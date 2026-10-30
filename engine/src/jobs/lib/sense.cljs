@@ -1,13 +1,14 @@
 (ns jobs.lib.sense
   "Look before concluding. A job's sync decision reads cells and areas through the seen-* helpers (jobs.lib.util,
   jobs.lib.look); a cell the body never looked at reads as unknown, and a decision that ends the job (none, no support,
-  not standable) must not rest on it. decide! records the unknown cells the decision read, looks at them (nearest to the
+  not standable) must not rest on it. decide! records the unknown cells the decision read, looks at those a look can show (in sight, not behind seen rock; nearest to the
   eye first, sight passes after each look) and decides again, bounded: as many looks a call as what a turn saves, by the
   caller's priced alternatives (:price), pays at the chance a look turns the decision (cost/turn-saving, cost/cell-looks),
   each cell at most once per run and body cell, and one look round per run and body cell for an area or entity query
   that found nothing, when its first look pays. A decision with no price takes no look. Only looks: never moves, digs or places, and sees nothing a player could not."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.perception :as perception]
             [jobs.lib.clock :as clock]
             [jobs.lib.memory-age :as memory-age]
@@ -41,22 +42,22 @@
             (some->> (concat area entities) seq (map #(or (:radius %) 16)) (apply max)))]
     (when d (:cost (value/walk-cost {:distance d})))))
 
-(defn fail-price
-  "The {:gap :delta} of a decision whose negative ends the job: its caller's next try of kind (value/retry-s, measured)
-  is what a turn spares; nothing else stands between the two (gap 0)."
-  [kind]
-  {:gap 0 :delta (value/retry-s kind)})
-
-(defn fails-to
-  "decide!'s :price for a decision whose negative ends the job (fail-price of kind)."
-  [kind]
-  (constantly (fail-price kind)))
-
 (defn find-price
   "decide!'s :price for a find whose other way costs other-s seconds: a look that shows the find saves that, less the walk
   to it (read-walk-s, its least price: the gap)."
   [c other-s]
   (fn [_ reads] (when-let [w (read-walk-s c reads)] {:gap w :delta other-s})))
+
+(defn fail-price
+  "The {:gap :delta} of a decision whose negative ends the job, after it read reads (decide's): a find whose other way
+  is the caller's next way, the call's worth (ctx/worth), less the walk to the nearest cell read (find-price)."
+  [c reads]
+  ((find-price c (ctx/worth c)) nil reads))
+
+(defn fails-to
+  "decide!'s :price for a decision whose negative ends the job (fail-price)."
+  [c]
+  (fn [_ reads] (fail-price c reads)))
 
 (defn max-looked [] (settings/get settings ::max-looked))
 (defn passes [] (settings/get settings ::passes))
@@ -93,12 +94,29 @@
   [p]
   (or (some-> (aget p "perception") :opts :radius) (settings/get perception/settings :engine.perception/radius)))
 
+(defn occluded?
+  "Whether a seen solid block lies between the eye of a body with feet at here and the centre of cell ([x y z] or
+  {:x :y :z}): a look from here cannot show it."
+  [p here cell]
+  (let [[x y z :as at] (if (vector? cell) cell [(:x cell) (:y cell) (:z cell)])
+        ex (:x here) ey (+ (:y here) game/eye-height) ez (:z here)
+        tx (+ x 0.5) ty (+ y 0.5) tz (+ z 0.5)
+        n (js/Math.ceil (/ (js/Math.hypot (- tx ex) (- ty ey) (- tz ez)) 0.2))]
+    (boolean (some (fn [k]
+                     (let [t (/ k n)
+                           on [(js/Math.floor (+ ex (* t (- tx ex)))) (js/Math.floor (+ ey (* t (- ty ey)))) (js/Math.floor (+ ez (* t (- tz ez))))]]
+                       (and (not= on at)
+                            (true? (some-> (u/sensed p (zipmap [:x :y :z] on)) .-fullCube)))))
+                   (range 1 n)))))
+
 (defn targets
-  "The cells of cells ([x y z]) not in looked and within sight radius of the feet here, nearest to the eye first."
+  "The cells of cells ([x y z]) not in looked, within sight radius of the feet here and not occluded? from there,
+  nearest to the eye first: the cells a look can show."
   [p here cells looked]
   (->> cells
        (remove looked)
        (filter #(<= (u/eye-dist here %) (radius p)))
+       (remove #(occluded? p here %))
        (u/nearest-first here identity)))
 
 (defn unknown? [p [x y z]] (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))

@@ -188,7 +188,7 @@
   (let [p (:primitives c)
         bed (bed-of c)
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
-        _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to :walk)}))
+        _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
         walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2})))]
     (cond
       (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))

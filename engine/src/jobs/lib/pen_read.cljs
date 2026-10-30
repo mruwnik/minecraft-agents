@@ -78,7 +78,7 @@
    (let [p (:primitives c)
          answer (read p opts)
          in-sight (sense/targets p (u/self-pos c) (:remembered answer) #{})
-         stale (take (sense/cell-looks (sense/fail-price :walk) (count in-sight)) in-sight)]
+         stale (take (sense/cell-looks (sense/fail-price c {:cells in-sight}) (count in-sight)) in-sight)]
      (if (and (empty? stale) (not (retry? answer)))
        answer
        (do (when-not (and (retry? answer) (await (if (:early? opts) (look/survey-until! c :cell (positive-every p opts retry?)) (look/survey! c :cell))))
@@ -86,7 +86,7 @@
                (when cell
                  (when (remembered? p cell) (await (sense/look-at! c cell)))
                  (recur more))))
-           (await (sense/decide! c ::pen #(read p opts) {:retry? retry? :batch true :price (sense/fails-to :walk)})))))))
+           (await (sense/decide! c ::pen #(read p opts) {:retry? retry? :batch true :price (sense/fails-to c)})))))))
 
 (defn listed
   "The :remembered cells of answer nearest to the body at here, as {:x :y :z}, at most pen/max-listed, plus

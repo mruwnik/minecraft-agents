@@ -345,7 +345,7 @@
         {:keys [shore land stepcell bankcell legs]} (await (sense/decide! c :breathe-land ways
                                                                  {:retry? (fn [w] (not (or (:shore w) (:land w)
                                                                                            (and carried? (:stepcell w)) (:bankcell w))))
-                                                                  :price (sense/fails-to :walk)}))]
+                                                                  :price (sense/fails-to c)}))]
     (cond
       bankcell (await (bank/dig! c bankcell (air/cap-dig-share)))
 

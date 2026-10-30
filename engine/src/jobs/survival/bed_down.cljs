@@ -408,7 +408,7 @@
   [c]
   (let [p (:primitives c)
         item (sh-beds/carried-bed p)
-        {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (sh-beds/bed-layout c true) (when-not (:roofed-only (:args c)) (sh-beds/bed-layout c false))) {:price (sense/fails-to :walk)}))]
+        {:keys [stand foot] :as layout} (await (sense/decide! c ::layout #(or (sh-beds/bed-layout c true) (when-not (:roofed-only (:args c)) (sh-beds/bed-layout c false))) {:price (sense/fails-to c)}))]
     (when foot
       (if (= stand (sh-sense/feet p))
         (let [r (await (tidy/place! c foot item false (click-for layout)))
@@ -494,7 +494,7 @@
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
-                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c)) {:price (sense/fails-to :walk)})))
+                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c)) {:price (sense/fails-to c)})))
         answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c)) (await (carried-answer c)))]
     (cond
       (:seal (ctx/mem c)) (await (seal-and-sleep! c))

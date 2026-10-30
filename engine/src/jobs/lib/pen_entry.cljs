@@ -70,7 +70,7 @@
   "pens judged after a look at the unseen cells of the pens it read (sense/decide!: bounded per call, each cell looked
   at once per run and body cell, unloaded cells never). Call it from a round."
   [c]
-  (await (sense/decide! c ::pens #(pens c) {:retry? #(or (empty? %) (:unseen? (meta %))) :price (sense/fails-to :walk)})))
+  (await (sense/decide! c ::pens #(pens c) {:retry? #(or (empty? %) (:unseen? (meta %))) :price (sense/fails-to c)})))
 
 (defn open-gates-near
   "The seen open fence gates {:x :y :z} within ::open-radius of here along x and z (lazily): the cheap test before any
