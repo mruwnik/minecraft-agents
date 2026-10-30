@@ -679,10 +679,22 @@
   [c bed carried? bed-way closed]
   (shut-worth (await (night-prices c bed carried? bed-way nil)) closed))
 
+(defn look-worth-of [prices] (max 0 (apply min ##Inf (vals prices))))
+
 (defn ^:async look-worth
   "What an edge walk to look is bought from (Q54): the cheapest way the night has without the look (night-prices, no bed), at least 0."
   [c bed-way]
-  (max 0 (apply min ##Inf (vals (await (night-prices c nil false bed-way nil))))))
+  (look-worth-of (await (night-prices c nil false bed-way nil))))
+
+(defn ^:async look-priced
+  "look-worth, with night.look-priced {:worth :prices} emitted when the worth changes from the one last emitted."
+  [c bed-way]
+  (let [prices (await (night-prices c nil false bed-way nil))
+        worth (look-worth-of prices)]
+    (when (not= (price/round1 worth) (:look-priced (ctx/mem c)))
+      (ctx/update-mem! c assoc :look-priced (price/round1 worth))
+      (ctx/emit! c :night.look-priced :debug {:worth (price/round1 worth) :prices (update-vals prices price/round1)}))
+    worth))
 
 (defn bed-in-room?
   "Whether the bed lies in the closed room the body stands in (its cell or the one above is a cell of reach-room/room)."
@@ -786,7 +798,7 @@
                              (cond (not= :out w) w
                                    (breath/in-water? p) (ending/end-in-water! c)
                                    :else :again))
-      (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge nil (await (look-worth c bed-way)))))
+      (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge nil (await (look-priced c bed-way)))))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)) (not (and bed-way (await (walkable-bed c)))))
       (do (when-not sheltered (hold/sheltered! c :dug-in))
           (cond
