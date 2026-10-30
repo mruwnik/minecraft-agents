@@ -50,10 +50,11 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :zones)))
         _ (dawn-after! p default-dawn)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
-                          :now #(deref clock)
-                          :world (ew/of-data {} {} (:zones world []))
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+        eng (tu/track-engine!
+             (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                           :now #(deref clock)
+                           :world (ew/of-data {} {} (:zones world []))
+                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}))]
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn ^:async tick-n [eng n]

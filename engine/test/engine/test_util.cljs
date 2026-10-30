@@ -265,13 +265,23 @@
     (try (await (f))
          (finally (set! wplan/chunk-expansions chunk)))))
 
+(defonce tracked-engines (atom []))
+
+(defn track-engine!
+  "Register eng to be shut down when the running async test ends, so its jobs do not outlive it; eng."
+  [eng]
+  (swap! tracked-engines conj eng)
+  eng)
+
 (defn run-async
-  "Run the promise-returning thunk f inside a cljs.test async block."
+  "Run the promise-returning thunk f inside a cljs.test async block; the engines it tracked are shut down after."
   [done f]
   (-> (js/Promise.resolve)
       (.then f)
       (.catch (fn [e] (is (nil? e) (str "async test threw: " e "\n" (.-stack e)))))
-      (.finally done)))
+      (.finally (fn []
+                  (run! core/shutdown! (first (reset-vals! tracked-engines [])))
+                  (done)))))
 
 (defn read-json [file]
   (js->clj (js/JSON.parse (fs/readFileSync file "utf8")) :keywordize-keys true))
