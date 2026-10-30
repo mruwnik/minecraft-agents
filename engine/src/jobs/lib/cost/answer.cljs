@@ -45,7 +45,7 @@
    ::hide-stays {:default {:k 33 :n 52} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                  :doc "Of n flights of the trial bodies that ended hidden in a refuge, k handed back with a danger still about (hide-out :hold :spent), 2026-10-28. Recount: node tools/event-counts.mjs hide-ends."}
    ::flee-meets {:default {:k 56 :n 124} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
-                 :doc "Of n flights of the trial bodies that got away (hostile.fled), k from a mob named again by its id in another run within 600 s (hostile-fight ::return-s), 2026-10-30: a fight names no id, so a few meets go uncounted. Recount: node tools/event-counts.mjs flee-meets."}
+                 :doc "Of n flights of the trial bodies that got away (hostile.fled), k from a mob named again by its id in another run within 600 s (hostile-fight ::return-s), 2026-10-30: decisions logged before then name no id (hostile.decided :mobs), so a meet answered by a fight goes uncounted (at most 9 more, 65/124, by kind within 40 blocks). Recount: node tools/event-counts.mjs flee-meets."}
    ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
                                   {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}
                                   {:k 960096 :n 1079468} {:k 948840 :n 1077476} {:k 937962 :n 1075465} {:k 927498 :n 1073431}

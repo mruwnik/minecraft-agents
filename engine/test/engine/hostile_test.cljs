@@ -1571,8 +1571,9 @@
         (let [respond-normal '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})
               s (await (flight-round respond-normal {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 0 4)]}))]
           (is (= :flee (:decision (first (hostile-entries (:eng s))))) "caught at the zombie's prior, the flight takes the blast and the zombie's blows, but meets them again only by cost.answer ::flee-meets: cheaper than the fight beside the creeper")
-          (is (= #{"creeper" "zombie"} (set (:near (first (filter #(= :hostile.decided (:kind %)) @(:seen s))))))
-              "the decision names every mob near: what a flight's catch is counted by"))))))
+          (let [e (first (filter #(= :hostile.decided (:kind %)) @(:seen s)))]
+            (is (= #{"creeper" "zombie"} (set (:near e))) "the decision names every mob near: what a flight's catch is counted by")
+            (is (= #{"creeper 8" "zombie 9"} (set (:mobs e))) "and their ids: what a meet after a flight is counted by")))))))
 
 (deftest respond-flees-a-creeper-from-a-dead-end-it-cannot-back-off-in
   (async done
