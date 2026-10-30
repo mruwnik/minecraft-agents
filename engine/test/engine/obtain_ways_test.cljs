@@ -39,6 +39,10 @@
   (are [item way] (= way (table/need-way (first (table/gather-needs {item 1}))))
     "wheat" :crops "potato" :crops "cobblestone" :gather "leather" :hunt))
 
+(deftest a-tree-gather-fells-within-the-radius-its-source-was-seen-in
+  (is (= [(base/seen-radius) (base/seen-radius)] (map #(get-in (first (table/gather-needs {% 2})) [:args :radius]) ["log" "oak_log"]))
+      "a tree seen 40 blocks off is a source, so the felling child looks that far"))
+
 (deftest a-gather-in-the-ways-brings-the-field-ways
   (are [ways wanted] (= wanted (base/way? {:quote-call {:ways ways}} :hunt))
     #{:gather} true #{:hunt} true #{:chest :craft} false))
