@@ -217,7 +217,7 @@
     (let [walls (mapv #(vector % 64 0) (range 1 (inc n)))
           break-even (/ (cost/look-s n) (cost/closed-chance 0 n))
           looks-at #(room-look-at nil %)]
-      (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
+      (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] walls))
                     reach-room/unseen-sides (constantly walls)
                     sense/unknown? (constantly true)]
         (is (nil? (looks-at (* 0.99 break-even))) (str "all " n " walls closed is not worth the looks"))
@@ -229,7 +229,7 @@
         known (set (take 20 extra))
         saving (* 1.01 (/ (cost/look-s 2) (cost/closed-chance 0 2)))
         look-at #(room-look-at extra %)]
-    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
+    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] walls))
                   reach-room/unseen-sides (constantly walls)
                   sense/unknown? (fn [_ cell] (not (known cell)))]
       (is (= (into walls (take 20 extra)) (look-at saving))
@@ -629,7 +629,7 @@
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
 (deftest the-unseen-walls-of-a-dark-room-are-looked-at-by-day-too
-  (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] [[1 64 0]]))
+  (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] [[1 64 0]]))
                 sh-inside/dark-hall (constantly :roofed)]
     (are [check buried?] (= :look (with-redefs [sh-sense/buried? (constantly buried?) sh-sense/buried-at? (constantly buried?)]
                                     (lit 0 0 #(kind check (assoc open-night :time st/noon)))))
@@ -643,7 +643,7 @@
   already looked at."
   ([world sides] (own-cell-exposure world sides nil))
   ([world sides walk-looked]
-   (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
+   (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] nil))
                  reach-room/unseen-sides (constantly sides)
                  sh-inside/dark-hall (fn [& _] (when (seq sides) :roofed))
                  sh-sense/buried? (constantly true)]
@@ -687,7 +687,7 @@
   or not, and looked at by a look round or not."
   [seen? looked? f]
   (let [site {:x 6 :y 64 :z 0}]
-    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] nil))
+    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] nil))
                   reach-room/unseen-sides (constantly [[0 64 0] [0 65 0]])
                   sh-inside/dark-hall (constantly :roofed)
                   sh-sense/buried? (constantly true)

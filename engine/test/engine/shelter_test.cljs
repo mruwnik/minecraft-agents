@@ -15,6 +15,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -1604,25 +1605,28 @@
     (tu/seeing-all raw-p)))
 
 (deftest the-edge-of-a-lit-region-is-looked-at-but-a-side-of-only-dark-cells-is-skipped
-  (let [lit (look-edge/pending {:primitives (tunnel-edge-body nil)} #{} 0)]
+  (let [lit (look-edge/pending {:primitives (tunnel-edge-body nil)} #{})]
     (is (seq lit) "an unseen side beside lit cells is looked at")
     (is (= lit (sort-by (fn [[x]] x) lit)) "nearest first")
     (let [dark (tunnel-edge-body {})
           feet (sh-sense/feet dark)
           near? (fn [[x y z]] (<= (Math/hypot (- x (:x feet)) (- y (:y feet)) (- z (:z feet))) (look/near-of dark)))
-          shown (look-edge/pending {:primitives dark} #{} 0)]
+          shown (look-edge/pending {:primitives dark} #{})]
       (is (seq shown) "a dark wall within near-of is looked at")
       (is (every? near? shown)))))
 
-(deftest the-edge-walk-stops-after-fifteen-cells-or-two-hundred-steps
+(deftest the-edge-walk-is-bought-by-its-hp-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
-        some-cell (first (look-edge/pending c #{} 0))
-        fifteen (set (map (fn [i] [i 100 100]) (range look-edge/max-edge-looks)))]
-    (is (seq (look-edge/pending c (disj fifteen [0 100 100]) 0)) "14 tried: more to do")
-    (is (empty? (look-edge/pending c fifteen 0)) "15 tried cells")
-    (is (seq (look-edge/pending c #{} (dec look-edge/max-edge-steps))))
-    (is (empty? (look-edge/pending c #{} look-edge/max-edge-steps)) "200 steps")
-    (is (some? some-cell))))
+        cell (first (look-edge/pending c #{}))
+        many (set (map (fn [i] [i 100 100]) (range 40)))]
+    (is (some? cell))
+    (is (seq (look-edge/pending c many)) "no count of cells tried ends the look at the edge")
+    (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 0 :secs 1})
+                  ctx/worth (constantly 100)]
+      (is (look-edge/walk-bought? c cell) "a walk costing no hp is bought"))
+    (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 19 :secs 1})
+                  ctx/worth (constantly 0.01)]
+      (is (not (look-edge/walk-bought? c cell)) "hp more than the call's worth buys are not"))))
 
 (deftest walkable-near-is-the-reachable-ground-nearest-the-cell
   (let [p (tunnel-seen-body)]
@@ -1659,7 +1663,9 @@
               walk-result (atom :done)
               orig-look-at! dig-look/look-at!
               orig-call ctx/call]
-          (with-redefs [dig-look/look-at! (fn [c' cell] (if (identical? c c') (do (swap! log conj [:look cell]) (js/Promise.resolve true)) (orig-look-at! c' cell)))
+          (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
+                        ctx/worth (constantly 100)
+                        dig-look/look-at! (fn [c' cell] (if (identical? c c') (do (swap! log conj [:look cell]) (js/Promise.resolve true)) (orig-look-at! c' cell)))
                         ctx/call (fn [c' slot job args]
                                    (if (identical? c c')
                                      (do (swap! log conj [:walk job (:pos args)]) (js/Promise.resolve @walk-result))
@@ -1675,8 +1681,7 @@
           (is (= [:look :walk :walk :look] (map first @log))
               "look, walk (still walking: again), walk done, look again")
           (is (= 19 (:x (nth (nth @log 1) 2))) "the stride reaches the cell 3 away, not the one 10 away")
-          (is (= #{[20 64 0]} (:edge-looked @mem*)))
-          (is (= 5 (:edge-steps @mem*))))))))
+          (is (= #{[20 64 0]} (:edge-looked @mem*))))))))
 
 (deftest the-night-looks-at-the-unseen-sides-of-a-lit-tunnel-and-is-done-without-digging
   (async done

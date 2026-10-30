@@ -114,7 +114,7 @@
   sense/round-plan pays for at the stay's price at chance (stay-look-price), nil when none or no wall is left: an unseen
   wall is an open side."
   [c text extra chance]
-  (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
+  (when-let [sides (seq (look-edge/pending c (sense/round-looked c)))]
     (when-let [cells (seq (:pay (sense/round-plan c (into (vec sides) extra) (stay-look-price c chance))))]
       (contract/look :exposed text :look-at (vec cells) :room-sides true))))
 

@@ -1,7 +1,8 @@
 (ns jobs.lib.look-edge
   "Look first, judge after: an unseen cell is open until looked at (a player walks up and looks). The unseen sides of the
   closed region the body stands in under a cover, and the unseen cells of a roof column, are looked at, nearest first, and
-  walked towards when a look cannot show them. Memory keys :edge-looked, :edge-phase, :edge-steps are the calling job's."
+  walked towards when a look cannot show them, a walk only while its hp (walk-risk/look-way) are bought by the call's worth.
+  Memory keys :edge-looked, :edge-phase are the calling job's."
   (:require [jobs.lib.cost.health :as cost-health]
             [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
@@ -9,13 +10,8 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.util :as u]))
-
-(def max-edge-looks
-  "Most cells of a closed region's unseen edge walked to in a night after a look failed to show them, nearest first."
-  15)
-
-(def max-edge-steps "Most looks and walks of the edge in a night." 200)
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-risk :as walk-risk]))
 
 (def edge-stride
   "How far past the nearest unseen cell one walk of the edge may reach, in blocks: the ground nearest the farthest unseen cell
@@ -61,13 +57,13 @@
 
 (defn pending
   "The cells [x y z] to look at before the body's region is judged: unseen cells beside the closed region the body stands in
-  under a cover, nearest first, not looked at in c's job memory and within the caps. A dark cell stays unseen after a look and
-  is not looked at twice. Reads no memory of a frame without a job: pass `looked` and `steps` then."
-  ([c] (pending c (:edge-looked (ctx/mem c) #{}) (:edge-steps (ctx/mem c) 0)))
-  ([c looked steps]
+  under a cover, nearest first, not looked at in c's job memory. A dark cell stays unseen after a look and
+  is not looked at twice. Reads no memory of a frame without a job: pass `looked` then."
+  ([c] (pending c (:edge-looked (ctx/mem c) #{})))
+  ([c looked]
    (let [p (:primitives c)
          feet (sh-sense/feet p)]
-     (when (and (< (count looked) max-edge-looks) (< steps max-edge-steps) (covered? p))
+     (when (covered? p)
        (->> (reach-room/unseen-sides p feet)
             (remove looked)
             (filter (lit-side? p feet))
@@ -108,6 +104,13 @@
              seq
              (apply max-key #(u/dist from (:to %))))))
 
+(defn walk-bought?
+  "Whether the hp of the walk to look at cell `to` and back (walk-risk/look-way) are bought by the call's worth
+  (walk-risk/buys-hp): a walk toward an unseen wall is priced, not counted."
+  [c to]
+  (let [self (.self (:primitives c))]
+    (<= (:hp (walk-risk/look-way c to 1)) (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c)))))
+
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
   looked at; what the look shows is read on the next pass, once the sight has settled. A side it did not show (a far wall
@@ -116,7 +119,6 @@
   place of walkable-near's."
   ([c cells] (look! c cells nil))
   ([c cells to]
-   (ctx/update-mem! c update :edge-steps (fnil inc 0))
    (let [cell (first cells)
          phase (get-in (ctx/mem c) [:edge-phase cell] 0)
          advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
@@ -124,7 +126,7 @@
        0 (do (advance! 1) (await (dig-look/look-at! c cell)))
        1 (let [reach-to (last (take-while #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
                near (or to (walkable-near (:primitives c) reach-to))
-               w (if near (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down})) :none)]
+               w (if (and near (walk-bought? c near)) (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down})) :none)]
            (when (not= :continue w) (advance! 2)))
        2 (do (advance! 3) (await (dig-look/look-at! c cell)))
        (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))
