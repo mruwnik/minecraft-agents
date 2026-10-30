@@ -139,14 +139,19 @@
   [p]
   ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
 
-(defn price-with-own
-  "price, a cell (own-s cell) prices over 0, the body's own build, left out of what the cuts destroy: the caller adds its price."
-  [p feet {:keys [step heading] :as e} own-s]
+(defn price
+  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
+  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
+  door or route adds what its cuts destroy (cost/destroyed-fn); with own-s, a cell it prices over 0, the body's own build,
+  is left out of that: the caller adds its price."
+  ([p feet e] (price p feet e nil))
+  ([p feet {:keys [step heading] :as e} own-s]
   (let [block-at (delay (escape/block-at-of p))
         destroyed (delay (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
-        lost-s (fn [cells] (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
-                                            (map #(@destroyed (@block-at %) % false)))
-                                      + 0 cells))
+        lost-s (fn [cells] (let [dug (set cells)]
+                             (transduce (comp (remove #(or (dig-route/open? (@block-at %)) (and own-s (pos? (own-s %)))))
+                                              (map #(@destroyed (@block-at %) % false dug)))
+                                        + 0 cells)))
         dig-s (fn [cells] (+ (cost/dig-cells-s (map #(tools/clear-ms p (@block-at %)) cells)) (lost-s cells)))]
     (case step
       :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
@@ -156,14 +161,7 @@
       :fill-gap (cw/fill-cost (:count e 1))
       :dig-route (dig-s (map :cell (:cells e)))
       :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)))))
-      0)))
-
-(defn price
-  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
-  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
-  door or route adds what its cuts destroy (cost/destroyed-fn): price-with-own with no own cells."
-  [p feet e]
-  (price-with-own p feet e nil))
+      0))))
 
 (defn gap-fill
   "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling or a gap jump

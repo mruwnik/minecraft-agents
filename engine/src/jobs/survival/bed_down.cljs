@@ -105,7 +105,7 @@
 (defn night-c [c] (assoc-in c [:args :for] :night))
 
 (defn seal-plan
-  "{:layout :cells :seconds} to put the carried bed down here and shut its row in (seal-cells, each at plug-way/place-s
+  "{:layout :cells :seconds} to put the carried bed down here and shut its row in (seal-cells, each at cost.ways/place-s
   for the night), when a row fits in the open and the shelter blocks carried cover every cell; else nil."
   [c]
   (let [layout (sh-beds/bed-layout c false)

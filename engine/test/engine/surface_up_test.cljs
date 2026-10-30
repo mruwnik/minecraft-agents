@@ -54,6 +54,12 @@
        (is (< near far) "a taller rise to the seen sky costs more")
        (is (zero? open) "a body on open ground climbs nothing"))))
 
+(deftest a-stair-cut-through-a-build-pays-its-put-back-but-a-trunk-is-free
+  (let [buried (fn [block] {:primitives (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                                                                   :blocks (dissoc (box -3 63 -3 3 67 3 block) "0,64,0" "0,65,0")})))})]
+    (with-mem {} #(is (< (surface/climb-s (buried "oak_log")) (surface/climb-s (buried "oak_planks")))
+                      "planks are put back, a natural trunk is not"))))
+
 (deftest a-rise-through-seen-cave-air-is-priced-as-walk-steps-not-stair-steps
   (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
                                                       :blocks (dissoc (box -3 63 -3 3 71 3 "stone") "0,64,0" "0,65,0" "0,66,0" "0,67,0" "0,68,0" "0,69,0" "0,70,0" "0,71,0")})))

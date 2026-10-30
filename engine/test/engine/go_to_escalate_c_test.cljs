@@ -990,6 +990,6 @@
     (is (= (+ (cost/dig-cost "oak_planks") (cost/put-back-s "oak_planks")) (dig-s "oak_planks" [1 64 0])))
     (is (= (+ (cost/dig-cost "stone") 5) (dig-s "stone" [2 64 0])))
     (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0])))
-    (is (= (+ (choose/price-with-own p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
+    (is (= (+ (choose/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
            (choose/price p [0 64 0] {:step :dig-route :cells planks}))
         "a way's price holds the put-back of a cell that is not the body's own; the caller prices its own")))

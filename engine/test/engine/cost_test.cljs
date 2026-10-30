@@ -811,10 +811,17 @@
       "dirt"       "air"   nil true  place
       nil          "air"   nil true  place
       "oak_planks" "air"   nil false place
+      "oak_log"    "air"   nil false 0
+      "stripped_oak_log" "air" nil false place
       "glass"      "air"   nil false (+ place (:value (cost/item-value [{:name "glass" :count 1}])))
       "wheat"      "air"   0   false plant
       "wheat"      "air"   7   false (+ wheat plant)
       "wheat"      "air"   nil false (+ wheat plant)
       "farmland"   "air"   nil false (+ place till)
       "farmland"   "wheat" 0   false (+ place till plant))
+    (let [crop-cell #js {:name "wheat" :age 7}
+          sensed {[0 65 0] crop-cell [0 66 0] nil}
+          destroyed (cost/destroyed-fn #(get sensed %))]
+      (is (= (+ place till) (destroyed "farmland" [0 64 0] false #{[0 65 0]})) "the crop over it is paid when its own cell is dug")
+      (is (= (+ place till wheat plant) (destroyed "farmland" [0 64 0] false)) "else it is paid with the farmland"))
     (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))

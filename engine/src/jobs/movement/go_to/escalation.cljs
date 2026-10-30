@@ -44,7 +44,7 @@
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill out-of-sight? price price-with-own frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-way drop-fill out-of-sight? price frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-cut-fn own-holes planned-cells]]
@@ -239,7 +239,7 @@
     :else (let [cut-s (reduce + 0 (map own-s (own-cells p own feet own-s)))]
             (when (and (pos? cut-s)
                        (or (= :none (:step base))
-                           (and (priced-steps (:step base)) (< (+ (price-with-own p feet own own-s) cut-s) (price p feet base)))))
+                           (and (priced-steps (:step base)) (< (+ (price p feet own own-s) cut-s) (price p feet base)))))
               (assoc own :own-cut true)))))
 
 (defn own-may-beat?
@@ -322,7 +322,7 @@
         ;; a stair or door over guesses priced as a dig route is: past the call's worth it is none
         guesses #(way-guesses (:primitives c) % feet)
         worth-it #(if (and (#{:stair :clear-path} (:step %))
-                           (past-worth? (+ (price-with-own (:primitives c) feet % (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
+                           (past-worth? (+ (price (:primitives c) feet % (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
                                         (guesses %) (:guess-risk opts) worth))
                     {:step :none :why :past-worth}
                     %)

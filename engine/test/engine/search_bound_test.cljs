@@ -52,7 +52,7 @@
 
 (deftest a-step-priced-unpassable-leaves-the-fallback-at-the-goals-worth
   (with-redefs [escape/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
-                choose/price (constantly ##Inf)
+                choose/price (fn ([_ _ _] ##Inf) ([_ _ _ _] ##Inf))
                 risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
     (let [c (assoc (ctx-at 0) :worth (constantly 40))]
       (is (= 40 (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})))
