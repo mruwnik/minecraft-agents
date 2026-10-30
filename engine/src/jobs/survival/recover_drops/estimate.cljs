@@ -164,7 +164,7 @@
       (seq named) (assoc :top-mobs (vec (take (cfg/top-n) named)))))))
 
 (defn numbers
-  "The priced numbers of a decision ({:value :chance :cost :parts}), as every entry that records one carries them."
+  "The priced numbers of a decision ({:value :chance :cost :parts}), as retreat! records them."
   [decided]
   (select-keys decided [:value :chance :cost :parts]))
 

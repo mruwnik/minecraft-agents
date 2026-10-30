@@ -9,6 +9,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
+            [jobs.lib.util :as u]
+            [jobs.lib.walk-risk :as risk]
             [engine.memory :as mem]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
@@ -144,49 +146,80 @@
           (await (run-until-empty eng 20))
           (is (nil? (recovered eng)) "a death on the way loses the kit too")
           (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)))
-          (is (< 3600 (js/parseFloat (second (re-find #"value ([0-9.]+)" (decided-text eng))))) "the kit is priced at hours"))))))
+          (is (< 3600 (:value (decided-numbers eng))) "the kit is priced at hours"))))))
 
 (def kit-pile
   (into dt/death-pile-of-the-field-report
         (map #(hash-map :name (str "iron_" %) :count 1)
              ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"])))
 
-(defn ^:async kit-run
-  "Die at the far corner over the kit pile with n skeletons standing round the walk; the unarmed body's decision."
+(def kit-at {:x 24.5 :y 64 :z 22.5})
+
+(defn ^:async kit-world
+  "Die at the far corner over the kit pile with n skeletons standing round the walk, the job not yet run: {:eng :c}."
   [n]
-  (let [at {:x 22 :y 64 :z 22}
-        pack (for [i (range n)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 (mod i 6)) :y 64 :z (+ 12.5 (quot i 6))}})
-        {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (map #(assoc % :pos at) (pile-drops kit-pile)) pack))})]
-    (die! eng {:pos at :inventory kit-pile :cause "skeleton"})
+  (let [pack (for [i (range n)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 17.5 (mod i 6)) :y 64 :z (+ 17.5 (quot i 6))}})
+        {:keys [eng p]} (setup {:floor [24 14 25 23] :self {:pos {:x 24.5 :y 64 :z 14.5}} :entities (vec (concat (map #(assoc % :pos kit-at) (pile-drops kit-pile)) pack))})]
+    (die! eng {:pos kit-at :inventory kit-pile :cause "skeleton"})
+    {:eng eng :c {:primitives p :args {} :view #(mem/view (:store eng))}}))
+
+(defn expected-numbers
+  "{:value :chance :danger :walk :cost} the pile at kit-at should be priced at from the body's place (the floor is a
+  corridor, so the way is the straight one): the walk-risk of the round trip with the stay at the pile, its risk in seconds, fetch-cost of the distance, and the walk part
+  (the distance back and forth at the per-block price)."
+  [c]
+  (let [distance (u/dist (u/self-pos c) kit-at)
+        stay-s (pile/collect-s c {:pos kit-at :inventory kit-pile})
+        est (risk/estimate c kit-at {:back? true :stay-s stay-s})
+        chance (:death-chance est)
+        danger (risk/risk-s c est)
+        fetch (cost/fetch-cost {:distance distance :danger-s danger :elapsed-ms 5000 :cause "skeleton" :back? true :stay-s stay-s})]
+    {:value (:value (cost/item-value kit-pile)) :chance chance :danger danger :cost (:cost fetch)
+     :walk (* 2 distance (cost/per-block))}))
+
+(defn ^:async kit-run
+  "The unarmed body's decision with n skeletons round the walk: {:eng :expected} (expected-numbers, taken before the job ran)."
+  [n]
+  (let [{:keys [eng c]} (await (kit-world n))
+        expected (expected-numbers c)]
     (core/submit! eng job {})
     (await (run-until-empty eng 20))
-    eng))
+    {:eng eng :expected expected}))
 
-(defn ^:async smallest-guarding-pack
-  "The least pack (doubling from one skeleton, up to 32) whose recorded decision no longer holds the fetch by the cost lib's worth of the pile times the chance of living through the walk."
+(defn ^:async pack-sizes-round-the-line
+  "[below above]: the largest pack that expected-numbers still has fetched and the next doubling (up to 32) it does not,
+  by the cost lib alone."
   []
-  (loop [n 1]
-    (let [eng (await (kit-run n))]
-      (if (or (>= n 32) (not (fetch-holds? (decided-numbers eng))))
-        n
-        (recur (* 2 n))))))
+  (loop [below 0 n 1]
+    (let [{:keys [c]} (await (kit-world n))]
+      (if (or (>= n 32) (not (fetch-holds? (expected-numbers c))))
+        [below n]
+        (recur n (* 2 n))))))
 
-(deftest a-kit-pile-inside-a-skeleton-packs-range-is-left-though-the-walk-skirts-it
+(defn near-rel? [a b] (<= (js/Math.abs (- a b)) (+ 0.2 (* 0.1 (js/Math.abs b)))))
+
+(deftest kit-pile-decisions-fall-either-side-of-the-priced-line
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [guarded (await (kit-run (await (smallest-guarding-pack))))
-              free (await (kit-run 0))
-              left (decided-numbers guarded)
-              taken (decided-numbers free)]
-          (is (nil? (recovered guarded)) "a danger skip stays open")
-          (is (not (fetch-holds? left)) "the pack's chance of killing the body outweighs the pile")
-          (is (pos? (:chance left)))
-          (priced-by-the-cost-lib kit-pile left)
-          (is (re-find #"^fetch: " (decided-text free)) "no pack: the pile is fetched")
-          (is (fetch-holds? taken))
-          (is (= :collected (:decision (recovered free))) "the drops lie where the body died")
-          (priced-by-the-cost-lib kit-pile taken))))))
+        (let [[below above] (await (pack-sizes-round-the-line))
+              fetched (await (kit-run below))
+              left (await (kit-run above))
+              numbers (fn [{:keys [eng]}] (decided-numbers eng))]
+          (is (pos? above) "some pack keeps the unarmed body off the kit")
+          (doseq [{:keys [eng expected] :as run} [fetched left]
+                  :let [{:keys [value chance cost parts]} (numbers run)]]
+            (is (near-rel? value (:value expected)) "the pile's item price")
+            (is (near-rel? chance (:chance expected)) "the death chance of the straight walk and stay")
+            (is (near-rel? (:danger parts 0) (:danger expected)) "the danger is the walk-risk in seconds")
+            (is (near-rel? (:walk parts) (:walk expected)) "the walk is the distance from the body to the pile, back and forth")
+            (is (near-rel? cost (:cost expected)) "the cost is fetch-cost of that walk"))
+          (is (= :collected (:decision (recovered (:eng fetched)))) "below the line the drops lying where the body died are fetched")
+          (is (nil? (recovered (:eng left))) "above it a danger skip stays open")
+          (is (re-find #"^skip: .*: skeleton" (decided-text (:eng left))))
+          (is (> (:chance (numbers left)) (:chance (numbers fetched))) "more skeletons, likelier death")
+          (priced-by-the-cost-lib kit-pile (numbers fetched))
+          (priced-by-the-cost-lib kit-pile (numbers left)))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
   (async done
@@ -195,8 +228,8 @@
         (let [{:keys [eng]} (await ((fetch-run "skeleton" iron-kit)))]
           (is (re-find #"^fetch: " (decided-text eng))))))))
 
-(defn survive-pct
-  "The survival chance in percent the decision of a run over a pile of stacks (killed by a skeleton that guards the pile) names: a pile worth too little to fetch, so both are the decision at the start."
+(defn death-chance
+  "The :chance the decision of a run over a pile of stacks (killed by a skeleton that guards the pile) records: a pile worth too little to fetch, so both are the decision at the start."
   [stacks]
   (let [pile (mapv #(hash-map :name (str "item_" %) :count 1) (range stacks))]
     (fn ^:async t []
@@ -204,15 +237,15 @@
         (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
         (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"unknown" 10}}) {})
         (await (run-until-empty eng 20))
-        (js/parseFloat (second (re-find #"x ([0-9.]+)% survive" (decided-text eng))))))))
+        (:chance (decided-numbers eng))))))
 
 (deftest the-body-stands-longer-collecting-a-pile-of-more-stacks-in-a-skeletons-range
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [few (await ((survive-pct 1)))
-              many (await ((survive-pct 8)))]
-          (is (< many few) "the collect tour is longer, and a body that stands in the fire range dies likelier"))))))
+        (let [few (await ((death-chance 1)))
+              many (await ((death-chance 8)))]
+          (is (> many few) "the collect tour is longer, and a body that stands in the fire range dies likelier"))))))
 
 (deftest collect-s-walks-the-seen-stacks-nearest-first-and-spreads-the-unseen
   (let [stack (fn [id name x] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0.5} :item {:name name :count 1} :visible true})
