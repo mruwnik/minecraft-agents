@@ -826,9 +826,7 @@
                       0)
        "retry-wins" (do (println (pr-str (retry-wins/report (for [b (array-seq (fs/readdirSync agents))
                                                                   :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
-                                                                  line (event-lines (path/join agents b "engine"))
-                                                                  :let [row (retry-wins/scan-line line)]
-                                                                  :when row]
+                                                                  row (retry-wins/covered (keep retry-wins/scan-line (event-lines (path/join agents b "engine"))))]
                                                               row))))
                         0)
        "craft-steps" (do (println (pr-str (craft-steps/report (for [b (array-seq (fs/readdirSync agents))

@@ -4,13 +4,16 @@
   job id), won or failed again, fitted as a Beta prior over the calls' shares (field-passes/beta-fit; the uniform [1 1]
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
-  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :place the place action (an occupied cell, no support, a failure or a timeout fails) and jumpPlace (no block raised, or part of them, fails), :walk a go-to's result (not arrived
-  fails), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
+  slot fails), :dig the dig action (a timeout, a failure or an unreachable block fails), :place the place action (an occupied cell, no support, a failure or a timeout fails) and jumpPlace (no block raised, or part of them, fails), :walk a go-to's end (not arrived
+  fails; read from the :result of logs before 2026-10-19, after it from the root go-to's :completed/:stopped and from a
+  job.child_ended of a job id that has a go-to.retrying, in the debug log: `covered` drops a body's go-to rows between its last
+  :result and its first child_ended, which no log shows an end of), :respond respond-to-hostile's :hostile.call (a call that changed nothing fails), :risky-stay jobs.lib.near/risky-wait!'s
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one), :kit-later jobs.items.get-kit's bill after a :later stop (:kit.later-wait a stop rested on, :kit.later-over a bill round that ended otherwise after one); :pooled all kinds' tries together,
   the prior of a kind with none counted. :walk-round is one round inside a go-to: a go-to.retrying (a fruitless round that plans again) fails, and a go-to result that follows one is the call's last round (won when it arrived); a call is a run of retrying tries ending at a result (a job id holds many); the pooled fit leaves it out.
   Pure parts: scan-line, retries, report."
-  (:require [clojure.string :as str]
+  (:require [cljs.reader :as reader]
+            [clojure.string :as str]
             [world-test.field-passes :as passes]))
 
 (def kinds "Action name -> [kind, the statuses that fail a try]." {"craft" [:craft #{"timeout"}] "furnace" [:furnace #{"busy"}] "dig" [:dig #{"timeout" "failed" "unreachable"}]
@@ -18,6 +21,13 @@
                                                  "jumpPlace" [:place #{"partial" "failed"}]})
 
 (defn- field [line re] (second (re-find re line)))
+
+(defn- ending-arrived
+  "The :arrived of a child_ended line's ending data, or nil (a cut-off child has none)."
+  [line]
+  (when (str/includes? line ":arrived")
+    (let [ev (try (reader/read-string line) (catch :default _ nil))]
+      (get-in ev [:data :ending :data :arrived]))))
 
 (defn scan-line
   "One log line -> {:kind :key [generation job-id] :t ms :fail? bool :edge :start|:end :action id} of a try of a retry kind, else nil."
@@ -47,7 +57,14 @@
       {:kind :walk-round :key (key) :t (t) :edge :end :fail? true :try (js/parseInt (field line #":try (\d+)"))}
 
       (and (str/includes? line ":kind :result") (re-find #":arrived (true|false)" line))
-      {:kind :walk :key (key) :t (t) :edge :end :fail? (= "false" (field line #":arrived (true|false)"))})))
+      {:kind :walk :key (key) :t (t) :edge :end :fail? (= "false" (field line #":arrived (true|false)")) :result? true}
+
+      (and (re-find #":kind :(completed|stopped)" line) (str/includes? line ":name \"jobs.movement.go-to\"") (re-find #":arrived (true|false)" line))
+      {:kind :walk :key (key) :t (t) :edge :end :fail? (= "false" (field line #":arrived (true|false)"))}
+
+      (str/includes? line ":kind :child_ended")
+      (when-some [arrived (ending-arrived line)]
+        {:kind :walk :key (key) :t (t) :edge :end :fail? (false? arrived) :child? true}))))
 
 (defn retries
   "{:key :won? :s} of each try that followed a failed one, from the scanned ends of one kind."
@@ -56,6 +73,25 @@
         [a b] (partition 2 1 (sort-by :t ends))
         :when (:fail? a)]
     {:key (:key a) :won? (not (:fail? b)) :s (/ (- (:t b) (:t a)) 1000)}))
+
+(defn covered
+  "One body's rows without the go-to rows between its last :result and its first child_ended: no log shows a go-to child's end there."
+  [rows]
+  (let [last-result (reduce max ##-Inf (keep #(when (:result? %) (:t %)) rows))
+        first-child (reduce min ##Inf (keep #(when (:child? %) (:t %)) rows))]
+    (remove #(and (#{:walk :walk-round} (:kind %)) (< last-result (:t %) first-child)) rows)))
+
+(defn- go-to-ends
+  "The :walk rows of the scanned rows once: an end from the root go-to or a child_ended duplicates a :result within a second
+  of it (logs of 2026-10-14 to 19 hold both); a child_ended counts only for a job id that has a go-to.retrying (other jobs'
+  endings carry :arrived too)."
+  [rows]
+  (let [retrying (into #{} (comp (filter #(= :walk-round (:kind %))) (map :key)) rows)
+        results (group-by :key (filter :result? rows))]
+    (remove #(and (= :walk (:kind %)) (not (:result? %))
+                  (or (and (:child? %) (not (retrying (:key %))))
+                      (some (fn [r] (< (abs (- (:t r) (:t %))) 1000)) (results (:key %)))))
+            rows)))
 
 (defn- rounds
   "The :walk-round rows of the scanned rows, keyed per go-to call (a job id holds many): a go-to.retrying is a failed round,
@@ -97,7 +133,8 @@
   kind with retries but no fitted spread (too few calls) keeps its pooled mean at the mean pseudo-count total of the kinds
   that did fit; with none fitted, its pooled counts. :pooled fits all kinds' tries together."
   [rows]
-  (let [rows (concat (remove #(= :walk-round (:kind %)) rows) (rounds rows))
+  (let [rows (go-to-ends rows)
+        rows (concat (remove #(= :walk-round (:kind %)) rows) (rounds rows))
         fits (fit rows)
         all (mapcat (fn [{:keys [kind tries]}] (map #(update % :key conj kind) tries)) (remove #(= :walk-round (:kind %)) fits))
         all-shares (for [[_ ts] (group-by :key all)] (/ (count (filter :won? ts)) (count ts)))

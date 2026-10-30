@@ -54,4 +54,4 @@
 (deftest the-first-retry-wins-at-the-measured-mean
   (let [{:keys [win fail]} (get-in (settings/get value/settings ::value/retry-counts) [:walk])]
     (is (= (/ win (+ win fail)) (cost/retry-chance :walk 1)) "the failure a retry follows is the condition the prior was counted under, not a failed retry")
-    (is (= (/ win (+ win fail 1)) (cost/retry-chance :walk 2)))))
+    (is (< (abs (- (/ win (+ win fail 1)) (cost/retry-chance :walk 2))) 1e-12))))

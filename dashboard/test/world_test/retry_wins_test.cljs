@@ -87,3 +87,27 @@
         {:keys [walk-round]} (r/report rows)]
     (is (= {:won 2 :retries 5 :calls 3} (select-keys walk-round [:won :retries :calls]))
         "each call's first retrying is the prior's condition; later retryings and the result are its tries; a result with no retrying is no round")))
+
+(defn child-end [job t data]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind :child_ended :level :debug :context {:job-id job}
+           :data {:slot :walk :status :done :ending {:kind :done :data data}}}))
+
+(defn root-end [t kind data]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind kind :context {:job-id "j9"} :data (assoc data :name "jobs.movement.go-to")}))
+
+(deftest go-to-ends-are-read-from-endings-after-the-result-event-went
+  (let [rows (keep r/scan-line [(retrying-try "j1/walk" 0 1) (child-end "j1/walk" 2000 {:arrived false}) (retrying-try "j1/walk" 3000 1) (child-end "j1/walk" 5000 {:arrived true})
+                                (root-end 0 :stopped {:arrived false}) (root-end 6000 :completed {:arrived true})
+                                (child-end "j2/dig" 0 {:arrived false}) (child-end "j2/dig" 1000 {:arrived true})])
+        {:keys [walk walk-round]} (r/report rows)]
+    (is (= {:won 2 :retries 2 :calls 2} (select-keys walk [:won :retries :calls])) "the child_ended pair and the root go-to's stop then completion; a dig child's ending is no go-to end")
+    (is (= {:won 1 :retries 2 :calls 2} (select-keys walk-round [:won :retries :calls])) "a call's last round is its child_ended; two calls (the first ended failed)")))
+
+(deftest an-ending-beside-its-result-event-is-one-end
+  (let [rows (keep r/scan-line [(walk "j1/walk" 0 false) (child-end "j1/walk" 10 {:arrived false}) (walk "j1/walk" 4000 true) (child-end "j1/walk" 4010 {:arrived true})])]
+    (is (= {:won 1 :retries 1 :calls 1} (select-keys (:walk (r/report rows)) [:won :retries :calls])))))
+
+(deftest a-body-has-no-go-to-rows-between-its-last-result-and-its-first-child-ending
+  (let [rows (keep r/scan-line [(walk "j1/walk" 1000 true) (retrying-try "j1/walk" 2000 1) (root-end 3000 :stopped {:arrived false}) (retrying-try "j2/walk" 4000 1) (child-end "j2/walk" 5000 {:arrived true}) (retrying-try "j2/walk" 6000 1)])]
+    (is (= [1000 5000] (map :t (filter #(= :walk (:kind %)) (r/covered rows)))))
+    (is (= [6000] (map :t (filter #(= :walk-round (:kind %)) (r/covered rows)))))))
