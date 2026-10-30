@@ -42,12 +42,12 @@
     (when (seq ds) (:cost (value/walk-cost {:distance (apply min ds)})))))
 
 (defn find-price
-  "decide!'s :price for a find whose other way costs other-s seconds: a look that shows the find saves that, less the walk
-  to it (read-walk-s, its least price: the gap). chance: the kind's chance a look shows one after i fruitless looks
-  (cost/cell-looks), nil turn-chance."
+  "decide!'s :price for a find whose other way costs other-s seconds: a look that shows the find saves that, at most the
+  call's worth (ctx/worth: a turn spares no more than giving the goal up), less the walk to it (read-walk-s, its least
+  price: the gap). chance: the kind's chance a look shows one after i fruitless looks (cost/cell-looks), nil turn-chance."
   ([c other-s] (find-price c other-s nil))
   ([c other-s chance]
-   (fn [_ reads] (when-let [w (read-walk-s c reads)] (cond-> {:gap w :delta other-s} chance (assoc :chance chance))))))
+   (fn [_ reads] (when-let [w (read-walk-s c reads)] (cond-> {:gap w :delta (min other-s (ctx/worth c))} chance (assoc :chance chance))))))
 
 (defn fail-price
   "The {:gap :delta} of a decision whose negative ends the job, after it read reads (decide's): a find whose other way

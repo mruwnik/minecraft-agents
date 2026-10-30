@@ -104,10 +104,11 @@
 
 (defn stay-look-price
   "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on: one seen bad leaves the stay its
-  exposure (price/stay-parts acted on now, cost/risk-s), one seen closed none; no other plan stands between (gap 0)."
+  exposure (price/stay-parts acted on now, cost/risk-s), at most the call's worth (ctx/worth: giving the goal up spares
+  the rest), one seen closed none; no other plan stands between (gap 0)."
   [c chance]
   (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))]
-    {:gap 0 :delta (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death}))}))
+    {:gap 0 :delta (min (ctx/worth c) (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death})))}))
 
 (defn room-look
   "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`: the ones

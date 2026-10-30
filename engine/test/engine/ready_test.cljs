@@ -200,11 +200,10 @@
 (deftest the-looks-at-a-rooms-unseen-walls-stop-where-the-stay-they-could-spare-costs-nothing
   (let [seen-block u/seen-block
         hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))
-        status #((ready/safe-at (constantly outside)) (ctx-of night-hut))]
+        status #((ready/safe-at (constantly outside)) (% (ctx-of night-hut)))]
     (with-redefs [u/seen-block (hide [3 64 0])]
-      (is (= :look (first (status))) "a dark stay costs hp: the unseen wall is worth a look")
-      (with-redefs [ready/stay-look-price (constantly {:gap 0 :delta 0})]
-        (is (not= :look (first (status))) "a look costs seconds and a wall seen closed would spare none")))))
+      (is (= :look (first (status identity))) "a dark stay costs hp: the unseen wall is worth a look")
+      (is (not= :look (first (status worthless))) "a goal worth nothing: giving it up spares the stay, so a wall seen closed would spare nothing"))))
 
 (defn room-look-at
   "The :look-at of ready/room-look of night-hut's ctx over extra, its stay's exposure priced at saving seconds."

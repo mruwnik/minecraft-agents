@@ -167,6 +167,15 @@
     (is (< (sense/cell-looks (priced nil) 50) (sense/cell-looks (priced cost/closed-cell-chance) 50))
         "a roof cell is closed at the roofed-room prior's ~0.6, far over the turn prior's 1/43: more looks pay")))
 
+(deftest a-find-spares-at-most-the-calls-worth
+  (let [reads {:cells [[3 64 0]]}
+        looks (fn [worth] (let [c (assoc (stub-ctx (tu/fake {:self {:pos feet}})) :worth (constantly worth))]
+                            (sense/cell-looks ((sense/find-price c 1000) nil reads) 50)))]
+    (is (pos? (looks ##Inf)) "a dear other way pays looks")
+    (is (zero? (looks 0)) "a call worth nothing: giving it up spares the other way, so no look pays")
+    (is (= (cost/cell-looks (- 30 (sense/read-walk-s (stub-ctx (tu/fake {:self {:pos feet}})) reads)) 50) (looks 30))
+        "worth 30 s: the find spares that less the walk")))
+
 (deftest a-costly-decision-is-made-again-only-after-looks-as-long-as-it
   (async done
     (tu/run-async done
