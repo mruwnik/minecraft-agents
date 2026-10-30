@@ -21,6 +21,8 @@
 (a/defargs settings
   {::seconds-per-level {:default 5 :spec (a/num-in 0 nil)
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
+   ::extra-s {:default 0 :spec (a/num-in 0 nil)
+              :doc "Seconds a death costs on top of its walk back, items and experience (death-cost); 0: the death is only what it takes to get back (Q79)."}
    ::notice-rate {:default {:other {:k 8 :n-s 42.4}
                             :ranged [{:case "lit 2" :blocks 2 :k 8 :n-s 11.2} {:case "lit 5" :blocks 5 :k 8 :n-s 18.7}
                                      {:case "lit 9" :blocks 9 :k 9 :n-s 46.9} {:case "lit 13" :blocks 13 :k 8 :n-s 21.2}
@@ -89,9 +91,9 @@
 
 (defn death-cost
   "Seconds a death at `at` ({:x :y :z}) costs: experience-cost and the walk back (back-cost:
-  its job resumes there) with the :carried items when not kept?."
+  its job resumes there) with the :carried items when not kept?, and the ::extra-s setting."
   [body at]
-  (+ (experience-cost body) (back-cost body at) (if (kept? body at) 0 (or (:carried body) 0))))
+  (+ (settings/get settings ::extra-s) (experience-cost body) (back-cost body at) (if (kept? body at) 0 (or (:carried body) 0))))
 
 (defn blow-outcome
   "{:dies :lived} of blows of about hit hp, damage hp of them expected, against the health and absorption of body: dies the

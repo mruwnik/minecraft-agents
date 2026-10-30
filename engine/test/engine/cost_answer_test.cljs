@@ -118,6 +118,20 @@
     (is (near (+ 1 1 xp back) (price bed {:damage 0 :seconds 1 :then [lethal]})) "a death in what follows pays it once too")
     (is (< (price (body 5) lethal) ##Inf) "a sure death is a finite price, bed or none")))
 
+(deftest an-extra-death-cost-raises-the-death-price-and-tips-a-quick-risky-answer-to-a-slow-safe-one-at-the-edge
+  (let [b (assoc (body 20) :respawn here)
+        risky {:damage 14 :hit 7 :seconds 5}
+        answers {:fight risky :flee {:damage 0 :seconds (+ 1 (cost/answer-price b risky here))}}
+        decide #(settings/with-settings {::death/extra-s %} (fn [] (cost/decide b answers here)))
+        base (decide 0)
+        gap (- (get-in base [:prices :flee]) (get-in base [:prices :fight]))
+        edge (/ gap (cost/death-chance b (:fight answers)))]
+    (is (= :fight (:answer base)) "no extra cost: the quick one is the cheaper")
+    (is (< 0 edge ##Inf) "the safe one is dearer now, by less than a death costs")
+    (is (= (+ (:death base) 7) (:death (decide 7))) "the extra is added to the death price")
+    (is (= :fight (:answer (decide (/ edge 2)))) "short of the edge the quick one holds")
+    (is (= :flee (:answer (decide (* 2 edge)))) "past the edge the safe one is taken")))
+
 (deftest a-survivor-pays-what-follows-whatever-it-costs
   (let [dear {:damage 100 :hit 5 :seconds 5000}
         after-it {:damage 0 :seconds 1 :then [dear]}]
