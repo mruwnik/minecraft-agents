@@ -2,6 +2,8 @@
 ;; never a lease on the job that wrote them. A stone wall across the plot at x 16 with a gate in it; the body 6 west of it.
 ;; Should-succeed: a :leave-open walk's gate is shut by the door-left reflex once jobs.lib.pass/leave-open-s (20 here) is out;
 ;; a pillar a finished job left stands until jobs.lib.ledger/ttl-s (30 here) is out, then the scaffold-left reflex takes it back.
+;; Should-succeed too: a root job that ends with scaffold it placed (fill-cells with a :purpose) hands it to the scaffold-left reflex at once, at the
+;; default ttl-s 3600 (jobs.lib.ledger/release-root!); a fill with no :purpose enters nothing in the ledger, so the reflex never fires.
 ;; Should-fail: with the default 600 s the gate stays open and door-left never fires.
 {:defaults
  {:tags [:door :cleanup :scaffold-left :memory]
@@ -34,4 +36,18 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 25}
             {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any] [:any]]}} :within-s 110}]
-   :after [[:not-block [10 0 16] "cobblestone"] [:not-block [10 1 16] "cobblestone"]]}]}
+   :after [[:not-block [10 0 16] "cobblestone"] [:not-block [10 1 16] "cobblestone"]]}
+  {:name "a-root-fills-scaffold-is-taken-back-once-its-root-ends"
+   :register [{:trigger :scaffold-left}]
+   :act [[:job (jobs.blocks.fill-cells {:cells [#at [12 0 16]] :use {:blocks ["cobblestone"]} :purpose :plug :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 60}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any]]}} :within-s 110}]
+   :after [[:not-block [12 0 16] "cobblestone"]]}
+  {:name "a-root-fill-with-no-purpose-leaves-nothing-for-the-reflex"
+   :register [{:trigger :scaffold-left}]
+   :act [[:job (jobs.blocks.fill-cells {:cells [#at [12 0 16]] :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 40}]
+   :after [[:block [12 0 16] "cobblestone"]]
+   :limit-s 60}]}
