@@ -769,7 +769,7 @@
     (job-ns/book-gained! (c {:items ["diamond"]}) before)
     (is (= {:collected 5 :wanted 4} @mem) "blocks dug out of a seal are not items asked for")))
 
-(deftest the-climb-to-near-may-clear-a-seal-for-a-body-shut-in-by-its-own-blocks
+(deftest the-climb-to-near-may-clear-a-seal-but-digs-no-stair-without-dig
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -780,7 +780,7 @@
                        f)]
           (with-redefs [child/run!* record]
             (await (tu/child-outcome eng job {:radius 6 :near {:x 4 :y 68 :z 0}} 10)))
-          (is (= [#{:walk :pillar :stair :clear-seal}] (distinct @ways))))))))
+          (is (= [#{:walk :pillar :clear-seal}] (distinct @ways))))))))
 
 (deftest a-drop-walk-offers-the-stair-only-with-dig
   (is (= #{:walk :pillar :clear-seal} (job-ns/drop-walk-ways {:args {}})))

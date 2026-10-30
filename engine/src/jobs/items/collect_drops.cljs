@@ -732,7 +732,7 @@
       (or (await (look!))
           (when (> (- (second (u/cell-vec near)) (feet-y c)) 1)
             (let [before (held-counts c)
-                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}}))]
+                  r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways (drop-walk-ways c)}))]
               (book-gained! c before)
               (cond
                 (= :continue r) :continue
