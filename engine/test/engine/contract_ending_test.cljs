@@ -11,7 +11,8 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.test-util :as tu]
-            [jobs.lib.choose :as choose]))
+            [jobs.lib.choose :as choose]
+            [jobs.lib.sense :as sense]))
 
 (deftest an-ending-names-its-cause-keyword
   (are [e k] (= k (contract/cause-key e))
@@ -428,7 +429,8 @@
             (is (< n (looks-at p)) "it looked again once the ttl passed")))))))
 
 (def looks-at-cell
-  "Asks for a look at the cell in :look-cell of the test world, which no look can settle."
+  "Asks for a look at the cell in :look-cell of the test world, which no look can settle (a test redefines it unknown:
+  the hook skips a known one)."
   {:can-start? (fn [_] (contract/look :unseen "never seen" :look-at [(:look-cell @world)]))
    :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
 
@@ -436,22 +438,23 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {'looks-at-cell looks-at-cell})
-              settle (^:async fn [] (dotimes [_ 3] (await (core/tick! eng))) (looks-at p))]
-          (swap! world assoc :look-cell [0 70 0])
-          (core/submit! eng '(looks-at-cell) {})
-          (let [n (await (settle))]
-            (is (pos? n) "it looked once")
-            (is (= n (await (settle))) "then waits")
-            (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 0.5])
-            (let [m (await (settle))]
-              (is (> m n) "the body moved: one more look")
-              (is (= m (await (settle))) "then waits again")
-              (swap! world assoc :look-cell [1 70 0])
-              (let [k (await (settle))]
-                (is (> k m) "other cells: one more look")
-                (is (= k (await (settle))) "then waits again")))
-            (is (nil? (:looks-rounds @world)))))))))
+        (with-redefs [sense/unknown? (constantly true)]
+          (let [{:keys [eng p]} (setup {'looks-at-cell looks-at-cell})
+                settle (^:async fn [] (dotimes [_ 3] (await (core/tick! eng))) (looks-at p))]
+            (swap! world assoc :look-cell [0 70 0])
+            (core/submit! eng '(looks-at-cell) {})
+            (let [n (await (settle))]
+              (is (pos? n) "it looked once")
+              (is (= n (await (settle))) "then waits")
+              (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 0.5])
+              (let [m (await (settle))]
+                (is (> m n) "the body moved: one more look")
+                (is (= m (await (settle))) "then waits again")
+                (swap! world assoc :look-cell [1 70 0])
+                (let [k (await (settle))]
+                  (is (> k m) "other cells: one more look")
+                  (is (= k (await (settle))) "then waits again")))
+              (is (nil? (:looks-rounds @world))))))))))
 
 (deftest a-cancelled-job-leaves-no-look-mark
   (async done
