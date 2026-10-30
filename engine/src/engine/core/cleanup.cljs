@@ -9,7 +9,7 @@
   job.cleanup_failed; a done one's data merges into the ending's."
   (:require [engine.args :as a]
             [engine.contract :as contract]
-            [engine.core.base :refer [cut-off! elapsed emit! mark now owner? since]]
+            [engine.core.base :refer [cut-off! elapsed emit! mark owner? since]]
             [engine.core.limits :as limits]
             [engine.core.tally :as tally]
             [engine.memory :as mem]

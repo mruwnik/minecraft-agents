@@ -84,6 +84,26 @@
           (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
           (is (<= 50 (:steps @world) 52) "it ends once its steps' 100 ms of CPU each spent the 5 s"))))))
 
+(deftest a-round-spends-the-larger-of-its-game-clock-and-cpu-time
+  (doseq [[clock-ms cpu-ms] [[10 100] [100 10]]]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (reset! world {})
+          (let [[seen sink] (tu/capture-sink)
+                game (atom 1000000)
+                cpu (atom 0)
+                spins {:defaults {:spend {:job-time 5}}
+                       :round (fn [c] (pace/steps! c (fn [] (swap! world update :steps (fnil inc 0))
+                                                       (swap! game + clock-ms) (swap! cpu + cpu-ms) :again)))}
+                eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now #(deref game) :cpu #(deref cpu)
+                                  :jobs {'spins spins} :triggers {}
+                                  :events (events/make {:body "Fake" :sinks [sink] :now #(deref game)})})]
+            (core/submit! eng '(spins) {})
+            (await (core/tick! eng))
+            (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
+            (is (<= 50 (:steps @world) 52) (str "the larger of " clock-ms " ms game and " cpu-ms " ms CPU per step spends the 5 s"))))))))
+
 (def waits
   {:round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})
 

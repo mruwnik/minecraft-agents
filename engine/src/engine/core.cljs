@@ -203,8 +203,14 @@
                         {:source :body :kind (keyword (:kind m))
                          :level (body-event-level (:kind m))})))))
 
-(defn process-cpu-ms []
+(defn process-cpu-ms
+  "The process's CPU time in ms: a round's time counts it too, so a body stuck computing under a frozen game clock still spends its budget."
+  []
   (let [u (.cpuUsage js/process)] (/ (+ (.-user u) (.-system u)) 1000)))
+
+(defonce default-cpu
+  ^{:doc "The CPU clock of an engine created without :cpu; tests set it to a fixed one so load cannot move a time budget."}
+  (atom process-cpu-ms))
 
 (defn create
   "An engine over primitives with state under dir. Restores engine.edn and
@@ -246,7 +252,7 @@
                              :world-time #(or (.-timeOfDay (.self primitives)) nil)
                              :world-age #(.worldAge primitives)
                              :live-jobs #(set (keys (:instances @st)))})
-        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :mono mono :cpu (or cpu process-cpu-ms) :clock-mark (atom [(now) (mono)]) :events ev
+        eng {:primitives primitives :jobs (ending/registry jobs) :triggers triggers :dir dir :now now :mono mono :cpu (or cpu @default-cpu) :clock-mark (atom [(now) (mono)]) :events ev
              :store store
              :hurt (hurt/new-state)
              :world (or world ((:world/blank hooks/all)))

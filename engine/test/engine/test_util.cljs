@@ -20,6 +20,8 @@
             [jobs.lib.near :as near]
             [jobs.lib.walk.plan :as wplan]))
 
+(reset! core/default-cpu (constantly 0))
+
 (def require-here node/require-here)
 
 (defn kind-reason "A status [kind text data] as [kind reason]." [[kind _ data]] [kind (:reason data)])
