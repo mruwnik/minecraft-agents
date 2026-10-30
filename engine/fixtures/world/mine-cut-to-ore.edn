@@ -10,4 +10,10 @@
    :blocks [[:fill [20 0 0] [24 12 31] "glass"] [:set [26 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 12 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
-   :after [[:item "raw_iron" 1] [:not-block [26 0 16] "iron_ore"]]}]}
+   :after [[:item "raw_iron" 1] [:not-block [26 0 16] "iron_ore"]]}
+  {:name "gravel-over-a-planned-cut-cell-is-cut-round"
+   :doc "Stone wall with a two-high glass row to the ore (seen through it); gravel hides in the stone over the row's second cell's head. The cut plans through the row, a look shows the gravel, the cut goes round and never opens the cell under it."
+   :blocks [[:fill [20 0 0] [24 12 31] "stone"] [:fill [20 0 16] [24 1 16] "glass"] [:set [21 2 16] "gravel"] [:set [26 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 12 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
+   :after [[:item "raw_iron" 1] [:not-block [26 0 16] "iron_ore"] [:block [21 2 16] "gravel"]]}]}
