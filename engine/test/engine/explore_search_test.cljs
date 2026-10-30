@@ -21,6 +21,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as world]
             [jobs.lib.child :as child]
+            [jobs.lib.cost.value :as value]
             [plan.shape :as shape]
             [jobs.explore.search :as search]
             [engine.contract :as contract]
@@ -1103,7 +1104,9 @@
                   (with-redefs [ctx/worth (constantly 700)] (await (search! {:target "diamond_block" :max-distance 23} {} 60 #(reset! prims (:p %))))))
               e (not-found-of s)]
           (is (= :stuck (:why e)))
-          (is (= 4 (get-in e [:coverage :scans])) "the first walk and the three retries a 700 s goal pays for")
+          (is (= (inc (count (take-while #(> (* 700 (value/retry-chance :walk %)) (value/retry-s :walk)) (iterate inc 1))))
+                 (get-in e [:coverage :scans]))
+              "the first walk and the retries a 700 s goal pays for at the measured :walk counts")
           (is (= 8 (looks s)) "one look round (four headings, level and down) at the first spot only"))))))
 
 (deftest done-carries-the-found-and-coverage-for-a-limit-ending
