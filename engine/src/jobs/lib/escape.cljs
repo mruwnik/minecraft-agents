@@ -85,6 +85,21 @@
 
 (defn protected? [n] (boolean (and n (re-find protected n))))
 
+(def guess-classes "The classes of a guessed rock cell (guess-class)." [:layer-beside :layer-apart :placed :apart])
+
+(def layer-top "Cells below this y are in the overworld's bedrock layer." -59)
+
+(defn guess-class
+  "The class of an unseen cell at height y that a route guesses as rock, by the names of its seen solid face neighbours: in
+  the bedrock layer (below layer-top) :layer-beside with a protected neighbour, else :layer-apart; above it :placed with a
+  protected neighbour that is not bedrock (a chest, a door: a build, not a rock room), else :apart. The measured rate of rock
+  never dug differs between them (world-test.guess-rock)."
+  [y names]
+  (let [prot (filter protected? names)]
+    (if (< y layer-top)
+      (if (seq prot) :layer-beside :layer-apart)
+      (if (some #(not= "bedrock" %) prot) :placed :apart))))
+
 (defn heading
   "Unit step [dx dz] along the larger horizontal axis from cell a toward cell b, or nil when b is straight above or
   below."

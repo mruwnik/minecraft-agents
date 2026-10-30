@@ -522,7 +522,7 @@
     (counted-chance {:k absent :n (+ absent present) :prior [(:absent prior) (:present prior)]})))
 
 (defn guess-bad-chance
-  "The chance a guessed cell of class (:beside or :apart, escalate-choose/beside-undiggable?) is rock never dug: counted-chance
+  "The chance a guessed cell of class (escape/guess-classes) is rock never dug: counted-chance
   of the call's own `looks` {:bad :all} of that class over value/::guess-rock-counts' pseudo-counts of it."
   [class {:keys [bad all]}]
   (let [prior (get (settings/get value/settings ::value/guess-rock-counts) class)]

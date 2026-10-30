@@ -739,12 +739,12 @@
 
 (deftest a-dig-route-over-guesses-is-priced-once-in-the-search-at-the-chance-each-holds
   ;; each guess is dug at its dig's price over 1 - its class's risk, in the search: a route's seconds carry its risk and
-  ;; are held to :worth-s as they are; a guess beside seen undiggable rock (a chest) is of class :beside
+  ;; are held to :worth-s as they are; a guess beside seen undiggable rock (a chest) is of class :placed
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air" "2,66,0" "chest")
         hidden #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]}
         p (hiding-with-pickaxe world hidden)
         answer #(choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false %)
-        risk {:beside 0.5 :apart 0.2}
+        risk {:placed 0.5 :apart 0.2}
         plain (answer {})
         {:keys [seconds dig]} (answer {:guess-risk risk :worth-s ##Inf})
         priced (fn [worth] (some? (answer {:guess-risk risk :worth-s worth})))]
@@ -753,31 +753,31 @@
     (is (> seconds (:seconds plain)) "the risk is in the route's seconds")
     (is (priced (* 1.01 seconds)) "priced once: no second factor on the route")
     (is (not (priced (* 0.99 seconds))))
-    (is (not-any? hidden (:dig (answer {:guess-risk {:beside 0.9 :apart 0.9} :worth-s ##Inf}))) "guesses that nearly always fail are dug round through seen rock")
-    (is (= [[2 65 0]] (map :cell (filter :beside (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
+    (is (not-any? hidden (:dig (answer {:guess-risk {:placed 0.9 :apart 0.9} :worth-s ##Inf}))) "guesses that nearly always fail are dug round through seen rock")
+    (is (= [[2 65 0]] (map :cell (filter (comp #{:placed} :class) (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
 
 (deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-and-at-zero-risk-by-its-price
   ;; the stair east from [0 64 0] two steps cuts [0 66 0] [1 66 0] [1 65 0] [1 67 0] [2 67 0] [2 66 0]; three are hidden,
-  ;; [2 66 0] under a seen light (class :beside): 10 s holds with 0.8 * 0.8 * 0.5 = 0.32
+  ;; [2 66 0] under a seen light (class :placed): 10 s holds with 0.8 * 0.8 * 0.5 = 0.32
   (let [p (hiding-with-pickaxe (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "2,67,0" "chest")
                                #{[1 65 0] [1 66 0] [2 66 0]})
         guesses (choose/way-guesses p {:step :stair :heading :east :steps 2} [0 64 0])
-        risk {:beside 0.5 :apart 0.2}]
-    (is (= {[1 65 0] false [1 66 0] false [2 66 0] true} (into {} (map (juxt :cell :beside)) guesses)))
+        risk {:placed 0.5 :apart 0.2}]
+    (is (= {[1 65 0] :apart [1 66 0] :apart [2 66 0] :placed} (into {} (map (juxt :cell :class)) guesses)))
     (is (choose/past-worth? 10 guesses risk 31))
     (is (not (choose/past-worth? 10 guesses risk 32)))
-    (is (choose/past-worth? 41 guesses {:beside 0 :apart 0} 38.8) "no look has failed: a stair dearer than the worth is still none")
-    (is (not (choose/past-worth? 10 guesses {:beside 0 :apart 0} 10)))
-    (is (choose/past-worth? 10 guesses {:beside 1 :apart 0} ##Inf) "a guess sure to fail: past any worth, arrival too")))
+    (is (choose/past-worth? 41 guesses {:placed 0 :apart 0} 38.8) "no look has failed: a stair dearer than the worth is still none")
+    (is (not (choose/past-worth? 10 guesses {:placed 0 :apart 0} 10)))
+    (is (choose/past-worth? 10 guesses {:placed 1 :apart 0} ##Inf) "a guess sure to fail: past any worth, arrival too")))
 
 (deftest the-guesses-a-stair-reached-count-as-looks-the-cell-it-could-not-dig-a-bad-one
   (let [{:keys [eng]} (gt/setup {:blocks {}})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
-        e {:step :stair :guesses [{:cell [1 65 0] :beside false} {:cell [2 66 0] :beside true} {:cell [3 67 0] :beside false}]}]
+        e {:step :stair :guesses [{:cell [1 65 0] :class :apart} {:cell [2 66 0] :class :placed} {:cell [3 67 0] :class :apart}]}]
     (.setOwner (:primitives eng) "tx")
     (esc/note-guesses! c e {:kind :stopped :cause {:reason :not-diggable :cell [2 66 0] :block "chest"}
                             :data {:dug [{:cell [1 65 0] :block "stone"}]}})
-    (is (= {:beside {:all 1 :bad 1} :apart {:all 1 :bad 0}} (:guess-looks (ctx/mem c))) "the cell past the stop is no look")))
+    (is (= {:placed {:all 1 :bad 1} :apart {:all 1 :bad 0}} (:guess-looks (ctx/mem c))) "the cell past the stop is no look")))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")

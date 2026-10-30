@@ -375,14 +375,13 @@
   [id]
   (swap! kept-routes dissoc id))
 
-(defn beside-undiggable?
-  "Whether a seen face-neighbour of cell is solid rock an escalation never digs (escape/diggable?): such rock
-  comes in veins and rooms, so a guess beside it is at risk. sensed: cell -> the sensed block or nil."
-  [sensed block-at [x y z]]
-  (boolean (some (fn [[dx dy dz]] (let [at [(+ x dx) (+ y dy) (+ z dz)] b (sensed at)]
-                                    (and b (not (true? (.-unknown b))) (escape/solid? (.-name b))
-                                         (not (escape/diggable? block-at (constantly true) at)))))
-                 [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
+(defn guess-class
+  "The escape/guess-class of unseen cell [x y z]: its seen solid face neighbours' names decide. sensed: cell -> the sensed
+  block or nil."
+  [sensed [x y z]]
+  (escape/guess-class y (keep (fn [[dx dy dz]] (let [b (sensed [(+ x dx) (+ y dy) (+ z dz)])]
+                                                  (when (and b (not (true? (.-unknown b))) (escape/solid? (.-name b))) (.-name b))))
+                              [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
 
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
@@ -398,10 +397,10 @@
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
-  :guess-risk {:beside :apart}: beside-undiggable? or not), in the search; it is none over :worth-s seconds."
+  :guess-risk {class chance}: guess-class), in the search; it is none over :worth-s seconds."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
   (let [own-s (:own-s route-opts)
-        {:keys [beside apart] :or {beside 0 apart 0}} (:guess-risk route-opts)
+        guess-risk (:guess-risk route-opts)
         worth-s (:worth-s route-opts)
         route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s)
         [fx _ fz] from
@@ -420,11 +419,9 @@
         prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s})
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
-                     (= beside apart) beside
-                     (beside-undiggable? (fn [[x y z]] (sensed x y z)) block-at cell) beside
-                     :else apart))
+                     :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
-        prices (if (= 0 beside apart) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
+        prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
         opts (fn [refused] (merge prices
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))
@@ -434,7 +431,7 @@
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
                  (if slice
-                   (sliced-answer slice [from goal floors-unseen-ok? route-opts [beside apart] refused] #(dig-route/search seen-floor from goal (opts refused)))
+                   (sliced-answer slice [from goal floors-unseen-ok? route-opts guess-risk refused] #(dig-route/search seen-floor from goal (opts refused)))
                    (dig-route/route seen-floor from goal (opts refused))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
@@ -451,8 +448,8 @@
       a)))
 
 (defn route-cells
-  "[{:cell :block :guess :beside}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
-  rock), :beside on a guess beside-undiggable?; [] when nothing is left to dig; :searching or nil as route-answer."
+  "[{:cell :block :guess :class}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
+  rock), :class its guess-class; [] when nothing is left to dig; :searching or nil as route-answer."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
   ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
@@ -464,12 +461,12 @@
        a (let [sensed #(u/sensed p (zipmap [:x :y :z] %))]
            (mapv (fn [cell] (let [guess (dig-look/unknown? p cell)]
                               (cond-> {:cell cell :block (block-at cell) :guess guess}
-                                (and guess (beside-undiggable? sensed block-at cell)) (assoc :beside true))))
+                                guess (assoc :class (guess-class sensed cell)))))
                  (:dig a)))))))
 
 (defn way-guesses
-  "[{:cell :beside}]: the cells stair or door e from feet cuts that the body has not sensed (read as rock), :beside
-  when beside-undiggable?."
+  "[{:cell :class}]: the cells stair or door e from feet cuts that the body has not sensed (read as rock), each with its
+  guess-class."
   [p {:keys [step heading steps]} feet]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
@@ -478,13 +475,14 @@
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
                 :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading)))
                 nil)]
-    (vec (for [cell cells :when (unseen? cell)] {:cell cell :beside (beside-undiggable? sensed block-at cell)}))))
+    (vec (for [cell cells :when (unseen? cell)] {:cell cell 
+                                                :class (guess-class sensed cell)}))))
 
 (defn past-worth?
   "Whether a way priced price-s (its own cells' put-backs too) is dearer than worth-s once priced over the chance each
-  of its guesses is diggable (1 - its class's risk in guess-risk {:beside :apart}): the stair or door has no search to price them in."
-  [price-s guesses {:keys [beside apart] :as guess-risk} worth-s]
-  (not (cost/affords? (/ price-s (reduce * 1 (map #(- 1 (if (:beside %) beside apart)) guesses))) worth-s)))
+  of its guesses is diggable (1 - its class's risk in guess-risk {class chance}): the stair or door has no search to price them in."
+  [price-s guesses guess-risk worth-s]
+  (not (cost/affords? (/ price-s (reduce * 1 (map #(- 1 (get guess-risk (:class %) 0)) guesses))) worth-s)))
 
 (def dig-margin
   "Blocks round its two ends a dig route (dig-way, frontier-way, a climb's) may stray. Not a price of guessed cells (unseen-step-s
@@ -494,8 +492,7 @@
 
 (defn search-opts
   "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches, its :own-s and :own-cut
-  (a way that may cut the body's own builds: searched apart), :guess-risk ({:beside :apart} the chance a guess beside
-  seen undiggable rock or apart from it fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
+  (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
   [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin}

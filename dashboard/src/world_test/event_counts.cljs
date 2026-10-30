@@ -30,7 +30,6 @@
   closing-rate: of the same flights, the gap to each chaser seen as two steps in a row start (retreat.step-speed :chasers), its growth
   over the seconds between the starts, per mob kind and sprint state (cost.danger/::closing-rates).
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
-  guess-looks [--agents DIR] (world-test.guess-looks; all bodies) counts from the logs alone: k of n looks of a dig route's guessed rock cells that showed it not diggable, per class (go-to escalation/prior-good-looks).
   look-seconds [--agents DIR] (world-test.look-seconds; all bodies) counts from the logs alone the :wall-ms per look of the :sense.looked events: n, median, mean (cost.look/look-tick-s).
   retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
   tree-logs (world-test.tree-logs; trial bodies only) counts from the logs alone the logs of each fell-tree :done: n, mean, median (trees/::logs-per-tree is the mean).

@@ -170,11 +170,11 @@
                        (dec best))))))
 
 (defn note-guess!
-  "Memory :guess-looks {class {:bad :all}}: cell, which the route guessed as rock, of class :beside or :apart
-  (escalate-choose/beside-undiggable?), was looked at, and was (ok?) or was not as guessed."
-  [c cell beside? ok?]
-  (ctx/emit! c :go-to.guess-look :info {:class (if beside? :beside :apart) :ok? ok? :cell cell})
-  (ctx/update-mem! c update-in [:guess-looks (if beside? :beside :apart)]
+  "Memory :guess-looks {class {:bad :all}}: cell, which the route guessed as rock, of class (escape/guess-class),
+  was looked at, and was (ok?) or was not as guessed."
+  [c cell class ok?]
+  (ctx/emit! c :go-to.guess-look :info {:class class :ok? ok? :cell cell})
+  (ctx/update-mem! c update-in [:guess-looks class]
                    #(-> % (update :all (fnil inc 0)) (update :bad (fnil + 0) (if ok? 0 1)))))
 
 (defn note-guesses!
@@ -184,17 +184,16 @@
   (let [dug (set (map (comp vec :cell) (:dug (:data r))))
         {:keys [reason cell]} (stop-detail r)
         bad (when (= :not-diggable reason) (some-> cell vec))]
-    (doseq [{g :cell beside :beside} guesses
+    (doseq [{g :cell class :class} guesses
             :when (or (dug g) (= bad g))]
-      (note-guess! c g beside (not= bad g)))))
+      (note-guess! c g class (not= bad g)))))
 
 (defn guess-risk
-  "{:beside :apart}: the chance a guess of each class is not diggable (cost/guess-bad-chance): those this call looked at
-  on top of the measured prior."
+  "{class chance}: the chance a guess of each escape/guess-classes class is not diggable (cost/guess-bad-chance): those this
+  call looked at on top of the measured prior."
   [c]
   (let [looks (:guess-looks (ctx/mem c))]
-    {:beside (cost/guess-bad-chance :beside (:beside looks))
-     :apart (cost/guess-bad-chance :apart (:apart looks))}))
+    (into {} (map (fn [k] [k (cost/guess-bad-chance k (get looks k))])) escape/guess-classes)))
 
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape/choose and the dig ways): a search that stood the body
