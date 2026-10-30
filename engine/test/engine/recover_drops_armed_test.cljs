@@ -36,14 +36,43 @@
       (await (run-until-empty eng 60))
       {:eng eng :seen seen :p p}))))
 
-(def short-pile "The field-report pile with 2 of its 24 raw iron: its worth, times the chance of living through the walk past a zombie and back, under what that walk costs an unarmed body."
-  (vec (keep #(case (:slot %) 17 nil 18 (assoc % :count 2) %) dt/death-pile-of-the-field-report)))
+(defn iron-pile
+  "The field-report pile with n of its 24 raw iron."
+  [n]
+  (vec (keep #(case (:slot %) 17 nil 18 (assoc % :count n) %) dt/death-pile-of-the-field-report)))
+
+(defn ^:async fetched-unarmed?
+  "Whether the unarmed body with no chest goes for the pile of n raw iron past the zombie (a skipped one stays open or is a final skip)."
+  [n]
+  (let [{:keys [eng]} (await ((run-with-chest nil false "zombie" (iron-pile n))))]
+    (= :collected (:decision (recovered eng)))))
+
+(def edge-memo (atom nil))
+
+(defn ^:async worth-edge
+  "The smallest raw iron count whose pile the unarmed body fetches past the zombie, found by asking the job's own decision
+  (value x survival chance against the walk's cost) so no price is copied here; the decision is monotone in the count."
+  []
+  (or @edge-memo
+      (do (assert (not (await (fetched-unarmed? 1))) "one iron is the skipped side")
+          (assert (await (fetched-unarmed? 24)) "the whole pile is the fetched side")
+          (loop [lo 1 hi 24]
+            (if (= 1 (- hi lo))
+              (reset! edge-memo hi)
+              (let [mid (quot (+ lo hi) 2)]
+                (if (await (fetched-unarmed? mid)) (recur lo mid) (recur mid hi))))))))
+
+(defn ^:async short-pile
+  "The field-report pile one raw iron under the edge: worth, times the chance of living through the walk past a zombie and back,
+  under what that walk costs an unarmed body."
+  []
+  (iron-pile (dec (await (worth-edge)))))
 
 (deftest an-unarmed-body-fetches-a-sword-and-a-helmet-before-the-zombie-trip
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen p]} (await ((run-with-chest kit-in-chest true "zombie" short-pile)))]
+        (let [{:keys [eng seen p]} (await ((run-with-chest kit-in-chest true "zombie" (await (short-pile)))))]
           (is (= 1 (get (inv p) "iron_sword")))
           (is (= "iron_helmet" (get (worn p) "head")))
           (is (re-find #"^fetch: " (decided-text eng)))
@@ -53,15 +82,23 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await ((run-with-chest nil false "zombie" short-pile)))]
+        (let [{:keys [eng p]} (await ((run-with-chest nil false "zombie" (await (short-pile)))))]
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
+
+(deftest the-edge-pile-is-fetched-unarmed-and-one-iron-under-it-is-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [edge (await (worth-edge))]
+          (is (not (await (fetched-unarmed? (dec edge)))) "one raw iron under the edge is left")
+          (is (await (fetched-unarmed? edge)) "the edge pile is fetched"))))))
 
 (deftest a-chest-whose-stock-is-unknown-is-not-searched
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await ((run-with-chest kit-in-chest false "zombie" short-pile)))]
+        (let [{:keys [eng p]} (await ((run-with-chest kit-in-chest false "zombie" (await (short-pile)))))]
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (nil? (get (inv p) "iron_sword"))))))))
 

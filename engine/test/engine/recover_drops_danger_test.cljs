@@ -123,21 +123,43 @@
           (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)))
           (is (< 3600 (js/parseFloat (second (re-find #"value ([0-9.]+)" (decided-text eng))))) "the kit is priced at hours"))))))
 
+(def kit-pile
+  (into dt/death-pile-of-the-field-report
+        (map #(hash-map :name (str "iron_" %) :count 1)
+             ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"])))
+
+(defn ^:async pack-left?
+  "Whether the unarmed body leaves the kit pile at the far corner to a pack of n skeletons around the walk (a danger skip stays open)."
+  [n]
+  (let [at {:x 22 :y 64 :z 22}
+        pack (for [i (range n)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 (mod i 6)) :y 64 :z (+ 12.5 (quot i 6))}})
+        {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (pile-drops kit-pile) pack))})]
+    (die! eng {:pos at :inventory kit-pile :cause "skeleton"})
+    (core/submit! eng job {})
+    (await (run-until-empty eng 20))
+    (and (nil? (recovered eng)) (boolean (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))
+
+(def pack-edge-memo (atom nil))
+
+(defn ^:async pack-edge
+  "The smallest pack of skeletons that makes the unarmed body leave the kit pile, found by asking the job's own decision (monotone in the count)."
+  []
+  (or @pack-edge-memo
+      (do (assert (not (await (pack-left? 0))) "no pack: the pile is fetched")
+          (assert (await (pack-left? 40)) "a large pack: the pile is left")
+          (loop [lo 0 hi 40]
+            (if (= 1 (- hi lo))
+              (reset! pack-edge-memo hi)
+              (let [mid (quot (+ lo hi) 2)]
+                (if (await (pack-left? mid)) (recur lo mid) (recur mid hi))))))))
+
 (deftest a-kit-pile-inside-a-skeleton-packs-range-is-left-though-the-walk-skirts-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [pile (into dt/death-pile-of-the-field-report
-                         (map #(hash-map :name (str "iron_" %) :count 1)
-                              ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"]))
-              at {:x 22 :y 64 :z 22}
-              pack (for [i (range 12)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 10.5 (mod i 6)) :y 64 :z (+ 12.5 (quot i 6))}})
-              {:keys [eng]} (setup {:floor [-10 -10 40 40] :entities (vec (concat (pile-drops pile) pack))})]
-          (die! eng {:pos at :inventory pile :cause "skeleton"})
-          (core/submit! eng job {})
-          (await (run-until-empty eng 20))
-          (is (nil? (recovered eng)) "the collect stands where all twelve shoot, and their arrows land together")
-          (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng)) (decided-text eng)))))))
+        (let [edge (await (pack-edge))]
+          (is (await (pack-left? edge)) "the collect stands where the pack shoots, and their arrows land together")
+          (is (not (await (pack-left? (dec edge)))) "one skeleton fewer and the pile is fetched"))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
   (async done
