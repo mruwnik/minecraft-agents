@@ -664,6 +664,33 @@
           (is @fetched)
           (is (= :fed (:reason (done-event s))) "the cows behind the body after the fetch are found by a new look round"))))))
 
+(deftest animals-are-looked-for-again-after-a-food-fetch-that-follows-some-feedings
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup-seeing (assoc (chest-world [{:name "wheat" :count 10}]) :inventory (wheat 2)
+                                       :entities (mapv #(cow % 2) [1 2 3 4])) nil)
+              ^js p (:p s)
+              orig (.-entities p)
+              hidden (atom false)
+              ran-out (atom false)
+              fetched (atom false)]
+          (calf-per-pair! p)
+          (perception/pass! (aget p "perception"))
+          (.override (.-world p) "look" (fn [token a impl] (reset! hidden false) (impl token a)))
+          (set! (.-entities p)
+                (fn [opts]
+                  (let [n (count-of s "wheat")]
+                    (when (zero? n) (reset! ran-out true))
+                    (when (and @ran-out (not @fetched) (pos? n))
+                      (reset! fetched true)
+                      (reset! hidden true)))
+                  (if @hidden #js [] (.call orig p opts))))
+          (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow" :pairs 2}) {})
+          (await (run-ticks s 200 700))
+          (is @fetched)
+          (is (= 4 (count (:fed (done-event s)))) "the cows behind the body after the second fetch are found by a new look round"))))))
+
 (deftest fetch-false-waits-for-food-and-leaves-the-chest
   (async done
     (tu/run-async done

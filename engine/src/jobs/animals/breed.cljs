@@ -431,7 +431,7 @@
       (>= (count (:fed m)) n) (await (finish! c :fed))
       (and (not (:pen-walked m)) (pen-box c) (not (animals/in-box? (pen-box c) (u/self-pos c)))
            (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2)) (await (walk-to-pen! c (pen-box c)))
-      (and (empty? cands) (empty? (:fed m)) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
+      (and (empty? cands) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
       (nil? food) (await (fetch-food! c))
       (or (empty? cands) (and (empty? (:fed m)) (< (count (animals/adults (:primitives c) mob (:radius (:args c)))) 2))) (await (finish! c (out-reason c)))
       :else (await (engage! c (animals/pick c cands) food)))))
