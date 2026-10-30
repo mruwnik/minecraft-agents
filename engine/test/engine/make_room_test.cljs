@@ -195,13 +195,14 @@
   (let [inventory [{:name "oak_log" :count 4 :slot 0}
                    {:name "dirt" :count 40 :slot 1}
                    {:name "gravel" :count 9 :slot 2}
-                   {:name "stick" :count 3 :slot 3}
+                   {:name "dandelion" :count 3 :slot 3}
                    {:name "poppy" :count 3 :slot 4}]
         order (fn [recency] (names-of (ord/toss-order inventory {} recency 20)))]
-    (is (= ["stick" "poppy" "dirt" "gravel" "oak_log"] (order {})) "by worth: stick and poppy equal (3, 3 by slot), then the blocks, the log dearer")
-    (is (= ["poppy" "stick" "dirt" "gravel" "oak_log"] (order {"stick" 100})) "the one picked up most recently goes last of its worth")
-    (is (= ["stick" "poppy" "dirt" "gravel" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
-        "stick has no pick-up (0): before the picked-up names; later pick-ups after earlier ones")))
+    (is (= (:value (cost/item-value [{:name "dandelion" :count 1}])) (:value (cost/item-value [{:name "poppy" :count 1}]))) "the two flowers are worth the same")
+    (is (= ["dandelion" "poppy" "dirt" "gravel" "oak_log"] (order {})) "by worth: dandelion and poppy equal (3, 3 by slot), then the blocks, the log dearer")
+    (is (= ["poppy" "dandelion" "dirt" "gravel" "oak_log"] (order {"dandelion" 100})) "the one picked up most recently goes last of its worth")
+    (is (= ["dandelion" "poppy" "dirt" "gravel" "oak_log"] (order {"poppy" 100 "gravel" 50 "dirt" 50}))
+        "dandelion has no pick-up (0): before the picked-up names; later pick-ups after earlier ones")))
 
 (deftest toss-order-throws-cheapest-blocks-first-and-keeps-coal-and-ores-below-their-worth
   (let [inventory [{:name "coal" :count 30 :slot 0}
