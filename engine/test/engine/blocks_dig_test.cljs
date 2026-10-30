@@ -483,6 +483,21 @@
           (is (= :nothing-possible (:kind e)) "the walk ran: no route is not a fact to wait on")
           (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
 
+(deftest the-walk-into-reach-clears-seals-unless-the-call-says-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ways-of (fn ^:async ways-of* [args]
+                        (let [seen (atom [])
+                              env (setup {:self body :blocks {"12,64,0" "dirt"}})
+                              go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+                              stub (fn ^:async spy [c] (swap! seen conj (:ways (:args c))) (ctx/end c :done nil {:arrived false :why :no-path}))
+                              env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))]
+                          (await (tu/child-outcome (:eng env) job (merge {:pos [12 64 0]} args) 6))
+                          (first @seen)))]
+          (is (contains? (await (ways-of {})) :clear-seal) "by default a walk may dig its own seal")
+          (is (= #{:walk} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own"))))))
+
 (defn after-walks
   "env with jobs.movement.go-to replaced by the real one followed by (f p): the world changes during the walk."
   [env f]

@@ -73,6 +73,7 @@
    :see {:doc "true: dig only from where the eye sees the block (jobs.lib.aim: nothing seen solid in the way, as a player aims), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough, the game lets a dig pass through blocks" :spec boolean? :default true}
    :through {:doc "false: no block in the aim line is dug first; a block no stand sees ends :unreachable (a take-back digs nothing but its own blocks)" :spec boolean? :default true}
    :pillar {:doc "false: a block overhead that no walk reaches is not pillared up to (the caller's :ways leave out :pillar)" :spec boolean? :default true}
+   :clear-seal {:doc "false: the walk into reach leaves out go-to's :clear-seal (a seal cleanup's own dig must not start another cleanup)" :spec boolean? :default true}
    :walk {:doc "false: a block out of reach (or out of sight with :see) ends :unreachable :no-walk at once, the body takes no step to it (a pick on the way)" :spec boolean? :default true}
    :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}

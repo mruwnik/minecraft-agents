@@ -297,7 +297,7 @@
           (let [[x y z] cell
                 outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept (into #{:fluid-adjacent :falling-block :under-feet}
                                                                            (filter #{:lava-adjacent}) (:accept (:args c)))
-                                                                     :ignore-zones? true :through false}))]
+                                                                     :ignore-zones? true :through false :clear-seal false}))]
             (when (and under? (not= :continue outcome)) (await (walk/settle! c)))
             (cond
               (= :continue outcome) :continue
