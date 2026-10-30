@@ -1,0 +1,20 @@
+;; Card 6558d218 (fix 388739808): at night a body roofed in a lit tunnel whose far end bends out of sight judges the tunnel without a priced edge walk
+;; (look-edge/look! bought from night/look-worth, the cheapest way left): it ends roofed and stays near the start. Live, the bend never makes a
+;; pending side (no walk-look runs); the priced walk itself is pinned by walk-look-test and shelter-test.
+;; Sky grid (y -6..-1 is stone over void): tunnel along x 4..29 at z 16, y -5..-4, torches; at x 29 it turns north to z 12 (a bend hides the rest).
+;; Needs night: --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :look]
+  :time :night :time-why :night-light
+  :blocks [[:fill [0 -6 8] [31 -1 20] "stone"]
+           [:fill [4 -5 16] [29 -4 16] "air"] [:fill [29 -5 12] [29 -4 15] "air"]
+           [:set [8 -5 16] "torch"] [:set [18 -5 16] "torch"] [:set [27 -5 16] "torch"] [:set [29 -5 13] "torch"]]
+  :body {:at [24.5 -5 16.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 8]]}
+  :limit-s 80}
+ :cases
+ [{:name "lit-tunnel-with-a-bend-ends-roofed-without-an-edge-walk"
+   :act [[:job (jobs.survival.night)]
+         [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night"}} 60]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :within-s 60 :of-job true}
+            {:no-event {:source :job :data {:pos [:not #{nil [:near #at [24.5 -5 16.5] 14]}]}} :of-job true :for-s 40}]
+   :after [[:body-near [24.5 -5 16.5] 14]]}]}
