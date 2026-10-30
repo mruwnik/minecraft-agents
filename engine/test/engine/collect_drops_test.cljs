@@ -9,6 +9,7 @@
             [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.items.collect-drops :as job-ns]
             [jobs.lib.child :as child]
@@ -761,6 +762,20 @@
           (is (= :no-route (:out (await (run nil :arrived)))) "no frontier toward the drop: left")
           (is (= :no-route (:out (await (run [4 64 0] nil)))) "nor when the walk there fails")
           (is (= :continue (:out (await (run [4 64 0] :continue)))) "a walk that waits on the world waits"))))))
+
+(deftest a-partial-dig-books-the-dug-cells-out-of-the-worth-the-next-plan-gets
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j"}
+              item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}
+              routes (atom 0) worths (atom [])]
+          (with-redefs [job-ns/look-pit! (fn [_ _ _] nil)
+                        dig-look/look-at! (fn [_ _] nil)
+                        job-ns/drop-route (fn [_ worth _ _ _ _ _] (swap! worths conj worth) (if (= 1 (swap! routes inc)) {:dig [[1 63 0] [2 63 0] [3 63 0]]} {:dig []}))
+                        job-ns/dig-cells! (fn [_ cells] (if (= 1 @routes) {:out :unreachable :cell (nth cells 2) :n 2} :dug))]
+            (is (= :dug (await (job-ns/dig-to! c item))))
+            (let [[w1 w2] @worths] (is (< w2 w1) "the two cells dug come out of the worth"))))))))
 
 (deftest a-drop-route-that-spends-its-nodes-goes-on-at-the-next-call
   (let [seen (fn [[x y z]] (cond (and (<= 16 x 22) (<= 0 y 1) (= z 16)) "air"

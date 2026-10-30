@@ -401,11 +401,12 @@
                     :no-route)
           :too-big :too-big
           nil
-          (let [d (await (dig-cells! c (:dig r)))]
+          (let [priced (mapv (fn [cell] ((:dig-s prices) (or (seen-name cell) "stone") cell)) (:dig r))
+                d (await (dig-cells! c (:dig r)))]
             (cond
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
-              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass) spent))
+              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass) (+ spent (reduce + (take (:n d) priced)))))
               (= :unseen (:out d))
               (let [l (await (light-here! c))]
                 (if l
