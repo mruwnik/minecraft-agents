@@ -76,6 +76,22 @@
           (is (pos? none))
           (is (<= outside none) "a bed elsewhere is not the shut room's answer, so it does not raise the worth"))))))
 
+(deftest night-door-with-a-cheaper-bed-outside-takes-the-bed-and-does-not-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:inventory st/dirt-stack}))]
+          (st/know-bed! eng {:x 30 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.night) {})
+          (let [log (await (with-child-log #(tu/run-until-empty eng 8)))
+                priced (st/emitted seen :night.door-shut-priced)]
+            (is (= 1 (count priced)) "one event for the decision")
+            (is (false? (:shut? (first priced))) (pr-str priced))
+            (is (contains? (:prices (first priced)) :bed))
+            (is (empty? (filter (fn [[k _ a]] (and (= :enter-room k) (not (pos? (or (:worth a) 0))))) log))
+                "no shut at worth 0")
+            (is (= [] (st/calls p "place")) "nothing placed")))))))
+
 (deftest look-worth-is-never-below-zero
   (async done
     (tu/run-async done

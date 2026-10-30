@@ -1,5 +1,5 @@
 ;; Card f69ae894 (fix 675df59db): at night a body in a closed room whose door stands open shuts the door (jobs.survival.enter-room) instead of digging in,
-;; the shut worth being the cheapest way left over the bed's answer when the bed lies in the room; a bed seen outside the room (through a glass window; the stone walls hide it) does not make it unworthy.
+;; the shut worth being the cheapest way left over the bed's answer when the bed lies in the room; a bed seen outside the room (through a glass window) that is the cheaper way is walked to and slept in, the door not shut (night.door-shut-priced shows the prices).
 ;; Hut: stone x 8..16, z 8..16, y 0..3, room 9..15, torches, door [12 0..1 16] open. Needs night: --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :shelter :sleep]
@@ -20,12 +20,10 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
    :after [[:block [12 0 16] "oak_door[open=false]"]]}
-  {:name "open-door-with-a-bed-outside-the-room-is-still-shut"
+  {:name "open-door-with-a-cheaper-bed-outside-is-slept-in-not-shut"
    :blocks [[:set [20 0 12] "red_bed[facing=east,part=foot]"] [:set [21 0 12] "red_bed[facing=east,part=head]"] [:set [19 1 12] "torch"] [:fill [16 0 12] [16 1 12] "glass"]]
    :act [[:job (jobs.survival.night)]
-         [:await {:source :job :kind :child_started :data {:slot :enter-room}} 60]
-         [:wait-s 15]] ; deliberate hold: the shut door must stay shut once the night job has looked at the outside bed
-   :expect [{:event {:source :job :kind :night.door-shut :data {:bed #at [20 0 12] :in-room false :worth 0}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :child_started :data {:slot :enter-room}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
-   :after [[:block [12 0 16] "oak_door[open=false]"]]}]}
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]]
+   :expect [{:event {:source :job :kind :night.door-shut-priced :data {:bed #at [20 0 12] :in-room false :shut? false}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :enter-room}} :for-s 60}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}]}]}

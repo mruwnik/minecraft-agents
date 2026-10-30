@@ -667,13 +667,17 @@
   [prices home]
   (max 0 (- (apply min ##Inf (vals (dissoc prices :home))) (- (:home prices) (:cost home)))))
 
+(defn shut-worth
+  "room-worth over the night's prices."
+  [prices closed]
+  (max 0 (- (apply min ##Inf (vals (dissoc prices closed))) (get prices closed 0))))
+
 (defn ^:async room-worth
   "Seconds shutting the room the body stands in is worth (Q54), as home-worth: what the cheapest way left while it stays
   open costs more than the night once it is shut, at least 0. closed: the answer the shut room is (:bed, the carried bed
   put down behind its filled doorway; for an open door shut, :bed when a bed lies in the room), nil when the shut room costs nothing more."
   [c bed carried? bed-way closed]
-  (let [prices (await (night-prices c bed carried? bed-way nil))]
-    (max 0 (- (apply min ##Inf (vals (dissoc prices closed))) (get prices closed 0)))))
+  (shut-worth (await (night-prices c bed carried? bed-way nil)) closed))
 
 (defn ^:async look-worth
   "What an edge walk to look is bought from (Q54): the cheapest way the night has without the look (night-prices, no bed), at least 0."
@@ -685,6 +689,19 @@
   [p bed]
   (let [cells (:cells (reach-room/room p (sh-sense/feet p)))]
     (boolean (some #(contains? cells %) [[(:x bed) (:y bed) (:z bed)] [(:x bed) (inc (:y bed)) (:z bed)]]))))
+
+(defn ^:async door-decision
+  "{:worth seconds :prices p} of shutting the open door of the room the body stands in (room-worth); emits night.door-shut-priced
+  {:bed :in-room :worth :shut? :prices} when the decision differs from the last one emitted (a worth of 0: another way is as cheap, the night takes that)."
+  [c bed carried? bed-way]
+  (let [closed (when (and (map? bed) (bed-in-room? (:primitives c) bed)) :bed)
+        prices (await (night-prices c bed carried? bed-way nil))
+        worth (shut-worth prices closed)
+        shown {:bed (when (map? bed) [(:x bed) (:y bed) (:z bed)]) :in-room (some? closed) :worth (price/round1 worth) :shut? (pos? worth)}]
+    (when (not= (dissoc shown :worth) (:door-decision (ctx/mem c)))
+      (ctx/update-mem! c assoc :door-decision (dissoc shown :worth))
+      (ctx/emit! c :night.door-shut-priced :debug (assoc shown :prices (update-vals prices price/round1))))
+    {:worth worth :prices prices}))
 
 (defn sleep-inputs
   "What staying asleep is priced on, read now (bed-down/answers): who else must still lie down (sh-sleepers/sleepers-short),
@@ -782,6 +799,7 @@
             home-way? (walk-home-wanted? c)
             home (when-not roofed
                    (await (walkable-home c (not bed) (fn ^:async bound [] (if bed-wanted ##Inf (bed-down/home-bound-s c (vals (await (night-prices c bed false bed-way nil)))))))))
+            door-call (when door (await (door-decision c bed bed-wanted bed-way)))
             offered (when (and home-way? (map? home) (or (:walkable? home) bed-wanted)) home)]
         (when (and bed-way (not bed)) (note-bed-far! c))
         (when breached
@@ -790,10 +808,7 @@
             (ctx/update-mem! c assoc :enclose (sh-sense/feet p))))
         (cond
           (= :searching bed) (do (hold/busy! c) :again)
-          door (let [closed (when (and (map? bed) (bed-in-room? p bed)) :bed)
-                     worth (await (room-worth c bed bed-wanted bed-way closed))]
-                 (ctx/emit! c :night.door-shut :debug {:bed (when (map? bed) [(:x bed) (:y bed) (:z bed)]) :in-room (some? closed) :worth (price/round1 worth)})
-                 (await (enter-room! c nil false nil worth)))
+          (and door (pos? (:worth door-call))) (await (enter-room! c nil false nil (:worth door-call)))
           (:bed-down (ctx/mem c)) (let [{:keys [bed answer]} (:bed-down (ctx/mem c))] (await (bed-down-step c bed answer)))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil false nil (await (room-worth c bed bed-wanted bed-way :bed))))
           (and (= :searching home) home-way?) :again
