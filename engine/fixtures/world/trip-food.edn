@@ -4,7 +4,7 @@
 ;; until the trip's tail is covered: far more than 2 loaves.
 ;; Should-succeed: 2 loaves and a chest of bread it booked 4 blocks off: get-food takes bread from the chest before the mine's work.
 ;; Should-fail: 30 loaves cover the trip: no bread is taken.
-;; A chest booked full but found empty: get-food ends done short (:least, the 2 loaves carried) and the mine runs its work
+;; A chest booked full but found empty: the fetch (get-food ends nothing-possible) ends done short, the mine going on with the 2 loaves, and runs its work
 ;; (no iron in reach: it stops :none), not stopped :look-first.
 {:defaults
  {:time :any

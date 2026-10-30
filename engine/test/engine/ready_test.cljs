@@ -1206,8 +1206,8 @@
 
 (deftest a-long-trip-fetches-its-food-from-home-before-it-starts
   (let [[kind _ {:keys [look-first]}] (trip-fed (trip-ctx 2 [0 1800 ##Inf] [3 64 0]))
-        [job {:keys [carry explore]}] look-first]
-    (is (= [:ok 'jobs.survival.get-food false] [kind job explore]))
+        [job {:keys [carry]}] look-first]
+    (is (= [:ok 'jobs.survival.fetch-trip-food] [kind job]))
     (is (< (/ 1800 60) carry (* 64 5)) "more than the mean trip's hunger, no more than the chest and the pack hold"))
   (are [c] (nil? (:look-first (nth (trip-fed c) 2)))
     (trip-ctx 40 [0 1800 ##Inf] [3 64 0])
@@ -1224,8 +1224,8 @@
 
 (deftest a-fetch-that-comes-back-short-stops-the-call-only-when-going-on-costs-more
   (let [c (trip-ctx 2 [0 1800 ##Inf] [3 64 0])]
-    (is (= 10 (:least (fetch-args c))) "worth ##Inf: running out on the 2 loaves is cheaper than stopping")
-    (is (nil? (:least (fetch-args (assoc c :worth (constantly 1) :quote-call {:worth 1})))) "worth 1 s: stopping is cheaper")))
+    (is (true? (:go-on? (fetch-args c))) "worth ##Inf: running out on the 2 loaves is cheaper than stopping")
+    (is (false? (:go-on? (fetch-args (assoc c :worth (constantly 1) :quote-call {:worth 1})))) "worth 1 s: stopping is cheaper")))
 
 (deftest a-trip-fetches-only-the-home-food-get-food-takes
   (let [c (trip-ctx 2 [0 1800 ##Inf] {[3 64 0] 20 [3000 64 0] 64})
@@ -1236,10 +1236,10 @@
 
 (deftest harvest-wood-fetches-its-trips-food-by-a-quote-that-answers-at-once
   (let [[kind _ {[job] :look-first}] (harvest-wood/fit? (assoc (trip-ctx 0 nil [3 64 0]) :args {:count 30}))]
-    (is (= [:ok 'jobs.survival.get-food] [kind job]) "eight trees of about 25 s each, no food carried: bread from the chest first")))
+    (is (= [:ok 'jobs.survival.fetch-trip-food] [kind job]) "eight trees of about 25 s each, no food carried: bread from the chest first")))
 
 (deftest the-long-trips-away-from-home-fetch-their-food-first
-  (are [fit args] (= 'jobs.survival.get-food (first (:look-first (nth (fit (assoc (trip-ctx 0 nil [3 64 0]) :args args)) 2))))
+  (are [fit args] (= 'jobs.survival.fetch-trip-food (first (:look-first (nth (fit (assoc (trip-ctx 0 nil [3 64 0]) :args args)) 2))))
     mine/fit? {:block "iron_ore" :count 64}
     dig-for/fit? {:block "iron_ore" :count 64}
     tunnel-job/fit? {:target {:x 400 :y 64 :z 0}}

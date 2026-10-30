@@ -620,20 +620,19 @@
     (when (map? q) (home-food/quote-trip c q place))))
 
 (defn trip-fed
-  "fit, and while that is ok, ok with a jobs.survival.get-food child (:explore false) as its :look-first call while the
+  "fit, and while that is ok, ok with a jobs.survival.fetch-trip-food child as its :look-first call while the
   trip's food (home-food/trip-fetch of own-trip, ending at place, by quote-fn) pays a fetch from home: the engine runs
   it only before the start, so a trip leaves home with its food. When going on with the carried food costs less than
-  the call is worth (ctx/worth; ##Inf with no engine behind c), the child takes :least the carried points, so a fetch
-  that comes back short is no reason to stop."
+  the call is worth (ctx/worth; ##Inf with no engine behind c), the fetch (jobs.survival.fetch-trip-food) is told to go on
+  with the carried food when get-food falls short; otherwise get-food's ending stops the call."
   [fit place quote-fn]
   (fn [c]
     (let [s (fit c)
-          {:keys [to had go-on-s]} (when (= :ok (first s))
+          {:keys [to go-on-s]} (when (= :ok (first s))
                                      (some->> (own-trip c place quote-fn) (home-food/trip-fetch c)))]
       (if to
         (contract/ok :trip-food (str "fetching food for the trip first: " to " points")
-                     :look-first ['jobs.survival.get-food (cond-> {:carry to :explore false}
-                                                            (< go-on-s (if (:worth c) (ctx/worth c) ##Inf)) (assoc :least had))])
+                     :look-first ['jobs.survival.fetch-trip-food {:carry to :go-on? (< go-on-s (if (:worth c) (ctx/worth c) ##Inf))}])
         s))))
 
 (defn fit-to-forage
