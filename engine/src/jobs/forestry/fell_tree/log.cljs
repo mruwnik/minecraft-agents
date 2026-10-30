@@ -137,7 +137,7 @@
   [c]
   (let [view (ctx/view c)
         held (ledger/held-cells view)]
-    (boolean (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/open-entries view)))))
+    (boolean (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/entries c)))))
 
 (def max-shut-in-rounds
   "Walks in a row that ended with the body shut in before the tree is given up: they cost the tree nothing, but each

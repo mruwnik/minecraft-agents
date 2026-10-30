@@ -56,7 +56,7 @@
   jobs.lib.ledger/decide reads it), so it is not someone's build."
   [c]
   (let [put-back (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))
-        entries (into {} (map (juxt :cell identity)) (ledger/open-entries (ctx/view c)))]
+        entries (into {} (map (juxt :cell identity)) (ledger/entries c))]
     (fn [cell block]
       (or (contains? put-back [(vec cell) block])
           (when-let [e (get entries (vec cell))]

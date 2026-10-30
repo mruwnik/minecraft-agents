@@ -72,7 +72,7 @@
   "The cells of the blocks this flight's plugs hold (the open ledger entries of the flight's plug purpose), as [x y z]."
   [c]
   (let [purpose (flight/plug-purpose c)]
-    (vec (keep #(when (= purpose (:purpose %)) (:cell %)) (ledger/open-entries (ctx/view c))))))
+    (vec (keep #(when (= purpose (:purpose %)) (:cell %)) (ledger/entries c)))))
 
 (def all-ways #{:walls :pit :pocket})
 

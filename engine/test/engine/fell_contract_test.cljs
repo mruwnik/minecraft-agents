@@ -340,7 +340,7 @@
 
 (deftest an-open-scaffold-cell-a-cleanup-held-does-not-keep-the-felling-open
   (with-redefs [ctx/view (constantly nil)
-                ledger/open-entries (constantly [{:cell [1 5 1] :owner "j"} {:cell [1 6 1] :owner "j"}])
+                ledger/entries (constantly [{:cell [1 5 1] :owner "j"} {:cell [1 6 1] :owner "j"}])
                 ledger/of-instance? (constantly true)
                 ledger/held-cells (constantly #{[1 6 1]})]
     (is (true? (log/open-scaffold? {:id "j"})) "one cell is not held")
