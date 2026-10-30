@@ -584,16 +584,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[job-time waits] [[1 1] [1e9 0]]]
-          (let [calls (atom 0)
-                cause {:reason :occupied :text "taken" :recheck-after-ms 2000}
-                obtain (waits-then-has-the-pickaxe cause calls false job-time)
-                s (start (world [{:name "stick" :count 2}] {}) {:items ["iron_pickaxe"] :explore false :food false} f/sight-opts
-                         {'jobs.items.obtain obtain})]
-            (loop [i 0]
-              (await (f/run-ticks s 1))
-              (when (and (< i 200) (= :not-done @(:out s))) (recur (inc i))))
-            (is (= waits (count (f/events-of s :kit.later-wait))) (str "a bill quoted at " job-time " s"))))))))
+        (let [rest-s 2
+              pays (- (cost/chance-times (cost/retry-chance :kit-later 1) (cost/items-find-worth {"iron_pickaxe" 1})) rest-s)]
+          (doseq [[job-time waits] [[(/ pays 2) 1] [(* 2 pays) 0]]]
+            (let [calls (atom 0)
+                  cause {:reason :occupied :text "taken" :recheck-after-ms (* 1000 rest-s)}
+                  obtain (waits-then-has-the-pickaxe cause calls false job-time)
+                  s (start (world [{:name "stick" :count 2}] {}) {:items ["iron_pickaxe"] :explore false :food false} f/sight-opts
+                           {'jobs.items.obtain obtain})]
+              (await (f/run-ticks s 200))
+              (is (= waits (count (f/events-of s :kit.later-wait))) (str "a bill quoted at " job-time " s")))))))))
 
 (deftest a-later-wait-is-won-only-by-a-done-bill
   (async done

@@ -15,8 +15,8 @@
             [engine.game :as game]))
 
 (a/defargs settings
-  {::craft-step {:default 0.94 :spec (a/num-in 0 nil)
-                 :doc "Seconds one craft step takes beyond its ingredients, a walk to the table in it. Counted over n = 43 craft children of the trial bodies' logs, 0.94 s wall each (recount: `node tools/event-counts.mjs craft-steps`, dashboard/src/world_test/craft_steps.cljs)."}})
+  {::craft-step {:default 0.905 :spec (a/num-in 0 nil)
+                 :doc "Seconds one craft action takes beyond its ingredients, the walk to the table not in it. Counted over n = 1148 finished craft actions of the trial bodies' logs (21 timeouts left out), 0.905 s each (recount: `node tools/event-counts.mjs craft-steps`, dashboard/src/world_test/craft_steps.cljs)."}})
 
 (def default-basis
   "Every constant of the item base; item-value's :basis is deep-merged over it."

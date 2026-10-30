@@ -1,6 +1,7 @@
 (ns engine.jobs-value-test
   "jobs.lib.cost.value: item-value (built from minecraft-data) and fetch-cost, the two sides of a fetch-or-skip decision."
   (:require [cljs.test :refer [deftest is are]]
+            [engine.settings :as settings]
             [jobs.lib.cost.table :as table]
             [jobs.lib.cost.value :as v]))
 
@@ -258,4 +259,7 @@
 (deftest the-craft-step-is-the-measured-setting-and-the-table-is-built-once
   (is (= (table/craft-step) (:craft-step (table/full-basis {}))))
   (is (= 7 (:craft-step (table/full-basis {:craft-step 7}))) "a caller's basis wins")
-  (is (identical? (table/table-for "1.20.4" {} {}) (table/table-for "1.20.4" {} {})) "made's memo keys on the table: one object per call"))
+  (let [t (table/table-for "1.20.4" {} {})]
+    (is (identical? t (table/table-for "1.20.4" {} {})) "made's memo keys on the table: one object per call")
+    (is (not (identical? t (settings/with-settings {:jobs.lib.cost.table/craft-step 1000} #(table/table-for "1.20.4" {} {}))))
+        "a changed ::craft-step rebuilds the table")))

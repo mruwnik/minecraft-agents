@@ -309,6 +309,11 @@
   [r]
   (or (some-> (get-in r [:cause :recheck-after-ms]) (/ 1000)) (cost/retry-s :kit-later)))
 
+(defn later-stop?
+  "Whether child stop r is one the kit may rest on: condition-failed for a :later, not obtain's :no-source or a pack that stayed full."
+  [r]
+  (and (= :condition-failed (:kind r)) (not (#{:no-source :inventory-full} (:reason r)))))
+
 (defn rest-later!
   "For a child's stop r ({:kind :reason :why :cause}) when it ended condition-failed for a :later (the world may lift it; not
   obtain's :no-source, nothing seen and no search, nor a pack that stayed full) and another try is worth its price
@@ -318,7 +323,7 @@
   [c r fails-key what again run-s]
   (let [fails (inc (get (ctx/mem c) fails-key 0))
         s (later-wait-s r)]
-    (when (and (= :condition-failed (:kind r)) (not (#{:no-source :inventory-full} (:reason r))) (cost/try-again? c :kit-later {:fails fails :try-s (+ s run-s)}))
+    (when (and (later-stop? r) (cost/try-again? c :kit-later {:fails fails :try-s (+ s run-s)}))
       (ctx/update-mem! c assoc fails-key fails)
       (ctx/emit! c :kit.later-wait :info {:cause (:reason r) :why (:why r) :fails fails :wait-s s
                                           :text (str what " waits (" (:why r) "): " again " in " (js/Math.round s) " s")})
@@ -328,9 +333,10 @@
 (defn ^:async wait-later!
   "rest-later! for the bill's stop r, a try priced with the bill's quote (bill-s) as retry? does; a rest runs the bill again in a fresh round."
   [c r]
-  (when-let [w (rest-later! c r :later-fails "gathering" "running the bill again" (if (= :condition-failed (:kind r)) (await (bill-s c (bill-of c))) 0))]
-    (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill) (update :bill-round (fnil inc 0)))))
-    w))
+  (when (later-stop? r)
+    (when-let [w (rest-later! c r :later-fails "gathering" "running the bill again" (await (bill-s c (bill-of c))))]
+      (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill) (update :bill-round (fnil inc 0)))))
+      w)))
 
 (defn food-later!
   "rest-later! for get-food's stop r (:too-dangerous while the body is fragile with a hostile near): the food is looked for again after the rest."
