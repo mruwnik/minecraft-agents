@@ -710,3 +710,12 @@
                 :risk-s (fn [cells _ _] (reset! seen cells) 0)}]
     (escape-way/way-s p [0 64 0] [1 70 0] {:step :clear-path :heading :east} priced)
     (is (every? (set @seen) [[2 65 0] [2 66 0] [2 67 0] [2 68 0]]) "every cell of the climb left from the door's far side is a priced cell")))
+
+(def unseen-shaft
+  "A 6-deep 1x1 shaft (feet y 58) in stone x -6..8, y 57..63; the goal on top 6 east."
+  (apply dissoc (box -6 57 -6 8 63 6 "stone") (for [y (range 58 64)] (str "0," y ",0"))))
+
+(deftest escape-choose-prices-the-pit-pillar-under-a-column-it-has-not-seen
+  ;; a dark shaft shows the body only the cells beside it: the pillar is priced against the door, not left for when nothing else is
+  (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)]
+    (is (= :pillar (:step (escape-way/choose p [0 58 0] [6 64 0]))))))

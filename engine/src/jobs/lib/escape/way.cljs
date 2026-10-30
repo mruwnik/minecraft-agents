@@ -255,7 +255,7 @@
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen; opts :drop-steps, of :pillar and :stair the ones never chosen, as if skipped, but the wall walk is still offered; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
   - the cheapest (way-s; opts :risk-s prices their dangers) of the ways that can be made:
-    - {:step :pillar :height n :item}: in a pit d deep, the column over it seen clear to the top, at least n pillar
+    - {:step :pillar :height n :item}: in a pit d deep, the column over it clear or unseen to the top (its unseen blocks priced), at least n pillar
       blocks carried: n the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto;
       beside a wall (a pit too wide to be walled on three sides), n the rim-pillar.
     - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
@@ -271,7 +271,7 @@
     floor the stair job lays.
   - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock): the deepest diggable one, up
     to max-depth.
-  - the pit's pillar with an unseen or solid cell in the column over it.
+  - the pit's pillar with a seen solid cell in the column over it.
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
     the block over the head; :no-dig: nothing allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
@@ -288,7 +288,7 @@
          height (when (pos? depth) (min depth (or rim-n depth)))
          pillar-blocks? (and (not (off :pillar)) height item (>= count height))
          headroom? (bs/passable? (block-at (escape/up feet 2)))
-         open-above? (and pillar-blocks? (every? #(bs/passable? (block-at (escape/up feet %))) (range 2 (+ height 2))))
+         open-above? (and pillar-blocks? (let [unseen? (escape/unseen-of p)] (every? #(or (unseen? %) (bs/passable? (block-at %))) (map #(escape/up feet %) (range 2 (+ height 2))))))
          rise (min (escape/max-depth) (max depth (- (second goal) (second feet))))
          stair-dirs (remove #(skip [:stair (escape/heading-names %)]) (distinct (cond->> escape/cardinals dir (cons dir))))
          [stair rise] (if (or (off :stair) (not (pos? rise)))
@@ -313,7 +313,7 @@
          door? (and gap (every? #(escape/diggable? block-at may-dig? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)
          ways (distinct (cond-> []
-                          (and open-above? headroom?) (conj {:step :pillar :height height :item item})
+                          open-above? (conj {:step :pillar :height height :item item})
                           stair (conj {:step :stair :heading stair :steps rise})
                           rim (conj {:step :pillar :height rim :item item})
                           door? (conj {:step :clear-path :heading (escape/heading-names dir)})

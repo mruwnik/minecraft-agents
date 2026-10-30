@@ -1,7 +1,8 @@
-;; A body at the bottom of a 1x1 pit on an unlit plot, carrying dirt, go-to the rim: it pillars out. The pit is dark, but a 3-deep pit is neither
+;; A body at the bottom of a 1x1 pit on an unlit plot, carrying dirt, go-to the rim: it pillars out. The pit is dark, but a 6-deep 1x1 pit is neither
 ;; large nor hides a pit, and the start check priced the walk, so the pillar child does not wait for light (:exposed) or give up.
 ;; Dark roofed plot, stone block x 10..24, y -4..2 with a 1x1 pit at x 16 z 16 (feet y -3); the goal is on the block top 6 east.
-;; Should-succeed: go-to.escalated :pillar and arrival. Should-fail: the pillar child waits or ends condition-failed, the body stays in the pit.
+;; Should-succeed: go-to.escalated :pillar and arrival, with default ways too (the column it cannot see is priced, not left last).
+;; Should-fail: the pillar child waits or ends condition-failed, the body stays in the pit; with default ways a :clear-path hand-dug along the floor.
 {:defaults
  {:tags [:movement :go-to :dark]
   :time :any
@@ -15,4 +16,10 @@
    :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1 :ways #{:walk :pillar}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [22.5 3 16.5] 2]]}
+  {:name "dark-pit-default-ways-pillars-not-digs-along-the-floor"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 3 16.5] 2]]}]}
