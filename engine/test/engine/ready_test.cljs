@@ -195,18 +195,24 @@
       (is (not= :look (first (status))) "a look costs seconds and the goal is worth none"))))
 
 (deftest a-round-of-looks-is-taken-whole-or-not-at-all-around-its-break-even-worth
-  (let [walls [[1 64 0] [2 64 0] [3 64 0] [4 64 0]]
-        break-even (/ (cost/look-s (count walls)) (cost/closed-chance 0 (count walls)))
-        looks-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" nil) (nth 2) :look-at)]
-    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))]
-      (is (nil? (looks-at (* 0.99 break-even))) "all four walls closed is not worth the four looks")
-      (is (= walls (looks-at (* 1.01 break-even))) "worth the round: every wall is looked at"))))
+  (doseq [n [4 24]]
+    (let [walls (mapv #(vector % 64 0) (range 1 (inc n)))
+          break-even (/ (cost/look-s n) (cost/closed-chance 0 n))
+          looks-at #(some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly %)) "dark" nil) (nth 2) :look-at)]
+      (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
+                    sense/unknown? (constantly true)]
+        (is (nil? (looks-at (* 0.99 break-even))) (str "all " n " walls closed is not worth the looks"))
+        (is (= walls (looks-at (* 1.01 break-even))) (str "worth the round: every one of " n " walls is looked at"))))))
 
-(deftest a-paying-round-passes-every-unseen-wall-on-for-the-look-hook
-  (let [walls (mapv #(vector % 64 0) (range (inc (sense/max-looks))))]
-    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))]
-      (is (= walls (some-> (ready/room-look (ctx-of night-hut) "dark" nil) (nth 2) :look-at))
-          "more walls than max-looks: all priced, all looked at in the one hook call"))))
+(deftest a-room-look-prices-only-the-extra-cells-still-unknown
+  (let [walls [[1 64 0] [2 64 0]]
+        extra (mapv #(vector % 64 5) (range 22))
+        known (set (take 20 extra))
+        worth (* 1.01 (/ (cost/look-s 4) (cost/closed-chance 0 2)))]
+    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _ _] walls))
+                  sense/unknown? (fn [_ cell] (not (known cell)))]
+      (is (= (into walls extra) (some-> (ready/room-look (assoc (ctx-of night-hut) :worth (constantly worth)) "dark" extra) (nth 2) :look-at))
+          "20 of the 22 extra cells are known: 2 walls and 2 extras are priced"))))
 
 (deftest a-wall-a-look-round-did-not-show-counts-as-open-not-looked-at-again
   (let [seen-block u/seen-block

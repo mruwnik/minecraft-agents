@@ -107,8 +107,9 @@
   a wall left unlooked counts open), nil when it does not or no wall is left: an unseen wall is an open side."
   [c text extra]
   (when-let [sides (seq (look-edge/pending c (sense/round-looked c) 0))]
-    (let [cells (into (vec sides) extra)
-          n (cost/round-looks (ctx/worth c) (count cells) (count sides))]
+    (let [p (:primitives c)
+          cells (into (vec sides) extra)
+          n (cost/round-looks (ctx/worth c) (+ (count sides) (count (filter (partial sense/unknown? p) extra))) (count sides))]
       (when (pos? n)
         (contract/look :exposed text :look-at cells :room-sides true)))))
 
