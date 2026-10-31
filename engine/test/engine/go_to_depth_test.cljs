@@ -671,3 +671,22 @@
           (is (seq digs) "a leg was dug before the budget ran out")
           (is (< (js/Math.abs (- (* (count digs) cell-s) (:dug-s (:escalation @out)))) 1e-6)
               (pr-str [(count digs) cell-s (:escalation @out)])))))))
+
+;; A pocket goal (3 64 6) sealed by seen stone on every side, 6 blocks from the body; the only walk is 20 blocks round the
+;; loop, under the old 48-block floor. The body stands in the open.
+(def short-loop (merge (floor 63 0 0 10 0) (floor 63 10 0 10 6) (floor 63 0 6 10 6)))
+(def sealed-goal [3 64 6])
+(def sealed-pocket (merge short-loop (box 1 64 1 9 65 5 "stone") {"4,64,6" "stone" "3,65,6" "stone" "3,64,5" "stone" "3,64,7" "stone" "2,64,6" "stone"}))
+
+(deftest a-goal-sealed-by-seen-stone-is-dug-to-not-walked-to-by-a-longish-unseen-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (climb! (assoc in-loop :blocks sealed-pocket :seen [[2 63 5 4 66 7]] :inventory [{:name "stone_pickaxe" :count 1}]) {:pos sealed-goal :range 2 :unknown false}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated)))))))))
+
+(deftest a-way-to-a-sealed-goal-is-bound-tighter
+  (are [sealed? out] (= out (detour/refusal (mapv #(update % :x * 2) line-20) 6 (constantly true) sealed?))
+    true {:detour true :route 40 :straight 6 :allowed 12}
+    false nil))

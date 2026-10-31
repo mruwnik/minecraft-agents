@@ -1,0 +1,19 @@
+;; A goal sealed by seen blocks is dug to, not walked to by a long way (Q83): a pocket [8 3 13] behind a 2-thick glass window the body stands
+;; at; the only walk to a stand within range 2 is the loop round (A east, down, B west), about 30 blocks over cells it never saw.
+;; Stone mass x 2..24, z 4..20, y 0..7; tunnel A z 10, link x 20, tunnel B z 15 (x 8..20), all y 3..4; pocket y 3 at x 8 z 13 behind glass z 11..12.
+{:defaults
+ {:tags [:movement :go-to :access]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 4] [24 7 20] "stone"]
+           [:fill [4 3 10] [20 4 10] "air"] [:fill [20 3 11] [20 4 15] "air"] [:fill [8 3 15] [20 4 15] "air"]
+           [:set [8 3 13] "air"] [:fill [8 3 11] [8 4 12] "glass"]
+           [:fill [2 9 4] [24 9 20] "light"]]
+  :body {:at [8.5 3 10.5] :settle-s 4 :inventory [["stone_pickaxe" 1] ["cobblestone" 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "sealed-pocket-behind-glass-is-dug-to-not-walked-round"
+   :act [[:job (jobs.movement.go-to {:pos #at [8 3 13] :range 2})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [8.5 3 13.5] 2.6]]}]}
