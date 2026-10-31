@@ -262,16 +262,26 @@
 
 (defonce rechecked (js/WeakMap.))
 
+(defn outranks-comfort?
+  "Whether listed job id is a plain call of a job tagged :outranks-comfort (jobs.survival.sleep, log-out): it takes the body from a comfort reflex."
+  [eng id]
+  (let [spec (get-in (state eng) [:instances id :spec])]
+    (boolean (and (= :leaf (:op spec))
+                  (some #{:outranks-comfort} (get-in eng [:jobs (:job spec) :tags]))))))
+
 (defn recheck-waits!
   "While reflex job h holds the body, the listed jobs' wait reasons are asked again every held-recheck-ms: a reason told
-  before it started (the dark of a night gone) would else stay on the list, and a job that could start says it waits for h."
+  before it started (the dark of a night gone) would else stay on the list, and a job that could start says it waits for h.
+  Returns the first unparked outranks-comfort job that could start, if any."
   [eng h]
   (let [t (now eng)
         key (:waiting eng)]
     (when (>= (- t (or (.get rechecked key) 0)) (settings/get settings ::held-recheck-ms))
       (.set rechecked key t)
-      (doseq [id (:list (state eng))]
-        (check-passes? eng id {:reason :reflex-holds :reflex (:reflex h) :job (:id h)})))))
+      (->> (:list (state eng))
+           (filter #(check-passes? eng % {:reason :reflex-holds :reflex (:reflex h) :job (:id h)}))
+           (filter #(and (outranks-comfort? eng %) (not (contains? (:failed (state eng)) %))))
+           first))))
 
 (defn clear-held-waits!
   "No reflex holds the body: the listed jobs told waiting for one (recheck-waits!) are not waiting for it any more."
@@ -296,7 +306,11 @@
         firing (choose-firing! eng order (remove #(contains? paused (:id %)) (evaluate-register! eng order)) h)]
     (cond
       firing (fire! eng firing h)
-      (running eng) (do (when (:reflex h) (recheck-waits! eng h)) (check-idle! eng))
+      (running eng) (do (when-let [id (and (:reflex h) (recheck-waits! eng h))]
+                          (when (comfort-reflex? eng h)
+                            (cut! eng h :outranked nil)
+                            (swap! (:state eng) assoc :resume id)))
+                        (check-idle! eng))
       :else (do (clear-held-waits! eng) (when-let [id (or (paused-reflex eng order) (when-not (exclusive-grace? eng) (choose-listed eng)))] (start-round! eng id))))))
 
 (defn tick!

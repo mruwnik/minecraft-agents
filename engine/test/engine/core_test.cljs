@@ -107,6 +107,7 @@
 
 (def registry
   {'count (tu/job count-round)
+   'night-count (assoc (tu/job count-round) :tags [:outranks-comfort])
    'bad-check (tu/job [throwing-check] count-round)
    'walk (tu/job walk-round)
    'parent-walk (tu/job parent-walk-round)
@@ -668,6 +669,45 @@
               (is (= [id] (listed eng)) "the hand-submitted job got the round")
               (is (= 1 (fired-count seen :hungry)) "the cut errand rests its cooldown: no refire at once")
               (release))))))))
+
+(deftest queued-outranking-job-cuts-a-comfort-reflex
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock seen]} (setup {:self {:food 5}})
+              world (.-world p)]
+          (core/register-reflex! eng {:trigger :hungry :level :comfort})
+          (let [release (.hold world "eat")
+                r1 (core/tick! eng)]
+            (await (in-act world "eat"))
+            (let [plain (core/submit! eng '(count))
+                  id (core/submit! eng '(night-count))]
+              (swap! clock + 3000)
+              (core/tick! eng)
+              (await r1)
+              (is (nil? (core/running eng)) "the comfort errand was cut for the tagged queued job")
+              (await (core/tick! eng))
+              (is (= [plain id] (listed eng)))
+              (is (= id (last (ran seen))) "the tagged job, not the front one, got the round")
+              (is (= 1 (fired-count seen :hungry)) "the cut errand rests its cooldown")
+              (release))))))))
+
+(deftest queued-plain-job-waits-behind-a-comfort-reflex
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:self {:food 5}})
+              world (.-world p)]
+          (core/register-reflex! eng {:trigger :hungry :level :comfort})
+          (let [release (.hold world "eat")
+                r1 (core/tick! eng)]
+            (await (in-act world "eat"))
+            (core/submit! eng '(count))
+            (swap! clock + 3000)
+            (core/tick! eng)
+            (is (= :hungry (:reflex (core/running eng))) "an untagged queued job does not cut it")
+            (release)
+            (await r1)))))))
 
 (deftest do-now-does-not-cut-an-urgent-reflex
   (async done

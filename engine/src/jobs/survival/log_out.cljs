@@ -61,7 +61,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def meta {:category :phase :part-of '[jobs.survival.night]})
+(def meta {:category :phase :part-of '[jobs.survival.night] :tags [:outranks-comfort]})
 
 (def safe? ready/ok)
 

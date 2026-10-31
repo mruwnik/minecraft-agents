@@ -112,6 +112,8 @@
   (let [n (contract/asked c night)]
     (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
 
+(def meta {:category :goal :tags [:outranks-comfort]})
+
 (def target [])
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
