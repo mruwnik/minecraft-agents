@@ -64,9 +64,9 @@
   another's chest."
   [c]
   (let [tried (set (:tried-sources (ctx/mem c)))
-        reach (walk-reach c)
+        near (walk-reach c)
         noted (->> (ctx/entries c :food-source)
-                   (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) reach)))
+                   (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) near)))
                    (sort-by :t >))
         known (set (map (comp :pos :data) noted))]
     (->> (concat noted (remove #(known (:pos (:data %))) (home-entries c)))
@@ -90,7 +90,7 @@
   (let [self (ctx/self-name c)
         here (u/self-pos c)
         tried (set (tried-key (ctx/mem c)))
-        reach (walk-reach c)
+        near (walk-reach c)
         zoned (->> (known/zones c)
                    (filter #(zones/same-owner? (:owner %) self))
                    (map (juxt :min :max)))
@@ -103,7 +103,7 @@
     (->> (concat zoned planned)
          distinct
          (remove (comp tried box-middle))
-         (filter #(<= (u/dist here (box-middle %)) reach))
+         (filter #(<= (u/dist here (box-middle %)) near))
          (sort-by #(u/dist here (box-middle %))))))
 
 (defn box-around
