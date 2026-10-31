@@ -365,7 +365,7 @@
       (let [p (:primitives c)
             pos (.-pos (.self p))
             [gx gy gz] to]
-        (and (not (and speculative? (one-way/too-deep? (- (second rim) (second at)))))
+        (and (not (and speculative? (one-way/too-deep? (second rim) (second at) gy)))
              (one-way/taken? p rim at small? (ctx/worth c))
              (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape-way/choose p (vec at) to) [:step :why]))))))))
 
@@ -413,7 +413,7 @@
         out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         {:keys [steps refused]} (let [all (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)]
-                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2 %3 (not= "found" (.-status r)))) {:steps all}))
+                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2 %3 (or (:unknown c) (not= "found" (.-status r))))) {:steps all}))
         step (or (one-way-of r) (when refused {:kind :drop :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
                       (masked-cut steps (masked-wet-ok c))
