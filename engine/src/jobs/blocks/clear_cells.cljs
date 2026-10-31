@@ -24,7 +24,7 @@
   more block names). The cells are :area: a box {:min :max} (each corner {:x :y :z} or [x y z], any order) or
   {:cells [...]}, at most 400 cells.
   Each cell is dug by a jobs.blocks.dig child: it walks in reach, holds the best carried tool and picks up the
-  drop. No tool is needed (a block whose tool is missing is dug and its drop lost). While the child waits on
+  drop. A block that needs a tool gets one first (carried, crafted or fetched); without one the cell is tried twice, then skipped (reason :no-tool): never dug by hand. While the child waits on
   the body (:inventory-full) the job yields :continue.
   Zones and plans: loaded cells that a zone or an active plan's footprint (not one the body made) refuses are skipped for good (reason
   :zone or :footprint, one clear-cells.refused info per round). The chosen cell is checked again before the dig.
@@ -95,10 +95,10 @@
     (into [] (comp (map a/cell) (distinct)) (:cells area))))
 
 (defn dig-args
-  "The jobs.blocks.dig args for the cell at pos: no tool needed, the drop picked up, the job's :accept and opt-out."
+  "The jobs.blocks.dig args for the cell at pos: a tool that harvests it (fetched or made), the drop picked up, the job's :accept and opt-out."
   [c pos]
   (merge (select-keys (:args c) [:accept :ignore-zones? :for-plan])
-         {:pos pos :need-drop false :collect true}))
+         {:pos pos :need-drop true :collect true}))
 
 (defn named
   "[[pos block-name] ...] of the loaded cells not skipped."

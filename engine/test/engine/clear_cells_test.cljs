@@ -18,7 +18,7 @@
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/fake-on-floor world)
+        p (tu/fake-on-floor (merge {:inventory [{:name "stone_pickaxe" :count 1}]} world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world shared
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -111,13 +111,14 @@
           (await (child-outcome eng job box 20))
           (is (= ["wooden_shovel" "stone_pickaxe"] (held-items p))))))))
 
-(deftest clear-cells-equips-nothing-without-a-tool
+(deftest clear-cells-never-digs-stone-by-hand
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks eight})]
-          (await (child-outcome eng job box 20))
-          (is (empty? (calls p "equip"))))))))
+        (let [{:keys [eng p]} (setup {:blocks eight :inventory [{:name "cobblestone" :count 1} {:name "stick" :count 1}]})]
+          (await (child-outcome eng job box 30))
+          (is (= "stone" (block-at p {:x 1 :y 64 :z 1})) "no tool can be had: the stone stays, never dug by hand")
+          (is (= [65 65 65 65] (dug-ys p)) "only the dirt, which needs no tool"))))))
 
 (deftest clear-cells-rejects-too-big-or-missing-boxes
   (are [args] (thrown? js/Error (clear-cells/cells args))
