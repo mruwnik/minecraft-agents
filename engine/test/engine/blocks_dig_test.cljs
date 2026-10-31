@@ -1240,6 +1240,22 @@
               result (await (tu/child-outcome (:eng env) job {:pos [3 69 0]} 80))]
           (is (= {:dug true} (select-keys result [:dug])) (pr-str result)))))))
 
+;; the ore lies above the room's stone roof: pillaring up would dig that roof from below
+(deftest a-pillar-does-not-start-under-a-roof-over-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [interior (set (keys (tu/box -2 63 -2 2 64 2 "air")))
+              blocks (-> (tu/box -3 62 -3 3 70 3 "stone")
+                         (as-> m (apply dissoc m interior))
+                         (assoc "1,67,0" "iron_ore"))
+              env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}] :blocks blocks})
+              _ (tu/seeing-all (:p env))
+              r (await (ending-cause (:eng env) job {:pos [1 67 0]} 40))]
+          (is (= :unreachable (:reason r)) (pr-str r))
+          (is (empty? (filter #(<= 65 (.-y (.-pos (.-args %)))) (calls (:p env) "dig"))) "the roof is not dug")
+          (is (empty? (calls (:p env) "place")) "nothing is pillared"))))))
+
 (deftest a-pillar-child-that-waits-is-resumed-next-round-not-skipped
   (async done
     (tu/run-async done

@@ -179,12 +179,13 @@
       {:cell hit :block (some-> (u/seen-block p (zipmap [:x :y :z] hit)) .-name)})))
 
 (defn roof-over-body?
-  "Whether the block at cell roofs the space the body stands in: over its head with a seen open cell right under it. It
-  may be a build's ceiling, so a tunnelling dig leaves it (the caller pillars, or the call ends unreachable)."
+  "Whether a block at cell roofs the space the body stands in: over its head with a seen open cell right under it. It
+  may be a build's ceiling, so a tunnelling dig leaves it (the caller pillars, or the call ends unreachable). A pillar (jobs.blocks.dig) does not start under one."
   [c [x y z]]
   (let [[_ fy _] (feet-cell c)]
     (and (< (inc fy) y)
-         (= :open ((aim/seen-kind-at (:primitives c)) x (dec y) z)))))
+         (let [kind-at (aim/seen-kind-at (:primitives c))]
+           (and (not= :open (kind-at x y z)) (= :open (kind-at x (dec y) z)))))))
 
 (defn through-cell
   "The block a player would dig to get at pos: line-blocker's cell when it is natural (through-natural), within reach, not tried before and no roof over the body (roof-over-body?), else nil."

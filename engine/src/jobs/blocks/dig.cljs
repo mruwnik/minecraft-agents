@@ -46,7 +46,7 @@
 
   A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
-  then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
+  then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false, and never from under a block that roofs the body's room), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs; with none to stand on it ends {:reason :hazard
   :hazards [:under-feet] :why :no-side-stand}. Only :accept :under-feet digs it from on top.
@@ -431,7 +431,10 @@
 (defn ^:async pillar-up!
   "A block overhead that no walk reaches: a player stacks a block or two under the feet. One pillar child per call (carried blocks only); :again when it built, :continue while it waits, else nil."
   [c pos]
-  (when-let [h (and (not (false? (:pillar (:args c)))) (not (:pillared (ctx/mem c))) (pillar-height c pos))]
+  (when-let [h (and (not (false? (:pillar (:args c)))) (not (:pillared (ctx/mem c)))
+                    (or (:pillaring (ctx/mem c)) (not (b/roof-over-body? c (update (b/feet-cell c) 1 + 2))))
+                    (pillar-height c pos))]
+    (ctx/update-mem! c assoc :pillaring true)
     (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (when-not (= :continue r) (ctx/update-mem! c assoc :pillared true))
       (cond (= :continue r) :continue
