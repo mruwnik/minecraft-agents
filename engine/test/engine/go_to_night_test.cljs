@@ -224,6 +224,18 @@
           (is (= inside (st/pos-of p)) "stayed in the hut")
           (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
 
+(deftest a-sealed-hut-far-from-spawn-holds-for-dawn-instead-of-cutting-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (merge (far-hut {"5,64,2" "cobblestone" "5,65,2" "cobblestone"})
+                                            {:inventory [{:name "iron_pickaxe" :count 1}]}))
+              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})]
+          (await (ticks eng 30))
+          (is (= inside (st/pos-of p)) "the body stays in its room")
+          (is (empty? (st/calls p "dig")) "no wall is cut before the walk is priced")
+          (is (= :risky (:reason (waiting-of eng id)))))))))
+
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
 
 (deftest a-queued-walk-too-risky-does-not-lead-the-body-out-of-its-mended-room-at-night

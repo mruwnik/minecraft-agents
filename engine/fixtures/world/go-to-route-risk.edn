@@ -2,6 +2,7 @@
 ;; Case 1 room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16], on open ground at night.
 ;; Should-succeed: a walk out of the room to a goal in a dark stone mound 24 blocks off starts and arrives (mostly underground: little risk).
 ;; Should-fail: a walk over dark open ground (the body in its torch-lit room, seeing them through glass, three standing zombies on open ground beside its way) is held (job.waiting :risky) for dawn: they burn at sunrise, so waiting prices less than the night walk, and it does not arrive in the night.
+;; Case 3: the same room sealed (no door) walks nowhere at night either: go-to prices the dig-out and the dawn wait before it cuts a wall, so it holds (:risky) and stays inside.
 ;; :time-why :dawn-decision: the case is about whether go-to starts at night; the sky is the one thing a lit/dark cell cannot give.
 {:defaults
  {:tags [:night :movement :go-to]
@@ -24,6 +25,19 @@
    :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [15 0 15] "torch"]
             [:fill [18 0 15] [18 1 15] "glass"] [:fill [18 0 17] [18 1 17] "glass"]
             [:set [18 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [18 1 16] "oak_door[facing=east,half=upper,open=false]"]]
+   :act [[:summon "zombie" [30.5 0 15.5] "{NoAI:1b}"]
+         [:summon "zombie" [36.5 0 17.5] "{NoAI:1b}"]
+         [:summon "zombie" [42.5 0 15.5] "{NoAI:1b}"]
+         [:wait-s 4]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.movement.go-to {:pos #at [50 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 20 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 2.5]]}
+  {:name "sealed-room-holds-for-dawn-instead-of-digging-out"
+   :body {:yaw 270 :inventory [["diamond_pickaxe" 1] ["diamond" 20]]}
+   :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [15 0 15] "torch"]
+            [:fill [18 0 15] [18 1 15] "glass"] [:fill [18 0 17] [18 1 17] "glass"]]
    :act [[:summon "zombie" [30.5 0 15.5] "{NoAI:1b}"]
          [:summon "zombie" [36.5 0 17.5] "{NoAI:1b}"]
          [:summon "zombie" [42.5 0 15.5] "{NoAI:1b}"]
