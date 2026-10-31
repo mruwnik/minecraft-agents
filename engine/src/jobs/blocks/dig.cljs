@@ -72,7 +72,7 @@
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
    :see {:doc "true: dig only from where the eye sees the block (jobs.lib.aim: nothing seen solid in the way, as a player aims), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough, the game lets a dig pass through blocks" :spec boolean? :default true}
-   :through {:doc "false: no block in the aim line is dug first; a block no stand sees ends :unreachable (a take-back digs nothing but its own blocks)" :spec boolean? :default true}
+   :through {:doc "false: no block in the aim line is dug first (a block roofing the body's room is never dug for it); a block no stand sees ends :unreachable (a take-back digs nothing but its own blocks)" :spec boolean? :default true}
    :pillar {:doc "false: a block overhead that no walk reaches is not pillared up to (the caller's :ways leave out :pillar)" :spec boolean? :default true}
    :clear-seal {:doc "false: the walk into reach is :walk only (a seal cleanup's own dig must not start another cleanup)" :spec boolean? :default true}
    :walk {:doc "false: a block out of reach (or out of sight with :see) ends :unreachable :no-walk at once, the body takes no step to it (a pick on the way)" :spec boolean? :default true}

@@ -178,11 +178,20 @@
     (when (and hit (not= hit target) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)))
       {:cell hit :block (some-> (u/seen-block p (zipmap [:x :y :z] hit)) .-name)})))
 
+(defn roof-over-body?
+  "Whether the block at cell roofs the space the body stands in: over its head with a seen open cell right under it. It
+  may be a build's ceiling, so a tunnelling dig leaves it (the caller pillars, or the call ends unreachable)."
+  [c [x y z]]
+  (let [[_ fy _] (feet-cell c)]
+    (and (< (inc fy) y)
+         (= :open ((aim/seen-kind-at (:primitives c)) x (dec y) z)))))
+
 (defn through-cell
-  "The block a player would dig to get at pos: line-blocker's cell when it is natural (through-natural), within reach and not tried before, else nil."
+  "The block a player would dig to get at pos: line-blocker's cell when it is natural (through-natural), within reach, not tried before and no roof over the body (roof-over-body?), else nil."
   [c pos]
   (let [{:keys [cell block]} (line-blocker c pos)]
-    (when (and cell block (re-find through-natural block) (not (contains? (:through (ctx/mem c)) cell)) (in-reach? c (zipmap [:x :y :z] cell)))
+    (when (and cell block (re-find through-natural block) (not (contains? (:through (ctx/mem c)) cell))
+               (not (roof-over-body? c cell)) (in-reach? c (zipmap [:x :y :z] cell)))
       cell)))
 
 (defn base-in-the-way

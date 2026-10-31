@@ -432,6 +432,20 @@
           (is (= {:dug true} (select-keys result [:dug])) (pr-str result))
           (is (< 1 (count (calls (:p env) "dig")))))))))
 
+;; a room under a stone slab (y 65) with dirt over it: the slab roofs the body's room, so it is not tunnelled through
+(deftest a-roof-over-the-body-is-not-dug-through-to-reach-a-cell-above-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (-> (tu/box -2 60 -3 8 68 3 "stone")
+                         (dissoc "3,63,0" "3,64,0")
+                         (assoc "3,66,0" "dirt"))
+              env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks})
+              _ (tu/seeing-all (:p env))
+              r (await (ending-cause (:eng env) job {:pos [3 66 0] :pillar false} 20))]
+          (is (= :unreachable (:reason r)) (pr-str r))
+          (is (empty? (calls (:p env) "dig"))))))))
+
 (deftest a-block-with-an-unconnected-pocket-beside-it-is-dug-through-when-the-walk-fails
   ;; the pocket (6 62 0) has a stone floor, so open-side? sends the body to walk first; no walk reaches it, so the stone in the line is dug
   (async done
