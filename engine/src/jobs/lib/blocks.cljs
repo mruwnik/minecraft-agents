@@ -402,6 +402,14 @@
                             (and s (not (true? (.-unknown s))) (not (support-name? (.-name s))) (> (or (.-ageMs s) 0) stale-ms))))
                         neighbours)))))
 
+(defn stale-target?
+  "Whether the body last sensed pos itself over stale-ms ago and the job has not yet looked at it: it may have changed
+  since, so what it held is no ground to refuse."
+  [c pos]
+  (let [s (u/sensed (:primitives c) pos)]
+    (boolean (and s (not (true? (.-unknown s))) (> (or (.-ageMs s) 0) stale-ms)
+                  (not= pos (::looked (mem-for c pos)))))))
+
 (defn refusing-mobs
   "The names of the entities a refused place reports near its cell (the mob in the way), nil when none."
   [r]

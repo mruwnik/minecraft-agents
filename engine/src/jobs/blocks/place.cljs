@@ -326,7 +326,7 @@
   "b/see-target!, and a look once more at a cell whose floor or walls were last sensed long ago, so no-support is judged on
   what is there now."
   [c pos]
-  (if (b/stale-support? c pos)
+  (if (or (b/stale-support? c pos) (b/stale-target? c pos))
     (do (b/note-looked! c pos)
         (await (look/look-at! c (b/cell pos))))
     (await (b/see-target! c pos))))
@@ -336,7 +336,8 @@
   the cell out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
   [c pos items]
   (let [block (b/target-name (:primitives c) pos "air")
-        full (occupied-by c pos items)
+        far? (and (b/stale-target? c pos) (not (b/in-reach? c pos (:see (:args c)))))
+        full (when-not far? (occupied-by c pos items))
         already (some #{block} items)
         lacking? (and (not full) (not already) (nil? (b/chosen c items)))
         fetched (when (and lacking? (fetching? c)) (await (fetch! c items)))
@@ -372,7 +373,8 @@
 (defn ^:async look-first!
   "A look at the cell, when due, is a step of its own, so can-run? judges what it shows (no support) before anything is placed."
   [c pos step]
-  (if (or (b/to-see? c pos) (b/stale-support? c pos))
+  (if (or (b/to-see? c pos) (b/stale-support? c pos)
+          (and (b/stale-target? c pos) (b/in-reach? c pos (:see (:args c)))))
     (do (await (see-target! c pos)) :again)
     (await (step))))
 

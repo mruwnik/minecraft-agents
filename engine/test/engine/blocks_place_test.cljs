@@ -294,6 +294,21 @@
             (is (= :placed (:reason result)))
             (is (= "cobblestone" (bd/block-at p {:x 2 :y 67 :z 0})))))))))
 
+(deftest a-target-remembered-as-stone-long-ago-is-looked-at-before-it-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"2,63,0" "stone"} :inventory cobble})
+              shown (atom false)]
+          (aset p "sensedAt" (fn [pos]
+                               (if (and (= [2 64 0] [(.-x pos) (.-y pos) (.-z pos)]) (not @shown))
+                                 #js {:name "stone" :ageMs 5000}
+                                 (.blockAt p pos))))
+          (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a)))
+          (let [result (await (tu/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 8))]
+            (is (= :placed (:reason result)))
+            (is (= "cobblestone" (bd/block-at p {:x 2 :y 64 :z 0})))))))))
+
 (deftest bad-args-are-never-from-can-start
   (are [args] (= [:never :bad-args] (tu/kind-reason (place/can-start? {:args args :primitives (:p (bd/setup {:self body}))})))
     {:item "cobblestone"}
