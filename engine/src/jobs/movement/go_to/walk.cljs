@@ -170,6 +170,35 @@
                      (>= (u/dist (peek steps) pos) (dec closest)))
             {:known-end true})))))
 
+(def route-min-steps
+  "Steps a plan toward a loaded goal needs for its way to be remembered (note-route)."
+  20)
+
+(defn cell-of [{:keys [x y z]}] (mapv #(js/Math.floor %) [x y z]))
+
+(defn route-check
+  "near/walk-round!'s :stair-check: check's why, else nothing; remembers (mem :route, every second step) the way of a long
+  plan made with the goal loaded, which a later plan short of the unloaded goal must not undo (route-tolls)."
+  [c check]
+  (fn [{:keys [status steps r] :as plan} first?]
+    (when (and (#{"partial" "found"} status) (> (count steps) route-min-steps)
+               (not= "goal-unloaded" (some-> ^js r .-reason))
+               (> (u/dist (peek steps) (let [[x y z] (peek (:route (ctx/mem c) [[0 0 0]]))] {:x x :y y :z z})) 3))
+      (ctx/update-mem! c assoc :route (mapv cell-of (take-nth 2 steps))))
+    (when check (check plan first?))))
+
+(defn route-tolls
+  "The :tolls of the cells beside the remembered route (route-check) behind the body, while it stands on it: the way back
+  along a route the goal was seen to lie on is dearer, so a plan short of an unloaded goal goes on instead of turning back."
+  [c]
+  (let [route (:route (ctx/mem c))
+        me (u/self-pos c)
+        d (fn [[x y z]] (u/dist {:x x :y y :z z} me))
+        i (when (seq route) (apply min-key #(d (route %)) (range (count route))))]
+    (when (and i (< (d (route i)) 6))
+      (->> (take i route) (mapcat cut/beside) distinct
+           (map (fn [[x y z]] {:x x :y y :z z :factor 2}))))))
+
 (defn turn-back
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
@@ -245,7 +274,7 @@
      :shut-also (shut-foreign c)
      :budget wsearch/round-budget
      :avoid (set (:fault-cells (ctx/mem c)))
-     :tolls (into (vec (:tolls (:args c))) (send-back-tolls (ctx/mem c)))
+     :tolls (-> (vec (:tolls (:args c))) (into (send-back-tolls (ctx/mem c))) (into (route-tolls c)))
      :zone-tolls (wworld/zone-tolls?)
      :unknown (round-unknown c)}))
 
@@ -550,7 +579,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (turn-back-check c (reprice/check c pos (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))
+            stair-check (turn-back-check c (reprice/check c pos (route-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
             round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :on-floor #(count-floor! c %1 %2) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
