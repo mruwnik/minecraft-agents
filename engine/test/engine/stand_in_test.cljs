@@ -81,7 +81,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (stand! {:blocks {"3,64,1" "water"}} {:where :water} true)]
           (await (tu/run-until-empty eng 10))
-          (is (<= 3 (count (tu/walked-to eng))) "at least three legs, not one")
+          (is (= 3 (count (filter #(and (= :round_started (:kind %)) (= "j1" (:job %))) @seen))) "three legs (rounds), not one")
           (is (seq (st/ended-because seen :blocked)) "then blocked"))))))
 
 (deftest no-water-within-reach-ends-no-place
