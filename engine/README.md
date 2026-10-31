@@ -656,7 +656,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
 
 - Query without a verdict: `jobs.lib.access/foreign-holder` (ctx, pos) names the zone, active claim or other body's plan holding a cell, else nil (nothing refused); `map.mjs --world W whose --center '[x y z]' --by ME` asks the same of zones and claims.
 - Every job that digs, places or takes accepts `:ignore-zones? true` (default false). By default it skips a refused target
-  with one warn naming the zone, claim or plan; a cell two plans share is such a target, and `:ignore-zones? true` acts on it anyway.
+  with one warn naming the zone, claim or plan; a cell two plans share is such a target, and `:ignore-zones? true` acts on it anyway. It covers the job's own targets only: the block jobs' walks (`lib.blocks/walk-request`) never pass it on, so go-to's escalations do not cut a zone's walls on the way.
 - `withdraw`, `deposit`, `haul`, `smelt` and jobs built on them wait `:refused` (`can-start?`/`can-run?`; a called child ends condition-failed `:refused`) on a foreign container.
 - Survival jobs (`breathe`, `extinguish`, `shut-in`, the crop dig of `get-food`) prefer a permitted option and break
   another's block only as a last resort (warn `<job>.trespass-last-resort`); `get-food` takes another's crops only with the caller's `:ignore-zones?` plus real hunger, else its no-food text names what it left. They never take from a foreign container. A

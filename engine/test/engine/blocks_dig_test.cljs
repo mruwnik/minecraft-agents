@@ -527,6 +527,19 @@
           (is (= #{:walk} (await (ways-of {:clear-seal false :seal true}))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
           (is (contains? (await (ways-of {:seal true})) :dig-out) "any other dig beside its seal may leave the shaft"))))))
 
+(deftest the-walk-never-carries-the-calls-leave-to-dig-in-zones
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom [])
+              env (setup {:self body :blocks {"12,64,0" "dirt"}})
+              go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
+              stub (fn ^:async spy [c] (swap! seen conj (:args c)) (ctx/end c :done nil {:arrived false :why :no-path}))
+              env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))]
+          (await (tu/child-outcome (:eng env) job {:pos [12 64 0] :ignore-zones? true} 6))
+          (is (seq @seen))
+          (is (not-any? :ignore-zones? @seen) "its escalations must not cut a zone's walls to reach the cell"))))))
+
 (defn after-walks
   "env with jobs.movement.go-to replaced by the real one followed by (f p): the world changes during the walk."
   [env f]

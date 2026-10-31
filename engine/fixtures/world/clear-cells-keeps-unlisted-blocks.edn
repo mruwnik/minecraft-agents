@@ -1,6 +1,7 @@
 ;; Card 00c073d0: clear-cells and fill-cells never break a block outside their cell list, and every dig is an info event.
 ;; Should-succeed: a listed cell with open air beside it is dug, with a :tidy.dug event naming it, and the stone beside it stays.
 ;; Should-fail: a listed cell buried in an unlisted stone mass is not reached by digging the mass (it stays stone, the call ends without a dig).
+;; Should-fail: a listed cell inside a sealed room whose walls lie in another's footprint is not reached with :ignore-zones? true either: the walk's escalation (pillar, stair, clear-path) leaves the walls standing.
 {:defaults
  {:tags [:build :dig]
   :time :any
@@ -18,4 +19,10 @@
    :blocks [[:fill [14 0 6] [18 3 10] "stone"]]
    :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [16 1 8]]}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 100 :of-job true}]
-   :after [[:block [16 1 8] "stone"] [:block [16 1 9] "stone"] [:block [16 1 10] "stone"] [:block [15 1 9] "stone"]]}]}
+   :after [[:block [16 1 8] "stone"] [:block [16 1 9] "stone"] [:block [16 1 10] "stone"] [:block [15 1 9] "stone"]]}
+  {:name "sealed-room-in-a-foreign-footprint-keeps-its-walls-under-ignore-zones"
+   :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [13 0 5] #at [19 4 11]] :want "stone"}]}]
+   :blocks [[:fill [14 0 6] [18 3 10] "stone"] [:fill [15 1 7] [17 2 9] "air"] [:fill [15 0 7] [17 0 9] "stone"] [:block [16 1 8] "dirt"]]
+   :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [16 1 8]]} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 110 :of-job true}]
+   :after [[:block [16 1 8] "dirt"] [:block [16 1 10] "stone"] [:block [16 2 10] "stone"] [:block [14 1 8] "stone"] [:block [16 3 8] "stone"] [:block [16 3 10] "stone"]]}]}

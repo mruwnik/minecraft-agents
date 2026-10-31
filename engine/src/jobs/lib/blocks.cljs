@@ -275,12 +275,13 @@
       (seq (ledger/near-of (ledger/entries c) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
 
 (defn ^:async walk-request
-  "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways, and (unless the :enter-pens setting) keeping out of the
+  "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways (no :ignore-zones?: the call's leave to dig
+  listed cells in a zone is no leave for the walk's escalations to cut its walls), and (unless the :enter-pens setting) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
   (let [pens (when-not (settings/get settings ::enter-pens) (await (pen-entry/pens! c)))
         keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
-    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c)}
             (seq keep-out) (assoc :tolls keep-out))]))
 
 (defn warn-kept-out! [c pens]
