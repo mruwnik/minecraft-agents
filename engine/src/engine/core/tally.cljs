@@ -5,7 +5,8 @@
   (:require [engine.contract :as contract]
             [engine.core.clock :refer [ttl-now]]
             [engine.hurt :as hurt]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.settings :as settings]))
 
 (defn snapshot
   "What the body carries and has lost to each hurt cause, for engine.contract/act-delta; no :inventory offline."
@@ -30,10 +31,20 @@
                                          (cond-> m (or (empty? path) (get-in m path)) (update-in (conj path :contract) f)))
                                        m paths))))))
 
-(defn count-act!
-  "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots."
+(def settle-ticks
+  "Physics steps an act's item uses wait before they are read again: the client's inventory view can read short for a
+  moment after a container closes (the server's resync lands after the act returned)."
+  3)
+
+(defn ^:async count-act!
+  "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots. When the act
+  seems to have used items, the bag is read again after a beat and that read counts."
   [eng root slots before]
-  (let [delta (contract/act-delta before (snapshot eng))]
+  (let [first-delta (contract/act-delta before (snapshot eng))
+        delta (if (seq (get-in first-delta [:uses :items]))
+                (do (await (js/Promise. (fn [ok] (js/setTimeout ok (* settle-ticks (settings/physics-ms (:primitives eng)))))))
+                    (contract/act-delta before (snapshot eng)))
+                first-delta)]
     (when (seq delta)
       (update-frames! eng root (frame-paths slots) #(update % :tally contract/add delta)))))
 

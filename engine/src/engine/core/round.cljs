@@ -90,7 +90,7 @@
                                                    :target (js->clj (.-pos args) :keywordize-keys true)}
                                             (= "noPath" (.-reason r)) (assoc :no-path true))
                       mem/moved-policy))
-        (tally/count-act! eng root slots before)
+        (await (tally/count-act! eng root slots before))
         (save-memory-soon! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (when-not quiet?
@@ -101,7 +101,7 @@
       (catch :default e
         (when (re-find #"^act-stuck" (str (.-message e)))
           (emit! eng (merge fields {:source :action :kind :stuck :level :warn :text (.-message e) :args (js->clj args)})))
-        (tally/count-act! eng root slots before)
+        (await (tally/count-act! eng root slots before))
         (save-memory-soon! eng)
         (emit! eng (cond-> (merge fields {:source :action :kind :done
                                           :status (if (cut? e) :cut :failed)})

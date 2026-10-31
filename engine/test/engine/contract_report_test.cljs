@@ -144,6 +144,23 @@
                  (-> (reader/read-string (fs/readFileSync (path/join dir "memory.edn") "utf8"))
                      (get-in [:entries (mem/job-kind id) 0 :data :children :a :contract :tally])))))))))
 
+(deftest a-short-inventory-view-right-after-an-act-is-not-counted-as-used
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup)
+              id (core/submit! eng '(eats) {})]
+          (.override (.-world p) "eat"
+                     (fn [token a impl]
+                       (let [full (:inventory @(fake/state p))]
+                         (-> (impl token a)
+                             (.then (fn [r]
+                                      (swap! (fake/state p) assoc :inventory [])
+                                      (js/setTimeout #(swap! (fake/state p) update :inventory (fn [_] (update-in full [0 :count] dec))) 20)
+                                      r))))))
+          (await (core/tick! eng))
+          (is (= {:uses {:items {"bread" 1}}} (tally eng id []))))))))
+
 (deftest health-counts-only-the-chosen-causes
   (async done
     (tu/run-async done
