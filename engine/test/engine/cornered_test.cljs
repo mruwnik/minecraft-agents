@@ -1712,6 +1712,17 @@
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (= :dry (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "a fight on a drowned it cannot target is no win: the swim to dry land"))))))
 
+(deftest an-armed-body-afloat-with-a-drowned-it-sees-beside-it-still-fights
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true} :blocks pool
+                                           :inventory [{:name "iron_sword" :count 1}]
+                                           :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20 :visible true}]})]
+          (core/submit! eng retreat {})
+          (dotimes [_ 6] (await (core/tick! eng)))
+          (is (not-any? #(and (= :retreat.step-speed (:kind %)) (= :dry (:slot %))) @seen) "a drowned in reach and in sight is fought, not fled"))))))
+
 (deftest a-body-wading-beside-a-drowned-does-not-take-the-swim-out-step
   (async done
     (tu/run-async done

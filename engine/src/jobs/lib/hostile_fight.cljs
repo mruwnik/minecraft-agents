@@ -245,6 +245,11 @@
 
 (declare hit-and-back-ok? flee-answer)
 
+(defn heard-afloat?
+  "Whether e is only heard while the body swims: an attack has no target to swing at (ends :no-target), so the fight never lands a blow."
+  [c e]
+  (and (breath/swimming? (:primitives c)) (not (danger-q/seen-only? e))))
+
 (defn fight-answer
   "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp of walk-q, go-to's quote of it;
   none: its lower bound) and the fight with near and the
@@ -263,7 +268,7 @@
         others (remove combat/creeper? (way-mobs p fought))]
     (when (and (seq fought) (or (not lone-creeper?) (hit-and-back-ok? c near)))
       (let [es (vec (concat fought others))
-            fight (update (fight-of c es struck-of) :mobs #(mapv (fn [m e] (assoc m :reach? (reaches? c e))) % es))
+            fight (update (fight-of c es struck-of) :mobs #(mapv (fn [m e] (assoc m :reach? (and (reaches? c e) (not (heard-afloat? c e))))) % es))
             left (keep (fn [[m e]] (when (false? (:reach? m)) e)) (map vector (:mobs fight) es))
             stats (cost/armour-stats (:equipment fight))
             {:keys [rate hardest]} (incoming c)

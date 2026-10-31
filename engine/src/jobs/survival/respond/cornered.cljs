@@ -212,9 +212,7 @@
                    (await (back-off-search! c chasers)))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
         weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim?))
-        ;; afloat, a drowned only heard or out of a swing's reach is no fight the body can win: the swim out comes first
-        win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed))
-                  (or (not swim?) (some #(and (danger-q/seen-only? %) (hostile/reaches? c %)) hostiles)))
+        win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
         prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
                                     (pillar/pillar-fits? (:primitives c) (pl/feet-cell c))
