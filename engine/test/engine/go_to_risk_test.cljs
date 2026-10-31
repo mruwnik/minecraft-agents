@@ -188,6 +188,16 @@
           (is (= :dawn wait) "a goal worth arrival still waits for a cheaper way")
           (is (re-find #"hp" text)))))))
 
+(deftest standing-hostiles-that-burn-at-sunrise-are-gone-from-the-dawn-walk-but-shaded-ones-stay
+  (let [zombies (for [[i x] (map-indexed vector [48 52 56])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ x 0.5) :y 64 :z 3.5}})
+        goal {:x 195 :y 64 :z 0}
+        wait-of (fn [blocks]
+                  (with-redefs [sh-sense/sky-light-at (constantly 15)] (let [c (ready-test/ctx-of (-> night-hut (assoc :entities zombies :inventory diamond-kit) (assoc :self {:pos {:x 12 :y 64 :z 0} :health 20 :food 20 :worldSpawn [-5000 64 0]}) (update :blocks merge blocks) (assoc :light {[12 64 0] [0 15] [12 65 0] [0 15]})))]
+                    (select-keys (nth (risk/status c goal (straight-plan c goal)) 2) [:wait :wait-s]))))
+        roofs (into {} (for [x [48 52 56]] [(str x ",66,3") "stone"]))]
+    (is (= :dawn (:wait (wait-of {}))) "zombies on open ground burn at sunrise: waiting for dawn beats walking past them")
+    (is (nil? (:wait (wait-of roofs))) "zombies under a roof stay by day: no wait makes the walk past them cheaper")))
+
 (def hut-bed {"4,64,-1" "red_bed"})
 
 (deftest a-body-whose-sleep-skips-the-night-sleeps-it-away-before-the-walk

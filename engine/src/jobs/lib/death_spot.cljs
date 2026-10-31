@@ -104,14 +104,18 @@
             (for [{{:keys [death-t pos]} :data} (ctx/entries c :deaths) :when (and pos (> death-t since))] [death-t pos])
             (at :respawned (comp list :pos)) (at :hurt (comp list :pos)) (at :moved (juxt :from :to)))))
 
-(defn burning?
-  "Whether mob burns at pos now: one of threat/burns-in-sun, the body seeing the spot lit by the open sky (sky reaching
-  down its column) by day (vanilla: the sky darkened under 4) with no rain."
+(defn burns-by-day?
+  "Whether mob (one of threat/burns-in-sun) standing at pos would burn once the sun is up: no rain now and sky light
+  reaching down its column (a shaded or roofed mob stays)."
   [p mob pos]
-  (let [{:keys [rain]} (sh-sense/sky-state p)
-        cell (update-vals pos js/Math.floor)]
-    (boolean (and (contains? threat/burns-in-sun mob) rain (zero? rain) (< (sh-sense/sky-subtract-now p) 4)
-                  (lit? p cell) (sh-sense/sky-reaches-from-above? p cell)))))
+  (let [{:keys [rain]} (sh-sense/sky-state p)]
+    (boolean (and (contains? threat/burns-in-sun mob) rain (zero? rain)
+                  (sh-sense/sky-reaches-from-above? p (update-vals pos js/Math.floor))))))
+
+(defn burning?
+  "Whether mob burns at pos now: burns-by-day?, by day (vanilla: the sky darkened under 4), the body seeing the spot lit."
+  [p mob pos]
+  (boolean (and (< (sh-sense/sky-subtract-now p) 4) (lit? p (update-vals pos js/Math.floor)) (burns-by-day? p mob pos))))
 
 (defn other-players
   "Positions of the players other than the body that it senses within threat/despawn-blocks of pos."

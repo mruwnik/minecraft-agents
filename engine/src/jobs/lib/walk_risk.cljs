@@ -22,6 +22,7 @@
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
@@ -328,7 +329,7 @@
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
   (shelter.clock/night-left-quote's mean) when dawn lowers a cell of it or the way out it leaves (:exit-dawn?); asleep
   when dawn would and the body's sleep skips the night (sh-sleepers/sleepers-short 0) in a bed of sleep-bed, for the
-  seconds before the sleep (sh-beds/sleep-s, its quote's), the walk then by day; and until
+  seconds before the sleep (sh-beds/sleep-s, its quote's), the walk then by day (a threat that burns in sun under open sky is gone from it: death-spot/burns-by-day?); and until
   healed to full when the body can heal. Each {:wait :secs :health :hp :s}: the health healed by then, the walk's hp after it, s the wait's seconds, what staying put risks over them
   (stay-estimate) and the walk after them (estimate-of, cost/risk-s) at the health healed by then (cost.health/heal-s-per-hp
   an hp), by full day's light once the night is over (:sky 0). A threat that may move off is priced as staying: no wait
@@ -341,7 +342,9 @@
         night-s (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))
         dawn? (and (pos? night-s) (or (:exit-dawn? in) (boolean (some #(spawn-light/dawn-lowers? p %) (:cells in)))))
         in-key (dissoc in :cells :catchers :remembered)
-        day (delay (check-cache/keyed c ::day-in in-key #(estimate-inputs c goal {:plan plan :sky 0})))
+        by-day (fn [ts] (filterv #(not (death-spot/burns-by-day? p (:mob %) (:pos %))) ts))
+        day (delay (check-cache/keyed c ::day-in in-key
+                                      #(-> (estimate-inputs c goal {:plan plan :sky 0}) (update :catchers by-day) (update :remembered by-day))))
         sleep (when (and dawn? (zero? (sh-sleepers/sleepers-short p (ctx/view c)))) (sleep-bed c goal))
         way (fn [kind secs day?]
               (let [healed (if heals? (min 20 (+ health (/ secs per-hp))) health)
