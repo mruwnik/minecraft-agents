@@ -200,7 +200,7 @@
   [c item n o worth]
   (if (and worth (neg? worth))
     (contract/later :not-worth (str "obtain: worth " (js/Math.round worth) " s, below nothing") :worth worth)
-    (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+    (ctx/child-status (dissoc c :quote-call) (or (:slot o) :need) 'jobs.items.obtain
                       (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
                         (and worth (js/isFinite worth)) (assoc :worth worth)))))
 
@@ -209,7 +209,7 @@
   when worth 0 is passed), with the light judged under the sky's darkening sky (nil: now; 0: full day); a :later that names a wait (:wait-ms, as :dark and :exposed do) costs the wait plus the price at full day (0 if none), since the obtain still follows it; ##Inf when it has no way (a :never, or a :later with neither, such as no-source: a search that could find one is priced in :price)."
   [c item n o sky]
   (let [status (fn [sky]
-                 (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+                 (ctx/child-status (dissoc c :quote-call) (or (:slot o) :need) 'jobs.items.obtain
                                    (cond-> (assoc (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o) :worth 0)
                                      sky (assoc :sky sky))))
         [kind _ data] (status sky)]

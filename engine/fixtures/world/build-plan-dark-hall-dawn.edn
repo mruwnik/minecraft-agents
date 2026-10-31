@@ -1,7 +1,7 @@
 ;; Card bf7a26db: from-plan in a long dark hall (a never-lit cell) at night, no torch carried, a chest of torches booked 43 blocks
 ;; west of the body out on open grass. The torches are needed after dawn too, so the fetch is worth the night left plus their price by day.
 ;; Should-fail (waits for dawn, no fetch before it): near-dawn-the-dark-walk-waits-for-day: at 22800 the night left (about 35 s) is
-;; less than the spawn risk of about 80 blocks of dark grass there and back. Should-succeed: midnight-the-torches-are-fetched: at 16000
+;; less than the spawn risk of about 80 blocks of dark grass there and back. Should-succeed: midnight-the-torches-are-fetched: at 13500 (dusk, about 475 s of night left)
 ;; the night left outweighs that risk; the torches are fetched and the site built.
 ;; The hall's west end is open: the pitch-dark site no look makes out is priced as unseen dark, not waited on.
 ;; The near-dawn body first looks over the grass from outside (unseen ground is guessed dark by day too), then steps in.
@@ -24,7 +24,7 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :text [:contains "a torch does"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 15 :of-job true}]}
   {:name "midnight-the-torches-are-fetched"
-   :act [[:time-set 16000] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :act [[:time-set 13500] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
    :after [[:block [88 0 16] "oak_planks"] [:block [89 0 16] "oak_planks"]]}]}
