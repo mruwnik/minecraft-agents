@@ -2,11 +2,13 @@
   "jobs.farm.maintain against the fake world: the stock steps (compost, deposit) after tend, and the keep they share."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.farm-tend-plan-test :as fp]
             [engine.farm-tend-test :as ft]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.farm.maintain :as maintain]
-            [jobs.farm.maintain-stock :as stock]))
+            [jobs.farm.maintain-stock :as stock]
+            [jobs.farm.stalks :as stalks]))
 
 (defn ^:async scenario
   "Submit farm.maintain with args in a world; run n ticks 700 ms apart; the setup map."
@@ -174,3 +176,55 @@
               _ (await (tu/run-ticks (:eng s) (:clock s) 60 700))]
           (is (pos? (get (ft/inv s) "wheat" 0)) "the ripe wheat 60 blocks off was cut")
           (is (true? (ft/finished? s))))))))
+
+(defn stalk-plan [id want]
+  {:id id :parts [{:id "stalk" :cells [[2 64 2] [3 64 2]] :want want}]})
+
+(defn stalk-world
+  "Stalks of the given heights over the cells (2,2) and (3,2), standing on grass."
+  [name h2 h3]
+  (let [col (fn [x h] (into {} (for [y (range 64 (+ 64 h))] [(fp/k x y 2) name])))]
+    {:blocks (merge {(fp/k 2 63 2) "grass_block" (fp/k 3 63 2) "grass_block"} (col 2 h2) (col 3 h3))}))
+
+(deftest a-stalk-want-is-read-whatever-its-spelling
+  (are [stalk want] (= stalk (stalks/stalk-of want))
+    "sugar_cane" {:crop "sugar_cane"}
+    "bamboo" [:any "bamboo" "bamboo_sapling"]
+    "bamboo" "bamboo"
+    nil {:crop "wheat"}
+    nil [:any "water" {:block "oak_slab" :waterlogged true}]))
+
+(deftest cut-skips-a-stalk-that-is-no-taller-than-its-base
+  (is (= [[3 65 2]]
+         (stalks/cut-cells (:p (fp/setup (stalk-world "sugar_cane" 1 3) {} []))
+                           {{:x 2 :y 64 :z 2} "sugar_cane" {:x 3 :y 64 :z 2} "sugar_cane"}))))
+
+(deftest the-cut-step-digs-above-the-stalk-base-only-when-there-is-something-to-cut
+  (are [skip cut] (= skip (:skip (maintain/decide :cut {:area {:plan "p"}} {:cut cut})))
+    :no-stalks []
+    nil [[3 65 2]])
+  (is (= {:area {:cells [[3 65 2]]} :only ["bamboo" "sugar_cane"] :for-plan "p"}
+         (update (:args (:call (maintain/decide :cut {:area {:plan "p"}} {:cut [[3 65 2]]}))) :only sort))))
+
+(deftest a-sugar-cane-plan-is-cut-above-the-base
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plans {"cane" (stalk-plan "cane" {:crop "sugar_cane"})}
+              s (fp/setup (stalk-world "sugar_cane" 1 3) plans [])]
+          (core/submit! (:eng s) (list 'jobs.farm.maintain {:area {:plan "cane"} :ignore-zones? true}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (= #{[3 65 2]} (fp/dug s)) "only the block above the base of the tall stalk")
+          (is (= "sugar_cane" (fp/block-at s 3 64 2)) "the base stays")
+          (is (true? (fp/finished? s))))))))
+
+(deftest a-bamboo-plan-is-cut-above-the-base
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plans {"bamboo" (stalk-plan "bamboo" [:any "bamboo" "bamboo_sapling"])}
+              s (fp/setup (stalk-world "bamboo" 4 1) plans [])]
+          (core/submit! (:eng s) (list 'jobs.farm.maintain {:area {:plan "bamboo"} :ignore-zones? true}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (= #{[2 65 2]} (fp/dug s)))
+          (is (= "bamboo" (fp/block-at s 2 64 2))))))))

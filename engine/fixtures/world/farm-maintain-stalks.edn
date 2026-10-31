@@ -1,0 +1,22 @@
+;; farm.maintain over a plan whose part wants sugar cane or bamboo cuts the stalk above the base block and never the base.
+;; Two stalks of 3 on grass [10..11 0 16]; the body at [10.5 0 14.5] holds an iron pickaxe.
+{:defaults
+ {:tags [:farm :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 -1 16] [11 -1 16] "grass_block"]]
+  :body {:at [10.5 0 14.5] :effects [["resistance" 600 4]] :inventory [["iron_pickaxe" 1]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "sugar-cane-plan-is-cut-above-the-base"
+   :blocks [[:fill [10 0 16] [11 2 16] "sugar_cane"]]
+   :plans [{:id "cane" :metadata {:by "$body"} :parts [{:id "cane" :cells [#at [10 0 16] #at [11 0 16]] :want {:crop "sugar_cane"}}]}]
+   :act [[:job (jobs.farm.maintain {:area {:plan "cane"}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [10 0 16] "sugar_cane"] [:block [11 0 16] "sugar_cane"] [:not-block [10 1 16] "sugar_cane"] [:not-block [11 2 16] "sugar_cane"]]}
+  {:name "bamboo-plan-is-cut-above-the-base"
+   :blocks [[:fill [10 0 16] [11 3 16] "bamboo"]]
+   :plans [{:id "bamboo" :metadata {:by "$body"} :parts [{:id "bamboo" :cells [#at [10 0 16] #at [11 0 16]] :want [:any "bamboo" "bamboo_sapling"]}]}]
+   :act [[:job (jobs.farm.maintain {:area {:plan "bamboo"}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [10 0 16] "bamboo"] [:not-block [10 1 16] "bamboo"] [:not-block [11 3 16] "bamboo"]]}]}

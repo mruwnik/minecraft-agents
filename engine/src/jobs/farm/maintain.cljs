@@ -8,6 +8,7 @@
             [jobs.farm.tend-box :as box]
             [jobs.farm.tend-decide :as tend-decide]
             [jobs.farm.tend-plan :as tend-plan]
+            [jobs.farm.stalks :as stalks]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.crops :as crops]
@@ -20,7 +21,8 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
-            [jobs.lib.work-place :as work-place]))
+            [jobs.lib.work-place :as work-place]
+            [jobs.lib.world :as known]))
 
 (def meta {:tags [:goal]})
 
@@ -29,6 +31,9 @@
   child job called once (a child that yields is called again on the next call; a step under way is not re-decided):
   - :tidy (jobs.farm.tidy over the plan and its :part): the area is a plan with no :parts and a tree, dirt or other block
     fills some of its crop cells; a body clears its own field.
+  - :cut (jobs.blocks.clear-cells): the plan has sugar cane or bamboo cells (a part wanting the stalk) and a stalk stands
+    on the base block of one; the stalk block above the base is dug and the rest of the stalk comes down with it, the base
+    is never dug.
   - :tend (jobs.farm.tend over the :area, with :till :irrigate :fertilize): harvest, irrigate, till, plant and fertilize as
     its conditions hold. It always runs; a field with nothing to do books it declined.
   - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
@@ -38,7 +43,7 @@
   a box, or twice the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
   register holds (jobs.lib.reserve: the food reserve, best food first; agent entries) and the :carry entry. Harvested
   crops above it are stored; seed above it is composted.
-  Skipped steps are booked {:skipped reason}: :nothing-blocked, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
+  Skipped steps are booked {:skipped reason}: :nothing-blocked, :no-stalks, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
   :declined when the child declined.
   It starts when tend would run or a stock step has something to do. Done once a step ran and tend has nothing
   to do and nothing is left to compost or store; a farm in order before the first pass waits :nothing-to-do. Ends :done with {:steps {step summary}} when a step ran to its end,
@@ -66,9 +71,9 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night work-place/spot))))
 
-(def steps [:tidy :tend :compost :deposit])
+(def steps [:tidy :cut :tend :compost :deposit])
 
-(def jobs {:tidy 'jobs.farm.tidy :tend 'jobs.farm.tend :compost 'jobs.farm.compost :deposit 'jobs.storage.deposit})
+(def jobs {:tidy 'jobs.farm.tidy :cut 'jobs.blocks.clear-cells :tend 'jobs.farm.tend :compost 'jobs.farm.compost :deposit 'jobs.storage.deposit})
 
 (defn sow-reserve
   "{seed count} the field's sowing keeps carried."
@@ -78,8 +83,22 @@
     (stock/box-reserve (stock/beds (box/ground-layer (:primitives c) (fa/arg-box c)))
                        (u/inventory (:primitives c)))))
 
+(defn stalk-bases
+  "{pos stalk} of the plan's sugar cane and bamboo cells ({} without :plan or when it cannot be read)."
+  [c]
+  (let [{:keys [plan part]} (:area (:args c))
+        answer (some->> plan (known/plan c))]
+    (if (and answer (not (:broken answer)))
+      (stalks/base-cells answer part)
+      {})))
+
+(defn stalk-cuts
+  "[[x y z]] of the stalk blocks above the base that the cut step would dig."
+  [c]
+  (stalks/cut-cells (:primitives c) (stalk-bases c)))
+
 (defn facts
-  "{:keep :waste :stored :blocked}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig."
+  "{:keep :waste :stored :blocked :cut}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig, the stalk blocks to cut."
   [c]
   (let [inventory (u/inventory (:primitives c))
         keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:carry (:args c)))]
@@ -88,15 +107,20 @@
      :stored (stock/surplus inventory keep crops/farm-goods)
      :blocked (if (and (fa/plan c) (empty? (fa/parts c)))
                 (count (tend-plan/clearable-cells c (:crops (tend-plan/planned c))))
-                0)}))
+                0)
+     :cut (stalk-cuts c)}))
 
 (defn decide
   "{:skip reason} or {:call {:slot :args}} for a step."
-  [step {:keys [area till irrigate fertilize composter chest ignore-zones?]} {:keys [keep waste stored blocked]}]
+  [step {:keys [area till irrigate fertilize composter chest ignore-zones?]} {:keys [keep waste stored blocked cut]}]
   (case step
     :tidy (if (pos? (or blocked 0))
             {:call {:slot :tidy :args (cond-> {:plan (:plan area)} (:part area) (assoc :part (:part area)) ignore-zones? (assoc :ignore-zones? true))}}
             {:skip :nothing-blocked})
+    :cut (if (empty? cut)
+           {:skip :no-stalks}
+           {:call {:slot :cut :args (cond-> {:area {:cells (vec (take 400 cut))} :only (vec stalks/names) :for-plan (:plan area)}
+                                      ignore-zones? (assoc :ignore-zones? true))}})
     :tend {:call {:slot :tend :args (cond-> {:area area :till till :irrigate irrigate :fertilize fertilize}
                                       ignore-zones? (assoc :ignore-zones? true))}}
     :compost (cond
@@ -114,6 +138,8 @@
   [c]
   (let [f (facts c)]
     (boolean (some #(:call (decide % (:args c) f)) [:compost :deposit]))))
+
+(defn cut-work? [c] (boolean (:call (decide :cut (:args c) (facts c)))))
 
 (defn tend-work? [c] (= :ok (first (tend/problem c))))
 
@@ -157,18 +183,31 @@
     (* (:blocked (facts c)) (cost/sown-worth (or (tend/sow-crop c) "wheat") (crops/stages-per-s false nil)))
     0))
 
+(defn cut-worth
+  "Seconds the stalks the cut step digs are worth: the goal-value of the blocks above the bases."
+  [c]
+  (let [cuts (:cut (facts c))]
+    (if (empty? cuts)
+      0
+      (:value (cost/goal-value (mapv (fn [[name n]] {:name name :count n})
+                                     (frequencies (map #(u/seen-name (:primitives c) (u/cell-pos %)) cuts))))))))
+
 (defn worth-of
   "Seconds a root pass is worth: tend's pass-price :worth, what its fertilize step adds (field-steps-worth),
-  and the tidy and stock steps' own (tidy-worth, stock-worth). Never ##Inf: cells never seen are priced by tend's prior."
+  the tidy and stock steps' own (tidy-worth, stock-worth) and the cut step's (cut-worth). Never ##Inf: cells never seen are priced by tend's prior. A plan tend cannot work (stalks only) is worth its cut."
   [c]
-  (let [f (tend/check-facts c)]
-    (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (tidy-worth c) (stock-worth c))))
+  (if (= :ok (first (tend/can-run? c)))
+    (let [f (tend/check-facts c)]
+      (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (tidy-worth c) (stock-worth c) (cut-worth c)))
+    (+ (stock-worth c) (cut-worth c))))
 
 (defn can-start?
-  "Tend's start check, or ok while a tidy or stock step has work."
+  "Tend's start check, or ok while a cut, tidy or stock step has work; a plan of stalks only waits :nothing-to-do while none is tall enough."
   [c]
   (let [t (tend/can-start? c)]
     (cond
+      (cut-work? c) (contract/ok :work "stalks to cut")
+      (and (= :never (first t)) (seq (stalk-bases c))) (contract/later :nothing-to-do "no stalk is tall enough to cut")
       (#{:ok :never} (first t)) t
       (tidy-work? c) (contract/ok :work "crop cells to clear")
       (stock-work? c) (contract/ok :work "stock to store or compost")
@@ -180,7 +219,7 @@
   (let [m (ctx/mem c)
         ran (count (remove (some-fn :skipped :stopped) (vals (:report m))))
         left (count (:todo m))]
-    (if (or (zero? ran) (tend-work? c) (tidy-work? c) (stock-work? c))
+    (if (or (zero? ran) (cut-work? c) (tend-work? c) (tidy-work? c) (stock-work? c))
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
       (contract/ok :in-order "the farm is in order" :units :steps :done ran :left 0 :result {:steps (:report m)}))))
 
@@ -192,6 +231,7 @@
   [step r]
   (case step
     :tidy (select-keys r [:dug])
+    :cut (select-keys r [:dug])
     :tend (select-keys r [:field :parts])
     :compost (select-keys r [:fed :bone-meal :reason])
     :deposit {:gave-up (boolean (:gave-up r)) :reason (:reason r)}))

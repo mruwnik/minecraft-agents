@@ -556,3 +556,13 @@
                       (passable? [(+ x dx) (inc y) (+ z dz)]) (full? lintel))]
        (str "the door at " door " opens onto " (want-block (wants at)) " at " at " (" top " high); a body standing on it ("
             (+ top body-height) ") hits the block planned at " lintel ", so the room cannot be entered")))))
+
+;; ---------------------------------------------------------------- farm readability
+(defn farm-warnings
+  "Texts for a plan assigned :use :farm (plan is the parsed plan) when no cell wants a crop in farmable (a predicate on a
+  want, the crops and stalks the farm jobs read): they would answer \"no crop cells\"."
+  [plan cells farmable?]
+  (when (and (some #(= :farm (:use %)) (:assign plan))
+             (not-any? #(farmable? (:want %)) cells))
+    [(str "the plan is assigned to farm jobs but no cell wants a crop they read (wheat, carrots, potatoes, beetroots, sugar_cane, bamboo): "
+          "farm jobs will find no crop cells")]))

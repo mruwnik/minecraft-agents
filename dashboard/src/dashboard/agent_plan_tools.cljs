@@ -5,6 +5,8 @@
             [plan.parse :as parse]
             [plan.shape :as shape]
             [engine.constants :as constants]
+            [jobs.farm.stalks :as stalks]
+            [jobs.lib.crops :as crops]
             [dashboard.block-height :as height]
             [dashboard.plan-compare :as cmp]))
 
@@ -103,6 +105,11 @@
                              0))))
                (:parts plan))))
 
+(defn farmable-want?
+  "Whether a plan want names a crop or stalk the farm jobs read."
+  [want]
+  (boolean (or (stalks/stalk-of want) (and (map? want) (crops/ripe-age (:crop want))))))
+
 (defn prepare-native
   "Accept plan source and native document/claim maps; return expansion and geometry checks.
   A nil zone source means zones have never been saved."
@@ -130,7 +137,8 @@
               :plan-errors (:errors saved-result)
               :expansion expansion
               :cells (mapv :pos cells)
-              :warnings (when expansion (shape/entrance-warnings cells height/top-of constants/body-height))
+              :warnings (when expansion (into (vec (shape/entrance-warnings cells height/top-of constants/body-height))
+                                            (shape/farm-warnings plan cells farmable-want?)))
               :region (cmp/bounds cells)
               :spots (:spots expansion)
               :parts (mapv #(select-keys % [:id :where :count :error]) (:parts expansion))

@@ -94,3 +94,15 @@
 (deftest a-bottom-slab-warns-and-a-top-slab-does-not
   (is (seq (:warnings (prepare (hut-plan "{:block \"oak_slab\" :type \"bottom\"}" "oak_planks") "hut" [] []))))
   (is (empty? (:warnings (prepare (hut-plan "{:block \"oak_slab\" :type \"top\"}" "oak_planks") "hut" [] [])))))
+
+(defn farm-plan [want]
+  (str "{:id \"f\" :parts [{:id \"p\" :cells [[0 64 0]] :want " want "}] :assign [{:spot \"p\" :body \"B\" :use :farm}]}"))
+
+(deftest a-farm-plan-with-no-crop-the-farm-jobs-read-is-warned-about
+  (is (seq (:warnings (prepare (farm-plan "\"stone\"") "f" [] []))))
+  (is (seq (:warnings (prepare (farm-plan "{:crop \"melon\"}") "f" [] [])))))
+
+(deftest a-farm-plan-with-a-crop-or-stalk-gives-no-warning
+  (is (empty? (:warnings (prepare (farm-plan "{:crop \"wheat\"}") "f" [] []))))
+  (is (empty? (:warnings (prepare (farm-plan "{:crop \"sugar_cane\"}") "f" [] []))))
+  (is (empty? (:warnings (prepare (farm-plan "[:any \"bamboo\" \"bamboo_sapling\"]") "f" [] [])))))
