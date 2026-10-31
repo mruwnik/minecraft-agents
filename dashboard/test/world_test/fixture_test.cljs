@@ -97,6 +97,12 @@
     (is (= (count (filter #(re-find #"^forceload add" %) (f/setup-commands g origin dark-case)))
            (count (filter #(re-find #"^forceload remove" %) cmds))))))
 
+(deftest an-underground-refill-reaches-the-pits-a-case-dug-below-its-floor
+  (let [g (f/case-grid dark-case)
+        origin (f/plot-origin g 465)
+        low (apply min (map #(js/parseInt (second (re-find #"fill \S+ (-?\d+) " %))) (f/solid-commands g origin 16)))]
+    (is (<= low (- (second origin) f/kill-depth)) "a pit dug under the floor is rock again for the next case")))
+
 (deftest a-sealed-cell-clears-the-natural-mobs-of-the-caves-round-it-lit-or-dark
   (let [dg (f/case-grid dark-case) lg (f/case-grid lit-case)
         origin (f/plot-origin dg 465)]

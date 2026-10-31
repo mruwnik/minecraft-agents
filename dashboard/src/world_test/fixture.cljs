@@ -770,11 +770,11 @@
          (str "fill " xa " " ya " " z0 " " xb " " (min y1 (+ ya (dec layers))) " " z1 " " block mode))))
 
 (defn solid-commands
-  "An underground cell refilled solid over the whole carved height: nothing is left to spawn in, and the next case's shell
-  and carving start from rock."
+  "An underground cell refilled solid over the whole carved height and kill-depth below the floor (a case digs pits there):
+  nothing is left to spawn in, and the next case's shell and carving start from rock."
   [grid [ox oy oz] height]
   (let [[sx sz] (dims grid)]
-    (fill-commands [ox (dec oy) oz (+ ox (dec sx)) (+ oy height) (+ oz (dec sz))] "stone" "")))
+    (fill-commands [ox (- oy kill-depth) oz (+ ox (dec sx)) (+ oy height) (+ oz (dec sz))] "stone" "")))
 
 (defn light-commands
   "A lit cell's invisible light blocks (level 15) in the air of two layers: the standing space (light-y) and the top of the
