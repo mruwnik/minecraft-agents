@@ -357,15 +357,17 @@
 
 (defn one-way-priced?
   "Whether the one-way step from `rim` landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth
-  (the call's :worth), and, for a drop of more than a block into a pit, a way out of the landing exists (escape-way/choose does not say :no-dig: a landing with nothing
+  (the call's :worth; a drop of a plan that stops short of the goal, speculative?, also no deeper than one-way/::max-speculative-drop whatever the worth), and, for a drop of more than a block into a pit, a way out of the landing exists (escape-way/choose does not say :no-dig: a landing with nothing
   it could dig round it is a certain trap, not a chance of one). True when there is no step (nil at)."
-  [c to rim at small?]
+  ([c to rim at small?] (one-way-priced? c to rim at small? false))
+  ([c to rim at small? speculative?]
   (or (nil? at)
       (let [p (:primitives c)
             pos (.-pos (.self p))
             [gx gy gz] to]
-        (and (one-way/taken? p rim at small? (ctx/worth c))
-             (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape-way/choose p (vec at) to) [:step :why])))))))
+        (and (not (and speculative? (one-way/too-deep? (- (second rim) (second at)))))
+             (one-way/taken? p rim at small? (ctx/worth c))
+             (or small? (not (pit? p (vec at))) (not= {:step :none :why :no-dig} (select-keys (escape-way/choose p (vec at) to) [:step :why]))))))))
 
 (defn drop-index
   "Index in steps of the first step that lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any
@@ -411,7 +413,7 @@
         out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         {:keys [steps refused]} (let [all (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)]
-                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2 %3)) {:steps all}))
+                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2 %3 (not= "found" (.-status r)))) {:steps all}))
         step (or (one-way-of r) (when refused {:kind :drop :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
                       (masked-cut steps (masked-wet-ok c))

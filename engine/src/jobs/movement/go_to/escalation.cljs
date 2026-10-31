@@ -38,6 +38,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk-risk :as risk]
             [jobs.lib.access :as access]
@@ -332,7 +333,7 @@
         zone-free (exit-dig-fn c feet)
         ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
         drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
-                  (when (and (= :drop (some-> kind keyword)) at (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
+                  (when (and (= :drop (some-> kind keyword)) at (not (one-way/too-deep? (- (second feet) (second at)))) (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
                              (not= :none (:step (escape-way/choose (:primitives c) (vec at) goal spare opts))))
                     (vec at)))
         chosen e

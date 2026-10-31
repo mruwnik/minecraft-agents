@@ -669,6 +669,12 @@
     (is (true? (priced? {})) "open ground: escape-way/choose has no wall to dig, which is no trap")
     (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
 
+(deftest a-drop-of-a-plan-that-stops-short-of-the-goal-is-not-deeper-than-the-speculative-cap-whatever-the-goal-is-worth
+  (let [priced? (fn [spec?] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :floor [-10 -10 10 10] :blocks {}}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+                                                    [20 64 0] [8 64 0] [9 56 0] false spec?))]
+    (is (true? (priced? false)) "a plan that reaches the goal takes an 8-block drop")
+    (is (false? (priced? true)) "a plan that stops short of it does not")))
+
 (def fence-pen
   "A gateless oak-fence ring (x/z -3..3 at y 64) on a stone floor x -10..12, z -6..6 (feet y 64)."
   (merge (box -10 63 -6 12 63 6 "stone")

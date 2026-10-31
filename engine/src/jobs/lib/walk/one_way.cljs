@@ -23,7 +23,14 @@
    ::dark-chance {:default 0.1 :spec (a/num-in 0 1)
                   :doc "Chance a drop onto a floor seen dark or not seen leaves the body trapped."}
    ::hall-chance {:default 0.3 :spec (a/num-in 0 1)
-                  :doc "Chance a drop into a dark hall (a cave where mobs spawn) leaves the body trapped."}})
+                  :doc "Chance a drop into a dark hall (a cave where mobs spawn) leaves the body trapped."}
+   ::max-speculative-drop {:default 4 :spec (a/num-in 0 nil)
+                           :doc "Blocks the longest drop may be that a walk takes though its plan does not reach the goal (a gamble that the land below goes on), whatever the goal is worth."}})
+
+(defn too-deep?
+  "Whether a drop of `blocks` is deeper than a walk whose plan stops short of its goal may take."
+  [blocks]
+  (> blocks (settings/get settings ::max-speculative-drop)))
 
 (defn light-carried?
   "Whether the body carries a torch or lantern: it holds one up at the rim and sees the floor lit."

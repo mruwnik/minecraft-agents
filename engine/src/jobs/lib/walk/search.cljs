@@ -299,7 +299,7 @@
       (do (keep-search! who k (when (and quoted (not done) (= "found" (.-status ^js (:r within)))) (assoc search :within within)))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
-      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3)) :fresh fresh?)
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true)) :fresh fresh?)
             partial? (= "partial" (:status plan))]
         (keep-search! who k (when-not partial? search))
         (cond-> plan partial? (assoc :search-on #(keep-search! who k search)))))))
