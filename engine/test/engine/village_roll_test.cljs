@@ -181,6 +181,7 @@
       (fn ^:async t []
         (let [[result p] (await (roll {:entities []} {}))]
           (is (= {:found false :status :stopped :reason :gone} (select-keys result [:found :status :reason])))
+          (is (re-find #"out of sight, not known dead" (str (get-in result [:ending :cause :hint]))) (pr-str result))
           (is (zero? (digs p))))))))
 
 (deftest a-villager-behind-the-body-is-looked-for-before-it-is-gone

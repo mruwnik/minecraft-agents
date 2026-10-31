@@ -144,7 +144,7 @@
 (defn stop!
   "End with reason (a keyword) as the cause: condition-failed for those in failed-conditions, else nothing-possible."
   [c reason]
-  (ctx/end c (cond (= :nitwit reason) :impossible (failed-conditions reason) :condition-failed :else :nothing-possible)
+  (ctx/end c (cond (= :nitwit reason) :impossible (failed-conditions (:reason reason reason)) :condition-failed :else :nothing-possible)
            reason (data-of c nil)))
 
 (defn found!
@@ -215,7 +215,7 @@
                (some #(pos? (:uses % 0)) offers) :locked
                offer {:found offer}
                :else :miss))
-      "gone" (stop! c :gone)
+      "gone" (stop! c (villager/gone-cause c))
       "out-of-reach" :again
       (if (u/count-fail! c)
         (ctx/end c :nothing-possible :window (data-of c nil))
@@ -301,7 +301,7 @@
                  (and (:seen (ctx/mem c)) (< (- (ctx/now c) (:away-since (ctx/mem c) (ctx/now c))) (* 1000 (away-s))))
                  (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
                      (await (wait-job! c :villager-out-of-view)))
-                 :else (stop! c :gone))
+                 :else (stop! c (villager/gone-cause c)))
       (and e (not (and (:seen (ctx/mem c)) (nil? (:away-since (ctx/mem c)))))) (do (ctx/update-mem! c #(-> % (assoc :seen true) (dissoc :away-since))) :again)
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)

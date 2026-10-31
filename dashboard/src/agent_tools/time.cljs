@@ -12,6 +12,7 @@
 
 (def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: the asking body's reading (a trial body never reads a Probe* world-test body); :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is (both commands wake an unwatched online body whose pose is stale), :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
+(def fresh-ms 5000)
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
@@ -106,10 +107,11 @@
   (filter #(= "online" (:status (read-pose ctx %))) (if body [body] (body-names ctx))))
 
 (defn ^:async wake-stale!
-  "Every command reads through this: online bodies whose pose is stale are marked watched and waited for, so a running body that nobody watches is not read as stale."
+  "Every command reads through this: online bodies whose pose is older than fresh-ms are marked watched and waited for, so an unwatched body (a sleeping one too) does not read as old or stale."
   [ctx body]
   (let [t (js/Date.now)
-        stale (filter #(= :stale (why-unusable ctx (read-pose ctx %) t)) (online-watchable ctx body))]
+        old? (fn [b] (let [pose (read-pose ctx b)] (or (= :stale (why-unusable ctx pose t)) (and (number? (:t pose)) (> (- t (:t pose)) fresh-ms)))))
+        stale (filter old? (online-watchable ctx body))]
     (doseq [b stale] (snap/touch-watch! ctx b t))
     (doseq [b stale]
       (await (snap/wait-for-dump! ctx b t #(js/Promise. (fn [ok] (js/setTimeout ok %))) #(js/Date.now))))))

@@ -124,7 +124,7 @@
         data (merge (result c) extra)]
     (cond
       (>= (bought c) need) (ctx/end c :done nil data)
-      (failed-conditions reason) (ctx/end c :condition-failed reason data)
+      (failed-conditions (:reason reason reason)) (ctx/end c :condition-failed reason data)
       :else (ctx/end c :nothing-possible reason data))))
 
 (defn give-up!
@@ -194,7 +194,7 @@
                   (retry :timeout))
       "no-item" (give-up! c :payment-short)
       "full" (give-up! c :no-room)
-      "gone" (give-up! c :gone)
+      "gone" (give-up! c (villager/gone-cause c))
       "cannot" (if (= "sold-out" (.-reason r))
                  (give-up! c :sold-out)
                  (retry :no-such-offer))
@@ -273,7 +273,7 @@
                    (await (room! c offer))
                    (await (buy! c offer)))
                (finish! c reason (when price {:price price}))))
-      "gone" (give-up! c :gone)
+      "gone" (give-up! c (villager/gone-cause c))
       "cannot" (cond
                  (= "not-villager" (.-reason r)) (give-up! c :not-villager)
                  (:villager (:args c)) (give-up! c :no-offers)
@@ -306,7 +306,7 @@
     (cond
       (and (nil? e) (await (villager/find-in-view! c ok? nil))) :again ; villagers count only while in view
       (and (nil? uuid) (seq skipped)) (give-up! c :no-offers)
-      (nil? e) (give-up! c :gone)
+      (nil? e) (give-up! c (villager/gone-cause c))
       (in-reach? c e) (await (trade! c))
       :else
       (let [r (await (child/call-chase* c :walk

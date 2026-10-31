@@ -4,7 +4,8 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (a/defargs settings
   {::search-radius {:default 48 :doc "Blocks within which villagers are looked for." :spec (a/int-in 1 96)}})
@@ -15,6 +16,16 @@
   "The villager entities in sight within the search radius."
   [p]
   (look/seen-objs p {:radius (search-radius) :names ["villager"]}))
+
+(defn gone-cause
+  "The cause for a villager not in view: :gone with a hint saying it is out of sight, not dead, and that villagers
+  are in bed at night."
+  [c]
+  (let [night? (sh-sense/dark-outside? (:primitives c))]
+    {:reason :gone
+     :hint (str "no such villager in view within " (search-radius) " blocks (out of sight, not known dead"
+                (when night? "; it is night and villagers sleep behind walls out of sight, try by day")
+                ")")}))
 
 (defn adult? [e] (not (.-baby e)))
 
