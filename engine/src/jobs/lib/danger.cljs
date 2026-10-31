@@ -325,11 +325,11 @@
     (if (.-knownMobs p) known (filterv seen-mob? known))))
 
 (defn hostile-dangers
-  "The dangers (dangers) the hostile-near trigger weighs (args :radius, :ranged-radius, :visible-only), nearest first:
-  heard mobs are muted while jobs.lib.body/heard-muted?, a ranged mob counts only within its fire range (:shooting?):
+  "The dangers (dangers) the hostile-near trigger weighs (args :radius, :ranged-radius, :visible-only, :ignore-heard?), nearest first:
+  heard mobs are left out when args say so and muted while jobs.lib.body/heard-muted?, a ranged mob counts only within its fire range (:shooting?):
   doing nothing about one past it loses nothing, and the trigger re-arms as it closes. None for a dead body."
   [world memory args]
   (if (body/dead? memory)
     []
     (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args (ranged-radius))}
-             {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true})))
+             {:sight? (:visible-only args true) :ignore-heard? (or (:ignore-heard? args) (body/heard-muted? memory)) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true})))

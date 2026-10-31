@@ -313,9 +313,12 @@
       "")))
 
 (defn threatened
-  "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry)."
+  "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry); heard-only
+  mobs the reflex already judged harmless (body/heard-judged?) are left out, so a run is not held by a sound for ever."
   [c]
-  (if (check-cache/cached c ::threatened #(hostile-loss/hostile-near? (:primitives c) (ctx/view c) (trigger-args c)))
+  (if (check-cache/cached c ::threatened
+                          #(hostile-loss/hostile-near? (:primitives c) (ctx/view c)
+                                                       (cond-> (trigger-args c) (body/heard-judged? (ctx/view c)) (assoc :ignore-heard? true))))
     (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first (an exclusive run pauses the hostile reflex)"))
     (contract/ok :no-hostile-near "no hostile near")))
 

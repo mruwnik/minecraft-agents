@@ -494,6 +494,15 @@
       {} :ok
       {:visible-only false} :later)))
 
+(deftest threatened-leaves-out-heard-mobs-a-lapsed-mute-judged-harmless
+  (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
+        world (merge at-origin {:entities [far] :blocks (tu/box 2 64 0 3 66 0 "stone")})
+        view (fn [& entries] {:now 100 :data (reduce (fn [d [k t]] (mem/add-entry d k {:t t :data {:until 50}} {:cap 8 :ttl :forever})) mem/empty-data entries)})
+        verdict (fn [v] (first (ready/threatened (assoc (with-entry world {:visible-only false}) :view (constantly v)))))]
+    (is (= :later (verdict (view))) "never judged: a heard mob holds the run")
+    (is (= :ok (verdict (view [:heard-mute 10]))) "its mute lapsed long ago: the run is not held for ever")
+    (is (= :later (verdict (view [:heard-mute 10] [:hurt 60]))) "hurt since: the unseen mob may be the one hitting")))
+
 (deftest threatened-is-read-once-per-window
   (let [c (ctx-of (merge at-origin {:entities [zombie]}))
         asked (atom 0)]
