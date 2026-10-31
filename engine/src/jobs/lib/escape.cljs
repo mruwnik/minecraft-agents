@@ -202,6 +202,30 @@
   ([p args spec]
    (enclosed? p (some-> (:doors args) keyword) (wworld/unseen-kind p (when-not (false? (:unknown args)) (or spec #js {}))))))
 
+(defn shut-in-blockers
+  "The solid cells [[x y z]] that keep the best step up out of the body's walkable room from being a step: of every wall
+  cell beside the room with a floor-high top, the one needing the fewest cells cleared (the headroom over the room cell, the
+  step's feet and head cells), nearest goal ({:x :y :z}) on a tie. Nil when no step is that close."
+  [c goal]
+  (let [p (:primitives c)
+        kind-at (reach/world-kinds p reach-room/body-kind-of (wworld/unseen-kind p (when-not (false? (:unknown (:args c))) (or (:unknown c) #js {}))))
+        {:keys [x y z]} (reach/standing-cell p kind-at)
+        {:keys [cells]} (reach-room/flood-visit (fn [cx cy cz] (reach/forward kind-at cx cy cz)) [x y z] 256)
+        solid-at? (fn [[cx cy cz]] (not (reach/passable? kind-at cx cy cz)))
+        cell-map (fn [[cx cy cz]] {:x cx :y cy :z cz})
+        candidates (for [cell cells
+                         :let [cx (aget cell 0) cy (aget cell 1) cz (aget cell 2)]
+                         [dx dz] cardinals
+                         :let [nx (+ cx dx) nz (+ cz dz)]
+                         :when (keyword-identical? :solid (kind-at nx cy nz))
+                         :let [blockers (filterv solid-at? [[cx (+ cy 2) cz] [nx (+ cy 1) nz] [nx (+ cy 2) nz]])]
+                         :when (seq blockers)]
+                     {:blockers blockers
+                      :score [(count blockers) (if goal (u/dist (cell-map (first blockers)) goal) 0)]})]
+    (when-let [best (first (sort-by :score candidates))]
+      (when (<= (count (:blockers best)) 2)
+        (:blockers best)))))
+
 (defn walk-spec
   "A fresh mask spec for a walk of job c's child go-to toward goal ([x y z], or nil), seeded as go-to seeds its own (goal, the
   stairs and tunnels the body cut), so the rock guess spares what its plans spare. The cells the walk looked at and could not

@@ -5,6 +5,7 @@
             [jobs.movement.go-to.headroom :as headroom]
             [jobs.movement.go-to.tuning :as tuning]
             [jobs.lib.breath :as breath]
+            [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.solid :as solid]
@@ -112,12 +113,17 @@
   (cond (vector? at) (str " at " (pr-str at))
         (:band at) (str " heard " (name (:band at)) ", " (name (:direction at)))))
 
+(defn blocked-words
+  "The blocking cells of a shut-in body's nearest step out, in words, or nothing."
+  [cells]
+  (when (seq cells) (str " (the nearest step out is blocked by solid " (str/join ", " (map pr-str cells)) ")")))
+
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
+  [pos {:keys [why kind detail escalation shut-in blocked-by nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
-         (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
+         (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation) (blocked-words blocked-by))
          (case why
            :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
            :goal-enclosed (if low-passage (headroom/words low-passage) "the goal is walled in with no way through")
@@ -125,9 +131,9 @@
            :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"
            :start-enclosed (if damage-refused
                             "the only ways out cost hp (a fall) and the damage budget allows none"
-                            "the body is shut in and nothing it can walk reaches out")
+                            (str "the body is shut in and nothing it can walk reaches out" (blocked-words blocked-by)))
            :exhausted (if shut-in
-                        "the body is shut in and this walk may not dig or build out"
+                        (str "the body is shut in and this walk may not dig or build out" (blocked-words blocked-by))
                         "no walkable way leads there from here")
            :out-of-sight "no stand within range that sees the block (:see) is reachable from here"
            :goal-unloaded "the goal lies in land that is not loaded and the loaded land leads no nearer"
@@ -177,6 +183,9 @@
                   (and (= :moved-while-searching why) (breath/in-water? (:primitives c))) (assoc :in-water true)
                   (= :goal-enclosed why) (merge (some->> (headroom/low-passage (:primitives c) (solid/cell (if (map? pos) pos (zipmap [:x :y :z] pos))))
                                                           (hash-map :low-passage))))
+         fields (cond-> fields
+                  (or (:shut-in fields) (= :start-enclosed why) (and (:escalation fields) (not (:into (:escalation fields)))))
+                  (merge (some->> (escape/shut-in-blockers c (when pos (if (map? pos) pos (zipmap [:x :y :z] pos)))) (hash-map :blocked-by))))
          text (give-up-words pos fields)]
      (finish! c (merge {:status :stopped :arrived false :reason :unreachable :text text} fields)))))
 

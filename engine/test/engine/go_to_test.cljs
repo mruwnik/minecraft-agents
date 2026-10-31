@@ -186,6 +186,21 @@
           (is (= [0 64 1] (at p)) "the body did not move")
           (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "one :moved entry per round"))))))
 
+(def roofed-step-world
+  {:blocks (merge (box 0 63 0 3 63 0 "stone") (box 3 64 0 3 64 0 "stone") (box 0 66 0 3 66 0 "stone")
+                  (box -1 64 0 -1 66 0 "stone") (box 0 64 -1 3 66 -1 "stone") (box 0 64 1 3 66 1 "stone")
+                  (box 4 64 0 9 64 0 "stone"))})
+
+(deftest a-shut-in-give-up-names-the-cells-that-block-the-nearest-step-out
+  ;; the step up onto the block at x 3 lacks the cells of the roof over it, and a player sees them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go! (assoc roofed-step-world :self {:pos {:x 0 :y 64 :z 0}}) {:pos [8 65 0] :ways #{:walk}}))]
+          (is (true? (:shut-in @out)))
+          (is (= [[2 66 0] [3 66 0]] (:blocked-by @out)))
+          (is (re-find #"blocked by solid \[2 66 0\], \[3 66 0\]" (:text @out))))))))
+
 (deftest an-old-caller-reads-the-result-it-read-before
   (async done
     (tu/run-async done
@@ -525,7 +540,7 @@
         ;; a stone wall at x 5 cuts the floor: the goal's side is walled in
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
               {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :ways #{:walk :clear-seal}}))]
-          (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (dissoc @out :at :near :text :status :shut-in)))
+          (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (dissoc @out :at :near :text :status :shut-in :blocked-by)))
           (is (= [3 64 0] (at p)) "the shortest walk among the cells within 1.5 of the nearest the goal it can reach")
           (is (= ["blocked" "arrived" "blocked"] (mapv :status (moved eng))) "no try again after the walk to the wall"))))))
 
