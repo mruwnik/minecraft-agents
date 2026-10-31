@@ -50,7 +50,7 @@
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every other body's plan footprint does" :spec a/name? :default nil}
    :open-pens? {:doc "true: cells that are the wall of an own pen holding livestock may be dug (the animals walk out)" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
+            :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (a/defargs settings
   {::max-cells {:default 400 :doc "Most cells the box may hold; a bigger box is impossible (:bad-args)." :spec (a/int-in 0 nil)}
@@ -142,7 +142,7 @@
   "{:allowed [[pos name] ..] :refused [[pos verdict] ..]}: the pending cells split by the rules' permission (a zone or
   a footprint of a plan another body made); unloaded cells are allowed (walked to)."
   [c todo]
-  (split-by-rules (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) (:accept (:args c)) todo))
+  (split-by-rules (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) (set (:accept (:args c))) todo))
 
 (defn bad-args
   "Never :bad-args for a missing corner or too big a box."

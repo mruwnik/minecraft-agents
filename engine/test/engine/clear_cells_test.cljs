@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.blocks-dig-test :as bd]
             [engine.test-util :as tu :refer [run-until-empty]]
@@ -461,3 +462,7 @@
           (is (= 8 (count dug)))
           (is (= #{"stone" "dirt"} (set (map :block dug))))
           (is (= #{:info} (set (map :level dug)))))))))
+
+(deftest accept-takes-a-list-or-a-set
+  (are [accept] (nil? (expr/problem registry/jobs (list 'jobs.blocks.clear-cells {:area {:cells [[0 64 0]]} :accept accept})))
+    [] #{} [:fluid-adjacent] #{:falling-block}))
