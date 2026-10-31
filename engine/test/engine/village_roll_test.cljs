@@ -117,9 +117,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [book (fn [enchant] (assoc-in (offer "enchanted_book") [:gives :enchants] [{:name enchant :level 1}]))
-              [result] (await (roll {:entities [(librarian [(book "sharpness")])]
-                                     :scripts [[(book "protection")] [(book "mending")]]}
-                                    {:want nil :enchant "mending"}))]
+              [result _ seen] (await (roll {:entities [(librarian [(book "sharpness")])]
+                                            :scripts [[(book "protection")] [(book "mending")]]}
+                                           {:want nil :enchant "mending"}))]
+          (is (some #(and (= :roll.offers (:kind %)) (re-find #"enchanted_book \(protection 1\)" (str (:text %)))) @seen)
+              "each roll says its offers' enchantments")
           (is (= {:found true :rolls 2} (select-keys result [:found :rolls])))
           (is (= [{:name "mending" :level 1}] (get-in result [:offer :gives :enchants]))))))))
 

@@ -196,6 +196,16 @@ test('offers: adjusted price, second cost, uses and the sold-out flags', async (
   assert.deepEqual(names(bot), ['openVillager', 'closeWindow'])
 })
 
+test('offers: an enchanted book names its stored enchantment and level', async () => {
+  const book = offer({ gives: ['enchanted_book', 1] })
+  book.outputItem.componentMap = new Map([['stored_enchantments', { data: { enchantments: [{ id: 7, level: 3 }] } }]])
+  const bot = makeBot({ trades: [book, offer()] })
+  bot.registry.enchantments = { 7: { name: 'mending' } }
+  const { offers } = await run(bot, { op: 'offers' })
+  assert.deepEqual(offers[0].gives, { item: 'enchanted_book', count: 1, enchants: [{ name: 'mending', level: 3 }] })
+  assert.deepEqual(offers[1].gives, { item: 'bread', count: 3 })
+})
+
 test('offers: a profession given by name and an empty window', async () => {
   const named = await run(makeBot({ target: villager({ metadata: { [VILLAGER_DATA]: data('minecraft:librarian', 5) } }) }), { op: 'offers' })
   assert.equal(named.profession, 'librarian')
