@@ -42,11 +42,11 @@
   (access/guessed-at p))
 
 (defn walk-blocked?
-  "Whether the entry e, out of the body's dig reach, is not worth a walk: far below, near a death, roofed (ledger/walk-blocker)."
+  "Whether the entry e, out of the body's dig reach, is not worth a walk: far below, near a death, roofed (ledger/walk-blocker). A roof is one the body has seen: the cells over a far block are seldom looked at, and the prior would read them as rock."
   [p memory entries e]
   (boolean (and (> (ledger/distance (ledger/eye-of {:primitives p}) (ledger/centre (:cell e))) (ledger/dig-reach))
                 (ledger/walk-blocker {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
-                               :died-near? (ledger/died-near-of memory) :block-at (access/guessed-at p)
+                               :died-near? (ledger/died-near-of memory) :block-at (access/sensed-at p "air")
                                :ledger (ledger/cells entries)}
                               e))))
 
