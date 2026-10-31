@@ -110,6 +110,13 @@
       (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
              (+ (now eng) (* 1000 (:cooldown-s entry 0)))))))
 
+(defn comfort-reflex?
+  "Whether holder h is a reflex that fired at :comfort level and owes no cleanup: an errand a hand-submitted job may displace."
+  [eng h]
+  (boolean (and (:reflex h)
+                (= :comfort (get-in (state eng) [:instances (:id h) :fired-level]))
+                (not (cleanup/closing? eng (:id h) [])))))
+
 (defn cut!
   "Take the body from holder h for entry; cause is the seq of the firing. A reflex job is dropped, unless it is in its
   cleanup: a pause is not an ending, so it stays (paused-reflex) and resumes. Writes the memory at once: the cut round
@@ -323,12 +330,13 @@
 
 (defn do-now!
   "Cut a running listed job, open sections or not, and list the job spec directly before it as a normal job: it runs
-  next, and the cut one, memory kept, continues right after it yields or ends. A running reflex is not cut; the new job
+  next, and the cut one, memory kept, continues right after it yields or ends. A running comfort reflex (not in its
+  cleanup) is cut too, its cooldown rested, as an errand the asker outranks; a higher reflex is not cut and the new job
   waits behind it, as does a running exclusive run."
   [eng spec]
   (expr/parse (:jobs eng) spec)
   (let [r (running eng)]
-    (when (and r (not (:reflex r)) (not (exclusive-job eng)))
+    (when (and r (not (exclusive-job eng)) (or (not (:reflex r)) (comfort-reflex? eng r)))
       (cut! eng r :do-now nil))
     (let [id (submit! eng spec {:now? true :by :agent})]
       (swap! (:state eng) assoc :resume id)

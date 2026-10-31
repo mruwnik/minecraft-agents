@@ -647,6 +647,43 @@
               (await r2)
               (is (nil? (core/running eng))))))))))
 
+(defn fired-count [seen reflex]
+  (count (filter #(and (= :reflex (:source %)) (= :fired (:kind %)) (= reflex (:reflex %))) @seen)))
+
+(deftest do-now-cuts-a-comfort-reflex-and-rests-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {:self {:food 5}})
+              world (.-world p)]
+          (core/register-reflex! eng {:trigger :hungry :level :comfort})
+          (let [release (.hold world "eat")
+                r1 (core/tick! eng)]
+            (await (in-act world "eat"))
+            (is (= :hungry (:reflex (core/running eng))))
+            (let [id (core/do-now! eng '(count))]
+              (await r1)
+              (is (nil? (core/running eng)) "the comfort errand was cut")
+              (await (core/tick! eng))
+              (is (= [id] (listed eng)) "the hand-submitted job got the round")
+              (is (= 1 (fired-count seen :hungry)) "the cut errand rests its cooldown: no refire at once")
+              (release))))))))
+
+(deftest do-now-does-not-cut-an-urgent-reflex
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:food 5}})
+              world (.-world p)]
+          (core/register-reflex! eng {:trigger :hungry :level :urgent})
+          (let [release (.hold world "eat")
+                r1 (core/tick! eng)]
+            (await (in-act world "eat"))
+            (core/do-now! eng '(count))
+            (is (= :hungry (:reflex (core/running eng))) "an urgent reflex keeps the body")
+            (release)
+            (await r1)))))))
+
 (deftest persistence-cooldown-retry-and-stop
   (async done
     (tu/run-async done
