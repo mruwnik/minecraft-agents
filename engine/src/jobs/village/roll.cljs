@@ -23,7 +23,7 @@
   again the workstation of :profession at :pos.
   Needs: a profession, a wanted item (or enchantment) and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
-  most :max-price (nil: no limit). Says which villager it picked (info roll.villager). Waits (:continue) for the villager to lose
+  most :max-price (nil: no limit). A villager seen before that steps out of view is waited for (three fruitless looks, then :gone). Says which villager it picked (info roll.villager). Waits (:continue) for the villager to lose
   and take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children. Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
@@ -52,12 +52,14 @@
 (a/defargs settings
   {::max-rolls {:default 20 :doc "Rolls (breaks of the workstation) without a match before the call gives up (:no-match)." :spec (a/int-in 1 200)}
    ::poll-s {:default 2 :doc "Seconds between looks while waiting for the villager to lose or take its job." :spec (a/int-in 1 60)}
+   ::away-s {:default 30 :doc "Seconds a villager seen before may stay out of view (after the workstation is placed) before the call ends :gone." :spec (a/int-in 1 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (settings/get settings ::poll-s))
+(defn away-s [] (settings/get settings ::away-s))
 (defn reach [] (settings/get settings ::reach))
 (defn leg-s [] (settings/get settings ::leg-s))
 
@@ -293,7 +295,14 @@
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place! c)))
       (not= item block) (stop! c :occupied)
-      (nil? e) (if (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again (stop! c :gone)) ; villagers count only while in view
+      ;; villagers count only while in view; one seen before may have stepped away while it lost its job
+      (nil? e) (cond
+                 (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
+                 (and (:seen (ctx/mem c)) (< (- (ctx/now c) (:away-since (ctx/mem c) (ctx/now c))) (* 1000 (away-s))))
+                 (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
+                     (await (wait-job! c :villager-out-of-view)))
+                 :else (stop! c :gone))
+      (and e (not (and (:seen (ctx/mem c)) (nil? (:away-since (ctx/mem c)))))) (do (ctx/update-mem! c #(-> % (assoc :seen true) (dissoc :away-since))) :again)
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
       (= "unemployed" profession) (await (wait-job! c :villager-takes-no-job))

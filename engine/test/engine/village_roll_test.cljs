@@ -371,6 +371,36 @@
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation (:p env)))))))))
 
+(defn hides-after-break!
+  "The villager steps out of sight when the workstation is broken and is back ms of clock after it stands again."
+  [{:keys [p clock]} ms offers]
+  (let [state (fake/state p)
+        away (atom nil)
+        back-at (atom nil)
+        step (fn [_ _ _ _]
+               (let [w @state
+                     stands? (= "lectern" (get-in w [:blocks ws-pos]))
+                     v (first (filter #(= "v-1" (:uuid %)) (:entities w)))]
+                 (cond
+                   (and v (not stands?)) (do (reset! away (assoc v :profession "unemployed" :offers nil))
+                                             (swap! state update :entities #(vec (remove (fn [e] (= "v-1" (:uuid e))) %))))
+                   (and @away stands? (nil? @back-at)) (reset! back-at (+ @clock ms))
+                   (and @away @back-at (>= @clock @back-at))
+                   (let [v @away]
+                     (reset! away nil)
+                     (swap! state update :entities conj (assoc v :profession "librarian" :offers offers))))))]
+    (add-watch state :hide step)
+    (add-watch clock :hide step)))
+
+(deftest a-villager-out-of-view-after-the-reroll-is-waited-for-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+              _ (hides-after-break! env 3000 [(offer "enchanted_book")])
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
+
 (deftest a-roll-cut-after-the-break-places-the-workstation-back-in-its-cleanup
   (async done
     (tu/run-async done
