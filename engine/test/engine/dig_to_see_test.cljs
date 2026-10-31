@@ -37,16 +37,17 @@
 
 (defn setup
   "An engine over wrapped primitives p; a recording parent runs job with args as its child, its result in :out."
-  [p job args]
+  ([p job args] (setup p job args true))
+  ([p job args ask-start?]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         out (atom :not-done)
-        parent (assoc (tu/recording-parent job args out) :can-start? #(ctx/child-status % :kid job args))
+        parent (cond-> (tu/recording-parent job args out) ask-start? (assoc :can-start? #(ctx/child-status % :kid job args)))
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (core/submit! eng '(recording-parent) {})
-    {:eng eng :p p :clock clock :seen seen :out out}))
+    {:eng eng :p p :clock clock :seen seen :out out})))
 
 (defn ^:async tick-out!
   ([s] (tick-out! s 400))
@@ -382,6 +383,6 @@
       (fn ^:async t []
         (let [p (sensing {:blocks dirt-ground :inventory []})
               _ (set! (.-look p) (fn [_] (js/Promise.resolve #js {:status "ok"})))
-              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :ways #{:carried})) 30))]
+              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :ways #{:carried}) false) 30))]
           (is (not= :no-tool (:reason @out)) (pr-str @out))
           (is (= :unseen (:reason @out)) (str "a called stair ends at once for cells it has not seen: " (pr-str @out))))))))

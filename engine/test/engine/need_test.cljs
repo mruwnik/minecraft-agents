@@ -113,13 +113,6 @@
             (await (run! (fn [c] (reset! price (need/item-price c "torch" 4 nil nil)) nil) {:obtain-start start}))
             (is (= want @price) (str (pr-str start)))))))))
 
-(deftest the-fetch-price-is-asked-without-the-callers-quote-call
-  (let [seen (atom [])
-        c {:primitives (tu/fake {}) :quote-call {:worth ##Inf}}]
-    (with-redefs [ctx/child-status (fn [c & _] (swap! seen conj (:quote-call c)) (contract/ok :ready "ready"))]
-      (need/item-status c "torch" 1 nil 30)
-      (need/item-price c "torch" 1 nil nil))
-    (is (= [nil nil] @seen) "under it the child reads as started and its price check is skipped")))
 
 (deftest a-fetch-that-waits-for-dawn-is-not-called-but-another-later-is
   (async done

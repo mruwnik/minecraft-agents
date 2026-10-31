@@ -426,3 +426,10 @@
           (core/submit! eng '(parent) {})
           (await (core/tick! eng))
           (is (= [[:never :gone] [:look :unseen] [:later :paused] [:ok :ready]] (:answers @world))))))))
+
+(deftest a-child-status-ctx-carries-no-quote-call-of-its-caller
+  (let [seen (atom nil)]
+    (with-redefs [ctx/check-status (fn [c _] (reset! seen c) (contract/ok :ready "ready"))
+                  ctx/child-job (fn [_ job args] [{:name job} args])]
+      (ctx/child-status {:quote-call {:worth ##Inf} :slots []} :kid 'probe {})
+      (is (not (contains? @seen :quote-call)) "with it the child reads as started and skips its own start check"))))
