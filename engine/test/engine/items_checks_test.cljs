@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.expr :as expr]
             [engine.memory :as mem]
+            [clojure.string :as str]
             [engine.registry :as registry]
             [jobs.items.smelt :as smelt]
             [engine.test-util :as tu]))
@@ -47,6 +48,12 @@
     'jobs.items.get-kit {} :bad-args
     'jobs.items.smelt {:item "diamond"} :not-smeltable
     'jobs.memory.remember {} :bad-args))
+
+(deftest craft-of-an-unknown-item-is-never-and-names-the-near-match
+  (let [[kind _ data] (verdict-of :can-start? 'jobs.items.craft {} {:item "chain"})]
+    (is (= :never kind))
+    (is (= :unknown-item (:reason data)))
+    (is (str/includes? (:why data) "did you mean iron_chain"))))
 
 (deftest remember-refuses-a-bad-or-reserved-kind-as-bad-args-with-the-why
   (are [args why] (= [:never why] (kind+why (verdict-of :can-start? 'jobs.memory.remember {} args)))
