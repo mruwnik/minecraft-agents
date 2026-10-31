@@ -1891,6 +1891,19 @@ test('scooping where there is no liquid is missing, pouring into a solid is occu
   assert.equal((await bucketRig({ blocks: { '1,64,0': 'stone' }, item: 'water_bucket', onActivate: noop }).p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'occupied')
 })
 
+test('a bucket pours into flowing liquid of its own kind (a source results) but not into a source or the other liquid', async () => {
+  const pour = async (item, liquid, level) => {
+    let now = level
+    const rigged = bucketRig({ blocks: { '1,64,0': liquid }, item, onActivate: () => { now = 0 } })
+    rigged.bot.blockAt = (read => v => { const b = read(v); return b && b.name === liquid ? Object.assign(b, { getProperties: () => ({ level: now }) }) : b })(rigged.bot.blockAt)
+    return (await rigged.p.place('t1', { pos: at(1, 64, 0), item })).status
+  }
+  assert.equal(await pour('water_bucket', 'water', 3), 'placed')
+  assert.equal(await pour('water_bucket', 'water', 0), 'occupied')
+  assert.equal(await pour('lava_bucket', 'water', 3), 'occupied')
+  assert.equal(await pour('lava_bucket', 'lava', 2), 'placed')
+})
+
 test('a bucket not carried is no-item', async () => {
   const { p } = bucketRig({ blocks: {}, item: 'bread', onActivate: () => {} })
   assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' })).status, 'no-item')

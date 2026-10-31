@@ -1,0 +1,15 @@
+;; A water bucket emptied into a flowing-water cell makes a source there (vanilla); a source cell stays occupied.
+{:defaults
+ {:tags [:blocks :jobs]
+  :body {:at [16.5 0 16.5] :inventory [["water_bucket" 1]]}
+  :blocks [[:set [18 0 16] "water"]]
+  :limit-s 40}
+ :cases
+ [{:name "flowing-cell-becomes-source"
+   :act [[:wait-s 2] [:job (jobs.blocks.place {:pos #at [19 0 16] :item "water_bucket"})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}]
+   :after [[:block [19 0 16] "water[level=0]"] [:item "water_bucket" 0] [:item "bucket" 1]]}
+  {:name "source-cell-stays-occupied"
+   :act [[:wait-s 2] [:job (jobs.blocks.place {:pos #at [18 0 16] :item "water_bucket"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :failed :primitive "occupied"}} :within-s 25 :of-job true}]
+   :after [[:item "water_bucket" 1]]}]}

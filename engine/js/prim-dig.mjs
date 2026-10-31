@@ -162,7 +162,9 @@ export function createDig (env) {
     const scoop = item.name === 'bucket'
     const there = env.bot.blockAt(vec(p))
     if (scoop && !(there && isLiquid(there.name))) return { status: 'missing' }
-    if (!scoop && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied', block: there.name }
+    // Pouring into flowing liquid of the bucket's own kind turns the cell into a source; a source cell stays occupied.
+    const refill = !scoop && Boolean(there) && there.name === item.name.replace('_bucket', '') && isLiquid(there.name) && (there.getProperties?.().level ?? 0) > 0
+    if (!scoop && !refill && there && !isAir(there.name) && !isReplaceable(there.name)) return { status: 'occupied', block: there.name }
     const aims = scoop ? [there.position.offset(0.5, 0.5, 0.5)] : aimPoints(p)
     if (aims.length === 0) return { status: 'no-support' }
     if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
@@ -182,7 +184,7 @@ export function createDig (env) {
     await env.bot.activateItem()
     // The block update can arrive after the window while the inventory already changed, so either one counts: the
     // cell flipped, or the held bucket turned into the filled one (scoop) / the emptied one (pour).
-    const cellChanged = () => { const now = env.bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name)) }
+    const cellChanged = () => { const now = env.bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name) && (!refill || (now.getProperties?.().level ?? 0) === 0)) }
     const itemChanged = () => scoop ? count(filledName) > filledBefore : count(item.name) < heldBefore
     const changed = () => cellChanged() || itemChanged()
     const deadline = Date.now() + setting('prim/bucket-wait-s') * 1000 * timeScale
