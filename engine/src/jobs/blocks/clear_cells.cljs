@@ -30,6 +30,7 @@
   :zone or :footprint, one clear-cells.refused info per round). The chosen cell is checked again before the dig.
   A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-cells.refused
   info) unless :open-pens?.
+  It digs nothing outside its cells: a cell reachable only by breaking an unlisted block is skipped :unreachable (every dig is a :tidy.dug info event).
   A dig hazard not in :accept counts a try (reason :hazard after two). A cell not in view (unloaded, or inside rock) is walked to by walking only (no pillar, no seal cleanup) until within 8 blocks, then dug like any other.
   Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
   refusals {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
@@ -98,7 +99,7 @@
   "The jobs.blocks.dig args for the cell at pos: a tool that harvests it (fetched or made), the drop picked up, the job's :accept and opt-out."
   [c pos]
   (merge (select-keys (:args c) [:accept :ignore-zones? :for-plan])
-         {:pos pos :need-drop true :collect true}))
+         {:pos pos :need-drop true :collect true :through false}))
 
 (defn named
   "[[pos block-name] ...] of the loaded cells not skipped."

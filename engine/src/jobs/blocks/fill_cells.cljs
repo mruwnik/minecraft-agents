@@ -151,7 +151,7 @@
   [c pos item]
   (let [before (u/seen-name (:primitives c) pos)
         borrowed? (blocks/borrowed? c item)
-        e (await (blocks/place-call! c pos item (cond-> (select-keys (:args c) [:ignore-zones?])
+        e (await (blocks/place-call! c pos item (cond-> (assoc (select-keys (:args c) [:ignore-zones?]) :through false)
                                                   (:in-place (:args c)) (assoc :see false))))
         o (blocks/place-outcome e)]
     (case o

@@ -1,0 +1,21 @@
+;; Card 00c073d0: clear-cells and fill-cells never break a block outside their cell list, and every dig is an info event.
+;; Should-succeed: a listed cell with open air beside it is dug, with a :tidy.dug event naming it, and the stone beside it stays.
+;; Should-fail: a listed cell buried in an unlisted stone mass is not reached by digging the mass (it stays stone, the call ends without a dig).
+{:defaults
+ {:tags [:build :dig]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "listed-cell-dug-with-an-event-and-its-neighbour-stone-stays"
+   :blocks [[:fill [16 0 10] [17 1 10] "stone"]]
+   :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [16 0 10]]}})]]
+   :expect [{:event {:source :job :kind :tidy.dug :data {:pos [16 0 10] :block "stone"}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [16 0 10] "air"] [:block [17 0 10] "stone"] [:block [17 1 10] "stone"] [:block [16 1 10] "stone"]]}
+  {:name "cell-buried-in-an-unlisted-stone-mass-is-not-dug-to"
+   :blocks [[:fill [14 0 6] [18 3 10] "stone"]]
+   :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [16 1 8]]}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 100 :of-job true}]
+   :after [[:block [16 1 8] "stone"] [:block [16 1 9] "stone"] [:block [16 1 10] "stone"] [:block [15 1 9] "stone"]]}]}

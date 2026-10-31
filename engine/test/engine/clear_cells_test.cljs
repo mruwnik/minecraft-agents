@@ -440,3 +440,24 @@
       (let [wall? (own-pen/wall-fn {:primitives p} (concat field [[1 61 1]]))]
         (is (true? (wall? [3 63 1])) "the pit the open ground drops into is still a pen")
         (is (= 1 @checks) "only the pit start is checked: the field starts reach more than a pen holds")))))
+
+(deftest clear-cells-never-digs-a-block-outside-its-list-to-reach-a-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall {"2,64,0" "stone" "2,65,0" "stone" "2,63,0" "stone" "3,64,0" "stone"}
+              {:keys [eng p]} (setup {:blocks wall})
+              _ (await (child-outcome eng job {:area {:cells [{:x 3 :y 64 :z 0}]}} 40))]
+          (is (every? #{[3 64 0]} (map #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (calls p "dig"))) "no dig outside the list")
+          (is (= "stone" (block-at p {:x 2 :y 64 :z 0}))))))))
+
+(deftest every-dig-is-an-info-event-naming-cell-and-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:blocks eight})
+              _ (await (child-outcome eng job box 40))
+              dug (kinds seen :tidy.dug)]
+          (is (= 8 (count dug)))
+          (is (= #{"stone" "dirt"} (set (map :block dug))))
+          (is (= #{:info} (set (map :level dug)))))))))

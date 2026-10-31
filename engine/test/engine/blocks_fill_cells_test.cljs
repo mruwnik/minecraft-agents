@@ -221,7 +221,7 @@
 
 (def shell
   "The 26 cells round the centre of a 3x3x3 block."
-  (vec (for [x (range 2 5) y (range 64 67) z (range 2 5) :when (not= [3 65 3] [x y z])] {:x x :y y :z z})))
+  (vec (for [x (range 2 5) y (range 64 67) z (range 2 5) :when (not (#{[3 65 3] [3 66 3]} [x y z]))] {:x x :y y :z z})))
 
 (defn ^:async shell-text [world-spec args]
   (let [env (bd/setup (merge {:self body :inventory [{:name "dirt" :count 30}]} world-spec))
@@ -257,3 +257,12 @@
             (is (= 1 (count (bd/calls (:p env) "place"))) "the cell was filled")
             (is (= [:plug] (mapv :purpose l)))
             (is (= [false] (mapv #(expiry/current? (:now v) %) l)))))))))
+
+(deftest fill-cells-never-digs-a-block-in-the-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "dirt" :count 5}]
+                             :blocks {"1,64,0" "stone" "1,65,0" "stone" "1,63,0" "stone"}})
+              _ (await (ending-of env {:cells [{:x 3 :y 64 :z 0}]}))]
+          (is (= "stone" (bd/block-at (:p env) {:x 1 :y 64 :z 0})) "the wall block outside the list stays"))))))

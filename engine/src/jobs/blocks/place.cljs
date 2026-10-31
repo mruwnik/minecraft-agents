@@ -63,6 +63,7 @@
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
    :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click); nil: plainly" :spec map? :default nil}
    :facing {:doc "north, south, east or west: the way a facing block (bed head, gate, door, stairs) is oriented; the body looks that way as it places (jobs.lib.placement); not with :click; nil: as the body stands" :spec (a/pred "north, south, east or west" #{"north" "south" "east" "west"}) :default nil}
+   :through {:doc "false: no block in the way is dug to reach the cell (a mend digs nothing but the plant in its own cell); a cell no stand sees ends :unreachable" :spec boolean? :default true}
    :see {:doc "true: place only from where the eye sees the cell (jobs.lib.aim: nothing seen solid in the way, as a player aims at the face it places against), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough" :spec boolean? :default true}})
 
 (def ways need/fetch-ways)
@@ -242,7 +243,7 @@
   "A walk to a stand that sees pos failed and a seen terrain block (not :for-plan's own cell) lies in the line within reach:
   dig it, as a player does. :continue, :again, or nil when there is none or it could not be dug."
   [c pos]
-  (let [hit (b/through-cell c pos)
+  (let [hit (when (:through (:args c)) (b/through-cell c pos))
         for-plan (:for-plan (:args c))]
     (when (and hit (not (and for-plan (= for-plan (get (world/footprints c) (vec hit))))))
       (let [e (waits/waiting-out c (await (ctx/call c :through 'jobs.blocks.dig (assoc (clear-args c (u/cell-pos hit)) :collect true :need-drop true))))]
