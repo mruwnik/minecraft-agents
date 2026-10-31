@@ -219,6 +219,21 @@
             (is (= #{[10 64 0] [11 64 0]} (chests-in p)))
             (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))))))))
 
+(deftest deposit-with-a-full-chest-argument-never-uses-another-chest-of-the-group
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5}]
+                                          :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                          :containers {"10,64,0" [] "11,64,0" []}})]
+          (mem/write! (:store eng) :storage/chests {:pos {:x 10 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (full-at p [10 64 0])
+          (let [result (await (wt/ending-of eng job {:items ["dirt"] :chest [10 64 0]} 30))]
+            (is (not= :done (:kind result)))
+            (is (= {"dirt" 5} (wt/inv p)))
+            (is (empty? (get-in @(fake/state p) [:containers [11 64 0]])))))))))
+
 (deftest deposit-into-an-explicit-chest-joins-it-to-the-group
   (async done
     (tu/run-async done

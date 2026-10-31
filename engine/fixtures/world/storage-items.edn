@@ -76,6 +76,16 @@
    :expect [{:event {:source :job :kind :stopped :message [:contains "feather"]} :within-s 40 :of-job true}]
    :after [[:item "shears" 0]]
    :limit-s 60}
+  ;; card bdbf1576: a :chest argument is the only chest looked into, even when it is the farther one and both are in the storage group
+  {:name "withdraw-from-the-given-far-chest-never-uses-the-near-group-chest"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:feather\",count:3}]}"]
+            [:set [14 0 16] "chest[facing=east]{Items:[{Slot:0b,id:\"minecraft:bread\",count:9}]}"]]
+   :memory [{:kind :storage/chests :data {:pos {:x 20 :y 0 :z 16}} :policy {:cap 16 :ttl :forever}}
+            {:kind :storage/chests :data {:pos {:x 14 :y 0 :z 16}} :policy {:cap 16 :ttl :forever}}]
+   :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 3}})]]
+   :expect [{:event {:source :job :kind :stopped :message [:contains "in this chest"]} :within-s 40 :of-job true}]
+   :after [[:item "bread" 0]]
+   :limit-s 60}
   {:name "withdraw-partial-take-ends-with-the-took-text"
    :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]]
    :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 14}})]]

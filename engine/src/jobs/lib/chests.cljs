@@ -36,8 +36,9 @@
 
 (defn chests
   "{:pool cells :open cells :group? bool}: the chests to try. group? when the body's storage group is in play (no :chest
-  argument, or one in the group): the :chest argument or place first, then the group nearest first. Else only the
-  argument. open is the pool without the ones found full this call."
+  argument, or one in the group): the :chest argument or place first. With no :chest argument the pool then holds the group nearest first; a :chest argument is the only chest tried, group
+  member or not, plus the chests this call put down (:made in its memory), so a call never ends up at another existing
+  chest. open is the pool without the ones found full this call."
   ([c] (chests c :put))
   ([c action]
   (let [view (ctx/view c)
@@ -45,9 +46,10 @@
         main (some-> (storage/chest-of view args) storage/cell-of)
         members (vec (distinct (concat (storage/group view) (own-plan-chests c))))
         group? (or (nil? (:chest args)) (some? (some #{main} members)))
+        spread? (nil? (:chest args))
         here (u/self-pos c)
         near (sort-by (fn [[x y z]] (+ (js/Math.abs (- x (:x here))) (js/Math.abs (- y (:y here))) (js/Math.abs (- z (:z here))))) members)
-        pool (vec (if group? (distinct (concat (when main [main]) near)) (when main [main])))
+        pool (vec (if spread? (distinct (concat (when main [main]) near)) (concat (when main [main]) (:made (ctx/mem c)))))
         full (:full (ctx/mem c) #{})
         refused? (fn [cell] (access/container-refusal c action (cell-pos cell)))]
     {:pool pool :open (vec (remove #(or (full %) (refused? %)) pool)) :group? group?})))

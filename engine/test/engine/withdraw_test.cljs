@@ -230,6 +230,20 @@
             (is (= {"bread" 5} (inv p)))
             (is (= {:kind :done :data {:text carried-text}} result))))))))
 
+(deftest withdraw-with-a-chest-argument-never-looks-into-another-chest-of-the-group
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                      :containers {"10,64,0" [] "11,64,0" [{:name "bread" :count 9}]}})]
+          (mem/write! (:store eng) :storage/chests {:pos {:x 10 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (let [result (await (ending-of eng job {:chest chest :items {"bread" 5}} 12))]
+            (is (= :chest-lacks (:cause result)))
+            (is (= "no bread in this chest (holds nothing)" (:text (:data result))))
+            (is (= {} (inv p)))
+            (is (= 9 (get-in @(fake/state p) [:containers [11 64 0] 0 :count])) "the other chest is untouched")))))))
+
 (deftest withdraw-reports-the-carried-counts-and-lists-the-need-as-items
   (async done
     (tu/run-async done
@@ -247,8 +261,9 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"10,64,0" "chest" "11,64,0" "chest"}
                                            :containers {"10,64,0" [{:name "bread" :count 3}] "11,64,0" [{:name "dirt" :count 2}]}})]
+          (know-place! eng :chest chest)
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
-          (let [result (await (ending-of eng job {:chest chest :items {"bread" 10}} 16))
+          (let [result (await (ending-of eng job {:items {"bread" 10}} 16))
                 text (:text (:data result))]
             (is (= {"bread" 3} (inv p)))
             (is (= :chest-lacks (:cause result)))

@@ -31,7 +31,7 @@
   - condition-failed :missing (no container at the chest; a recorded :chest place is retracted, one chest_missing warn): at once.
   - nothing-possible, the cause the inspect or transfer status (:unreachable, :full, :nothing-moved, ..): after three failed attempts
     in a row.
-  Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
+  Storage group: with no :chest (a :chest argument is the only chest looked into), a chest that lacks what is short
   is followed by the next one; :chest-lacks is reported only once the last has been looked into.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
   (jobs.lib.stock), for jobs.items.obtain.
