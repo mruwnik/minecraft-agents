@@ -1,0 +1,14 @@
+;; Card 4d2fb456: clear-cells on a room inside solid stone (cells out of sight) digs each cell once: no pillar or seal cleanup refills it, no cell is skipped as unseen.
+;; Should-succeed: a 7x7x3 room above a corridor is dug out (147 cells) and no cobblestone is left in it.
+{:defaults
+ {:tags [:build :dig]
+  :time :any
+  :plot {:height 14 :floor "grass_block"}
+  :blocks [[:fill [2 0 2] [18 11 18] "stone"] [:fill [10 0 3] [10 1 7] "air"]]
+  :body {:at [10.5 0 3.5] :inventory [["iron_pickaxe" 2] ["cobblestone" 20]] :effects [["resistance" 900 4] ["haste" 900 2]]}
+  :limit-s 600}
+ :cases
+ [{:name "room-in-solid-stone-is-dug-once-and-not-refilled"
+   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [7 2 5] :max #at [13 4 11]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug 147}} :within-s 500 :of-job true}]
+   :after [[:block [7 2 5] "air"] [:block [13 4 11] "air"] [:block [10 3 8] "air"] [:block [7 4 11] "air"]]}]}

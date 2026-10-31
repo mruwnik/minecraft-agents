@@ -30,7 +30,7 @@
   :zone or :footprint, one clear-cells.refused info per round). The chosen cell is checked again before the dig.
   A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-cells.refused
   info) unless :open-pens?.
-  A dig hazard not in :accept counts a try (reason :hazard after two). A cell reached but still unseen counts a try (reason :unloaded after two).
+  A dig hazard not in :accept counts a try (reason :hazard after two). A cell not in view (unloaded, or inside rock) is walked to by walking only (no pillar, no seal cleanup) until within 8 blocks, then dug like any other.
   Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
   refusals {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
   {:reason :refused :zones :plans} (every pending cell is refused, before the first round).
@@ -241,6 +241,15 @@
       :else (let [top (apply max (map #(:y (first %)) loaded))]
               (apply min-key #(u/dist me (first %)) (filter #(= top (:y (first %))) loaded))))))
 
+(def unseen-reach
+  "Blocks from the eye within which an unseen cell is dug at once: a cell inside rock is never in view, and the dig child digs through to it."
+  8)
+
+(defn digs-unseen?
+  "Whether the unseen cell pos is near enough to dig (the dig child walks, looks and digs through), not to walk to first."
+  [c pos]
+  (<= (u/eye-dist (u/self-pos c) pos) unseen-reach))
+
 (defn ^:async step-off!
   "Only under-foot cells are left: walk to the nearest cell outside the box (jobs.lib.step-off) to leave the cell the job
   must clear. A step that fails bumps the cell the body is standing on."
@@ -326,10 +335,9 @@
       (if (empty? allowed)
         (finish! c)
         (if-let [[pos n] (top-cell c allowed)]
-          (if (nil? n)
-            (let [w (await (common/walk! c pos 3 {}))]
+          (if (and (nil? n) (not (digs-unseen? c pos)))
+            (let [w (await (common/walk! c pos 3 {:ways #{:walk}}))]
               (when (= :blocked w) (bump! c pos :unreachable))
-              (when (and (= :there w) (nil? (u/seen-name (:primitives c) pos))) (bump! c pos :unloaded))
               (if (= :continue w) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))

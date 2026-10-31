@@ -311,16 +311,15 @@
           (is (= 1 (count (:list (core/state eng)))) "still listed, yielding")
           (is (empty? (calls p "dig"))))))))
 
-(deftest clear-cells-gives-up-a-cell-it-reached-but-never-sees
+(deftest clear-cells-hands-an-unseen-cell-near-the-body-to-dig-not-a-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [far {:area {:min {:x 30 :y 64 :z 30} :max {:x 31 :y 64 :z 30}}}
-              {:keys [eng p]} (setup {:blocks {"30,64,30" "dirt" "31,64,30" "dirt"} :floor [-5 -5 35 35]
-                                      :unloaded ["30,64,30" "31,64,30"]})
-              result (await (child-outcome eng job far 8))]
-          (is (= {{:x 30 :y 64 :z 30} :unloaded {:x 31 :y 64 :z 30} :unloaded} (:skipped result)) "a reached cell that stays unseen counts tries, then is skipped")
-          (is (empty? (calls p "dig"))))))))
+        (let [near-box {:area {:min {:x 1 :y 64 :z 1} :max {:x 2 :y 64 :z 1}}}
+              {:keys [eng p]} (setup {:blocks {"1,64,1" "stone" "2,64,1" "stone"} :unloaded ["1,64,1" "2,64,1"]})
+              result (await (child-outcome eng job near-box 8))]
+          (is (not-any? #{:unloaded} (vals (:skipped result))) "a cell inside rock is never skipped as unseen")
+          (is (empty? (tu/walk-calls p)) "no walk of the job's own (it would pillar and fill the room)"))))))
 
 (deftest clear-cells-clears-the-whole-box-in-one-round
   (async done
