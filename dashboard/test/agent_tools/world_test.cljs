@@ -26,6 +26,7 @@
     ["place" "1" "64" "2" "oak_planks"] '(jobs.blocks.place {:pos {:x 1 :y 64 :z 2} :item "oak_planks"})
     ["use-on" "1" "64" "2" "--item" "bread" "--face" "up"] '(jobs.items.use {:on {:x 1 :y 64 :z 2} :item "bread" :face "up"})
     ["use-on" "1" "64" "2"] '(jobs.items.use {:on {:x 1 :y 64 :z 2}})
+    ["use-on" "1" "64" "2" "--item" "water_bucket" "--ignore-zones"] '(jobs.items.use {:on {:x 1 :y 64 :z 2} :item "water_bucket" :ignore-zones? true})
     ["interact" "17" "--item" "lead"] '(jobs.items.use {:on 17 :item "lead"})
     ["equip" "iron_helmet"] '(jobs.items.equip {:item "iron_helmet"})
     ["equip"] '(jobs.items.equip {})
