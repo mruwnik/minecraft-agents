@@ -217,7 +217,7 @@
   (let [t (tend/can-start? c)]
     (cond
       (cut-work? c) (contract/ok :work "stalks to cut")
-      (and (= :never (first t)) (seq (stalk-bases c))) (contract/later :nothing-to-do "no stalk is tall enough to cut")
+      (and (= :never (first t)) (seq (stalk-bases c))) (contract/later :nothing-to-do "no stalk is tall enough to cut" :recheck-after-ms (tend/recheck-ms))
       (#{:ok :never} (first t)) t
       (tidy-work? c) (contract/ok :work "crop cells to clear")
       (stock-work? c) (contract/ok :work "stock to store or compost")

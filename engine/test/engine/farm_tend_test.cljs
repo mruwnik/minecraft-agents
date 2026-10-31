@@ -739,7 +739,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))]
-          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (update (select-keys (await (ending-of s {:area box} 20)) [:kind :cause]) :cause dissoc :text))))
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (update (select-keys (await (ending-of s {:area box} 20)) [:kind :cause]) :cause dissoc :text :recheck-after-ms))))
         (let [s (setup (world (farm "wheat" 7 all-cells all-cells)))]
           (is (= {:kind :impossible :cause {:reason :no-box}} (update (select-keys (await (ending-of s {} 20)) [:kind :cause]) :cause dissoc :text)))
           (is (= :impossible (:kind (await (ending-of s {:area {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}}} 20)))) "no crop layer")
@@ -761,3 +761,13 @@
                                  (tend/part-status c)))]
     (is (= [:look :nothing-to-do] (tu/kind-reason (status false))))
     (is (= [:later :nothing-to-do] (tu/kind-reason (status true))))))
+
+(deftest a-seen-field-with-nothing-to-do-waits-resting-between-checks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
+              _ (tu/seeing-after-look (:p s))]
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
+          (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
+          (is (= #{(tend/recheck-ms)} (set (map #(:recheck-after-ms %) (events-of s :waiting))))))))))

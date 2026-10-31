@@ -95,9 +95,11 @@
 
 (a/defargs settings
   {::job-time-s {:default 1200 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::recheck-s {:default 25 :doc "Seconds a farm job that waits with nothing to do or a pass not worth the walk rests before its start check is asked again (crops change over minutes)." :spec (a/num-in 0 nil)}
    ::max-cells {:default 2048 :doc "Most cells a field may cover; a larger box is refused :no-box." :spec (a/int-in 0 nil)}})
 (def fit? (ready/fit-for :work))
 (defn max-cells [] (settings/get settings ::max-cells))
+(defn recheck-ms [] (* 1000 (settings/get settings ::recheck-s)))
 
 (defn usable-box?
   "A box with a crop layer above its farmland layer, of at most max-cells cells."
@@ -325,9 +327,10 @@
       (let [f (check-facts c)]
         (when-not (would-run? c f)
           (if-let [site (walk-due? c)]
-            (some->> (not-worth c f (walk-args c site)) (checks/cause-status :later))
-            (checks/cause-status (if (and (needs-look? c) (not (look/surveyed? c :near))) :look :later)
-                                 (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f)))))))))
+            (some->> (not-worth c f (walk-args c site)) (#(assoc % :recheck-after-ms (recheck-ms))) (checks/cause-status :later))
+            (let [look? (and (needs-look? c) (not (look/surveyed? c :near)))
+                  cause (if (seq (:short f)) {:reason :short-seed :seeds (vec (sort (:short f)))} (nothing-to-do-reason f))]
+              (checks/cause-status (if look? :look :later) (cond-> cause (not look?) (assoc :recheck-after-ms (recheck-ms)))))))))))
 
 (def job-sym 'jobs.farm.tend)
 (defn key-of [part] (or part "*"))
