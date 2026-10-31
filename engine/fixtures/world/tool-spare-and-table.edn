@@ -19,6 +19,14 @@
             {:count-event {:source :job :kind :tool.low} :for-s 100 :at-most 1}]
    :after [[:item "stone_pickaxe" [:>= 1]]]
    :limit-s 260}
+  ;; Card ed4fd2c3: go-to's way-out stair runs with spent-uses 0; the worn last pick still gets a spare first
+  {:name "way-out-stair-with-spent-uses-0-and-a-worn-last-pick-gets-a-spare"
+   :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :settings {:jobs.lib.trip/spent-uses 0}})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 8}} :within-s 240 :of-job true}]
+   :after [[:item "stone_pickaxe" [:>= 1]]]
+   :limit-s 260}
   {:name "worn-last-pick-nothing-to-make-a-spare-warns-and-goes-on"
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["torch" 8]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
