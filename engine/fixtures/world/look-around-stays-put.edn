@@ -1,0 +1,28 @@
+;; A body standing still stays in its cell: idle between jobs and through a look-around job, in a 1-wide corridor
+;; with an open shaft beside it that ends under lava.
+{:defaults
+ {:tags [:movement :look]
+  :time :any
+  :plot {:light :lit :height 8}
+  :blocks [[:fill [10 0 4] [22 6 31] "stone"]
+           [:fill [16 0 10] [16 1 22] "air"]
+           [:fill [16 2 18] [16 4 18] "air"]
+           [:set [16 5 18] "lava"]]
+  :body {:at [16.5 0 16.5] :yaw 180}
+  :limit-s 60}
+ :cases
+ [{:name "idle-then-look-around-same-cell"
+   :act [[:wait-s 8]
+         [:job (jobs.movement.look-around {})]
+         [:await {:source :job :kind :completed} 30]
+         [:wait-s 3]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 0.35]]}
+  {:name "edge-of-cell-same-cell"
+   :body {:at [16.12 0 16.5] :yaw 180}
+   :act [[:wait-s 8]
+         [:job (jobs.movement.look-around {})]
+         [:await {:source :job :kind :completed} 30]
+         [:wait-s 3]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:body-near [16.12 0 16.5] 0.3]]}]}
