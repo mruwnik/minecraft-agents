@@ -3,21 +3,22 @@
 ;; lies beyond it, so the way there runs along its rim (the body ends past the pit) and must never step off.
 ;; Light: the plot's light blocks sit at y 2 and the top, so a column under them is lit about 14 rows down: the plain pit's floor
 ;; is dark (landing unseen, the worse case), the lit-pit case fills the pit with light blocks so the floor is in sight.
+;; The spawnpoint lies by the body: a far one (plots are thousands of blocks out) prices a death at the walk back, which refuses the search.
 ;; Should-succeed: emerald found, no fall hurt.
 {:defaults
  {:tags [:explore :search :movement]
   :time :any
   :plot {:light :lit :height 6 :length 100 :width 32}
   :blocks [[:fill [14 -20 0] [33 -1 23] "air"] [:set [90 0 10] "emerald_block"]]
-  :body {:at [6.5 0 16.5] :settle-s 2 :effects [["hunger" 120 255]]}
+  :body {:at [6.5 0 16.5] :spawnpoint [4 0 16] :settle-s 2 :effects [["hunger" 120 255]]}
   :act [[:wait-s 3]
         [:rcon "damage $BODY 8.5 minecraft:generic"]
         [:job (jobs.explore.search {:target "emerald_block" :scan-radius 100 :use-notes false :settings {:jobs.explore.search/max-legs 6}})]]
   :expect [{:event {:source :job :kind :planned} :within-s 30 :of-job true}
-           {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}
-           {:event {:source :job :kind :completed :data {:reason :found}} :within-s 50 :of-job true}]
-  :after [[:body-near [90.5 0 10.5] 55]]
-  :limit-s 60}
+           {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}
+           {:event {:source :job :kind :completed :data {:reason :found}} :within-s 80 :of-job true}]
+  :after [[:body-near [90.5 0 10.5] 85]]
+  :limit-s 90}
  :cases
  [{:name "hurt-hungry-search-does-not-walk-off-an-unseen-floor-pit"}
   {:name "hurt-hungry-search-does-not-walk-off-a-lit-pit"
