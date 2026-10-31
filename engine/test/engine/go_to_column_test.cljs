@@ -496,3 +496,19 @@
           (is (> (:turn-back-s @out) (:worth-s @out)))
           (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))
 
+
+(def raised-pen
+  {:floor [-5 -5 30 30] :light [15 0]
+   :blocks (merge (box 6 63 12 20 74 22 "stone")
+                  (into {} (for [z (range 1 12) y (range 64 (+ 64 z))] [(str 8 "," y "," z) "stone"])))
+   :sight true :exact-eye true :bodyHitbox true :self {:pos {:x 8.5 :y 64 :z 0.5}}})
+
+(deftest an-unseen-column-on-a-raised-platform-is-climbed-by-the-ramp-and-arrived-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (go! raised-pen {:pos [12 16] :range 3}))
+              [x y z] (at p)]
+          (is (:arrived @out) (pr-str @out))
+          (is (>= y 74) (str "on the platform: at " (at p)))
+          (is (<= (js/Math.hypot (- 12 x) (- 16 z)) 3.5) (str "at " (at p))))))))

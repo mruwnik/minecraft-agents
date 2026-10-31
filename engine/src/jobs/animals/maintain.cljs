@@ -383,8 +383,12 @@
     (hunting/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
     :else
     (let [r (await (child/call-walk* c :look {:pos (pen-read/look-pos (pen-read/arg-box c)) :range 3}))]
-      (when-not (= :continue r) (look/note-surveyed! c))
-      (if (= :continue r) :yield :again))))
+      (cond
+        (= :continue r) :yield
+        (= :done (:kind r)) (do (look/note-surveyed! c) :again)
+        :else (let [{:keys [mob target]} (:args c)]
+                (ctx/end c (:kind r) (contract/cause-key r)
+                         {:mob mob :target target :text (str "maintain stopped: the walk to look at the pen ended " (name (:kind r)) ", no animal was counted")}))))))
 
 (defn ^:async round
   "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world. A plan that goes bad after can-run? is left to the next check (plan-trouble-round-test)."

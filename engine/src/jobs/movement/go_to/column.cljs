@@ -2,8 +2,8 @@
   "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the surface of that column: its highest seen stand with
   no seen solid over it (trees skipped; the unseen ground under a trunk is solid), why :surface; else (the column seen only under cover) the stand nearest the body's
   feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
-  estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, else the feet
-  y; seen open there down to an unseen cell: the lowest open cell over it, unseen-under), or, when the column is seen there
+  estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, or the rim of a
+  seen wall there whose top is unseen, else the feet y; seen open there down to an unseen cell: the lowest open cell over it, unseen-under), or, when the column is seen there
   and has no floor, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
   seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
   range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
@@ -98,15 +98,27 @@
 
 (def estimate-reach "Blocks above and below the feet a neighbouring column's seen ground is looked for (estimate)." 32)
 
+(defn rim
+  "The y over the highest seen solid of the column x z (from lo to hi) whose cell above is unseen: a wall or platform edge
+  seen from below, its top never in view; nil when the highest seen cell is not solid or none."
+  [kind-at x z lo hi]
+  (loop [y hi]
+    (when (>= y lo)
+      (let [k (kind-at x y z)]
+        (cond (keyword-identical? :unknown k) (recur (dec y))
+              (keyword-identical? :solid k) (when (keyword-identical? :unknown (kind-at x (inc y) z)) (inc y)))))))
+
 (defn estimate
   "The y an unseen column x z is guessed to stand at: the surface (else the seen ground nearest the feet) of the nearest
-  column around it, looked for in 8 directions out to approach-range, else body-y; within estimate-reach of the feet, as
+  column around it, looked for in 8 directions out to approach-range (a column seen only as a wall, its top unseen: the
+  rim over it, the land behind it stands at least that high); else body-y; within estimate-reach of the feet, as
   64 full-height columns read per aim cost 100s of ms."
   [kind-at x z body-y]
-  (or (some (fn [[d dx dz]] (let [cx (+ x (* d dx)) cz (+ z (* d dz)) lo (- body-y estimate-reach) hi (+ body-y estimate-reach)]
-                              (or (top kind-at cx cz lo hi) (ground kind-at cx cz body-y lo hi))))
-            (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz]))
-      body-y))
+  (let [around (for [d (range 1 (inc approach-range)) [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [d dx dz])
+        lo (- body-y estimate-reach) hi (+ body-y estimate-reach)
+        col (fn [[d dx dz]] [(+ x (* d dx)) (+ z (* d dz))])]
+    (or (some (fn [c] (let [[cx cz] (col c)] (or (top kind-at cx cz lo hi) (ground kind-at cx cz body-y lo hi) (rim kind-at cx cz lo hi)))) around)
+        body-y)))
 
 (defn unseen-under
   "The guess y of column x z at y: y when unseen, else, seen open down to an unseen cell (its ground not seen yet), the

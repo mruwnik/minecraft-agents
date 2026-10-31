@@ -415,6 +415,17 @@
           (is (= 0 (:adults (done-event s)))))))))
 
 
+(deftest a-look-walk-that-gives-up-ends-the-pass-and-herds-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock] :as s} (h/setup {:floor [30 -3 45 3] :self {:pos {:x 40 :y 64 :z 0}} :entities []} 50)]
+          (core/submit! eng (spec {:target 4}) {})
+          (await (tu/run-ticks eng clock 80 700))
+          (is (true? (finished? s)))
+          (is (nil? (:steps (done-event s))) "no step ran on an uncounted pen")
+          (is (not= :completed (:kind (done-event s)))))))))
+
 (def pen-plan
   {:id "pen" :metadata {:by "Fake"} :parts [{:id "cows" :box [[0 60 -5] [8 70 5]] :want "air" :herd {:mob "cow" :target 4}}]})
 
