@@ -36,17 +36,26 @@
   moment after a container closes (the server's resync lands after the act returned)."
   3)
 
-(defn ^:async count-act!
-  "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots. When the act
-  seems to have used items, the bag is read again after a beat and that read counts."
+(defn add-delta!
+  [eng root slots delta]
+  (when (seq delta)
+    (update-frames! eng root (frame-paths slots) #(update % :tally contract/add delta))))
+
+(defn count-act!
+  "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots, from the bag as it reads now."
   [eng root slots before]
-  (let [first-delta (contract/act-delta before (snapshot eng))
-        delta (if (seq (get-in first-delta [:uses :items]))
-                (do (await (js/Promise. (fn [ok] (js/setTimeout ok (* settle-ticks (settings/physics-ms (:primitives eng)))))))
-                    (contract/act-delta before (snapshot eng)))
-                first-delta)]
-    (when (seq delta)
-      (update-frames! eng root (frame-paths slots) #(update % :tally contract/add delta)))))
+  (add-delta! eng root slots (contract/act-delta before (snapshot eng))))
+
+(defn ^:async count-act-settled!
+  "count-act! for an act that returned: when it seems to have used items, the bag is read again after a beat and that
+  read counts. Not for a failed or cut act, which must not wait."
+  [eng root slots before]
+  (let [first-delta (contract/act-delta before (snapshot eng))]
+    (add-delta! eng root slots
+                (if (seq (get-in first-delta [:uses :items]))
+                  (do (await (js/Promise. (fn [ok] (js/setTimeout ok (* settle-ticks (settings/physics-ms (:primitives eng)))))))
+                      (contract/act-delta before (snapshot eng)))
+                  first-delta))))
 
 (defn count-try!
   "Book a child ending (reason of job) as a try on every frame from root down to slots (the :tries spend line), the
