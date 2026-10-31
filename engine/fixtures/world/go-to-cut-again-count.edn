@@ -1,6 +1,7 @@
 ;; Card 3bb8bfe3: go-to :cut-again counts only cuts that sent the body back with no closest approach gained, keyed to the goal.
-;; Should-fail: the goal 4 blocks from a stationary (NoAI, helmeted) zombie inside the hostile-near radius 8 is cut again and
-;; again: the go-to gives up :cut-again (naming the zombie) after a few hostile-near fires, not an endless cycle.
+;; Should-fail: the goal 4 blocks from three stationary (NoAI, helmeted) zombies inside the hostile-near radius 8 is cut again
+;; and again; a few flights later the reflex prices the fight cheaper than another flight, kills them and the go-to arrives:
+;; no endless cycle (2 to 12 fires). The :cut-again give-up itself is priced against the goal's worth (unit tests).
 ;; Should-succeed: a far walk where a zombie is summoned beside the body three times and killed two seconds later still
 ;; arrives: the body carries a sword, so it fights in place (no send-back). Unarmed it flees each time, and three flees
 ;; without gain are by design a give-up (live at 919b3113).
@@ -10,10 +11,12 @@
   :register [{:trigger :hostile-near}]
   :body {:at [4.5 0 16.5] :effects [["resistance" 900 4]]}}
  :cases
- [{:name "goal-beside-zombie-gives-up-cut-again"
+ [{:name "goal-beside-zombies-is-no-endless-cycle"
    :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [24.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [24.5 0 17.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:why :cut-again}} :within-s 115 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 115 :of-job true}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 115 :at-least 2 :at-most 12}]
    :limit-s 120}
   {:name "kills-in-place-do-not-count-as-cuts"
