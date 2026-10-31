@@ -76,11 +76,11 @@
 (def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn reach-seen?
-  "Whether the water reach of the cell is settled: every block a source could wet it from is seen, or buried (unseen with no seen
+  "Whether the water reach of the cell is settled (memo: a volatile map of block reads, shared by the cells of one reading): every block a source could wet it from is seen, or buried (unseen with no seen
   open block beside it, as a player cannot see into a hill). Only an unseen block next to a seen open one is worth a look."
-  [p {:keys [x y z]}]
+  ([p cell] (reach-seen? p cell (volatile! {})))
+  ([p {:keys [x y z]} memo]
   (let [r (farm/water-reach)
-        memo (volatile! {})
         seen (fn [pos] (let [m @memo]
                          (if (contains? m pos)
                            (m pos)
@@ -88,17 +88,18 @@
         open? (fn [n] (and n (or (bs/air n) (bs/fluids n) (b/clearable n))))
         reachable? (fn [[px py pz]] (some (fn [[dx dy dz]] (open? (seen [(+ px dx) (+ py dy) (+ pz dz)]))) neighbours))]
     (every? (fn [pos] (or (seen pos) (not (reachable? pos))))
-            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
+            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)])))))
 
 (defn readings
   "The field cells by state: :dry (reach seen, no water), :unknown (water absent, reach partly unseen), :wet."
   [c]
   (let [cs (field-cells c)
         ws (cw/waters c cs)
-        p (:primitives c)]
+        p (:primitives c)
+        memo (volatile! {})]
     (group-by (fn [{:keys [x y z] :as cell}]
                 (cond (farm/hydrated? ws x y z) :wet
-                      (reach-seen? p cell) :dry
+                      (reach-seen? p cell memo) :dry
                       :else :unknown))
               cs)))
 

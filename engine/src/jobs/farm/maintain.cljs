@@ -9,6 +9,7 @@
             [jobs.farm.tend-decide :as tend-decide]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.farm.stalks :as stalks]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.crops :as crops]
@@ -18,6 +19,7 @@
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as rsv]
+            [jobs.lib.sense :as sense]
             [jobs.lib.storage :as storage]
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]
@@ -192,14 +194,22 @@
       (:value (cost/goal-value (mapv (fn [[name n]] {:name name :count n})
                                      (frequencies (map #(u/seen-name (:primitives c) (u/cell-pos %)) cuts))))))))
 
-(defn worth-of
-  "Seconds a root pass is worth: tend's pass-price :worth, what its fertilize step adds (field-steps-worth),
-  the tidy and stock steps' own (tidy-worth, stock-worth) and the cut step's (cut-worth). Never ##Inf: cells never seen are priced by tend's prior. A plan tend cannot work (stalks only) is worth its cut."
+(defn root-worth
+  "worth-of without the cache."
   [c]
   (if (= :ok (first (tend/can-run? c)))
     (let [f (tend/check-facts c)]
       (+ (:worth (tend/pass-price c f)) (field-steps-worth c f) (tidy-worth c) (stock-worth c) (cut-worth c)))
     (+ (stock-worth c) (cut-worth c))))
+
+(defn worth-of
+  "Seconds a root pass is worth: tend's pass-price :worth, what its fertilize step adds (field-steps-worth),
+  the tidy and stock steps' own (tidy-worth, stock-worth) and the cut step's (cut-worth). Never ##Inf: cells never seen are priced by tend's prior. A plan tend cannot work (stalks only) is worth its cut.
+  A start check (no token) reads it once per cache window and memory epoch."
+  [c]
+  (if (:token c)
+    (root-worth c)
+    (check-cache/cached c [::worth (fa/part c) (sense/known-memory (:primitives c))] #(root-worth c))))
 
 (defn can-start?
   "Tend's start check, or ok while a cut, tidy or stock step has work; a plan of stalks only waits :nothing-to-do while none is tall enough."

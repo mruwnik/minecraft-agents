@@ -2,21 +2,30 @@
   "What the crops of a field are worth to a pass, shared by jobs.farm.tend and jobs.farm.harvest: the seen water that wets a
   field (waters), the rate a crop grows at (growth-rate), whether a cell holds a ripe crop now (ripe-now) and the worth of
   the harvests and replantings of a field's read cells (harvest-worth), unseen cells at the measured prior (cost/field-share)."
-  (:require [jobs.lib.cost :as cost]
+  (:require [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.farm :as lib-farm]
             [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (defn waters
-  "The seen water as a set of [x y z] near the cells; a cell poured is water only once it is seen as such."
+  "The seen water as a set of [x y z] near the cells; a cell poured is water only once it is seen as such. A start check (a ctx
+  without a token) reads it once per memory epoch (once per cache window without a perception): a check asks for it several times a tick."
   [c cs]
-  (let [me (u/self-pos c)
-        reach (min 64 (+ (lib-farm/water-reach) 1 (apply max 0 (map #(u/dist me %) cs))))]
-    (into #{}
-          (map (fn [{:keys [x y z]}] [x y z]))
-          (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius reach :max 4096 :live? true})))))
+  (let [p (:primitives c)
+        me (u/self-pos c)
+        cell (mapv js/Math.floor [(:x me) (:y me) (:z me)])
+        epoch (sense/known-memory p)
+        reach (min 64 (+ (lib-farm/water-reach) 1 (apply max 0 (map #(u/dist me %) cs))))
+        read #(into #{}
+                    (map (fn [{:keys [x y z]}] [x y z]))
+                    (map :pos (look/seen-blocks p {:names ["water"] :radius reach :max 4096 :live? true})))]
+    (cond (:token c) (read)
+          epoch (check-cache/keyed c ::waters [reach cell epoch] read)
+          :else (check-cache/cached c [::waters reach cell] read))))
 
 (defn growth-rate
   "Stages a second the crop at pos grows (crops/stages-per-s): wet while water seen in ws (a set of [x y z]) reaches the
