@@ -145,6 +145,10 @@
         (ctx/update-mem! c assoc :glanced true)
         (await (look/look-around-until! c #(place-of c block-at))))))
 
+(def stalled-legs-max
+  "Legs in a row that get no nearer before the flight is blocked: a swimmer starting deep swims up first, so early legs gain little."
+  3)
+
 (defn ^:async round
   [c]
   (let [p (:primitives c)
@@ -154,8 +158,11 @@
       (await (ctx/act c :look (clj->js {:pos {:x (+ 0.6 (:x here)) :y (+ 2.5 (:y here)) :z (+ 0.5 (:z here))}})))
       (look/see! c))
     (if-let [cell (await (find-once! c block-at))]
-      (if (await (options/leg-step! c (:where (:args c)) {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0
-                                    (or (:leg-s (:args c)) (options/flight-timeout-s))))
-        :continue
-        (ctx/end c :nothing-possible :blocked {:text (str "no leg led to the " (name (:where (:args c))) " at " (pr-str (u/cell-vec cell)))}))
+      (let [nearer? (await (options/leg-step! c (:where (:args c)) {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0
+                                              (or (:leg-s (:args c)) (options/flight-timeout-s))))
+            stalled (if nearer? 0 (inc (:stalled (ctx/mem c) 0)))]
+        (ctx/update-mem! c assoc :stalled stalled)
+        (if (< stalled stalled-legs-max)
+          :continue
+          (ctx/end c :nothing-possible :blocked {:text (str "no leg led to the " (name (:where (:args c))) " at " (pr-str (u/cell-vec cell)))})))
       (ctx/end c :nothing-possible :no-place {:text (str "no " (name (:where (:args c))) (when-let [r (reach-of c)] (str " within " r " blocks")))}))))

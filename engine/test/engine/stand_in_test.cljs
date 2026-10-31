@@ -51,7 +51,8 @@
 
 (defn stand!
   "Run (jobs.survival.stand-in args) over world; steer teleports the body to the steer target (pos), as a walk would. {:p :seen}."
-  [world args]
+  ([world args] (stand! world args false))
+  ([world args stuck?]
   (let [[seen sink] (tu/legacy-capture-sink)
         clock (atom 1000000)
         p (tu/fake-on-floor world)
@@ -60,9 +61,9 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (.override (.-world p) "steer"
                (fn [token a impl] (-> (impl token a)
-                                      (.then (fn [r] (when-let [t (some-> a .-pos)] (fake/swap-self! p assoc :pos [(.-x t) (.-y t) (.-z t)])) r)))))
+                                      (.then (fn [r] (when-let [t (and (not stuck?) (some-> a .-pos))] (fake/swap-self! p assoc :pos [(.-x t) (.-y t) (.-z t)])) r)))))
     (core/submit! eng (list 'jobs.survival.stand-in args) {})
-    {:eng eng :p p :seen seen}))
+    {:eng eng :p p :seen seen})))
 
 (deftest a-body-walks-to-the-nearest-water-and-ends-done-in-it
   (async done
@@ -73,6 +74,15 @@
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water cell")
           (is (= [3 1] (mapv #(js/Math.floor %) ((juxt :x :z) (st/pos-of p)))) "stands in it")
           (is (empty? (st/ended-because seen :no-place))))))))
+
+(deftest a-flight-is-blocked-only-after-three-legs-in-a-row-get-no-nearer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (stand! {:blocks {"3,64,1" "water"}} {:where :water} true)]
+          (await (tu/run-until-empty eng 10))
+          (is (<= 3 (count (tu/walked-to eng))) "at least three legs, not one")
+          (is (seq (st/ended-because seen :blocked)) "then blocked"))))))
 
 (deftest no-water-within-reach-ends-no-place
   (async done
