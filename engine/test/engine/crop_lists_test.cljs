@@ -12,7 +12,7 @@
   (doseq [crop (keys crops/ripe-age)
           :when (crops/seed-of crop)]
     (is (strays/crop-blocks crop) (str crop " is a crop block to tidy")))
-  (is (= (set crops/field-seeds) (set (vals crops/seed-of))))
+  (is (= (set crops/field-seeds) (set (vals crops/field-seed-of))))
   (is (every? (set harvest/collect-items) crops/field-seeds) "a harvest picks up every seed that sows a field crop")
   (is (= crops/field-seeds tend-box/seed-items)))
 

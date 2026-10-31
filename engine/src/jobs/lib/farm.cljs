@@ -60,7 +60,7 @@
         carried #(get counts % 0)]
     (if seed
       (when (pos? (carried seed)) seed)
-      (->> (vals crops/seed-of)
+      (->> (vals crops/field-seed-of)
            (filter #(pos? (carried %)))
            (sort-by #(- (carried %)))
            first))))

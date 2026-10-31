@@ -2,6 +2,7 @@
   "jobs.lib.plan-field: every way a plan can be unworkable, and the status each gives."
   (:require [cljs.test :refer [deftest is are]]
             [jobs.farm.field :as fld]
+            [jobs.farm.plant :as plant]
             [jobs.lib.plan-field :as pf]
             [jobs.lib.world-files :as world]))
 
@@ -21,6 +22,15 @@
     {:plan "gone"} [] "no such plan" true
     {:plan "p" :part "b"} [] "no crop cells" false
     {:plan "p" :part "a"} nil pf/no-zones true))
+
+(deftest stem-crops-are-crop-cells-a-farm-job-sows
+  (is (= {{:x 0 :y 64 :z 0} "melon_stem"}
+         (fld/crop-cells {:cells [{:pos [0 64 0] :want {:crop "melon_stem"}}]} nil)))
+  (is (= "pumpkin_seeds" (fld/seed-of "pumpkin_stem"))))
+
+(deftest nothing-to-do-says-why
+  (is (re-find #"3 cells are untilled" (:why (plant/nothing-to-do [1 2 3]))))
+  (is (:why (plant/nothing-to-do []))))
 
 (deftest ignore-zones-skips-the-zone-list-and-zones-off-never-asks-for-one
   (is (:cells (read {:plan "p" :part "a" :ignore-zones? true} nil)))

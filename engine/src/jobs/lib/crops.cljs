@@ -43,9 +43,15 @@
    "potatoes" {:seed "potato" :produce ["potato" "poisonous_potato"]}
    "beetroots" {:seed "beetroot_seeds" :produce ["beetroot" "beetroot_seeds"]}})
 
-(def seed-of (update-vals field-items :seed))
+(def field-seed-of "Seed per box-field crop." (update-vals field-items :seed))
 
-(def field-seeds "The items that sow a field crop." (vec (vals seed-of)))
+(def stem-seed-of
+  "Seed per stem crop: a plan may plant and tend them, but they have no growth stage to harvest (the fruit is the harvest)."
+  {"melon_stem" "melon_seeds" "pumpkin_stem" "pumpkin_seeds"})
+
+(def seed-of "Seed per crop a plan can want: the field crops and the stems." (merge field-seed-of stem-seed-of))
+
+(def field-seeds "The items that sow a field crop." (vec (vals field-seed-of)))
 
 (def other-seeds "Seeds of crops the farm jobs do not sow (they stay carried or are composted)." ["melon_seeds" "pumpkin_seeds"])
 

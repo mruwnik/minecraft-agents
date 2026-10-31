@@ -60,7 +60,7 @@
   [p cells]
   (filterv (fn [[pos crop]]
              (let [b (u/seen-block p pos)]
-               (and b (= crop (.-name b)) (some-> (.-age b) (< (crops/ripe-age crop))))))
+               (and b (crops/ripe-age crop) (= crop (.-name b)) (some-> (.-age b) (< (crops/ripe-age crop))))))
            cells))
 
 (defn wrong-crops

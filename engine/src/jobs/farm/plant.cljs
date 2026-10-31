@@ -92,7 +92,7 @@
   (when-not (pick-seed seed c)
     (let [carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
           kept (reserve/held c :sow)
-          names (if seed [seed] (vals crops/seed-of))]
+          names (if seed [seed] (vals crops/field-seed-of))]
       (when-let [n (->> names (filter #(and (pos? (get carried % 0)) (pos? (get kept % 0))))
                         (sort-by #(- (carried %))) first)]
         {:seed n :held (carried n) :kept (kept n) :reserve-points (home-food/carry-points c)}))))
@@ -129,7 +129,7 @@
   [seed n]
   (if seed
     {:reason :need :item seed :count n}
-    {:reason :need :any-of (vec (sort (distinct (vals crops/seed-of)))) :count n}))
+    {:reason :need :any-of (vec (sort (distinct (vals crops/field-seed-of)))) :count n}))
 
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do."
@@ -172,6 +172,13 @@
   (when-let [how (seq (need/fetch-how c))]
     {:how (set how)}))
 
+(defn nothing-to-do
+  "The cause for a field with no bare cell, saying how many cells are untilled (till them first)."
+  [untilled]
+  (if (seq untilled)
+    {:reason :nothing-to-do :untilled (count untilled) :why (str "no bare farmland to sow; " (count untilled) " cells are untilled (till them first)")}
+    {:reason :nothing-to-do :why "no bare cell to sow"}))
+
 (defn plan-problem [c]
   (let [{:keys [trouble cells]} (planned c)]
     (if trouble
@@ -182,7 +189,7 @@
           (seq short) (when (nil? (fetch-opts c)) (seed-wanted c))
           (seq (fld/planned-bare (:primitives c) cells)) {:reason :refused}
           :else (let [dry (untilled-planned (:primitives c) cells)]
-                  (cond-> {:reason :nothing-to-do} (seq dry) (assoc :untilled (count dry)))))))))
+                  (nothing-to-do dry)))))))
 
 (defn box-problem [c]
   (let [{:keys [seed]} (:args c)
@@ -192,7 +199,7 @@
         bare (bare-cells p box [])
         untilled (untilled-cells p box)]
     (cond
-      (empty? bare) (cond-> {:reason :nothing-to-do} (seq untilled) (assoc :untilled (count untilled)))
+      (empty? bare) (nothing-to-do untilled)
       (held-back seed c) (assoc (held-back seed c) :reason :food-reserve)
       (not (pick-seed seed c)) (when (nil? (fetch-opts c)) (seed-need seed (count bare)))
       (empty? (sowable-cells c bare)) {:reason :refused})))
@@ -262,7 +269,7 @@
                          (worth (seed->crop seed) pos)
                          (if box-crop
                            (worth box-crop pos)
-                           (apply min (map #(worth % pos) (keys crops/seed-of))))))
+                           (apply min (map #(worth % pos) (keys crops/field-seed-of))))))
                      cells))))
 
 (defn quote-of [c]

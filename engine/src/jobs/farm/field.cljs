@@ -10,10 +10,10 @@
 (def seed-of crops/seed-of)
 
 (defn crop-cells
-  "{pos crop} of the cells of a plan answer (of part, when given) that want a crop harvest knows."
+  "{pos crop} of the cells of a plan answer (of part, when given) that want a crop harvest knows or a stem (melon, pumpkin: sown and tended, never cut)."
   [answer part]
   (into {} (keep (fn [{:keys [pos want] :as cell}]
-                   (when (and (map? want) (ripe-age (:crop want)) (or (nil? part) (= part (:part cell))))
+                   (when (and (map? want) (seed-of (:crop want)) (or (nil? part) (= part (:part cell))))
                      [(u/cell-pos pos) (:crop want)])))
         (:cells answer)))
 
@@ -21,7 +21,7 @@
   "Whether p shows crop ripe at pos (nil, an unloaded cell, is not)."
   [p pos crop]
   (let [b (u/seen-block p pos)]
-    (boolean (and b (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
+    (boolean (and b (ripe-age crop) (= crop (.-name b)) (some-> (.-age b) (>= (ripe-age crop)))))))
 
 (defn unwatched?
   "Whether a planned crop cell (cells {pos crop}) is remembered, not in view, and not known ripe: it may have ripened
