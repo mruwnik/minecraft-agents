@@ -48,3 +48,11 @@
         (when-let [e (or (first (remove #(= "unemployed" (.-profession %)) es)) (first es))]
           (ctx/update-mem! c assoc :chosen (ident e))
           (ident e)))))
+
+(defn ^:async find-in-view!
+  "The entity of the villager pick! gives, looked for with a look round that stops at the first look that shows it
+  (sensed only inside the view cone, so a test after the last look would miss it); nil when none shows. want: look/see!."
+  [c ok? want]
+  (let [p (:primitives c)
+        f #(some->> (pick! c ok?) (find-by-uuid p))]
+    (or (f) (await (look/look-around-until! c f (look/glance-effort) want)))))

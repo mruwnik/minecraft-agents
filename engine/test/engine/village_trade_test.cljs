@@ -393,6 +393,15 @@
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= {"emerald" 9 "bread" 1} (inv p))))))))
 
+(deftest a-villager-seen-by-one-look-of-the-round-is-bought-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (trade {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 10}]}
+                                       {:count 1} #(ls/entities-during-look % 2)))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= {"emerald" 9 "bread" 1} (inv p))))))))
+
 (deftest trade-waits-for-payment-only-when-it-will-not-fetch
   (are [inv ways ok] (= ok (= :ok (first (trade/no-payment {:args {:villager "v-1" :buy "bread" :count 1 :ways ways}
                                                               :primitives (tu/fake-on-floor {:inventory inv})}))))

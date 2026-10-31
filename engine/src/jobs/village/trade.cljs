@@ -9,7 +9,6 @@
             [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
-            [jobs.lib.look :as look]
             [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -280,13 +279,12 @@
   :continue (go-to yields), an ending or a retry."
   [c]
   (let [skipped (:skipped (ctx/mem c) #{})
-        uuid (villager/pick! c #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %)))))
+        ok? #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %))))
+        uuid (villager/pick! c ok?)
         e (when uuid (villager/find-by-uuid (:primitives c) uuid))]
     (cond
-      (and (nil? uuid) (not (look/surveyed? c))) (await (look/survey! c))
+      (and (nil? e) (await (villager/find-in-view! c ok? nil))) :again ; villagers count only while in view
       (and (nil? uuid) (seq skipped)) (give-up! c :no-offers)
-      (nil? uuid) (give-up! c :gone)
-      (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (give-up! c :gone)
       (in-reach? c e) (await (trade! c))
       :else

@@ -189,6 +189,14 @@
                                      :wrap #(do (ls/entities-after-look (:p %)) %)} {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
 
+(deftest a-villager-seen-by-one-look-of-the-round-is-found-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (roll {:entities [(librarian [(offer "enchanted_book")])]
+                                     :wrap #(do (ls/entities-during-look (:p %) 2) %)} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
+
 (deftest the-wall-time-ends-the-wait-when-the-villager-never-takes-the-workstation
   (async done
     (tu/run-async done

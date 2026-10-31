@@ -151,11 +151,13 @@
   (ctx/update-mem! c assoc :offer (select-keys offer [:index :cost :gives]))
   :again)
 
+(defn not-nitwit? [e] (not= "nitwit" (.-profession e)))
+
 (defn pick!
   "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once)."
   [c]
   (let [before (villager/chosen c)
-        id (villager/pick! c #(not= "nitwit" (.-profession %)))]
+        id (villager/pick! c not-nitwit?)]
     (when (and id (nil? before))
       (let [e (villager/find-by-uuid (:primitives c) id)]
         (ctx/emit! c :roll.villager :info
@@ -290,8 +292,7 @@
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place! c)))
       (not= item block) (stop! c :occupied)
-      (and (nil? e) (not (look/surveyed? c :run look/hazards-only))) (await (look/survey! c :run (look/glance-effort) look/hazards-only)) ; villagers count only while in view
-      (nil? e) (stop! c :gone)
+      (nil? e) (if (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again (stop! c :gone)) ; villagers count only while in view
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
       (= "unemployed" profession) (await (wait-job! c :villager-takes-no-job))
