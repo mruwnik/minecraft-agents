@@ -1,0 +1,14 @@
+;; Card 47a2fd56: a stair rising through rock is cleared in one call: cells that cannot be reached yet wait until a lower cell is dug (top-down alone skipped them :unreachable).
+;; Should-succeed: a 3-high (jumpable) stair of 5 steps up a stone block, body at its foot; all 15 cells dug, none skipped.
+{:defaults
+ {:tags [:build]
+  :time :any
+  :plot {:height 10 :floor "grass_block"}
+  :blocks [[:fill [9 0 10] [11 8 17] "stone"]]
+  :body {:at [10.5 0 8.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "rising-stair-dug-in-one-call"
+   :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [10 0 10] #at [10 1 10] #at [10 2 10] #at [10 1 11] #at [10 2 11] #at [10 3 11] #at [10 2 12] #at [10 3 12] #at [10 4 12] #at [10 3 13] #at [10 4 13] #at [10 5 13] #at [10 4 14] #at [10 5 14] #at [10 6 14]]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug 15 :skipped {}}} :within-s 150 :of-job true}]
+   :after [[:block [10 0 10] "air"] [:block [10 6 14] "air"]]}]}

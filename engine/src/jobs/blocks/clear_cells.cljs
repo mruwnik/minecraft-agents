@@ -213,6 +213,11 @@
   (ctx/emit! c :clear-cells.refused :info {:reason :own-pen :cells (count poss)
                                          :text (str "left " (count poss) " cells: the wall of a pen with animals in it (:open-pens? true digs it)")}))
 
+(defn defer!
+  "An unreachable cell waits until another cell is dug (it may be reached then); it is skipped only when nothing else is left."
+  [c pos]
+  (ctx/update-mem! c update :deferred (fnil conj #{}) pos))
+
 (defn bump! [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:cell-tries pos] 0))]
     (if (>= n (max-tries))
@@ -227,15 +232,31 @@
         fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
     #{{:x fx :y (dec fy) :z fz} {:x fx :y fy :z fz} {:x fx :y (inc fy) :z fz}}))
 
+(defn exposed
+  "The [pos name] of loaded that touch seen air outside the cells still to dig that a body could stand in or just above
+  (solid floor within 2 below it): a stair dug into rock opens from its foot, not from its far wall; all of them when none does."
+  [c loaded]
+  (let [p (:primitives c)
+        todo (into #{} (map first) loaded)
+        air? (fn [pos] (some-> (u/seen-name p pos) bs/air))
+        solid? (fn [pos] (let [n (u/seen-name p pos)] (and n (not (bs/air n)))))
+        below (fn [{:keys [x y z]} d] {:x x :y (- y d) :z z})
+        standable? (fn [pos] (and (air? pos) (not (todo pos)) (or (solid? (below pos 1)) (and (air? (below pos 1)) (solid? (below pos 2))))))
+        open? (fn [{:keys [x y z]}]
+                (some (fn [[dx dy dz]] (standable? {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
+                      [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+        out (filter #(open? (first %)) loaded)]
+    (if (seq out) out loaded)))
+
 (defn top-cell
   "The pending [pos name] at the highest y among the loaded cells not under the
-  body's feet, nearest the body; with none loaded, the nearest unloaded one.
+  body's feet that touch open air, nearest the body; with none loaded, the nearest unloaded one.
   Under-foot cells are picked only when nothing else is pending (nil then)."
   [c todo]
   (let [me (u/self-pos c)
         feet (under-foot c)
         others (remove #(and (second %) (feet (first %))) todo)
-        loaded (filter second others)]
+        loaded (exposed c (filter second others))]
     (cond
       (empty? others) nil
       (empty? loaded) (apply min-key #(u/dist me (first %)) others)
@@ -301,7 +322,7 @@
     (case (:reason w)
       :not-allowed (when (#{:zone :claim :footprint} (:by w)) (skip-refused! c [[t (assoc w :reason (:by w))]]))
       :hazard (bump! c t :hazard)
-      (skip! c t :unreachable)))
+      (defer! c t)))
   (if (or (blocks/body-wait? w) (= :not-loaded (:reason w))) :continue :again))
 
 (defn ^:async dig!
@@ -317,7 +338,7 @@
             (:dug :lava-unsealed) (ctx/update-mem! c #(-> % (update :cell-tries dissoc t) (update :dug (fnil inc 0))))
             :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
             (:cannot :fluid) (skip! c t :cannot)
-            :unreachable (skip! c t :unreachable)
+            :unreachable (defer! c t)
             (bump! c t (contract/cause-key e)))
           :again))))
 
@@ -330,19 +351,29 @@
     (let [{:keys [allowed refused]} (sort-out c (pending c))
           pen-wall? (pen-wall-fn)
           {open true walled false} (group-by (fn [[pos _]] (not (pen-wall? [(:x pos) (:y pos) (:z pos)]))) allowed)
-          allowed (vec open)]
+          allowed (vec open)
+          deferred (:deferred (ctx/mem c) #{})
+          ready (vec (remove #(deferred (first %)) allowed))]
       (when (seq refused) (skip-refused! c refused))
       (when (seq walled) (skip-pen-walls! c (map first walled)))
-      (if (empty? allowed)
+      (if (and (empty? ready) (seq allowed))
+        (let [{:keys [dug retried-at] :or {dug 0}} (ctx/mem c)]
+          (if (= dug retried-at)
+            (do (doseq [[pos _] allowed] (skip! c pos :unreachable))
+                (ctx/update-mem! c dissoc :deferred)
+                (finish! c))
+            (do (ctx/update-mem! c #(-> % (dissoc :deferred) (assoc :retried-at dug)))
+                :again)))
+      (if (empty? ready)
         (finish! c)
-        (if-let [[pos n] (top-cell c allowed)]
+        (if-let [[pos n] (top-cell c ready)]
           (if (and (nil? n) (not (digs-unseen? c pos)))
             (let [w (await (common/walk! c pos 3 {:ways #{:walk}}))]
               (when (= :blocked w) (bump! c pos :unreachable))
               (if (= :continue w) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))
-          (await (step-off! c allowed)))))))
+          (await (step-off! c ready))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until the box is cleared or declined; :continue only while a walk or the body waits."
