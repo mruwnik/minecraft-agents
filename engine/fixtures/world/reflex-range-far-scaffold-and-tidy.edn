@@ -54,7 +54,7 @@
    :limit-s 70}
   {:name "scaffold-left-entry-3-below-the-feet-is-taken-back"
    :register [{:trigger :scaffold-left}]
-   :blocks [[:set [6 0 8] "cobblestone"] [:fill [20 -1 6] [22 2 10] "stone"] [:fill [18 -1 6] [19 1 10] "stone"] [:fill [16 -1 6] [17 0 10] "stone"]]
+   :blocks [[:set [6 0 8] "cobblestone"] [:fill [21 -1 6] [22 2 10] "stone"] [:fill [20 -1 6] [20 1 10] "stone"] [:fill [19 -1 6] [19 0 10] "stone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [21.5 3 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 30}
