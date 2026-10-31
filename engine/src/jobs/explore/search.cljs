@@ -745,6 +745,17 @@
                first
                (#(vector (% 1) y (% 2)))))))
 
+(defn climb-price!
+  "With :worth, a stair up not yet begun that costs more than is left of the worth ends the search :price (a sealed
+  work site is not tunnelled out of for a comfort errand); nil when affordable, begun or unpriced."
+  [c]
+  (when-let [worth (:worth (:args c))]
+    (when-not (:on (:surface (ctx/mem c)))
+      (let [price (surface-up/climb-s c)]
+        (when (cost/leg-stops? price 1 (- worth (:spent (ctx/mem c) 0)))
+          (ctx/update-mem! c assoc :next-price price :next-chance 1)
+          (finish! c :not-found :price))))))
+
 (defn ^:async advance!
   "Start the next leg, or end the search for want of one."
   [c names ns]
@@ -752,10 +763,11 @@
         stale (revisit c m names ns)]
     (cond
       (and (surface-only? names) (not (surface-up/climbed? c)) (sh-sense/buried? (:primitives c)))
-      (case (await (surface-up/step! c))
-        :continue :continue
-        :out :again
-        (finish! c :not-found :no-way-up))
+      (or (climb-price! c)
+          (case (await (surface-up/step! c))
+            :continue :continue
+            :out :again
+            (finish! c :not-found :no-way-up)))
       stale
       (or (await (price-leg! c (:pos stale) true))
           (do (ctx/update-mem! c (fn [m] (-> m (update :revisited (fnil conj #{}) (:id stale)) (assoc :leg (:pos stale) :leg-column nil))))

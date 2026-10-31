@@ -1031,6 +1031,15 @@
           (is (finished? s) "a body surface-up counts as out but still under rock leaves the way up to the legs")
           (is (nil? (found-of s))))))))
 
+(deftest a-priced-farm-animal-search-under-rock-ends-on-price-when-the-stair-up-costs-more-than-the-find-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "sheep" :scan-radius 16 :worth 1}
+                                {:blocks (merge (tu/box -3 60 -3 3 70 3 "stone") (tu/box 0 64 0 0 65 0 "air")) :self {:pos {:x 0.5 :y 64 :z 0.5}}} 60
+                                #(swap! (fake/state (:p %)) assoc :light-default [0 0])))]
+          (is (= :price (:why (not-found-of s)))))))))
+
 (deftest use-notes-false-ignores-searched-notes-older-than-the-job
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
