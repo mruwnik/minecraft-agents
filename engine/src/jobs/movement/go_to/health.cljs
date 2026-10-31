@@ -103,21 +103,34 @@
           (await (drive/lean-to! c (drive/lip from floor)))
           (await (dig-look/look-at! c floor))
           (look/see! c)
+          (ctx/update-mem! c dissoc :probe)
           true)))))
+
+(defn ^:async probe-found
+  "[drops hp] of the whole way planned under policy (drops as in drops), or nil when none."
+  [c pw pos range policy]
+  (let [^js r (:r (await (wplan/plan-within! c pw [(:x pos) (:y pos) (:z pos)] range (walk/default-weight) policy)))]
+    (when (= "found" (.-status r))
+      [(drops (:primitives c) (some-> r .-path .-steps)) (or (some-> r .-path .-cost .-damage) 0)])))
 
 (defn ^:async probe-plan!
   "Whether a whole way exists for the body that may spend all but 1 hp (:max-damage still capping): the hp it costs, or nil
   when there is none. A refusal of the budget in a search that finds no whole way anyway (:damage-refused is only a move the
-  budget turned away) is no reason to heal."
+  budget turned away) is no reason to heal. Pads and shafts not looked at yet count as bounces (:trust-landings), so a drop
+  onto one is among the probe's drops and gets its look; once every drop of that way is looked at, it is planned again on
+  what the body sees."
   [c pos range]
   (let [{:keys [max-damage]} (wworld/walk-settings c)
         policy (assoc (wworld/body-policy c) :damage-budget (cost/survivable-budget (wworld/damage-body c) {:max-damage max-damage}))
         pw (wworld/path-world (:primitives c) (:unknown c))
-        within (await (wplan/plan-within! c pw [(:x pos) (:y pos) (:z pos)] range (walk/default-weight) policy))
-        ^js r (:r within)]
-    (when (= "found" (.-status r))
-      (ctx/update-mem! c assoc :probe-drops (drops (:primitives c) (some-> r .-path .-steps)))
-      (or (some-> r .-path .-cost .-damage) 0))))
+        looked (set (:drops-looked (ctx/mem c)))
+        trusted (await (probe-found c pw pos range (assoc policy :trust-landings true)))
+        [ds hp] (if (and trusted (seq (first trusted)) (every? looked (first trusted)))
+                  (await (probe-found c pw pos range policy))
+                  trusted)]
+    (when ds
+      (ctx/update-mem! c assoc :probe-drops ds)
+      hp)))
 
 (def probe-keep-ms "How long a probe is kept while the body waits." 10000)
 
@@ -142,8 +155,9 @@
   :hp-budget}: healing is the caller's or the reflexes'."
   [c planned]
   (cond
-    (or (not planned) (<= planned (wworld/damage-budget c))) nil
+    (not planned) nil
     (await (look-at-drops! c)) :again
+    (<= planned (wworld/damage-budget c)) nil
     :else
     (let [{:keys [min-health]} (wworld/walk-settings c)
           body (body-of c)]

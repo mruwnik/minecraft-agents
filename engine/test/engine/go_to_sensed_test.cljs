@@ -904,6 +904,25 @@
                (finally (set! wplan/plan-within! orig)))
           (is (= [true] @masks) "the unseen pad is not read from the raw chunks"))))))
 
+(defn probing
+  "A job that stores (f c) in atom a, with c under go-to's :unknown mask."
+  [a f]
+  {:round (fn ^:async probing-round [c]
+            (reset! a (await (f (assoc c :unknown (wworld/unknown-spec)))))
+            (ctx/end c :done nil))})
+
+(deftest a-way-within-the-budget-is-still-looked-at-when-it-drops-onto-a-pad-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [a (atom :none)]
+          (await (run-job (probing a (fn ^:async over-round [c]
+                                       (ctx/update-mem! c assoc :probe-drops [{:from [-1 60 0] :floor [1 55 0]}])
+                                       (await (gth/over-budget! c 0))))
+                          {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
+                          {}))
+          (is (= :again @a)))))))
+
 (def pit-job {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}})
 
 (defn pit-sneaks
