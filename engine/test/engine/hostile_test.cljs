@@ -1475,6 +1475,25 @@
   "A trench two deep at x 3 and 4 across the whole floor."
   (cells-of "stone" (for [x [3 4] z (range -10 11)] [x 61 z])))
 
+(def glass-split-pool
+  "A pool x -4..6, z -2..2, water y 62..64 in a stone basin, split at x 2 by glass; the drowned stands east of it."
+  (merge (cells-of "stone" (concat (for [x (range -5 8) z (range -3 4) y [61]] [x y z])
+                                    (for [x (range -5 8) z [-3 3] y [62 63 64 65 66]] [x y z])
+                                    (for [x [-5 7] z (range -3 4) y [62 63 64 65 66]] [x y z])))
+         (cells-of "water" (for [x (range -4 7) z (range -2 3) y [62 63 64] :when (not= x 2)] [x y z]))
+         (cells-of "glass" (for [z (range -2 3) y [62 63 64 65 66]] [2 y z]))))
+
+(deftest hostile-near-holds-for-a-drowned-in-the-same-open-pool
+  (is (holds-seeing-the-void? {:blocks (-> (apply dissoc glass-split-pool (keys (cells-of "x" (for [z (range -2 3) y [65 66]] [2 y z]))))
+                                    (merge (cells-of "water" (for [z (range -2 3) y [62 63 64]] [2 y z]))))
+                               :self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}}
+                               :entities [{:id 7 :name "drowned" :kind "hostile" :visible true :pos {:x 4.5 :y 64 :z 0.5}}]} danger-args)))
+
+(deftest hostile-near-ignores-a-drowned-behind-glass-across-the-pool
+  (is (not (holds-seeing-the-void? {:blocks glass-split-pool :self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}}
+                                    :entities [{:id 7 :name "drowned" :kind "hostile" :visible true :pos {:x 4.5 :y 64 :z 0.5}}]} danger-args))
+      "no way round the glass"))
+
 (deftest hostile-near-ignores-a-zombie-with-no-way-to-the-body
   (is (not (holds? {:blocks zombie-pen :entities [(visible-zombie 8 0)]} danger-args)) "walled into a pen")
   (is (not (holds-seeing-the-void? {:blocks dividing-wall :entities [(visible-zombie 8 0)]} danger-args)) "behind a wall across the floor")

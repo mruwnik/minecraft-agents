@@ -1,0 +1,29 @@
+;; A drowned shut in a glass box inside the lake cannot reach a body afloat in the same lake: the hostile reflex never decides
+;; (hostile-near needs a melee mob with a way to the body). Same lake as cornered-swim-out: stone x 3..30, z 9..23, y 0..2, water x 4..14, z 10..22.
+;; The box: hollow glass x 10..14, z 13..19, y -1..3, water inside. The body looks around first: a cell it has not seen is open ground.
+;; Should-succeed: no hostile.decided for 20 s.
+;; Should-fail (control): without the box the drowned has a way and the reflex decides.
+{:defaults
+ {:tags [:hostile :survival :water]
+  :time :any
+  :register [{:trigger :suffocating}
+             {:trigger :hostile-near}]
+  :blocks [[:fill [3 0 9] [30 2 23] "stone"]
+           [:fill [4 0 10] [14 2 22] "water"]]
+  :body {:at [8.5 1 16.5] :yaw 270 :effects [["resistance" 600 4] ["water_breathing" 600 0]]}
+  :limit-s 60}
+ :cases
+ [{:name "drowned-in-a-glass-box-is-no-danger"
+   :blocks [[:fill [10 -1 13] [14 3 19] "glass" :hollow]
+            [:fill [11 0 14] [13 2 18] "water"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "drowned" [12.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 1] [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]]
+   :expect [{:no-event {:source :job :kind :hostile.decided} :for-s 20}]
+   :after [[:entities "type=drowned,tag=wt" [[3 -1 9] [30 6 23]] 1]]
+   :limit-s 60}
+  {:name "control-drowned-in-the-open-lake-decides"
+   :act [[:summon "drowned" [10.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 1] [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]]
+   :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}]
+   :limit-s 60}]}
