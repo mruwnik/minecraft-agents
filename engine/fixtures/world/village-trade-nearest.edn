@@ -17,4 +17,10 @@
    :act [[:summon "villager" [13.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.village.trade {:buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-offers}} :within-s 80 :of-job true}]
-   :after [[:item "bread" 0] [:item "emerald" 8]]}]}
+   :after [[:item "bread" 0] [:item "emerald" 8]]}
+  {:name "librarian-offers-name-the-books-enchantment"
+   :act [[:summon "villager" [13.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"},Xp:1,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:20},sell:{id:\"minecraft:enchanted_book\",count:1,components:{\"minecraft:stored_enchantments\":{\"minecraft:mending\":1}}},maxUses:12,xp:1}]}}"]
+         [:job (jobs.village.trade {:buy "enchanted_book" :spend {:items {"emerald" 0}}})]]
+   :expect [{:event {:source :job :kind :trade.offers :data {:profession "librarian" :enchants ["mending 1"]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :price}} :within-s 80 :of-job true}]
+   :after [[:item "emerald" 8]]}]}

@@ -1,5 +1,6 @@
 (ns jobs.village.trade
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.string :as str]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -236,6 +237,24 @@
         (do (ctx/update-mem! c assoc :room-tried true)
             :again)))))
 
+(defn offer-text
+  "One offer as a line: \"2 emerald -> 1 enchanted_book (mending 1)\"."
+  [{:keys [cost gives disabled]}]
+  (str (str/join " + " (map #(str (:count %) " " (:item %)) cost))
+       " -> " (:count gives) " " (:item gives)
+       (when-let [es (seq (:enchants gives))]
+         (str " (" (str/join ", " (map #(str (:name %) " " (:level %)) es)) ")"))
+       (when disabled " [sold out]")))
+
+(defn emit-offers!
+  "Say what the villager offers (profession, level, every offer with its enchantments), as a player reads the window."
+  [c kind villager r offers]
+  (ctx/emit! c kind :info
+             {:villager villager :profession (.-profession r) :level (.-level r) :offers offers
+              :enchants (vec (for [o offers e (get-in o [:gives :enchants])] (str (:name e) " " (:level e))))
+              :text (str "villager " villager " (" (.-profession r) " " (.-level r) ") offers: "
+                         (str/join "; " (map offer-text offers)))}))
+
 (defn ^:async trade!
   "Read the offers and buy from the chosen one: :again, an ending or a retry."
   [c]
@@ -246,7 +265,9 @@
         r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
         status (.-status r)]
     (case status
-      "ok" (let [{:keys [offer reason price]} (choose (js->clj (.-offers r) :keywordize-keys true) {:buy buy :payment payment :max-price (when-not (= ##Inf max-price) max-price)})]
+      "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)
+                 {:keys [offer reason price]} (choose offers {:buy buy :payment payment :max-price (when-not (= ##Inf max-price) max-price)})]
+             (emit-offers! c :trade.offers villager r offers)
              (if offer
                (or (await (pay! c offer))
                    (await (room! c offer))

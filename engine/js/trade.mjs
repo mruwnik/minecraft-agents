@@ -35,8 +35,24 @@ async function openWindow (bot, target, timeScale) {
   }
 }
 
+// The enchantments an item carries, [{name, level}]: a book keeps them in the stored_enchantments component, which
+// prismarine-item's enchants getter does not read
+const enchantsOf = (bot, item) => {
+  const stored = item.componentMap?.get?.('stored_enchantments')?.data
+  if (stored) {
+    const raw = Array.isArray(stored) ? stored : stored.enchantments ?? []
+    return raw.map(e => ({ name: e.name ?? bot.registry?.enchantments?.[e.id]?.name ?? `enchantment#${e.id}`, level: e.level ?? e.lvl }))
+  }
+  try {
+    return (item.enchants ?? []).map(e => ({ name: e.name, level: e.lvl ?? e.level }))
+  } catch {
+    return []
+  }
+}
+
 // cost[0] is the adjusted price (realPrice), not the base count the stack carries
-const offerRow = (t, index) => {
+const offerRow = (bot, t, index) => {
+  const enchants = enchantsOf(bot, t.outputItem)
   const left = Math.max(0, t.maximumNbTradeUses - t.nbTradeUses)
   return {
     index,
@@ -44,7 +60,7 @@ const offerRow = (t, index) => {
       { item: t.inputItem1.name, count: t.realPrice },
       ...(t.hasItem2 ? [{ item: t.inputItem2.name, count: t.inputItem2.count }] : [])
     ],
-    gives: { item: t.outputItem.name, count: t.outputItem.count },
+    gives: { item: t.outputItem.name, count: t.outputItem.count, ...(enchants.length > 0 && { enchants }) },
     uses: t.nbTradeUses,
     maxUses: t.maximumNbTradeUses,
     left,
@@ -88,7 +104,7 @@ async function closeAndSettle (bot, ctx, timeScale) {
 }
 
 async function buy (bot, ctx, win, a, timeScale) {
-  const row = win.trades.map(offerRow)[a.offer]
+  const row = win.trades.map((t, i) => offerRow(bot, t, i))[a.offer]
   if (!row) return { status: 'cannot', reason: 'no-such-offer', offers: win.trades.length }
   if (row.disabled) return { status: 'cannot', reason: 'sold-out' }
   const before = tally(bot)
@@ -156,7 +172,7 @@ export async function tradeWith (bot, ctx, a, { timeScale = 1, reach }) {
   try {
     ctx.alive()
     if (win.trades.length === 0) return { status: 'cannot', reason: 'no-offers', why: 'none', profession, level }
-    if (a.op === 'offers') return { status: 'ok', uuid: a.villager, profession, level, offers: win.trades.map(offerRow) }
+    if (a.op === 'offers') return { status: 'ok', uuid: a.villager, profession, level, offers: win.trades.map((t, i) => offerRow(bot, t, i)) }
     return await buy(bot, ctx, win, a, timeScale)
   } finally {
     closeWindow(bot)

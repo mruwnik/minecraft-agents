@@ -208,6 +208,7 @@
       "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)
                  {:keys [offer]} (trade/choose offers {:buy want :max-price max-price :enchant enchant})]
              (u/progress! c)
+             (trade/emit-offers! c :roll.offers villager r offers)
              (cond
                (some #(pos? (:uses % 0)) offers) :locked
                offer {:found offer}
