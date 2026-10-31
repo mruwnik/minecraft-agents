@@ -26,6 +26,17 @@
   [view]
   (reduce (fn [m e] (assoc m (:pos (:data e)) (:items (:data e)))) {} (mem/entries view stock-kind)))
 
+(defn age-ms
+  "Ms since the chest at cell was last booked (looked into or moved from), nil when not booked."
+  [view cell]
+  (some->> (mem/entries view stock-kind) (filter #(= cell (:pos (:data %)))) (map :t) seq (apply max) (- (:now view))))
+
+(defn age-text
+  "\"seen 3 h ago\" for an age in ms."
+  [ms]
+  (let [min (quot ms 60000)]
+    (str "seen " (cond (< min 1) "just now" (< min 120) (str min " min ago") :else (str (quot min 60) " h ago")))))
+
 (defn stacks->items
   "{name n} of inspected container items (JS array of {name count}) or cljs maps."
   [stacks]

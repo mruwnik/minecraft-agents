@@ -343,6 +343,15 @@
           (is (= :done (:kind e)))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the far chest"))))))
 
+(deftest the-walk-to-a-remembered-chest-says-when-it-was-last-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (f/bare []) :blocks assoc "14,64,0" "chest") [(assoc f/own-zone :min [-20 60 -20] :max [20 70 20])])
+              _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [14 64 0] :items {"stick" 8}} stock/stock-policy)
+              _ (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false :ways #{:chest}} 30))]
+          (is (re-find #"seen .* ago|seen just now" (pr-str (f/events-of s :obtain.chest)))))))))
+
 (deftest a-chest-in-another-players-zone-is-not-looked-into
   (async done
     (tu/run-async done

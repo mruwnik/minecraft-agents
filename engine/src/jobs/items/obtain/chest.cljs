@@ -69,7 +69,8 @@
 (defn ^:async withdraw! [c pos items names have crafts?]
   (say-chest! c pos (str "taking " (holds items names) " from the")
               (str "(" (js/Math.round (u/dist (u/self-pos c) pos)) " blocks away, "
-                   (if crafts? "near enough to beat crafting" "nothing carried makes it") ")"))
+                   (if crafts? "near enough to beat crafting" "nothing carried makes it")
+                   (some->> (stock/age-ms (ctx/view c) (stock/cell-of pos)) stock/age-text (str ", ")) ")"))
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
         e (waits/waiting-out c (await (ctx/call c :take 'jobs.storage.withdraw
