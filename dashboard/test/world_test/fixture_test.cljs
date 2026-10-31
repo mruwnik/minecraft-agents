@@ -409,6 +409,11 @@
       (is (< (.indexOf body "item replace entity ProbeFixture armor.head with minecraft:air")
              (.indexOf body "give ProbeFixture bread 3"))
           "the slots are emptied before the case's gear is given"))
+    (is (some #{"spawnpoint ProbeFixture 20016.5 150 20016.5"} (f/body-commands origin "ProbeFixture" glass))
+        "the respawn point defaults to the start: the world spawn is far from every plot and would price each death as a huge walk back")
+    (is (some #{"spawnpoint ProbeFixture 20001 150 20002"}
+              (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :spawnpoint] [1 0 2])))
+        "a case's own :spawnpoint wins")
     (is (some #{"tp ProbeFixture 20016.5 150 20016.5 180 0"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :yaw] 180)))
         "a case may turn the body (yaw, degrees: 0 south, 180 north) so it can see what lies behind the default view")

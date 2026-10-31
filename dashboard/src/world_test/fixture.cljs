@@ -924,7 +924,8 @@
 
 (defn body-commands
   "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down), still a spectator
-  (ensure-at-start! makes it survival once it stands there), healed and fed, its inventory and effects as the case says."
+  (ensure-at-start! makes it survival once it stands there), healed and fed, its inventory and effects as the case says. Its respawn point is :spawnpoint, else the start (the world spawn is
+  far from every plot, which would price each death as a huge walk back)."
   [origin body c]
   (let [{:keys [at yaw pitch inventory effects spawnpoint]} (:body c)]
     (-> [(str "clear " body)
@@ -936,7 +937,7 @@
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))
         (into (for [[effect seconds amp] effects]
                 (str "effect give " body " " effect " " (or seconds 600) " " (or amp 0) " true")))
-        (cond-> spawnpoint (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin spawnpoint))))))))
+        (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin (or spawnpoint at))))))))
 
 (declare reply-pos)
 
