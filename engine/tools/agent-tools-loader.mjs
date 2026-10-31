@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import './quiet-pipe.mjs'
-import { bundleSources, buildRequiredEdn, buildRequiredMessage, missingExports, newerSource, staleBundleMessage } from './agent-tools-bundle-check.mjs'
+import { bundleSources, buildRequiredEdn, buildRequiredMessage, missingExports, staleSource, staleBundleMessage } from './agent-tools-bundle-check.mjs'
 
 const require = createRequire(import.meta.url)
 // AGENT_TOOLS_BUNDLE points at another compiled bundle (a scratch one for trying a stale bundle).
@@ -22,10 +22,10 @@ const resolveBundle = () => {
 const bundleFile = resolveBundle()
 const tools = require(bundleFile)
 
-// A cheap mtime scan (no compile); stderr only, so the tool's stdout stays clean.
+// A cheap mtime scan, confirmed by content hash when the bundle has a stamp (no compile); stderr only, so the tool's stdout stays clean.
 {
   const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
-  const newer = newerSource(bundleFile, bundleSources(repoRoot))
+  const newer = staleSource(bundleFile, bundleSources(repoRoot))
   if (newer) process.stderr.write(`${staleBundleMessage()}\n`)
 }
 

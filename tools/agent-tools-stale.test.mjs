@@ -38,3 +38,15 @@ test('a bundle newer than every source is current, one older than a source is st
   assert.equal(needsBuild(root), true)
   fs.rmSync(root, { recursive: true })
 })
+
+test('a source newer than the bundle but identical to the stamped build is current', async () => {
+  const root = repo()
+  const bundle = path.join(root, 'dashboard/out/agent-tools.cjs')
+  fs.writeFileSync(bundle, '')
+  touch(bundle, 120)
+  assert.equal(needsBuild(root), true)
+  const { bundleSources, sourceHash } = await import('../engine/tools/agent-tools-bundle-check.mjs')
+  fs.writeFileSync(`${bundle}.src`, sourceHash(bundleSources(root)))
+  assert.equal(needsBuild(root), false)
+  fs.rmSync(root, { recursive: true })
+})

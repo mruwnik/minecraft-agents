@@ -10,6 +10,8 @@ import {
   buildRequiredMessage,
   missingExports,
   newerSource,
+  sourceHash,
+  staleSource,
   staleBundleMessage,
 } from '../../tools/agent-tools-bundle-check.mjs'
 
@@ -102,6 +104,25 @@ test('a source newer than the bundle is reported as stale, with the rebuild comm
     assert.equal(newerSource(bundle, [src]), path.join(src, 'sub', 'a.cljs'))
     assert.equal(newerSource(bundle, [path.join(dir, 'missing')]), null)
     assert.doesNotMatch(staleBundleMessage(), /cljs|compile|\//)
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
+})
+
+test('a newer source whose content matches the bundle stamp is not stale', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'at-stamp-'))
+  try {
+    const bundle = path.join(dir, 'agent-tools.cjs')
+    const src = path.join(dir, 'a.cljs')
+    fs.writeFileSync(bundle, '')
+    fs.writeFileSync(src, '(ns a)')
+    const t = Date.now() / 1000
+    fs.utimesSync(bundle, t - 100, t - 100)
+    assert.equal(staleSource(bundle, [src]), src)
+    fs.writeFileSync(`${bundle}.src`, `${sourceHash([src])}\n`)
+    assert.equal(staleSource(bundle, [src]), null)
+    fs.writeFileSync(src, '(ns b)')
+    assert.equal(staleSource(bundle, [src]), src)
   } finally {
     fs.rmSync(dir, { recursive: true })
   }

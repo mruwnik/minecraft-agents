@@ -149,12 +149,18 @@ pool_outputs() {
 # engine/out/build-id.edn: the commit a body bundle was built from (engine.build reads it at start; a hash with -dirty: tracked files differ from it); the pool slot has no .git, so the checkout writes it
 # engine/out/body-release.src: tools/engine-src-hash as taken before the compile read its sources (src_state), so a land during the compile makes the bundle look stale, never current
 src_state=
-snapshot_src() { src_state=$("$repo/tools/engine-src-hash" "$repo"); }
+# dashboard/out/agent-tools.cjs.src: hash of the agent-tools sources as taken before the compile, so the loader's stale warning ignores mtime-only changes
+at_hash=
+snapshot_src() {
+  src_state=$("$repo/tools/engine-src-hash" "$repo")
+  case " ${builds[*]} " in *" agent-tools "*) at_hash=$(node "$repo/engine/tools/agent-tools-src-hash.mjs" "$repo") ;; esac
+}
 write_build_id() {
   local b
   for b in "${builds[@]}"; do
     [ "$b" != body-release ] || [ -z "$src_state" ] || { echo "$src_state" > "$repo/engine/out/body-release.src.new" && mv -f "$repo/engine/out/body-release.src.new" "$repo/engine/out/body-release.src"; }
   done
+  [ -z "$at_hash" ] || { echo "$at_hash" > "$repo/dashboard/out/agent-tools.cjs.src.new" && mv -f "$repo/dashboard/out/agent-tools.cjs.src.new" "$repo/dashboard/out/agent-tools.cjs.src"; }
   for b in "${builds[@]}"; do
     case "$b" in body|body-release) printf '{:commit "%s"}\n' "$(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet HEAD -- engine dashboard tools 2>/dev/null || echo -dirty)" > "$repo/engine/out/build-id.edn"; return ;; esac
   done

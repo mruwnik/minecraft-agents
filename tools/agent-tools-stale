@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Exit 0 when dashboard/out/agent-tools.cjs is missing or older than a source it is built from (the list mirrors
-# bundleSources in engine/tools/agent-tools-bundle-check.mjs); exit 1 when it is current. A stat scan, no compile.
-repo=${1:-$(cd "$(dirname "$0")/.." && pwd)}
+# Exit 0 when dashboard/out/agent-tools.cjs is missing or stale against a source it is built from (the list is bundleSources in
+# engine/tools/agent-tools-bundle-check.mjs); exit 1 when it is current. A stat scan (plus a hash when a source is newer), no compile.
+here=$(cd "$(dirname "$0")/.." && pwd)
+repo=${1:-$here}
 bundle="$repo/dashboard/out/agent-tools.cjs"
 [ -e "$bundle" ] || exit 0
-roots=("$repo/dashboard/src/agent_tools" "$repo/dashboard/src/dashboard/agent_plan_tools.cljs" "$repo/dashboard/src/dashboard/plan_compare.cljs" "$repo/engine/src/plan" "$repo/engine/src/engine/bodies.cljs")
-[ -n "$(find "${roots[@]}" -name '*.clj*' -newer "$bundle" -print -quit 2>/dev/null)" ]
+exec node --input-type=module -e "
+import { bundleSources, staleSource } from '$here/engine/tools/agent-tools-bundle-check.mjs'
+process.exit(staleSource('$bundle', bundleSources('$repo')) ? 0 : 1)"

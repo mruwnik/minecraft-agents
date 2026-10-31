@@ -2,6 +2,7 @@
 // report exports it does not yet have, so this check cannot live inside the bundle.
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 
 export const missingExports = (bundle, required) =>
   required.filter(name => bundle?.[name] === undefined)
@@ -27,6 +28,28 @@ export const newerSource = (bundle, roots) => {
   }
   roots.forEach(walk)
   return newest?.file ?? null
+}
+
+// Content hash of the cljs/cljc sources under the roots (what tools/compile stamps next to the bundle).
+export const sourceHash = roots => {
+  const hash = crypto.createHash('sha1')
+  const walk = file => {
+    const stat = fs.statSync(file, { throwIfNoEntry: false })
+    if (!stat) return
+    if (!stat.isDirectory()) return /\.clj[sc]?$/.test(file) && hash.update(fs.readFileSync(file)).update('\0')
+    fs.readdirSync(file).sort().forEach(name => walk(path.join(file, name)))
+  }
+  roots.forEach(walk)
+  return hash.digest('hex')
+}
+
+// A source newer than the bundle by mtime counts only when its content differs from what the bundle was built from
+// (git rebases and checkouts touch mtimes without changing content). Without a stamp the mtime alone decides.
+export const staleSource = (bundle, roots) => {
+  const newer = newerSource(bundle, roots)
+  if (!newer || !fs.existsSync(`${bundle}.src`)) return newer
+  const stamp = fs.readFileSync(`${bundle}.src`, { encoding: 'utf8', flag: 'r' }).trim()
+  return stamp === sourceHash(roots) ? null : newer
 }
 
 export const staleBundleMessage = () =>
