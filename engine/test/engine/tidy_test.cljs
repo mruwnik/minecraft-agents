@@ -749,6 +749,21 @@
               (is (= [0] (mapv :tries (tidy-entries eng))) "yielding go-to costs no try")
               (is (= [] (not-restored-runs seen)) "the job yields, it is no ending and never :gave-up")))))))))
 
+(deftest a-walk-that-yields-keeps-heading-for-its-cell-instead-of-turning-to-the-far-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (restore! (assoc with-hitbox :floor [-30 -30 30 30] :self {:pos [2 64 0]}) [(zs/whole-zone "Miles")]
+                                        [(dug-cell [20 64 0]) (dug-cell [-20 64 0])])
+              heads (atom [])]
+          (await (tu/with-near-stub
+                   (fn ^:async f [_ {:keys [x]} _ _]
+                     (swap! heads conj x)
+                     (swap! (fake/state p) update-in [:self :pos 0] + (if (pos? x) 10 -10))
+                     :partial)
+                   (fn ^:async b [] (dotimes [_ 5] (await (core/tick! eng))))))
+          (is (apply = (map pos? @heads)) "every walk heads for the same end"))))))
+
 (deftest a-run-that-hits-the-pass-cap-with-cells-waiting-ends-stopped-not-done
   (async done
     (tu/run-async done

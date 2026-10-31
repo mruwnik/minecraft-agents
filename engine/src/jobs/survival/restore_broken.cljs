@@ -223,7 +223,7 @@
   [c {:keys [cell tries] :as e}]
   (let [walked (await (walk-to! c cell))]
     (if (= :continue walked)
-      :continue
+      (do (ctx/update-mem! c assoc :heading cell) :continue)
       (do (tidy/count-try! c cell)
           (let [put (when walked (await (put-back! c e)))]
             (cond
@@ -291,10 +291,13 @@
   "What one pass does with the waiting entries (synchronous, its searches and floods bounded whatever the number
   waiting): [:done], [:skip e why], [:step-clear e] or [:restore e]. An occupied cell comes first, then the first of
   the first, farthest from the body first, whose put-back seals no other (checked while the pass's search allowance
-  lasts), else the first in order."
-  [c waiting]
+  lasts), else the first in order. prefer: the cell a walk that yielded was heading for; it goes first, else the body
+  would turn to the other end each time it got nearer to one (farthest first) and never arrive."
+  ([c waiting] (decide c waiting nil))
+  ([c waiting prefer]
   (let [pr (probe c)
         e (or (first (filter #(= :occupied (why-not c % pr)) waiting))
+              (first (filter #(= prefer (:cell %)) waiting))
               (first (remove #(seals-others? c % waiting pr) (take-while (fn [_] (search-left? pr)) (supported-first c (farthest-first c waiting)))))
               (first (supported-first c waiting)))
         why (when e (why-not c e pr))]
@@ -305,7 +308,7 @@
       (tidy/unreachable? (:primitives c) e) [:skip e :unreachable]
       (>= (:tries e) (tidy/max-tries)) [:skip e :gave-up]
       (or (seals-body? c e pr) (seals-others? c e waiting pr)) [:skip e :seals]
-      :else [:restore e])))
+      :else [:restore e]))))
 
 (defn ^:async pass!
   "One step over the next waiting entry: restore it, step clear of it, or skip it with a reason. Resolves :again,
@@ -313,7 +316,7 @@
   [c]
   (let [seen (:seen (ctx/mem c) #{})
         waiting (vec (remove #(contains? seen (:cell %)) (tidy/entries c)))
-        [verdict e why] (decide c waiting)]
+        [verdict e why] (decide c waiting (:heading (ctx/mem c)))]
     (case verdict
       :done :done
       :skip (do (if (and (= :changed why) (= (:was e) (tidy/block-now (:primitives c) (:cell e))))
