@@ -1859,6 +1859,20 @@ test('a pour re-aims when the ray would land the water outside the cell', async 
   assert.equal(names(bot).filter(n => n === 'activateItem').length, 1)
 })
 
+test('a pour whose every aim is caught by a wall is refused unreachable without activating the item', async () => {
+  const { bot, p } = bucketRig({ blocks: { '0,64,0': 'stone' }, item: 'lava_bucket', onActivate: blocks => { blocks['0,65,0'] = 'lava' } })
+  bot.blockAtCursor = () => ({ name: 'stone', position: at(0, 64, 0), face: 1 })
+  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'lava_bucket' }), { status: 'unreachable', reason: 'line-blocked' })
+  assert.equal(names(bot).includes('activateItem'), false)
+})
+
+test('a pour that spends the bucket but leaves the target without the liquid fails and names the cell that changed', async () => {
+  const items = [{ name: 'lava_bucket', count: 1, slot: 36 }]
+  const { p } = rig({ blocks: { '0,63,0': 'stone', '1,63,0': 'stone' }, items, onActivate: () => { items.splice(0, 1, { name: 'bucket', count: 1, slot: 36 }) } })
+  const r = await p.place('t1', { pos: at(1, 64, 0), item: 'lava_bucket' })
+  assert.deepEqual([r.status, r.reason], ['failed', 'landed-elsewhere'])
+})
+
 test('place with a boat looks at the water and activates the item; the boat is down when the carried count drops', async () => {
   const items = [{ name: 'oak_boat', count: 1, slot: 36 }]
   const { bot, p } = rig({ blocks: { '0,63,0': 'stone', '1,64,0': 'water' }, items, onActivate: () => { items.length = 0 } })
@@ -2101,12 +2115,6 @@ test('a scoop succeeds when the cell turns to air shortly after the activation',
   const { p } = rig({ blocks, items: [{ name: 'bucket', count: 1, slot: 36 }], onActivate: () => { setTimeout(() => { delete blocks['1,64,0'] }, 5) } })
   assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'bucket' })).status, 'placed')
 }))
-
-test('a pour succeeds when the water_bucket became a bucket though the cell still reads air', async () => {
-  const items = [{ name: 'water_bucket', count: 1, slot: 36 }]
-  const { p } = rig({ blocks: { '0,63,0': 'stone', '1,63,0': 'stone' }, items, onActivate: () => { items.splice(0, 1, { name: 'bucket', count: 1, slot: 36 }) } })
-  assert.deepEqual(await p.place('t1', { pos: at(1, 64, 0), item: 'water_bucket' }), { status: 'placed', block: 'water' })
-})
 
 test('a scoop where neither the cell nor the inventory changes still fails unchanged', async () => {
   const { p } = rig({ blocks: { '1,64,0': 'water' }, items: [{ name: 'bucket', count: 1, slot: 36 }], onActivate: () => {} })

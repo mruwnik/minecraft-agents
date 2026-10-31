@@ -175,24 +175,42 @@ export function createDig (env) {
     const unheld = await holdFailure(item)
     if (unheld) return unheld
     ctx.alive()
-    // A neighbour between the body and the aimed face catches the ray and the liquid lands above it: the first aim whose ray ends in p.
+    // A neighbour between the body and the aimed face catches the ray and the liquid lands beside it: the first aim whose ray ends in p.
+    // With none, the pour is refused so the caller can move; it never fires at a wrong cell.
+    let aimed = scoop
     for (const aim of aims) {
       await lookNow(() => env.bot.lookAt(aim, true))
       ctx.alive()
-      if (scoop || rayEndsIn(p)) break
+      if (scoop || rayEndsIn(p)) { aimed = true; break }
     }
+    if (!aimed) return { status: 'unreachable', reason: 'line-blocked' }
+    const around = () => {
+      const out = []
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+        const q = { x: p.x + dx, y: p.y + dy, z: p.z + dz }
+        out.push([q, env.bot.blockAt(vec(q))?.name])
+      }
+      return out
+    }
+    const aroundBefore = around()
     await env.bot.activateItem()
     // The block update can arrive after the window while the inventory already changed, so either one counts: the
     // cell flipped, or the held bucket turned into the filled one (scoop) / the emptied one (pour).
-    const cellChanged = () => { const now = env.bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && isLiquid(now.name) && (!refill || (now.getProperties?.().level ?? 0) === 0)) }
+    const kind = item.name.replace('_bucket', '')
+    const cellChanged = () => { const now = env.bot.blockAt(vec(p)); return scoop ? !(now && isLiquid(now.name)) : Boolean(now && now.name === kind && Number(now.getProperties?.().level ?? 0) === 0) }
     const itemChanged = () => scoop ? count(filledName) > filledBefore : count(item.name) < heldBefore
-    const changed = () => cellChanged() || itemChanged()
+    const changed = () => scoop ? cellChanged() || itemChanged() : cellChanged()
     const deadline = Date.now() + setting('prim/bucket-wait-s') * 1000 * timeScale
     while (!changed() && Date.now() < deadline) {
       await sleepMs(setting('prim/poll-ms') * timeScale)
       ctx.alive()
     }
-    if (!changed()) return { status: 'failed', reason: 'unchanged' }
+    if (!changed()) {
+      const moved = aroundBefore.filter(([q, was]) => env.bot.blockAt(vec(q))?.name !== was).map(([q]) => xyz(q))
+      return moved.length > 0 || itemChanged()
+        ? { status: 'failed', reason: 'landed-elsewhere', changed: moved }
+        : { status: 'failed', reason: 'unchanged' }
+    }
     return { status: 'placed', block: scoop ? 'bucket' : item.name.replace('_bucket', '') }
   }
 
