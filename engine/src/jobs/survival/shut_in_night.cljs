@@ -59,7 +59,7 @@
 
 (defn end!
   "The night's end of a call: the :shelter entry {:pos :state :built} (:sealed false when the world shows the body open;
-  :roof the cell placed above it; :door the cells of one side placed, or of the pocket's way in; :start the cell dug from, or
+  :roof the cell placed above it; :door the cells of one side placed, or of the pocket's way in (:pocket true: filled again when it is left); :start the cell dug from, or
   the top of the shaft walled at the bottom of; :take-back the placed {:cell :item} dearer than ::take-back-value and any near
   a planned gate or within reach of the respawn bed (a lid on its respawn cell obstructs it), which dig-in-leave/leave! digs again by day; :room true for a mended roof), and the shut-in.sealed / .unsealed event.
   way is the way that ended the call, data its result ({:placed :roof :start :spent}), sealed? whether the world shows the body shut in."
@@ -102,6 +102,7 @@
                                 (contains? cells roof) (assoc :roof roof)
                                 (pos? reseals) (assoc :reseals reseals)
                                 door (assoc :door door)
+                                (= :pocket way) (assoc :pocket true)
                                 start (assoc :start start)
                                 (seq take-back) (assoc :take-back take-back)
                                 (= :room way) (assoc :room true))

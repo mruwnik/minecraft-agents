@@ -1,0 +1,18 @@
+;; A night niche dug into a room's rock wall (shelter entry :pocket true, the way in plugged with cobblestone) is walled again once the body
+;; leaves it by day: no dark dead end left open in the room. Stone block x 8..24, a lit-free air room x 8..15, the niche pair at x 17.
+;; Should-succeed: leave-shelter completes, the body is in the room, the plug cells at x 16 read cobblestone again.
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [8 -6 8] [24 3 24]  "stone"] [:fill [8 -2 8] [15 3 24] "air"] [:fill [17 -2 16] [17 -1 16] "air"]
+           [:fill [16 -2 16] [16 -1 16] "cobblestone"]]
+  :memory [{:kind :shelter :data {:pos #xyz [17 -2 16] :state :built :pocket true :door [#xyz [16 -2 16] #xyz [16 -1 16]]}
+            :policy {:cap 10 :ttl 1200000}}]
+  :body {:at [17.5 -2 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "niche-left-by-day-is-walled-again"
+   :act [[:job (jobs.survival.leave-shelter)]]
+   :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
+   :after [[:body-near [14.5 -2 16.5] 3] [:block [16 -2 16] "cobblestone"] [:block [16 -1 16] "cobblestone"]]}]}

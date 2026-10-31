@@ -560,6 +560,21 @@
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))
 
+(deftest the-niche-is-walled-again-when-left-at-dawn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})]
+          (st/refuse-cell! p [0 63 0])
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (= {:x 5.5 :y 64} (select-keys (st/pos-of p) [:x :y])) "in the niche")
+          (.setTime (.-world p) noon)
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
+          (await (st/tick-n eng 40))
+          (is (< (:x (st/pos-of p)) 4) "out of the hill")
+          (is (= ["stone" "stone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "the way in is walled again: no nook open in the hill"))))))
+
 (deftest the-nights-result-sums-what-its-niche-placed
   (async done
     (tu/run-async done

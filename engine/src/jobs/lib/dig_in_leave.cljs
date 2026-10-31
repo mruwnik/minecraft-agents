@@ -81,7 +81,8 @@
   (let [p (:primitives c)
         cell (first (filter #(sh-sense/solid-at? p %) door))]
     (if cell
-      (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
+      (let [_ (when-not (:refill-item (leave-mem c)) (update-leave! c assoc :refill-item (u/seen-name p cell)))
+            _ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
             r (await (tidy/dig! c cell))]
         (if (= "dug" (.-status r))
           :continue
@@ -177,6 +178,16 @@
           (update-take-back! c update :dug (fnil inc 0))
           (skip-cell! c cell (keyword (.-status r))))
         :continue))))
+
+(defn ^:async refill-mouth!
+  "A night pocket's way in, dug open to leave by, filled again with the block it was walled with, so the pocket is no dark
+  nook in the wall. One fill-cells call; :continue while it works, else nil (a block not carried any more leaves it open)."
+  [c entry]
+  (let [r (waits/waiting-out c (await (ctx/call c :refill 'jobs.blocks.fill-cells
+                                                {:cells (:door entry) :ignore-zones? true :use {:blocks [(:refill-item (leave-mem c))]}})))]
+    (if (= :continue r)
+      :continue
+      (do (update-leave! c assoc :refilled true) nil))))
 
 (defn door-of
   "escape/door through the wall from the feet along heading h, or nil."
@@ -281,7 +292,7 @@
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones :refused),
     all four are tried again with :ignore-zones?, the survival last resort.
     The cells dug in another's zone or claim are noted as :tidy entries.
-  The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
+  A night pocket (:pocket) has its way in filled again once the body is out. The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
   (the :take-back cells of its entry, still the placed block) are dug and their drops collected (jobs.items.collect-drops);
   a cell it cannot reach or dig is left, with a debug dig-in.take-back-skipped. Events: dig-in.took-back (info).
   With :any-time? (go-to's escalation, whose route risk priced the exit) the body leaves at night too.
@@ -302,6 +313,8 @@
        (and (not entry) (:exit (leave-mem c)) (not unsafe)) (await (level-exit! c order))
        step? (await (open-door! c (:door entry)))
        (and (not shut?) take-back? (not unsafe) (= :continue (await (take-back! c)))) :continue
+       (and (not shut?) (:pocket entry) (:refill-item (leave-mem c)) (not (:refilled (leave-mem c))) (not unsafe)
+            (= :continue (await (refill-mouth! c entry)))) :continue
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
        level-first? (await (level-exit! c order))
