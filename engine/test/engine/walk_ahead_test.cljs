@@ -522,6 +522,33 @@
             (is (= (wwatch/max-learned) (:walks r)) label)
             (is (true? (:learn-spent (:done r))) label)))))))
 
+(deftest learned-replans-of-ping-pong-walks-are-tallied-over-the-calls-of-one-job
+  ;; a search that is not finished ends a follow! after a few learned replans: the next call must not count from none again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem* (atom {})
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]}) :id "walk-stub" :root "walk-stub" :slots []
+                 :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "walk-stub") [{:t 1000000 :data @mem*}]}
+                                                    :policies {(mem/job-kind "walk-stub") mem/job-policy}}})
+                 :update-mem (fn [f more] (apply swap! mem* f more))}
+              walks (atom 0)
+              per-call (dec (drive/rim-felt))
+              walk-fn (fn [_ _]
+                        (let [i (swap! walks inc)]
+                          (js/Promise.resolve [(if (pos? (mod i (inc per-call)))
+                                                 {:status :replan :why :unseen :learned true :cells [[1 84 1]] :step 1 :at [(if (odd? i) 40 0) 85 0.5]}
+                                                 {:status :arrived :at [0 85 0.5]})
+                                               1])))
+              follow (fn [] (drive/follow! c {:status "found" :r #js {} :steps (line 10) :ms 5}
+                                           {:plan-fn (fn [_] (js/Promise.resolve {:status "found" :r #js {} :steps (line 10) :ms 5}))
+                                            :walk-fn walk-fn :to [200 85 0] :policy executor/policy}))
+              _ (await (follow))
+              before @walks
+              r (await (follow))]
+          (is (= 1 (- @walks before)) "the second call ends on the tally of the first")
+          (is (true? (:learn-spent (:done r)))))))))
+
 ;; a re-plan the caller refused (near/walk-once!'s stair-check): {:refused true} with its :stop
 (def refused {:status "found" :r #js {} :steps [] :stop {:status :stair-cheaper :why :dives} :refused true :ms 5})
 

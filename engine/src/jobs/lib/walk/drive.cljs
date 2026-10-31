@@ -75,6 +75,17 @@
     {:best (if (or improved? (nil? best)) (or left best) best)
      :stale (inc (if improved? 0 stale))}))
 
+(defn rim-felt
+  "Rim floors missing, felt over the calls of one job without getting nearer the goal, that end a walk: three eighths of max-learned."
+  []
+  (quot (* 3 (wwatch/max-learned)) 8))
+
+(defn floor-learned?
+  "Whether a learned replan found the floor a step on at the body's own level missing (not a wall or ceiling cell solid,
+  not a step down's landing): a rim felt along column by column."
+  [{:keys [cells at]}]
+  (boolean (and at (some #(= (second %) (dec (js/Math.floor (+ (second at) 1e-3)))) cells))))
+
 (defn plan-left
   "Blocks the plan's steps still lead on from step k, plus the straight line from their end to the goal cell to: the way
   left by the route the body was on, which shrinks along a way that must first lead off (a stair down) and grows along an
@@ -180,6 +191,7 @@
         learned (atom #{})
         cuts (atom 0)
         track (atom {})
+        total (atom (let [t (when (:view c) (:learn-track (ctx/mem c)))] (if (= to (:to t)) t {})))
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
         proved-none? (fn [pl] (let [nw (wplan/no-walk pl 0 policy)]
                                 (or (contains? #{:goal-cut-off :goal-enclosed} (:reason nw)) (:stopped-short nw))))
@@ -240,12 +252,12 @@
           (and spent? (or (not= "found" (:status plan)) (some :unseen-floor (:steps plan))) (or (= :replan (:status done)) (and (= :arrived (:status done)) (:cut-rest plan))) (spent?))
           (finish (cond-> {:status :tour-spent :at (:at done)} (:step done) (assoc :step (:step done))) plan walked')
 
-          (and (= :replan (:status done)) (:learned done) (or (>= (:stale (learned-progress @track (:at done) to)) (wwatch/max-learned)) (>= spent wwatch/max-watch-replans)))
+          (and (= :replan (:status done)) (:learned done) (or (>= (:stale (learned-progress @track (:at done) to)) (wwatch/max-learned)) (and (floor-learned? done) (>= (:stale (learned-progress @total (:at done) to)) (rim-felt))) (>= spent wwatch/max-watch-replans)))
           (finish (assoc done :learn-spent true :cells (vec (take 6 (concat (:cells done) (mapcat first @learned)))) :learned-cells (into (vec (:cells done)) (mapcat first) @learned) :plan-left (plan-left steps k to)) plan walked')
 
           (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)
-                _ (when (:learned done) (do (swap! learned conj [(:cells done) (:why done)]) (swap! track learned-progress (:at done) to)))
+                _ (when (:learned done) (do (swap! learned conj [(:cells done) (:why done)]) (swap! track learned-progress (:at done) to) (when (floor-learned? done) (swap! total learned-progress (:at done) to) (when (:update-mem c) (ctx/update-mem! c assoc :learn-track (assoc @total :to to))))))
                 _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)) (settings/get settings ::look-over-edge))
                     (await (look-over-edge! c (first (:cells done)))))
                 t (clock/now)
