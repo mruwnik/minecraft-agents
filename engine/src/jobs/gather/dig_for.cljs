@@ -16,7 +16,7 @@
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.side :as wall]
-            [jobs.gather.mine.targets :as targets :refer [owed reach kinds items main-block carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
+            [jobs.gather.mine.targets :as targets :refer [owed reach kinds items main-block carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! floating? stalled! drop-in-line? next-target!]]
             [jobs.gather.mine.expect :as expect]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
@@ -304,7 +304,8 @@
                                                (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos))
                         cell (access/cell pos)
-                        cut (when (and (= :blocked walked) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
+                        float? (and (= :blocked walked) (floating? c (targets/cluster-of pos targets)))
+                        cut (when (and (= :blocked walked) (not float?) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
                                        (not (#{:off-plan :needs-health :damage-budget} (result/why (near/last-walk c))))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
                               (let [cluster (targets/cluster-of pos targets)
@@ -312,6 +313,7 @@
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
                     (cond
+                      float? (do (skip-unreachable! c pos targets) :again)
                       (= :risky walked) (do (targets/skip-risky! c pos (:data (near/last-walk c))) :again)
                       (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)
                       (= :partial cut) :continue

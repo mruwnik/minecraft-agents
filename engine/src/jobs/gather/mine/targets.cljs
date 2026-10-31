@@ -295,6 +295,21 @@
     (doseq [cell cluster] (skip! c cell))
     (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) (map access/cell cluster)))))
 
+(def air-names #{"air" "cave_air" "void_air" "light"})
+
+(defn floating?
+  "Whether the cluster hangs in the air as far as the body has seen: every cell round it that it has seen is air or more of its ore (and some are air),
+  so no dig has a block to start from and no stand lies beside it."
+  [c cluster]
+  (let [p (:primitives c)
+        cells (set cluster)
+        ring (distinct (for [cell cluster dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]
+                             :let [n (merge-with + cell {:x dx :y dy :z dz})]
+                             :when (not (contains? cells n))]
+                         n))
+        names (keep #(u/seen-name p %) ring)]
+    (and (some air-names names) (every? #(or (air-names %) (str/ends-with? % "_ore")) names))))
+
 (defn stall-rounds [] (settings/get settings ::stall-rounds))
 
 (defn stalled!

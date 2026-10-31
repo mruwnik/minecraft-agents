@@ -391,6 +391,17 @@
       {:steps (subvec steps 0 i) :refused [x y z]}
       {:steps steps})))
 
+(defn cut-descent
+  "A plan that goes on over unseen floors (some step has :unseen-floor) is cut before the first step lying deeper below its
+  start than one-way/::max-speculative-drop and below the goal's level, whatever the drops that get there (the body would
+  be down in land it has not seen, with no way back); {:steps kept :refused [x y z]}, else {:steps steps}."
+  [steps goal-y]
+  (let [y0 (:y (first steps))
+        i (first (keep-indexed (fn [i s] (when (and (pos? i) (one-way/too-deep? y0 (:y s) goal-y)) i)) steps))]
+    (if (and i (some :unseen-floor steps))
+      (let [{:keys [x y z]} (nth steps i)] {:steps (subvec (vec steps) 0 i) :refused [x y z]})
+      {:steps steps})))
+
 (defn frontier-path
   "The planner's path to r's frontier (the searched node at the edge of what is loaded, within its reach of the goal, the
   search having run out of land) and that node's cell [x y z], with :known true when the node lies in land earlier
@@ -413,7 +424,11 @@
         out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         {:keys [steps refused]} (let [all (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)]
-                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2 %3 (or (:unknown c) (not= "found" (.-status r))))) {:steps all}))
+                                  (let [speculative? (or (:unknown c) (not= "found" (.-status r)))
+                                        cut (if (and (= :open one-way) speculative?)
+                                              (cut-refused all #(one-way-priced? c to %1 %2 %3 speculative?))
+                                              {:steps all})]
+                                    (if (and speculative? (not (:refused cut))) (cut-descent (:steps cut) (second to)) cut)))
         step (or (one-way-of r) (when refused {:kind :drop :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
                       (masked-cut steps (masked-wet-ok c))
