@@ -17,7 +17,7 @@
 (def container-names ["chest" "trapped_chest" "barrel"])
 (defn chest-radius [] (settings/get settings ::chest-radius))
 (def stock-kind :fetch/stock)
-(def stock-policy {:cap 64 :ttl (* 6 60 60 1000)})
+(def stock-policy {:cap 64 :ttl (* 7 24 60 60 1000)})
 
 (defn cell-of [pos] (if (vector? pos) pos [(:x pos) (:y pos) (:z pos)]))
 

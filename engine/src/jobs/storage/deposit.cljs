@@ -54,6 +54,7 @@
   Found goods (jobs.lib.found: bulk or containers picked up with no work of the body near) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
   A weapon named in :items and put in is remembered (:weapon-stowed, 10 min): the needs-weapon reflex leaves a deliberate put-away alone meanwhile.
+  Each transfer emits info deposit.put (chest, item, count).
   Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.stock), so observe chests shows it.")
 
 (a/defargs args
@@ -265,6 +266,9 @@
               (if (and (pos? (or (.-moved r) 0))
                        (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))
                 (do (ctx/update-mem! c #(-> % (update :deposited (fnil inc 0)) (update :moved (fnil + 0) (.-moved r))))
+                    (ctx/emit! c :deposit.put :info
+                               {:chest (storage/cell-of chest) :item (:name (:stack pick)) :count (.-moved r)
+                                :text (str "put " (.-moved r) " " (:name (:stack pick)) " in the chest at " (pr-str (storage/cell-of chest)))})
                     (when (and items (some #(.includes (:name (:stack pick)) %) combat/default-weapons))
                       (ctx/remember! c :weapon-stowed {:item (:name (:stack pick))} stowed-policy))
                     (u/progress! c)

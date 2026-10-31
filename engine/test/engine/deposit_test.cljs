@@ -34,6 +34,18 @@
           (is (= {} (wt/inv p)))
           (is (= :done (:kind result))))))))
 
+(deftest deposit-emits-an-info-event-naming-chest-item-and-count
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}] :containers {"10,64,0" []}})]
+          (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))
+          (let [e (first (filter #(= :deposit.put (:kind %)) @seen))]
+            (is (= {:chest [10 64 0] :item "dirt" :count 5} (select-keys e [:chest :item :count])))))))))
+
+(deftest chest-stock-is-remembered-for-days
+  (is (>= (:ttl stock/stock-policy) (* 24 60 60 1000))))
+
 (deftest deposit-of-a-named-weapon-is-remembered-so-the-reflex-leaves-it-in
   (async done
     (tu/run-async done
