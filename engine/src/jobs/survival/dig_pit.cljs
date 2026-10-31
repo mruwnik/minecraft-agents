@@ -28,7 +28,7 @@
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
   time, with :for :night plus the walk and the site's toll (dig-pit-site/toll-s: how shut-in weighs a site in a known mob's field against its other ways; ##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s; with :for :night, :morning-s, morning-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
-  With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the cheapest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site; its walk plus the toll of known mobs it would flee over the pit's stay, relocation-site), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
+  With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the cheapest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site; its walk plus the toll of known mobs it would flee over the pit's stay, relocation-site), climbing out of its own failed pit first (a walk only: it never digs, bridges or climbs to get there; one that cannot arrive ends :walk-failed); with no such ground it ends :failed :no-site.")
 
 (a/defargs args
   {:ignore-zones? :shared
@@ -199,7 +199,7 @@
   (if-let [start (site/pit-start c)]
     (let [r (await (dig-leave/climb! c {:start start} cell))]
       (if (map? r) (fail! c :trapped "could not climb out of the failed pit") :continue))
-    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0 :stay-s (site/pit-s c cell)})))]
+    (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0 :ways #{:walk} :stay-s (site/pit-s c cell)})))]
       (cond (= :continue e) :continue
             (or (not (:arrived (:data e))) (:re-aimed (:data e))) (fail! c :walk-failed "could not walk to ground for a pit")
             :else (do (ctx/update-mem! c dissoc :walk-to)

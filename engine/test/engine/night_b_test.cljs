@@ -225,6 +225,23 @@
           (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end walk-failed"))))))
 
+(def hill-ground
+  "Ground x -2..2 and x 9..14 (the only sites 9+ from a failed one at 0) with a stone hill between, x 3..8, y 60..66, on a strip z -2..2 with void beside it."
+  (into {} (for [x (range -2 15) z (range -2 3) y (range 60 67)
+                 :when (or (<= y 63) (<= 3 x 8))]
+             [(str x "," y "," z) (if (<= 3 x 8) "stone" "dirt")])))
+
+(deftest a-walk-to-a-relocation-site-does-not-dig-through-a-hill-to-get-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks hill-ground :floor [-2 -2 2 2] :inventory st/dirt-stack})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (tu/run-until-empty eng 5))
+          (is (empty? (st/calls p "dig")) "no dig through the hill to reach the site: a walk only")
+          (is (= [:walk-failed] (distinct (map :reason (filter #(= :stopped (:kind %)) @seen))))))))))
+
 (deftest a-site-chosen-before-the-body-was-moved-far-is-not-walked-back-to
   (async done
     (tu/run-async done
@@ -315,7 +332,7 @@
           (await (tu/run-until-empty eng 5))
           (is (= [:no-site] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits at the start, it does not run a round to fail")
-          (is (empty? (st/calls p "place"))))))))
+          (is (empty? (st/calls p "dig"))))))))
 
 (deftest a-failed-site-is-not-dug-again-after-a-cut-however-long-the-night
   (async done
