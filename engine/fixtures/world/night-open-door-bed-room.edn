@@ -20,6 +20,12 @@
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
    :after [[:block [12 0 16] "oak_door[open=false]"]]}
+  {:name "body-standing-in-the-open-doorway-steps-in-and-shuts-the-door"
+   :body {:at [12.5 0 16.5]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :enter-room}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
+   :after [[:block [12 0 16] "oak_door[open=false]"]]}
   {:name "open-door-with-a-cheaper-bed-outside-is-slept-in-not-shut"
    :blocks [[:set [20 0 12] "red_bed[facing=east,part=foot]"] [:set [21 0 12] "red_bed[facing=east,part=head]"] [:set [19 1 12] "torch"] [:fill [16 0 12] [16 1 12] "glass"]
             [:set [9 1 9] "air"] [:set [15 1 15] "air"]] ; the unlit room makes staying dear, the bed clearly cheaper

@@ -10,6 +10,7 @@
             [jobs.lib.seal :as seal]
             [jobs.survival.respond.options :as cornered]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]))
 
@@ -119,6 +120,16 @@
          (sort-by #(u/dist (u/self-pos c) (room-lib/mid (:cell %))))
          first)))
 
+(defn step-out-cell
+  "The cell to step to before shutting the door at cell: inside, else (inside is the door's own cell, which no walk can
+  stand in) the nearest seen standable cell beside it, or inside."
+  [p cell inside]
+  (if (not= (door-key cell) (door-key inside))
+    inside
+    (or (first (filter #(reach/seen-standable? p %)
+                       (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] (assoc cell :x (+ (:x cell) dx) :z (+ (:z cell) dz)))))
+        inside)))
+
 (defn ^:async shut-home-door!
   "Shut an open door of the home room the body is in: from where it stands within door-reach, else a step to the room
   cell inside it first, as also when it stands in the door's own cell (a step that gets no nearer gives the door up for
@@ -128,6 +139,6 @@
         in-door? (click/standing-in? (u/self-pos c) cell (:half (click/props-of b)))]
     (if (and (not in-door?) (<= (u/dist (u/self-pos c) (room-lib/mid cell)) (door-reach)))
       (await (shut-door! c {:cell cell :name (.-name b)}))
-      (do (when-not (await (cornered/step! c :home inside 0))
+      (do (when-not (await (cornered/step! c :home (step-out-cell (:primitives c) cell inside) 0))
             (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell)))
           :again))))
