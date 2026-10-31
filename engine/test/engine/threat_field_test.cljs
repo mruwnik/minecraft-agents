@@ -166,3 +166,17 @@
     (is (< 0 (dies crossing) (dies along) (dies close)))
     (is (< 0 (hurt (stay 1)) (hurt (stay 600))) "600 s at a far-edge cell over 1 s there")
     (is (< 0 (dies (stay 1)) (dies (stay 600))))))
+
+(def hut
+  "The route-risk fixture's hut: stone x 14..18, z 14..18, y 64..66, hollow inside, glass panes and a shut door in the east wall (x 18)."
+  (merge (into {} (for [x (range 14 19) z (range 14 19) y [64 65 66]
+                         :when (or (= 66 y) (#{14 18} x) (#{14 18} z))]
+                    [(str x "," y "," z) "stone"]))
+         {"18,64,15" "glass" "18,65,15" "glass" "18,64,17" "glass" "18,65,17" "glass"
+          "18,64,16" "oak_door" "18,65,16" "oak_door"}))
+
+(deftest a-sealed-room-the-body-has-seen-is-outside-a-zombies-field
+  (let [{:keys [c look!]} (seen-body {:blocks hut :self {:pos {:x 16.5 :y 64 :z 16.5}}})
+        _ (look!)
+        reach (field/reach-fn (field/field-of c {:mob "zombie" :pos {:x 30.5 :y 64 :z 15.5}}))]
+    (is (nil? (reach 16 64 16)) "walls, glass, door and roof seen from inside: the zombie outside has no way in")))
