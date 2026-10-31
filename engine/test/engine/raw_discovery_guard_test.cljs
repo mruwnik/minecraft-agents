@@ -27,7 +27,7 @@
    "access/toggle.cljs" [2 "the gate the walk looked at; :unknown is checked"]
    "forestry/plant_sapling.cljs" [1 "only whether the debt's chunk is loaded"]
    "lib/apiary.cljs" [1 "the hive and fire cells beside the body; callers read :unknown"]
-   "lib/tidy.cljs" [3 "the cell the body is about to act on or just acted on (the dug block names its drops)"]
+   "lib/tidy.cljs" [1 "block-now: the cell the body just placed on or dug"]
    "lib/reach.cljs" [1 "block-kind of the sensed answer: unknown is its own kind"]
    "lib/doors.cljs" [1 "the door beside the body; an unknown cell has no name, so no kind"]
    "survival/extinguish.cljs" [2 "the cell it pours on, and the cell it just looked at"]})

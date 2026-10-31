@@ -101,7 +101,7 @@
   another's, else nil. Reads the block, so call it before the act."
   [c action pos]
   (when-let [v (refusal c action pos)]
-    (let [was (u/block-name (:primitives c) pos)]
+    (let [was (u/seen-name (:primitives c) pos)]
       (merge {:cell (access/cell pos) :action action :was was}
              (when (and (= :dig action) (crops/seed-of was)) {:any-of [(crops/seed-of was)]}) ; a crop is put back as its seed
              (select-keys v [:zone :claim :plan])))))
@@ -113,7 +113,7 @@
   (let [cell (access/cell pos)]
     (when-let [id (get (access/own-plans c) (get (known/footprints c) cell))]
       (when-not (= id (:for-plan (:args c)))
-        {:cell cell :action :dig :was (u/block-name (:primitives c) pos) :plan id :mend true}))))
+        {:cell cell :action :dig :was (u/seen-name (:primitives c) pos) :plan id :mend true}))))
 
 (defn put-back-items
   "The items that put a dug block back: the block and what its dig dropped (names)."
