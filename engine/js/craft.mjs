@@ -136,7 +136,7 @@ async function resync (bot, ctx, timeScale) {
   await settle(bot, ctx, timeScale)
 }
 
-async function syncWindow (bot, timeScale) {
+export async function syncWindow (bot, timeScale) {
   let timer
   const bound = new Promise(resolve => { timer = setTimeout(resolve, 3000 * timeScale) })
   await Promise.race([Promise.resolve().then(() => bot._syncWindow?.(bot.inventory)).catch(() => {}), bound])

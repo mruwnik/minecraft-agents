@@ -3176,6 +3176,34 @@ test('place with a click and no look looks at the cursor point; with only a pitc
   assert.deepEqual(down.bot.calls.find(c => c.name === 'look').args, [0.25, -Math.PI / 2, true])
 })
 
+const staleWorld = swapWorks => ({
+  ...world,
+  held: { name: 'iron_pickaxe', count: 1, slot: 36 },
+  items: [{ name: 'iron_pickaxe', count: 1, slot: 36 }, { name: 'glowstone', count: 4, slot: 18 }, { name: 'cobblestone', count: 4, slot: 19 }],
+  onEquip: (b, item) => { if (swapWorks()) b.heldItem = item }
+})
+
+test('equip of an item outside the hotbar resyncs the window and retries when the hand still holds the old item', async () => {
+  let resynced = false
+  const { bot, p } = rig(staleWorld(() => resynced))
+  bot._syncWindow = async () => { resynced = true }
+  assert.deepEqual(await p.equip('t1', { item: 'glowstone' }), { status: 'equipped' })
+  assert.equal(bot.heldItem.name, 'glowstone')
+})
+
+test('equip fails naming what the hand holds when the item never reaches it', async () => {
+  const { p } = rig(staleWorld(() => false))
+  assert.deepEqual(await p.equip('t1', { item: 'glowstone' }), { status: 'failed', reason: 'cannot hold glowstone: hand has iron_pickaxe' })
+})
+
+test('place never places with another item in hand', async () => {
+  const { bot, p } = rig(staleWorld(() => false))
+  const r = await p.place('t1', { pos: at(2, 65, 0), item: 'cobblestone' })
+  assert.equal(r.status, 'failed')
+  assert.match(r.reason, /cannot hold cobblestone: the hand has iron_pickaxe/)
+  assert.ok(!names(bot).includes('placeBlock') && !names(bot).includes('_placeBlockWithOptions'))
+})
+
 test('place with a click on air or a fluid has no support and equips nothing', async () => {
   for (const name of [undefined, 'water']) {
     const { bot, p } = clickRig({ blocks: name ? { '1,65,0': name } : {} })

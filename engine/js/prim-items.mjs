@@ -6,6 +6,7 @@ import { emptyHand, emptySlot, emptiable } from './unequip.mjs'
 import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
 import { craftItem } from './craft.mjs'
+import { hold } from './hold.mjs'
 import { tradeWith } from './trade.mjs'
 import { CONTAINER, DESTS, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, need, entityKind } from './prim-base.mjs'
 import { setting } from './settings.mjs'
@@ -100,10 +101,8 @@ export function createItems (env) {
     const { item: name, dest = 'hand' } = a
     need(typeof name === 'string' && DESTS.includes(dest), 'equip needs item and dest hand|off-hand|head|torso|legs|feet')
     return act(token, { boundS: 2 }, async ctx => {
-      const item = inventory().find(i => i.name === name)
-      if (!item) return { status: 'no-item' }
-      await env.bot.equip(item, dest)
-      return { status: 'equipped' }
+      const held = await hold(env.bot, name, dest, timeScale)
+      return held.status === undefined ? { status: 'failed', reason: `cannot hold ${name}: ${dest} has ${held.held ?? 'nothing'}` } : held
     })
   }
 

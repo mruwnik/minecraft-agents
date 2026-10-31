@@ -9,6 +9,8 @@ import blockFor from 'prismarine-block'
 import pf from 'mineflayer-pathfinder'
 import { sleepMs, xyz, dist, center, isAir, isNum, isPos, cell, vec, cutError, need, entityKind, droppedItem, gained } from './prim-base.mjs'
 import { setting } from './settings.mjs'
+import { hold } from './hold.mjs'
+import { syncWindow } from './craft.mjs'
 
 const { Vec3 } = vec3
 const { goals } = pf
@@ -120,6 +122,12 @@ export function createDig (env) {
     return hit.position.x + dx === p.x && hit.position.y + dy === p.y && hit.position.z + dz === p.z
   }
 
+  // The held item is checked, never assumed: a place or use with another item in hand would act on the wrong thing.
+  const holdFailure = async item => {
+    const r = await hold(env.bot, item.name, 'hand', timeScale)
+    return r.status !== 'equipped' ? { status: 'failed', reason: `cannot hold ${item.name}: the hand has ${r.held ?? 'nothing'}` } : null
+  }
+
   const isBucket = name => name === 'bucket' || name.endsWith('_bucket')
   const isLiquid = name => name === 'water' || name === 'lava'
   const isBoat = name => /_(boat|raft)$/.test(name)
@@ -133,7 +141,8 @@ export function createDig (env) {
     const count = () => inventory().filter(i => i.name === item.name).reduce((sum, i) => sum + i.count, 0)
     const before = count()
     ctx.alive()
-    await env.bot.equip(item, 'hand')
+    const unheld = await holdFailure(item)
+    if (unheld) return unheld
     ctx.alive()
     await lookNow(() => env.bot.lookAt(vec({ x: p.x + 0.5, y: p.y + 0.9, z: p.z + 0.5 }), true))
     ctx.alive()
@@ -161,7 +170,8 @@ export function createDig (env) {
     const filledName = `${there?.name}_bucket`
     const [filledBefore, heldBefore] = [count(filledName), count(item.name)]
     ctx.alive()
-    await env.bot.equip(item, 'hand')
+    const unheld = await holdFailure(item)
+    if (unheld) return unheld
     ctx.alive()
     // A neighbour between the body and the aimed face catches the ray and the liquid lands above it: the first aim whose ray ends in p.
     for (const aim of aims) {
@@ -255,7 +265,8 @@ export function createDig (env) {
       if (!support) return { status: 'no-support' }
       if (dist(eye(), center(p)) > setting('prim/reach')) return { status: 'unreachable' }
       ctx.alive()
-      await env.bot.equip(item, 'hand')
+      const unheld = await holdFailure(item)
+      if (unheld) return unheld
       ctx.alive()
       try {
         if (a.click) await clickPlace(ctx, support, a.click)
@@ -273,6 +284,7 @@ export function createDig (env) {
         await sleepMs(setting('prim/poll-ms') * timeScale)
         ctx.alive()
       }
+      if (carried() >= carriedBefore) await syncWindow(env.bot, timeScale)
       const now = env.bot.blockAt(vec(p))
       return { status: 'placed', block: a.item, placed: { name: now?.name, properties: now ? stateProperties(now) : {} } }
     })

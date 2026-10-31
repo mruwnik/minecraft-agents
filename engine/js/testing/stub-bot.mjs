@@ -11,7 +11,7 @@ const { Vec3 } = vec3
 const never = () => new Promise(() => {})
 const key = (x, y, z) => `${x},${y},${z}`
 
-export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, shapes = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9, held = null, moveCap = Infinity, onClick = () => {}, onPlace = () => {} } = {}) {
+export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], entities = {}, hang = [], reject = {}, pos = [0, 64, 0], food = 10, timeOfDay = 15000, containers = {}, props = {}, shapes = {}, effects = [], unloaded = false, sleeping = false, onActivate = () => {}, onUseBlock = () => {}, freeSlot = 9, held = null, moveCap = Infinity, onClick = () => {}, onPlace = () => {}, onEquip = (b, item, dest) => { if (dest === 'hand') b.heldItem = item } } = {}) {
   const calls = []
   const bot = new EventEmitter()
   const hangs = new Set(hang)
@@ -79,7 +79,8 @@ export function stubBot ({ oxygen = 20, blocks = {}, items = [], worn = [], enti
     stopDigging: act('stopDigging'),
     placeBlock: act('placeBlock', (...a) => onPlace(bot, ...a)),
     _placeBlockWithOptions: act('_placeBlockWithOptions', (...a) => onPlace(bot, ...a)),
-    equip: act('equip'),
+    equip: act('equip', (item, dest) => onEquip(bot, item, dest)),
+    _syncWindow: act('_syncWindow'),
     toss: act('toss'),
     tossStack: act('tossStack'),
     consume: act('consume'),
