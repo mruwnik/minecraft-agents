@@ -123,11 +123,8 @@ test('the distance is measured from the eye to the middle of the villager', asyn
   assert.ok(Math.abs(result.distance - 4.645) < 1e-6)
 })
 
-test('a villager with nothing to sell is refused without opening a window', async t => {
+test('a baby is refused without opening a window', async t => {
   const rows = [
-    ['unemployed', { metadata: { [VILLAGER_DATA]: data(0, 1) } }, 'unemployed', 'unemployed', 1],
-    ['nitwit', { metadata: { [VILLAGER_DATA]: data(11, 1) } }, 'nitwit', 'nitwit', 1],
-    ['nitwit by name', { metadata: { [VILLAGER_DATA]: data('minecraft:nitwit', 1) } }, 'nitwit', 'nitwit', 1],
     ['baby', { metadata: { [VILLAGER_DATA]: data(0, 1), [BABY]: true } }, 'baby', 'unemployed', 1],
     ['baby with a profession', { metadata: { [VILLAGER_DATA]: data(FARMER, 3), [BABY]: true } }, 'baby', 'farmer', 3]
   ]
@@ -140,16 +137,20 @@ test('a villager with nothing to sell is refused without opening a window', asyn
   }
 })
 
-test('a villager whose villager_data was never sent is an unemployed level 1 one, with no window', async t => {
+test('a villager reading jobless is tried at the window: refused when it does not open, else read', async t => {
   const rows = [
-    ['no metadata at all', { metadata: {} }, 'unemployed'],
-    ['metadata slot null', { metadata: { [VILLAGER_DATA]: null } }, 'unemployed']
+    ['unemployed', { metadata: { [VILLAGER_DATA]: data(0, 1) } }, 'unemployed', 'unemployed'],
+    ['nitwit', { metadata: { [VILLAGER_DATA]: data(11, 1) } }, 'nitwit', 'nitwit'],
+    ['nitwit by name', { metadata: { [VILLAGER_DATA]: data('minecraft:nitwit', 1) } }, 'nitwit', 'nitwit'],
+    ['no metadata at all', { metadata: {} }, 'unemployed', 'unemployed'],
+    ['metadata slot null', { metadata: { [VILLAGER_DATA]: null } }, 'unemployed', 'unemployed']
   ]
-  for (const [label, extra, why] of rows) {
+  for (const [label, extra, why, profession] of rows) {
     await t.test(label, async () => {
-      const bot = makeBot({ target: villager(extra) })
-      assert.deepEqual(await run(bot, { op: 'offers' }), { status: 'cannot', reason: 'no-offers', why, profession: 'unemployed', level: 1 })
-      assert.deepEqual(names(bot), [])
+      const closed = await run(makeBot({ target: villager(extra), open: 'never' }), { op: 'offers' })
+      assert.deepEqual(closed, { status: 'cannot', reason: 'no-offers', why, profession, level: 1 })
+      const opened = await run(makeBot({ target: villager(extra) }), { op: 'offers' })
+      assert.equal(opened.status, 'ok')
     })
   }
 })
