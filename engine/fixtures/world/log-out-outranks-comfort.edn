@@ -1,10 +1,12 @@
 ;; Card e51c5646 (32afe9b3): a queued log-out takes the body from the firing needs-weapon reflex (default level, no :level on the row) and its cooldown rests: the reflex does not refire and the log-out runs.
+;; Log-out needs night: run with --allow-time --time-log <file>.
 {:defaults
- {:tags [:survival :needs-weapon]
-  :time :any
+ {:tags [:night :survival :needs-weapon]
+  :time :night :time-why :sleep
   :plot {:height 8}
   :register [{:trigger :needs-weapon}]
-  :body {:at [16.5 0 16.5]}
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
+  :body {:at [16.5 0 16.5] :spawnpoint [4 0 4]}
   :limit-s 120}
  :cases
  [{:name "queued-log-out-starts-from-a-cut-needs-weapon-without-refire"
