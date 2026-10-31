@@ -1,0 +1,30 @@
+;; A 1-wide, 2-tall tunnel (x 10, z 12..19, stand y 0) climbs one step to a room (stand y 1, z 5..11) whose water source at [10 1 6] spills over the step and
+;; flows down the tunnel to the corridor (z 20), as the iron farm's kill-room water did. A player walks up a shallow stream; the current only slows them.
+;; Should-succeed: walk-up-shallow-stream-tunnel (from the corridor to the room: arrives, no :stuck).
+{:defaults
+ {:tags [:movement :water] :time :any
+  :plot {:height 12}
+  :limit-s 90}
+ :cases
+ [{:name "walk-up-shallow-stream-tunnel"
+   :blocks [[:fill [3 -1 4] [17 1 25] "stone"]
+            [:fill [10 1 5] [10 1 11] "air"]
+            [:fill [10 0 12] [10 1 19] "air"]
+            [:fill [4 0 20] [16 1 20] "air"]
+            [:set [10 1 6] "water"]]
+   :body {:at [6.5 0 20.5] :yaw 90 :settle-s 8}
+   :act [[:job (jobs.movement.go-to {:pos #at [10 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}]
+   :after [[:body-near [10.5 1 8.5] 2]]}
+  {:name "walk-up-fed-by-a-fall-stepped-tunnel"
+   :blocks [[:fill [3 -1 4] [17 4 25] "stone"]
+            [:fill [10 2 5] [10 3 11] "air"]
+            [:fill [10 1 12] [10 2 12] "air"]
+            [:fill [10 0 13] [10 1 19] "air"]
+            [:fill [4 0 20] [16 1 20] "air"]
+            [:fill [10 4 5] [10 4 11] "light"] [:set [10 3 12] "light"] [:fill [10 2 13] [10 2 19] "light"] [:fill [4 2 20] [16 2 20] "light"]
+            [:set [10 2 6] "water"]]
+   :body {:at [6.5 0 20.5] :yaw 90 :settle-s 10}
+   :act [[:job (jobs.movement.go-to {:pos #at [10 2 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}]
+   :after [[:body-near [10.5 2 8.5] 2]]}]}
