@@ -20,6 +20,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
             [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sense]
             [engine.test-util :as tu]))
 
 (defn export [sym k] (get-in registry/jobs [sym k] (constantly nil)))
@@ -388,10 +389,11 @@
 
 (defn ^:async torch-status
   "The start status of an obtain of 4 more torches worth `worth` to a parent, asked from the parent's round (jobs.lib.need/item-status)."
-  [{:keys [eng]} worth]
+  [{:keys [eng]} worth & [seen?]]
   (let [out (atom nil)
         parent {:round (fn ^:async status-round [c]
-                         (reset! out (need/item-status c "torch" 4 {:how #{:chest :craft :gather}} worth))
+                         (reset! out (with-redefs [sense/seen-cell? (constantly (boolean seen?))]
+                                       (need/item-status c "torch" 4 {:how #{:chest :craft :gather}} worth)))
                          (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'status-parent] parent)]
     (core/submit! eng '(status-parent) {})
@@ -404,7 +406,7 @@
   [t & [light]]
   (let [s (f/start (cond-> (-> (f/bare []) (assoc :time t) (update :blocks assoc "20,64,0" "chest")) light (assoc :light {} :light-default light)) [(assoc f/own-zone :max [30 70 6])])]
     (mem/write! (:store (:eng s)) stock/stock-kind {:pos [20 64 0] :items {"torch" 8}} stock/stock-policy)
-    (:price (nth (await (torch-status s 0)) 2))))
+    (:price (nth (await (torch-status s 0 true)) 2))))
 
 (deftest a-worth-is-weighed-against-the-cheapest-ways-price-at-least
   (async done
