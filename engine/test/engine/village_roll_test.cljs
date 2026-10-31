@@ -128,10 +128,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [baby (vt/villager [(offer "paper")] {:id 2 :uuid "v-0" :baby true :profession "unemployed" :pos {:x 1 :y 64 :z 1}})
-              [result p] (await (roll {:entities [baby (librarian [(offer "paper")])]
-                                       :scripts [[(offer "enchanted_book")]]}
-                                      {:villager nil :profession "librarian" :want "enchanted_book"}))]
+              [result p seen] (await (roll {:entities [baby (librarian [(offer "paper")])]
+                                            :scripts [[(offer "enchanted_book")]]}
+                                           {:villager nil :profession "librarian" :want "enchanted_book"}))]
           (is (= {:found true :rolls 1 :item "lectern"} (select-keys result [:found :rolls :item])))
+          (is (= ["v-1"] (map :villager (filter #(= :roll.villager (:kind %)) @seen))))
           (is (= "lectern" (workstation p))))))))
 
 (deftest an-offer-already-there-is-found-without-a-dig
@@ -217,6 +218,17 @@
                                   :zones [{:name "farm" :min [2 60 0] :max [2 70 0] :owner "Miles"}]}
                                  {}))]
           (is (zero? (digs p)))
+          (is (= "lectern" (workstation p))))))))
+
+(deftest ignore-zones-breaks-and-places-in-anothers-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])]
+                                       :scripts [[(offer "enchanted_book")]]
+                                       :zones [{:name "farm" :min [2 60 0] :max [2 70 0] :owner "Miles"}]}
+                                      {:ignore-zones? true}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation p))))))))
 
 (deftest a-villager-that-keeps-its-job-after-the-break-is-waited-for-until-the-wall-time

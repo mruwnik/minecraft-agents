@@ -13,6 +13,7 @@
             [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
             [jobs.village.trade :as trade]))
 
@@ -22,8 +23,9 @@
   again the workstation of :profession at :pos.
   Needs: a profession, a wanted item (or enchantment) and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
-  most :max-price (nil: no limit). Waits (:continue) for the villager to lose
-  and take its job until the call's :wall-time. Re-reads the world every step, so a restart finds a missing
+  most :max-price (nil: no limit). Says which villager it picked (info roll.villager). Waits (:continue) for the villager to lose
+  and take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
+  :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children. Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
   matches, else
@@ -39,7 +41,8 @@
    :profession {:doc "villager profession whose workstation block is broken and placed again, e.g. librarian" :spec string? :default nil}
    :want {:doc "item name an offer is to give; nil with :enchant: enchanted_book" :spec a/item? :default nil}
    :enchant {:doc "enchantment name an offer's item is to carry, e.g. mending" :spec string? :default nil}
-   :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
+   :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}
+   :ignore-zones? :shared})
 
 (def workstations
   {"librarian" "lectern" "farmer" "composter" "cleric" "brewing_stand" "armorer" "blast_furnace" "butcher" "smoker"
@@ -148,16 +151,26 @@
   (ctx/update-mem! c assoc :offer (select-keys offer [:index :cost :gives]))
   :again)
 
-(defn ^:async wait-job!
-  "Hold still for a poll, saying why the villager's job is awaited; :continue."
-  [c why]
-  (await (child/pause! c (poll-s) why))
-  :continue)
-
 (defn pick!
-  "The villager rolled: :villager, else the nearest adult that is no nitwit."
+  "The villager rolled: :villager, else the nearest adult that is no nitwit (saying which one it picked, once)."
   [c]
-  (villager/pick! c #(not= "nitwit" (.-profession %))))
+  (let [before (villager/chosen c)
+        id (villager/pick! c #(not= "nitwit" (.-profession %)))]
+    (when (and id (nil? before))
+      (let [e (villager/find-by-uuid (:primitives c) id)]
+        (ctx/emit! c :roll.villager :info
+                   {:villager id :pos (some-> e (.-pos) u/pos-of) :profession (some-> e (.-profession))
+                    :text (str "rolls villager " id ": the nearest adult that is no nitwit")})))
+    id))
+
+(defn ^:async wait-job!
+  "Hold still for a poll, saying why the villager's job is awaited; :continue. At night the reason says villagers
+  claim workstations only in the day."
+  [c why]
+  (await (child/pause! c (poll-s) (if (and (= why :villager-takes-no-job) (sh-sense/night? (:primitives c)))
+                                    :night-villagers-take-no-job
+                                    why)))
+  :continue)
 
 (defn ^:async walk!
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
@@ -223,7 +236,7 @@
   (let [{:keys [pos]} (:args c)
         slot (keyword (str "dig-" (rolls c)))
         _ (ctx/update-mem! c assoc :broken true)
-        r (await (child! c slot 'jobs.blocks.dig {:pos pos :collect true}))]
+        r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0))))
           :again)
@@ -250,7 +263,7 @@
   (let [{:keys [pos]} (:args c)
         item (item-of (:args c))
         slot (keyword (str "place-" (rolls c)))
-        r (await (child! c slot 'jobs.blocks.place {:pos pos :item item}))]
+        r (await (child! c slot 'jobs.blocks.place (cond-> {:pos pos :item item} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (dissoc :broken)))
           :again)

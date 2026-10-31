@@ -33,6 +33,13 @@
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,4],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000004" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :occupied}} :within-s 40 :of-job true}]}
+  {:name "roll-at-night-names-the-villager-and-the-reason"
+   :time :night :time-why :villager-schedule
+   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,7],VillagerData:{profession:\"minecraft:none\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :roll.villager :data {:villager "00004f24-0000-0007-0000-000500000007"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30}]
+   :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-cell-behind-the-body-is-looked-at"
    :body {:at [8.5 0 16.5] :yaw 90}
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,5],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
