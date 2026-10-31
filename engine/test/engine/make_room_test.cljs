@@ -782,7 +782,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)})
+        (let [{:keys [eng p clock]} (setup {:inventory (many "junk" 35)})
               looks (atom 0)
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)]
           (core/register-reflex! eng {:trigger :inventory-nearly-full :args {} :job (list 'jobs.storage.make-room {})})
@@ -791,6 +791,7 @@
                                           (await (impl token a))))
           (await (core/tick! eng))
           (is (= 1 (count (spots))) "the first toss's spot outlives the cut reflex")
+          (swap! clock + 130000) ; a cut comfort reflex rests its cooldown (120 s) before it refires
           (loop [i 0]
             (await (core/tick! eng))
             (when (and (< i 60) (seq (:instances (core/state eng)))) (recur (inc i))))
