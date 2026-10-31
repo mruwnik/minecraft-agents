@@ -503,6 +503,14 @@
     (is (not (f/plan-on-plot? (plan [[20014 100 20014] [20018 101 20018]]) [20000 -40 20000] [32 32])))
     (is (not (f/plan-on-plot? (pr-str {:id "p" :parts []}) [20000 -40 20000] [32 32])))))
 
+(deftest a-plan-given-by-cells-or-blueprint-origin-is-found
+  (let [plan (fn [part] (pr-str {:id "p" :parts [part]}))
+        plot [20000 -40 20000]]
+    (is (f/plan-on-plot? (plan {:id "a" :cells [[20012 -40 20016] [20013 -40 20016]]}) plot [32 32]))
+    (is (not (f/plan-on-plot? (plan {:id "a" :cells [[20112 -40 20016]]}) plot [32 32])))
+    (is (f/plan-on-plot? (plan {:id "h" :blueprint "starter-hut" :at [20010 -40 20010]}) plot [32 32]))
+    (is (not (f/plan-on-plot? (plan {:id "h" :blueprint "starter-hut" :at [20330 -41 20010]}) plot [32 32])))))
+
 (deftest plan-refs-resolve-to-the-runner-prefix
   (is (= '(jobs.forestry.prepare {:plan "test-probex-wood"})
          (f/resolve-plan-refs '(jobs.forestry.prepare {:plan "$plan:wood"}) "test-probex-")))

@@ -992,16 +992,23 @@
   [plan prefix]
   (pr-str (assoc plan :id (str prefix (:id plan)))))
 
+(defn part-boxes
+  "The boxes ([[x1 y1 z1] [x2 y2 z2]]) a plan part covers: its :box, each of its :cells, or the :at of a blueprint."
+  [{:keys [box cells at]}]
+  (concat (when box [box])
+          (map (fn [c] [c c]) cells)
+          (when at [[at at]])))
+
 (defn plan-on-plot?
-  "Whether the plan file text has a part box inside the plot (origin, dims [size-x size-z], 32 high): a plan another
-  body's killed run left there would refuse this case's blocks as another's."
+  "Whether the plan file text has a part (box, cells or blueprint origin) inside the plot (origin, dims [size-x size-z],
+  32 high): a plan another body's killed run left there would refuse this case's blocks as another's."
   [text [ox oy oz] [size-x size-z]]
   (boolean
-   (some (fn [{[[x1 y1 z1] [x2 y2 z2]] :box}]
+   (some (fn [[[x1 y1 z1] [x2 y2 z2]]]
            (and x1 (<= (min x1 x2) (+ ox size-x -1)) (>= (max x1 x2) ox)
                 (<= (min y1 y2) (+ oy 31)) (>= (max y1 y2) oy)
                 (<= (min z1 z2) (+ oz size-z -1)) (>= (max z1 z2) oz)))
-         (:parts (reader/read-string text)))))
+         (mapcat part-boxes (:parts (reader/read-string text))))))
 
 (defn resolve-plan-refs
   "Replaces every \"$plan:<id>\" string in form with the runner's plan id (prefix + id), so a fixture names its
