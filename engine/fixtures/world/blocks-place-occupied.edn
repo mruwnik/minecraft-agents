@@ -22,4 +22,16 @@
   {:name "head-block-suffocation"
    :act [[:rcon "execute at $BODY run setblock ~ ~1 ~ stone"] [:wait-s 4] [:rcon "execute at $BODY run setblock ~ ~1 ~ air"]]
    :expect [{:event {:source :body :kind :hurt :data {:causes ["suffocation"]}} :within-s 15}]
-   :after [[:block [16 1 16] "air"]]}]}
+   :after [[:block [16 1 16] "air"]]}
+ {:name "stale-remembered-stone-now-air-out-of-sight"
+   :blocks [[:set [22 0 16] "stone"]]
+   :act [[:wait-s 3] [:rcon "execute at $BODY run fill ~3 ~ ~-1 ~3 ~1 ~1 stone"] [:rcon "execute at $BODY run setblock ~6 ~ ~ air"] [:wait-s 3]
+         [:job (jobs.blocks.place {:pos #at [22 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 40 :of-job true}]
+   :after [[:block [22 0 16] "cobblestone"] [:item "cobblestone" 7]]}
+ {:name "stale-remembered-stone-still-stone-out-of-sight"
+   :blocks [[:set [22 0 16] "stone"]]
+   :act [[:wait-s 3] [:rcon "execute at $BODY run fill ~3 ~ ~-1 ~3 ~1 ~1 stone"] [:wait-s 3]
+         [:job (jobs.blocks.place {:pos #at [22 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :occupied :block "stone"}} :within-s 40 :of-job true}]
+   :after [[:block [22 0 16] "stone"] [:item "cobblestone" 8]]}]}
