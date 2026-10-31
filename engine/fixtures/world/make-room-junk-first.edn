@@ -45,6 +45,15 @@
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 10 :until {:source :job :kind :completed}}]
    :limit-s 100}
+  ;; Card 64387e49: cheap seeds go into a chest a few steps away, not onto the floor of a base.
+  {:name "chest-near-takes-surplus-seeds-nothing-tossed"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["wheat_seeds" 256] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
+   :act [[:job (jobs.storage.make-room {:free 3})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :make-room.tossed} :for-s 10 :until {:source :job :kind :completed}}]
+   :limit-s 100}
   {:name "bag-of-junk-only-done-is-emitted"
    :body {:inventory [["dirt" 640] ["gravel" 640] ["sand" 640] ["andesite" 384]]}
    :act [[:job (jobs.storage.make-room {:free 12})]]

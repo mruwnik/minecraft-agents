@@ -385,10 +385,23 @@
                   {:keys [eng p]} (setup {:inventory (same "gravel" 35 64) :containers {"10,64,0" []}})]
               (set! pick/quote! (fn [_ _] (js/Promise.resolve {:uses {:job-time [mean mean mean]}})))
               (try (know-chest! eng chest-pos)
-                   (await (run-reflex eng {:free 2} {}))
+                   (await (settings/with-settings {::mr/tidy-walk-s 0} #(run-reflex eng {:free 2} {})))
                    (finally (set! pick/quote! quote!)))
               (is (= chest? (pos? (count (calls p "transfer")))) (str "walk quoted at " factor " of the toss worth"))
               (is (= (not chest?) (pos? (count (calls p "toss"))))))))))))
+
+(deftest a-short-chest-walk-is-taken-even-when-the-toss-would-throw-less
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [quote! pick/quote!
+              {:keys [eng p]} (setup {:inventory (same "wheat_seeds" 35 64) :containers {"10,64,0" []}})]
+          (set! pick/quote! (fn [_ _] (js/Promise.resolve {:uses {:job-time [5 5 5]}})))
+          (try (know-chest! eng chest-pos)
+               (await (run-reflex eng {:free 2} {}))
+               (finally (set! pick/quote! quote!)))
+          (is (pos? (count (calls p "transfer"))) "5 s walk is under tidy-walk-s")
+          (is (= 0 (count (calls p "toss"))) "nothing is littered"))))))
 
 (deftest toss-cost-sums-the-first-short-stacks-and-is-infinite-when-too-few-can-go
   (is (= ##Inf (mr/toss-cost [] 1)))

@@ -35,7 +35,7 @@
   :carry-blocks; seeds up to :carry-seeds each; other blocks are not kept. Names in :carry-items are kept whole.
   Steps, in order:
   1. The storage chest whose walk go-to quotes cheapest (jobs.lib.walk-pick; not marked :chest-unusable), when that walk costs no more than the
-     stacks it saves from the toss are worth (all of them when the toss cannot free enough), takes what jobs.storage.deposit may put
+     stacks it saves from the toss are worth or the tidy-walk-s setting (10) seconds (all of them when the toss cannot free enough), takes what jobs.storage.deposit may put
      away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
      then the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
      :chest-unusable for the unusable-ttl-s setting (600) seconds and the job goes on without it.
@@ -75,6 +75,7 @@
   {::toss-fails {:default 3 :doc "Failed tosses in a row before the call gives up." :spec (a/int-in 1 nil)}
    ::unusable-ttl-s {:default 600 :doc "Seconds a chest that failed is left alone." :spec (a/num-in 0 nil)}
    ::spot-slack {:default 8 :doc "A toss spot the body is farther than :away plus this from is stale, in blocks." :spec (a/num-in 0 nil)}
+   ::tidy-walk-s {:default 10 :doc "A chest whose walk quotes this many seconds or less is used even when the toss would cost less: littering a base is not free." :spec (a/num-in 0 nil)}
    ::swap-radius {:default 8 :doc "When no slot is free, a dropped item worth more than some carried stack within this radius is swapped in." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
@@ -83,6 +84,7 @@
   []
   (+ (:value (cost/item-value [{:name "chest" :count 1}]))
      (:cost (cost/walk-cost {:distance (cost/own-place-blocks)}))))
+(defn tidy-walk-s [] (settings/get settings ::tidy-walk-s))
 (defn swap-radius [] (settings/get settings ::swap-radius))
 
 (defn unusable-policy [] {:cap 5 :ttl (* 1000 (settings/get settings ::unusable-ttl-s))})
@@ -444,7 +446,7 @@
       :else
       (let [chest (when-not (:chest-done @run)
                     (when-not (contains? @run :chest)
-                      (swap! run assoc :chest (await (usable-chest! c (if dir (toss-cost order (slots-short c)) ##Inf)))))
+                      (swap! run assoc :chest (await (usable-chest! c (if dir (max (tidy-walk-s) (toss-cost order (slots-short c))) ##Inf)))))
                     (:chest @run))]
         (cond
           (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
