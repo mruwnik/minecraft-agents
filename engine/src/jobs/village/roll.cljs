@@ -34,7 +34,7 @@
     read three times), :place-failed (no room to step off the cell), or the ending of the dig or place child.")
 
 (a/defargs args
-  {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
+  {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
    :pos {:doc "the workstation block, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :profession {:doc "villager profession whose workstation block is broken and placed again, e.g. librarian" :spec string? :default nil}
    :want {:doc "item name an offer is to give; nil with :enchant: enchanted_book" :spec a/item? :default nil}
@@ -79,7 +79,7 @@
   (let [{:keys [villager]} (:args c)
         {:keys [error]} (b/parse (:args c))]
     (cond
-      (not (and (or (nil? villager) (string? villager)) (string? (item-of (:args c))) (string? (want-of (:args c)))))
+      (not (and (or (nil? villager) (villager/id? villager)) (string? (item-of (:args c))) (string? (want-of (:args c)))))
       (contract/never :bad-args "needs a known profession and a wanted item (or enchantment)"
                       :why "needs a known profession and a wanted item (or enchantment)")
       error (contract/never :bad-args error :why error)
@@ -91,7 +91,7 @@
   [c]
   (let [{:keys [villager]} (:args c)
         p (:primitives c)
-        e (when (string? villager) (villager/find-by-uuid p villager))
+        e (when (villager/id? villager) (villager/find-by-uuid p villager))
         block (when e (some->> (:pos (b/parse (:args c))) (u/seen-name p)))
         item (item-of (:args c))]
     (cond

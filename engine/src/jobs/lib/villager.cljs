@@ -20,10 +20,19 @@
 
 (defn adults [p] (filter adult? (seen p)))
 
+(def id?
+  "Whether x can name a villager: its uuid (string) or its numeric entity id, as entity listings give it."
+  (a/pred "a villager's uuid string or entity id" #(or (string? %) (integer? %))))
+
+(defn ident
+  "What names villager entity e to the jobs: its uuid when known, else its numeric entity id."
+  [e]
+  (or (.-uuid e) (.-id e)))
+
 (defn find-by-uuid
-  "The villager entity with uuid in sight within the search radius, or nil."
-  [p uuid]
-  (first (filter #(= uuid (.-uuid %)) (seen p))))
+  "The villager entity named by id (uuid or numeric entity id) in sight within the search radius, or nil."
+  [p id]
+  (first (filter #(or (= id (.-uuid %)) (= id (.-id %))) (seen p))))
 
 (defn chosen
   "The uuid of the villager a job works with: the call's :villager, else the one picked first (kept in memory), else nil."
@@ -31,9 +40,11 @@
   (or (:villager (:args c)) (:chosen (ctx/mem c))))
 
 (defn pick!
-  "Without :villager, choose the nearest adult villager in sight that ok? accepts and keep it. The uuid or nil."
+  "Without :villager, choose the nearest adult villager in sight that ok? accepts and keep it, one whose profession reads
+  as a job first (the profession is not always readable). The id or nil."
   [c ok?]
   (or (chosen c)
-      (when-let [e (first (filter ok? (adults (:primitives c))))]
-        (ctx/update-mem! c assoc :chosen (.-uuid e))
-        (.-uuid e))))
+      (let [es (filter ok? (adults (:primitives c)))]
+        (when-let [e (or (first (remove #(= "unemployed" (.-profession %)) es)) (first es))]
+          (ctx/update-mem! c assoc :chosen (ident e))
+          (ident e)))))

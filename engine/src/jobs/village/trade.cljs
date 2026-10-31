@@ -17,7 +17,7 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Buy :count of :buy from the villager with uuid :villager (nil: the nearest adult with a job in sight). One call is the whole purchase: find the villager
+  "Buy :count of :buy from the villager :villager (uuid or entity id; nil: the nearest adult in sight that has offers, a villager that shows none is skipped for the next, as a player opens one after another). One call is the whole purchase: find the villager
   within jobs.lib.villager/search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those paid with an item of the call's :use {:payment [..]}
@@ -42,7 +42,7 @@
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
 (a/defargs args
-  {:villager {:doc "the villager's entity uuid; nil: the nearest adult villager with a job in sight" :spec string? :default nil}
+  {:villager {:doc "the villager's entity uuid or numeric entity id; nil: the nearest adult villager in sight, the next one when it has no offers" :spec villager/id? :default nil}
    :buy {:doc "item name to buy" :spec a/item? :default nil}
    :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}})
 
@@ -254,7 +254,11 @@
                    (await (buy! c offer)))
                (finish! c reason (when price {:price price}))))
       "gone" (give-up! c :gone)
-      "cannot" (give-up! c (if (= "not-villager" (.-reason r)) :not-villager :no-offers))
+      "cannot" (cond
+                 (= "not-villager" (.-reason r)) (give-up! c :not-villager)
+                 (:villager (:args c)) (give-up! c :no-offers)
+                 :else (do (ctx/update-mem! c #(-> % (update :skipped (fnil conj #{}) villager) (dissoc :chosen)))
+                           :again))
       "out-of-reach" (retry :unreachable)
       (retry :window))))
 
@@ -275,10 +279,12 @@
   "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,
   :continue (go-to yields), an ending or a retry."
   [c]
-  (let [uuid (villager/pick! c #(not (#{"unemployed" "nitwit"} (.-profession %))))
+  (let [skipped (:skipped (ctx/mem c) #{})
+        uuid (villager/pick! c #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %)))))
         e (when uuid (villager/find-by-uuid (:primitives c) uuid))]
     (cond
       (and (nil? uuid) (not (look/surveyed? c))) (await (look/survey! c))
+      (and (nil? uuid) (seq skipped)) (give-up! c :no-offers)
       (nil? uuid) (give-up! c :gone)
       (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (give-up! c :gone)

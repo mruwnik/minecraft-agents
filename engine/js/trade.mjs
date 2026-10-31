@@ -135,7 +135,7 @@ async function buy (bot, ctx, win, a, timeScale) {
 }
 
 export async function tradeWith (bot, ctx, a, { timeScale = 1, reach }) {
-  const target = Object.values(bot.entities).find(e => e.uuid === a.villager)
+  const target = Object.values(bot.entities).find(e => e.uuid === a.villager || e.id === a.villager)
   if (!target) return { status: 'gone' }
   if (target.name !== 'villager') return { status: 'cannot', reason: 'not-villager', name: target.name }
   const eye = bot.entity.position.offset(0, bot.entity.eyeHeight ?? constants.eyeHeight, 0)
@@ -144,11 +144,14 @@ export async function tradeWith (bot, ctx, a, { timeScale = 1, reach }) {
 
   const { villagerProfession, level } = villagerData(bot, target)
   const profession = professionOf(villagerProfession)
-  const why = noOffersWhy(profession, mobFields(bot, target).baby === true)
-  if (why) return { status: 'cannot', reason: 'no-offers', why, profession, level }
+  if (mobFields(bot, target).baby === true) return { status: 'cannot', reason: 'no-offers', why: 'baby', profession, level }
 
+  // the profession reading can be wrong, so a villager that reads jobless is tried: a player opens it too
   const win = await openWindow(bot, target, timeScale)
-  if (!win) return { status: 'failed', reason: 'window-did-not-open' }
+  if (!win) {
+    const why = noOffersWhy(profession, false)
+    return why ? { status: 'cannot', reason: 'no-offers', why, profession, level } : { status: 'failed', reason: 'window-did-not-open' }
+  }
   ctx.onAbort(() => closeWindow(bot))
   try {
     ctx.alive()

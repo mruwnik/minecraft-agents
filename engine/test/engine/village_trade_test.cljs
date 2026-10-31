@@ -121,6 +121,26 @@
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= {"emerald" 3 "bread" 1} (inv p))))))))
 
+(deftest a-nearer-villager-without-offers-is-skipped-for-the-next
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bare (villager [] {:id 2 :uuid "v-0" :pos {:x 0.5 :y 64 :z 0}})
+              [result p] (await (trade {:entities [bare (villager [(bread {})])] :inventory [{:name "emerald" :count 4}]}
+                                       {:villager nil}))
+              [none] (await (trade {:entities [bare] :inventory [{:name "emerald" :count 4}]} {:villager nil}))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= {"emerald" 3 "bread" 1} (inv p)))
+          (is (= :no-offers (:reason none))))))))
+
+(deftest a-villager-is-named-by-its-entity-id
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result] (await (trade {:entities [(villager [(bread {})] {:id 7 :uuid nil})] :inventory [{:name "emerald" :count 4}]}
+                                     {:villager 7}))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result)))))))
+
 (deftest only-offers-paid-with-the-call-s-payment-items-are-taken
   (async done
     (tu/run-async done

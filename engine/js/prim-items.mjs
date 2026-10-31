@@ -276,7 +276,7 @@ export function createItems (env) {
 
   const trade = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
-    need(typeof a.villager === 'string' && a.villager !== '', 'trade needs a villager uuid')
+    need((typeof a.villager === 'string' && a.villager !== '') || Number.isInteger(a.villager), 'trade needs a villager uuid or entity id')
     need(a.op === 'offers' || a.op === 'buy', 'trade op must be offers or buy')
     need(a.op !== 'buy' || (Number.isInteger(a.offer) && a.offer >= 0), 'trade buy needs an offer index of 0 or more')
     need(a.times == null || (Number.isInteger(a.times) && a.times >= 1), 'trade times must be a positive integer')

@@ -9,7 +9,7 @@
 
 (defn check [{:keys [villager op offer times] :as a}]
   (cond
-    (not (and (map? a) (string? villager) (seq villager))) (throw (pockets/bad-args "trade needs villager, a uuid string"))
+    (not (and (map? a) (or (integer? villager) (and (string? villager) (seq villager))))) (throw (pockets/bad-args "trade needs villager, a uuid string or entity id"))
     (not (#{"offers" "buy"} op)) (throw (pockets/bad-args "trade op must be offers or buy"))
     (and (= op "buy") (not (and (integer? offer) (>= offer 0)))) (throw (pockets/bad-args "trade buy needs offer, an integer >= 0"))
     (and (some? times) (not (and (integer? times) (>= times 1)))) (throw (pockets/bad-args "trade times must be an integer >= 1"))))
@@ -56,7 +56,7 @@
 
 (defn trade [w {:keys [villager op] :as a}]
   (check a)
-  (let [i (first (keep-indexed #(when (= villager (:uuid %2)) %1) (:entities w)))
+  (let [i (first (keep-indexed #(when (or (= villager (:uuid %2)) (= villager (:id %2))) %1) (:entities w)))
         e (when i (nth (:entities w) i))
         distance (when e (pockets/distance (get-in w [:self :pos]) (:pos e)))
         profession (get e :profession "unemployed")
