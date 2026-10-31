@@ -193,6 +193,21 @@
               (is (= :search-spent (:why @out)) (pr-str @out))
               (is (<= @rounds 6) "it gave up within a few slices"))))))))
 
+;; a round that ends on the goal cell with a failed status (its plan failed from there) is an arrival, not a give-up: it
+;; stood on the goal and escalated "no way in" (card bef57664)
+(deftest a-failed-round-that-ends-on-the-goal-is-an-arrival
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (do
+          (with-redefs [near/walk-round! (fn [c _ _ _]
+                                           (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [30.5 64 0.5])
+                                           (js/Promise.resolve {:result {:status :no-path :reason :abilities} :status "blocked"
+                                                                :from (:pos c) :to {:x 30 :y 64 :z 0}}))]
+            (let [{:keys [out]} (await (gt/go! {:self {:pos [0.5 64 0.5]} :blocks floor-blocks}
+                                               {:pos [30 64 0] :range 1}))]
+              (is (true? (:arrived @out)) (pr-str @out)))))))))
+
 ;; a walk whose steer was cut short by the call's own seconds (:out-of-time) is a leg's end, not a stuck body that gives the walk up
 (deftest a-steer-cut-by-the-calls-seconds-ends-a-leg-not-a-stuck-giveup
   (async done

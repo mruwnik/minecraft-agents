@@ -582,7 +582,8 @@
             nearer? (boolean (and target (< tdist (dec (get tbests target js/Infinity)))))
             _ (ctx/update-mem! c assoc :tour-walks (if (< left (dec best)) 0 (cond-> (:tour-walks (ctx/mem c) 0) frontier inc)))]
         (cond
-          (= "arrived" status)
+          ;; a round that ends short of "arrived" on the goal (a plan that failed from there) is still an arrival
+          (or (= "arrived" status) (and (here? c pos range) (not (refused-hang c pos))))
           (await (arrive! c pos))
 
           (:out-of-time walked)
