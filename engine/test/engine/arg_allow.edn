@@ -72,6 +72,7 @@
  [jobs.farm.irrigate :for-plan]
  [jobs.farm.maintain :chest]
  [jobs.farm.maintain :irrigate]
+ [jobs.farm.maintain :ignore-zones?]
  [jobs.farm.plant :area]
  [jobs.farm.plant :blocks]
  [jobs.farm.plant :ignore-zones?]

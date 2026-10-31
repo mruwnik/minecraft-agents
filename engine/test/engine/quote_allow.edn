@@ -33,7 +33,6 @@
  jobs.farm.find-spot
  jobs.farm.grow
  jobs.farm.harvest
- jobs.farm.irrigate
  jobs.farm.maintain
  jobs.farm.tidy
  jobs.farm.till
