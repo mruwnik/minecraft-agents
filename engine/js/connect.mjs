@@ -34,6 +34,15 @@ export function installTickEnd (bot) {
   bot.on('physicsTick', () => bot._client.write('tick_end', {}))
 }
 
+// Mineflayer leaves promises nobody awaits (openVillager's trade-list handler rejects when the window never opens), and
+// node exits on one: log it instead, a stray rejection must not take the body down.
+let guarded = null
+export function guardRejections (proc = process, log = console.error) {
+  if (guarded === proc) return
+  guarded = proc
+  proc.on('unhandledRejection', reason => log('unhandled rejection (ignored):', reason?.stack ?? reason))
+}
+
 // Resolves with the bot once it has spawned and the pathfinder has movements that never dig or build and
 // steer clear of hazards (see movements.mjs): a primitive that walks must not quietly break blocks or wade into
 // lava. Rejects when the server refuses, drops the connection or stays silent.
@@ -41,6 +50,7 @@ export function installTickEnd (bot) {
 // `create` replaces mineflayer.createBot (tests).
 export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = mineflayer.createBot } = {}) {
   return new Promise((resolve, reject) => {
+    guardRejections()
     installLazyChunks()
     bufferLightArrays(params.version ?? DEFAULTS.version)
     const bot = create(botOptions(params))

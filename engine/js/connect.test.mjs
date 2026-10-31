@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import prismarineRegistry from 'prismarine-registry'
-import { botOptions, connectBot, installTickEnd, DEFAULTS } from './connect.mjs'
+import { botOptions, connectBot, installTickEnd, guardRejections, DEFAULTS } from './connect.mjs'
 import { createSense } from './prim-sense.mjs'
 
 test('botOptions passes the default view distance to mineflayer', () => {
@@ -78,4 +78,14 @@ test('installTickEnd writes one tick_end per physics tick when the protocol has 
   installTickEnd(without.bot)
   without.bot.emit('physicsTick')
   assert.deepEqual(without.writes, [])
+})
+
+test('guardRejections logs an unhandled rejection instead of leaving node to exit, and installs once', () => {
+  const proc = new EventEmitter()
+  const logged = []
+  guardRejections(proc, (...a) => logged.push(a))
+  guardRejections(proc, (...a) => logged.push(a))
+  assert.equal(proc.listenerCount('unhandledRejection'), 1)
+  proc.emit('unhandledRejection', new Error('Event windowOpen did not fire'))
+  assert.equal(logged.length, 1)
 })
