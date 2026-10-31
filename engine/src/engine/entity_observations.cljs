@@ -11,6 +11,7 @@
     the view cone, or hearing. Drops and the like make no sound.
   - a :heard row has no :pos, only :direction (8 compass points) and :band (:near or :far); :seen and :remembered keep
     the exact place.
+  - a sound after a sighting does not replace the row: it stays and ages to :remembered at the place it was seen
   - a baby mob (the sample's `fields`, interact.mjs mobFields) carries :baby true; a villager carries :profession; a sheep carries :color and, when sheared, :sheared true.
   - the body itself is :self.
   Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
@@ -195,7 +196,10 @@
         ;; Still loaded but no longer sensed (walked behind a wall, teleported away): the row would be a ghost.
         lost (into #{} (keep (fn [[e how]] (when-not how (:key (entity-identity store source e))))) senses)
         cap (get-in store [:opts :cap])
+        ;; A sound after a sighting does not unsee it: the row stays and ages to :remembered at the place it was seen.
         incoming (keep #(observation store source (.-fields sample) dim % now) (take cap loaded))
+        incoming (remove #(and (= :heard (:sense %)) (contains? #{:seen :remembered} (:sense (get (:entities @(:state store)) (:key %)))))
+                         incoming)
         ;; A hostile mob is listed only while perception's memory holds it, whether or not the client still tracks it.
         forgotten (when known (into #{} (keep (fn [[key e]] (when (and (:hostile? e) (not (contains? known (:id e)))) key)))
                                     (:entities @(:state store))))
@@ -291,6 +295,7 @@
                         (.onEntityDeath primitives #(dead! store %)) (fn []))
                       (catch :default _ (fn [])))]
     (sample!)
+    (aset primitives "sampleEntities" sample!)
     (let [timer (js/setInterval sample! (setting "sample-ms"))]
       (.unref timer)
       (assoc store :stop (fn [] (js/clearInterval timer) (unlisten))))))

@@ -154,6 +154,17 @@
     (is (= :remembered (sense-at 10000)))
     (is (= 9000 (:age-ms (first (:entities (seen/snapshot c 10000))))))))
 
+(deftest a-sound-after-a-sighting-keeps-the-sighting
+  (let [senses (atom :seen)
+        c (cache {:sense (fn [_ _] @senses)}) bot #js {:entity (entity 0 "player" "p-0" 0)} villager (entity 1 "villager" "v-1" 7)
+        row #(first (:entities (seen/snapshot c %)))]
+    (seen/observe! c (sample bot [villager]) 1000)
+    (reset! senses :heard)
+    (seen/observe! c (sample bot [villager]) 2000)
+    (seen/observe! c (sample bot [villager]) 9000)
+    (is (= :remembered (:sense (row 9000))) "turned away, the villager is remembered where it was seen")
+    (is (= 7 (get-in (row 9000) [:pos :x])))))
+
 (deftest disconnected-or-stalled-samples-do-not-fabricate-sightings
   (let [c (cache) bot (js-obj) e (entity 1 "cow" "cow" 1)]
     (seen/observe! c (sample bot [e]) 0)
