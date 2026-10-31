@@ -184,7 +184,7 @@
   ([c pos last-resort?] (dig! c pos last-resort? nil))
   ([c pos last-resort? opts]
    (let [pend (or (when (noting? c last-resort?) (pending c :dig pos)) (own-pending c pos))
-         was (u/block-name (:primitives c) pos)
+         was (u/seen-name (:primitives c) pos)
          r (await (ctx/act c :dig (clj->js (merge opts {:pos pos}))))
          _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r))
