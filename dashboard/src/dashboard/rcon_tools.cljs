@@ -78,6 +78,9 @@
 (def hostile-mobs ["zombie" "skeleton" "creeper" "spider" "enderman" "witch" "drowned" "husk" "stray" "parched" "bogged"
                    "zombie_villager" "phantom" "slime" "pillager" "vindicator"])
 
+;; kill-near kills one of these types around a point (golems and villagers strayed from test builds)
+(def killable-near ["iron_golem" "zombie" "villager"])
+
 (def max-give 64)
 (def max-effect-seconds 120)
 (def max-amplifier 4)
@@ -174,6 +177,12 @@
                                r (positive-at-most radius "radius" max-radius)]
                            (mapv #(str "kill @e[type=minecraft:" % ",x=" cx ",y=" cy ",z=" cz ",distance=.." r "]")
                                  hostile-mobs)))}
+   "kill-near" {:arity [5 5] :usage "<iron_golem|zombie|villager> <x> <y> <z> <radius<=32>"
+                :build (fn [[type x y z radius] _]
+                         (let [id (one-of type killable-near "entity")
+                               [cx cy cz] (coords [x y z])
+                               r (positive-at-most radius "radius" max-radius)]
+                           [(str "kill @e[type=minecraft:" id ",x=" cx ",y=" cy ",z=" cz ",distance=.." r "]")]))}
    "setblock" {:arity [4 4] :usage "<x> <y> <z> <block>"
                :build (fn [[x y z block] _]
                         [(str "setblock " (join-coords [x y z]) " minecraft:" (one-of block blocks "block"))])}

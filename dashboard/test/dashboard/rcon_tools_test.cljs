@@ -40,6 +40,7 @@
     ["summon" "zombie" "1" "64" "2"] ["summon minecraft:zombie 1 64 2"]
     ["summon" "cow" "1" "64" "2" "3"] (vec (repeat 3 "summon minecraft:cow 1 64 2"))
     ["kill-mobs" "0" "64" "0" "16"] (mapv #(str "kill @e[type=minecraft:" % ",x=0,y=64,z=0,distance=..16]") hostile)
+    ["kill-near" "iron_golem" "599" "32" "-6976" "12"] ["kill @e[type=minecraft:iron_golem,x=599,y=32,z=-6976,distance=..12]"]
     ["setblock" "1" "2" "3" "stone"] ["setblock 1 2 3 minecraft:stone"]
     ["fill" "0" "0" "0" "7" "7" "6" "glass"] ["fill 0 0 0 7 7 6 minecraft:glass"]
     ["fill" "5" "5" "5" "0" "0" "0" "air"] ["fill 5 5 5 0 0 0 minecraft:air"]))
@@ -80,6 +81,11 @@
     ["kill-mobs" "0" "0" "0" "33"] #"radius"
     ["kill-mobs" "0" "0" "0" "5" "@e"] #"usage"
     ["kill-mobs" "@e" "0" "0" "5"] #"number"
+    ["kill-near" "iron_golem" "0" "0" "0" "33"] #"radius"
+    ["kill-near" "player" "0" "0" "0" "5"] #"not allowed"
+    ["kill-near" "wolf" "0" "0" "0" "5"] #"not allowed"
+    ["kill-near" "iron_golem" "@e" "0" "0" "5"] #"number"
+    ["kill-near" "iron_golem" "0" "0" "0"] #"usage"
     ["effect" t "poison" "121"] #"seconds"
     ["effect" t "poison" "10" "5"] #"amplifier"
     ["effect" t "speed"] #"not allowed"
