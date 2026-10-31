@@ -27,7 +27,7 @@
             [jobs.lib.storage :as storage]))
 
 (def doc
-  "Craft until at least :count of :item are carried. 2x2 recipes work anywhere; bigger ones use a crafting table
+  "Craft until at least :count of :item are carried in all (:count is the total to carry, not how many more to make: :count 1 with one carried crafts nothing). 2x2 recipes work anywhere; bigger ones use a crafting table
   (:table, else the nearest seen within the table-radius setting), put down from the bag or fetched when none is in reach.
   Needs: an item name (impossible :bad-args); a table known when the recipe needs one, else one look round first (:look :no-table). An ingredient that runs out is fetched (jobs.lib.need) from the ways the call allows (:ways #{:carried}: stops :short).
   Returns :done {:made n :item :text}. Stopping short it ends with :made, :item and :text: condition-failed
@@ -145,7 +145,7 @@
         data [:units :items :done made :left (left c have) :result {:made made}]]
     (if (zero? (left c have))
       (if (and (zero? made) (pos? have))
-        (apply contract/ok :crafted (str "already carried " have " " item "; pass :count N for more") data)
+        (apply contract/ok :crafted (str "nothing crafted: already carried " have " " item "; :count is the total to carry, so pass a larger one") data)
         (apply contract/ok :crafted (str "crafted " made " " item) data))
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
