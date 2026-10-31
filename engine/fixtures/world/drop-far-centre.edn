@@ -1,0 +1,28 @@
+;; Card c29cca5d: a job with a far :center walks down a shallow lit drop to it (a 3-block drop is cheap to climb out of).
+;; Plateau x 0..40, 3 high, body on it; centre 85 east on the flat (find-spot-drop-centre is the model).
+;; hunt is passed :worth 600 (its default worth, one beef, is too small to walk 86 blocks over unseen floor). Should-succeed: harvest-wood fells the tree, dig-for digs the ore, hunt kills the cow, each at the far centre.
+{:defaults
+ {:tags [:movement :one-way :jobs] :time :any
+  :plot {:light :lit :height 12 :floor "grass_block" :length 128 :width 64}
+  :blocks [[:fill [0 0 0] [40 2 63] "grass_block"]]
+  :body {:at [4.5 3 32.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "harvest-wood-takes-a-shallow-drop-to-a-far-centre"
+   :blocks [[:fill [90 0 32] [90 3 32] "oak_log"] [:fill [88 3 30] [92 4 34] "oak_leaves[persistent=true]"] [:set [90 3 32] "oak_log"]]
+   :body {:inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 6 :center #at [90 0 36]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:item "oak_log" [:>= 3]]]}
+  {:name "dig-for-takes-a-shallow-drop-to-a-far-centre"
+   :blocks [[:set [90 0 32] "iron_ore"]]
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 8]]}
+   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 4 :center #at [90 0 32]})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 180 :of-job true}]
+   :after [[:item "raw_iron" 1]]}
+  {:name "hunt-takes-a-shallow-drop-to-a-far-centre"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "cow" [90.5 0 32.5] "{NoAI:1b}"]
+         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 8 :center #at [90 0 32] :worth 600})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 180 :of-job true}]
+   :after [[:item "beef" [:>= 1]]]}]}

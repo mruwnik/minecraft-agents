@@ -306,6 +306,19 @@
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}]
    :after [[:body-near [13.5 3 16.5] 3] [:body-far [7.5 0 16.5] 6]]
    :limit-s 120}
+  {:name "dark-drop-taken-with-blocks-to-pillar-back-out"
+   ;; card c29cca5d: the cheap-goal dark mine of dark-drop-refused-for-a-cheap-goal with 12 dirt carried: the drop is priced by the climb out (a 3-block pillar), not a flat 300 s, so the goal worth 28 takes it: the body ends well past the rim, below it (the dark tunnel beyond is the route risk's, which may stop it there)
+   :plot {:height 16 :light :dark}
+   :blocks [[:fill [2 0 8] [30 11 24] "stone"]
+            [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
+            [:fill [13 3 16] [22 5 16] "air"]
+            [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"] [:set [25 6 16] "torch"]]
+   :body {:at [26.5 7 16.5] :inventory [["dirt" 12]]}
+   :time :any
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk} :worth 28})]]
+   :expect [{:no-event {:source :job :kind :stopped :data {:why :one-way}} :for-s 40}]
+   :after [[:body-far [13.5 3 16.5] 6]]
+   :limit-s 120}
   {:name "dark-drop-taken-for-a-valuable-goal"
    ;; card 9c8a2c22 (Q385): the same dark mine, no worth said (arrive): the drop is not refused for its price: the body goes to the rim (the dark floor below is then the sight gate's to judge)
    :plot {:height 16 :light :dark}
