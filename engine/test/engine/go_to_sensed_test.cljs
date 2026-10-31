@@ -1075,6 +1075,17 @@
                                                    {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
           (is (= {:arrived true} out) (pr-str (last seen))))))))
 
+(deftest go-to-takes-the-slime-pad-drop-beside-a-bare-drop-whose-glass-ring-it-has-not-seen
+  ;; a bare 6 drop at z -3 costs hp, the pad drop at z 0 none, but the pad's glass face shows only from the lip above it: the
+  ;; probe takes the unseen wall for a wall, so the body goes to that lip and looks instead of giving up on the bare drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (cliff-foot "stone") (box -1 50 -1 -1 59 1 "glass"))
+              {:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z -3.5}} :exact-eye true :bodyHitbox true :blocks blocks}
+                                                   {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+          (is (= {:arrived true} out) (pr-str (last seen))))))))
+
 (deftest a-body-shut-in-on-a-plateau-far-from-a-sealed-pocket-gets-off-at-the-edge-nearest-it
   ;; world case go-to-far-enclosed-goal: a plateau 6 high on a stone mass, the pocket 70 across and 9 down too far for one
   ;; dig route; no stair, pillar or wall leads off the top, so it walks to the edge nearest the pocket, looks over it and

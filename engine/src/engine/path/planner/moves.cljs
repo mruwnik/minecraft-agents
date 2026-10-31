@@ -105,10 +105,13 @@
                       (fn [bx by bz] (.wallAt s bx by bz))
                       x y z (/ fall16 16))))
 
-  ;; a seen block at x y z with a whole collision top
+  ;; a seen block at x y z with a whole collision top; an unseen cell (options.unknown) counts as one when landingSeen
+  ;; answers yes for it (a walk that trusts what it has not looked at)
   (wallAt [s x y z]
     (let [id (.stateAt s x y z)]
-      (and (not (== id UNLOADED)) (>= (aget (.-tbl-top s) id) WHOLE) ^boolean (.landSeen s x y z true))))
+      (and (not (== id UNLOADED))
+           (or (>= (aget (.-tbl-top s) id) WHOLE) (and (== id (.-unk-id s)) (some? (.-land-seen s))))
+           ^boolean (.landSeen s x y z true))))
 
   ;; walk off an edge into the first standable cell below the neighbour column, or into water that holds a fall (fallStops) up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which
