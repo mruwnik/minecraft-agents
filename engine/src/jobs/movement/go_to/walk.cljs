@@ -176,28 +176,34 @@
 
 (defn cell-of [{:keys [x y z]}] (mapv #(js/Math.floor %) [x y z]))
 
-(defn route-check
-  "near/walk-round!'s :stair-check: check's why, else nothing; remembers (mem :route, every second step) the way of a long
-  plan made with the goal loaded, which a later plan short of the unloaded goal must not undo (route-tolls)."
-  [c check]
-  (fn [{:keys [status steps r] :as plan} first?]
-    (when (and (#{"partial" "found"} status) (> (count steps) route-min-steps)
-               (not= "goal-unloaded" (some-> ^js r .-reason))
-               (> (u/dist (peek steps) (let [[x y z] (peek (:route (ctx/mem c) [[0 0 0]]))] {:x x :y y :z z})) 3))
-      (ctx/update-mem! c assoc :route (mapv cell-of (take-nth 2 steps))))
-    (when check (check plan first?))))
+(def route-reach
+  "How far ahead (blocks) along the remembered route the walk aims while the goal is unloaded: land still loaded."
+  48)
 
-(defn route-tolls
-  "The :tolls of the cells beside the remembered route (route-check) behind the body, while it stands on it: the way back
-  along a route the goal was seen to lie on is dearer, so a plan short of an unloaded goal goes on instead of turning back."
+(defn route-via
+  "The cell of the remembered route (route-check) farthest ahead of the body within route-reach of it, while the body
+  stands on the route (within 6), else nil: with the goal in unloaded land the walk goes on along the route, where a plan
+  to the goal itself would turn back."
   [c]
   (let [route (:route (ctx/mem c))
         me (u/self-pos c)
         d (fn [[x y z]] (u/dist {:x x :y y :z z} me))
-        i (when (seq route) (apply min-key #(d (route %)) (range (count route))))]
-    (when (and i (< (d (route i)) 6))
-      (->> (take i route) (mapcat cut/beside) distinct
-           (map (fn [[x y z]] {:x x :y y :z z :factor 2}))))))
+        i (when (seq route) (apply min-key #(d (route %)) (range (count route))))
+        j (when (and i (< (d (route i)) 6)) (last (filter #(<= (d (route %)) route-reach) (range i (count route)))))]
+    (when (and j (> (d (route j)) 8))
+      (zipmap [:x :y :z] (route j)))))
+
+(defn route-check
+  "near/walk-round!'s :stair-check: remembers (mem :route, every second step) the way of a long plan made with the goal
+  loaded; a plan short of the goal in unloaded land while the body stands on that way ends the round {:route-via cell}
+  (route-via), where a plan to the goal itself would turn back; else check's why."
+  [c check]
+  (fn [{:keys [status steps r] :as plan} first?]
+    (let [unloaded? (= "goal-unloaded" (some-> ^js r .-reason))]
+      (when (and (#{"partial" "found"} status) (> (count steps) route-min-steps) (not unloaded?))
+        (ctx/update-mem! c assoc :route (mapv cell-of (take-nth 2 steps))))
+      (or (when unloaded? (when-let [via (route-via c)] {:route-via via}))
+          (when check (check plan first?))))))
 
 (defn turn-back
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
@@ -274,7 +280,7 @@
      :shut-also (shut-foreign c)
      :budget wsearch/round-budget
      :avoid (set (:fault-cells (ctx/mem c)))
-     :tolls (-> (vec (:tolls (:args c))) (into (send-back-tolls (ctx/mem c))) (into (route-tolls c)))
+     :tolls (into (vec (:tolls (:args c))) (send-back-tolls (ctx/mem c)))
      :zone-tolls (wworld/zone-tolls?)
      :unknown (round-unknown c)}))
 
@@ -452,6 +458,15 @@
                (not (sh-sense/buried? (:primitives c))))
       (surface-descent-s))))
 
+(defn ^:async walk-via!
+  "One walk round to via (route-via); the route is forgotten when the round brought the body no nearer it."
+  [c via doors]
+  (let [before (u/dist (u/self-pos c) via)
+        {:keys [status]} (await (near/walk-round! c via 1 (walk-opts c doors)))]
+    (when (and (not= "searching" status) (> (u/dist (u/self-pos c) via) (- before 2)))
+      (ctx/update-mem! c dissoc :route))
+    :again))
+
 (defn second-surfacing-in-air?
   "Whether a swim to air has just brought the body, head out, back to the air it started the dive from (mem :last-air):
   the dive from there did not fit its air, so another try would repeat it (go-to escalates instead)."
@@ -620,6 +635,9 @@
 
           (:learn-spent walked)
           (await (learn-spent! c pos walked status left best))
+
+          (and (= "stair" status) (:route-via (:why walked)))
+          (await (walk-via! c0 (:route-via (:why walked)) doors))
 
           (and (= "stair" status) (:risk (:why walked)))
           (reprice/end c (:risk (:why walked)))

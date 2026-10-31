@@ -499,17 +499,19 @@
     (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
     (swap! gcut/approaches dissoc (:id c))))
 
-(deftest a-route-seen-to-lead-to-the-goal-is-dearer-to-walk-back-along-than-to-go-on
+(deftest a-route-seen-to-lead-to-the-goal-is-walked-on-while-the-goal-is-unloaded
   (let [mem* (atom {})
         c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 30.5 :y 64 :z 0.5}}}) mem* {}))
         steps (mapv (fn [x] {:x (+ 0.5 x) :y 64 :z 0.5}) (range 60))
         check (gwalk/route-check c nil)]
     (check {:status "partial" :r #js {:reason "searching"} :steps steps} false)
     (is (= 30 (count (:route @mem*))) "a long plan with the goal loaded is remembered")
-    (check {:status "partial" :r #js {:reason "goal-unloaded"} :steps (vec (take 40 (reverse steps)))} false)
-    (is (= 30 (count (:route @mem*))) "a plan short of an unloaded goal does not replace it")
-    (is (every? #(< (:x %) 30) (gwalk/route-tolls c)) "only cells behind the body are tolled")
-    (is (seq (gwalk/route-tolls c)))))
+    (is (= {:route-via {:x 58 :y 64 :z 0}}
+           (check {:status "partial" :r #js {:reason "goal-unloaded"} :steps (vec (take 40 (reverse steps)))} false))
+        "a plan short of an unloaded goal ends the round: the body on the route walks on to its end")
+    (is (= 30 (count (:route @mem*))) "and does not replace the route")
+    (reset! mem* (assoc @mem* :route (vec (take 16 (:route @mem*)))))
+    (is (nil? (gwalk/route-via c)) "near the end it plans to the goal again")))
 
 (deftest a-walk-counts-its-floors-in-process-and-a-restart-keeps-them
   (let [mem* (atom {})
