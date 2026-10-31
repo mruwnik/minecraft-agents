@@ -203,4 +203,16 @@
    :expect [{:event {:source :job :kind :completed :context {:job-id "j3"}} :within-s 90}
             {:no-event {:source :job :kind :goods.found} :for-s 30 :until {:source :job :kind :completed :context {:job-id "j3"}}}]
    :after [[:item "dirt" 0]]
-   :limit-s 140}]}
+   :limit-s 140}
+  ;; card 80050ccc: look opens a chest and books its stacks (observe chests lists them) and takes nothing; a cell that holds no chest does not complete
+  {:name "look-books-a-chest-and-takes-nothing"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]]
+   :act [[:job (jobs.storage.look {:chests [#xyz [20 0 16]]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "bread" 0] [:memory {:entries {:fetch/stock [{:data {:pos [:any] :items {"bread" 5}}}]}}]]
+   :limit-s 80}
+  {:name "look-at-a-cell-with-no-chest-does-not-complete"
+   :act [[:job (jobs.storage.look {:chests [#xyz [20 0 16]]})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]
+   :limit-s 80}]}

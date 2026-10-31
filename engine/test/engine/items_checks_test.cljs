@@ -12,7 +12,7 @@
 (def area
   '[jobs.items.craft jobs.items.enchant jobs.items.equip jobs.items.get-kit jobs.items.get-tool jobs.items.use
     jobs.items.kitchen jobs.items.obtain jobs.items.pick-up-loose jobs.items.smelt
-    jobs.storage.deposit jobs.storage.haul jobs.storage.make-room jobs.storage.withdraw
+    jobs.storage.deposit jobs.storage.haul jobs.storage.look jobs.storage.make-room jobs.storage.withdraw
     jobs.food.fish jobs.memory.forget-place jobs.memory.remember jobs.memory.set-place])
 
 (deftest every-job-of-the-area-has-a-check
