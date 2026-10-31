@@ -1,7 +1,7 @@
 ;; go-to has no wait for dawn: its start check judges the route's risk (jobs.lib.walk-risk) by the light seen and the hostiles known.
 ;; Case 1 room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16], on open ground at night.
 ;; Should-succeed: a walk out of the room to a goal in a dark stone mound 24 blocks off starts and arrives (mostly underground: little risk).
-;; Should-fail: a walk over dark open ground (the body outside, the hostiles in view) with three hostiles standing beside its way is held (job.waiting :risky) 
+;; Should-fail: a walk over dark open ground (the body outside, three standing hostiles beside its way) is not held for dawn: they are still there by day, so waiting prices no less than walking, and go-to walks and arrives.
 ;; :time-why :dawn-decision: the case is about whether go-to starts at night; the sky is the one thing a lit/dark cell cannot give.
 {:defaults
  {:tags [:night :movement :go-to]
@@ -19,13 +19,14 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
    :after [[:body-near [40.5 0 16.5] 2.5]]}
-  {:name "walk-over-dark-open-ground-past-hostiles-is-held-with-the-risk"
+  {:name "walk-over-dark-open-ground-past-hostiles-goes-when-dawn-prices-no-less"
    :body {:yaw 270}
+   :limit-s 110
    :act [[:summon "zombie" [32.5 0 21.5] "{NoAI:1b}"]
          [:summon "zombie" [36.5 0 11.5] "{NoAI:1b}"]
          [:summon "zombie" [40.5 0 21.5] "{NoAI:1b}"]
          [:wait-s 4]
          [:job (jobs.movement.go-to {:pos #at [50 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 20 :of-job true}]
-   :after [[:body-near [16.5 0 16.5] 2.5]]}]}
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
+   :after [[:body-near [50.5 0 16.5] 2.5]]}]}
