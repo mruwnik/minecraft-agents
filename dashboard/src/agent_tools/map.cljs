@@ -185,7 +185,8 @@
 
 (defn zone-value [patch value id actor]
   (when (and (contains? patch :name) (not= (:name patch) id)) (throw (data/fail :validation "name must match ID")))
-  (let [value (assoc value :name id :owner (coalesce (:owner value) actor))]
+  (let [value (cond-> (assoc value :name id :owner (coalesce (:owner value) actor))
+                (set? (:allow value)) (update :allow (partial into #{} (map #(keyword (data/name %))))))]
     (validate-zone value)
     value))
 

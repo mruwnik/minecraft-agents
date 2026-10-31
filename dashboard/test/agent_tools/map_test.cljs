@@ -23,6 +23,9 @@
     (is (re-find #":min" message))
     (is (re-find #":max" message))))
 
+(deftest zone-value-saves-allow-as-keywords-for-the-zone-reader
+  (is (= #{:harvest :take} (:allow (map-tool/zone-value {} {:min [0 0 0] :max [1 1 1] :allow #{"harvest" :take}} "z" "b")))))
+
 (deftest find-center-takes-a-vector-or-an-xyz-map
   (let [center #(:center (map-tool/filters nil {:center %}))]
     (is (= [1 2 3] (center "[1 2 3]")))
