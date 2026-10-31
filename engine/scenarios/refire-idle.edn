@@ -7,6 +7,6 @@
              :job (jobs.survival.respond-to-hostile)}
             {:trigger :night :persistence :cooldown :cooldown-s 10
              :job (jobs.survival.night)}
-            {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
-             :job (jobs.survival.get-food {:food 6})}]
+            {:trigger :hungry :persistence :cooldown :cooldown-s 90
+             :job (jobs.survival.get-food)}]
  :queue []}

@@ -12,7 +12,8 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.trigger-api :as trigger-api]
-            [engine.triggers :as triggers]))
+            [engine.triggers :as triggers]
+            [jobs.lib.foods :as foods]))
 
 (def all-triggers
   "The shipped triggers plus the condition language, as a body has them (ad hoc :when entries)."
@@ -223,3 +224,11 @@
           later [:hostile-near :night :dusk-home :hungry]
           :when (contains? at later)]
     (is (< (at :died) (at later)) (str f ": :died before " later))))
+
+(deftest scenario-hungry-entries-keep-the-default-food-line
+  (doseq [f scenario-files
+          e (:register (scenario/read-file (str "scenarios/" f)))
+          :when (= :hungry (:trigger e))
+          food [(get-in e [:args :food]) (:food (second (:job e)))]
+          :when food]
+    (is (>= food foods/default-food) (str f ": hungry :food " food " is below the default " foods/default-food))))
