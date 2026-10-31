@@ -46,7 +46,7 @@
     @out))
 
 (defn kc "Kind and cause keyword (nil cause stays nil) of an ending." [e] (select-keys e [:kind :cause]))
-(defn kcm "Kind and cause map without its text and parts." [e] (update (select-keys e [:kind :cause]) :cause dissoc :text :parts))
+(defn kcm "Kind and cause map without its text, parts and why." [e] (update (select-keys e [:kind :cause]) :cause dissoc :text :parts :why))
 
 ;; ------------------------------------------------------------------ till
 
@@ -235,7 +235,8 @@
         (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)
                                                            {:blocks (into {} (for [x (range 2 5) z (range 2 5)] [(str x ",63," z) "dirt"]))}))
                                   plant {:area pt/field-box} 20))]
-          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do :untilled 9}} (kcm e))))
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do :untilled 9}} (kcm e)))
+          (is (re-find #"9 cells are untilled" (:why (:cause e)))))
         (let [e (await (ending-of (pt/start {:blocks {"2,63,2" "dirt" "3,63,2" "grass_block"} :inventory (pt/inv "wheat_seeds" 6) :floor tu/walk-floor}
                                              (ew/of-data (pt/shared-plans []) {} []))
                                   plant {:area {:plan "mix"}} 20))]
