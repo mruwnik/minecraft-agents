@@ -318,6 +318,9 @@
                       (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)
                       (= :partial cut) :continue
                       (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos targets) :again)
+                      (and (= :blocked walked) (= :risky (contract/cause-key (near/last-walk c))))
+                      (do (ctx/emit! c :mine.walk-refused :info {:pos cell :text (str "mine skips " (str/join "," cell) ": the walk is too dangerous for what it is worth")})
+                          (skip! c pos) :again)
                       (= :blocked walked) (let [w (near/last-walk c)]
                                             (ctx/emit! c :mine.walk-failed :info {:pos (access/cell pos) :why (result/why w) :cause (contract/cause-key w)
                                                                                   :text (str "mine's walk to " (str/join "," (access/cell pos)) " gave up (" (result/why w) (when (= :too-big cut) ", and the cut search outgrew the heap") "); it skips the target and counts a failure")})
