@@ -106,7 +106,7 @@
   Not when it fired at a higher level than :comfort (starving hungry): that need is still pressing once the danger ends."
   [eng reflex fired-level]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))]
-    (when (and (= :comfort (:level entry) (or fired-level :comfort)) (= :cooldown (:persistence entry)))
+    (when (and (= :comfort (or fired-level (:level entry) :comfort)) (= :cooldown (:persistence entry)))
       (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
              (+ (now eng) (* 1000 (:cooldown-s entry 0)))))))
 
