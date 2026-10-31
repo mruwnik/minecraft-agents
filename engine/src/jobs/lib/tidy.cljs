@@ -188,8 +188,8 @@
          r (await (ctx/act c :dig (clj->js (merge opts {:pos pos}))))
          _ (await (tools/note-wear! c))]
      (when (= "dug" (.-status r))
-       (ctx/emit! c :tidy.dug :info {:pos (spent/cell-vec pos) :block was
-                                     :text (str "dug " (or was "a block") " at " (pr-str (spent/cell-vec pos)))})
+       (let [cell (spent/cell-vec (if (object? pos) (js->clj pos :keywordize-keys true) pos))]
+         (ctx/emit! c :tidy.dug :info {:cell cell :block was :text (str "dug " (or was "a block") " at " (pr-str cell))}))
        (built/forget! c (spent/cell-vec pos))
        (let [own (set (b/drops-of (:primitives c) (:was pend)))
              drops (filterv own (dropped-names r))]

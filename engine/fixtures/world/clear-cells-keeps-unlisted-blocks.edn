@@ -11,7 +11,7 @@
  [{:name "listed-cell-dug-with-an-event-and-its-neighbour-stone-stays"
    :blocks [[:fill [16 0 10] [17 1 10] "stone"]]
    :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [16 0 10]]}})]]
-   :expect [{:event {:source :job :kind :tidy.dug :data {:pos [16 0 10] :block "stone"}} :within-s 100 :of-job true}
+   :expect [{:event {:source :job :kind :tidy.dug :data {:cell #at [16 0 10] :block "stone"}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [16 0 10] "air"] [:block [17 0 10] "stone"] [:block [17 1 10] "stone"] [:block [16 1 10] "stone"]]}
   {:name "cell-buried-in-an-unlisted-stone-mass-is-not-dug-to"
