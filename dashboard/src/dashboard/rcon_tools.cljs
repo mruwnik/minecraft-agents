@@ -66,10 +66,12 @@
 
 (def default-targets ["ClaudeProbe" "ProbeWater" "ProbeFight" "ProbeNight" "ProbeStuck"])
 (def items ["bread" "cooked_beef" "apple" "water_bucket" "bucket" "cobblestone" "dirt" "oak_planks" "iron_sword"
-            "diamond_sword" "iron_axe" "torch" "oak_sapling" "wheat_seeds" "red_bed" "shield" "leather_helmet" "iron_helmet"])
+            "diamond_sword" "iron_axe" "torch" "oak_sapling" "wheat_seeds" "red_bed" "shield" "leather_helmet" "iron_helmet"
+            ;; iron farm kit
+            "iron_pickaxe" "iron_shovel" "hopper" "chest" "lava_bucket" "oak_sign" "white_bed" "glass" "glowstone" "name_tag"])
 (def effects ["poison" "wither" "hunger" "instant_damage" "regeneration" "saturation" "fire_resistance"
               "water_breathing" "slowness"])
-(def entities ["zombie" "skeleton" "spider" "creeper" "cow" "pig" "sheep" "chicken"])
+(def entities ["zombie" "skeleton" "spider" "creeper" "cow" "pig" "sheep" "chicken" "villager"])
 (def blocks ["air" "water" "lava" "stone" "dirt" "cobblestone" "oak_planks" "fire" "glass" "torch" "red_bed" "chest"])
 ;; kill-mobs targets only these: a selector cannot or-together types, so it is one kill command per type, and
 ;; villagers, pets, item frames and players are never in the list
