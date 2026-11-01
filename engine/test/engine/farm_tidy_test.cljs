@@ -81,7 +81,9 @@
 
 (def strays [[2 64 2] [3 64 2] [4 64 3] [3 65 3] [2 64 4]])
 
-(def tidy-spec {:blocks tidy-field :drops {"short_grass" "wheat_seeds" "oak_sapling" "oak_sapling"}})
+(def tidy-spec
+  "The tidy field, with the pickaxe clear-cells asks for to dig the cobblestone (it never digs a block by hand)."
+  {:blocks tidy-field :drops {"short_grass" "wheat_seeds" "oak_sapling" "oak_sapling"} :inventory [{:name "stone_pickaxe" :count 1}]})
 
 ;; ---------------------------------------------------------------- the rule, pure
 
@@ -189,7 +191,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start tidy-spec {"field" field-plan})
               result (await (outcome eng {:plan "field"} 200))]
-          (is (= {"wheat_seeds" 1 "cobblestone" 1 "oak_sapling" 1 "oak_leaves" 1 "dirt" 1} (inv p)))
+          (is (= {"stone_pickaxe" 1 "wheat_seeds" 1 "cobblestone" 1 "oak_sapling" 1 "oak_leaves" 1 "dirt" 1} (inv p)))
           (is (= 5 (:dug result))))))))
 
 (deftest crops-water-and-the-wanted-torch-stand-after
