@@ -259,3 +259,19 @@
           (await (core/tick! eng))
           (is (= ["j2"] (:list (core/state eng))) "the cleanup went first, it did not wait behind the cut job")
           (core/shutdown! eng))))))
+
+(deftest a-submitted-worth-sets-the-root-jobs-worth-over-its-own-worth-of
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [seen (atom [])
+              jobs {'priced {:args {} :worth-of (constantly 3)
+                             :round (fn [c] (swap! seen conj (ctx/worth c)) (ctx/end c :done nil))}}
+              eng (core/create {:primitives (tu/fake {}) :jobs jobs :triggers {} :dir (tu/tmp-dir)
+                                :events (events/make {:stdout? false})})]
+          (command eng "own" :submit {:spec '(priced)})
+          (command eng "asked" :submit {:spec '(priced {:worth 500})})
+          (await (core/tick! eng))
+          (await (core/tick! eng))
+          (is (= [3 500] @seen))
+          (core/shutdown! eng))))))
