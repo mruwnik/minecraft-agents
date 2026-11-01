@@ -1,0 +1,14 @@
+;; Card fae63dd5: a body restart mid-job says which job was running.
+;; Should-succeed: a long wait job is running when the body restarts; the restarted engine emits one warn restart.jobs event naming it.
+{:defaults
+ {:tags [:engine :restart] :time :any
+  :plot {:height 6}
+  :body {:at [4.5 0 4.5]}
+  :limit-s 120}
+ :cases
+ [{:name "restart-names-the-running-job"
+   :act [[:job (jobs.time.noop {:seconds 60})]
+         [:wait-s 3]
+         [:restart-body]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:pos [:any] :mode [:any]}] 30]]
+   :expect [{:event {:source :system :kind :restart.jobs :level :warn} :within-s 60}]}]}
