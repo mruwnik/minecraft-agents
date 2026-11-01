@@ -569,11 +569,13 @@
     (notes/note! c [{:kind :leg-tried :what (vec names) :pos [x y z] :n n :ttl-ms (* 1000 (settings/get settings ::leg-tried-ttl-s))}])))
 
 (defn leg-args
-  "The go-to args of the walk toward the leg [x y z]."
-  [c [x y z]]
-  (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
-    (forage? c) (->> (ready/forage-walk c))
-    (< (u/failures c) 2) (assoc :ways #{:walk :clear-seal})))
+  "The go-to args of the walk toward the leg [x y z]: every way when it is a dig-out leg (dig?, default the :dig-out? the
+  round booked), else the plain ones until two walks failed."
+  ([c leg] (leg-args c leg (:dig-out? (ctx/mem c))))
+  ([c [x y z] dig?]
+   (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
+     (forage? c) (->> (ready/forage-walk c))
+     (and (not dig?) (< (u/failures c) 2)) (assoc :ways #{:walk :clear-seal}))))
 
 (defn ^:async price-leg!
   "With :worth, the price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
@@ -688,7 +690,7 @@
             arrived (and (:arrived data) (or step? (not in-water)))
             dangerous? (= :goal-dangerous (or why cause))
             [hx _ hz] (here c)]
-        (ctx/update-mem! c (fn [m] (cond-> (dissoc m :leg :leg-column :leg-price)
+        (ctx/update-mem! c (fn [m] (cond-> (dissoc m :leg :leg-column :leg-price :dig-out?)
                                      (:leg-price m) (update :spent (fnil + 0) (:leg-price m))
                                      arrived (dissoc :blocked)
                                      (and arrived (:leg-column m)) (update-in [:stepped (:leg-column m)] (fnil min ##Inf) (xz-dist [hx hz] (:leg-column m)))
@@ -799,6 +801,7 @@
                 (cond
                   (= :continue dig) :continue
                   dig (let [{:keys [leg column]} dig]
+                        (ctx/update-mem! c assoc :dig-out? true)
                         (or (await (price-leg! c leg false))
                             (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column) (cond-> column (update :tried (fnil conj []) column)) (update :legs (fnil inc 0)))))
                                 (note-leg-start! c leg)

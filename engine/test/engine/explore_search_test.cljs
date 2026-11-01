@@ -695,7 +695,7 @@
                   (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far)))
               first-walk (first @asked)]
           (is (finished? s))
-          (is (contains? (:ways first-walk) :clear-seal) "the closed pocket is dug out of by go-to's clear-seal way")
+          (is (nil? (:ways first-walk)) "the closed pocket is dug out of with every way go-to has, not the plain walk and clear-seal of a first leg")
           (is (= 80 (get-in first-walk [:pos :y])) "at the feet's height, a column of the sweep, not a step into unseen rock")
           (is (seq (walks s))))))))
 
@@ -818,7 +818,7 @@
                               child/call-walk* (fn [_ _ a] (swap! asked conj a) (js/Promise.resolve {:kind :done :data {:arrived true}}))]
                   (await (search! {:target "diamond_block" :max-distance 23} {} 40)))]
           (is (seq @asked) "a dig-out walk was asked, not :no-way-out at once")
-          (is (every? #(contains? (:ways %) :clear-seal) @asked))
+          (is (every? #(nil? (:ways %)) @asked) "a dig-out walk is asked with every way, not the plain ones a leg gets before two walks failed")
           (is (not= :no-way-out (:why (not-found-of s)))))))))
 
 (deftest a-body-shut-in-a-room-digs-out-toward-the-side-go-to-quotes-cheapest

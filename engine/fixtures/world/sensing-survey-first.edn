@@ -165,20 +165,20 @@
             {:event {:source :job :kind :completed :data {:reason :found}} :within-s 200 :of-job true}]
    :limit-s 220}
 
-  ;; Night: shut in a stone room with a torch and no window, nothing seen outside, no leg to walk: dawn is the cheaper way (the dug walk out risks the dark
-  ;; ground), so the search waits :dark (its job time does not run out) and digs out only once the sky is light.
+  ;; Night: shut in a stone room with four torches (one corner torch leaves the far walls dark and unseen) and no window, nothing seen outside, no leg to walk: dawn is the cheaper way (the dug walk out risks the dark
+  ;; ground) with dawn ~30 s off (time 22000; a far dawn would price above the ~70 s dark walk), so go-to holds the dig-out :risky for dawn (the job time does not run out) and the search digs out once the sky is light.
   ;; Run with --allow-time and a shared --time-log.
   {:name "search-sealed-in-a-room-waits-for-dawn-then-digs-out"
    :time :night-exclusive :time-why :dawn-decision
-   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
-   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"]]
+   :plot {:light :sky :height 8 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"] [:set [15 0 9] "torch"] [:set [9 0 15] "torch"] [:set [15 0 15] "torch"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:time-set 22000] [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :settings {:jobs.explore.search/max-distance 60 :jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
          [:wait-s 70]
          [:time-set 1000]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}
-            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 70 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 20 :of-job true}
             {:event {:source :action :kind :started :data {:name "dig"}} :within-s 200}
             {:no-event {:source :job :kind :stopped :data {:why :no-way-out}} :for-s 200 :of-job true}]
    :limit-s 220}

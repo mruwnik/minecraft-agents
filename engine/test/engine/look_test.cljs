@@ -10,6 +10,7 @@
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
             [clojure.string :as str]))
 
@@ -399,3 +400,15 @@
     (aset p "lastForcedSampleAt" -1000)
     (look/see! c)
     (is (= 2 @n) "a later look samples again")))
+
+(deftest ground-past-the-walls-of-a-lit-sealed-room-at-night-is-lowered-by-dawn
+  (let [inside (for [x [-1 0 1] y [64 65] z [-1 0 1]] [x y z])
+        p (seeing {:time midnight :light-default [0 0] :light (zipmap inside (repeat [0 14]))
+                   :blocks (apply dissoc (tu/box -2 63 -2 2 66 2 "stone") (map #(.join (clj->js %) ",") inside))})]
+    (doseq [yaw [0 90 180 270] pitch [-60 0 60]]
+      (swap! (fake/state p) assoc :yaw yaw :pitch pitch)
+      (perception/pass! (aget p "perception")))
+    (let [cell {:x 6 :y 64 :z 0}]
+      (is (= [] (look/room-air-unseen p)))
+      (is (< (spawn-light/chance-at p cell false 0) (spawn-light/chance-at p cell false)))
+      (is (spawn-light/dawn-lowers? p cell)))))
