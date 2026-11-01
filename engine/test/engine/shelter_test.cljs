@@ -1654,7 +1654,7 @@
         blocks (into {} (for [x (range -2 23) y (range 62 68) z (range -3 4)
                               :when (or (solid? x y z) (mid-wall? x y z))]
                           [(str x "," y "," z) "stone"]))
-        missed #{[3 66 0] [18 64 0]}
+        missed #{[3 66 0] [3 64 1] [18 64 0]}
         raw-p (tu/fake {:time night :self {:pos {:x 5.5 :y 64 :z 0.5}} :blocks blocks})
         seen? (fn [x y z] (not (missed [x y z])))
         p (doto raw-p
@@ -1664,6 +1664,7 @@
     (swap! (fake/state raw-p) assoc :light-default [15 15])
     (tu/set-sensed! p (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos)) (.blockAt (tu/oracle raw-p) pos) #js {:unknown true})))
     (let [cells (set (look-edge/pending {:primitives p} #{}))]
+      (is (contains? cells [3 64 1]) "an unseen cell under the roof is looked at")
       (is (not (contains? cells [18 64 0])) "an unseen plain cell past the gap is not looked at")
       (is (every? (fn [[x]] (<= x 10)) cells)))))
 
