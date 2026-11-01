@@ -356,7 +356,10 @@
       (not (b/in-reach? c pos (:see (:args c))))
       (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
         (if (:unreachable w)
-          (or (await (dig-through! c pos)) (unreachable c pos items (:unreachable w) (:text w)))
+          (or (await (dig-through! c pos))
+              (if-let [sight (b/sight-text c pos)]
+                (unreachable c pos items :out-of-sight sight)
+                (unreachable c pos items (:unreachable w) (:text w))))
           w))
       (= :own-body (:reason (place-verdict c pos items)))
       (let [r (await (step-off/step-off-zoned! c pos {}))]

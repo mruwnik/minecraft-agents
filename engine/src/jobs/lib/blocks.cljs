@@ -178,6 +178,15 @@
     (when (and hit (not= hit target) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)))
       {:cell hit :block (some-> (u/seen-block p (zipmap [:x :y :z] hit)) .-name)})))
 
+(defn sight-text
+  "Why the cell cannot be aimed at though it is within reach (no face in sight, the first block in the line named), else nil."
+  [c pos]
+  (let [v (if (vector? pos) pos (u/cell-vec pos))]
+    (when (and (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach) (not (aim/body-sees? c v)))
+      (let [{:keys [cell block]} (line-blocker c pos)]
+        (str "no face of " (pr-str v) " is in sight from here"
+           (when cell (str ", blocked by " (or block "a block") " at " (pr-str cell))))))))
+
 (defn roof-over-body?
   "Whether a block at cell roofs the space the body stands in: over its head with a seen open cell right under it. It
   may be a build's ceiling, so a tunnelling dig leaves it (the caller pillars, or the call ends unreachable). A pillar (jobs.blocks.dig) does not start under one."

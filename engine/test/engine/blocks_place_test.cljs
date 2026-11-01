@@ -371,6 +371,15 @@
           (is (= 2 @walks) "one more try, then it ends")
           (is (= {:kind :nothing-possible :cause {:reason :unreachable :why :no-path}} e)))))))
 
+(deftest a-cell-in-reach-behind-a-wall-is-out-of-sight-not-a-walk-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/failing-walks (bd/setup {:self body :inventory cobble :blocks {"1,64,0" "stone" "1,65,0" "stone" "1,66,0" "stone" "2,63,0" "stone"}}) (atom 0))
+              out (await (tu/child-outcome (:eng env) job {:pos [2 64 0] :item "cobblestone" :through false} 8))]
+          (is (= :out-of-sight (:why out)))
+          (is (re-find #"no face of \[2 64 0\] is in sight from here, blocked by stone" (:text out))))))))
+
 (deftest a-top-level-place-whose-walk-has-no-way-ends-instead-of-waiting
   (async done
     (tu/run-async done
