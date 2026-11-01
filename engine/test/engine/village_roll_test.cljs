@@ -304,6 +304,15 @@
           (is (zero? (count (vt/calls p "place"))) "no place is tried without the item")
           (is (= "air" (workstation p))))))))
 
+(deftest the-body-beside-the-workstation-steps-flush-against-it-before-the-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ p] (await (roll {:entities [(librarian [(offer "paper")])] :self {:pos {:x 1.5 :y 64 :z 0.5}}
+                                  :wrap breaks-without-a-drop} {}))
+              goals (map #(let [t (.-pos (.-args %))] [(.-x t) (.-z t)]) (vt/calls p "moveTo"))]
+          (is (some #(and (< (Math/abs (- 1.7 (first %))) 0.01) (< (Math/abs (- 0.5 (second %))) 0.01)) goals)))))))
+
 (deftest a-place-child-that-stops-ends-with-its-ending
   (async done
     (tu/run-async done

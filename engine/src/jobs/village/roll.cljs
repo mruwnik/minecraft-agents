@@ -256,11 +256,22 @@
                   :continue)))
       :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
+(defn ^:async flush-to-cell!
+  "A body in the cell beside the workstation steps to its edge nearest the workstation, so the pickup reach (hitbox grown by a block)
+  covers the whole workstation cell and the drop is taken where it falls, even when a slab keeps the body out of the cell."
+  [c pos]
+  (let [[x y z] (b/feet-cell c)
+        dx (- (:x pos) x)
+        dz (- (:z pos) z)]
+    (when (and (= y (:y pos)) (= 1 (+ (Math/abs dx) (Math/abs dz))))
+      (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5 (* 0.2 dx)) :y y :z (+ z 0.5 (* 0.2 dz))} :range 0.1})))))
+
 (defn ^:async dig!
   "Break the workstation; the break is booked before the dig child runs, so a cut leaves it for the cleanup."
   [c]
   (let [{:keys [pos]} (:args c)
         slot (keyword (str "dig-" (rolls c)))
+        _ (await (flush-to-cell! c pos))
         _ (ctx/update-mem! c assoc :broken true :stand (u/self-pos c))
         r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
@@ -296,19 +307,21 @@
 
 (defn ^:async recover!
   "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): stand on its
-  cell, where a drop within a block comes to the body, and wait a few polls; then end :workstation-lost. :again or :continue."
+  cell when the body can enter it, else stay at the cell's edge, and wait a few polls for the drop to come; then end :workstation-lost. :again or :continue."
   [c]
   (let [{:keys [pos]} (:args c)
         tries (:recovers (ctx/mem c) 0)]
     (cond
-      (>= tries 3) (stop! c :workstation-lost)
+      (>= tries 5) (stop! c :workstation-lost)
       (on-cell? c pos) (do (ctx/update-mem! c update :recovers (fnil inc 0))
                            (await (child/pause! c 1 :picking-up-the-drop))
                            :continue)
       :else (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk}}))]
               (cond (= :continue r) :continue
                     (:arrived (:data r)) :again
-                    :else (stop! c :workstation-lost))))))
+                    :else (do (ctx/update-mem! c update :recovers (fnil inc 0))
+                              (await (child/pause! c 1 :picking-up-the-drop))
+                              :continue))))))
 
 (defn ^:async place!
   "Place the workstation again, and the book of the break closed."
