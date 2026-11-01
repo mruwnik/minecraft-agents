@@ -47,7 +47,7 @@
   {::wait-s {:default 45 :doc "Seconds to stay near a fed pair for a birth, before the attempt counts as fruitless." :spec (a/int-in 1 600)}
    ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
-   ::max-beds {:default 3 :doc "Beds one call puts down for the villagers before it ends :no-bed." :spec (a/int-in 1 nil)}
+   ::max-beds {:default 3 :doc "Beds one call puts down for the villagers before it ends :no-bed; 0 never places one." :spec (a/int-in 0 nil)}
    ::feed-s {:default 30 :doc "Seconds one pair's feeding takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn wait-s [] (settings/get settings ::wait-s))
 (defn wait-range [] (settings/get settings ::wait-range))
@@ -119,12 +119,12 @@
       (contract/ok :food "the meal is carried or fetched"))))
 
 (defn no-bed
-  "Later :no-bed while no free bed is seen, none is carried and a fetch is off."
+  "Later :no-bed while no free bed is seen and none may be put down: ::max-beds is 0, or none is carried and a fetch is off."
   [c]
   (let [p (:primitives c)
         vs (villager/seen p)]
-    (if (and (bed-short? c vs) (nil? (sh-beds/carried-bed p)) (not (need/fetch-opts c)))
-      (contract/later :no-bed "no free bed seen, none carried and no fetch for one" :need {:reason :need :any-of wood/bed-names :count 1})
+    (if (and (bed-short? c vs) (or (zero? (max-beds)) (and (nil? (sh-beds/carried-bed p)) (not (need/fetch-opts c)))))
+      (contract/later :no-bed (if (zero? (max-beds)) "no free bed seen and ::max-beds is 0, so none is put down" "no free bed seen, none carried and no fetch for one") :need {:reason :need :any-of wood/bed-names :count 1})
       (contract/ok :bed "a free bed is seen, carried or fetched"))))
 
 (defn pair-lost

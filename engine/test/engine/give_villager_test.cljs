@@ -141,6 +141,9 @@
                                          #(-> % ls/entities-after-look (taking (all-taken "v-1")))))]
           (is (= {:given 1 :status :done} (select-keys @out [:given :status]))))))))
 
+(deftest the-crowd-hold-names-the-villager-and-the-crowd
+  (is (= "no clear spot to toss to villager v-1xxxxx: 2 other villagers close by" (feed/crowd-why #js {:uuid "v-1xxxxxyz"} [1 2]))))
+
 (deftest a-villager-crowded-by-another-is-not-tossed-to
   ;; Live, the neighbour of the villager took the drop and the toss was not counted.
   (async done

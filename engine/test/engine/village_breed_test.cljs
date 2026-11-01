@@ -56,8 +56,8 @@
 
 (defn ^:async run!
   "Tick the engine at most n times, while its list holds a job and stop? (when given) is false."
-  [{:keys [eng clock]} n & [stop?]]
-  (await (settings/with-settings {:jobs.village.breed/wait-s 3}
+  [{:keys [eng clock extra]} n & [stop?]]
+  (await (settings/with-settings (merge {:jobs.village.breed/wait-s 3} extra)
            (fn ^:async t []
              (loop [i 0]
                (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
@@ -68,9 +68,9 @@
 (defn ^:async breed
   "Run the job until it ends (at most n ticks); its result is in :out. The world has beds unless it says :no-beds."
   [world args n prepare]
-  (let [p (tu/seeing-all (tu/fake-on-floor (merge {:floor h/flight-floor} (when-not (:no-beds world) {:blocks beds}) (dissoc world :no-beds))))
+  (let [p (tu/seeing-all (tu/fake-on-floor (merge {:floor h/flight-floor} (when-not (:no-beds world) {:blocks beds}) (dissoc world :no-beds :settings))))
         _ (prepare p)
-        s (start {:p p} args)]
+        s (assoc (start {:p p} args) :extra (:settings world))]
     (core/submit! (:eng s) '(recording-parent) {})
     (await (run! s n))
     s))
@@ -153,6 +153,15 @@
           (is (= :done (:status @out)) "a carried bed is put down, then the pair is fed")
           (is (= 3 (count (h/calls p "place"))) "pop 2 and target 3 want three beds; the fake lays one cell a bed")
           (is (= 2 (count (tosses p)))))))))
+
+(deftest max-beds-zero-never-places-a-bed-even-when-one-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (breed {:entities pair :inventory (conj bread {:name "red_bed" :count 3}) :no-beds true :settings {:jobs.village.breed/max-beds 0}} args 30 identity))]
+          (is (= [:condition-failed :no-bed] ((juxt (comp :kind :ending) :reason) @out)))
+          (is (empty? (h/calls p "place")))
+          (is (empty? (tosses p))))))))
 
 (deftest an-adult-walking-into-view-is-not-a-birth
   (async done

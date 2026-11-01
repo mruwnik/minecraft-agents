@@ -190,13 +190,18 @@
         turned (take 4 (drop (mod blocked 4) (cycle ss)))]
     (first (filter #(clear-side? others % (from-stand v %)) turned))))
 
+(defn crowd-why
+  "The hold text: which villager cannot be tossed to and how many others stand round it."
+  [e os]
+  (str "no clear spot to toss to villager " (subs (str (.-uuid e)) 0 8) ": " (count os) " other villagers close by"))
+
 (defn ^:async wait-room!
   "Hold 0.5 s for the crowd round the villager to move off; the held time is booked, and the call stops :crowded after
   crowd-s. :again, :continue or the stop."
-  [c]
+  [c e os]
   (if (>= (:crowded-ms (ctx/mem c) 0) (* 1000 (crowd-s)))
     (stop! c :crowded)
-    (let [r (await (child/pause! c 0.5 :waiting-for-room))]
+    (let [r (await (child/pause! c 0.5 (crowd-why e os)))]
       (ctx/update-mem! c dissoc :walks) ; it got within reach
       (when (= :done (:kind r)) (ctx/update-mem! c update :crowded-ms (fnil + 0) 500))
       (if (= :continue r) :continue :again))))
@@ -323,7 +328,7 @@
       (let [me (u/self-pos c) v (u/pos-of (.-pos e)) os (others c e)
             side (clear-stand os v me (:blocked m 0))]
         (cond
-          (nil? side) (await (wait-room! c))
+          (nil? side) (await (wait-room! c e os))
           (and (tossing-gap? me v) (clear-side? os (side-of me v) me)) (await (toss! c e item))
           :else (await (walk! c (stand v side) 0)))))))
 
