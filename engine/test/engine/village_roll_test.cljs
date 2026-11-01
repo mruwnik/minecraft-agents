@@ -483,6 +483,36 @@
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
 
+(defn shifts-body-and-hides-villager-after-break!
+  "The break moves the body 0.4 along x (the pickup of the drop); the villager is in sight only from the spot it was
+  first seen from, as through a slit."
+  [{:keys [p]} offers]
+  (let [state (fake/state p)
+        home (get-in @state [:self :pos])
+        gone (atom nil)
+        step (fn [_ _ _ w]
+               (let [at (get-in w [:self :pos])
+                     v (first (filter #(= "v-1" (:uuid %)) (:entities w)))]
+                 (cond
+                   (and v (not= "lectern" (get-in w [:blocks ws-pos])) (= home at))
+                   (do (reset! gone (assoc v :profession "unemployed" :offers nil))
+                       (swap! state #(-> % (update :entities (fn [es] (vec (remove (fn [e] (= "v-1" (:uuid e))) es))))
+                                         (assoc-in [:self :pos] (update home 0 + 0.4)))))
+                   (and @gone (= home at) (= "lectern" (get-in w [:blocks ws-pos])))
+                   (let [g @gone]
+                     (reset! gone nil)
+                     (swap! state update :entities conj (assoc g :profession "librarian" :offers offers))))))]
+    (add-watch state :slit step)))
+
+(deftest a-villager-seen-only-from-where-the-body-first-stood-is-looked-for-from-there-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
+              _ (shifts-body-and-hides-villager-after-break! env [(offer "enchanted_book")])
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
+
 (deftest a-roll-cut-after-the-break-places-the-workstation-back-in-its-cleanup
   (async done
     (tu/run-async done

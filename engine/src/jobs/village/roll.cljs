@@ -266,6 +266,17 @@
     (when (and (= y (:y pos)) (= 1 (+ (Math/abs dx) (Math/abs dz))))
       (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5 (* 0.2 dx)) :y y :z (+ z 0.5 (* 0.2 dz))} :range 0.1})))))
 
+(defn ^:async back-to-view!
+  "The villager was seen from another spot (the pickup or the flush moved the body): step back there, as a player
+  shifts to look through a slit again. :again when it set out (three tries a sighting), else nil."
+  [c]
+  (let [{:keys [x y z] :as view} (:view (ctx/mem c))
+        me (u/self-pos c)]
+    (when (and view (< (:view-tries (ctx/mem c) 0) 3) (> (js/Math.hypot (- (:x me) x) (- (:z me) z)) 0.1))
+      (ctx/update-mem! c update :view-tries (fnil inc 0))
+      (await (ctx/act c :moveTo #js {:pos #js {:x x :y y :z z} :range 0.1}))
+      :again)))
+
 (defn ^:async dig!
   "Break the workstation; the break is booked before the dig child runs, so a cut leaves it for the cleanup."
   [c]
@@ -349,6 +360,7 @@
         villager (pick! c)
         e (when villager (villager/find-by-uuid p villager))
         block (u/seen-name p pos)
+        _ (when e (ctx/update-mem! c assoc :view (u/self-pos c) :view-tries 0))
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) (max-rolls))]
     (cond
@@ -364,6 +376,7 @@
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job
       (nil? e) (cond
+                 (await (back-to-view! c)) :again
                  (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
                  (and (:seen (ctx/mem c)) (< (- (ctx/now c) (:away-since (ctx/mem c) (ctx/now c))) (* 1000 (away-s))))
                  (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
