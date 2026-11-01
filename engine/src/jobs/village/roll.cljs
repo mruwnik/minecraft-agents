@@ -226,6 +226,18 @@
   [r]
   (or (keyword? r) (contract/ending? r)))
 
+(defn ^:async back-off!
+  "Step three blocks back from the workstation cell along the side the body stands on, so a mob that wants out of the cell
+  is not held in by the body at its mouth. :continue or nil."
+  [c pos]
+  (let [{:keys [x z]} (u/self-pos c)
+        dx (- x (+ (:x pos) 0.5))
+        dz (- z (+ (:z pos) 0.5))
+        [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])
+        r (await (child/call-walk* c :back-off {:pos {:x (+ (:x pos) (* 3 sx)) :y (:y pos) :z (+ (:z pos) (* 3 sz))}
+                                               :range 1 :ways #{:walk}}))]
+    (when (= :continue r) :continue)))
+
 (defn ^:async child!
   "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop. A place refused
   with a mob in the cell (the villager stepped in) waits a poll and is placed again: :continue."
@@ -234,9 +246,11 @@
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (:data r)
-      (and (= 'jobs.blocks.place job) (seq (:mobs (:data r)))) (do (ctx/update-mem! c update :place-waits (fnil inc 0))
-          (await (child/pause! c (poll-s) :mob-in-the-cell))
-          :continue)
+      (and (= 'jobs.blocks.place job) (seq (:mobs (:data r))))
+      (do (ctx/update-mem! c update :place-waits (fnil inc 0))
+          (or (await (back-off! c (:pos cargs)))
+              (do (await (child/pause! c (poll-s) :mob-in-the-cell))
+                  :continue)))
       :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
 (defn ^:async dig!
@@ -244,7 +258,7 @@
   [c]
   (let [{:keys [pos]} (:args c)
         slot (keyword (str "dig-" (rolls c)))
-        _ (ctx/update-mem! c assoc :broken true)
+        _ (ctx/update-mem! c assoc :broken true :stand (u/self-pos c))
         r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0))))
@@ -258,13 +272,24 @@
     (and (= x (:x pos)) (= z (:z pos)) (contains? #{(:y pos) (dec (:y pos))} y))))
 
 (defn ^:async clear-cell!
-  "Walk off the workstation cell so it can be placed (jobs.lib.step-off). :again, :continue or the stop."
+  "Walk off the workstation cell so it can be placed (jobs.lib.step-off), to the side the dig was made from, never into a dead end behind it. :again, :continue or the stop."
   [c pos]
-  (let [r (await (step-off/step-off-zoned! c pos {}))]
+  (let [r (await (step-off/step-off-zoned! c pos (if-let [stand (:stand (ctx/mem c))] {:near stand} {})))]
     (cond
       (= :continue r) :continue
       (= :arrived r) :again
       :else (stop! c :place-failed))))
+
+(defn ^:async to-stand!
+  "Back to where the dig was made from when the body picked up the drop beyond the cell: placing from there would shut it
+  in behind the workstation. :again, :continue, or nil when it is there (or not known)."
+  [c]
+  (let [stand (:stand (ctx/mem c))]
+    (when (and stand (not (u/within? (u/self-pos c) stand 1.5)))
+      (let [r (await (child/call-walk* c :to-stand {:pos stand :range 1 :ways #{:walk}}))]
+        (cond (= :continue r) :continue
+              (:arrived (:data r)) :again
+              :else nil)))))
 
 (defn ^:async place!
   "Place the workstation again, and the book of the break closed."
@@ -272,11 +297,16 @@
   (let [{:keys [pos]} (:args c)
         item (item-of (:args c))
         slot (keyword (str "place-" (rolls c) "-" (:place-waits (ctx/mem c) 0)))
-        r (await (child! c slot 'jobs.blocks.place (cond-> {:pos pos :item item} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+        r (await (child! c slot 'jobs.blocks.place (cond-> {:pos pos :item item :through false} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (dissoc :broken)))
           :again)
       r)))
+
+(defn ^:async place-or-return!
+  "place!, after a walk back to the dig's stand when the body is elsewhere (to-stand!)."
+  [c]
+  (or (await (to-stand! c)) (await (place! c))))
 
 (defn ^:async step!
   "One piece of the search, from what the world and the saved count say now. :again, :continue or :done."
@@ -297,7 +327,7 @@
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
         (and e (not= "unemployed" profession)) (await (wait-job! c :villager-keeps-job))
         (on-cell? c pos) (await (clear-cell! c pos))
-        :else (await (place! c)))
+        :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job
       (nil? e) (cond
@@ -329,7 +359,7 @@
         block (u/seen-name (:primitives c) pos)]
     (if-not (and (:broken (ctx/mem c)) block (bs/air block))
       (ctx/end c :done nil)
-      (let [r (if (on-cell? c pos) (await (clear-cell! c pos)) (await (place! c)))]
+      (let [r (if (on-cell? c pos) (await (clear-cell! c pos)) (await (place-or-return! c)))]
         (if (= :again r) (await (cleanup c nil)) r)))))
 
 (defn ^:async round

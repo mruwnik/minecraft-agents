@@ -306,6 +306,25 @@
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation p))))))))
 
+(deftest the-place-child-digs-nothing-in-the-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom nil)
+              wrap (fn [env]
+                     (let [j (get (:jobs (:eng env)) 'jobs.blocks.place)]
+                       (assoc-in env [:eng :jobs 'jobs.blocks.place]
+                                 (assoc j :round (fn ^:async spy [c]
+                                                   (reset! seen (:args c))
+                                                   (await ((:round j) c)))))))]
+          (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+                        :inventory [{:name "lectern" :count 1}]
+                        :blocks {ws-key "air"}
+                        :scripts [[(offer "enchanted_book")]]
+                        :wrap wrap}
+                       {}))
+          (is (false? (:through @seen))))))))
+
 (deftest a-body-on-the-workstation-cell-steps-off-before-placing
   (async done
     (tu/run-async done

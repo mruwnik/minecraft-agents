@@ -16,6 +16,11 @@
     (is (= 1 (js/Math.abs (- 2 (:x (first cs)))) (inc (js/Math.abs (:z (first cs))))) "a neighbour first")
     (is (not-any? #(and (= 2 (:x %)) (= 0 (:z %))) cs))))
 
+(deftest equally-near-cells-go-to-the-one-nearest-near
+  (are [near x] (= x (:x (first (step-off/candidates (world {}) cell {:near near}))))
+    {:x 10 :y 64 :z 0} 3
+    {:x -10 :y 64 :z 0} 1))
+
 (deftest a-wall-or-lava-two-blocks-east-is-no-goal
   (are [blocks] (not (contains? (goals blocks) [4 64 0]))
     {"4,64,0" "stone" "4,65,0" "stone"}

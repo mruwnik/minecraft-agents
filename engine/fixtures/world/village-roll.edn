@@ -25,6 +25,17 @@
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000009" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-sealed-cell-from-the-corridor-never-digs-a-wall"
+   :plot {:floor "grass_block" :height 8}
+   :blocks [[:fill [11 -1 15] [14 2 17] "stone" :hollow] [:fill [14 -1 12] [21 2 20] "stone" :hollow]
+            [:set [14 0 16] "air"] [:set [14 1 16] "air"] [:set [13 0 16] "lectern"]]
+   :body {:at [15.5 0 16.5] :yaw 90 :settle-s 2}
+   :act [[:summon "villager" [12.5 0 16.5] "{UUID:[I;20260,7,5,10],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:wait-s 2]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-00050000000a" :pos #at [13 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
+   :after [[:block [13 0 16] "lectern"] [:block [13 1 15] "stone"] [:block [13 1 17] "stone"] [:block [12 1 15] "stone"]
+           [:block [12 1 17] "stone"] [:block [13 2 16] "stone"] [:block [11 0 16] "stone"] [:block [11 1 16] "stone"]]}
   {:name "nitwit-cannot-be-rolled"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,2],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000002" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]

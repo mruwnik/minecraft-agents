@@ -28,14 +28,15 @@
 
 (defn candidates
   "The cells {:x :y :z} to stand on within reach (default two) blocks (feet one down, level or one up) of the column of cell, nearest
-  first, level before a step. Left out: standable-cell? says no, a hazard at feet or head, a member of avoid (a set of
+  first, level before a step, of equal distance the one nearest :near (a pos, the body's) first. Left out: standable-cell? says no, a hazard at feet or head, a member of avoid (a set of
   [x y z]), or one ok? (a fn of the cell, default all) refuses."
-  [p {:keys [x y z]} {:keys [avoid ok? reach] :or {avoid #{} ok? (constantly true) reach (reach-blocks)}}]
+  [p {:keys [x y z]} {:keys [avoid ok? reach near] :or {avoid #{} ok? (constantly true) reach (reach-blocks)}}]
   (let [r (range (- reach) (inc reach))]
     (->> (for [dx r dz r dy [0 1 -1]
                :when (not (and (zero? dx) (zero? dz)))]
            {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-         (sort-by (fn [c] [(+ (* (- (:x c) x) (- (:x c) x)) (* (- (:z c) z) (- (:z c) z))) (js/Math.abs (- (:y c) y))]))
+         (sort-by (fn [c] [(+ (* (- (:x c) x) (- (:x c) x)) (* (- (:z c) z) (- (:z c) z))) (js/Math.abs (- (:y c) y))
+                           (if near (+ (js/Math.pow (- (:x c) (:x near)) 2) (js/Math.pow (- (:z c) (:z near)) 2)) 0)]))
          (filter #(and (reach/standable-cell? p % (reach/lookup p)) (not (hazard-at? p %))
                        (not (contains? avoid [(:x %) (:y %) (:z %)])) (ok? %))))))
 
@@ -48,11 +49,11 @@
          (map (fn [[dx dz]] [(+ x dx) (dec y) (+ z dz)])))))
 
 (defn ^:async step-off!
-  "Walk off the column of cell (a go-to child :step-off, range 0, no escalation). opts {:avoid :ok? :reach} as candidates (jobs pass :ok? (zone-ok (access/rules-input c))).
+  "Walk off the column of cell (a go-to child :step-off, range 0, no escalation). opts {:avoid :ok? :reach :near} as candidates (:near default: the body) (jobs pass :ok? (zone-ok (access/rules-input c))).
   Glances at floors it has not seen first. Resolves to :arrived, :continue (go-to waits on the world) or {:unreachable why}: no cell to go to (:no-cell) or go-to's."
   [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
   (await (dig-look/look-unknown! c (floors cell reach)))
-  (if-let [to (first (candidates (:primitives c) cell opts))]
+  (if-let [to (first (candidates (:primitives c) cell (merge {:near (u/self-pos c)} opts)))]
     (let [e (await (child/call-walk* c :step-off {:pos to :range 0 :ways #{:walk :clear-seal}}))
           res (:data e)]
       (cond

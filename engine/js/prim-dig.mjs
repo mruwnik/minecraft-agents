@@ -294,8 +294,8 @@ export function createDig (env) {
       } catch (err) {
         if (!/^Server refused/.test(err?.message ?? '')) throw err
         const refusal = refusalFacts(p, support)
-        const near = refusal.entities.map(e => `${e.name ?? e.kind}#${e.id}`).join(', ') || 'none'
         const at = v => `${v.x},${v.y},${v.z}`
+        const near = refusal.entities.map(e => `${e.name ?? e.kind}#${e.id} at ${at(e.pos)}`).join(', ') || 'none'
         return { status: 'failed', reason: `${err.message} (against ${at(refusal.against)} face ${at(refusal.face)}, body at ${at(refusal.stand)}, entities near the cell: ${near})`, refusal }
       }
       // The inventory update for the placed item can trail the block; the act's after-snapshot (the tally) must see it.
