@@ -35,7 +35,7 @@
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried: the body stands on its cell for a few polls, then ends; nothing is placed), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body walked to it and to its far side and waited a few polls; nothing is placed), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -323,23 +323,70 @@
               (:arrived (:data r)) :again
               :else nil)))))
 
+(defn drop-spot
+  "Where the broken workstation's drop lies, for the body to reach: the nearest seen item of it within 4 blocks of the cell, else the
+  cell beyond the workstation from where the dig was made (a drop slides on, away from the digger). Nil when neither is known."
+  [c pos item]
+  (let [seen (->> (look/seen-items (:primitives c) {:radius 4 :max 32})
+                  (filter #(and (= item (.-name (.-item %))) (u/within? (u/pos-of (.-pos %)) pos 4))))
+        stand (:stand (ctx/mem c))]
+    (cond
+      (seq seen) (u/pos-of (.-pos (first (sort-by #(u/dist (u/pos-of (.-pos %)) pos) seen))))
+      stand (let [dx (- (+ (:x pos) 0.5) (:x stand))
+                  dz (- (+ (:z pos) 0.5) (:z stand))
+                  [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
+              {:x (+ (:x pos) 0.5 sx) :y (:y pos) :z (+ (:z pos) 0.5 sz)}))))
+
+(defn far-side
+  "The point 2 blocks beyond spot on the line from the body through it, along the longer axis: the other side of the wall or cell the drop lies in."
+  [c spot]
+  (let [{:keys [x z]} (u/self-pos c)
+        dx (- (:x spot) x)
+        dz (- (:z spot) z)]
+    (if (>= (js/Math.abs dx) (js/Math.abs dz))
+      (assoc spot :x (+ (:x spot) (* 2 (js/Math.sign dx))))
+      (assoc spot :z (+ (:z spot) (* 2 (js/Math.sign dz)))))))
+
+(defn ^:async reach-drop!
+  "Take the drop through a gap in a wall (a back passage behind a sealed cell): the first try walks (go-to, walk only) within pickup
+  range of the drop's spot, later tries to the far side of it from where the body stood, then presses up against whatever keeps the body
+  out, so the pickup box reaches through. :again, :continue, or nil when it was tried four times or no spot is known."
+  [c]
+  (let [{:keys [pos]} (:args c)
+        n (:reach-drops (ctx/mem c) 0)
+        spot (when (< n 4) (drop-spot c pos (item-of (:args c))))]
+    (when spot
+      (ctx/update-mem! c update :reach-drops (fnil inc 0))
+      (let [r (await (child/call-walk* c (keyword (str "reach-drop-" n)) (if (zero? n)
+                                                       {:pos spot :range 2.5 :ways #{:walk}}
+                                                       {:pos (far-side c spot) :range 1.2 :ways #{:walk}})))]
+        (cond
+          (= :continue r) :continue
+          :else (do (when (:arrived (:data r))
+                      (await (ctx/act c :moveTo #js {:pos #js {:x (:x spot) :y (:y spot) :z (:z spot)} :range 0.1})))
+                    (await (child/pause! c 1 :picking-up-the-drop))
+                    :again))))))
+
 (defn ^:async recover!
-  "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): stand on its
-  cell when the body can enter it, else stay at the cell's edge, and wait a few polls for the drop to come; then end :workstation-lost. :again or :continue."
+  "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): walk to where its drop
+  lies and take it through a gap (reach-drop!); failing that stand on its cell when the body can enter it, else stay at the cell's
+  edge, and wait a few polls for the drop to come; then end :workstation-lost. :again or :continue."
   [c]
   (let [{:keys [pos]} (:args c)
         tries (:recovers (ctx/mem c) 0)]
     (cond
       (>= tries 5) (stop! c :workstation-lost)
-      (on-cell? c pos) (do (ctx/update-mem! c update :recovers (fnil inc 0))
-                           (await (child/pause! c 1 :picking-up-the-drop))
-                           :continue)
-      :else (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk}}))]
-              (cond (= :continue r) :continue
-                    (:arrived (:data r)) :again
-                    :else (do (ctx/update-mem! c update :recovers (fnil inc 0))
-                              (await (child/pause! c 1 :picking-up-the-drop))
-                              :continue))))))
+      :else (or (await (reach-drop! c))
+                (if (on-cell? c pos)
+                  (do (ctx/update-mem! c update :recovers (fnil inc 0))
+                      (await (child/pause! c 1 :picking-up-the-drop))
+                      :continue)
+                  (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk}}))]
+                    (cond (= :continue r) :continue
+                          (:arrived (:data r)) :again
+                          :else (do (ctx/update-mem! c update :recovers (fnil inc 0))
+                                    (await (child/pause! c 1 :picking-up-the-drop))
+                                    :continue))))))))
 
 (defn ^:async place!
   "Place the workstation again, and the book of the break closed."

@@ -332,6 +332,17 @@
               goals (map #(let [t (.-pos (.-args %))] [(.-x t) (.-z t)]) (vt/calls p "moveTo"))]
           (is (some #(and (< (Math/abs (- 1.7 (first %))) 0.01) (< (Math/abs (- 0.5 (second %))) 0.01)) goals)))))))
 
+(deftest a-seen-drop-out-of-reach-is-walked-up-to-and-pressed-against
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [drop {:id 90 :name "item" :kind "item" :pos {:x 4.5 :y 64 :z 0.5} :item {:name "lectern" :count 1}}
+              [_ p] (await (roll {:entities [(librarian [(offer "paper")]) drop] :self {:pos {:x 1.5 :y 64 :z 0.5}}
+                                  :wrap breaks-without-a-drop} {}))
+              goals (map #(let [t (.-pos (.-args %))] [(.-x t) (.-z t)]) (vt/calls p "moveTo"))]
+          (is (some #(and (= 4.5 (first %)) (= 0.5 (second %))) goals)
+              "the body presses up against the wall nearest the drop, so a gap in it lets the pickup reach through"))))))
+
 (deftest a-place-child-that-stops-ends-with-its-ending
   (async done
     (tu/run-async done
