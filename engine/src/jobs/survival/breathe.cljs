@@ -301,6 +301,31 @@
       :else (ctx/update-mem! c update :failed-steps (fnil conj []) cell))
     :again))
 
+(defn drop-sides
+  "The cells beside the body's own cell, level with it, that the water would carry it into and let it fall: open (air or
+  flowing water) with no floor under them. nil when there are none."
+  [p pos]
+  (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
+    (seq (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+               :let [n {:x (+ fx dx) :y fy :z (+ fz dz)}]
+               :when (and (breath/passable-water-or-air? (u/seen-name p n)) (not (still-water? p n)) (not (breath/holds-body? p n)))]
+           n))))
+
+(defn ^:async seal!
+  "A current carries the surfaced body into a shaft beside its column within a fraction of a second, less than a place
+  child needs to aim. A swim with hold keeps it at the cell centre meanwhile; a block goes in the open cell beside it.
+  :again either way; the cell is not tried again."
+  [c cell]
+  (let [p (:primitives c)
+        fillers (choose/filler-names c :climb)
+        hold (-> (ctx/act c :swim (clj->js {:hold true :ms (settings/get settings ::tread-ms)}))
+                 (.catch (fn [_] nil)))
+        e (await (ctx/call c :step 'jobs.blocks.place {:pos [(:x cell) (:y cell) (:z cell)] :use {:blocks fillers} :ways #{:carried}}))]
+    (ctx/update-mem! c update :sealed (fnil conj []) cell)
+    (when (= :done (:kind e)) (ctx/update-mem! c update :steps (fnil inc 0)))
+    (await hold)
+    :again))
+
 (defn ^:async land-by-go-to!
   "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded, unless the
   child's time slice ended with the body nearer by the min-leg setting: that try does not count)."
@@ -335,6 +360,7 @@
               (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
         m (ctx/mem c)
         carried? (boolean (escape/pillar-item c))
+        sealcell (when carried? (first (remove (set (:sealed (ctx/mem c))) (drop-sides p (u/self-pos c)))))
         in-budget? (< (:travelled m 0) (* 3 (swim-range)))
         ways (fn []
                (let [shore (shore/nearest-land p pos (shore-radius) (:failed-shores m) shore-cell?)
@@ -354,6 +380,8 @@
                                                                                            (and carried? (:stepcell w)) (:bankcell w))))
                                                                   :price (sense/fails-to c)}))]
     (cond
+      sealcell (await (seal! c sealcell))
+
       bankcell (await (bank/dig! c bankcell (air/cap-dig-share)))
 
       shore

@@ -323,6 +323,20 @@
           (is (not-any? #(= 1 (some-> % .-args .-pos .-x)) (array-seq (.. p -world -calls))) "no move into the shaft")
           (is (not= 1 (js/Math.floor (:x (core/self-pos p))))))))))
 
+(deftest a-surfaced-body-in-a-column-beside-an-open-shaft-is-held-while-a-block-goes-in-the-open-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:inWater true :oxygen 4}
+                     :inventory [{:name "dirt" :count 1}]
+                     :blocks (merge water-column walls
+                                    (into {} (for [y (range 50 70) c [[(str "1," y ",0") "air"] [(str "2," y ",0") "stone"]]] c)))}
+              {:keys [eng p]} (setup world)]
+          (await (one-run! eng side-args))
+          (let [calls (array-seq (.. p -world -calls))]
+            (is (some #(and (= "swim" (.-name %)) (true? (.. % -args -hold))) calls) "a swim holds the column centre")
+            (is (some #(and (= "place" (.-name %)) (= 1 (.. % -args -pos -x))) calls) "a block goes in the shaft cell beside it")))))))
+
 (deftest drowning-with-no-air-in-reach-is-stopped-no-air
   (async done
     (tu/run-async done

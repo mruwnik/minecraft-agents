@@ -112,6 +112,7 @@ export function createMove (env) {
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms > 0), 'swim needs ms, a number of milliseconds above 0')
     need(a.toward === undefined || a.toward === null || isPos(a.toward), 'swim toward needs {x, y, z}')
     need(a.tread === undefined || typeof a.tread === 'boolean', 'swim tread needs true or false')
+    need(a.hold === undefined || typeof a.hold === 'boolean', 'swim hold needs true or false')
     const ms = Math.min(a.ms ?? setting('prim/swim-default-ms'), setting('prim/swim-max-ms'))
     const toward = a.toward ?? null
     const before = oxygenNow()
@@ -123,6 +124,19 @@ export function createMove (env) {
         for (const control of [...pressed]) { pressed.delete(control); env.bot.setControlState(control, false) }
       }
       ctx.onAbort(release)
+      const home = center(cell(here()))
+      const steer = () => {
+        const at = env.bot.entity.position
+        const dx = home.x - at.x
+        const dz = home.z - at.z
+        const yaw = env.bot.entity.yaw
+        const forward = dz * Math.cos(yaw) - dx * Math.sin(yaw)
+        const strafe = -(dx * Math.cos(yaw) + dz * Math.sin(yaw))
+        for (const [control, on] of [['forward', forward > 0.08], ['back', forward < -0.08], ['right', strafe > 0.08], ['left', strafe < -0.08]]) {
+          if (on) press(control)
+          else if (pressed.has(control)) { pressed.delete(control); env.bot.setControlState(control, false) }
+        }
+      }
       try {
         if (toward) {
           // climb out toward the target: the pathfinder has no move from floating feet onto a rim just above
@@ -151,10 +165,13 @@ export function createMove (env) {
           if (y > best + 0.05) { best = y; stalled = 0 } else if (env.bot.entity.isCollidedVertically) stalled += 1
           if (stalled * setting('prim/poll-ms') >= setting('prim/swim-blocked-ms')) return result('blocked')
         }
-        if (!a.tread) return result('surfaced')
-        // treading water: jump stays held for the rest of ms, so the head stays out while the lungs refill
+        if (!a.tread && !a.hold) return result('surfaced')
+        // treading water: jump stays held for the rest of ms, so the head stays out while the lungs refill. Holding also
+        // pushes back to the centre of the cell the swim began in, against a current, whatever way the body faces (another
+        // act may be turning it): the controls are worked out from the yaw.
         press('jump')
         for (;;) {
+          if (a.hold) steer()
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
