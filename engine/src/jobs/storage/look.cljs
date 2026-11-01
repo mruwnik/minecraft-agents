@@ -17,9 +17,9 @@
   once) and records the stacks in body memory :fetch/stock, which ./bin/observe chests lists.
   Needs: some chest, else waits :no-chest; a chest that zones or claims of another refuse :take, else waits
   :refused {:zones :claims}. :ignore-zones? true skips it.
-  Ends done {:looked {[x y z] {name n}}} once every chest was opened (the message counts them); else nothing-possible (cause the open status,
-  :unreachable ..) or condition-failed :missing (the block is no container; a recorded :chest place is retracted),
-  with :looked so far and :gave-up true.")
+  Ends done {:looked {[x y z] {name n}} :gone [cells]} once every chest was opened or found gone (the message counts them); else nothing-possible (cause the open status,
+  :unreachable ..) or condition-failed :missing (every chest was gone). A chest that is no container any more is noted gone (its booking
+  and a recorded :chest place are retracted) and the look carries on; :gone lists them.")
 
 (a/defargs args
   {:chests {:doc "[x y z] or {:x :y :z} of each chest to open; the storage group when nil" :spec (a/coll-of ::a/pos) :default nil}
@@ -40,7 +40,9 @@
   (let [view (ctx/view c)]
     (vec (distinct (map storage/cell-of (or (:chests (:args c)) (concat (storage/group view) (keys (stock/stock-of view)))))))))
 
-(defn pending [c] (remove (set (keys (:looked (ctx/mem c)))) (cells c)))
+(defn gone [c] (:gone (ctx/mem c) []))
+
+(defn pending [c] (remove (into (set (keys (:looked (ctx/mem c)))) (gone c)) (cells c)))
 
 (defn can-start? [c]
   (contract/all [(if (seq (cells c)) (contract/ok :chest "a chest is known") (contract/later :no-chest "no chest known"))
@@ -51,7 +53,7 @@
   (let [left (count (pending c))
         data [:units :chests :done (- (count (cells c)) left) :left left :result {:looked (:looked (ctx/mem c) {})}]]
     (if (and (zero? left) (seq (cells c)))
-      (apply contract/ok :looked (str "look: all " (count (cells c)) " chest(s) opened") data)
+      (apply contract/ok :looked (str "look: " (count (:looked (ctx/mem c))) " chest(s) opened, " (count (gone c)) " gone") data)
       (apply contract/later :looking (str "look: " left " chest(s) to open") data))))
 
 (defn quote-of [c]
@@ -72,9 +74,13 @@
         (= "ok" status) (do (ctx/update-mem! c assoc-in [:looked cell] (stock/stacks->items (:items seen)))
                             (u/progress! c)
                             :again)
-        (= "missing" status) (stop! c :condition-failed :missing)
+        (= "missing" status) (do (ctx/forget-where! c stock/stock-kind #(= cell (:pos %)))
+                                 (ctx/update-mem! c update :gone (fnil conj []) cell)
+                                 :again)
         :else (stop! c :nothing-possible (keyword status))))
-    (ctx/end c :done nil {:looked (:looked (ctx/mem c) {})})))
+    (if (and (empty? (:looked (ctx/mem c))) (seq (gone c)))
+      (stop! c :condition-failed :missing)
+      (ctx/end c :done nil {:looked (:looked (ctx/mem c) {}) :gone (gone c)}))))
 
 (defn ^:async round [c]
   (await (pace/steps! c (fn ^:async look-step [] (await (step! c))))))
