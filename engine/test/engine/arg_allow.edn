@@ -168,6 +168,7 @@
  [jobs.storage.deposit :inventory]
  [jobs.storage.haul :gave-up]
  [jobs.storage.haul :inventory]
+ [jobs.storage.look :chests]
  [jobs.storage.haul :leave]
  [jobs.storage.make-room :carry-blocks]
  [jobs.strip.all :base]

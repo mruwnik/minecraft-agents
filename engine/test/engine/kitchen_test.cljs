@@ -172,7 +172,7 @@
               s (await (run (list job (assoc args :reserve {} :stock {"bread" 3})) world 30 {"wheat" 9}))]
           (is (= {"wheat" 9} (chest-items s)) "the wheat is put back")
           (is (= :no-table (:reason (first (events-of s :stopped)))))
-          (is (re-find #"crafting_table" (pr-str (:because (first (events-of s :stopped))))) "the cause names the table"))))))
+          (is (re-find #"crafting table" (pr-str (:because (first (events-of s :stopped))))) "the cause names the table"))))))
 
 (deftest wheat-in-the-chest-is-baked-though-none-is-carried
   (async done

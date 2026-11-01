@@ -7,6 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.chests :as chests]
             [jobs.lib.pace :as pace]
+            [jobs.lib.quote :as quote]
             [jobs.lib.stock :as stock]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
@@ -57,8 +58,10 @@
       (apply contract/later :looking (str "look: " left " chest(s) to open") data))))
 
 (defn quote-of [c]
-  (let [t (* (count (pending c)) (settings/get settings ::chest-s))]
-    {:uses {:job-time [(/ t 4) t (max t (settings/get settings ::job-time-s))]}}))
+  (let [n (count (pending c))
+        t (* n (settings/get settings ::chest-s))]
+    (quote/then {:uses {:job-time [(/ t 4) t (max t (settings/get settings ::job-time-s))]}}
+                (apply quote/then (repeat n (quote/work :click))))))
 
 (defn stop! [c kind cause]
   (ctx/end c kind cause {:gave-up true :looked (:looked (ctx/mem c) {})}))
