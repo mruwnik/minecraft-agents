@@ -96,10 +96,10 @@
     (into [] (comp (map a/cell) (distinct)) (:cells area))))
 
 (defn dig-args
-  "The jobs.blocks.dig args for the cell at pos: a tool that harvests it (fetched or made), the drop picked up, the job's :accept and opt-out."
+  "The jobs.blocks.dig args for the cell at pos: a tool that harvests it (fetched or made; snow, whose drop is a snowball, is dug by hand), the drop picked up, the job's :accept and opt-out."
   [c pos]
   (merge (select-keys (:args c) [:accept :ignore-zones? :for-plan])
-         {:pos pos :need-drop true :collect true :through false}))
+         {:pos pos :need-drop (not= "snow" (u/seen-name (:primitives c) pos)) :collect true :through false}))
 
 (defn named
   "[[pos block-name] ...] of the loaded cells not skipped."
