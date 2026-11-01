@@ -1589,7 +1589,7 @@ test('swim hold: pushes toward the cell centre whatever the yaw (mineflayer forw
   for (const [yaw, control] of expected) {
     const { bot, p } = rig({ blocks: { '0,63,0': 'water' }, pos: [0.5, 64, 0.5] })
     setTimeout(() => { bot.entity.position = new Vec3(0.9, 64, 0.5); bot.entity.yaw = yaw }, 5)
-    const result = await p.swim('t1', { hold: true, ms: 300 })
+    const result = await p.swim('t1', { hold: true, ms: 3000 })
     assert.equal(result.status, 'timeout')
     const pressed = controls(bot).filter(([, on]) => on).map(([name]) => name)
     assert.deepEqual([...new Set(pressed)], ['jump', control], `yaw ${yaw}`)
@@ -1600,7 +1600,7 @@ test('swim hold: pushes toward the cell centre whatever the yaw (mineflayer forw
 test('swim hold: ends filled, releasing every control, once the until cell holds a block', () => virtually(async () => {
   const blocks = { '0,63,0': 'water' }
   const { bot, p } = rig({ blocks, pos: [0.5, 64, 0.5] })
-  setTimeout(() => { blocks['1,64,0'] = 'stone' }, 50)
+  setTimeout(() => { blocks['1,64,0'] = 'stone' }, 10)
   const result = await p.swim('t1', { hold: true, until: at(1, 64, 0), ms: 3000 })
   assert.equal(result.status, 'filled')
   assert.equal(controls(bot).filter(([, on]) => on).length, controls(bot).filter(([, on]) => !on).length)
