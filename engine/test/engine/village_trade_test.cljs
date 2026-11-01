@@ -147,11 +147,14 @@
       (fn ^:async t []
         (let [offer (bread {:cost [{:item "diamond" :count 1}]})
               world {:entities [(villager [offer])] :inventory [{:name "emerald" :count 4} {:name "diamond" :count 2}]}
-              [refused] (await (trade world {:ways #{:carried}}))
-              [paid p] (await (trade world {:use {:payment ["diamond"]}}))]
+              [refused] (await (trade world {:ways #{:carried} :use {:payment ["emerald"]}}))
+              [paid p] (await (trade world {:use {:payment ["diamond"]}}))
+              [unnamed p2] (await (trade world {:ways #{:carried}}))]
           (is (= :no-offer (:reason refused)))
           (is (= {:bought 1 :paid {"diamond" 1} :item "bread"} paid))
-          (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p))))))))
+          (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p)))
+          (is (= paid unnamed) "no emerald offer for the item: any carried item pays")
+          (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p2))))))))
 
 (deftest an-offer-with-two-cost-stacks-pays-both
   (async done
@@ -422,7 +425,7 @@
                                                               :primitives (tu/fake-on-floor {:inventory inv})}))))
     [] #{:carried} false
     [] #{:carried :chest} true
-    [{:name "emerald" :count 1}] #{:carried} true))
+    [{:name "paper" :count 24}] #{:carried} true))
 
 (deftest payment-not-carried-and-not-fetched-ends-payment-short-before-any-buy
   (async done

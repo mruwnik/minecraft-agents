@@ -20,7 +20,7 @@
   within jobs.lib.villager/search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those paid with an item of the call's :use {:payment [..]}
-  (default emerald) and whose price (the adjusted count of the first cost stack) is within what the call's :spend
+  (default emerald; with no emerald offer for :buy, an offer paid in any other item, e.g. 24 paper for an emerald) and whose price (the adjusted count of the first cost stack) is within what the call's :spend
   {:items {payment n}} has left (none set: no limit) are kept. The cheapest is taken, the lowest index on a tie.
   :count is items wanted. An offer gives several per trade, so it buys ceil(remaining / items per trade) trades
   and may overshoot a little.
@@ -87,9 +87,9 @@
 (defn no-payment
   "Later :need while no currency is carried and the call will not fetch it."
   [c]
-  (if (or (need/fetch-opts c) (pos? (carried c currency)))
+  (if (or (need/fetch-opts c) (seq (u/inventory (:primitives c))))
     (contract/ok :payment "payment carried or fetched")
-    (contract/later :need "no payment carried and no fetch for it" :why "no payment carried and no fetch for it" :item currency :count 1)))
+    (contract/later :need "nothing carried to pay with and no fetch for it" :why "no payment carried and no fetch for it" :item currency :count 1)))
 
 (def can-start? (cond/and bad-args no-payment))
 
@@ -145,7 +145,8 @@
                            (or (nil? enchant) (some (fn [e] (= enchant (:name e))) (get-in % [:gives :enchants]))))
                      offers)
         open (map #(assoc % :price (get-in % [:cost 0 :count])) (remove :disabled mine))
-        fit (filter #(or (nil? max-price) (<= (:price %) max-price)) open)]
+        limit (fn [o] (cond (nil? max-price) ##Inf (fn? max-price) (max-price (get-in o [:cost 0 :item])) :else max-price))
+        fit (filter #(<= (:price %) (limit %)) open)]
     (cond
       (empty? mine) {:reason :no-offer}
       (empty? open) {:reason :sold-out}
@@ -259,13 +260,19 @@
   [c]
   (let [{:keys [buy]} (:args c)
         villager (villager/chosen c)
-        payment (set (or (ctx/use c :payment) [currency]))
+        chosen-payment (ctx/use c :payment)
+        payment (set (or chosen-payment [currency]))
         max-price (apply max (map #(get-in (ctx/left c) [:spend :items %] ##Inf) payment))
+        spend-of #(get-in (ctx/left c) [:spend :items %] ##Inf)
         r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
         status (.-status r)]
     (case status
       "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)
-                 {:keys [offer reason price]} (choose offers {:buy buy :payment payment :max-price (when-not (= ##Inf max-price) max-price)})]
+                 pick (fn [payment max-price] (choose offers {:buy buy :payment payment :max-price max-price}))
+                 first-pick (pick payment (when-not (= ##Inf max-price) max-price))
+                 {:keys [offer reason price]} (if (and (nil? chosen-payment) (= :no-offer (:reason first-pick)))
+                                                (pick nil spend-of)
+                                                first-pick)]
              (emit-offers! c :trade.offers villager r offers)
              (if offer
                (or (await (pay! c offer))

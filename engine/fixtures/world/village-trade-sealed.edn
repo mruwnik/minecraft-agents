@@ -31,4 +31,12 @@
    :act [[:summon "villager" [16.4 0 16.5] "{NoAI:1b,UUID:[I;20263,7,5,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
          [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00050000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 60 :of-job true}]
-   :after [[:item "bread" 6] [:item "emerald" 7]]}]}
+   :after [[:item "bread" 6] [:item "emerald" 7]]}
+  {:name "librarian-buys-24-paper-for-an-emerald"
+   :blocks [[:fill [15 -1 15] [17 3 17] "stone" :hollow]
+            [:set [15 1 16] "stone_slab[type=bottom]"]]
+   :body {:at [14.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["paper" 24]] :effects [["resistance" 600 4]]}
+   :act [[:summon "villager" [16.2 0 16.5] "{NoAI:1b,UUID:[I;20263,7,6,843],VillagerData:{profession:\"minecraft:librarian\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:paper\",count:24},sell:{id:\"minecraft:emerald\",count:1},maxUses:16,xp:2}]}}"]
+         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00060000034b" :buy "emerald" :count 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:bought 1}} :within-s 60 :of-job true}]
+   :after [[:item "emerald" 1] [:item "paper" 0]]}]}
