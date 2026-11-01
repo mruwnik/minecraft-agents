@@ -529,6 +529,16 @@
             (is (= reason (:reason out)) (str "age " age))
             (is (re-find (re-pattern (name reason)) (:text out)))))))))
 
+(deftest a-refused-bucket-pour-names-the-block-in-the-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "lava_bucket" :count 1}]})
+              _ (.override (.-world (:p env)) "place" (fn ^:async f [_ _ _] #js {:status "occupied" :block "cobblestone"}))
+              out (await (tu/child-outcome (:eng env) use-on {:on at :item "lava_bucket"} 40))]
+          (is (= :occupied (:reason out)))
+          (is (re-find #"occupied by cobblestone" (:text out))))))))
+
 (deftest a-quote-of-place-and-use-on-grows-with-the-walk
   (async done
     (tu/run-async done

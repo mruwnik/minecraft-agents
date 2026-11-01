@@ -57,7 +57,8 @@
   "End the call: done when used, else kind with the result's :reason (and :why); the data is the result with a :text."
   [c kind {:keys [used] :as result}]
   (let [result (update result :text #(or % (str (if used "clicked " "did not click ") (pr-str (b/cell (:pos result)))
-                                                (when-not used (str ": " (name (:reason result)))))))]
+                                                (when-not used (str ": " (name (:reason result))
+                                                                    (when-let [block (some-> (:raw result) .-block)] (str " by " block)))))))]
     (ctx/end c kind (when-not used (select-keys result [:reason :why])) result)))
 
 (defn ripe-before?
