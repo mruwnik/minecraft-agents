@@ -991,6 +991,10 @@
     lit-hut-with-window nil :later
     (assoc night-hut :time st/noon) nil :ok))
 
+(deftest mine-and-dig-for-given-only-an-item-wait-in-a-night-hut
+  (doseq [safe? [mine/safe? dig-for/safe?]]
+    (is (= :later (first (safe? (assoc (ctx-of lit-hut-with-window) :args {:item "coal" :count 1})))))))
+
 (deftest felling-a-tree-outside-the-night-shelter-waits-for-day-instead-of-walking-out
   (let [check (fn [at] (let [c (assoc (ctx-of tunnel) :args {:at at} :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data dug-in-entry}]}}}))]
                          (first (fell-tree/safe? c))))]
