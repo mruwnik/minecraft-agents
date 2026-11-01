@@ -128,14 +128,16 @@
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
   looked at; what the look shows is read on the next pass, once the sight has settled. A side it did not show (a far wall
   of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
-  A walk is priced once, at its start, with the seconds the job's walks spent before it (:edge-spent), so walks one after
+  A cell begun stays the one worked on while it is still pending, however the walk reorders the nearest-first list. A walk is priced once, at its start, with the seconds the job's walks spent before it (:edge-spent), so walks one after
   another are bought from what the call's worth leaves.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
   place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given."
   ([c cells] (look! c cells nil))
   ([c cells to] (look! c cells to (ctx/worth c)))
   ([c cells to worth]
-   (let [cell (first cells)
+   (let [phases (:edge-phase (ctx/mem c))
+         cell (or (first (filter #(<= 1 (get phases % 0) 4) cells)) (first cells))
+         cells (cons cell (remove #{cell} cells))
          phase (get-in (ctx/mem c) [:edge-phase cell] 0)
          advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
      (case phase
