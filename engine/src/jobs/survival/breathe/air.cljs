@@ -192,10 +192,12 @@
         pocket? (and pocket
                      (< swim-ms (breath/air-left-ms (.self p)))
                      (let [dig-ms (await (cap-dig-ms c))] (or (nil? dig-ms) (<= swim-ms dig-ms))))
-        target (or surface (when pocket? (:cell pocket)))]
+        target (or surface (when pocket? (:cell pocket)))
+        ;; a surface beside the own column with no body held up under it is a fall, not air: counted as tried, never gone to
+        drop? (and surface (not stair?) (not= [(:x surface) (:z surface)] [(js/Math.floor (:x pos)) (js/Math.floor (:z pos))]) (not (breath/holds-body? p surface)))]
     (if-not target
       :none
-      (let [arrived? (or (await (go! c :air target 0))
+      (let [arrived? (or (and (not drop?) (await (go! c :air target 0)))
                          ;; raw moveTo kept: the go-to planner may find no route up a flooded stair it cannot see whole (range 0, no time for a plan)
                          (and stair? (= "arrived" (swim/status (await (ctx/act c :moveTo (clj->js {:pos {:x (+ 0.5 (:x target)) :y (:y target) :z (+ 0.5 (:z target))} :range 0 :timeoutS 6})))))))]
         (ctx/update-mem! c update :failed-air (fnil conj []) target)
@@ -235,7 +237,7 @@
 
 (defn crawl-columns-near
   "The water columns (feet and head cell seen water) within ::crawl-radius of the body at its height, not tried in this run and
-  brighter than the body's own cell and not past a downward bubble column, brightest first, then nearest: light seeping down a hole in the roof shows in the water under it."
+  brighter than the body's own cell, not past a downward bubble column and over a floor (not a waterfall), brightest first, then nearest: light seeping down a hole in the roof shows in the water under it."
   [c]
   (let [p (:primitives c)
         raw (look/raw-of p)
@@ -247,7 +249,7 @@
         open? (fn [cell] (every? #(contains? breath/swimmable (breath/seen-water-name p (update cell :y + %))) [0 1]))]
     (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
                :let [cell (-> feet (update :x + dx) (update :z + dz))]
-               :when (and (not (contains? tried [(:x cell) (:z cell)])) (> (glow cell) own) (open? cell)
+               :when (and (not (contains? tried [(:x cell) (:z cell)])) (> (glow cell) own) (open? cell) (breath/holds-body? p cell)
                      (not (breath/drag-between? p (:x feet) (:z feet) (:x cell) (:z cell) (:y feet))))]
            cell)
          (sort-by (fn [cell] [(- (glow cell)) (+ (js/Math.abs (- (:x cell) (:x feet))) (js/Math.abs (- (:z cell) (:z feet))))])))))

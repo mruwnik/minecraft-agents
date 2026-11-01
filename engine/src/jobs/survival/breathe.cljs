@@ -173,8 +173,14 @@
   (let [cell (breath/surface-in-column p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) reach)]
     (if cell (assoc pos :y (:y cell)) pos)))
 
+(defn still-water?
+  "Whether cell is seen source water: flowing water (a waterfall) carries a swimmer off, so it is no base to climb from."
+  [p cell]
+  (let [b (u/seen-block p cell)]
+    (boolean (and b (= "water" (.-name b)) (zero? (js/Number (or (some-> (.-properties b) .-level) 0)))))))
+
 (defn shore-cell?
-  "A land cell a swimming body can climb onto: a side neighbour has room (feet and head cells air or water) over water
+  "A land cell a swimming body can climb onto: a side neighbour has room (feet and head cells air or water) over still water
   one or two blocks below the land cell's feet, so its rim is at most one block above the water. Land behind a wall,
   or on a wall two above the water, is not one."
   [p cell]
@@ -182,7 +188,7 @@
           (let [n (-> cell (update :x + dx) (update :z + dz))
                 at (fn [dy] (breath/seen-water-name p (update n :y + dy)))]
             (and (breath/passable-water-or-air? (at 0)) (breath/passable-water-or-air? (at 1))
-                 (or (= "water" (at -1)) (= "water" (at -2))))))
+                 (or (still-water? p (update n :y dec)) (still-water? p (update n :y - 2))))))
         [[1 0] [-1 0] [0 1] [0 -1]]))
 
 (def headings
@@ -269,7 +275,8 @@
          (filter #(and (= "water" (u/seen-name p %))
                        (bs/air (u/seen-name p (update % :y inc)))
                        (bs/air (u/seen-name p (update % :y + 2)))
-                       (blocks/support? p %)))
+                       (blocks/support? p %)
+                       (breath/holds-body? p %)))
          first)))
 
 (defn ^:async step!

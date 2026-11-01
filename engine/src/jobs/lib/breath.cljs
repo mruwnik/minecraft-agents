@@ -249,18 +249,6 @@
                             (filter open?))]
               (recur next (into seen next))))))))
 
-(defn flood-air
-  "The nearest cell whose feet are seen water, or air over a seen block, and whose head cell is air, found by find-joined,
-  not in the feet column (swum up directly) and not in failed; nil if none."
-  [p self-pos radius reach failed]
-  (let [skip (set failed)
-        fx (js/Math.floor (:x self-pos)) fz (js/Math.floor (:z self-pos))]
-    (find-joined p self-pos radius reach
-                 (fn [cell] (and (not (contains? skip cell)) (not (and (= fx (:x cell)) (= fz (:z cell))))
-                                 (air? (seen-water-name p (update cell :y inc)))
-                                 (or (contains? swimmable (seen-water-name p cell))
-                                     (let [below (seen-water-name p (update cell :y dec))] (and below (not (air? below))))))))))
-
 (defn holds-body?
   "Whether a body standing or swimming in cell is held up: the cell below is a full block or still (source) water. A cell over
   air, or over falling or flowing water, lets it drop; a cell below never seen is no reason to refuse."
@@ -271,6 +259,19 @@
           "water" (zero? (js/Number (or (some-> (.-properties b) .-level) 0)))
           ("bubble_column" "kelp" "kelp_plant" "seagrass" "tall_seagrass") true
           (boolean (.-fullCube (u/sensed p (update cell :y dec))))))))
+
+(defn flood-air
+  "The nearest cell whose feet are seen water, or air over a seen block, and whose head cell is air, found by find-joined,
+  not in the feet column (swum up directly) and not in failed; nil if none."
+  [p self-pos radius reach failed]
+  (let [skip (set failed)
+        fx (js/Math.floor (:x self-pos)) fz (js/Math.floor (:z self-pos))]
+    (find-joined p self-pos radius reach
+                 (fn [cell] (and (not (contains? skip cell)) (not (and (= fx (:x cell)) (= fz (:z cell))))
+                                 (air? (seen-water-name p (update cell :y inc)))
+                                 (holds-body? p cell)
+                                 (or (contains? swimmable (seen-water-name p cell))
+                                     (let [below (seen-water-name p (update cell :y dec))] (and below (not (air? below))))))))))
 
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.

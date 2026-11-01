@@ -309,6 +309,20 @@
           (is (>= (:y (core/self-pos p)) 68) "and stands in air")
           (is (= [[:completed nil]] (ended seen))))))))
 
+(deftest a-capped-column-beside-an-open-shaft-digs-the-cap-and-never-enters-the-shaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:inWater true :oxygen 4}
+                     :inventory [{:name "iron_shovel" :count 1}]
+                     :blocks (merge water-column walls
+                                    {"0,68,0" "dirt"}
+                                    (into {} (for [y (range 50 70)] [(str "1," y ",0") "air"])))}
+              {:keys [eng p]} (setup world)]
+          (await (one-run! eng side-args))
+          (is (not-any? #(= 1 (some-> % .-args .-pos .-x)) (array-seq (.. p -world -calls))) "no move into the shaft")
+          (is (not= 1 (js/Math.floor (:x (core/self-pos p))))))))))
+
 (deftest drowning-with-no-air-in-reach-is-stopped-no-air
   (async done
     (tu/run-async done
@@ -1714,12 +1728,21 @@
 (deftest crawl-skips-lit-columns-behind-a-drag-column
   (let [water (fn [x z] (for [y [64 65]] [(str x "," y "," z) "water"]))
         p (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0.5 :y 64 :z 0.5}}
-                     :blocks (into {"1,64,0" "bubble_column"}
+                     :blocks (into {"1,64,0" "bubble_column" "0,63,2" "stone"}
                                    (mapcat (fn [[x z]] (water x z)) [[0 0] [2 0] [0 2]]))
                      :states {"1,64,0" {:drag true}}
                      :time 1000 :light {[2 64 0] [0 14] [0 64 2] [0 14]} :light-default [0 0]})
         cols (air/crawl-columns-near (climb-ctx p {}))]
     (is (= [[0 2]] (map (juxt :x :z) cols)) "the lit column behind the drag column is not a target")))
+
+(deftest crawl-skips-a-lit-water-column-over-a-drop
+  (let [water (fn [x z] (for [y [64 65]] [(str x "," y "," z) "water"]))
+        p (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0.5 :y 64 :z 0.5}}
+                     :blocks (into {"2,63,0" "air" "0,63,2" "stone"}
+                                   (mapcat (fn [[x z]] (water x z)) [[0 0] [2 0] [0 2]]))
+                     :time 1000 :light {[2 64 0] [0 14] [0 64 2] [0 14]} :light-default [0 0]})
+        cols (air/crawl-columns-near (climb-ctx p {}))]
+    (is (= [[0 2]] (map (juxt :x :z) cols)) "the lit column with air under it is a waterfall, not a target")))
 
 (deftest a-second-drowning-in-the-same-run-counts-rises-afresh
   (async done
