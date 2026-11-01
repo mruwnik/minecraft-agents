@@ -343,6 +343,38 @@
           (is (some #(and (= 4.5 (first %)) (= 0.5 (second %))) goals)
               "the body presses up against the wall nearest the drop, so a gap in it lets the pickup reach through"))))))
 
+(def dug-cells (atom []))
+
+(defn digs-only-what-it-is-given
+  "env whose dig child clears the cell it is given and picks up only the slab, never the workstation; a place child sets its cell and takes the item."
+  [env]
+  (let [p (:p env)
+        cell (fn [c] (let [x (:pos (:args c))] (if (map? x) [(:x x) (:y x) (:z x)] (vec x))))
+        stub (fn [env job round] (assoc-in env [:eng :jobs job] (assoc (get (:jobs (:eng env)) job) :round round)))]
+    (-> env
+        (stub 'jobs.blocks.dig
+              (fn ^:async dig [c]
+                (swap! dug-cells conj (cell c))
+                (swap! (fake/state p) assoc-in [:blocks (cell c)] "air")
+                (when (= 65 (second (cell c))) (swap! (fake/state p) fake/give "bamboo_slab" 1))
+                (ctx/end c :done nil {:dug true})))
+        (stub 'jobs.blocks.place
+              (fn ^:async place [c]
+                (swap! (fake/state p) #(-> % (assoc-in [:blocks (cell c)] (:item (:args c))) (fake/take-one (:item (:args c)))))
+                (ctx/end c :done nil {:placed true}))))))
+
+(deftest a-drop-beyond-the-slab-gap-is-taken-after-lifting-the-slab-and-the-slab-goes-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [_ (reset! dug-cells [])
+              [result p] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"2,65,0" "bamboo_slab"}
+                                       :wrap digs-only-what-it-is-given} {}))]
+          (is (= {:status :stopped :reason :workstation-lost} (select-keys result [:status :reason])) "no drop ever came")
+          (is (= "bamboo_slab" (get-in @(fake/state p) [:blocks [2 65 0]])) "the slab is back although the call ended")
+          (is (= [[2 64 0] [2 65 0]] @dug-cells) "the slab over the cell is lifted once the drop is out of reach")
+          (is (= "air" (workstation p))))))))
+
 (deftest a-place-child-that-stops-ends-with-its-ending
   (async done
     (tu/run-async done

@@ -16,6 +16,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
+            [jobs.village.roll-gap :as gap]
             [jobs.village.trade :as trade]))
 
 (def doc
@@ -377,6 +378,7 @@
     (cond
       (>= tries 5) (stop! c :workstation-lost)
       :else (or (await (reach-drop! c))
+                (await (gap/lift! c pos (rolls c)))
                 (if (on-cell? c pos)
                   (do (ctx/update-mem! c update :recovers (fnil inc 0))
                       (await (child/pause! c 1 :picking-up-the-drop))
@@ -429,6 +431,7 @@
         (and e (not= "unemployed" profession)) (await (wait-job! c :villager-keeps-job))
         (zero? (u/carried-count p item)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
+        (:slab (ctx/mem c)) (or (await (to-stand! c)) (await (gap/restore! c pos (rolls c))))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job
@@ -455,15 +458,19 @@
           :else r)))))
 
 (defn ^:async cleanup
-  "However the call ends: a workstation this call broke and did not place back is placed (stepping off its cell first).
-  Done, or the place child's failure."
+  "However the call ends: a slab lifted for a drop is put back and a workstation this call broke and did not place back is placed
+  (each after stepping off its cell first). Done, or the place child's failure."
   [c _]
   (let [{:keys [pos]} (:args c)
-        block (u/seen-name (:primitives c) pos)]
-    (if-not (and (:broken (ctx/mem c)) block (bs/air block) (pos? (u/carried-count (:primitives c) (item-of (:args c)))))
-      (ctx/end c :done nil)
-      (let [r (if (on-cell? c pos) (await (clear-cell! c pos)) (await (place-or-return! c)))]
-        (if (= :again r) (await (cleanup c nil)) r)))))
+        block (u/seen-name (:primitives c) pos)
+        r (cond
+            (and (:slab (ctx/mem c)) (on-cell? c pos)) (await (clear-cell! c pos))
+            (:slab (ctx/mem c)) (or (await (to-stand! c)) (await (gap/restore! c pos (rolls c))))
+            (not (and (:broken (ctx/mem c)) block (bs/air block) (pos? (u/carried-count (:primitives c) (item-of (:args c))))))
+            (ctx/end c :done nil)
+            (on-cell? c pos) (await (clear-cell! c pos))
+            :else (await (place-or-return! c)))]
+    (if (= :again r) (await (cleanup c nil)) r)))
 
 (defn ^:async round
   "The whole search: steps (a pace between) until found or stopped; it yields while the villager or a child waits."
