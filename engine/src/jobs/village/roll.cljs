@@ -32,7 +32,7 @@
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
   matches, else
-  - condition-failed: :gone, :baby, :locked (an offer was already used), :occupied (another block at :pos),
+  - condition-failed: :gone, :baby, :locked (an offer was already used, or the villager is above level 1: it has traded), :occupied (another block at :pos),
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
@@ -219,7 +219,7 @@
              (u/progress! c)
              (trade/emit-offers! c :roll.offers villager r offers)
              (cond
-               (some #(pos? (:uses % 0)) offers) :locked
+               (or (some #(pos? (:uses % 0)) offers) (< 1 (or (.-level r) 1))) :locked
                offer {:found offer}
                :else :miss))
       "gone" (stop! c (villager/gone-cause c))

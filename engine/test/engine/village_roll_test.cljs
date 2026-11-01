@@ -23,7 +23,7 @@
 (defn librarian
   "A villager that already claimed the workstation, with the offers."
   [offers & [extra]]
-  (vt/villager offers (merge {:profession "librarian"} extra)))
+  (vt/villager offers (merge {:profession "librarian" :level 1} extra)))
 
 (defn rolls-offers!
   "Make the fake villager behave: it loses its profession when the workstation cell is empty, and takes it again (with the
@@ -187,6 +187,14 @@
           (is (= {:found false :status :stopped :reason :locked} (select-keys result [:found :status :reason])))
           (is (zero? (digs p))))))))
 
+(deftest a-villager-above-level-1-is-locked-without-a-dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")] {:level 2})]} {}))]
+          (is (= {:found false :status :stopped :reason :locked} (select-keys result [:found :status :reason])))
+          (is (zero? (digs p))))))))
+
 (deftest a-missing-villager-is-gone
   (async done
     (tu/run-async done
@@ -216,7 +224,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]} {:spend {:wall-time 30}}))]
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]} {:spend {:wall-time 30}}))]
           (is (= {:found false :reason :wall-time} (select-keys result [:found :reason])))
           (is (= "lectern" (workstation p))))))))
 
@@ -224,7 +232,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
                                        :inventory [{:name "lectern" :count 1}]
                                        :blocks {ws-key "air"}
                                        :scripts [[(offer "enchanted_book")]]}
@@ -379,7 +387,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+        (let [[result p seen] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
                                             :blocks {ws-key "air"} :inventory [{:name "lectern" :count 1}]
                                             :wrap (stub-job 'jobs.blocks.place stopped)} {}))]
           (is (= {:found false :status :stopped :reason :no-tool} (select-keys result [:found :status :reason])))
@@ -399,7 +407,7 @@
                                                      (await ((:round j) c))
                                                      (do (reset! refused true)
                                                          (ctx/end c :nothing-possible {:reason :failed} {:placed false :reason :failed :mobs ["villager"]}))))))))
-              [result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+              [result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
                                        :inventory [{:name "lectern" :count 1}]
                                        :blocks {ws-key "air"}
                                        :scripts [[(offer "enchanted_book")]]
@@ -419,7 +427,7 @@
                                  (assoc j :round (fn ^:async spy [c]
                                                    (reset! seen (:args c))
                                                    (await ((:round j) c)))))))]
-          (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+          (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
                         :inventory [{:name "lectern" :count 1}]
                         :blocks {ws-key "air"}
                         :scripts [[(offer "enchanted_book")]]
@@ -431,7 +439,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
                                        :inventory [{:name "lectern" :count 1}]
                                        :self {:pos {:x 2 :y 64 :z 0}}
                                        :blocks {ws-key "air"}
@@ -446,7 +454,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})]
                                        :inventory [{:name "lectern" :count 1}]
                                        :self {:pos {:x 2 :y 64 :z 0}}
                                        :floor [2 0 2 0]

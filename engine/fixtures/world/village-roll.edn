@@ -84,6 +84,11 @@
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000002" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :nitwit}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
+  {:name "level-2-librarian-is-locked-without-a-dig"
+   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,Xp:10,UUID:[I;20260,7,5,15],VillagerData:{profession:\"minecraft:librarian\",level:2,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000010" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :locked}} :within-s 40 :of-job true}]
+   :after [[:block [16 0 16] "lectern"]]}
   {:name "absent-villager-is-gone"
    :act [[:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000003" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 30 :of-job true}]
