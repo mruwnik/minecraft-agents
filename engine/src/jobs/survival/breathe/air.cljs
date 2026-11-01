@@ -235,7 +235,7 @@
 
 (defn crawl-columns-near
   "The water columns (feet and head cell seen water) within ::crawl-radius of the body at its height, not tried in this run and
-  brighter than the body's own cell, brightest first, then nearest: light seeping down a hole in the roof shows in the water under it."
+  brighter than the body's own cell and not past a downward bubble column, brightest first, then nearest: light seeping down a hole in the roof shows in the water under it."
   [c]
   (let [p (:primitives c)
         raw (look/raw-of p)
@@ -247,7 +247,8 @@
         open? (fn [cell] (every? #(contains? breath/swimmable (breath/seen-water-name p (update cell :y + %))) [0 1]))]
     (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
                :let [cell (-> feet (update :x + dx) (update :z + dz))]
-               :when (and (not (contains? tried [(:x cell) (:z cell)])) (> (glow cell) own) (open? cell))]
+               :when (and (not (contains? tried [(:x cell) (:z cell)])) (> (glow cell) own) (open? cell)
+                     (not (breath/drag-between? p (:x feet) (:z feet) (:x cell) (:z cell) (:y feet))))]
            cell)
          (sort-by (fn [cell] [(- (glow cell)) (+ (js/Math.abs (- (:x cell) (:x feet))) (js/Math.abs (- (:z cell) (:z feet))))])))))
 

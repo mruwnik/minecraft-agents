@@ -1711,6 +1711,16 @@
     (is (breath/drag-between? p 0 0 1 1 64))
     (is (not (breath/drag-between? p 0 0 0 2 64)))))
 
+(deftest crawl-skips-lit-columns-behind-a-drag-column
+  (let [water (fn [x z] (for [y [64 65]] [(str x "," y "," z) "water"]))
+        p (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0.5 :y 64 :z 0.5}}
+                     :blocks (into {"1,64,0" "bubble_column"}
+                                   (mapcat (fn [[x z]] (water x z)) [[0 0] [2 0] [0 2]]))
+                     :states {"1,64,0" {:drag true}}
+                     :time 1000 :light {[2 64 0] [0 14] [0 64 2] [0 14]} :light-default [0 0]})
+        cols (air/crawl-columns-near (climb-ctx p {}))]
+    (is (= [[0 2]] (map (juxt :x :z) cols)) "the lit column behind the drag column is not a target")))
+
 (deftest a-second-drowning-in-the-same-run-counts-rises-afresh
   (async done
     (tu/run-async done
