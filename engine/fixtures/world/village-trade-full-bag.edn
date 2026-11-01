@@ -1,0 +1,14 @@
+;; The inventory-nearly-full reflex must not put away the paper a running trade pays with. Should-succeed: a nearly full bag, 24 paper, a
+;; farmer selling 1 bread for 24 paper; make-room fires but keeps the paper, the trade completes.
+{:defaults
+ {:tags [:village :trade :storage :jobs]
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [10.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["paper" 24]] :effects [["resistance" 600 4]]}
+  :register [{:trigger :inventory-nearly-full}]
+  :limit-s 120}
+ :cases
+ [{:name "full-bag-keeps-the-trade-payment"
+   :act [[:summon "villager" [14.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:paper\",count:24},sell:{id:\"minecraft:bread\",count:1},maxUses:12,xp:1}]}}"]
+         [:job (jobs.village.trade {:buy "bread" :spend {:items {"paper" 24}}})]]
+   :expect [{:event {:source :job :kind :completed :data {:bought 1}} :within-s 100 :of-job true}]
+   :after [[:item "bread" 1] [:item "paper" 0]]}]}

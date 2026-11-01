@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -35,7 +36,7 @@
   - :price (every open offer is dearer than the payment spend left; :price is the cheapest seen).
   - :payment-short, :no-room, :incomplete (a buy stopped short for no reason, three times), or the
     primitive's failure reason.
-  Before a buy the body must carry the price of one trade: missing it is fetched (jobs.lib.need; :payment-short when the ways leave only :carried or the fetch ended), and with a full bag one
+  While it runs the payment (the :spend items, and emeralds unless bought) is held in the reserve register. Before a buy the body must carry the price of one trade: missing it is fetched (jobs.lib.need; :payment-short when the ways leave only :carried or the fetch ended), and with a full bag one
   jobs.storage.make-room child (keeping the payment) runs per call. With ways #{:carried}, can-start? waits (later :need)
   while no emerald is carried.
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
@@ -329,12 +330,21 @@
           (let [res (:data r)] (or (:arrived res) (:nearer res))) :again
           :else (give-up! c :unreachable))))))
 
+(defn hold-payment!
+  "Reserve the carried units the trade may pay with (the currency unless it is bought, and the call's :spend items) so a reflex's make-room leaves them."
+  [c]
+  (let [spend (get-in (ctx/left c) [:spend :items])
+        items (cond-> (into {} (keep (fn [[i n]] (when (pos? n) [i (if (js/isFinite n) n :all)]))) spend)
+                (not= currency (:buy (:args c))) (assoc currency :all))]
+    (reserve/set-job-entries! c (vec (for [[i n] items] {:id (str (:id c) "-pay-" i) :item i :count n :strength 1 :by (:id c) :why "kept to pay the trade"})))))
+
 (defn ^:async round
   "One call is the whole purchase: steps (with a pace between) until it ends; a retry counts failures in a row, reset by
   a buy, and the third gives up. Yields only while go-to waits on the world."
   [c]
   (let [fails (atom 0)]
     (await (pace/steps! c (fn ^:async trade-step []
+                            (hold-payment! c)
                             (let [r (await (step! c))]
                               (cond
                                 (:retry r) (if (< (swap! fails inc) (u/max-failures))

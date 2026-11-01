@@ -6,6 +6,8 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.look-support :as ls]
+            [engine.memory :as mem]
+            [jobs.lib.reserve :as reserve]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
             [jobs.village.trade :as trade]))
@@ -456,3 +458,20 @@
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= 4 (get (inv p) "emerald")))
           (is (= ["offers" "offers" "buy"] (take 3 @ops)) "make-room ran between the first offers read and the buy"))))))
+
+(deftest the-payment-is-reserved-while-the-trade-runs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:world {:entities [(villager [(bread {:cost [{:item "paper" :count 24}]})])]
+                                              :inventory [{:name "paper" :count 24} {:name "emerald" :count 3}]}})
+              seen (atom nil)]
+          (.override (.-world p) "trade"
+                     (fn ^:async f [token args impl]
+                       (when (= "buy" (.-op args))
+                         (reset! seen (mapv #(select-keys % [:item :count]) (reserve/entries (mem/view (:store eng))))))
+                       (await (impl token args))))
+          (await (child-outcome eng job {:villager "v-1" :buy "bread" :spend {:items {"paper" 24}}} 80))
+          (is (= #{{:item "paper" :count 24} {:item "emerald" :count :all}} (set @seen))
+              "a reflex's make-room keeps what the trade pays with")
+          (is (empty? (reserve/entries (mem/view (:store eng)))) "released when the trade ends"))))))
