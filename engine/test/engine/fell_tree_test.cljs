@@ -102,6 +102,15 @@
           (is (apply < (take 6 ys)) "the low logs go bottom-up from the ground")
           (is (apply > (drop 6 ys)) "the high ones top-down from the pillar"))))))
 
+(deftest the-body-looks-around-for-drops-before-the-tree-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (fell tall {:radius 10} 200))
+              names (mapv #(.-name %) (.-calls (.-world p)))
+              last-dig (last (keep-indexed (fn [i n] (when (= "dig" n) i)) names))]
+          (is (seq (filter #{"look"} (subvec names last-dig))) "a look follows the last dig"))))))
+
 (def tall-9 {:blocks (lt/tree 6 0 "oak" 9) :inventory []})
 
 (defn log-pillar-cells
