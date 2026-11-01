@@ -20,7 +20,7 @@
 
 (def entry-keys
   "Keys a register entry may have, in a scenario or a put."
-  #{:id :trigger :when :job :args :persistence :cooldown-s :level :backoff :builtin? :ttl-s :by})
+  #{:id :trigger :when :job :args :persistence :cooldown-s :cancel-cut? :level :backoff :builtin? :ttl-s :by})
 
 (def common-keys #{:op :id :by :generation-id :request-id})
 
@@ -149,6 +149,7 @@
       (and (some? job) (job-problem jobs job)) (refuse :bad-job [:job] (job-problem jobs job))
       (and (some? persistence) (not (persistences persistence))) (refuse :bad-persistence [:persistence] (str ":persistence is one of " (pr-str (sort persistences))))
       (and (contains? e :cooldown-s) (not (and (number? cooldown-s) (>= cooldown-s 0)))) (refuse :bad-cooldown [:cooldown-s] ":cooldown-s is a number of seconds, 0 or more")
+      (and (contains? e :cancel-cut?) (not (boolean? (:cancel-cut? e)))) (refuse :bad-cancel-cut [:cancel-cut?] ":cancel-cut? is true or false")
       (and (contains? e :level) (not (core/levels (:level e)))) (refuse :bad-level [:level] (str ":level is one of " (pr-str (sort (keys core/levels)))))
       (and (contains? e :backoff) (backoff-problem (:backoff e))) (refuse :bad-backoff [:backoff] (backoff-problem (:backoff e)))
       (and (contains? e :ttl-s) (not (pos-number? ttl-s))) (refuse :bad-ttl [:ttl-s] ":ttl-s is a positive number of seconds")
@@ -214,7 +215,7 @@
         changes (get-in s [:changes id])
         {:keys [cooldown-until stopped?]} (get-in s [:reflex-state id])
         bo (core/backoff-entry eng id)]
-    (cond-> (select-keys e [:id :trigger :when :job :args :persistence :cooldown-s :level :backoff :builtin? :by :until])
+    (cond-> (select-keys e [:id :trigger :when :job :args :persistence :cooldown-s :cancel-cut? :level :backoff :builtin? :by :until])
       (:when e) (dissoc :args)
       (core/live? (:mute changes) tt) (assoc :muted (select-keys (:mute changes) [:until]))
       (core/live? (:position changes) tt) (assoc :moved (select-keys (:position changes) [:value :until]))
@@ -247,7 +248,7 @@
                {:id (:id given) :trigger :condition :when (:when given) :job (:job given)
                 :args {:id (:id given)} :persistence :stop :cooldown-s 0 :builtin? false}
                (core/entry-from eng given))]
-    (cond-> (merge base (select-keys given [:persistence :cooldown-s :level :backoff :builtin? :by]))
+    (cond-> (merge base (select-keys given [:persistence :cooldown-s :cancel-cut? :level :backoff :builtin? :by]))
       (:ttl-s given) (assoc :until (+ (core/ttl-now eng) (* 1000 (:ttl-s given)))))))
 
 (defn cancel-running!
@@ -367,7 +368,7 @@
    (let [picked (mapv scenario-id (offered-named eng ids))]
      {:ok true :op :decline :declined picked :offered (settle-offer! eng picked)})))
 
-(def spec-keys [:trigger :when :job :args :persistence :cooldown-s :level :backoff :builtin?])
+(def spec-keys [:trigger :when :job :args :persistence :cooldown-s :cancel-cut? :level :backoff :builtin?])
 
 (defn refresh-defaults!
   "Entries still as the scenario or an upgrade put them (:by, which any agent edit replaces) take the current default

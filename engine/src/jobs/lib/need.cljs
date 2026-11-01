@@ -17,6 +17,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
@@ -220,11 +221,18 @@
           (:wait-ms data) (+ (/ (:wait-ms data) 1000) (or (:price (nth (status 0) 2 nil)) 0))
           :else ##Inf)))
 
+(defn priced
+  "Options o of an obtain fetch with a :worth: the caller's own when it gave one, else what the wanted item is worth to the body, so a trip dearer than the thing is declined whatever job asked."
+  [c job args o]
+  (if (or (:worth o) (not= 'jobs.items.obtain job))
+    o
+    (assoc o :worth (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) (or (some-> (:item args) vector) (:any-of args)) (u/self-pos c) (:count args 1)))))
+
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
   [c job args cause-reason wanted {:keys [slot return?] :as o}]
   (let [slot (or slot :need)
-        args (fetch-args job args o)
+        args (fetch-args job args (priced c job args o))
         want [job args]
         identity-of [job (dissoc args :count :avoid :spend :worth)]
         _ (when (not= identity-of (get-in (ctx/mem c) [:need/slot-want slot]))

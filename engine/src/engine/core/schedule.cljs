@@ -9,7 +9,7 @@
             [engine.core.ending :refer [call-of clear-asked! run-status]]
             [engine.core.cleanup :as cleanup]
             [engine.core.activity :refer [check-body-idle! check-idle! restart-body-idle! section-level sections]]
-            [engine.core.list-edits :refer [submit!]]
+            [engine.core.list-edits :refer [cancel! submit!]]
             [engine.core.round :refer [check-ctx]]
             [engine.core.settle :refer [end-slot! judge-deferred-ends! start-round!]]
             [engine.contract :as contract]
@@ -183,7 +183,9 @@
         node (expr/parse (:jobs eng) (:job entry))
         fired (emit! eng {:source :reflex :kind :fired :level :info :reflex (:id entry)
                           :job id :interrupted (:id h) :text (reflex-text (:id entry) node)})]
-    (when h (cut! eng h (:id entry) fired))
+    (when h
+      (cut! eng h (:id entry) fired)
+      (when (and (:cancel-cut? entry) (not (:reflex h))) (cancel! eng (:id h) (:id entry))))
     (swap! (:state eng) add-instance id node {:reflex (:id entry) :fired-level (:level entry)})
     (mem/create-job! (:store eng) id (expr/label node) (second (job-of eng {:spec node})))
     (start-round! eng id)))

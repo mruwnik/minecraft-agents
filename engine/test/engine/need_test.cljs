@@ -78,6 +78,15 @@
 
 (defn carried [p item] (fake/carried (:inventory @(fake/state p)) item))
 
+(deftest item!-prices-an-obtain-by-what-the-item-is-worth-when-the-caller-gave-no-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1) nil))]
+          (is (js/isFinite (:worth (first @obtain))) "a finite worth reaches the obtain child"))
+        (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1 {:worth 77}) nil))]
+          (is (= 77 (:worth (first @obtain))) "the caller's own worth stays"))))))
+
 (deftest item!-passes-a-done-child
   (async done
     (tu/run-async done
