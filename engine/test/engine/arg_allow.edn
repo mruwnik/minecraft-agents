@@ -254,5 +254,6 @@
  :jobs.survival.respond-to-hostile/stay-inside
  :jobs.survival.respond.state/hide-health
  :jobs.survival.wall-placer/max-places
+ :jobs.village.breed/max-beds
  :jobs.village.breed/wait-s
  ]}
