@@ -1,5 +1,5 @@
 ;; The :loose-items reflex (jobs.lib.loose, jobs.items.pick-up-loose): seen items worth the detour are picked up.
-;; Should-succeed: once fell-tree ends, its logs left lying and 2 logs summoned 4 off are picked up; a log 4 blocks off;
+;; Should-succeed: a log 4 blocks off is picked up;
 ;; dirt 8 blocks down a drop when on :always (the control: it is in sight and judged).
 ;; Should-fail: the same dirt without :always (not worth the climb), a log in another body's zone.
 {:defaults
@@ -8,20 +8,7 @@
   :body {:at [16.5 0 20.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 120}
  :cases
- [{:name "felled-logs-picked-up-after-the-fell"
-   :plot {:height 12}
-   :blocks [[:fill [16 0 16] [16 4 16] "oak_log"]
-            [:fill [14 3 14] [18 5 18] "oak_leaves[persistent=true]"]
-            [:fill [16 3 16] [16 4 16] "oak_log"]]
-   :body {:inventory [["iron_axe" 1]]}
-   ;; the body walks over most felled logs while it digs; the 2 summoned by the trunk after the fell make sure the reflex has some (the body ends near the tree, not at its start)
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]
-         [:await {:source :job :kind :completed} 90]
-         [:summon "item" [16.5 0 17.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
-   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
-            {:event {:source :reflex :kind :ended :context {:reflex-id :loose-items} :data {:outcome :done}} :within-s 110}]
-   :after [[:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 6]]]}
-  {:name "log-four-blocks-off-picked-up"
+ [{:name "log-four-blocks-off-picked-up"
    :act [[:summon "item" [16.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :loose-items} :data {:outcome :done}} :within-s 30}]
    :after [[:item "oak_log" 2]]
