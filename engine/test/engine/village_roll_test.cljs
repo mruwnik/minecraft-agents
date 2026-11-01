@@ -284,6 +284,28 @@
           (is (= "air" (workstation p)))
           (is (not (contains? (vt/kinds seen) :roll.gave-up))))))))
 
+(deftest a-place-refused-for-a-mob-in-the-cell-is-waited-out-and-placed-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refused (atom false)
+              wrap (fn [env]
+                     (let [j (get (:jobs (:eng env)) 'jobs.blocks.place)]
+                       (assoc-in env [:eng :jobs 'jobs.blocks.place]
+                                 (assoc j :round (fn ^:async refuse-once [c]
+                                                   (if @refused
+                                                     (await ((:round j) c))
+                                                     (do (reset! refused true)
+                                                         (ctx/end c :nothing-possible {:reason :failed} {:placed false :reason :failed :mobs ["villager"]}))))))))
+              [result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
+                                       :inventory [{:name "lectern" :count 1}]
+                                       :blocks {ws-key "air"}
+                                       :scripts [[(offer "enchanted_book")]]
+                                       :wrap wrap}
+                                      {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
+          (is (= "lectern" (workstation p))))))))
+
 (deftest a-body-on-the-workstation-cell-steps-off-before-placing
   (async done
     (tu/run-async done

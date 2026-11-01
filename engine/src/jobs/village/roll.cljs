@@ -227,12 +227,16 @@
   (or (keyword? r) (contract/ending? r)))
 
 (defn ^:async child!
-  "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop."
+  "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop. A place refused
+  with a mob in the cell (the villager stepped in) waits a poll and is placed again: :continue."
   [c slot job cargs]
   (let [r (await (ctx/call c slot job cargs))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (:data r)
+      (and (= 'jobs.blocks.place job) (seq (:mobs (:data r)))) (do (ctx/update-mem! c update :place-waits (fnil inc 0))
+          (await (child/pause! c (poll-s) :mob-in-the-cell))
+          :continue)
       :else (ctx/end c (:kind r) (:cause r) (data-of c nil)))))
 
 (defn ^:async dig!
@@ -267,7 +271,7 @@
   [c]
   (let [{:keys [pos]} (:args c)
         item (item-of (:args c))
-        slot (keyword (str "place-" (rolls c)))
+        slot (keyword (str "place-" (rolls c) "-" (:place-waits (ctx/mem c) 0)))
         r (await (child! c slot 'jobs.blocks.place (cond-> {:pos pos :item item} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (dissoc :broken)))
