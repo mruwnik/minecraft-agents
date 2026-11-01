@@ -200,10 +200,10 @@
   [c check]
   (fn [{:keys [status steps r] :as plan} first?]
     (let [unloaded? (= "goal-unloaded" (some-> ^js r .-reason))]
-      (when (and (#{"partial" "found"} status) (> (count steps) route-min-steps) (not unloaded?))
-        (ctx/update-mem! c assoc :route (mapv cell-of (take-nth 2 steps))))
-      (or (when unloaded? (when-let [via (route-via c)] {:route-via via}))
-          (when check (check plan first?))))))
+      (or (when check (check plan first?))
+          (do (when (and (#{"partial" "found"} status) (> (count steps) route-min-steps) (not unloaded?))
+                (ctx/update-mem! c assoc :route (mapv cell-of (take-nth 2 steps))))
+              (when unloaded? (when-let [via (route-via c)] {:route-via via})))))))
 
 (defn turn-back
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
@@ -459,10 +459,10 @@
       (surface-descent-s))))
 
 (defn ^:async walk-via!
-  "One walk round to via (route-via); the route is forgotten when the round brought the body no nearer it."
+  "One walk round to via (route-via), priced and turn-back-checked like the walk to the goal; the route is forgotten when the round brought the body no nearer it."
   [c via doors]
   (let [before (u/dist (u/self-pos c) via)
-        {:keys [status]} (await (near/walk-round! c via 1 (walk-opts c doors)))]
+        {:keys [status]} (await (near/walk-round! c via 1 (assoc (walk-opts c doors) :stair-check (turn-back-check c (reprice/check c via nil)))))]
     (when (and (not= "searching" status) (> (u/dist (u/self-pos c) via) (- before 2)))
       (ctx/update-mem! c dissoc :route))
     :again))

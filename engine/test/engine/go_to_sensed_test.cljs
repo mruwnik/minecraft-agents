@@ -13,6 +13,7 @@
             [engine.go-to-column-test :as gcol]
             [engine.go-to-doors-test :as gd]
             [engine.memory :as mem]
+            [jobs.lib.near :as near]
             [jobs.lib.util :as u]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
@@ -512,6 +513,31 @@
     (is (= 30 (count (:route @mem*))) "and does not replace the route")
     (reset! mem* (assoc @mem* :route (vec (take 16 (:route @mem*)))))
     (is (nil? (gwalk/route-via c)) "near the end it plans to the goal again")))
+
+(deftest a-plan-the-checks-refuse-is-not-remembered-as-the-route
+  (let [mem* (atom {})
+        c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 30.5 :y 64 :z 0.5}}}) mem* {}))
+        steps (mapv (fn [x] {:x (+ 0.5 x) :y 64 :z 0.5}) (range 60))
+        refuse (fn [_ _] {:turn-back {}})
+        plan {:status "partial" :r #js {:reason "searching"} :steps steps}]
+    (is (= {:turn-back {}} ((gwalk/route-check c refuse) plan false)))
+    (is (nil? (:route @mem*)) "a refused plan is not kept")
+    (swap! mem* assoc :route (mapv (fn [x] [x 64 0]) (range 60)))
+    (is (= {:turn-back {}} ((gwalk/route-check c refuse) {:status "partial" :r #js {:reason "goal-unloaded"} :steps steps} false))
+        "the checks speak before the via")))
+
+(deftest a-via-round-that-brings-the-body-no-nearer-forgets-the-route
+  (async done
+    (let [mem* (atom {:route [[0 64 0] [50 64 0]]})
+          c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 30.5 :y 64 :z 0.5}}}) mem* {}))
+          opts* (atom nil)]
+      (with-redefs [near/walk-round! (fn [_ _ _ o] (reset! opts* o) (js/Promise.resolve {:status "stuck"}))]
+        (.then (gwalk/walk-via! c {:x 58 :y 64 :z 0} :open)
+               (fn [r]
+                 (is (= :again r))
+                 (is (fn? (:stair-check @opts*)) "the round is priced and turn-back-checked")
+                 (is (nil? (:route @mem*)))
+                 (done)))))))
 
 (deftest a-walk-counts-its-floors-in-process-and-a-restart-keeps-them
   (let [mem* (atom {})
