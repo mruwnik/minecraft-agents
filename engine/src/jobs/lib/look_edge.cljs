@@ -63,16 +63,21 @@
    (let [p (:primitives c)
          feet (sh-sense/feet p)]
      (when (covered? p)
-       (->> (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet))
-            :cells
-            (map vec)
-            (filter (fn [[x y z]] (nil? (u/seen-block p {:x x :y y :z z}))))
-            (concat (reach-room/unseen-sides p feet))
-            distinct
-            (remove looked)
-            (filter (lit-side? p feet))
-            (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
-            vec)))))
+       (let [flood (some->> (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet))
+                            :cells
+                            (map vec))
+             h (sh-sense/room-roof-height)
+             sky-open? (some (fn [[x y z]] (sh-sense/open-air-above? p {:x x :y y :z z} (+ y h))) flood)
+             under-roof? (fn [[x y z]] (let [cell {:x x :y y :z z}] (or (sh-sense/roofed? p h cell) (sh-sense/leaf-roofed? p h cell))))]
+         (->> flood
+              (filter (fn [[x y z]] (nil? (u/seen-block p {:x x :y y :z z}))))
+              (concat (reach-room/unseen-sides p feet))
+              distinct
+              (remove looked)
+              (filter (if sky-open? under-roof? any?))
+              (filter (lit-side? p feet))
+              (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
+              vec))))))
 
 (defn walkable-near-fn
   "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once."

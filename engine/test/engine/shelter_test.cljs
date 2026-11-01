@@ -1641,6 +1641,32 @@
     (tu/set-sensed! p (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos)) (.blockAt (tu/oracle raw-p) pos) #js {:unknown true})))
     (is (= #{[14 65 1] [14 66 0]} (set (look-edge/pending {:primitives p} #{}))) "the two missed cells, no rock behind them")))
 
+(deftest a-region-open-to-the-sky-through-a-gap-is-not-looked-at-beyond-the-roof
+  ;; A roofed hall whose end gap leads onto an open plain: the plain's unseen cells show nothing the night can use (the gap is
+  ;; filled or the hall is no shelter), so only the cells under the roof are looked at.
+  (let [hall? (fn [x y z] (and (<= 0 x 9) (<= -1 z 1) (#{64 65} y)))
+        plain? (fn [x y z] (and (<= 10 x 20) (<= -1 z 1) (#{64 65} y)))
+        roof? (fn [x y z] (and (<= -1 x 10) (<= -2 z 2) (= y 66)))
+        wall? (fn [x y z] (and (<= -1 x 21) (<= -2 z 2) (#{64 65} y) (not (hall? x y z)) (not (plain? x y z))
+                               (not (and (= x 10) (= z 0)))))
+        solid? (fn [x y z] (or (= y 63) (roof? x y z) (and (wall? x y z) (not (and (= x 10) (= z 0))))))
+        mid-wall? (fn [x y z] (and (= x 10) (not= z 0) (#{64 65} y)))
+        blocks (into {} (for [x (range -2 23) y (range 62 68) z (range -3 4)
+                              :when (or (solid? x y z) (mid-wall? x y z))]
+                          [(str x "," y "," z) "stone"]))
+        missed #{[3 66 0] [18 64 0]}
+        raw-p (tu/fake {:time night :self {:pos {:x 5.5 :y 64 :z 0.5}} :blocks blocks})
+        seen? (fn [x y z] (not (missed [x y z])))
+        p (doto raw-p
+            (aset "seenBlockAt" (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos))
+                                            (let [b (.blockAt (tu/oracle raw-p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
+                                            #js {:unknown true :pos pos}))))]
+    (swap! (fake/state raw-p) assoc :light-default [15 15])
+    (tu/set-sensed! p (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos)) (.blockAt (tu/oracle raw-p) pos) #js {:unknown true})))
+    (let [cells (set (look-edge/pending {:primitives p} #{}))]
+      (is (not (contains? cells [18 64 0])) "an unseen plain cell past the gap is not looked at")
+      (is (every? (fn [[x]] (<= x 10)) cells)))))
+
 (deftest the-edge-walk-is-bought-by-its-price-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
         cell (first (look-edge/pending c #{}))
