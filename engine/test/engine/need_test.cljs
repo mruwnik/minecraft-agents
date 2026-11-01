@@ -101,6 +101,18 @@
         (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1) {:caller-worth 0}))]
           (is (= (lectern-worth) (:worth (first @obtain))) "a caller worth below the item's own gives the item's"))))))
 
+(deftest a-means-fetch-is-worth-at-least-a-death-so-a-pillar-still-fetches-far-dirt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [death (fn [c] (cost/death-s (:primitives c) (ctx/view c)))
+              seen (atom nil)
+              {:keys [obtain]} (await (run! #(do (reset! seen (death %)) (need/blocks! % ["dirt"] 3)) nil))]
+          (is (>= (:worth (first @obtain)) @seen) "blocks under an endless caller are priced by a death, not the few seconds dirt is worth"))
+        (let [seen (atom nil)
+              {:keys [obtain]} (await (run! #(do (reset! seen (cost/death-s (:primitives %) (ctx/view %))) (need/item! % "torch" 2 {:means? true})) nil))]
+          (is (>= (:worth (first @obtain)) @seen) "a torch fetched as a means is priced the same"))))))
+
 (deftest the-start-check-prices-the-obtain-as-the-run-does
   (async done
     (tu/run-async done

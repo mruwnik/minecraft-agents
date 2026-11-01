@@ -277,7 +277,7 @@
     (let [item (:item (:args c))
           n (:short step)
           e (await (if item
-                     (need/item! c item n {:return? true :how (need/fetch-how c)})
+                     (need/item! c item n {:return? true :means? true :how (need/fetch-how c)})
                      (need/blocks! c (choose/filler-names c :pillar) n {:return? true :how (need/fetch-how c)})))]
       (cond
         (= :continue e) :continue
