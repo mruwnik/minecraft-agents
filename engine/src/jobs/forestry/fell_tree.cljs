@@ -44,7 +44,7 @@
   Each log is dug by a jobs.blocks.dig child that leaves the drop on the ground; a leaf hiding a log from the eye is dug
   first. When the tree is down a jobs.items.collect-drops child picks up the drops of the logs dug from the ground (by
   id: another player's logs are left); the pillar's logs are collected by the pillar way before it comes down.
-  Before it ends it looks around once, so drops outside the view cone enter perception (the loose-items reflex).
+  Before it ends it looks around once and stops at the first look that shows a drop, so the body ends facing it and the loose-items reflex sees it.
   Zones: a tree whose base log is in another owner's zone or claim, or in a plan's footprint (but :for-plan's own), is
   not a candidate; a later log that turns out refused makes the tree unreachable (warn fell-tree.declined once, :reason
   :refused). :ignore-zones? true skips the check. Logs joined to the tree that the same rule refuses, or that lie more than
@@ -322,7 +322,7 @@
           stop
           (if (zero? (:dug (ctx/mem c) 0))
             (ctx/end c :condition-failed {:reason :gone :base (:base (ctx/mem c))} nil)
-            (do (await (look/look-around! c))
+            (do (await (look/look-around-until! c #(seq (look/seen-items (:primitives c) {:radius (settings/get settings ::collect-radius)}))))
                 (ctx/end c :done nil (tree-result c))))))
 
       :else
