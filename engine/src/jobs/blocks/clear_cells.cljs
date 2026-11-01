@@ -312,18 +312,24 @@
 
 (defn wait-of [e] (let [cause (:cause e)] (if (map? cause) cause {:reason cause})))
 
+(defn waits?
+  "Whether the refusal w is a body wait the job yields on: a missing tool is not, the fetch already failed to make one."
+  [w]
+  (and (blocks/body-wait? w) (not= :no-tool (:reason w))))
+
 (defn declined!
   "Book the cell t whose dig child was refused with cause w: a body reason or an unloaded cell keeps it (the job yields
-  :continue), a refusal or a missing zone list skips or leaves it, a hazard counts a try, anything else skips it as
-  :unreachable."
+  :continue), a refusal or a missing zone list skips or leaves it, a hazard or a tool that cannot be had counts a try,
+  anything else skips it as :unreachable."
   [c t w]
-  (when-not (or (blocks/body-wait? w) (= :not-loaded (:reason w)))
+  (when-not (or (waits? w) (= :not-loaded (:reason w)))
     (ctx/update-mem! c dissoc :target)
     (case (:reason w)
+      :no-tool (bump! c t :no-tool)
       :not-allowed (when (#{:zone :claim :footprint} (:by w)) (skip-refused! c [[t (assoc w :reason (:by w))]]))
       :hazard (bump! c t :hazard)
       (defer! c t)))
-  (if (or (blocks/body-wait? w) (= :not-loaded (:reason w))) :continue :again))
+  (if (or (waits? w) (= :not-loaded (:reason w))) :continue :again))
 
 (defn ^:async dig!
   "One round of the dig child on the target cell t; book its end. Any other ending counts a try (skipped after two under the ending's cause key)."

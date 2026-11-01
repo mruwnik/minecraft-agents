@@ -165,6 +165,16 @@
           (is (= [] (:refused result)))
           (is (empty? (of-kind seen :tidy.wrong)) "the wrong cells ride the ending, no separate warn"))))))
 
+(deftest a-stray-needing-a-tool-it-cannot-get-is-skipped-and-the-others-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start (dissoc tidy-spec :inventory) {"field" field-plan})
+              result (await (outcome eng {:plan "field"} 200))]
+          (is (= (disj (set strays) [3 64 2]) (dug p)))
+          (is (= 4 (:dug result)))
+          (is (= [[3 64 2]] (mapv :pos (:refused result)))))))))
+
 (deftest every-dig-goes-through-the-dig-job
   (async done
     (tu/run-async done
