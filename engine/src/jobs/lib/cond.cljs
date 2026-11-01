@@ -179,6 +179,18 @@
   (flag :hostile-near [:hostile-near (str "a hostile within " radius)] [:no-hostile-near (str "no hostile within " radius)]
         (online (fn [c _] (danger-q/danger-near? (world c) radius radius)))))
 
+(defn coord [p k] (if (map? p) (get p k) (get p ({:x 0 :y 1 :z 2} k))))
+
+(defn outside-box
+  "Whether the body is beyond the box between corners lo and hi (positions, inclusive cells)."
+  [lo hi]
+  (flag :outside-box [:outside-box "outside the box"] [:inside-box "inside the box"]
+        (online (fn [_ s]
+                  (let [here (.-pos s)
+                        beyond? (fn [k] (let [v (js/Math.floor (aget here (name k)))]
+                                          (cljs.core/or (cljs.core/< v (coord lo k)) (cljs.core/> v (coord hi k)))))]
+                    (boolean (some beyond? [:x :y :z])))))))
+
 (defn burning []
   (flag :burning [:burning "burning"] [:not-burning "not burning"] (online (fn [c _] (body/burning? (world c))))))
 
@@ -272,6 +284,9 @@
    'hostile-near {:args [:number] :type :status
                   :doc "a real danger (as the hostile-near trigger: a mob that can reach the body, or a ranged one with a line of fire) is within that many blocks"
                   :fn hostile-near}
+   'outside-box {:args [:position :position] :type :status
+                 :doc "the body's cell is outside the box between two corner positions, written as vectors [x y z] (min, max; max cell included)"
+                 :fn outside-box}
    'burning {:args [] :type :status :doc "on fire or in lava without fire resistance (the burning trigger)" :fn burning}
    'suffocating {:args [] :type :status :doc "drowning or enclosed (the suffocating trigger, default oxygen)"
                  :fn suffocating}

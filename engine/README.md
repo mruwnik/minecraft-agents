@@ -475,7 +475,7 @@ names (`:library`, `jobs.lib.cond`), never evaluated; only library names and lit
   (`"inventory bread 9 >= 8"`, reason the value's name). `(since :kind)`: seconds since memory last recorded an
   unexpired entry of that kind.
 - Statuses: `(daytime) (mounted) (in-water) (hostile-near r)` (a real danger) `(burning) (suffocating) (night-unsafe)
-  (wearing "item")`; each has an ok and a fail reason (`(mounted)`: `:mounted` / `:not-aboard`).
+  (wearing "item") (outside-box [x y z] [x y z])`; `outside-box` takes two literal corner vectors (max cell included) and holds when the body's cell is beyond them in any axis, the base of a stay-in-area trigger (the entry's job a `go-to` back inside; an ad hoc entry is `:danger` level); each has an ok and a fail reason (`(mounted)`: `:mounted` / `:not-aboard`).
 - `(and ...)`: any `:never`, else the first `:later`, else the first `:look`, else `:ok`. `(or ...)`: the first `:ok`,
   else `:look`, `:later`, `:never`. Both ask every part. `(not a)` swaps `:ok` and a definite `:later`/`:never`, keeping
   a's text and reason. `(because :reason "text"? a)` renames a failing reason.

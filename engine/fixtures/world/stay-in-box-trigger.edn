@@ -1,0 +1,23 @@
+;; An agent-defined stay-in-area trigger (ad hoc :when (outside-box lo hi), job go-to back inside; engine/README Conditions).
+;; Box x 0..20 of a 40 long plot; the register entry is the recipe worlds/Leo/WORLD.md gives for the base.
+;;   walk-out-is-cut-and-body-returns (should-succeed): a go-to toward x 30 leaves the box; the trigger fires, its go-to ends at x 10, the body is back inside.
+;;   walk-inside-never-fires (should-succeed): the same trigger and a go-to to x 15: it never fires and the job arrives.
+{:defaults
+ {:tags [:movement :triggers] :time :any
+  :plot {:height 10 :length 40 :width 16}
+  :register [{:id :stay-in-box
+              :when (outside-box #at [0 -2 0] #at [20 6 15])
+              :job (jobs.movement.go-to {:pos #at [10 0 8] :range 2 :ways #{:walk :clear-seal}})
+              :persistence :cooldown :cooldown-s 5}]
+  :body {:at [4.5 0 8.5] :yaw 270 :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "walk-out-is-cut-and-body-returns"
+   :act [[:job (jobs.movement.go-to {:pos #at [30 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :stay-in-box}} :within-s 60}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :stay-in-box}} :within-s 60}]
+   :after [[:body-near [10.5 0 8.5] 12]]}
+  {:name "walk-inside-never-fires"
+   :act [[:job (jobs.movement.go-to {:pos #at [15 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 5}]}]}

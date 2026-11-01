@@ -96,7 +96,8 @@
     (number? x) :number
     (string? x) :string
     (keyword? x) :keyword
-    (boolean? x) :boolean))
+    (boolean? x) :boolean
+    (and (vector? x) (= 3 (count x)) (every? number? x)) :position))
 
 (declare check allowed)
 

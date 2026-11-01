@@ -110,11 +110,17 @@
     '(and (not (in-water)) (< (inventory "bread") 8) (because :day-not-come (daytime)))
     '(> (blocks-near "oak_log" 16) 3)))
 
-(deftest the-library-is-what-the-default-trigger-set-names
+(deftest outside-box-holds-beyond-the-box-in-any-axis
+  (let [box '(outside-box [-80 22 -146] [-34 34 -98])
+        at (fn [x y z] (first (status box (ctx-of (tu/fake {:self {:pos [x y z]}})))))]
+    (is (= [:later :later] [(at -60 24 -120) (at -34 34 -98)]))
+    (is (= [:ok :ok :ok :ok] [(at -81 24 -120) (at -60 35 -120) (at -60.5 24 -97) (at -60 21 -120)]))))
+
+(deftest the-library-is-what-is-what-the-default-trigger-set-names
   (is (= cond/library triggers/library))
   (is (every? #(contains? triggers/library %) '[health food inventory time-of-day place since distance-to free-slots
                                                  blocks-near daytime mounted in-water wearing hostile-near burning
-                                                 suffocating night-unsafe])))
+                                                 suffocating night-unsafe outside-box])))
 
 ;; ------------------------------------------------------------------ statuses of compiled forms
 
