@@ -63,12 +63,13 @@
   With dangers, each plan costs the dangers the body knows of now (jobs.lib.threats/planner-dangers): it keeps away from them.
   With dark (default: unless false), each plan costs dark cells more by the hp a zombie would cost the kit, up to twice a lit cell unarmed (wworld/with-dark: look/dark-fn).
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
-  With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (wworld/with-tolls); a toll of ##Inf is a wall.
+  With tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls), each plan costs those cells factor times their seconds more (wworld/with-tolls); a toll of ##Inf is a wall. Each plan also tolls the roofed water seen near the walk (toll-cells/flood-cells): a flooded room is a last resort.
   With unknown (wworld/unknown-spec), each plan reads the cells the body never saw as unknown (wworld/path-world).
   With quoted, a found plan stays kept for the next plan of the same search key (walk/plan-walk-budgeted!), so go-to's walk does not search the quoted route again.
   A promise: the searches run in slices with yields between them (walk/plan-walk!), so the body's API answers meanwhile."
   [c to range doors policy walls explore one-way budget progress dangers & [avoid dark tolls unknown quoted]]
-  (loop [walls (into (vec walls) (map #(select-keys % [:x :y :z])) (filter #(infinite? (:factor %)) tolls))]
+  (let [tolls (into (vec tolls) (tc/flood-walk-tolls c {:x (nth to 0) :y (nth to 1) :z (nth to 2)}))]
+   (loop [walls (into (vec walls) (map #(select-keys % [:x :y :z])) (filter #(infinite? (:factor %)) tolls))]
     (let [tolls (remove #(infinite? (:factor %)) tolls)
           pw (cond-> (wworld/costed-world c (wworld/path-world (:primitives c) unknown) {:dangers? dangers :dark? (not (false? dark))})
                (seq avoid) (wworld/with-avoid avoid)
@@ -87,7 +88,7 @@
                                                                                    :swim-steps (count (filter :swim (:steps plan))))))))
       (if (seq iron)
         (recur (into walls iron))
-        plan))))
+        plan)))))
 
 (defn octile
   "The planner's distance (its h) between columns [x z] and [gx gz]: the longer side plus 0.414 of the shorter."

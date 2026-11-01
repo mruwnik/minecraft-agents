@@ -273,23 +273,6 @@
                :when (u/low-floor? (u/seen-block p cell))]
            cell))))
 
-(def flood-radius "Blocks round the cell within which deep water is kept out of a block job's walk." 5)
-
-(defn flooded-cells
-  "The seen deep water cells (water with water above) within flood-radius of pos, as cells a walk never enters (a go-to ##Inf toll): a room or passage flooded
-  to the ceiling is a drowning trap, not a way to a cell a step or two off. Empty when the body or the cell is itself in water."
-  [c pos]
-  (let [p (:primitives c) r flood-radius
-        water? (fn [cell] (= "water" (u/seen-name p cell)))
-        at (fn [{:keys [x y z]}] {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)})
-        feet (at (u/self-pos c)) tgt (at pos)]
-    (if (or (water? feet) (water? tgt) (water? (update feet :y inc)))
-      []
-      (vec (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -3 4)
-                 :let [cell {:x (+ (:x tgt) dx) :y (+ (:y tgt) dy) :z (+ (:z tgt) dz)}]
-                 :when (and (water? cell) (water? (update cell :y inc)))]
-             cell)))))
-
 (def seal-radius "Blocks from the feet within which an own ledger block counts as the body's seal." 3)
 
 (defn walk-ways
@@ -306,9 +289,7 @@
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
   (let [pens (when-not (settings/get settings ::enter-pens) (await (pen-entry/pens! c)))
-        keep-out (mapv #(assoc % :factor ##Inf) (-> (vec (mapcat :gates pens))
-                                                      (into (when (:for-plan (:args c)) (low-floor-cells c pos)))
-                                                      (into (flooded-cells c pos))))]
+        keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
     [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c)}
             (seq keep-out) (assoc :tolls keep-out))]))
 

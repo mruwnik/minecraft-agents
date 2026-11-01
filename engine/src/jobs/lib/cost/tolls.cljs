@@ -10,6 +10,10 @@
   "Times its own seconds a cell of another's zone costs more to cross: a last resort, not a ban."
   10)
 
+(def flood-factor
+  "Times its own seconds a cell of water roofed over (no air to surface in) costs more to swim: a flooded room is a last resort, not a ban."
+  50)
+
 (defn tolls
   "The :tolls arg of go-to for cells ([x y z] each, feet cells) each costing factor times its own seconds more."
   [cells factor]
@@ -24,6 +28,11 @@
   "tolls for the cells of zones the body has no business in."
   [cells]
   (tolls cells zone-factor))
+
+(defn flood-tolls
+  "tolls for the cells of water with a roof."
+  [cells]
+  (tolls cells flood-factor))
 
 (defn fail-chance
   "The chance a step fails that failed k of n tries: the measured-prior convention, (k+1)/(n+2)."

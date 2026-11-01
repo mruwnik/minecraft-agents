@@ -217,3 +217,20 @@
                   (let [trail (await (job-trail form extra))]
                     (is (seq trail) (pr-str form))
                     (is (not (on-strip? trail -5 5)) (pr-str form))))))))))
+
+(def flooded-room
+  "Water x 10..12, y 64..65, z 0 under a stone roof at y 66, and an open pool x 20..22 (water 2 deep, air over it)."
+  (merge (into {} (for [x (range 10 13) y [64 65]] [(str x "," y ",0") "water"]))
+         (into {} (for [x (range 10 13)] [(str x ",66,0") "stone"]))
+         (into {} (for [x (range 20 23) y [64 65]] [(str x "," y ",0") "water"]))))
+
+(deftest roofed-water-is-tolled-but-open-water-and-a-swimmer-are-not
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (fn [tolls] (set (map (juxt :x :y :z) tolls)))
+              dry (await (in-round (setup flooded-room []) #(tc/flood-walk-tolls % {:x 30 :y 64 :z 0})))
+              swimmer (await (in-round (setup flooded-room [] {:self {:pos [11.5 64 0.5]}}) #(tc/flood-walk-tolls % {:x 30 :y 64 :z 0})))]
+          (is (= #{[10 64 0] [11 64 0] [12 64 0] [10 65 0] [11 65 0] [12 65 0]} (cells dry)) "the roofed room only, not the open pool")
+          (is (every? #(< 1 (:factor %)) dry) "a price, not a wall")
+          (is (nil? swimmer) "a body already in water may swim out"))))))

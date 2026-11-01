@@ -1,0 +1,19 @@
+;; Card 4f038a76 (Leo: clear-cells walked into a flooded kill room): a short way runs through a tunnel flooded to its roof, found only when the walk
+;; rounds the bend (it lies out of sight at the start); a dry way is longer.
+;; Should-succeed: the body arrives by the dry way and plans no swim at all (the re-plan on sight of the water prices the flooded stretch out).
+{:defaults
+ {:tags [:movement :water]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :blocks [[:fill [4 0 0] [30 5 18] "stone"]
+           [:fill [10 0 2] [10 1 6] "air"] [:fill [10 0 6] [26 1 6] "air"] [:fill [26 0 6] [26 1 16] "air"]
+           [:fill [6 0 6] [10 1 6] "air"] [:fill [6 0 6] [6 1 16] "air"] [:fill [6 0 16] [26 1 16] "air"]
+           [:fill [20 0 6] [22 1 6] "water"]]
+  :body {:at [10.5 0 2.5] :effects [["resistance" 900 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "dry-way-over-a-flooded-tunnel"
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 12] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:moves [:contains "swim"]}} :for-s 90 :until {:source :job :kind :completed :data {:arrived true}} :of-job true}]
+   :after [[:body-near [26.5 0 12.5] 2]]}]}

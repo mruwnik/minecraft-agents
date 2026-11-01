@@ -45,7 +45,7 @@
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
   A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
-  Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors; never through water seen deep (water over water) within 5 of the cell, unless the body or the cell is in water); a failed walk is tried once more,
+  Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false, and never from under a block that roofs the body's room), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs; with none to stand on it ends {:reason :hazard

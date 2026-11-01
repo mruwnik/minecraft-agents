@@ -31,7 +31,7 @@
   A cell that is the wall of an own pen holding livestock is skipped for good (reason :own-pen, one clear-cells.refused
   info) unless :open-pens?.
   It digs nothing outside its cells: a cell reachable only by breaking an unlisted block is skipped :unreachable (every dig is a :tidy.dug info event).
-  A dig hazard not in :accept counts a try (reason :hazard after two). A cell not in view (unloaded, or inside rock) is walked to by walking only (no pillar, no seal cleanup, never through deep water) until within 8 blocks, then dug like any other.
+  A dig hazard not in :accept counts a try (reason :hazard after two). A cell not in view (unloaded, or inside rock) is walked to by walking only (no pillar, no seal cleanup) until within 8 blocks, then dug like any other.
   Refused before it starts: {:reason :bad-args :why} (impossible: a missing corner or too many cells), as can-start?
   refusals {:reason :no-zones} (no zone list read, unless :ignore-zones?, also in the middle of the job) and
   {:reason :refused :zones :plans} (every pending cell is refused, before the first round).
@@ -374,7 +374,7 @@
         (finish! c)
         (if-let [[pos n] (top-cell c ready)]
           (if (and (nil? n) (not (digs-unseen? c pos)))
-            (let [w (await (common/walk! c pos 3 {:ways #{:walk} :tolls (mapv #(assoc % :factor ##Inf) (blocks/flooded-cells c pos))}))]
+            (let [w (await (common/walk! c pos 3 {:ways #{:walk}}))]
               (when (= :blocked w) (bump! c pos :unreachable))
               (if (= :continue w) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)

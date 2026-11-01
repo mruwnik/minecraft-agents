@@ -103,6 +103,40 @@
   (when (and pos (not (:ignore-zones? (:args c))))
     (not-empty (cost/zone-tolls (zone-cells c (u/self-pos c) pos)))))
 
+(def roof-reach "Blocks above a water cell that are looked at for air." 12)
+
+(def air-names #{"air" "cave_air" "void_air"})
+
+(defn roofed?
+  "Whether the water column above cell [x y z] ends, within roof-reach, in a seen block that is not air: nowhere to surface."
+  [p [x y z]]
+  (loop [dy 1]
+    (let [n (when (<= dy roof-reach) (u/seen-name p {:x x :y (+ y dy) :z z}))]
+      (cond
+        (or (nil? n) (air-names n)) false
+        (= "water" n) (recur (inc dy))
+        :else true))))
+
+(defn flood-cells
+  "The cells [x y z] of seen water roofed over (a flooded room or passage: no air to surface in, so a drowning trap and a way
+  with no easy exit) within the walk from the body to pos ({:x :y :z}), at most max-cells (the nearest). None when the body or pos is
+  itself in water: it may swim out or in. Re-read at every plan, so water that comes into sight re-prices the route."
+  [c pos]
+  (let [p (:primitives c)
+        feet (u/self-pos c)
+        wet? (fn [m] (= "water" (u/seen-name p {:x (js/Math.floor (:x m)) :y (js/Math.floor (:y m)) :z (js/Math.floor (:z m))})))]
+    (when-not (or (wet? feet) (wet? (update feet :y inc)) (wet? pos))
+      (->> (look/seen-blocks p {:names ["water"] :radius (min 32 (+ (margin) (js/Math.ceil (u/dist feet pos)))) :max (max-cells) :live? true})
+           (map (fn [{:keys [pos]}] [(:x pos) (:y pos) (:z pos)]))
+           (filter #(roofed? p %))
+           vec
+           not-empty))))
+
+(defn flood-walk-tolls
+  "go-to's :tolls for the roofed water seen near a walk from the body to pos (flood-cells). nil when there is none."
+  [c pos]
+  (when pos (some-> (flood-cells c pos) cost/flood-tolls)))
+
 (defn walk-tolls
   "go-to's :tolls for a walk from the body to pos ({:x :y :z}): the farm cells it has seen near the walk and, unless the job
   ignores zones, the cells of other bodies' zones. nil when there are none."
