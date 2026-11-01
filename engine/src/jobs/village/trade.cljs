@@ -136,13 +136,23 @@
   [reason]
   {:retry reason})
 
+(defn enchant-wants
+  "An :enchant arg as {name min-level}: a name (any level), or a map of names to minimum levels; nil for none."
+  [enchant]
+  (cond (string? enchant) {enchant 1} (map? enchant) enchant))
+
+(defn carries
+  "The enchantment of the gives that satisfies wants ({name min-level}), as {:name :level}; nil when none does."
+  [wants gives]
+  (some (fn [e] (when (>= (:level e 1) (get wants (:name e) ##Inf)) e)) (:enchants gives)))
+
 (defn choose
   "Pick an offer from the read offers: {:offer o} with :price, or {:reason
-  r} (and :price, the cheapest open one, for \"price\")."
+  r} (and :price, the cheapest open one, for \"price\"). :enchant is a name or a map name -> minimum level (any one of them)."
   [offers {:keys [buy max-price payment enchant]}]
   (let [mine (filter #(and (= buy (get-in % [:gives :item]))
                            (or (nil? payment) (contains? payment (get-in % [:cost 0 :item])))
-                           (or (nil? enchant) (some (fn [e] (= enchant (:name e))) (get-in % [:gives :enchants]))))
+                           (or (nil? enchant) (carries (enchant-wants enchant) (:gives %))))
                      offers)
         open (map #(assoc % :price (get-in % [:cost 0 :count])) (remove :disabled mine))
         limit (fn [o] (cond (nil? max-price) ##Inf (fn? max-price) (max-price (get-in o [:cost 0 :item])) :else max-price))

@@ -19,7 +19,8 @@
 
 (def doc
   "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, in sight)
-  until one gives :want (with :enchant, an enchanted book of that enchantment, e.g. \"mending\"), by breaking and placing
+  until one gives :want (with :enchant, an enchanted book of that enchantment, e.g. \"mending\"; :enchant may be a map
+  name -> minimum level, {\"mending\" 1 \"unbreaking\" 3}: the first offer with any of them stops the roll, and the done text names it), by breaking and placing
   again the workstation of :profession at :pos.
   Needs: a profession, a wanted item (or enchantment) and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
@@ -40,7 +41,7 @@
    :pos {:doc "the workstation block, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :profession {:doc "villager profession whose workstation block is broken and placed again, e.g. librarian" :spec string? :default nil}
    :want {:doc "item name an offer is to give; nil with :enchant: enchanted_book" :spec a/item? :default nil}
-   :enchant {:doc "enchantment name an offer's item is to carry, e.g. mending" :spec string? :default nil}
+   :enchant {:doc "enchantment an offer's item is to carry: a name (e.g. mending, any level) or a map name -> minimum level, e.g. {\"mending\" 1 \"unbreaking\" 3}; an offer with any one of them matches" :spec (a/or-of string? (a/map-of string? (a/int-in 1 nil))) :default nil}
    :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
@@ -132,7 +133,7 @@
   [c]
   (let [data [:units :offers :done (if (:offer (ctx/mem c)) 1 0) :left (if (:offer (ctx/mem c)) 0 1) :result (data-of c nil)]]
     (if (:offer (ctx/mem c))
-      (apply contract/ok :found (str "found " (want-of (:args c)) " after " (rolls c) " rolls") data)
+      (apply contract/ok :found (str "found " (or (:matched (ctx/mem c)) (want-of (:args c))) " after " (rolls c) " rolls") data)
       (apply contract/later :rolling (str (rolls c) " rolls without " (want-of (:args c))) data))))
 
 (defn quote-of [c]
@@ -150,7 +151,9 @@
 (defn found!
   "Book the matching offer; done? ends the job."
   [c offer]
-  (ctx/update-mem! c assoc :offer (select-keys offer [:index :cost :gives]))
+  (let [e (some->> (:enchant (:args c)) trade/enchant-wants (#(trade/carries % (:gives offer))))]
+    (ctx/update-mem! c assoc :offer (select-keys offer [:index :cost :gives])
+                     :matched (when e (str (:name e) " " (:level e)))))
   :again)
 
 (defn not-nitwit? [e] (not= "nitwit" (.-profession e)))

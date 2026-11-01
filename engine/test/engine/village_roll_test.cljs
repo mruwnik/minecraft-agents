@@ -86,7 +86,8 @@
     {:villager "v-1" :pos nil :profession "librarian" :want "enchanted_book"} false
     {:villager "v-1" :pos [2 64 0] :profession nil :want "enchanted_book"} false
     {:villager "v-1" :pos [2 64 0] :profession "librarian" :want nil} false
-    {:villager "v-1" :pos [2 64 0] :profession "librarian" :want nil :enchant "mending"} true))
+    {:villager "v-1" :pos [2 64 0] :profession "librarian" :want nil :enchant "mending"} true
+    {:villager "v-1" :pos [2 64 0] :profession "librarian" :want nil :enchant {"mending" 1 "unbreaking" 3}} true))
 
 (deftest an-unseen-workstation-cell-asks-for-a-look-then-the-round-walks-there
   (let [args {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book"}
@@ -124,6 +125,17 @@
               "each roll says its offers' enchantments")
           (is (= {:found true :rolls 2} (select-keys result [:found :rolls])))
           (is (= [{:name "mending" :level 1}] (get-in result [:offer :gives :enchants]))))))))
+
+(deftest an-enchant-map-stops-on-any-book-at-its-minimum-level
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [book (fn [enchant level] (assoc-in (offer "enchanted_book") [:gives :enchants] [{:name enchant :level level}]))
+              [result] (await (roll {:entities [(librarian [(book "sharpness" 5)])]
+                                     :scripts [[(book "unbreaking" 2)] [(book "efficiency" 5)] [(book "unbreaking" 3)]]}
+                                    {:want nil :enchant {"mending" 1 "unbreaking" 3}}))]
+          (is (= {:found true :rolls 3} (select-keys result [:found :rolls])))
+          (is (= [{:name "unbreaking" :level 3}] (get-in result [:offer :gives :enchants]))))))))
 
 (deftest the-nearest-adult-is-rolled-when-no-villager-is-named
   (async done

@@ -20,6 +20,11 @@
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000001" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book" :settings {:jobs.village.roll/max-rolls 12}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
+  {:name "roll-with-a-book-map-stops-on-any-listed-book"
+   :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,12],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+         [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-00050000000c" :pos #at [16 0 16] :profession "librarian" :want nil :enchant {"mending" 1 "unbreaking" 1 "protection" 1 "sharpness" 1 "efficiency" 1 "knockback" 1 "silk_touch" 1 "fortune" 1 "looting" 1 "power" 1 "feather_falling" 1 "respiration" 1 "aqua_affinity" 1 "thorns" 1 "depth_strider" 1 "frost_walker" 1 "fire_protection" 1 "blast_protection" 1 "projectile_protection" 1 "sweeping_edge" 1 "fire_aspect" 1 "punch" 1 "flame" 1 "infinity" 1 "luck_of_the_sea" 1 "lure" 1 "loyalty" 1 "impaling" 1 "riptide" 1 "channeling" 1 "multishot" 1 "piercing" 1 "quick_charge" 1 "soul_speed" 1 "swift_sneak" 1 "smite" 1 "bane_of_arthropods" 1 "binding_curse" 1 "vanishing_curse" 1} :settings {:jobs.village.roll/max-rolls 12}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 220 :of-job true}]
+   :after [[:block [16 0 16] "lectern"]]}
   {:name "roll-three-times-in-one-call"
    :act [[:summon "villager" [16.5 1 17.5] "{UUID:[I;20260,7,5,9],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000009" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
