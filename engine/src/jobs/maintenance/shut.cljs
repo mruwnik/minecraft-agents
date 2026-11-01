@@ -32,7 +32,7 @@
   counted (the trigger waits :open-s per fail) until the attempts setting (5) runs have failed: then it is dropped with a last warn. A block an
   animal stands in (:animal-in-the-way, info only) keeps its entry untouched and counts no failure.
 
-  Both: one run shuts them all. Each is walked to within the reach setting (3) (a jobs.movement.go-to child, doors :never: it opens nothing on
+  Both: one run shuts them all. Each is walked to within the reach setting (3), seeing it (a jobs.movement.go-to child, :see, doors :never: it opens nothing on
   the way). A walk that goes on or waits (go-to :continue) is another step; the block is not given up.
   Ends :done with {:shut n :left []} when every opening was shut (a call that finds none open ends done at once); with any left,
   :nothing-possible :left with {:shut n :left [{:cell :reason}]}. Spends :job-time.")

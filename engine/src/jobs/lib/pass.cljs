@@ -168,8 +168,8 @@
 
 (defn left-open!
   "Warn that the block at cell stays open, and why."
-  [c {:keys [x y z]} why]
-  (ctx/emit! c :door-left-open :warn {:cell [x y z] :why why
+  [c {:keys [x y z]} why & [outcome]]
+  (ctx/emit! c :door-left-open :warn {:cell [x y z] :why why :outcome outcome
                                       :text (str "the walker left the block at " [x y z] " open: " (name why))}))
 
 (defn ^:async shut-column!
@@ -194,7 +194,7 @@
           (let [{:keys [outcome]} (await (click/click! c cell :closed name))]
             (if (= :changed outcome)
               (ctx/forget-where! c :opened #(= cell (:cell %)))
-              (left-open! c cell :shut-failed))))))))
+              (left-open! c cell :shut-failed outcome))))))))
 
 (defn ^:async shut-ready!
   "Shut each block of the columns pending that the body is out of; the columns it is still in."

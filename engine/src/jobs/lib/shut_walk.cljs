@@ -12,9 +12,9 @@
 (defn tries [] (settings/get settings ::tries))
 
 (defn ^:async walk!
-  "nil when the body stands within reach of pos, else why not: :continue (the walk goes on or waits) or :unreachable."
+  "nil when the body stands within reach of pos and sees it (the click refuses a block the eye has no line to), else why not: :continue (the walk goes on or waits) or :unreachable."
   [c pos ways]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :never :ways ways}))
+  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :see true :doors :never :ways ways}))
         res (:data e)]
     (ctx/update-mem! c dissoc :blocker)
     (cond

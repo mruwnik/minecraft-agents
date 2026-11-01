@@ -11,6 +11,7 @@
             [jobs.lib.pass :as pass]
             [jobs.lib.doors :as doors]
             [jobs.lib.access :as access]
+            [jobs.lib.aim :as aim]
             [jobs.lib.shut-walk :as walk]
             [jobs.lib.world :as known]))
 
@@ -69,7 +70,7 @@
   [c {:keys [cell column dist]}]
   (if (pass/in-column? column (doors/feet-cell (u/self-pos c)))
     :standing-in
-    (if-let [why (when (> dist (pass/leftover-reach)) (await (walk/walk! c cell #{:walk :clear-seal})))]
+    (if-let [why (when (or (> dist (pass/leftover-reach)) (not (aim/body-sees? c (u/cell-vec cell)))) (await (walk/walk! c cell #{:walk :clear-seal})))]
       why
       (loop [n 1]
         (await (pass/shut-column! c column))

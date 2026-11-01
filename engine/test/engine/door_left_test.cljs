@@ -158,6 +158,18 @@
           (is (= [] (opened eng)))
           (is (= 1 (:shut (first (filter #(= :completed (:kind %)) @seen))))))))))
 
+(deftest a-left-gate-within-reach-but-behind-a-wall-is-walked-to-a-stand-that-sees-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup (gate-world true 8 0 {:blocks (box 7 64 -1 7 66 1 "stone")}))]
+          (remember-opened! s)
+          (core/submit! eng '(jobs.maintenance.shut) {})
+          (await (tick-until s #(empty? (:list (core/state eng))) 30))
+          (is (seq (tu/walked-to eng)) "it moved although the gate was within reach")
+          (is (not (open? p gate-cell)))
+          (is (= [] (opened eng))))))))
+
 (deftest a-gate-shut-out-of-sight-is-walked-to-and-left-unseen-not-ended-already
   (async done
     (tu/run-async done
