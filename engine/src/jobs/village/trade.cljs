@@ -289,11 +289,11 @@
     (mapv #(js/Math.floor %) [x y z])))
 
 (defn in-reach?
-  "Whether the body is within reach of villager e and sees its cell over the blocks it has seen (a glass wall is solid:
+  "Whether the body is within reach of villager e and sees its body or head over the blocks it has seen (a glass wall is solid:
   the click would not get through)."
   [c e]
   (and (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))
-       (aim/body-sees? c (cell-of e))))
+       (aim/body-sees-entity? c (u/pos-of (.-pos e)) 1.95)))
 
 (defn ^:async step!
   "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,

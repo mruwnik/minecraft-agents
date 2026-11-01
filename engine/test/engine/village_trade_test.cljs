@@ -358,16 +358,31 @@
           (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :unreachable} result))
           (is (not (contains? (kinds seen) :trade.gave-up))))))))
 
-(deftest a-villager-in-a-glass-box-is-not-traded-with
+(deftest a-villager-behind-a-glass-wall-is-not-traded-with
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [box (into {"1,63,0" "stone"} (map (fn [k] [k "glass"])) ["0,64,0" "2,64,0" "1,64,1" "1,64,-1" "1,65,0"])
-              p (tu/seeing-all (tu/fake-on-floor {:entities [(villager [(bread {})])] :inventory [{:name "emerald" :count 3}] :blocks box}))
+        (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos [0.5 64 0.5]}
+                                                  :entities [(villager [(bread {})] {:pos {:x 2.2 :y 64 :z 0.5}})]
+                                                  :inventory [{:name "emerald" :count 3}]
+                                                  :blocks {"1,64,0" "glass" "1,65,0" "glass" "2,63,0" "stone" "3,64,0" "glass" "2,64,1" "glass" "2,64,-1" "glass" "2,66,0" "glass" "2,65,1" "glass" "2,65,-1" "glass" "3,65,0" "glass"}}))
               {:keys [eng]} (start {:p p})
               result (plain (await (child-outcome eng job {:villager "v-1" :buy "bread"} 80)))]
           (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :unreachable} result))
           (is (empty? (calls p "trade"))))))))
+
+(deftest a-villager-sealed-in-behind-stone-and-a-slab-is-traded-with-from-where-the-body-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos [0.5 64 0.5]}
+                                                  :entities [(villager [(bread {})] {:pos {:x 2.2 :y 64 :z 0.5}})]
+                                                  :inventory [{:name "emerald" :count 3}]
+                                                  :blocks {"1,64,0" "stone" "1,65,0" "stone_slab"} :states {"1,65,0" {:type "bottom"}}}))
+              {:keys [eng]} (start {:p p})
+              result (plain (await (child-outcome eng job {:villager "v-1" :buy "bread"} 80)))]
+          (is (= 1 (:bought result)))
+          (is (empty? (calls p "goTo"))))))))
 
 (deftest a-buy-that-timed-out-after-the-goods-landed-counts-them
   (async done
