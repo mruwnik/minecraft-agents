@@ -57,7 +57,7 @@
        (let [n (torches-short c owed)
              o (need/fetch-opts c)]
          (and (pos? n)
-              (composite/ok? (need/item-status c "torch" n o (when worth-of (worth-of n o))))))))
+              (composite/ok? (need/item-status c "torch" n o (if worth-of (worth-of n o) ##Inf)))))))
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) or no light comes (:exposed, a torch lowers it) and the body can hang torches
@@ -101,7 +101,7 @@
   "Get n torches (jobs.lib.need) for a dark site short of them: :continue while the child waits on the world, :again once it ended
   (:torches-tried whatever came of it, so a failed fetch is asked once and the wait for light names its reason)."
   [c n]
-  (let [e (await (need/item! c "torch" n (need/fetch-opts c)))]
+  (let [e (await (need/item! c "torch" n (assoc (need/fetch-opts c) :worth ##Inf)))]
     (when-not (= :continue e)
       (ctx/update-mem! c assoc :torches-tried true))
     (if (= :continue e) :continue :again)))
