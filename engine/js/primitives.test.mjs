@@ -3548,3 +3548,39 @@ test('eat returns only once the eaten item has left the bag, even when the slot 
     assert.equal(items[0].count, 1)
   } finally { await primitives.close() }
 })
+
+// A mob's box, not its centre, decides whether the server refuses the cell; place waits for it to leave.
+const villagerAt = (x, id = 40) => ({ id, name: 'villager', type: 'passive', position: at(x, 64, 0), height: 1.95, width: 0.6, health: 20 })
+
+const refusingRig = (entities, refuseWhile) => {
+  const blocks = { '1,63,0': 'stone' }
+  const bot = stubBot({ blocks, entities, items: [{ name: 'cobblestone', count: 2, slot: 36 }] })
+  const place = bot.placeBlock
+  bot.placeBlock = (ref, face) => refuseWhile() ? Promise.reject(new Error('Server refused to place cobblestone: the block is still air')) : (blocks['1,64,0'] = 'cobblestone', place(ref, face))
+  const p = createPrimitivesFromBot(bot, { timeScale: SCALE })
+  p.setOwner('t1')
+  return { p }
+}
+
+test('place waits for a villager whose box (centre in the next cell) overlaps the cell to leave, then places', async () => {
+  const entities = { 40: villagerAt(0.8) }
+  const { p } = refusingRig(entities, () => Boolean(entities[40]))
+  setTimeout(() => { delete entities[40] }, 10)
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })).status, 'placed')
+})
+
+test('place that a mob keeps refusing ends failed and names the overlapping mob, not one beside the cell', async () => {
+  const entities = { 40: villagerAt(0.8), 41: villagerAt(3.5, 41) }
+  const { p } = refusingRig(entities, () => true)
+  const r = await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })
+  assert.equal(r.status, 'failed')
+  assert.deepEqual(r.refusal.entities.map(e => e.id), [40])
+  assert.match(r.reason, /mobs overlapping the cell: villager#40/)
+})
+
+test('a refusal with no mob over the cell is not waited out', async () => {
+  let clicks = 0
+  const { p } = refusingRig({ 41: villagerAt(3.5, 41) }, () => ++clicks)
+  assert.equal((await p.place('t1', { pos: at(1, 64, 0), item: 'cobblestone' })).status, 'failed')
+  assert.equal(clicks, 1)
+})

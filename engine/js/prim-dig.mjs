@@ -256,10 +256,23 @@ export function createDig (env) {
     stand: xyz(here()),
     look: { yaw: env.bot.entity.yaw, pitch: env.bot.entity.pitch },
     cell: env.bot.blockAt(vec(p))?.name,
-    entities: liveEntities(env.bot)
-      .filter(e => Math.abs(e.position.x - (p.x + 0.5)) < 1.2 && Math.abs(e.position.z - (p.z + 0.5)) < 1.2 && e.position.y > p.y - 2 && e.position.y < p.y + 1.5)
-      .map(e => ({ id: e.id, name: e.name, kind: entityKind(e), pos: xyz(e.position) }))
+    entities: mobsInCell(p).map(e => ({ id: e.id, name: e.name, kind: entityKind(e), pos: xyz(e.position) }))
   })
+
+  // The server refuses a block whose cell a mob's box overlaps (width and height, not just its centre); the body itself never counts.
+  const mobsInCell = p => liveEntities(env.bot).filter(e => {
+    if (e.id === env.bot.entity.id) return false
+    const half = (e.width ?? 0.6) / 2 + 0.5
+    return Math.abs(e.position.x - (p.x + 0.5)) < half && Math.abs(e.position.z - (p.z + 0.5)) < half &&
+      e.position.y < p.y + 1 && e.position.y + (e.height ?? 1.8) > p.y
+  })
+
+  const refused = (err, p, support) => {
+    const refusal = refusalFacts(p, support)
+    const at = v => `${v.x},${v.y},${v.z}`
+    const near = refusal.entities.map(e => `${e.name ?? e.kind}#${e.id} at ${at(e.pos)}`).join(', ') || 'none'
+    return { status: 'failed', reason: `${err.message} (against ${at(refusal.against)} face ${at(refusal.face)}, body at ${at(refusal.stand)}, mobs overlapping the cell: ${near})`, refusal }
+  }
 
   const place = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
@@ -288,15 +301,19 @@ export function createDig (env) {
       const unheld = await holdFailure(item)
       if (unheld) return unheld
       ctx.alive()
-      try {
-        if (a.click) await clickPlace(ctx, support, a.click)
-        else await placeSneaking(ctx, support, isInteractable(support.ref.name))
-      } catch (err) {
-        if (!/^Server refused/.test(err?.message ?? '')) throw err
-        const refusal = refusalFacts(p, support)
-        const at = v => `${v.x},${v.y},${v.z}`
-        const near = refusal.entities.map(e => `${e.name ?? e.kind}#${e.id} at ${at(e.pos)}`).join(', ') || 'none'
-        return { status: 'failed', reason: `${err.message} (against ${at(refusal.against)} face ${at(refusal.face)}, body at ${at(refusal.stand)}, entities near the cell: ${near})`, refusal }
+      // A mob walking through the cell clears it in moments: wait it out (a player times the click), then click again.
+      const waitUntil = Date.now() + setting('prim/place-mob-wait-ms') * timeScale
+      for (;;) {
+        try {
+          if (a.click) await clickPlace(ctx, support, a.click)
+          else await placeSneaking(ctx, support, isInteractable(support.ref.name))
+          break
+        } catch (err) {
+          if (!/^Server refused/.test(err?.message ?? '')) throw err
+          if (!mobsInCell(p).length || Date.now() >= waitUntil) return refused(err, p, support)
+        }
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
       }
       // The inventory update for the placed item can trail the block; the act's after-snapshot (the tally) must see it.
       const deadline = Date.now() + setting('prim/place-consume-wait-ms') * timeScale

@@ -8,5 +8,13 @@
    :blocks [[:set [18 0 16] "stone"]]
    :act [[:summon "sheep" [18.5 0 17.5] "{NoAI:1b}"]
          [:job (jobs.blocks.place {:pos #at [18 0 17] :item "dirt"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :failed :why [:contains "Server refused"]}} :within-s 30 :of-job true}]
-   :after [[:block [18 0 17] "air"] [:item "dirt" 8]]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :failed :why [:contains "mobs overlapping the cell: sheep"]}} :within-s 30 :of-job true}]
+   :after [[:block [18 0 17] "air"] [:item "dirt" 8]]}
+  {:name "sheep-leaves-the-cell-is-waited-out"
+   :blocks [[:set [18 0 16] "stone"]]
+   :act [[:summon "sheep" [19.1 0 17.5] "{NoAI:1b}"]
+         [:job (jobs.blocks.place {:pos #at [18 0 17] :item "dirt"})]
+         [:wait-s 3]
+         [:rcon "kill @e[type=sheep,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}]
+   :after [[:block [18 0 17] "dirt"] [:item "dirt" 7]]}]}
