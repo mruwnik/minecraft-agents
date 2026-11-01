@@ -104,6 +104,18 @@
     40 40 false [0 0] false
     5 5 true [0 14] false))
 
+(deftest a-lit-roofed-room-with-a-pond-in-its-floor-is-shelter-for-a-body-dry-beside-the-pond
+  (let [blocks (merge (box 11 11 false)
+                      (into {} (for [x (range -1 12) z (range -1 12) y (range 59 63)] [(str x "," y "," z) "stone"]))
+                      (into {} (for [x (range 4 7) z (range 4 7) y (range 60 64)] [(str x "," y "," z) "water"])))
+        raw-p (tu/fake {:time night :blocks blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 14])
+        _ (fake/swap-self! raw-p assoc :pos [7.5 64 5.5])
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        _ (perception/pass! per)
+        p (tu/seeing-all (perception/wrap raw-p per))]
+    (is (true? (sh-inside/safe-from-night? p)))))
+
 (deftest a-sensed-hostile-or-fire-or-lava-in-or-beside-the-closed-room-makes-it-no-shelter
   (let [safe? (fn [world blocks] (sh-inside/safe-from-night?
                                   (let [raw-p (tu/fake (merge {:time night :blocks (merge (box 1 4 false) blocks)} world))
@@ -524,6 +536,10 @@
   "Flat ground a pit can be dug in (a lone column has open sides, which a pit rules out): dirt over x -4..8, z -4..4, the body's column dirt over stone."
   (merge (into {} (for [x (range -4 9) z (range -4 5) y (range 60 64)] [(str x "," y "," z) "dirt"])) floor))
 
+;; Water on every other top cell: every dry cell has water beside it, so no dry site is near to relocate to.
+(def wet-floor
+  (merge pit-floor (into {} (for [x (range -4 9) z (range -4 5) :when (odd? (+ x z))] [(str x ",63," z) "water"]))))
+
 (def ore-ground
   "pit-floor with iron ore (which drops no block) from y 61 to 63 everywhere: no pit anywhere can be roofed with what it digs."
   (merge pit-floor (into {} (for [x (range -4 9) z (range -4 5) y [61 62 63]] [(str x "," y "," z) "iron_ore"]))))
@@ -782,7 +798,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 3}]
-                                           :blocks (assoc pit-floor "1,63,0" "water" "-1,63,0" "water" "0,63,1" "water" "0,63,-1" "water")})]
+                                           :blocks (assoc wet-floor "1,63,0" "water" "-1,63,0" "water" "0,63,1" "water" "0,63,-1" "water")})]
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 12))
           (is (= [] (calls p "dig")) "floor intact")
@@ -1233,7 +1249,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [fluid ["water" "lava"]]
-          (let [{:keys [eng p]} (setup {:time night :blocks (assoc pit-floor "1,63,0" fluid)
+          (let [{:keys [eng p]} (setup {:time night :blocks (assoc wet-floor "1,63,0" fluid)
                                       :inventory [{:name "dirt" :count 1}]})]
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 8))
@@ -1242,7 +1258,7 @@
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 8))
             (is (empty? (calls p "place")) "carried dirt does not make the site safe")
-            (is (= :fluid-adjacent (:reason (first (entries eng :shut-in-failed)))))))))))
+            (is (= :hazard-below (:reason (first (entries eng :shut-in-failed)))))))))))
 
 (deftest dig-in-refuses-water-plants-bubbles-and-waterlogged-blocks-beside-the-pit
   (async done
@@ -1250,12 +1266,12 @@
       (fn ^:async t []
         (doseq [[block states] [["seagrass" nil] ["tall_seagrass" nil] ["kelp" nil] ["kelp_plant" nil] ["bubble_column" nil]
                                 ["oak_slab" {"1,63,0" {:waterlogged true}}]]]
-          (let [{:keys [eng p]} (setup {:time night :blocks (assoc pit-floor "1,63,0" block) :states states
+          (let [{:keys [eng p]} (setup {:time night :blocks (assoc wet-floor "1,63,0" block) :states states
                                         :inventory [{:name "dirt" :count 1}]})]
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 8))
             (is (empty? (calls p "dig")) block)
-            (is (= :fluid-adjacent (:reason (first (entries eng :shut-in-failed)))) block)))))))
+            (is (#{:hazard-below :fluid-adjacent} (:reason (first (entries eng :shut-in-failed)))) block)))))))
 
 (deftest dig-in-does-not-dig-down-from-water
   (async done

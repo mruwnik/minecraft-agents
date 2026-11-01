@@ -241,13 +241,14 @@
 (defn reached-from-outside?
   "Whether a mob could stand outside the sealed-region round feet ({:x :y :z}) right beside the body, in a side cell one lower (its
   head in a gap over a drop), level or one higher (on the side block, under a roof no walker jumps past), so it hits the
-  body though no walker's flood gets in. Only cells the body has seen: one behind a wall is no gap."
+  body though no walker's flood gets in. Only cells the body has seen: one behind a wall is no gap. Water under a cell of the region (a pond in the room's floor) is the room's own."
   [p {:keys [x y z] :as feet}]
   (let [kind-at (reach-room/shut-kind-at p)
         cells (:cells (sealed-region p feet))]
     (boolean (some (fn [[dx dy dz]]
                      (let [s [(+ x dx) (+ y dy) (+ z dz)]]
                        (and (not (contains? cells s)) (apply reach/standable? kind-at s)
+                            (not (and (keyword-identical? :water (apply kind-at s)) (contains? cells (update s 1 inc))))
                             (every? #(some? (u/seen-block p (zipmap [:x :y :z] %))) [s (update s 1 inc) (update s 1 dec)]))))
                    (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [dx dy dz])))))
 
