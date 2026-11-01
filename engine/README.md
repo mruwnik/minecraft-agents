@@ -879,7 +879,7 @@ node engine/tools/observe.mjs Bob --world test catalog jobs [--all] | catalog jo
 node engine/tools/quote.mjs Bob --world test jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'   (also jobs.primitive.*)
 node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test light [x y z] [--radius 0-8]   # perceived light at a cell (default the feet): block, sky, sky-subtract, effective, lit/dark, seen
-node engine/tools/observe.mjs Bob --world test cell x y z   # block name and state properties of one cell, live or remembered (a negative coordinate needs `--` first)
+node engine/tools/observe.mjs Bob --world test cell x y z   # block name and state properties of one cell, live or remembered
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world test list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled

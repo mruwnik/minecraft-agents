@@ -151,6 +151,7 @@
 
 (deftest cell-is-a-read-only-observe-query-of-one-cell
   (is (= "/cell?x=1&y=64&z=-3" (:path (request "--world" "w" "ProbeBody" "cell" "--" "1" "64" "-3"))))
+  (is (= "/cell?x=-43&y=24&z=-118" (:path (request "--world" "w" "ProbeBody" "cell" "-43" "24" "-118"))))
   (doseq [[argv pattern] [[["cell"] #"x y z"]
                           [["cell" "1" "2"] #"x y z"]
                           [["cell" "1" "a" "3"] #"integers"]
