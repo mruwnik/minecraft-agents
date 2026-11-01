@@ -19,4 +19,8 @@
             [:fill [79 -1 15] [83 -1 17] "farmland[moisture=7]"] [:fill [80 0 16] [82 0 16] "wheat[age=7]"]]
    :act [[:job (jobs.farm.harvest {:area {:pos #xyz [81 0 16] :radius 6} :replant false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :gave-up}} :within-s 160 :of-job true}]
-   :after [[:item "wheat" 0]]}]}
+   :after [[:item "wheat" 0]]}
+  {:name "harvest-of-sugar-cane-is-bad-args"
+   :blocks [[:fill [79 -1 15] [83 -1 17] "dirt"] [:fill [80 0 16] [82 2 16] "sugar_cane[age=15]"]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [81 0 16] :radius 6} :crops ["sugar_cane"]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}]}]}

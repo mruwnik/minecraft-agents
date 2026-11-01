@@ -318,6 +318,11 @@
         (is (= {:kind :done :cause :already}
                (kc (await (ending-of (ht/start {:world {:blocks (ht/field "wheat" 3 [2 3] [2]) :ages (ht/ages 3 [2 3] [2])}}) harvest {} 20)))))))))
 
+(deftest harvest-of-a-crop-it-cannot-cut-is-never-bad-args
+  (let [can-start (:can-start? (get registry/jobs harvest))]
+    (is (= [:never :bad-args] (tu/kind-reason (can-start {:primitives (tu/fake {}) :args {:crops ["sugar_cane"]}}))))
+    (is (not= [:never :bad-args] (tu/kind-reason (can-start {:primitives (tu/fake {}) :args {:crops ["wheat"]}}))))))
+
 (deftest harvest-partial-run-is-done-only-when-it-meets-least
   (async done
     (tu/run-async done

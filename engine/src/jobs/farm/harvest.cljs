@@ -57,7 +57,7 @@
   {:area {:doc "the field: a box {:min :max} (corners inclusive, the ground layer is the lowest y and the crops one above it are inside; only crops inside it are cut), a circle {:pos :radius} (a sphere) or {:plan id :part name} (the plan's crop cells); nil: a circle of radius 12 round the body's position when the job first runs" :spec fa/spec :default nil}
    :replant {:doc "replant what was cut" :spec boolean? :default true}
    :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :spec boolean? :default true}
-   :crops {:doc "crop block names to cut; all known crops when nil" :spec (a/coll-of a/name?) :default nil}
+   :crops {:doc "field crop names to cut (wheat, carrots, potatoes, beetroots; others are refused as bad args); all of them when nil" :spec (a/coll-of a/name?) :default nil}
    :ignore-zones? :shared})
 
 (def ripe-age crops/ripe-age)
@@ -261,7 +261,10 @@
 
 (defn can-run? [c] (pf/plan-can-run? (planned c)))
 
-(def bad-args (checks/args-fit "harvest :area must be a box, circle or plan" #(contains? #{nil :box :circle :plan} (fa/kind (fa/of %)))))
+(def bad-args
+  (cond/and (checks/args-fit "harvest :area must be a box, circle or plan" #(contains? #{nil :box :circle :plan} (fa/kind (fa/of %))))
+            (checks/args-fit (str "harvest :crops must be field crops " (str/join ", " (sort (keys ripe-age))) " (sugar cane and bamboo are cut by farm.maintain from a plan)")
+                             #(every? ripe-age (:crops (:args %))))))
 
 (def can-start? (cond/and bad-args can-run? (checks/refusing :work "something to harvest" problem)))
 
