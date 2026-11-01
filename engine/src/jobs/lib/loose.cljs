@@ -11,6 +11,7 @@
     :collecting   another job's collect-drops is collecting round it (the :collecting hold, written by collect-drops, dropped in
                   its cleanup, ::hold-ttl-s at most);
     :owed         it appeared under :owed-s ago while some other job runs: that job's own drop (a felled log, a dug ore);
+    :seed-glut    it is a seed kind and the body already carries :seed-cap of it;
     :left         a run left it (:loose-left, not reached or not picked up) in the last :left-s (longer than
                   :thrown-s and :owed-s: a spot a run failed on stays failed, where those two only guess at ownership)."
   (:require [engine.args :as a]
@@ -19,6 +20,8 @@
             [engine.settings :as settings]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.cost :as cost]
+            [jobs.lib.crops :as crops]
+            [jobs.lib.storage :as storage]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]))
@@ -41,10 +44,11 @@
    ::hold-ttl-s {:default 3600 :spec (a/num-in 1 nil) :doc "Seconds a :collecting hold lasts when its job never released it."}
    ::left-cap {:default 32 :spec (a/int-in 1 nil) :doc "Most :loose-left entries kept."}
    ::check-radius {:default 32 :spec (a/num-in 1 nil) :doc "Blocks within which pick-up-loose looks for the items it tried, after the run."}
+   ::seed-cap {:default 64 :spec (a/int-in 0 nil) :doc "Seed kinds already carried at this many are not picked up: replanting needs a stack at most."}
    ::collect-pad {:default 1 :spec (a/num-in 0 nil) :doc "Blocks added to :radius for the collect-drops child's area."}})
 
 (def option-keys [:radius :min-ratio :always :never :thrown-s :owed-s :left-s :dumped-s
-                  :drop-dy :throw-dxz :throw-dy :toss-ms :toss-reach :hold-cap :hold-ttl-s :left-cap :check-radius :collect-pad])
+                  :drop-dy :throw-dxz :throw-dy :toss-ms :toss-reach :hold-cap :hold-ttl-s :left-cap :check-radius :collect-pad :seed-cap])
 
 (defn options
   "The settings with the non-nil keys of overrides over them."
@@ -139,10 +143,15 @@
                              :plan-cells #{} :self self :now now :action :take
                              :cell (mapv js/Math.floor [(:x pos) (:y pos) (:z pos)])})))))
 
+(defn carried-of
+  "{name n} the body carries."
+  [p]
+  (storage/carried-totals (u/inventory p)))
+
 (defn judge
   "Why entity e is left (a keyword, see the ns doc), or nil when it is taken. live is the set of live job ids, except
   the caller's own job id; :zone stands for a zone or a claim."
-  [{:keys [view kn o self feet live left except]} e]
+  [{:keys [view kn o self feet live left except carried]} e]
   (let [now (:now view)
         name (some-> (.-item e) .-name)
         pos (item-pos e)
@@ -156,6 +165,7 @@
       (and by (zones/same-owner? by self)) :thrown
       (and by (or (nil? age) (< age (* 1000 (:thrown-s o))))) :thrown
       (contains? left (.-id e)) :left
+      (and (crops/seed-item? name) (>= (get carried name 0) (:seed-cap o))) :seed-glut
       (some #(<= (u/dist (:anchor %) pos) (:radius %)) holds) :collecting
       (and age (< age (* 1000 (:owed-s o))) (seq live)) :owed
       (not (verdict kn self now pos)) :zone
@@ -171,7 +181,7 @@
   (let [o (options args)
         feet (u/pos-of (.-pos (.self p)))
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet feet
-             :live (live-ids view except) :left (left-ids view) :except except}
+             :live (live-ids view except) :left (left-ids view) :except except :carried (carried-of p)}
         near (seen p o)
         near-ids (set (map #(.-id %) near))
         beyond (->> (look/seen-items p {:radius (:check-radius o) :max 32})
@@ -188,5 +198,5 @@
   [p view kn args except]
   (let [o (options args)
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet (u/pos-of (.-pos (.self p)))
-             :live (live-ids view except) :left (left-ids view) :except except}]
+             :live (live-ids view except) :left (left-ids view) :except except :carried (carried-of p)}]
     (filterv #(nil? (judge env %)) (seen p o))))

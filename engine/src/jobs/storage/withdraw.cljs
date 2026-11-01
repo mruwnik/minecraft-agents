@@ -23,6 +23,7 @@
   Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job
   waits, a reflex ends condition-failed); a chest of the group that zones or claims of another do not refuse :take, else waits
   :refused {:zones :claims}. :ignore-zones? true skips it.
+  What it takes is noted in body memory (:withdrawn, 5 minutes) so a reflex's make-room leaves it.
   The count is a target, not an amount to take: the ending text says: carried lectern 8 (took 5, had 3).
   Ends done when everything is carried (also at once when it already is), or when at least the call's :least items
   toward the wanted ones are carried at any other ending (:all wants every one). The data of every other ending has :gave-up and
@@ -176,6 +177,15 @@
        (str "took " (str/join ", " (map (fn [[n k]] (str n " " k)) (sort taken)))
             "; no more " (str/join ", " names) " in the chests (the last " holds ")")))))
 
+(def taken-policy
+  "What was just taken, in body memory: jobs.storage.make-room leaves it (taken for a purpose)."
+  {:cap 16 :ttl 300000})
+
+(defn hold-taken!
+  "Remember the units of name taken so far this call as :withdrawn, so a reflex's make-room leaves them."
+  [c name]
+  (ctx/remember! c :withdrawn {:item name :count (get-in (ctx/mem c) [:taken name])} taken-policy))
+
 (defn ^:async take!
   "Look into the chest (walking into reach) and take the first short name the chest holds: :again, :continue, or the ending."
   [c chest short]
@@ -212,6 +222,7 @@
               (give-up! c "nothing-moved" short)
               :else (do (stock/note-moved! c chest name (- (.-moved r)))
                         (ctx/update-mem! c update-in [:taken name] (fnil + 0) (.-moved r))
+                        (hold-taken! c name)
                         (u/progress! c)
                         :again))))))))
 

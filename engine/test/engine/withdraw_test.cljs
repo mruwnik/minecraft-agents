@@ -61,6 +61,15 @@
           (is (= [{:name "bread" :count 20}] (chest-items p)))
           (is (= {:kind :done :data {:text "withdraw: carried bread 16 (took 12, had 4)"}} result)))))))
 
+(deftest what-is-taken-is-remembered-so-a-reflex-leaves-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:inventory [{:name "bread" :count 4}] :containers {"10,64,0" [{:name "bookshelf" :count 1} {:name "bread" :count 32}]}})]
+          (await (ending-of eng job {:chest chest :items {"bookshelf" 1 "bread" 16}} 8))
+          (is (= #{{:item "bookshelf" :count 1} {:item "bread" :count 12}}
+                  (set (map :data (mem/entries (mem/view (:store eng)) :withdrawn))))))))))
+
 (deftest withdraw-with-enough-carried-moves-nothing
   (async done
     (tu/run-async done

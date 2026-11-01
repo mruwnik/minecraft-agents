@@ -163,8 +163,8 @@
          (ord/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:carry-food 0 :carry-blocks 0} nil))))
 
 (deftest keep-counts-keep-the-held-units-up-to-the-carried-total
-  (is (= {"diamond" 3 "bread" 0 "emerald" 0 "dirt" 2}
-         (ord/keep-counts [{:name "diamond" :count 5} {:name "bread" :count 2} {:name "emerald" :count 1} {:name "dirt" :count 2}]
+  (is (= {"diamond" 3 "bread" 0 "gold_ingot" 0 "dirt" 2}
+         (ord/keep-counts [{:name "diamond" :count 5} {:name "bread" :count 2} {:name "gold_ingot" :count 1} {:name "dirt" :count 2}]
                          {:carry-food 0 :carry-blocks 0}
                          {"diamond" 3 "dirt" 9 "elytra" 1}))
       "held raises a floor, never above what is carried or for what is not carried"))
@@ -281,22 +281,34 @@
       [40 30] 30 [1]
       [10 64] 64 [0])))
 
-(deftest deposit-names-lists-the-names-above-their-keep-least-worth-keeping-first
+(deftest deposit-names-puts-the-biggest-low-value-surplus-first-and-the-dearer-names-after
   (let [inventory [{:name "iron_pickaxe" :count 1}
                    {:name "bread" :count 20}
                    {:name "cobblestone" :count 64}
                    {:name "cobblestone" :count 64}
                    {:name "dirt" :count 3}
-                   {:name "water_bucket" :count 1}]]
-    (are [keep expected] (= expected (ord/deposit-names inventory keep {}))
-      {"bread" 16 "cobblestone" 64 "dirt" 0 "iron_pickaxe" 1} ["dirt" "cobblestone" "bread"]
-      {"bread" 20 "cobblestone" 128 "dirt" 0} ["dirt"]
-      {"bread" 20 "cobblestone" 128 "dirt" 3} [])))
+                   {:name "wheat_seeds" :count 1336}
+                   {:name "emerald" :count 3}
+                   {:name "water_bucket" :count 1}]
+        keep (ord/keep-counts inventory (assoc ord/keep-defaults :carry-food 20) {})]
+    (is (= ["wheat_seeds" "cobblestone"] (ord/deposit-names inventory keep {} 3.2))
+        "seeds above their keep go first, the biggest surplus first, though cobblestone has a floor too")
+    (is (not-any? #{"emerald" "bread" "iron_pickaxe"} (ord/deposit-names inventory keep {} 3.2))
+        "emeralds and tools stay carried"))
+  (are [keep expected] (= expected (ord/deposit-names [{:name "bread" :count 20} {:name "dirt" :count 3}] keep {} 3.2))
+    {"bread" 16 "dirt" 0} ["dirt" "bread"]
+    {"bread" 20 "dirt" 3} []))
+
+(deftest keep-counts-keep-emeralds-and-what-was-just-withdrawn
+  (let [inventory [{:name "emerald" :count 3} {:name "bookshelf" :count 1} {:name "dirt" :count 5}]]
+    (is (= {"emerald" 3 "bookshelf" 0 "dirt" 5} (ord/keep-counts inventory ord/keep-defaults {}))
+        "the bookshelf has no floor")
+    (is (= 1 (get (ord/keep-counts inventory ord/keep-defaults {"bookshelf" 1}) "bookshelf")))))
 
 (deftest deposit-names-puts-the-older-pick-up-first-among-equal-worth
   (let [inventory [{:name "oak_planks" :count 64} {:name "birch_planks" :count 64} {:name "spruce_planks" :count 64}]
         keep {"oak_planks" 0 "birch_planks" 0 "spruce_planks" 0}]
-    (are [recency expected] (= expected (ord/deposit-names inventory keep recency))
+    (are [recency expected] (= expected (ord/deposit-names inventory keep recency 3.2))
       {} ["oak_planks" "birch_planks" "spruce_planks"]
       {"oak_planks" 5} ["birch_planks" "spruce_planks" "oak_planks"]
       {"oak_planks" 5 "birch_planks" 3 "spruce_planks" 9} ["birch_planks" "oak_planks" "spruce_planks"])))
@@ -329,14 +341,30 @@
           (await (run-reflex eng {:free 6} {}))
           (is (= 0 (count (calls p "toss"))) "no toss")
           (is (= 4 (count (calls p "transfer"))) "four junk stacks")
-          (is (= {"iron_pickaxe" 1 "iron_chestplate" 1 "water_bucket" 1 "cooked_beef" 16 "bread" 10 "cobblestone" 192}
+          (is (= {"iron_pickaxe" 1 "iron_chestplate" 1 "water_bucket" 1 "cooked_beef" 16 "bread" 10 "cobblestone" 64}
                  (select-keys (carried p) ["iron_pickaxe" "iron_chestplate" "water_bucket" "cooked_beef" "bread" "cobblestone"]))
-              "bread and the building blocks stay")
+              "bread stays and the cobblestone keeps its floor")
           (is (= 6 (- 36 (stack-count p))) "six slots are free")
           (is (seq (reflex-done seen)))
           (is (not (declined? seen))))))))
 
 ;; The live case: bread and cobblestone sit in low slots, junk after them.
+(deftest a-seed-glut-goes-to-the-chest-and-emeralds-and-a-fresh-withdrawal-stay
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inventory (vec (concat [{:name "iron_pickaxe" :count 1} {:name "emerald" :count 3} {:name "bookshelf" :count 1}]
+                                     (same "wheat_seeds" 16 64) (same "dirt" 6 64) (many "junk" 9)))
+              {:keys [eng p]} (setup {:inventory inventory :containers {"10,64,0" []}})]
+          (know-chest! eng chest-pos)
+          (mem/write! (:store eng) :withdrawn {:item "bookshelf" :count 1} {:cap 16 :ttl 300000})
+          (await (run-reflex eng {:free 6} {}))
+          (is (= {"emerald" 3 "bookshelf" 1} (select-keys (carried p) ["emerald" "bookshelf"])))
+          (is (= 0 (count (calls p "toss"))))
+          (is (seq (calls p "transfer")))
+          (is (= "wheat_seeds" (arg-of "item" (first (calls p "transfer"))))
+              "the biggest low-value surplus goes first"))))))
+
 (deftest a-chest-takes-the-junk-and-not-the-bread-and-cobblestone-in-low-slots
   (async done
     (tu/run-async done

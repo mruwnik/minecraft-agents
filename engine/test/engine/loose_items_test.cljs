@@ -72,6 +72,15 @@
 (deftest a-nearly-full-inventory-holds-nothing
   (is (false? (holds? (assoc (world log-near) :inventory (vec (for [i (range 34)] {:name "dirt" :count 64 :slot (+ 9 i)})))))))
 
+(def seeds-near (item 14 "wheat_seeds" [3.5 64 0.5]))
+
+(deftest seeds-are-left-once-a-stack-is-carried
+  (let [carrying (fn [n] (assoc (world seeds-near) :inventory [{:name "wheat_seeds" :count n :slot 9}]))
+        always #(holds-with {:always ["wheat_seeds"]} %)]
+    (is (true? (always (carrying 10))) "a few seeds are still taken")
+    (is (false? (always (carrying 64))) "a full stack is replanting enough")
+    (is (true? (holds-with {:always ["wheat_seeds"] :seed-cap 200} (carrying 64))))))
+
 (deftest a-danger-near-is-left-to-the-jobs-check
   (is (true? (holds? (update (world log-near) :entities conj {:id 7 :name "zombie" :kind "hostile" :pos [-3 64 0]})))))
 

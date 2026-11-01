@@ -20,6 +20,8 @@
   [item]
   (/ (:value (cost/item-value [item])) (max 1 (or (:count item) 1))))
 
+(def currency "The trade currency: carried whole, never put away by a reflex." "emerald")
+
 (def tool-like #{"bucket" "water_bucket" "lava_bucket"})
 
 (defn protected?
@@ -44,7 +46,7 @@
 (defn keep-counts
   "{name n}: how many of each carried name stay carried. Protected names keep
   their whole total; food names share carry-food, best food-points first (nil: held keeps the reserve);
-  shelter-blocks keep up to carry-blocks each, seeds up to carry-seeds each, carry-items whole, held ({name n}, the reserve
+  shelter-blocks keep up to carry-blocks each, seeds up to carry-seeds each, carry-items and emeralds whole, held ({name n}, the reserve
   register) at least n; the rest 0."
   [inventory {:keys [carry-food carry-blocks carry-seeds carry-items]} held]
   (let [totals (storage/carried-totals inventory)
@@ -60,7 +62,7 @@
                        food-floors
                        (capped shelter-blocks carry-blocks)
                        (capped #(str/ends-with? % "_seeds") carry-seeds)
-                       (select-keys totals carry-items))
+                       (select-keys totals (conj carry-items currency)))
                 (into {} (for [[k n] held :when (totals k)] [k (min n (totals k))])))))
 
 (defn recency
@@ -96,19 +98,20 @@
 
 (defn deposit-names
   "Distinct carried names, not protected, whose total exceeds their keep, in
-  the order to put them away: least worth keeping first. Names without a floor
-  (keep 0) before names with one (food, building blocks), then the lowest
-  item-worth among the name's stacks, then when the name was last
-  picked up (recency {name t}; never is 0, oldest first), then its lowest slot
-  (the stack's index when it has no :slot)."
-  [inventory keep recency]
+  the order to put them away: low-value surplus first (every stack of the name worth less than max-worth per item), the
+  biggest surplus (carried above the keep) first, then the dearer names cheapest first. Ties: when the name was last
+  picked up (recency {name t}; never is 0, oldest first), then its lowest slot (the stack's index when it has no :slot)."
+  [inventory keep recency max-worth]
   (let [totals (storage/carried-totals inventory)
         stacks (map-indexed (fn [i s] (assoc s :slot (or (:slot s) i))) inventory)
         order-key (fn [[n ss]]
-                    [(if (pos? (get keep n 0)) 1 0)
-                     (apply min (map item-worth ss))
-                     (get recency n 0)
-                     (apply min (map :slot ss))])]
+                    (let [worth (apply min (map item-worth ss))
+                          low? (< worth max-worth)]
+                      [(if low? 0 1)
+                       (if low? (- (get keep n 0) (totals n)) worth)
+                       worth
+                       (get recency n 0)
+                       (apply min (map :slot ss))]))]
     (->> stacks
          (remove #(protected? (:name %)))
          (filter #(> (totals (:name %)) (get keep (:name %) 0)))

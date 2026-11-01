@@ -1,0 +1,16 @@
+;; A full bag with a seed glut: make-room puts the seeds away and leaves the emeralds and the bookshelf just taken from a chest.
+{:defaults
+ {:tags [:make-room :jobs :storage]
+  :time :any
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "seed-glut-goes-emeralds-and-a-fresh-bookshelf-stay"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}
+            {:kind :withdrawn :data {:item "bookshelf" :count 1} :policy {:cap 16 :ttl 300000}}]
+   :body {:inventory [["wheat_seeds" 1336] ["emerald" 3] ["bookshelf" 1] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1]]}
+   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :make-room.tossed} :for-s 10 :until {:source :job :kind :completed}}]
+   :after [[:item "emerald" 3] [:item "bookshelf" 1] [:item "wheat_seeds" 1208]]
+   :limit-s 100}]}

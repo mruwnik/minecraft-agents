@@ -32,12 +32,12 @@
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below the toss-below setting only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
   :carry-food (best food-points first; the body's food reserve, jobs.lib.reserve, when nil). Golden apples are never put away.
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
-  :carry-blocks; seeds up to :carry-seeds each; other blocks are not kept. Names in :carry-items are kept whole.
+  :carry-blocks; seeds up to :carry-seeds each; other blocks are not kept. Names in :carry-items, emeralds and what jobs.storage.withdraw took out in the last 5 minutes are kept whole.
   Steps, in order:
   1. The storage chest whose walk go-to quotes cheapest (jobs.lib.walk-pick; not marked :chest-unusable), when that walk costs no more than the
      stacks it saves from the toss are worth or the tidy-walk-s setting (10) seconds (all of them when the toss cannot free enough), takes what jobs.storage.deposit may put
-     away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
-     then the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
+     away: low-value names (worth under the toss-below setting) first, the biggest surplus above the keep first, then the dearer names, cheapest first;
+     ties go to the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
      :chest-unusable for the unusable-ttl-s setting (600) seconds and the job goes on without it.
   2. With no slot free and an item lying within the swap-radius setting (8) that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.
@@ -156,12 +156,17 @@
     (when (and r (<= (:price r) limit))
       (:pick r))))
 
+(defn withdrawn
+  "{name n} taken from a chest a few minutes ago (jobs.storage.withdraw): carried for the job that fetched it."
+  [c]
+  (reduce (fn [m {:keys [item count]}] (update m item (fnil max 0) count)) {} (map :data (ctx/entries c :withdrawn))))
+
 (defn state
   "What the round decides on: inventory, floors and recency."
   [c]
   (let [inventory (u/inventory (:primitives c))]
     {:inventory inventory
-     :keep (ord/keep-counts inventory (cond-> (:args c) (:stuck? (:args c)) (update :carry-items conj "chest")) (reserve/held c :make-room))
+     :keep (ord/keep-counts inventory (cond-> (:args c) (:stuck? (:args c)) (update :carry-items conj "chest")) (merge-with max (reserve/held c :make-room) (withdrawn c)))
      :recency (ord/recency (ctx/view c))}))
 
 (defn ground-items
@@ -434,7 +439,7 @@
         m (ctx/mem c)
         free-now (u/free-slots p)
         {:keys [inventory keep recency] :as st} (state c)
-        names (ord/deposit-names inventory keep recency)
+        names (ord/deposit-names inventory keep recency toss-below)
         dir (await (direction! c run))
         swap (when (and dir (zero? free-now)) (or (swap-target c st) (await (seek-swap! c run st))))
         order (if (:stuck? (:args c))
