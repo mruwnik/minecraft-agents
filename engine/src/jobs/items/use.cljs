@@ -34,7 +34,7 @@
 (a/defargs args
   {:on {:doc "what to click: a block, [x y z] or {:x :y :z}, or an entity id (observe entities lists them)" :spec (a/or-of a/position? (a/int-in 1 nil)) :default nil}
    :item {:doc "the item to hold for the click; nil: a block keeps the hand as it is, an entity gets the empty hand; none: the empty hand" :spec a/item? :default nil}
-   :see {:doc "block only. true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
+   :see {:doc "block only. true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough; a click refused for want of a line (no-line) walks to a seeing stand once and clicks again" :spec boolean? :default false}
    :air {:doc "true: no block is clicked; the body looks at the spot :on (any point, a whole cell at its centre) and uses :item in the air, as a player throws an egg, snowball or ender pearl. No walk; needs :item (egg snowball ender_pearl experience_bottle wind_charge splash_potion lingering_potion trident); :used when one was spent. Zones are not asked" :spec boolean? :default false}
    :ignore-zones? :shared
    :for-plan {:doc "block only: id of the plan whose work this is: its own footprint does not refuse the bucket; nil: every plan's footprint does" :spec a/name? :default nil}

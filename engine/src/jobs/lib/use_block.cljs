@@ -81,17 +81,20 @@
 (defn ^:async attempt-block!
   "One step: walk into reach (:again after a failed walk, until the limit), else click and end."
   [c pos]
-  (let [{:keys [item face see range]} (:args c)
+  (let [{:keys [item face range]} (:args c)
+        see (or (:see (:args c)) (:needs-line (ctx/mem c)))
         w (when-not (b/in-reach? c pos see) (await (b/walk-into-reach! c pos see range)))]
     (cond
       (:unreachable w) (finish-block! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})
       w w
       :else
       (let [[status r] (await (click-block! c {:pos pos :item item :face face}))]
-        (finish-block! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
+        (if (and (= :unreachable status) (= "no-line" (.-reason r)) (not see))
+          (do (ctx/update-mem! c assoc :needs-line true) :again)
+          (finish-block! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
                        (cond-> {:used (= :used status) :pos pos :item item :face face :raw r
                                 :reason (if (and (= :unchanged status) (= "bone_meal" item) (ripe-before? r)) :ripe status)}
-                         (.-spawnSet r) (assoc :spawn-set true)))))))
+                         (.-spawnSet r) (assoc :spawn-set true))))))))
 
 
 (defn ^:async run-round [c]

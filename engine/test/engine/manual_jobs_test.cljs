@@ -22,8 +22,9 @@
 
 (defn ^:async outcome
   "Run job with args as the child of a recording parent in a world; {:result the child's result :p :seen}."
-  [world job args]
+  [world job args & [patch!]]
   (let [{:keys [eng p seen]} (setup world)
+        _ (when patch! (patch! p))
         out (atom :not-done)
         parent (tu/recording-parent job args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
@@ -51,6 +52,19 @@
           (is (= :done (:status result)))
           (is (= 1 (count (calls p "useOn"))))
           (is (= 1 (count (ce/ends seen :used)))))))))
+
+(deftest use-on-without-a-line-walks-to-a-stand-that-sees-the-block-and-clicks-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [result p]} (await (outcome {:blocks {"2,63,0" "oak_fence_gate"}} use-on {:on [2 63 0]}
+                                                 (fn [p] (let [real (.-useOn p) hidden (atom true)]
+                                                           (aset p "useOn" (fn [token a]
+                                                                             (if (compare-and-set! hidden true false)
+                                                                               (js/Promise.resolve #js {:status "unreachable" :reason "no-line"})
+                                                                               (real token a))))))))]
+          (is (true? (:used result)))
+          (is (= 1 (count (calls p "useOn")))))))))
 
 (deftest use-on-walks-into-reach-first
   (async done
