@@ -113,6 +113,7 @@ export function createMove (env) {
     need(a.toward === undefined || a.toward === null || isPos(a.toward), 'swim toward needs {x, y, z}')
     need(a.tread === undefined || typeof a.tread === 'boolean', 'swim tread needs true or false')
     need(a.hold === undefined || typeof a.hold === 'boolean', 'swim hold needs true or false')
+    need(a.until === undefined || a.until === null || isPos(a.until), 'swim until needs {x, y, z}')
     const ms = Math.min(a.ms ?? setting('prim/swim-default-ms'), setting('prim/swim-max-ms'))
     const toward = a.toward ?? null
     const before = oxygenNow()
@@ -130,8 +131,9 @@ export function createMove (env) {
         const dx = home.x - at.x
         const dz = home.z - at.z
         const yaw = env.bot.entity.yaw
-        const forward = dz * Math.cos(yaw) - dx * Math.sin(yaw)
-        const strafe = -(dx * Math.cos(yaw) + dz * Math.sin(yaw))
+        // mineflayer: forward is (-sin yaw, -cos yaw), left is (cos yaw, -sin yaw)
+        const forward = -dx * Math.sin(yaw) - dz * Math.cos(yaw)
+        const strafe = -(dx * Math.cos(yaw) - dz * Math.sin(yaw))
         for (const [control, on] of [['forward', forward > 0.08], ['back', forward < -0.08], ['right', strafe > 0.08], ['left', strafe < -0.08]]) {
           if (on) press(control)
           else if (pressed.has(control)) { pressed.delete(control); env.bot.setControlState(control, false) }
@@ -170,11 +172,14 @@ export function createMove (env) {
         // pushes back to the centre of the cell the swim began in, against a current, whatever way the body faces (another
         // act may be turning it): the controls are worked out from the yaw.
         press('jump')
-        for (;;) {
+        // until: the hold ends 'filled' once that cell holds a solid block (the caller's place went in)
+        const filled = () => !!a.until && env.bot.blockAt(vec(cell(a.until)))?.boundingBox === 'block'
+        while (!filled()) {
           if (a.hold) steer()
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
+        return result('filled')
       } finally {
         release()
       }

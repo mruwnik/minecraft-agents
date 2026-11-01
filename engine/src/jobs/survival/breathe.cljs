@@ -318,7 +318,7 @@
   [c cell]
   (let [p (:primitives c)
         fillers (choose/filler-names c :climb)
-        hold (-> (ctx/act c :swim (clj->js {:hold true :ms (settings/get settings ::tread-ms)}))
+        hold (-> (ctx/act c :swim (clj->js {:hold true :until {:x (:x cell) :y (:y cell) :z (:z cell)} :ms (settings/get settings ::tread-ms)}))
                  (.catch (fn [_] nil)))
         e (await (ctx/call c :step 'jobs.blocks.place {:pos [(:x cell) (:y cell) (:z cell)] :use {:blocks fillers} :ways #{:carried}}))]
     (ctx/update-mem! c update :sealed (fnil conj []) cell)
@@ -360,7 +360,7 @@
               (ctx/update-mem! c assoc :start (or start (u/self-pos c)) :failed-headings failed)))
         m (ctx/mem c)
         carried? (boolean (escape/pillar-item c))
-        sealcell (when carried? (first (remove (set (:sealed (ctx/mem c))) (drop-sides p (u/self-pos c)))))
+        sealcell (when (and carried? (surfaced-in-water? c)) (first (remove (set (:sealed (ctx/mem c))) (drop-sides p (u/self-pos c)))))
         in-budget? (< (:travelled m 0) (* 3 (swim-range)))
         ways (fn []
                (let [shore (shore/nearest-land p pos (shore-radius) (:failed-shores m) shore-cell?)

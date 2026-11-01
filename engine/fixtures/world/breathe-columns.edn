@@ -80,6 +80,17 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :after [[:not-block [16 24 16] "dirt"] [:body-near [16.5 24.5 16.5] 3]]}
+  {:name "capped-column-beside-a-drop-on-the-z-side-is-not-stepped-into"
+   :plot {:height 31}
+   :blocks [[:fill [0 9 0] [31 29 31] "stone"]
+            [:fill [16 20 16] [16 23 16] "water"]
+            [:set [16 24 16] "dirt"]
+            [:fill [16 25 16] [16 29 16] "air"]
+            [:fill [16 0 17] [16 29 17] "air"]]
+   :body {:at [16.5 21 16.5] :inventory [["iron_shovel" 1]] :effects []}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:no-event {:source :body :kind :died} :for-s 40}]
+   :after [[:not-block [16 24 16] "dirt"] [:body-near [16.5 24.5 16.5] 3]]}
   {:name "magma-neighbour-is-not-entered"
    :blocks [[:fill [16 0 16] [16 3 16] "water"]
             [:set [16 4 16] "dirt"]
