@@ -604,6 +604,8 @@
          (f/register-put-argvs "Probe" "test"
                                [{:trigger :wedged :persistence :cooldown :cooldown-s 0
                                  :job '(jobs.survival.unwedge) :args {:radius 8}}] [0 0 0])))
+  (is (= [["Probe" "--world" "test" "put" "box" "--trigger" "box" "--cancel-cut" "true" "--by" "world-test"]]
+         (f/register-put-argvs "Probe" "test" [{:trigger :box :cancel-cut? true}] [0 0 0])))
   (is (= [] (f/register-put-argvs "Probe" "test" [] [0 0 0]))))
 
 (deftest register-put-resolves-plot-relative-markers-in-job-args
