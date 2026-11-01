@@ -302,6 +302,8 @@
     (.onBodyEvent primitives #(record-body-event! eng %))
     (drop-leftover-reflex-jobs! eng saved)
     (drop-leftover-slot-jobs! eng saved)
+    (when-let [text (restart/report-text saved)]
+      (emit! eng {:source :system :kind :restart.jobs :level :warn :text text}))
     (let [notices (into (filterv some? (drop-unknown-jobs! eng)) (repair-entries! eng))]
       (doseq [[request-id request] (:attention (state eng))
               :when (and (:job-id request) (not (some #{(:job-id request)} (:list (state eng)))))]

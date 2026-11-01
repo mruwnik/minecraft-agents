@@ -1285,6 +1285,26 @@
             (await (core/tick! again))
             (is (= ["j1"] (ran seen2)) "the body resumes from the list")))))))
 
+(deftest a-restart-tells-which-jobs-were-running
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dir (tu/tmp-dir)
+              {:keys [eng p seen]} (setup {} dir)]
+          (core/submit! eng '(parent-walk) {})
+          (core/submit! eng '(count) {})
+          (.hold (.-world p) "moveTo")
+          (let [walking (core/tick! eng)]
+            (await (in-act (.-world p) "moveTo"))
+            (core/shutdown! eng)
+            (await walking))
+          (is (empty? (filter #(= :restart.jobs (:kind %)) @seen)) "a first start says nothing")
+          (let [{seen2 :seen} (setup {} dir)
+                told (filter #(= :restart.jobs (:kind %)) @seen2)]
+            (is (= 1 (count told)))
+            (is (= :warn (:level (first told))))
+            (is (re-find #"resumed.*j1 parent-walk.*queued, kept: j2 count" (:text (first told))))))))))
+
 ;; ---------------------------------------------------------------- act
 
 (defn ^:async intent-round

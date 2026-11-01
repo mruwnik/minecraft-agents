@@ -34,6 +34,21 @@
                 :data {:kind :cut-off :cause :restart}
                 :text "stopped: restart (an exclusive run ends with the engine)"})))
 
+(defn report-text
+  "The one line telling the agent what a restart did to its jobs, from the saved state: the job in flight and the queued ones (all resume from their saved memory; a round in the middle of an act starts again, and anything timed or in the world meanwhile was not done), and the reflex and exclusive jobs that ended with it. Nil when nothing was running or queued."
+  [saved]
+  (let [label (fn [id] (str id " " (expr/label (get-in saved [:instances id :spec]))))
+        listed (:list saved)
+        flying (some #{(:current saved)} listed)
+        queued (remove #{flying} listed)
+        ended (keep (fn [[id inst]] (when (or (:reflex inst) (:exclusive? inst)) (label id))) (:instances saved))]
+    (when (or (seq listed) (seq ended))
+      (str "the body restarted: "
+           (when flying (str "running when it stopped, now resumed from its saved memory: " (label flying) "; "))
+           (when (seq queued) (str "queued, kept: " (str/join ", " (map label queued)) "; "))
+           (when (seq ended) (str "ended with the restart: " (str/join ", " ended) "; "))
+           "any timed work meanwhile was not done"))))
+
 (defn unknown-job
   "The message why inst's spec no longer resolves against the registry, or nil."
   [eng inst]
