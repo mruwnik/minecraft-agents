@@ -456,6 +456,14 @@
                                                     :self {:pos {:x 12.5 :y 64 :z 14.5}}}))]
     (is (= [{:x 13 :y 64 :z 8} {:x 14 :y 64 :z 8}] (b/low-floor-cells {:primitives p} {:x 14 :y 66 :z 8})))))
 
+(deftest a-block-jobs-walk-keeps-out-of-deep-water-near-the-cell
+  (let [flood {"14,64,9" "water" "14,65,9" "water" "15,64,9" "water" "16,64,9" "water" "16,65,9" "water"}
+        mk (fn [blocks self] (tu/seeing-all (tu/fake-on-floor {:blocks blocks :self {:pos self}})))
+        dry {:x 12.5 :y 64 :z 14.5}]
+    (is (= [{:x 14 :y 64 :z 9} {:x 16 :y 64 :z 9}] (sort-by :x (b/flooded-cells {:primitives (mk flood dry)} {:x 14 :y 66 :z 8}))))
+    (is (= [] (b/flooded-cells {:primitives (mk flood {:x 14.5 :y 64 :z 9.5})} {:x 14 :y 66 :z 8})))
+    (is (= [] (b/flooded-cells {:primitives (mk (assoc flood "14,66,8" "water") dry)} {:x 14 :y 66 :z 8})))))
+
 (defn gate-clicks [p] (count (filterv #(= "useOn" (.-name %)) (.-calls (.-world p)))))
 
 (deftest a-place-beyond-a-pen-works-from-outside-without-using-its-gate
