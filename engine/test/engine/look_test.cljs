@@ -386,3 +386,16 @@
     (is (not (surveyed? :cell nil)) "a narrow look is no full pass")
     (note! nil)
     (is (every? #(surveyed? :cell %) [nil look/hazards-only crops]) "a full pass covers every want")))
+
+(deftest see-samples-the-entity-cache-but-not-twice-in-a-row
+  (let [n (atom 0)
+        p (doto (seeing {})
+            (aset "sampleEntities" (fn [] (swap! n inc))))
+        c {:primitives p}]
+    (look/see! c)
+    (is (= 1 @n) "a look books the entity cache")
+    (look/see! c)
+    (is (= 1 @n) "a look right after shares that sample")
+    (aset p "lastForcedSampleAt" -1000)
+    (look/see! c)
+    (is (= 2 @n) "a later look samples again")))

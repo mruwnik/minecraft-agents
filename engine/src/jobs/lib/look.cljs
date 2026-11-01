@@ -109,11 +109,25 @@
   "A want for a look that searches for entities: no block is wanted, only the hazards every targeted look checks."
   {})
 
+(def sample-gap-ms "Looks closer together than this share one entity-cache sample." 300)
+
+(defn sample-entities!
+  "Forces an entity-cache sample (it also reads knownMobs) unless the last forced one is younger than sample-gap-ms.
+  Without the cache, just knownMobs."
+  [^js prim]
+  (cond
+    (fn? (.-sampleEntities prim))
+    (let [t (js/performance.now) last-at (aget prim "lastForcedSampleAt")]
+      (when (or (nil? last-at) (>= (- t last-at) sample-gap-ms))
+        (aset prim "lastForcedSampleAt" t)
+        (.sampleEntities prim)))
+    (fn? (.-knownMobs prim)) (.knownMobs prim)))
+
 (defn see!
   "A sight pass now at effort (default glance-effort), so what the last look faced is in memory before the next decision.
   With want ({:names :match :radius}; {} wants only hazards, for a look for entities) it ray-checks just those kinds
-  (rays/look-for!) and leaves the rest to the ambient passes. An entity-cache sample too (sampleEntities), so a villager in view now is booked before the next look turns away. A mob sample too (knownMobs): a silent creeper is sensed only inside the view cone, and the next look may turn away
-  before the timer's sample."
+  (rays/look-for!) and leaves the rest to the ambient passes. Then a (throttled) entity-cache sample, so a villager or a
+  silent creeper in view now is booked before the next look turns away."
   ([c] (see! c (glance-effort)))
   ([c effort] (see! c effort :forced))
   ([c effort why] (see! c effort why nil))
@@ -122,8 +136,7 @@
      (if want
        (perception/look-for! per (assoc want :effort effort :why why))
        (perception/pass! per {:effort effort :reuse? true :why why}))
-     (when (fn? (.-knownMobs (:primitives c))) (.knownMobs (:primitives c)))
-     (when (fn? (.-sampleEntities (:primitives c))) (.sampleEntities (:primitives c))))))
+     (sample-entities! (:primitives c)))))
 
 (defn ^:async glance-until!
   "glance!, testing (f) after each look and stopping at the first truthy one, returned (nil when none): entities are
