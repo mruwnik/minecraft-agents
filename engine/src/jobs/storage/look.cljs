@@ -12,12 +12,12 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Open each chest of :chests (the storage group when nil) and book what it holds, taking nothing out: a player's look
+  "Open each chest of :chests (when nil: the storage group plus every chest whose contents the body has booked, as ./bin/observe chests lists) and book what it holds, taking nothing out: a player's look
   into a chest. Walks into reach (one go-to), opens it (jobs.lib.chests/look-in!, which digs a seen block off its lid
   once) and records the stacks in body memory :fetch/stock, which ./bin/observe chests lists.
   Needs: some chest, else waits :no-chest; a chest that zones or claims of another refuse :take, else waits
   :refused {:zones :claims}. :ignore-zones? true skips it.
-  Ends done {:looked {[x y z] {name n}}} once every chest was opened; else nothing-possible (cause the open status,
+  Ends done {:looked {[x y z] {name n}}} once every chest was opened (the message counts them); else nothing-possible (cause the open status,
   :unreachable ..) or condition-failed :missing (the block is no container; a recorded :chest place is retracted),
   with :looked so far and :gave-up true.")
 
@@ -35,9 +35,10 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn cells
-  "The chests to open, [x y z] each once: the :chests argument, else the storage group."
+  "The chests to open, [x y z] each once: the :chests argument, else the storage group and the booked chests."
   [c]
-  (vec (distinct (map storage/cell-of (or (:chests (:args c)) (storage/group (ctx/view c)))))))
+  (let [view (ctx/view c)]
+    (vec (distinct (map storage/cell-of (or (:chests (:args c)) (concat (storage/group view) (keys (stock/stock-of view)))))))))
 
 (defn pending [c] (remove (set (keys (:looked (ctx/mem c)))) (cells c)))
 
@@ -50,7 +51,7 @@
   (let [left (count (pending c))
         data [:units :chests :done (- (count (cells c)) left) :left left :result {:looked (:looked (ctx/mem c) {})}]]
     (if (and (zero? left) (seq (cells c)))
-      (apply contract/ok :looked "look: every chest opened" data)
+      (apply contract/ok :looked (str "look: all " (count (cells c)) " chest(s) opened") data)
       (apply contract/later :looking (str "look: " left " chest(s) to open") data))))
 
 (defn quote-of [c]

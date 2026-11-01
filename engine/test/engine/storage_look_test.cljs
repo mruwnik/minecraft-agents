@@ -28,3 +28,15 @@
                  (stock/stock-of (mem/view (:store eng)))) "the chests list in observe chests")
           (is (= [{:name "bread" :count 5}] (get-in @(fake/state p) [:containers [10 64 0]])))
           (is (empty? (filter #(= "transfer" (.-name %)) (.-calls (.-world p))))))))))
+
+(deftest default-look-opens-every-booked-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}] "12,64,0" [{:name "emerald" :count 3}]}})]
+          (doseq [cell [[10 64 0] [12 64 0]]]
+            (mem/write! (:store eng) stock/stock-kind {:pos cell :items {"stale" 1}} stock/stock-policy))
+          (core/submit! eng '(jobs.storage.look) {})
+          (await (run-until-empty eng 12))
+          (is (= {[10 64 0] {"bread" 5} [12 64 0] {"emerald" 3}} (stock/stock-of (mem/view (:store eng))))
+              "booked chests are outside the storage group, and the default look still refreshed them"))))))
