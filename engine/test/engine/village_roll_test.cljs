@@ -243,6 +243,25 @@
           (is (zero? (digs p)))
           (is (= "lectern" (workstation p))))))))
 
+(deftest the-calls-ways-go-to-the-place-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ways (atom [])
+              wrap (fn [env]
+                     (let [j (get (:jobs (:eng env)) 'jobs.blocks.place)]
+                       (assoc-in env [:eng :jobs 'jobs.blocks.place]
+                                 (assoc j :round (fn ^:async spy [c]
+                                                   (swap! ways conj (:ways (:args c)))
+                                                   (await ((:round j) c)))))))
+              [result p] (await (roll {:entities [(librarian [(offer "paper")])]
+                                       :scripts [[(offer "enchanted_book")]]
+                                       :wrap wrap}
+                                      {:ways #{:carried}}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= [#{:carried}] (distinct @ways)))
+          (is (= "lectern" (workstation p))))))))
+
 (deftest ignore-zones-breaks-and-places-in-anothers-zone
   (async done
     (tu/run-async done
