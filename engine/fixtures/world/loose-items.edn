@@ -14,10 +14,12 @@
             [:fill [14 3 14] [18 5 18] "oak_leaves[persistent=true]"]
             [:fill [16 3 16] [16 4 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
-   ;; the body walks over most felled logs while it digs; the 2 summoned 4 off after the fell (1 off would be picked up by walking distance before the reflex looks) make sure the reflex has some (the body ends near the tree, not at its start)
+   ;; the body walks over most felled logs while it digs; the 2 summoned 5 off, in the view cone (the body ends looking down at the last log, and an item outside the cone is not seen; 1 off is picked up by walking distance first) make sure the reflex has some (the body ends near the tree, not at its start)
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]
          [:await {:source :job :kind :completed} 90]
-         [:summon "item" [16.5 0 20.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"]
+         [:summon "item" [16.5 0 12.5] "{Item:{id:\"minecraft:oak_log\",count:2}}"]
+]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:event {:source :reflex :kind :ended :context {:reflex-id :loose-items} :data {:outcome :done}} :within-s 110}]
    :after [[:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 6]]]}
