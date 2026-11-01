@@ -1,0 +1,20 @@
+;; A fence gate in a fence wall (z 16, x 1..31). Cards c043946c, 22327a7e.
+;; A: items.use on the shut gate from 3 blocks along the wall's plane (no line to it): walks to a seeing stand and opens it.
+;; B: go-to through the gate: opens it, walks through, and the gate is shut again behind the body.
+{:defaults
+ {:tags [:door :movement :pen]
+  :time :any
+  :plot {:floor "grass_block" :height 8 :length 48}
+  :blocks [[:fill [1 0 16] [31 0 16] "oak_fence"] [:set [16 0 16] "oak_fence_gate[facing=south,open=false]"]]
+  :limit-s 90}
+ :cases
+ [{:name "use-on-gate-seen-edge-on-walks-to-a-stand-and-opens-it"
+   :body {:at [19.5 0 17.5] :yaw 90}
+   :act [[:job (jobs.items.use {:on #at [16 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=true]"]]}
+  {:name "go-to-through-the-gate-leaves-it-shut"
+   :body {:at [16.5 0 20.5] :yaw 180 :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 12] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:block [16 0 16] "oak_fence_gate[open=false]"] [:body-near [16.5 0 12.5] 2]]}]}
