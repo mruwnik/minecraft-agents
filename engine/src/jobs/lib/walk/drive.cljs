@@ -68,9 +68,10 @@
 (defn learned-progress
   "The learned-replan tally {:best :stale} after a learned replan with the body at [x y z] bound for to: stale counts the
   learned replans since the body's best distance to the goal last improved by a block (go-to's idiom), this one included.
-  A walk that keeps getting nearer never runs out; backing off or going back and forth never resets it."
+  The distance is the sum of the axis gaps: a stair down toward a goal far to the side gains a block a step in it, a straight line
+  hardly any. A walk that keeps getting nearer never runs out; backing off or going back and forth never resets it."
   [{:keys [best stale] :or {stale 0}} at to]
-  (let [left (when (and at to) (js/Math.hypot (- (at 0) (to 0)) (- (at 1) (to 1)) (- (at 2) (to 2))))
+  (let [left (when (and at to) (+ (js/Math.abs (- (at 0) (to 0))) (js/Math.abs (- (at 1) (to 1))) (js/Math.abs (- (at 2) (to 2)))))
         improved? (and left best (< left (dec best)))]
     {:best (if (or improved? (nil? best)) (or left best) best)
      :stale (inc (if improved? 0 stale))}))

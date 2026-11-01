@@ -780,3 +780,11 @@
     (is (nil? (felt up (assoc pose :y 64.2 :collided-y true :x 0.05))) "off-centre it may have clipped the block beside the column")
     (is (= [[0 67 0]] (felt up (assoc pose :y 64.2 :collided-y true :x 0.65 :z 0.35))))
     (is (nil? (felt up (assoc pose :y 66 :collided-y true))))))
+
+;; a dark stair down toward a goal far to the side: each row gains a block of the gap by axis, a hypot gain of 0.1, so with
+;; the old distance the rim floors felt along the stair's side never reset and ended the walk part-way down.
+(deftest a-stair-down-toward-a-far-goal-counts-as-getting-nearer
+  (let [to [200 -40 30]
+        row (fn [t [z y]] (drive/learned-progress t [0 y z] to))
+        t (reduce row {} [[10 -28] [11 -29] [12 -30] [13 -31]])]
+    (is (= 1 (:stale t)))))
