@@ -362,8 +362,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos [0.5 64 0.5]}
-                                                  :entities [(villager [(bread {})] {:pos {:x 2.2 :y 64 :z 0.5}})]
+        (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos [0 64 0]}
+                                                  :entities [(villager [(bread {})] {:pos {:x 2 :y 64 :z 0}})]
                                                   :inventory [{:name "emerald" :count 3}]
                                                   :blocks {"1,64,0" "glass" "1,65,0" "glass" "2,63,0" "stone" "3,64,0" "glass" "2,64,1" "glass" "2,64,-1" "glass" "2,66,0" "glass" "2,65,1" "glass" "2,65,-1" "glass" "3,65,0" "glass"}}))
               {:keys [eng]} (start {:p p})
@@ -376,7 +376,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/seeing-all (tu/fake-on-floor {:self {:pos [0.5 64 0.5]}
-                                                  :entities [(villager [(bread {})] {:pos {:x 2.2 :y 64 :z 0.5}})]
+                                                  :entities [(villager [(bread {})] {:pos {:x 2.2 :y 64 :z 0.5} :hittable true})]
                                                   :inventory [{:name "emerald" :count 3}]
                                                   :blocks {"1,64,0" "stone" "1,65,0" "stone_slab"} :states {"1,65,0" {:type "bottom"}}}))
               {:keys [eng]} (start {:p p})

@@ -1,7 +1,8 @@
 ;; Sealed-alcove librarian: the villager stands in a 1-wide stone alcove; its west wall is stone below and a bottom slab at
 ;; eye height, so the body outside sees its head over the slab and trades from where it stands (no walk to its cell).
 ;; Should-succeed: the trade completes. Should-fail: with a full stone block where the slab is, the villager is not seen and
-;; the trade ends stopped :unreachable.
+;; the trade ends stopped :unreachable. lectern-and-top-slab-gap: the villager stands behind a lectern with a top slab above it (a player aims through
+;; the gap between lectern top and slab bottom), an andesite seal behind it, the body 2.1 blocks off: the trade completes from where the body stands.
 {:defaults
  {:tags [:village :trade :jobs]
   :plot {:floor "grass_block" :height 8}
@@ -20,4 +21,14 @@
    :act [[:summon "villager" [16.2 0 16.5] "{NoAI:1b,UUID:[I;20263,7,4,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
          [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00040000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 60 :of-job true}]
-   :after [[:item "bread" 0]]}]}
+   :after [[:item "bread" 0]]}
+  {:name "lectern-and-top-slab-gap-trades-from-here"
+   :blocks [[:fill [15 -1 15] [17 3 17] "stone" :hollow]
+            [:set [17 0 16] "lectern[facing=east]"]
+            [:set [17 1 16] "bamboo_slab[type=top]"]
+            [:fill [15 0 16] [15 1 16] "andesite"]]
+   :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2 :inventory [["emerald" 8]] :effects [["resistance" 600 4]]}
+   :act [[:summon "villager" [16.4 0 16.5] "{NoAI:1b,UUID:[I;20263,7,5,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
+         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00050000034b" :buy "bread" :count 6})]]
+   :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 60 :of-job true}]
+   :after [[:item "bread" 6] [:item "emerald" 7]]}]}

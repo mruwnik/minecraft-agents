@@ -7,7 +7,6 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.need :as need]
             [engine.ctx :as ctx]
-            [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.villager :as villager]
@@ -289,11 +288,11 @@
     (mapv #(js/Math.floor %) [x y z])))
 
 (defn in-reach?
-  "Whether the body is within reach of villager e and sees its body or head over the blocks it has seen (a glass wall is solid:
-  the click would not get through)."
+  "Whether the body is within reach of villager e and a line from its eye to the villager's feet, middle or head clears
+  the collision boxes between (`hittable`: a player aims through the gap over a lectern or under a top slab; a glass wall blocks)."
   [c e]
   (and (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))
-       (aim/body-sees-entity? c (u/pos-of (.-pos e)) 1.95)))
+       (not (false? (.-hittable e)))))
 
 (defn ^:async step!
   "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,

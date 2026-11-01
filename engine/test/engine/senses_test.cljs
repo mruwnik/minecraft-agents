@@ -19,6 +19,9 @@
                      (case (get blocks [x y z])
                        :block #js [#js [0 0 0 1 1 1]]
                        :fence #js [#js [0.375 0 0.375 0.625 1.5 0.625]]
+                       :lectern #js [#js [0 0 0 1 0.875 1]]
+                       :glass #js [#js [0 0 0 1 1 1]]
+                       :top-slab #js [#js [0 0.5 0 1 1 1]]
                        (let [b (get blocks [x y z])] (if (vector? b) (clj->js b) #js []))))}))
 
 (defn ent [id name kind x & [extra]]
@@ -96,6 +99,12 @@
     (is (= true (hit {[2 64 0] :fence})))
     (is (= true (hit {})))
     (is (nil? (.-hittable ^js (first (.entities ^js (:w (wrapped {:entities [(ent 9 "zombie" "hostile" 9.5)]})) #js {})))))))
+
+(deftest a-villager-behind-a-lectern-and-a-top-slab-is-hittable-through-the-gap
+  (let [villager (ent 9 "villager" "passive" 3.4)
+        hit (fn [blocks] (.-hittable ^js (first (.entities ^js (:w (wrapped {:entities [villager] :blocks blocks})) #js {}))))]
+    (is (true? (hit {[2 64 0] :lectern [2 65 0] :top-slab})))
+    (is (false? (hit {[2 64 0] :lectern [2 65 0] :glass})))))
 
 (deftest entities-max-applies-after-the-sight-filter
   (let [es (concat [(ent 1 "cow" "passive" 3.5)] (map #(ent (+ 10 %) "sheep" "passive" (+ 4.5 %)) (range 3)))

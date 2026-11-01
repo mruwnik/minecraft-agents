@@ -2,8 +2,7 @@
   "Whether an eye can aim at a block, as a player must to dig it, place against it or use it: a clear line from the eye
   to the block's centre or to a point just inside one of its faces, over the cells the body has seen (a cell never seen
   is in nobody's way). go-to's :see and jobs.lib.blocks/in-reach? ask it."
-  (:require [clojure.string :as str]
-            [engine.game :as game]
+  (:require [engine.game :as game]
             [engine.sight :as sight]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
@@ -64,25 +63,3 @@
   "Whether the job's body, where it stands now, sees the block at cell [x y z]."
   [c cell]
   (sees-cell? (seen-kind-at (:primitives c)) (body-eye c) cell))
-
-(defn over-slabs
-  "kind-at with a bottom slab :open to a line that stays at or above its top (y at or above the cell's middle)."
-  [kind-at p ey ty]
-  (fn [x y z]
-    (let [k (kind-at x y z)]
-      (if (and (keyword-identical? :solid k) (>= (min ey ty) (+ y 0.5))
-               (let [b (u/seen-block p {:x x :y y :z z})]
-                 (and (some-> b .-name (str/ends-with? "_slab")) (= "bottom" (some-> b .-properties .-type)))))
-        :open
-        k))))
-
-(defn body-sees-entity?
-  "Whether the job's body, where it stands now, has a line from its eye to the body (middle) or head of an entity of
-  height h standing at pos {:x :y :z}: a player aims over a bottom slab at a head that rises above it."
-  [c pos h]
-  (let [p (:primitives c)
-        [ex ey ez] (body-eye c)
-        {:keys [x y z]} pos]
-    (boolean (some (fn [ty] (let [kind-at (over-slabs (seen-kind-at p) p ey ty)]
-                              (sight/line-clear ex ey ez x ty z (fn [cx cy cz] (keyword-identical? :solid (kind-at cx cy cz))))))
-                   [(+ y (* 0.5 h)) (+ y (* 0.85 h))]))))
