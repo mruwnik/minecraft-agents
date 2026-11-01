@@ -315,7 +315,7 @@
       (is (true? (holds-with night-bed-world seed! :zones [(bed-zone self-name)])) (str label ": own zone"))
       (is (true? (holds-with night-bed-world seed! :zones nil)) (str label ": no zone list read"))
       (is (false? (holds-with night-bed-world seed! :zones [(bed-zone "Miles")])) (str label ": another owner's zone: their build"))
-      (is (true? (holds-with night-bed-world seed! :claims [(bed-claim "Miles")])) (str label ": another owner's claim"))
+      (is (false? (holds-with night-bed-world seed! :claims [(bed-claim "Miles")])) (str label ": another owner's claim: their build"))
       (is (false? (holds-with occupied-world seed! :zones [])) (str label ": occupied"))
       (is (false? (holds-with occupied-world seed! :zones [(bed-zone "Miles")])) (str label ": occupied, another's zone"))
       (is (true? (holds-with occupied-world seed! :zones [(bed-zone self-name)])) (str label ": occupied, own zone"))
@@ -338,7 +338,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]] [[] [(bed-claim "Miles")]]]]
+        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]]]]
           (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 6))

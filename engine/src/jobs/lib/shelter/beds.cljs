@@ -75,14 +75,26 @@
   (let [me (.-username (.self p))]
     (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) (when kn (world/zones kn))))))
 
+(def villager-bed-radius
+  "Blocks within which a villager in sight makes a bed a villager's (its home): a village's beds are theirs."
+  10)
+
+(defn villager-near?
+  "Whether a villager in sight stands within villager-bed-radius of pos."
+  [p pos]
+  (boolean (some #(<= (u/dist {:x (.-x (.-pos %)) :y (.-y (.-pos %)) :z (.-z (.-pos %))} pos) villager-bed-radius)
+                 (look/seen-objs p {:radius (+ 24 villager-bed-radius) :names ["villager"]}))))
+
 (defn others-bed?
-  "Whether the bed at pos is another's build: in another owner's zone or live claim, or on the footprint of a plan another body made. kn
-  is the engine world (nil: none known), now the claims' clock (ms)."
-  [p kn now {:keys [x y z]}]
+  "Whether the bed at pos is another's build: in another owner's zone or live claim, on the footprint of a plan another body
+  made, or beside a villager in sight (a village bed) unless on the body's own plan. kn is the engine world (nil: none
+  known), now the claims' clock (ms)."
+  [p kn now {:keys [x y z] :as pos}]
   (let [me (.-username (.self p))
         cell [x y z]
         by (get (world/plan-authors kn) (get (world/footprints kn nil) cell))]
-    (boolean (or (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me))
+    (boolean (or (and (villager-near? p pos) (not (and by (not (zones/foreign-owner? by me)))))
+                 (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me))
                        (concat (world/zones kn) (world/live-claims (world/area-claims kn) now)))
                  (and by (zones/foreign-owner? by me))))))
 

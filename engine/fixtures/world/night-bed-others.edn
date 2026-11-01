@@ -3,7 +3,7 @@
 ;; Overdue (max-days-awake 0), so a bed in the open counts. The own-plan case starts beside its bed (within 2 blocks, no walk to
 ;; price: a walk of 5 blocks and staying put cost the same). Should-succeed: no sleep in the others' beds (the night shelters
 ;; instead), sleep in the own-plan bed. Should-fail: a sleep call at the other's bed.
-;; Needs the night (bed use is decided by the clock).
+;; A bed with a villager in sight beside it is the village's. Needs the night (bed use is decided by the clock).
 {:defaults
  {:tags [:night :survival :bed :zones]
   :time :night :time-why :sleep
@@ -19,6 +19,10 @@
    :after [[:body-far [12.5 0 8.5] 2]]}
   {:name "a-bed-in-anothers-zone-is-not-slept-in"
    :zones [{:name "miles-hut" :min [10 0 6] :max [15 3 10] :owner "Miles"}]
+   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
+   :after [[:body-far [12.5 0 8.5] 2]]}
+  {:name "a-bed-beside-a-villager-is-not-slept-in"
+   :act [[:summon "villager" [14.5 0 8.5] "{NoAI:1b}"]]
    :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
    :after [[:body-far [12.5 0 8.5] 2]]}
   {:name "a-bed-on-the-bodys-own-plan-is-slept-in"

@@ -70,6 +70,17 @@
     (is (false? (permit? (claimed "Other" 100) 50)) "a claim live by the engine clock")
     (is (true? (permit? (claimed "Other" 100) 200)) "a claim run out by the engine clock")))
 
+(deftest a-bed-beside-a-villager-is-not-one-to-use
+  (let [bed {:x 20 :y 64 :z 0}
+        permit? (fn [kn villager-x]
+                  (let [p (tu/fake {:time night :blocks {"20,64,0" "red_bed"}
+                                    :entities [{:id 1 :name "villager" :kind "passive" :pos {:x villager-x :y 64 :z 0}}]})]
+                    ((sh-beds/bed-permit p kn 0) bed)))
+        own-plan {"hut" {:id "hut" :parts [{:id "bed" :cells [[20 64 0]] :want "red_bed"}] :metadata {:by "Fake"}}}]
+    (is (false? (permit? (ew/of-data {} {} []) 25)) "a villager 5 blocks off: a village bed")
+    (is (true? (permit? (ew/of-data {} {} []) 40)) "no villager near")
+    (is (true? (permit? (ew/of-data own-plan {} []) 25)) "the body's own plan")))
+
 (deftest the-live-spawn-bed-is-used-when-the-remembered-bed-is-far
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}
         far {:x 500 :y 64 :z 500}
