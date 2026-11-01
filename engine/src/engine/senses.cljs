@@ -36,16 +36,17 @@
     (and (>= id 0) (some? table) (rays/blocks-line? raw table id x y z fx fy fz tx ty tz))))
 
 (def corner-inset 0.05)
+(def feet-inset 0.1)
 
 (defn sight-points
-  "Where the eye may meet entity e, in order: its middle, its head (0.1 under the top), then the head-height corners of
-  its box when its width is known."
+  "Where the eye may meet entity e, in order: its middle, its head (0.1 under the top), its feet (0.1 over the bottom: a
+  slit above a cell's floor shows only the legs), then the head-height corners of its box when its width is known."
   [^js e]
   (let [^js pos (.-pos e) x (.-x pos) y (.-y pos) z (.-z pos)
         h (or (.-height e) default-height)
         head (+ y (max 0.1 (- h 0.1)))
         r (some-> (.-width e) (/ 2) (- corner-inset))]
-    (concat [[x (+ y (/ h 2)) z] [x head z]]
+    (concat [[x (+ y (/ h 2)) z] [x head z] [x (+ y feet-inset) z]]
             (when (and r (pos? r))
               (for [dx [(- r) r] dz [(- r) r]] [(+ x dx) head (+ z dz)])))))
 

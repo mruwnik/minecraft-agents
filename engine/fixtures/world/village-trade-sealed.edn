@@ -3,6 +3,7 @@
 ;; Should-succeed: the trade completes. Should-fail: with a full stone block where the slab is, the villager is not seen and
 ;; the trade ends stopped :unreachable. lectern-and-top-slab-gap: the villager stands behind a lectern with a top slab above it (a player aims through
 ;; the gap between lectern top and slab bottom), an andesite seal behind it, the body 2.1 blocks off: the trade completes from where the body stands.
+;; deep-in-the-pod: the villager stands 2.75 back, only its legs clear the slab: the entity list shows it :seen.
 {:defaults
  {:tags [:village :trade :jobs]
   :plot {:floor "grass_block" :height 8}
@@ -32,6 +33,16 @@
          [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00050000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 60 :of-job true}]
    :after [[:item "bread" 6] [:item "emerald" 7]]}
+  {:name "deep-in-the-pod-only-the-legs-show-over-the-lectern"
+   :blocks [[:fill [14 -1 15] [17 3 17] "stone" :hollow]
+            [:set [17 0 16] "lectern[facing=east]"]
+            [:set [17 1 16] "bamboo_slab[type=top]"]
+            [:fill [14 0 16] [14 1 16] "andesite"]]
+   :body {:at [18.3 0 16.5] :yaw 90 :settle-s 2}
+   :act [[:summon "villager" [15.55 0 16.5] "{NoAI:1b}"]
+         [:until [:cli "entities" ["$body" "--world" "$world" "--type" "villager"] {:items [:has {:sense :seen}]}] 30]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:body-near [18.3 0 16.5] 3]]}
   {:name "librarian-buys-24-paper-for-an-emerald"
    :blocks [[:fill [15 -1 15] [17 3 17] "stone" :hollow]
             [:set [15 1 16] "stone_slab[type=bottom]"]]

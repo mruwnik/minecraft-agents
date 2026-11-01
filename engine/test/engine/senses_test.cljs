@@ -204,3 +204,9 @@
     (is (= [] (listed boat {[3 63 0] :block [3 64 0] :block})) "a two-high bank hides the whole boat")
     (is (= [6] (listed cow column)) "a column hides the middle and the head; a corner of the top face shows")
     (is (= [] (listed (js/Object.assign cow #js {:width js/undefined}) column)) "no width: only the middle and the head")))
+
+(deftest a-villager-is-seen-through-a-slit-that-shows-only-its-legs
+  (let [villager (ent 9 "villager" "villager" 3.4)
+        listed (fn [blocks] (mapv #(.-id ^js %) (.entities ^js (:w (wrapped {:entities [villager] :blocks blocks})) #js {})))]
+    (is (= [9] (listed {[2 65 0] :block})) "a block over the line to the middle and the head leaves the feet in view")
+    (is (= [] (listed {[2 65 0] :block [2 64 0] :block})) "a wall over all of it hides the villager")))
