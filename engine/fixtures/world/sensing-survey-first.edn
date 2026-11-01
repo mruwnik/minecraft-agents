@@ -148,16 +148,16 @@
 
   ;; Night: the body is shut in a stone room with a torch and a glass window at night; a search for a target outside waits for day in the room
   ;; (job.waiting :dark) and its job time does not run out meanwhile; once the time is set to day it leaves and finds the target.
-  ;; Run with --allow-time and a shared --time-log.
+  ;; Dawn is set ~30 s off (time 22000): a long wait would price above the dark walk out (~70 s) and the body would go. Run with --allow-time and a shared --time-log.
   {:name "search-waits-the-night-in-a-room-without-timing-out"
    :time :night-exclusive
-   :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+   :plot {:light :sky :height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
-            [:set [9 0 9] "torch"] [:fill [16 1 12] [16 2 12] "glass"] [:set [40 0 12] "emerald_block"]]
+            [:set [9 0 9] "torch"] [:fill [16 1 12] [16 2 12] "glass"] [:set [40 0 28] "emerald_block"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:time-set 22000] [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :settings {:jobs.explore.search/max-distance 60 :jobs.lib.cost.find/leg-spacing 8 :jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
-         [:wait-s 70] ; outlasts the 45 s job time: the wait must not time the job out
+         [:wait-s 70] ; the job time (45 s of work) does not run while waiting
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true}
