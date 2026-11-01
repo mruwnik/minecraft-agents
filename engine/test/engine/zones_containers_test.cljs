@@ -48,7 +48,7 @@
                 result (await (wt/ending-of eng 'jobs.storage.withdraw (merge {:chest chest :items {"bread" 8}} extra) 12))]
             (is (= taken? (pos? (count (calls p "transfer")))) (pr-str [zone extra]))
             (is (= ({true :done false :condition-failed} taken?) (:kind result)) (pr-str [zone extra]))
-            (is (= ({true "withdraw: everything wanted is carried" false nil} taken?) (get-in result [:data :text])) (pr-str [zone extra]))
+            (is (= ({true "withdraw: carried bread 8 (took 8, had 0)" false nil} taken?) (get-in result [:data :text])) (pr-str [zone extra]))
             (is (= ({true nil false refused-at-start} taken?) ({true nil false result} taken?)) (pr-str [zone extra]))))))))
 
 (deftest withdraw-from-a-foreign-chest-never-inspects-its-way-in
