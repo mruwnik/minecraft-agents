@@ -188,9 +188,10 @@
 
 (defn fetch-args
   "The args of the fetch child job for args and options o (the count still the one asked for)."
-  [job args {:keys [how explore minutes for-plan center]}]
+  [job args {:keys [how explore minutes for-plan center worth]}]
   (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
     for-plan (assoc :for-plan for-plan)
+    (and worth (js/isFinite worth)) (assoc :worth worth)
     (and center (= job 'jobs.items.obtain)) (assoc :center center)))
 
 (defn item-status
@@ -225,7 +226,7 @@
   (let [slot (or slot :need)
         args (fetch-args job args o)
         want [job args]
-        identity-of [job (dissoc args :count :avoid :spend)]
+        identity-of [job (dissoc args :count :avoid :spend :worth)]
         _ (when (not= identity-of (get-in (ctx/mem c) [:need/slot-want slot]))
             (ctx/update-mem! c #(-> (update % :children dissoc slot) (assoc-in [:need/slot-want slot] identity-of))))
         fresh? (nil? (get-in (ctx/mem c) [:children slot]))]

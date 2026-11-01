@@ -49,6 +49,12 @@
    :act [[:job (jobs.items.craft {:item "cherry_planks" :count 4 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}]
    :after [[:item "cherry_planks" 0] [:item "oak_planks" 0] [:item "oak_log" 1]]}
+  ;; card 5608a8fb: a short ingredient is fetched as any planks species, so the bamboo planks a seen chest holds are taken (no trip for oak)
+  {:name "chest-from-bamboo-planks-in-a-seen-chest-no-oak-gathered"
+   :blocks [[:set [24 0 16] "crafting_table"] [:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bamboo_planks\",count:8}]}"]]
+   :act [[:job (jobs.items.craft {:item "chest"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "chest" 1]]}
   {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
    :act [[:job (jobs.items.craft {:item "white_bed" :ways #{:carried}})]]

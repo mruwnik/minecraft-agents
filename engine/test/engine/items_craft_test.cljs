@@ -532,6 +532,14 @@
           (is (= :stopped (:status result)))
           (is (not (str/blank? (:text result)))))))))
 
+(deftest craft-fetches-the-planks-species-a-chest-holds-instead-of-the-one-the-recipe-lists-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (merge table-block wheat-chest) :containers {"-2,64,3" [{:name "bamboo_planks" :count 8}]}})
+              result (await (child-outcome eng job {:item "stick"} 120))]
+          (is (= 2 (get (inv p) "bamboo_planks")) (pr-str result)))))))
+
 (deftest craft-fetch-false-reports-the-shortfall-and-leaves-the-chest
   (async done
     (tu/run-async done

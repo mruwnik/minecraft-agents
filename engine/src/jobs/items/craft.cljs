@@ -243,13 +243,21 @@
   (when (and (:want-table (ctx/mem c)) (not (carried-table? c)))
     {:item "crafting_table" :count 1}))
 
+(defn goal-worth
+  "The worth of the fetches for ingredients: what the rest of :count of :item is to the body (cost/find-worth); a fetch dearer than it is declined."
+  [c]
+  (let [item (:item (:args c))]
+    (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) [item] (u/self-pos c) (max 1 (left c (storage/usable-carried (u/inventory (:primitives c)) item))))))
+
 (defn ^:async fetch!
   "Get what (problem c) names with jobs.items.obtain children (jobs.lib.need) until nothing is due any more: nil (the item
   arrived, the fetch failed or the call's ways allow none; the craft judges where it stands), :continue while a child waits."
   [c problem]
   (loop []
     (when-let [{:keys [item count]} (and (seq (need/fetch-how c)) (problem c))]
-      (let [e (await (need/item! c item count {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}))]
+      (let [opts {:worth (goal-worth c) :how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}
+            kin (get (recipes/interchange (game/version-of (:primitives c)) (:item (:args c))) item)
+            e (await (if (> (clojure.core/count kin) 1) (need/blocks! c (sort kin) count opts) (need/item! c item count opts)))]
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) nil
@@ -355,9 +363,9 @@
 (defn problem
   "The first ingredient of the last shortage still not carried up to the amount it needed, as {:item :count}, else nil."
   [c]
-  (let [have (reserve/free c (chooser c))]
+  (let [have (recipes/pooled (game/version-of (:primitives c)) (:item (:args c)) (storage/carried-totals (reserve/free c (chooser c))))]
     (some (fn [[name want]]
-            (let [n (storage/carried have name)]
+            (let [n (get have name 0)]
               (when (< n want) {:item name :count (- want n)})))
           (:wants (ctx/mem c)))))
 
