@@ -51,7 +51,9 @@
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,11],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-00050000000b" :pos #at [17 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 2}})]]
-   :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}]}
+   :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
+   :after [[:block [17 0 16] "lectern"]]}
   {:name "nitwit-cannot-be-rolled"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,2],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000002" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]

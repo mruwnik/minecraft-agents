@@ -34,7 +34,7 @@
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried: the body stands on its cell for a few polls, then ends; nothing is placed), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -294,6 +294,22 @@
               (:arrived (:data r)) :again
               :else nil)))))
 
+(defn ^:async recover!
+  "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): stand on its
+  cell, where a drop within a block comes to the body, and wait a few polls; then end :workstation-lost. :again or :continue."
+  [c]
+  (let [{:keys [pos]} (:args c)
+        tries (:recovers (ctx/mem c) 0)]
+    (cond
+      (>= tries 3) (stop! c :workstation-lost)
+      (on-cell? c pos) (do (ctx/update-mem! c update :recovers (fnil inc 0))
+                           (await (child/pause! c 1 :picking-up-the-drop))
+                           :continue)
+      :else (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk}}))]
+              (cond (= :continue r) :continue
+                    (:arrived (:data r)) :again
+                    :else (stop! c :workstation-lost))))))
+
 (defn ^:async place!
   "Place the workstation again, and the book of the break closed."
   [c]
@@ -329,6 +345,7 @@
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
         (and e (not= "unemployed" profession)) (await (wait-job! c :villager-keeps-job))
+        (zero? (u/carried-count p item)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)
@@ -360,7 +377,7 @@
   [c _]
   (let [{:keys [pos]} (:args c)
         block (u/seen-name (:primitives c) pos)]
-    (if-not (and (:broken (ctx/mem c)) block (bs/air block))
+    (if-not (and (:broken (ctx/mem c)) block (bs/air block) (pos? (u/carried-count (:primitives c) (item-of (:args c)))))
       (ctx/end c :done nil)
       (let [r (if (on-cell? c pos) (await (clear-cell! c pos)) (await (place-or-return! c)))]
         (if (= :again r) (await (cleanup c nil)) r)))))

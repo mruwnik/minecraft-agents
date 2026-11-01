@@ -285,12 +285,31 @@
           (is (= {:found false :rolls 0 :status :stopped :reason :no-tool} (select-keys result [:found :rolls :status :reason])))
           (is (= "lectern" (workstation p)) "nothing was broken"))))))
 
+(defn breaks-without-a-drop
+  "env whose dig child clears the workstation cell and picks nothing up (the drop slid out of reach)."
+  [env]
+  (let [p (:p env)
+        j (get (:jobs (:eng env)) 'jobs.blocks.dig)]
+    (assoc-in env [:eng :jobs 'jobs.blocks.dig]
+              (assoc j :round (fn ^:async stubbed [c]
+                                (swap! (fake/state p) assoc-in [:blocks ws-pos] "air")
+                                (ctx/end c :done nil {:dug true :collected 0}))))))
+
+(deftest a-broken-workstation-whose-drop-is-out-of-reach-ends-workstation-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :wrap breaks-without-a-drop} {}))]
+          (is (= {:found false :status :stopped :reason :workstation-lost} (select-keys result [:found :status :reason])))
+          (is (zero? (count (vt/calls p "place"))) "no place is tried without the item")
+          (is (= "air" (workstation p))))))))
+
 (deftest a-place-child-that-stops-ends-with-its-ending
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result p seen] (await (roll {:entities [(vt/villager nil {:profession "unemployed"})]
-                                            :blocks {ws-key "air"}
+                                            :blocks {ws-key "air"} :inventory [{:name "lectern" :count 1}]
                                             :wrap (stub-job 'jobs.blocks.place stopped)} {}))]
           (is (= {:found false :status :stopped :reason :no-tool} (select-keys result [:found :status :reason])))
           (is (= "air" (workstation p)))
