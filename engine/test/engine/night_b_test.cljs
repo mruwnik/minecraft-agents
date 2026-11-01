@@ -321,6 +321,34 @@
           (is (empty? (filter #(= :no-site (:reason %)) @seen)) "a room too small for a site 9 blocks off still has ground 4 blocks from the water")
           (is (seq (st/calls p "place"))))))))
 
+(deftest a-night-pit-with-water-beside-the-floor-under-the-feet-is-dug-on-dry-ground-away-from-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack
+                                         :blocks (into {} (for [x (range -6 7) z (range -6 7) y (range 60 64)]
+                                                   [(str x "," y "," z) (if (and (= 63 y) (<= -2 x 2) (<= -1 z 1) (not (and (<= -1 x 1) (zero? z)))) "water" "dirt")]))})]
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (tu/run-until-empty eng 40))
+          (is (seq (st/calls p "place")))
+          (is (every? #(let [{:keys [x z]} (st/arg-pos %)] (> (max (js/Math.abs x) (js/Math.abs z)) 2)) (st/calls p "place"))
+              "no pit is opened at the water's edge: the body steps away first"))))))
+
+(deftest a-night-in-a-stone-room-beside-a-pond-finds-a-way-to-dig-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (into {} (for [x (range -6 7) z (range -6 7) y (range 56 69)]
+                                [(str x "," y "," z)
+                                 (cond (and (<= -5 x 5) (<= -5 z 5) (<= 64 y 67)) "air"
+                                       (and (<= -1 x 1) (<= -1 z 1) (<= 60 y 63)) "water"
+                                       :else "stone")]))
+              {:keys [eng p seen]} (st/setup {:time night :inventory [{:name "stone_pickaxe" :count 1}] :blocks blocks})]
+          (st/teleport! p 2.5 64 0.5)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 40))
+          (is (empty? (st/emitted seen :shelter.exposed)) "stone beyond the water takes a pit or a pocket, so the night is not left exposed"))))))
+
 (deftest a-night-dig-pit-with-no-ground-for-a-pit-in-sight-waits-no-site-instead-of-ending
   (async done
     (tu/run-async done

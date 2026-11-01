@@ -19,7 +19,7 @@
   ;; The room is dark and no torch makes it safe: the body walks off the water's edge onto solid floor and digs in.
   {:name "swimmer-in-a-dark-room-climbs-out-and-digs-in"
    :time-why :night-light ; jobs.survival.night ends at once by day after leaving the water
-   :body {:at [16.5 -1 16.5]}
+   :body {:at [16.5 -1 16.5] :inventory [["stone_pickaxe" 1]]}
    :blocks [[:fill [10 -6 10] [22 5 22] "stone"] [:fill [11 0 11] [21 3 21] "air"] [:fill [15 -4 15] [17 -1 17] "water"]]
    :act [[:job (jobs.survival.night)]]
    :expect [{:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}

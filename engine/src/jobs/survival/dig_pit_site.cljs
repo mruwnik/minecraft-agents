@@ -204,11 +204,12 @@
 
 (defn site
   "Where a night pit is dug from: {:at :here}, {:at :there :cell f} (walk there first: a pit failed at the feet, or a zone
-  refuses them and a free site is near), or nil with none."
+  refuses them, or water lies beside the ground under them, and a free site is near), or nil with none."
   [c]
-  (let [feet (sh-sense/feet (:primitives c))
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
         failed? (failed-here? c :pit)]
-    (if (or failed? (zone-refused? c feet))
+    (if (or failed? (zone-refused? c feet) (dig-cells/lateral-fluid p (update feet :y dec)))
       (if-let [f (relocation-site c {:free? (not failed?)})]
         {:at :there :cell f}
         (when-not failed? {:at :here}))
