@@ -578,6 +578,7 @@ HTTP over `worlds/<world>/agents/<name>/engine/events.sock` (mode 0600; all bodi
 | `GET /places?max=` | named places in body memory (`engine.memory/places`: latest entry of each kind under place-policy), by name with `:pos`, a retracted one `:gone true :was`; max capped at 64, `:more?`; read-only (`observe <agent> places`) |
 | `GET /chests?max=` | chest stock the body saw (memory `:fetch/stock`, kept 7 days, latest per chest; obtain's "taking X from the chest" event says "seen N min ago"), nearest first with `:pos`, `:distance`, `:age-ms`, `:items {name n}`; max capped at 64; read-only (`observe <agent> chests`) |
 | `GET /light?x&y&z&radius=` | the light the body perceives at a cell (default its feet): `:block :sky :sky-subtract :light :lit? :seen?`; with radius (0-8) the cube's `light-read` (`:dark-fraction :darkest :unseen`) plus `:cells :seen`; read-only (`observe <agent> light [x y z] [--radius n]`) |
+| `GET /cell?x&y&z` | one cell as the body senses it (never x-ray): `:name`, `:properties` (block state: waterlogged, level (0 = source), facing, half, lit ...), `:live?` (in sight or felt now, else remembered), `:age-ms`; `:seen? false` if never seen |
 | `GET /job?id=` | one job's parsed spec, args, state, linked requests; a finished job answers its recorded outcome (`:finished? true :status :result :ended-at`) from the results record: the last `engine.core.base/recent-results-limit` (100) ended listed jobs and `reflex-results-limit` (20) reflex jobs, in `results.edn`, not in the state or `/snapshot` |
 | `GET /results?ids=j1,j2` | the recorded outcomes of up to 32 job ids |
 | `GET /catalog?kind=jobs\|triggers&prefix=[&category=][&tag=]` / `kind=job\|trigger&name=` | names page / one description (a contract job's also `:target :ways :defaults`; each arg shows its effective `:default` and `:default-from` `:code`, `:world` or `:body`) |
@@ -877,6 +878,7 @@ node engine/tools/observe.mjs Bob --world test catalog jobs [--all] | catalog jo
 node engine/tools/quote.mjs Bob --world test jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'   (also jobs.primitive.*)
 node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test light [x y z] [--radius 0-8]   # perceived light at a cell (default the feet): block, sky, sky-subtract, effective, lit/dark, seen
+node engine/tools/observe.mjs Bob --world test cell x y z   # block name and state properties of one cell, live or remembered (a negative coordinate needs `--` first)
 node engine/tools/observe.mjs Bob --world test settings [--changed] [--raw] | settings reload | settings set :jobs.x/key <edn> | settings unset :jobs.x/key   # keys with layer and the game rate; dashboard popup has the same
 node engine/tools/entities.mjs Bob --world test [--type zombie --radius 32 --player Alex --limit 20]
 node engine/tools/jobs.mjs Bob --world test list | show j17 | cancel j17 | cancel-all | retry j17 | resolve <attention> --reason handled

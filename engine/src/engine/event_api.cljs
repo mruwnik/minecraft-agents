@@ -1,6 +1,6 @@
 (ns engine.event-api
   "The engine's private HTTP API on a local Unix socket (mode 0600). The wire format is EDN.
-  GET   /snapshot, /status, /inventory, /seen, /chests, /places, /light, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
+  GET   /snapshot, /status, /inventory, /seen, /cell, /chests, /places, /light, /events, /job, /jobs, /results, /triggers, /catalog, /quote, /settings
   POST  /jobs and /triggers (changes), /attention/resolve, /chat, /settings/reload, /settings/set, /settings/unset
   Bodies are limited (a setting, 16 KB). Lists are paged and bounded."
   (:require [engine.args :as a]
@@ -258,6 +258,29 @@
     (when (and (or (nil? (.get params "radius")) radius)
                (or (empty? given) (and (= 3 (count given)) (every? js/Number.isSafeInteger nums))))
       (cond-> {} (seq given) (assoc :cell (zipmap [:x :y :z] nums)) radius (assoc :radius radius)))))
+
+(defn cell-query
+  "The validated /cell query as {:x :y :z}, or nil when malformed (all three integers)."
+  [params]
+  (let [given (keep #(.get params %) ["x" "y" "z"])
+        nums (map js/Number given)]
+    (when (and (= 3 (count given)) (every? js/Number.isSafeInteger nums))
+      (zipmap [:x :y :z] nums))))
+
+(defn cell-view
+  "Read-only: one cell as the body senses it (never x-ray): {:cell [x y z] :seen? :name :properties (the block's state, e.g.
+  waterlogged, level, facing) :live? (in sight or felt now, else remembered) :age-ms}; {:seen? false} for a cell never seen."
+  [eng {:keys [x y z]}]
+  (if (core/offline? eng)
+    {:ok false :reason :offline :offline (core/away eng)}
+    (let [^js b (some-> (.-sensedAt ^js (:primitives eng)) (.call (:primitives eng) (clj->js {:x x :y y :z z})))
+          cell [x y z]]
+      (if (or (nil? b) (.-unknown b))
+        {:ok true :cell cell :seen? false}
+        {:ok true :cell cell :seen? true :name (.-name b)
+         :properties (js->clj (.-properties b) :keywordize-keys true)
+         :live? (boolean (or (.-visible b) (.-felt b)))
+         :age-ms (.-ageMs b)}))))
 
 (defn seen-query
   "The validated /seen query as {:names :radius :max}, or nil when it is malformed."
@@ -588,6 +611,11 @@
                         (and (= method "GET") (= pathname "/places"))
                         (if-let [max (number-param (.-searchParams url) "max" 64 64)]
                           (respond! res 200 (places-view eng {:max max}))
+                          (bad! res 400 :bad-query))
+
+                        (and (= method "GET") (= pathname "/cell"))
+                        (if-let [q (cell-query (.-searchParams url))]
+                          (respond! res 200 (cell-view eng q))
                           (bad! res 400 :bad-query))
 
                         (and (= method "GET") (= pathname "/light"))

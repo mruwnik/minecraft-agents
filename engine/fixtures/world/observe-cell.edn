@@ -1,0 +1,17 @@
+;; `observe cell x y z`: a seen cell's block name and state properties, live; an unloaded cell is not seen.
+{:defaults
+ {:tags [:agent-tools :observe] :time :any
+  :plot {:light :lit :height 12}
+  :blocks [[:fill [10 0 10] [22 8 22] "stone"] [:fill [14 4 14] [18 6 18] "air"]]
+  :body {:at [16.5 4 16.5] :spawnpoint [16 4 16] :yaw 270}
+  :limit-s 90}
+ :cases
+ [{:name "cell-shows-the-state-of-a-seen-block"
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~17 ~4 ~16 oak_slab[waterlogged=true]"]
+         [:until [:cli "observe" ["$body" "--world" "$world" "cell" "--" #at [17 4 16]]
+                  {:ok true :seen? true :name "oak_slab" :properties {:waterlogged true} :live? true}] 20]]
+   :after [[:body-near [16.5 4 16.5] 4]]}
+  {:name "cell-of-an-unloaded-position-is-not-seen"
+   :act [[:until [:cli "observe" ["$body" "--world" "$world" "cell" "3000" "64" "3000"]
+                  {:ok true :seen? false}] 20]]
+   :after [[:body-near [16.5 4 16.5] 1.5]]}]}

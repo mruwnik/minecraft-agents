@@ -495,6 +495,25 @@
                     :seenBlocks (fn [q] (swap! calls conj (js->clj q :keywordize-keys true))
                                   (clj->js rows))}})
 
+(defn cell-engine [answer]
+  {:primitives #js {:isOffline (fn [] false) :sensedAt (fn [_] answer)}})
+
+(deftest cell-view-reports-a-cells-block-state-and-whether-it-is-live
+  (is (= {:ok true :cell [1 64 2] :seen? true :name "oak_sign" :properties {:waterlogged true :rotation "4"} :live? true :age-ms 0}
+         (event-api/cell-view (cell-engine #js {:name "oak_sign" :properties #js {:waterlogged true :rotation "4"} :visible true :ageMs 0})
+                              {:x 1 :y 64 :z 2})))
+  (is (= {:ok true :cell [1 64 2] :seen? true :name "lava" :properties {:level "0"} :live? false :age-ms 900}
+         (event-api/cell-view (cell-engine #js {:name "lava" :properties #js {:level "0"} :visible false :ageMs 900})
+                              {:x 1 :y 64 :z 2})))
+  (is (= {:ok true :cell [1 64 2] :seen? false}
+         (event-api/cell-view (cell-engine #js {:unknown true}) {:x 1 :y 64 :z 2}))))
+
+(deftest cell-query-needs-three-integers
+  (let [q #(event-api/cell-query (js/URLSearchParams. %))]
+    (is (= {:x 1 :y 64 :z -3} (q "x=1&y=64&z=-3")))
+    (is (nil? (q "x=1&y=64")))
+    (is (nil? (q "x=1&y=a&z=3")))))
+
 (deftest seen-view-lists-remembered-blocks-nearest-first-with-name-pos-and-distance
   (let [calls (atom [])
         rows [{:name "chest" :pos {:x 1 :y 64 :z 2} :distance 3.04 :age-ms 5}
