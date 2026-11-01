@@ -149,12 +149,17 @@
               world {:entities [(villager [offer])] :inventory [{:name "emerald" :count 4} {:name "diamond" :count 2}]}
               [refused] (await (trade world {:ways #{:carried} :use {:payment ["emerald"]}}))
               [paid p] (await (trade world {:use {:payment ["diamond"]}}))
-              [unnamed p2] (await (trade world {:ways #{:carried}}))]
+              [unnamed p2] (await (trade world {:ways #{:carried}}))
+              [spent p3] (await (trade world {:ways #{:carried} :spend {:items {"diamond" 1}}}))]
           (is (= :no-offer (:reason refused)))
+          (is (= :no-offer (:reason unnamed)) "an unnamed diamond is never spent")
+          (is (re-find #"diamond" (:text unnamed)))
+          (is (= {"emerald" 4 "diamond" 2} (inv p2)))
+          (is (= paid spent) "named in :spend, it pays")
+          (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p3)))
           (is (= {:bought 1 :paid {"diamond" 1} :item "bread"} paid))
           (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p)))
-          (is (= paid unnamed) "no emerald offer for the item: any carried item pays")
-          (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p2))))))))
+          )))))
 
 (deftest an-offer-with-two-cost-stacks-pays-both
   (async done
@@ -240,7 +245,7 @@
                   :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :no-offers} :have {} :kind :child_ended}
                  {:label "nothing for the item"
                   :world {:entities [(villager [{:cost [{:item "emerald" :count 1}] :gives {:item "apple" :count 1}}])]}
-                  :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :no-offer} :have {} :kind :child_ended}
+                  :args {} :want {:bought 0 :paid {} :item "bread" :text "no offer for bread paid with emerald; offered: 1 emerald -> 1 apple" :status :stopped :reason :no-offer} :have {} :kind :child_ended}
                  {:label "busy villager, the window never opens"
                   :world {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]}
                   :args {} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :window} :have {"emerald" 3} :kind :child_ended}]))))))
@@ -425,7 +430,8 @@
                                                               :primitives (tu/fake-on-floor {:inventory inv})}))))
     [] #{:carried} false
     [] #{:carried :chest} true
-    [{:name "paper" :count 24}] #{:carried} true))
+    [{:name "paper" :count 24}] #{:carried} false
+    [{:name "emerald" :count 1}] #{:carried} true))
 
 (deftest payment-not-carried-and-not-fetched-ends-payment-short-before-any-buy
   (async done
