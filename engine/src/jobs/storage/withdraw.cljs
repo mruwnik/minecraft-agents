@@ -23,6 +23,7 @@
   Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job
   waits, a reflex ends condition-failed); a chest of the group that zones or claims of another do not refuse :take, else waits
   :refused {:zones :claims}. :ignore-zones? true skips it.
+  The count is a target, not an amount to take: the ending text says: carried lectern 8 (took 5, had 3).
   Ends done when everything is carried (also at once when it already is), or when at least the call's :least items
   toward the wanted ones are carried at any other ending (:all wants every one). The data of every other ending has :gave-up and
   :short {name n}, what is still missing; the report counts the items carried toward the wanted ones.
@@ -87,6 +88,17 @@
 
 (def carried-text "withdraw: everything wanted is carried")
 
+(defn taken-text
+  "The ending text: the count wanted is what is carried, so say how many were taken and how many were already carried."
+  [c]
+  (let [inv (u/inventory (:primitives c))
+        taken (:taken (ctx/mem c))
+        row (fn [[name want]] (let [got (get taken name 0)]
+                                (str name " " (storage/carried inv name) " (took " got ", had " (- (storage/carried inv name) got) ")")))]
+    (if (empty? taken)
+      carried-text
+      (str "withdraw: carried " (str/join ", " (map row (sort (select-keys (:items (:args c)) (keys taken)))))))))
+
 (defn entity-done? [c]
   (if (:emptied (ctx/mem c))
     (contract/ok :emptied "withdraw: the container is empty or the bag full" :units :container :done 1 :left 0)
@@ -100,7 +112,7 @@
         left (reduce + 0 (map second (shortfall inv items)))
         want (reduce + 0 (vals items))]
     (if (zero? left)
-      (contract/ok :carried carried-text :units :items :done want :left 0)
+      (contract/ok :carried (taken-text c) :units :items :done want :left 0)
       (contract/later :short (str "withdraw: " left " item(s) short") :units :items :done (- want left) :left left
                       :result {:short (into {} (shortfall inv items))}))))
 
@@ -211,7 +223,7 @@
         chest (some-> (first (:open (chests/chests c :take))) chests/cell-pos)
         short (shortfall (u/inventory (:primitives c)) items)]
     (cond
-      (empty? short) (ctx/end c :done nil {:text carried-text})
+      (empty? short) (ctx/end c :done nil {:text (taken-text c)})
       :else
       (await (take! c chest short)))))
 

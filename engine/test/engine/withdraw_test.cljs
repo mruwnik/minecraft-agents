@@ -59,7 +59,7 @@
               result (await (ending-of eng job {:chest chest :items {"bread" 16}} 8))]
           (is (= {"bread" 16} (inv p)))
           (is (= [{:name "bread" :count 20}] (chest-items p)))
-          (is (= {:kind :done :data {:text carried-text}} result)))))))
+          (is (= {:kind :done :data {:text "withdraw: carried bread 16 (took 12, had 4)"}} result)))))))
 
 (deftest withdraw-with-enough-carried-moves-nothing
   (async done
@@ -191,7 +191,7 @@
         (let [{:keys [eng p]} (setup {:containers {"20,64,0" [{:name "bread" :count 9} {:name "stone_hoe" :count 3}]}})
               result (await (ending-of eng job {:chest {:x 20 :y 64 :z 0} :items (array-map "bread" 4 "stone_hoe" 2)} 1))]
           (is (= {"bread" 4 "stone_hoe" 2} (inv p)))
-          (is (= {:kind :done :data {:text carried-text}} result))
+          (is (= {:kind :done :data {:text "withdraw: carried bread 4 (took 4, had 0), stone_hoe 2 (took 2, had 0)"}} result))
           (is (= 2 (count (calls p "transfer"))))
           (is (= 1 (count (tu/walked-to eng)))))))))
 
@@ -228,7 +228,7 @@
           (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
           (let [result (await (ending-of eng job {:items {"bread" 5}} 12))]
             (is (= {"bread" 5} (inv p)))
-            (is (= {:kind :done :data {:text carried-text}} result))))))))
+            (is (= {:kind :done :data {:text "withdraw: carried bread 5 (took 5, had 0)"}} result))))))))
 
 (deftest withdraw-with-a-chest-argument-never-looks-into-another-chest-of-the-group
   (async done
