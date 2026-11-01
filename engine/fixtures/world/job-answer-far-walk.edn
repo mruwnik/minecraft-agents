@@ -1,0 +1,15 @@
+;; A root job's answer says how far its children walked from the start: go-to walks 24 blocks over a lit stone plateau (x 8..60, z 8..24, y 0..9).
+;; Should-succeed: the completed event's text ends with "(walked N blocks from the start)" and carries :trip {:far N}.
+{:defaults
+ {:tags [:go-to :movement]
+  :time :any
+  :plot {:height 20 :length 64 :width 32}
+  :blocks [[:fill [8 0 8] [60 9 24] "stone"]
+           [:set [12 11 12] "glowstone"] [:set [12 11 20] "glowstone"] [:set [30 11 12] "glowstone"] [:set [30 11 20] "glowstone"]
+           [:set [44 11 12] "glowstone"] [:set [44 11 20] "glowstone"]]
+  :body {:at [16.5 10 16.5]}
+  :limit-s 120}
+ :cases
+ [{:name "go-to-answer-names-the-far-walk"
+   :act [[:job (jobs.movement.go-to {:pos #at [40 10 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:trip {:far [:any]}} :message [:contains "blocks from the start)"]} :within-s 90 :of-job true}]}]}

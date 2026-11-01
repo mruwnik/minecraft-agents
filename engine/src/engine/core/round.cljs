@@ -53,6 +53,8 @@
   [ms k on-stuck]
   (js/Promise. (fn [_ reject] (on-stuck (js/setTimeout #(reject (js/Error. (str "act-stuck: " (name k) " in flight over " (js/Math.round (/ ms 1000)) " s"))) ms)))))
 
+(def trip-acts "The acts whose walk or dig the report's :trip counts." #{:moveTo :steer :dig})
+
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, count what it used and yielded on every frame of the chain (engine.core.tally),
@@ -71,7 +73,7 @@
         p (:primitives eng)
         quiet? (and (= :wait k) (some? (some-> args .-why)))
         _ (when-not quiet? (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)})))
-        from (when (= :moveTo k) (self-pos p))
+        from (when (trip-acts k) (self-pos p))
         before (tally/snapshot eng)
         away-record (when (= :offline k) (log-out-record eng root id args ((:now eng))))
         _ (when away-record
@@ -91,6 +93,8 @@
                                             (= "noPath" (.-reason r)) (assoc :no-path true))
                       mem/moved-policy))
         (await (tally/count-act-settled! eng root slots before))
+        (when (trip-acts k)
+          (tally/count-trip! eng root slots from (self-pos p) (and (= :dig k) (= "dug" (.-status r)))))
         (save-memory-soon! eng)
         (record-act! eng {:root root :reflex reflex} k r (distance from to))
         (when-not quiet?

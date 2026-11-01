@@ -68,10 +68,37 @@
   (cond-> (assoc (:uses tally) :job-time (/ (+ (or ran-ms 0) extra-ms) 1000))
     started-ms (assoc :wall-time (/ (- now started-ms) 1000))))
 
+(defn add-trip
+  "A frame's :trip {:origin :dug :far} after an act from -> to (positions {:x :y :z}); dug? when it dug one cell. The origin is
+  where the frame's first act began; :far the greatest straight-line distance from it."
+  [trip from to dug?]
+  (let [origin (or (:origin trip) from)
+        d (when (and origin to) (Math/hypot (- (:x to) (:x origin)) (- (:y to) (:y origin)) (- (:z to) (:z origin))))]
+    (assoc trip :origin origin :dug (+ (or (:dug trip) 0) (if dug? 1 0)) :far (max (or (:far trip) 0) (or d 0)))))
+
+(def trip-far-min "Farthest distance (blocks) from the start below which a report says nothing of the walk." 20)
+
+(defn trip-summary
+  "{:dug cells :far blocks} of a report's :trip when it dug or went at least trip-far-min away, else nil."
+  [{:keys [dug far]}]
+  (let [dug (or dug 0) far (or far 0)]
+    (when (or (pos? dug) (>= far trip-far-min))
+      (cond-> {} (pos? dug) (assoc :dug dug) (>= far trip-far-min) (assoc :far (js/Math.round far))))))
+
+(defn trip-text
+  "The parenthesis for a trip-summary, nil for none."
+  [summary]
+  (when summary
+    (str "(" (str/join ", " (cond-> []
+                             (:dug summary) (conj (str "dug " (:dug summary) " cells"))
+                             (:far summary) (conj (str "walked " (:far summary) " blocks from the start")))) ")")))
+
 (defn report
-  "The report of a frame's :contract state at now: its tally with what used gives among the uses."
+  "The report of a frame's :contract state at now: its tally with what used gives among the uses, and its trip-summary as :trip."
   ([state now] (report state now 0))
-  ([state now extra-ms] (assoc (:tally state) :uses (used state now extra-ms))))
+  ([state now extra-ms]
+   (cond-> (assoc (:tally state) :uses (used state now extra-ms))
+     (trip-summary (:trip state)) (assoc :trip (trip-summary (:trip state))))))
 
 ;; ------------------------------------------------------------------ endings
 

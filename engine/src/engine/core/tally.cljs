@@ -57,6 +57,13 @@
                       (contract/act-delta before (snapshot eng)))
                   first-delta))))
 
+(defn count-trip!
+  "Book an act's walk or dig on every frame from root down to slots (the :trip of the report): from the position before it, to
+  where it ended; dug? when it dug a cell."
+  [eng root slots from to dug?]
+  (when (or from to)
+    (update-frames! eng root (frame-paths slots) #(update % :trip contract/add-trip from to dug?))))
+
 (defn count-try!
   "Book a child ending (reason of job) as a try on every frame from root down to slots (the :tries spend line), the
   last one kept for the cause; a frame of a job that counts its own tries (meta :own-tries?) is left out."

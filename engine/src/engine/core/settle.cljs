@@ -12,7 +12,8 @@
             [engine.core.tally :as tally]
             [engine.contract :as contract]
             [engine.backoff :as backoff]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [clojure.string :as str]))
 
 (defn stopped-text
   "The words of a :stopped event: the result's own :text, else its cause's (a status's text), else their :why,
@@ -80,6 +81,14 @@
   [eng id e]
   (merge (tally/end-root! eng id true e) (:report e)))
 
+(defn with-trip
+  "Event ev of a root job's ending with the digs and far walk of its report (contract/trip-summary) in :data :trip and
+  after its :text, however deep in its children they happened."
+  [ev report]
+  (if-let [t (contract/trip-summary (:trip report))]
+    (-> ev (assoc-in [:data :trip] t) (update :text #(str/join " " (remove empty? [% (contract/trip-text t)]))))
+    ev))
+
 (defn rebase-queued!
   "Queued calls that have not started stand where the body stands now: a job ahead of them (a stair, a go-to) moved the body on purpose,
   and a respawn moved it without a choice, so their :submitted-at (engine.contract/moved-cause) is this cell, not the submit's."
@@ -110,12 +119,14 @@
         (swap! (:fruitless eng) dissoc id)
         (delete-root! eng id :ended)
         (rebase-queued! eng)
-        (emit! eng (if (= :done (:kind ending))
-                     (merge fields {:source :job :kind :completed :level :info :attention :notice
-                                    :data data :report report}
-                            (when (:text data) {:text (:text data)}))
-                     (merge fields {:source :job :kind :stopped :level :warn :attention :notice
-                                    :data data :text (stopped-text data) :report report})))))
+        (emit! eng (with-trip
+                     (if (= :done (:kind ending))
+                       (merge fields {:source :job :kind :completed :level :info :attention :notice
+                                      :data data :report report}
+                              (when (:text data) {:text (:text data)}))
+                       (merge fields {:source :job :kind :stopped :level :warn :attention :notice
+                                      :data data :text (stopped-text data) :report report}))
+                     report))))
 
       :done
       (let [report (tally/end-root! eng id true)]
@@ -124,13 +135,15 @@
         (swap! (:fruitless eng) dissoc id)
         (delete-root! eng id :ended)
         (rebase-queued! eng)
-        (emit! eng (if (stopped-result? result)
-                     (merge fields {:source :job :kind :stopped :level :warn :attention :notice
-                                    :data (dissoc result :dug)
-                                    :text (stopped-text result) :report report})
-                     (merge fields {:source :job :kind :completed :level :info
-                                    :attention :notice
-                                    :data {:status :completed} :report report}))))
+        (emit! eng (with-trip
+                     (if (stopped-result? result)
+                       (merge fields {:source :job :kind :stopped :level :warn :attention :notice
+                                      :data (dissoc result :dug)
+                                      :text (stopped-text result) :report report})
+                       (merge fields {:source :job :kind :completed :level :info
+                                      :attention :notice
+                                      :data {:status :completed} :report report}))
+                     report)))
 
       :cut
       (do (swap! (:state eng) assoc :resume id :current nil)

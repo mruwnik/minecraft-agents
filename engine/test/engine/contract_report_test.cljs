@@ -88,6 +88,13 @@
                                                                          {}))
                                                   (swap! clock + 50)
                                                   (ctx/end c :done nil))}
+                                 'strolls {:round (fn ^:async strolls-round [c]
+                                                    (await (ctx/call c :w {:name :walker
+                                                                           :round (fn ^:async walker-round [c]
+                                                                                    (await (ctx/act c :moveTo #js {:pos #js {:x 40 :y 64 :z 0}}))
+                                                                                    (ctx/end c :done nil))}
+                                                                     {}))
+                                                    (ctx/end c :done nil))}
                                  'craft {:round (fn ^:async craft-round [c]
                                                   (await (ctx/act c :craft #js {:item "oak_planks" :count 4}))
                                                   (ctx/end c :done nil))}}
@@ -199,3 +206,26 @@
             (is (= report (:report (first (filter #(= :completed (:kind %)) @seen)))))
             (is (= [{:job 'craft :report report :kind :done :cause nil}]
                    (mapv :data (mem/entries (mem/view (:store eng)) :job-report))))))))))
+
+(deftest trip-sums-digs-and-the-farthest-distance-from-the-first-act
+  (let [a {:x 0 :y 64 :z 0}
+        trip (-> nil
+                 (contract/add-trip a {:x 30 :y 64 :z 0} false)
+                 (contract/add-trip {:x 30 :y 64 :z 0} {:x 30 :y 64 :z 0} true)
+                 (contract/add-trip {:x 30 :y 64 :z 0} {:x 3 :y 64 :z 4} false))]
+    (is (= {:dug 1 :far 30.0} (select-keys trip [:dug :far])))
+    (is (= {:dug 1 :far 30} (contract/trip-summary trip)))
+    (is (= "(dug 1 cells, walked 30 blocks from the start)" (contract/trip-text (contract/trip-summary trip))))
+    (is (nil? (contract/trip-summary {:dug 0 :far 5.0})) "a short walk is not worth a line")))
+
+(deftest a-root-job-answers-with-the-far-walk-of-its-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/submit! eng '(strolls) {})
+          (await (core/tick! eng))
+          (let [completed (first (filter #(= :completed (:kind %)) @seen))]
+            (is (= {:far 40} (:trip completed)))
+            (is (= "(walked 40 blocks from the start)" (:text completed)))
+            (is (= {:far 40} (get-in completed [:report :trip])))))))))
