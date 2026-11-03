@@ -296,6 +296,10 @@
                       (catch :default _ (fn [])))]
     (sample!)
     (aset primitives "sampleEntities" sample!)
+    (aset primitives "rememberedEntity"
+          (fn [id] (some (fn [e] (when (and (#{:seen :remembered} (:sense e)) (:pos e) (or (= id (:uuid e)) (= id (:id e))))
+                                   (clj->js (:pos e))))
+                         (vals (:entities @(:state store))))))
     (let [timer (js/setInterval sample! (setting "sample-ms"))]
       (.unref timer)
       (assoc store :stop (fn [] (js/clearInterval timer) (unlisten))))))

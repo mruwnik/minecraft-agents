@@ -112,7 +112,7 @@
     (cond
       (and (nil? e) (await (villager/find-in-view! c ok? nil))) :again ; villagers count only while in view
       (and (nil? uuid) (seq skipped)) (finish! c :no-offers nil)
-      (nil? e) (finish! c (villager/gone-cause c) nil)
+      (nil? e) (or (await (villager/approach-remembered! c uuid (reach))) (finish! c (villager/gone-cause c) nil))
       (in-reach? c e) (await (act! c))
       :else
       (let [r (await (child/call-chase* c :walk

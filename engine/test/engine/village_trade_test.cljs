@@ -418,6 +418,21 @@
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= {"emerald" 9 "bread" 1} (inv p))))))))
 
+(deftest a-named-villager-out-of-view-is-walked-to-where-it-was-last-seen-and-bought-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (trade {:entities [(villager [(bread {})] {:pos {:x 12.5 :y 64 :z 0.5}})]
+                                        :inventory [{:name "emerald" :count 10}]}
+                                       {:count 1}
+                                       (fn [p]
+                                         (let [entities (.-entities p)
+                                               walked? #(some (fn [call] (#{"goTo" "moveTo" "steer"} (.-name call))) (.-calls (.-world p)))]
+                                           (aset p "entities" (fn [q] (if (walked?) (.call entities p q) #js [])))
+                                           (aset p "rememberedEntity" (fn [id] (when (= "v-1" id) #js {:x 12.5 :y 64 :z 0.5})))))))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (pos? (count (calls p "steer")))))))))
+
 (deftest a-villager-seen-by-one-look-of-the-round-is-bought-from
   (async done
     (tu/run-async done

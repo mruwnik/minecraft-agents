@@ -16,7 +16,7 @@
 
 (def doc
   "Buy :count of :buy from the villager :villager (uuid or entity id; nil: the nearest adult in sight that has offers, a villager that shows none is skipped for the next, as a player opens one after another). One call is the whole purchase: find the villager
-  within jobs.lib.villager/search-radius, walk within reach of it (jobs.lib.trade-window ::reach), seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of jobs.lib.trade-window ::chase-timeout-s), read its offers (prices move between visits),
+  within jobs.lib.villager/search-radius (a named one out of view: first to where it was last seen), walk within reach of it (jobs.lib.trade-window ::reach), seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of jobs.lib.trade-window ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those paid with an item of the call's :use {:payment [..]}
   (default emerald plus the items named in :spend {:items {item n}}, e.g. {\"paper\" 24} to sell 24 paper for an emerald; any other item, diamond too, is never spent) and whose price (the adjusted count of the first cost stack) is within what the call's :spend
@@ -27,7 +27,7 @@
   was bought, else with the cause, condition-failed for :gone, :not-villager, :payment-short and :no-room, else
   nothing-possible. A partial purchase stays bought and paid. A missing item name is impossible (:bad-args).
   done? holds once the remembered count reaches :count; the engine then ends it :done (already, before a start). The causes:
-  - :gone (not listed within jobs.lib.villager/search-radius, also a non-villager entity under the uuid), :not-villager.
+  - :gone (not listed within jobs.lib.villager/search-radius and not at the place it was last seen, also a non-villager entity under the uuid), :not-villager.
   - :unreachable (walk blocked, or still out of reach after three tries in the call).
   - :no-offers (unemployed, nitwit, baby, or an empty window), :window (did not open three times: busy
     villager), :no-offer (nothing gives :buy), :sold-out.
