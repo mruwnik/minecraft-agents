@@ -1,0 +1,22 @@
+;; Card ee1c79b3: blocks.dig's drop sweep (collect-drops :search) walks with go-to priced by the missing drop's worth, so it does
+;; not step into the hole the dig left over lava. Stone mass x 8..24, z 8..24, y 0..9; the body stands on top at (16 10 16) and digs
+;; the floor cell (18 9 16) beside it (:walk false) with lava under the hole at (18 8 16).
+{:defaults
+ {:tags [:forestry :collect-drops :mining :lava :survival]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:set [18 8 16] "lava"]]
+  :body {:at [16.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4] ["fire_resistance" 600 0]]}
+  :limit-s 90}
+ :cases
+ [;; should stay out: lava left open under the hole (:on-lava :leave), the body never stands in the dug cell column
+  {:name "open-lava-under-hole-body-stays-out"
+   :act [[:job (jobs.blocks.dig {:pos #at [18 9 16] :walk false :on-lava :leave :accept #{:lava-adjacent}})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}]
+   :after [[:block [18 8 16] "lava"] [:body-far [18.5 9.0 16.5] 0.8]]}
+  ;; Leo's j408 shape: lava under the hole sealed by the dig (cobblestone); the sweep may then step in, safely
+  {:name "sealed-lava-under-hole-dig-completes"
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [18 9 16] :walk false :accept #{:lava-adjacent}})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}]
+   :after [[:not-block [18 8 16] "lava"]]}]}
