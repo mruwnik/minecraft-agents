@@ -293,3 +293,14 @@
       (is (= [4 64 4] (:center result)))
       (is (= ["uuid-near"] (mapv :uuid (:items result))))
       (finally (close)))))
+
+(deftest a-heard-row-is-kept-only-if-its-band-could-lie-within-the-radius
+  (let [now 1700000000000
+        heard (fn [type band] (-> (entity type type "overworld" nil now 500 119500 {:sense :heard :direction :east :band band})
+                                  (dissoc :pos)))
+        rows [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 100 119900 {:self? true :username "ProbeMove"})
+              (heard "near-one" :near)
+              (heard "far-one" :far)]
+        types (fn [radius] (set (map :type (:items (entities/project {:body "ProbeMove" :radius radius :limit 10 :raw? false} (snapshot now rows))))))]
+    (is (= #{"near-one"} (types 4)))
+    (is (= #{"near-one" "far-one"} (types 64)))))
