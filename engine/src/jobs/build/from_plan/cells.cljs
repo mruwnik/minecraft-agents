@@ -150,12 +150,6 @@
                                 (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b))))))))]
     (every? solid? [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))
 
-(defn seen-open?
-  "Whether the body has seen the cell and it holds no solid block (air, a plant, water): a place to stand or look from."
-  [p n]
-  (let [b (u/sensed p (pos-map n))]
-    (boolean (and (some? b) (not (true? (.-unknown b))) (or (bs/passable? (.-name b)) (bs/fluids (.-name b)))))))
-
 (defn retreat-dists
   "{cell steps}: the open cells (as sensed) around the plan and mouth, by steps from mouth through open cells; a block
   cut into rock is filled farthest first, so the way back to the mouth stays open until the last cell."
