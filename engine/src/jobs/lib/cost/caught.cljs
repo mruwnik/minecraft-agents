@@ -11,9 +11,12 @@
   at the chance, its mobs land lambda blows, else mu (the fight's own); one followed by a flight counts what the flight
   took too, the price of choosing it. A bow group's lambda is arrows at the ::counted-difficulty's shot rate; prior
   scales it to the cost difficulty's (threat/shot-rate)."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.cost.threat :as threat]))
+            [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.value :as value]
+            [jobs.lib.cost.weapon :as weapon]))
 
 (def counts? (a/coll-of (a/coll-of (a/num-in 0 nil))))
 
@@ -37,6 +40,11 @@
                                 :died []}}
              :spec (a/map-of keyword? (a/map-with {:lived counts? :died counts?}))
              :doc "As ::flights, the trial fights with a sword or axe: a fight the run of fight decisions about the group, each within 30 s of the one before, and the 30 s after it; none against a drowned (its swum fights are priced by cost.fight/wet-rate). Recount: node tools/event-counts.mjs caught-flights :fight-counts, 2026-10-27."}
+   ::matchups {:default {:zombie {"iron/1" {:k 1 :n 29} "stone/1" {:k 2 :n 23} "wooden/1" {:k 2 :n 25}}}
+               :spec (a/map-of keyword? (a/map-of string? (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})))
+               :doc "Per group, per matchup (matchup), the trial fights with it, n, and k of them that died, as counted for ::fights; a fight with a matchup not counted is priced by the pooled ::fights alone. Recount: node tools/event-counts.mjs caught-flights :fight-matchups, 2026-11-04."}
+   ::matchup-weight {:default 10 :spec (a/num-in 0 nil)
+                     :doc "The pseudo-fights the pooled chance of a fight gone bad counts for against a matchup's own (shrinkage towards the pooled rate)."}
    ::counted-difficulty {:default 1 :spec (a/int-in 1 3) :doc "The server difficulty ::flights and ::fights were counted at."}})
 
 (def groups
@@ -133,3 +141,22 @@
          {:keys [blows shape]} (posterior counts)
          rate (if (= :bow group) (/ (threat/shot-rate) (threat/shot-rate (settings/get settings ::counted-difficulty))) 1)]
      {:chance (chance counts (js/Math.round (or health 20))) :blows (* rate blows) :shape shape})))
+
+(defn matchup
+  "The key \"tier/foes\" of a fight: the kit's tier (its weapon's material: wooden, stone, iron ...; fist for none) and how many foes (at least 1)."
+  [weapon-name foes]
+  (str (if (contains? weapon/weapon-damage-by-name weapon-name) (first (str/split weapon-name #"_")) "fist") "/" (max 1 (or foes 1))))
+
+(defn fight-prior
+  "prior of a fight (::fights) with mob-name begun at health, its chance moved by the fight's matchup (weapon, foes) when
+  that has counts: the chance at full health is the matchup's deaths k of n shrunk towards the pooled chance at full health
+  (value/counted-chance, ::matchup-weight pseudo-fights of it), the chance at health scaled by the same share."
+  [mob-name health weapon-name foes]
+  (let [pooled (prior ::fights mob-name health)
+        counts (get-in (settings/get settings ::matchups) [(group-of ::fights mob-name) (matchup weapon-name foes)])
+        full (:chance (prior ::fights mob-name 20))
+        m (settings/get settings ::matchup-weight)]
+    (if (or (nil? counts) (not (pos? full)))
+      pooled
+      (let [shrunk (value/counted-chance (assoc counts :prior [(* m full) (* m (- 1 full))]))]
+        (update pooled :chance #(min 1 (* % (/ shrunk full))))))))

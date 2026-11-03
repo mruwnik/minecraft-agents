@@ -488,14 +488,18 @@
   choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (unseen-ahead, glanced
   the cells the flight looked at: the flight would be the cornered step, no walk away); with one, the flight looks first,
   and a way may be there at way-on-chance: the chance is that of an unseen way (flight-caught-chance). Nothing routed:
-  the prior with the unseen worse case."
+  the prior with the unseen worse case. A flight that takes the preferred end (a safe home) uncaught
+  is a known route to a refuge: {:chance 0 :refuge-s seconds of the route}, no prior to add and exposure only over the route (cost/flee-answer :refuge-s)."
   [ends counts opts glanced]
-  (let [ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
+  (let [picked (choose ends opts)
+        refuge? (and picked (not (:caught? picked)) (boolean (some-> (:prefer? opts) (#(% picked)))))
+        ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
         left (filter #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
         ways (filter gets-away? ends)
         best (when (seq left) (apply max-key :score left))
         caught (filter :caught? ring)]
     (cond
+      refuge? {:chance 0 :refuge-s (:s picked)}
       best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught))))
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}

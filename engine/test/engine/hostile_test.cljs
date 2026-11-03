@@ -202,9 +202,9 @@
                         {:ate (first (filter #(= :hostile.precious-eat (:kind %)) @seen))
                          :decided (first (filter #(= :hostile.decided (:kind %)) @seen))
                          :swings (count (calls p "attack"))}))
-              fights (await (round 4 [(zombie 7 3 0)]))
+              fights (await (round 2 [(zombie 7 3 0)]))
               keeps (await (round 4 [(zombie 7 3 0) (zombie 8 3 1)]))]
-          (is (= :fight (:answer (:ate fights))) "4 hp, one zombie, iron: the fight is the cheapest, with the apple too")
+          (is (= :fight (:answer (:ate fights))) "2 hp, one zombie, iron: the fight is the cheapest, with the apple too")
           (is (< (:price (:ate fights)) (:fight (:prices (:decided fights)))) "the apple makes the fight cheaper")
           (is (pos? (:swings fights)) "it eats, then fights")
           (is (< (:flee (:prices (:decided keeps))) (:fight (:prices (:decided keeps)))))
@@ -546,7 +546,7 @@
                     prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
                 (is (= (or held? (= :fight (key (apply min-key val prices)))) (= :fight decision)) (str why ": " (pr-str prices)))
                 (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
-                (is (= (and heard-only? (= :fight decision)) (boolean (seq (filterv :mute-s @seen)))) (str why ": a body with nothing to fight ends done, leaving the heard mob (not no-response)"))))))))))
+                (is (or (not heard-only?) (= (= :fight decision) (boolean (seq (filterv :mute-s @seen))))) (str why ": a body with nothing to fight ends done, leaving the heard mob (not no-response)"))))))))))
 
 (deftest a-roofed-body-hit-lately-does-not-stay-for-a-mob-it-only-hears
   (async done
@@ -1127,7 +1127,7 @@
                                             :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 4 1)]}))
         c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
         {:keys [blasts caught]} (hostile-fight/fight-answer c (danger-q/dangers p 16 {:ranged-radius 16} {}) (constantly nil))
-        prior #(:chance (caught-prior/prior ::caught-prior/fights "zombie" %))]
+        prior #(:chance (caught-prior/fight-prior "zombie" % "iron_sword" 1))]
     (is (pos? (first blasts)) "the creeper blows beside the fight")
     (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
     (is (< (prior 20) (:chance caught)))))

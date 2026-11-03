@@ -245,7 +245,7 @@
         shape (when-let [s (fight/blow-shape (assoc fight :mobs fought))] (fight/sum-shape [[damage s] [left-damage nil]]))
         hit (reduce max 0 (map #(blow stats %) mobs))
         bad (keep #(when-not (or (= "creeper" (:name %)) (fight/wet-drowned? fight %))
-                     [% (caught-prior/prior ::caught-prior/fights (:name %) health)])
+                     [% (caught-prior/fight-prior (:name %) health (:weapon fight) (count fought))])
                   fought)
         [m pr] (when (seq bad) (apply max-key #(:chance (second %)) bad))
         gone-bad (when m (threat/mob-hurt stats (threat/kind m) (:blows pr) identity 1))]
@@ -416,7 +416,7 @@
   on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
   met again by flee-meets) unless the way back passes one nearer than it stands. :caught: each flight is caught by its way (caught: the flee
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over
-  caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
+  caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health (none with :refuge-s, the seconds of a route to a known refuge reached uncaught: it is all known, and a mob hits only over those seconds)
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
   flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's over
   the swim's share of the flight's seconds (flee-mob's :swim-s) no more than caught-s at reach-rate (blows do not outlast
@@ -426,16 +426,20 @@
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
   The flight gains on each mob at its danger/closing-rate.
   nil when a mob keeps up or none is given."
-  [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
+  [{:keys [health food equipment mobs returns later caught caught-s swim land refuge-s] :as args}]
   (let [stats (armour/armour-stats equipment)
-        priors (map #(caught-prior/prior (:name %) health) mobs)
+        priors (map #(cond-> (caught-prior/prior (:name %) health) refuge-s (assoc :chance 0)) mobs)
         prior (when (seq priors) (apply max-key :chance priors))
         way (or caught 0)
         caught (- 1 (* (- 1 (:chance prior 0)) (- 1 way)))
         v (danger/flee-walk-speed (or food 20))
         wet {:swim swim :land land :sv (* (planner/swim-speed equipment) (/ v (danger/body-speed (or food 20))))
              :gain #(danger/closing-rate (or food 20) %)}
-        per-of (fn [mobs] (map #(flee-mob stats v wet %) mobs))
+        per-of (fn [mobs] (map #(let [f (flee-mob stats v wet %)]
+                                  (if (and f refuge-s (> (:seconds f) refuge-s))
+                                    (-> f (assoc :seconds refuge-s) (update :damage * (/ refuge-s (:seconds f))))
+                                    f))
+                               mobs))
         per (per-of mobs)
         times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))

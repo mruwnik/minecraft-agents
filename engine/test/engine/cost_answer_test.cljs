@@ -69,13 +69,26 @@
 
 (deftest a-fight-goes-bad-at-the-trial-fights-prior-and-a-flight-after-it-adds-its-own-catch
   (let [f #(cost/fight-answer (assoc (fight "stone_sword" (mob "zombie" 0)) :health %))
-        bad (caught/prior ::caught/fights "zombie" 20)]
-    (is (= (:chance bad) (-> (f 20) :caught :chance)) "gone bad at the prior of its health")
+        bad (caught/fight-prior "zombie" 20 "stone_sword" 1)]
+    (is (= (:chance bad) (-> (f 20) :caught :chance)) "gone bad at the prior of its health and matchup")
     (is (< (-> (f 20) :caught :chance) (-> (f 5) :caught :chance)) "likelier from low health")
     (is (< 0.03 (answer/answer-death-chance (body 20) (f 20) here) 0.12) "a sword fight begun at 20 hp dies about as often as the trials' (4 of 51)")
     (let [walk (cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0.5})]
       (is (< (js/Math.abs (- (- 1 (* (- 1 (:chance bad)) (- 1 (-> walk :caught :chance)))) (-> (answer/followed (f 20) walk) :caught :chance))) 1e-9)
           "a fight left to a walk: caught if either goes bad"))))
+
+(deftest a-fights-matchup-moves-its-prior-towards-its-own-counts-and-an-uncounted-one-keeps-the-pooled
+  (let [chance (fn [weapon n] (-> (cost/fight-answer (assoc (apply fight weapon (repeat n (mob "zombie" 0))) :health 20)) :caught :chance))
+        pooled (:chance (caught/prior ::caught/fights "zombie" 20))]
+    (is (< (chance "iron_sword" 1) (chance "stone_sword" 1) pooled) "iron's 1 death in 29 fights is under stone's 2 in 23, both under the pooled rate")
+    (is (= pooled (chance "diamond_sword" 1)) "a kit tier never counted is the pooled rate")
+    (is (= pooled (chance "iron_sword" 2)) "so is a foe count never counted")))
+
+(deftest a-flight-to-a-known-refuge-reached-uncaught-carries-no-whole-flight-prior
+  (let [walk #(cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0 :refuge-s %})]
+    (is (pos? (-> (walk nil) :caught :chance)) "an open flight is caught at the prior")
+    (is (zero? (-> (walk 2) :caught :chance)) "a run into a refuge the search found uncaught is all known")
+    (is (< (:seconds (walk 2)) (:seconds (walk nil))) "and lasts the route's seconds, not the flight's")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
