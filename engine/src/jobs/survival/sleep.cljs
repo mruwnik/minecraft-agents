@@ -25,7 +25,7 @@
   Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
-  Before each walk go-to's quote is asked: when it finds no route (the land is closed, the bed walled in), the body does not move and the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes).
+  Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -223,11 +223,16 @@
         walk-args {:pos bed :range 2 :ways walk-ways}
         route (when-not (taken?) (:route (await (ctx/quote c 'jobs.movement.go-to walk-args))))
         no-way? (no-way-quote? route)
-        walk (when-not (or (taken?) no-way?) (await (child/call-walk* c :go walk-args)))]
+        searching? (= :searching (some-> (:reason route) keyword))
+        walk (when-not (or (taken?) no-way? searching?) (await (child/call-walk* c :go walk-args)))]
     (cond
       (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
       no-way? (give-up-unreachable-now! c bed (no-walk-text route))
+      searching? :continue
       (= :continue walk) :continue
-      (not= :done (:kind walk)) (give-up-unreachable! c bed walk)
+      (not= :done (:kind walk)) (let [after (:route (await (ctx/quote c 'jobs.movement.go-to walk-args)))]
+                                  (if (no-way-quote? after)
+                                    (give-up-unreachable-now! c bed (no-walk-text after))
+                                    (give-up-unreachable! c bed walk)))
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
       :else (await (sleep-at! c bed)))))
