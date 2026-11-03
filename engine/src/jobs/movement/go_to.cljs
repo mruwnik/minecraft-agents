@@ -212,7 +212,7 @@
         (if (and (aim/here? c stand (:range (:args c)))
                  (not (breath/in-water? (:primitives c)))
                  (not (faults/hanging-cell c stand)))
-          (contract/ok :there "already within range of the goal" :result {:arrived true})
+          (contract/ok :there (str "already within range " (:range (:args c)) " of the goal (:range 0: the exact cell)") :result {:arrived true})
           later)))))
 
 (defn ^:async run-steps!
