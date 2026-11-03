@@ -245,6 +245,20 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
+(deftest a-search-walk-may-risk-only-what-the-missing-items-are-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (bd/setup {:self body})
+              walks (atom [])
+              record (let [f (fn [_ _ _ args] (swap! walks conj args) (js/Promise.resolve :continue))]
+                       (aset f "cljs$core$IFn$_invoke$arity$4" f)
+                       f)]
+          (with-redefs [child/run!* record]
+            (await (tu/child-outcome eng job {:radius 6 :items ["cobblestone"] :least-items ["cobblestone"] :near {:x 4 :y 64 :z 0} :search 3 :least 1} 10)))
+          (is (= (cost/find-worth nil ["cobblestone"] (:pos body) 1) (:worth (first @walks)))
+              "the search walk is bounded by the drop's worth, not left unpriced"))))))
+
 (deftest a-search-walks-to-cells-whose-floor-it-has-not-seen
   (async done
     (tu/run-async done

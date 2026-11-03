@@ -507,6 +507,16 @@
   (cond-> #{:walk :clear-seal}
     (:dig (:args c)) (into [:clear-path :stair :dig-out])))
 
+(defn search-worth
+  "Seconds the drops a search still looks for are worth (cost/find-worth of the :least-items, else the :items, for the count
+  still missing), so go-to prices the walk's risk against them; nil when the search names no item (the caller's worth stands)."
+  [c]
+  (let [{:keys [least-items items]} (:args c)
+        names (seq (or least-items items))
+        missing (- (least c) (wanted-count c))]
+    (when names
+      (cost/find-worth nil names (u/self-pos c) (if (js/isFinite missing) (max 1 missing) 1)))))
+
 (defn ^:async search-step!
   "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
   :continue while go-to waits on the world, :waited after search-waits calls in a row did, :walked after a cell, nil when none is left.
@@ -521,7 +531,10 @@
                     (seed! (vec (take 1 (sort-by #(u/dist (u/cell-pos (u/cell-vec anchor)) %) (search-cells c anchor))))))
                 :else (:search-queue m))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run!* c :search 'jobs.movement.go-to {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)}))]
+      (let [worth (search-worth c)
+            r (await (child/run!* c :search 'jobs.movement.go-to
+                                  (cond-> {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)}
+                                    worth (assoc :worth worth))))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited
