@@ -23,11 +23,13 @@
 (defn world [blocks inventory]
   {:blocks blocks :inventory inventory :drops {:obsidian "obsidian"} :self {:pos [0.5 64 0.5]}})
 
-(defn ^:async obtain [w]
-  (let [{:keys [eng p]} (lt/setup w)
-        ;; obsidian's table worth is its dig plus a share of the pickaxe, not the lava's risk: the agent says what one is worth
-        res (await (tu/child-outcome eng 'jobs.items.obtain {:item "obsidian" :count 1 :worth 300} 300))]
-    {:res res :p p}))
+(defn ^:async obtain
+  "obtain obsidian; the caller's stated :worth (an agent through ./bin) unless args say otherwise."
+  ([w] (obtain w {:worth 300}))
+  ([w args]
+   (let [{:keys [eng p]} (lt/setup w)
+         res (await (tu/child-outcome eng 'jobs.items.obtain (merge {:item "obsidian" :count 1} args) 300))]
+     {:res res :p p})))
 
 (defn carried [p name] (reduce + (map #(.-count %) (filter #(= name (.-name %)) (array-seq (.-inventory (.self p)))))))
 
@@ -47,6 +49,15 @@
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (carried p "obsidian")))
           (is (= 1 (carried p "water_bucket")) "the bucket is full again"))))))
+
+(deftest at-the-tables-worth-a-lava-walk-costing-more-than-the-obsidian-is-refused-not-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (obtain (world lava-lake [pick {:name "water_bucket" :count 1}]) {}))]
+          (is (not= :done (:status res)) (pr-str res))
+          (is (= :not-worth (:reason res)) (pr-str res))
+          (is (zero? (carried p "obsidian"))))))))
 
 (deftest a-mine-child-that-dug-the-obsidian-and-still-collects-is-kept-not-replaced-by-a-pour
   (async done
