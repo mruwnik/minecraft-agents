@@ -20,6 +20,12 @@
    :expect [{:event {:source :job :kind :trade.offers :data {:profession "farmer"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:profession "farmer"}} :within-s 80 :of-job true}]
    :after [[:item "bread" 0] [:item "emerald" 8]]}
+  {:name "offers-reads-the-villager-cheapest-to-reach-not-the-one-behind-a-wall"
+   :blocks [[:fill [12 0 9] [12 3 20] "stone"]]
+   :act [[:summon "villager" [14.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
+         [:summon "villager" [10.5 0 23.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"},Xp:1,Offers:{Recipes:[{buy:{id:\"minecraft:paper\",count:24},sell:{id:\"minecraft:emerald\",count:1},maxUses:16,xp:1}]}}"]
+         [:job (jobs.village.offers {})]]
+   :expect [{:event {:source :job :kind :completed :data {:profession "librarian"}} :within-s 80 :of-job true}]}
   {:name "only-a-jobless-villager-has-no-offers"
    :act [[:summon "villager" [13.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.village.trade {:buy "bread" :count 6})]]
