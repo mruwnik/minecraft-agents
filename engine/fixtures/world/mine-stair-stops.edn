@@ -1,6 +1,6 @@
 ;; jobs.gather.mine and the stops of its stair and tunnel (cards 787a0e2d, 9ffbe74b, f9e8af23, 67f4f4b5, 4afdf72c, fb386c81, 2f2655ac):
 ;; a tunnel from the foot of the body's own stair never cuts the floor of the stair's steps (ends :undercuts-way); gravel in the stair's
-;; line is dug through, a cave under the steps is bridged with a carried block; a stair blocked on its faced heading (a table, a foreign
+;; line is dug through, a cave under the steps is bridged with a carried block; a stair blocked on its faced heading (a chest, a foreign
 ;; zone) turns to another heading; a body moved off the stair does not end the mine :no-stone-found; the stone pickaxe is held for stone
 ;; and its break is told once. The descent runs to :level 4 (6 steps east from the surface cell [16 10 16]), then a 3 block tunnel.
 ;; Stone mass x 2..30, z 4..28, y 0..9 (surface feet y 10); the body faces east (yaw 270).
@@ -45,12 +45,21 @@
             {:no-event {:source :job :kind :mine.descent-stopped} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
    :after [[:block [19 6 16] "cobblestone"]]}
-  {:name "table-in-the-first-step-turns-the-stair-to-another-heading"
+  {:name "table-in-the-first-step-is-dug-and-the-stair-goes-on-east"
+   ;; a crafting table in the cut is dug (it comes back as an item); the stair keeps its heading
    :blocks [[:set [17 10 16] "crafting_table"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :mine.turned} :for-s 220 :of-job true
+             :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
+   :after [[:block [17 10 16] "air"]]}
+  {:name "chest-in-the-first-step-turns-the-stair-to-another-heading"
+   ;; a stair never digs a storage block (a base block)
+   :blocks [[:set [17 10 16] "chest"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.turned :data {:from "east"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]
-   :after [[:block [17 10 16] "crafting_table"]]}
+   :after [[:block [17 10 16] "chest"]]}
   {:name "foreign-zone-east-turns-the-stair-to-another-heading"
    ;; zone-margin 1: the default keeps a stair's start 7 blocks clear of the zone, so it would never face it
    :zones [{:name "far" :min [17 2 12] :max [22 11 20] :owner "SomeoneElse"}]
