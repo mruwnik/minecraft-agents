@@ -472,6 +472,14 @@
     (is (not-any? (set room) (plan/grounded-stands p [6 64 6] 64 nil (set (map :pos cells)) #{})) "none when every plan cell is barred")
     (is (empty? (plan/stands-for p [6 64 6] 64 nil (set (map :pos cells)) #{})) "a seen cell no body can stand in is no fallback stand")))
 
+(deftest a-stand-in-a-pocket-the-body-is-not-in-is-no-stand
+  (let [open (set (for [x (range 4 9) y [64 65] z [5 7]] [x y z]))
+        rock (into {} (for [x (range -3 16) y (range 63 67) z (range -3 12) :when (not (open [x y z]))] [(str x "," y "," z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks rock :self {:pos {:x 5.5 :y 64 :z 5.5}}}))
+        c {:primitives p}]
+    (is (= [[6 64 5]] (vec (fp-walk/reachable-stands c [[6 64 7] [6 64 5]]))))
+    (is (= [[6 64 7]] (vec (fp-walk/reachable-stands c [[6 64 7]]))) "no stand in the body's region: all kept")))
+
 (deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done
     (tu/run-async done

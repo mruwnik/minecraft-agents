@@ -262,11 +262,24 @@
         reached (count (filter #(<= (apply js/Math.hypot (map - eye (mapv (partial + 0.5) (:pos %)))) (stand-reach)) (open-cells c cells cell)))]
     (* (max 1 reached) (cell-s))))
 
+(defn reachable-stands
+  "The stands the body can walk to over the ground it knows (jobs.lib.reach/forward) when that ground is a closed region
+  with one of them in it, else all: a stand in a pocket the body is not in (a villager cell behind its lectern) is no stand."
+  [c stands]
+  (let [p (:primitives c)
+        {:keys [x y z]} (u/self-pos c)
+        {:keys [cells closed?]} (reach-room/flood-visit (partial reach/forward (reach/lookup p)) [(js/Math.floor x) (js/Math.floor (+ y 0.2)) (js/Math.floor z)] 4000)]
+    (if-not closed?
+      stands
+      (let [here (set (map vec cells))]
+        (or (seq (filter #(contains? here (vec %)) stands)) stands)))))
+
 (defn ^:async walk-to-stand!
   "Walk to the cheapest (stand-price) stand cell beside cell, among those that see it first (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
   [c cells cell]
   (trace! c :walk-to! (:pos cell))
   (let [{:keys [all inner]} (stand-choices c cells cell)
+        all (if (or (in-hole? c) (shut-in-walk? c)) all (reachable-stands c all))
         stands (or (seq (seeing c all (:pos cell))) (seq (reaching c all (:pos cell))) inner all)
         stand (second (first (sort-by first (map (juxt #(stand-price c cells cell %) identity) stands))))]
     (cond
