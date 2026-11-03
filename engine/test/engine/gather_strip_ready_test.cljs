@@ -82,3 +82,8 @@
 (deftest fit-is-later-only-below-the-risky-health
   (are [check] (= :ok (kind check rt/night-hut {}))
     get-seeds/fit? mine/fit? collect-drops/fit? seal/fit?))
+
+(deftest strip-tunnel-trip-ends-at-the-tunnels-end
+  (let [c (ctx rt/night-hut {:heading "east" :limit 400 :origin [0 64 0]})]
+    (is (= [400 64 0] (strip-tunnel/tunnel-end c)) "400 steps from the cell ahead (1 64 0)")
+    (is (= [400 64 0] (:moves-to (strip-tunnel/trip-quote c))) "the trip's far end, not the next cell")))

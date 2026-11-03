@@ -254,8 +254,18 @@
         s (* n 2 1.2)]
     {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 1 1]}))
 
-(defn trip-quote "quote-of with the stone of the steps left as its :spoil (mine.expect/spoil), for the trip's food." [c]
-  (cond-> (quote-of c) (expect/spoil (steps-left c)) (assoc :spoil (expect/spoil (steps-left c)))))
+(defn tunnel-end
+  "[x y z] of the cell the steps left end at, along :heading from the cell ahead; nil without a heading."
+  [c]
+  (when-let [{:keys [x y z]} (work-place/ahead c)]
+    (let [[dx dz] (headings (:heading (:args c)))
+          n (max 0 (dec (steps-left c)))]
+      [(+ x (* n dx)) y (+ z (* n dz))])))
+
+(defn trip-quote "quote-of with the stone of the steps left as its :spoil (mine.expect/spoil), for the trip's food, and the tunnel's end as the trip's far end (:moves-to)." [c]
+  (cond-> (quote-of c)
+    (expect/spoil (steps-left c)) (assoc :spoil (expect/spoil (steps-left c)))
+    (tunnel-end c) (assoc :moves-to (tunnel-end c))))
 
 (defn ^:async round [c] (await (pace/steps! c #(step c))))
 
