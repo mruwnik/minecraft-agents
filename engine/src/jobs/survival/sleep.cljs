@@ -25,7 +25,7 @@
   Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
-  Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on also ends it (over unseen land that search has no end).
+  Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -229,7 +229,7 @@
       (= :continue walk) :continue
       (not= :done (:kind walk)) (let [_ (ctx/update-mem! c assoc :walk-failed true)
                                   after (:route (await (ctx/quote c 'jobs.movement.go-to walk-args)))]
-                                  (if (no-way-quote? after)
+                                  (if (or (no-way-quote? after) (= :budget (some-> (:reason after) keyword)))
                                     (give-up-unreachable-now! c bed (no-walk-text after))
                                     (give-up-unreachable! c bed walk)))
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
