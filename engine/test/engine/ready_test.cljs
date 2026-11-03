@@ -503,7 +503,14 @@
                     [(first s) (:reason (nth s 2))]))]
     (is (= [:later :hostile-near] (verdict wall 0)) "a way round the wall: doing nothing about it costs more than a worthless call")
     (is (= [:ok :heard-priced] (verdict wall 1e9)) "the same sound under a call worth more than it costs: no wait for the reflex to judge it")
-    (is (= [:ok :no-hostile-near] (verdict room 0)) "the body shut in a room with no way in: the sound costs nothing")))
+    (is (= [:ok :no-hostile-near] (verdict room 0)) "the body shut in a room with no way in: the sound costs nothing")
+    (is (= [:look :heard-unseen] (let [world (merge at-origin {:entities [(assoc zombie :pos {:x 7 :y 64 :z 0})] :blocks room})
+                                       p (sky/with-sky (tu/seeing-within (tu/fake (merge {:floor tu/walk-floor} world)) 4))
+                                       _ (game/select! p)
+                                       s (ready/threatened (-> (with-entry world {:visible-only false})
+                                                               (assoc :primitives p :worth (constantly 0) ::price/stay-s 30)))]
+                                   [(first s) (:reason (nth s 2))]))
+        "its walls not yet seen: only the guess that they are open lets it in, so it looks before it waits")))
 
 (deftest threatened-is-read-once-per-window
   (let [c (ctx-of (merge at-origin {:entities [zombie]}))

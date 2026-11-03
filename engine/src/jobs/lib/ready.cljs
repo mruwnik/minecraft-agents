@@ -322,19 +322,30 @@
 
 (defn heard-price
   "ok while the heard-only dangers (heard-dangers) cost no more than the call is worth over its stay: what doing nothing
-  about them for price/stay-s costs (hostile-loss/loss-over, the trigger's price, as though each came), against ctx/worth;
-  else later :hostile-near, priced again after walk-risk/recheck-ms. A sound is priced, not waited on."
+  about them for price/stay-s costs (hostile-loss/loss-over, the trigger's price, as though each came), against ctx/worth.
+  Over it, look :heard-unseen at the guessed ones' spots when only a way through cells the body has not seen (an unseen
+  wall is no shelter) makes the price too high, else later :hostile-near, priced again after walk-risk/recheck-ms. A
+  sound is priced, not waited on."
   [c]
   (let [p (:primitives c)
+        view (ctx/view c)
         hs (heard-dangers c)
-        loss (if (seq hs) (hostile-loss/loss-over p (ctx/view c) hs (price/stay-s c)) 0)
         worth (ctx/worth c)
-        heard (when (seq hs) (dawn/hostile-text (map #(dawn/describe p %) hs)))]
+        loss #(if (seq %) (hostile-loss/loss-over p view % (price/stay-s c)) 0)
+        all (loss hs)
+        heard (when (seq hs) (dawn/hostile-text (map #(dawn/describe p %) hs)))
+        seen-way (danger/seen-way-lookup p)
+        opts {:sight? (:visible-only (trigger-args c) true) :sight-at (danger/sight-lookup p)}
+        sure (filter #(danger/danger-in? p seen-way % opts) hs)
+        guessed (remove (set sure) hs)]
     (cond
       (empty? hs) (contract/ok :no-hostile-near "no hostile near")
-      (<= loss worth) (contract/ok :heard-priced (str heard ": " (price/round1 loss) " s over the stay, within the call's worth " (price/round1 worth) " s"))
-      :else (contract/later :hostile-near (str "a hostile is near: " heard ": " (price/round1 loss) " s over the stay, more than the call's worth " (price/round1 worth) " s")
-                            :loss loss :worth worth :recheck-after-ms walk-risk/recheck-ms))))
+      (<= all worth) (contract/ok :heard-priced (str heard ": " (price/round1 all) " s over the stay, within the call's worth " (price/round1 worth) " s"))
+      (and (seq guessed) (<= (loss sure) worth))
+      (contract/look :heard-unseen (str heard ": its way to the body runs through cells not seen; look first")
+                     :look-at (mapv #(update-vals (danger/mob-pos p %) js/Math.floor) guessed))
+      :else (contract/later :hostile-near (str "a hostile is near: " heard ": " (price/round1 all) " s over the stay, more than the call's worth " (price/round1 worth) " s")
+                            :loss all :worth worth :recheck-after-ms walk-risk/recheck-ms))))
 
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a

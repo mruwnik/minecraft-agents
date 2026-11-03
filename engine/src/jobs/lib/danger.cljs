@@ -200,6 +200,11 @@
        (reach/cell-of rough)
        (->> (range len (+ len (/ obs/near-band 2) 1) 1) (map cell-at) (filter may?) first)))))
 
+(defn seen-way-lookup
+  "mob-lookup with a cell the body has not seen read as rock: a way only through what the body has seen."
+  [p]
+  (reach/seen-lookup p reach/kind-of :solid))
+
 (defn heard-pos
   "Where a heard-only mob may be for a way or a line of fire: the feet of open-cell-from's cell, nil when there is none."
   [p kind-at sight-at e]
