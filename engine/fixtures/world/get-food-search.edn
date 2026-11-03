@@ -130,10 +130,11 @@
          [:job (jobs.survival.get-food {:explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}]
    :after [[:body-far [109.5 0 16.5] 60]]}
-  ;; 1bda3325: one hungry line for get-food and get-kit: food 8 at full health is not hungry, so get-food ends already
+  ;; 1bda3325: one hungry line for get-food and get-kit: food 8 at full health is not hungry (saturation fills the bar and its reserve, then 5 s of hunger 255 burns 128 exhaustion: 80 of saturation, 12 food), so get-food ends already
   {:name "food-8-at-full-health-is-not-hungry"
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-         [:job (jobs.survival.get-food {:explore false})]]
+   :act [[:rcon "effect give $BODY minecraft:saturation 2 10 true"] [:until-effect-gone "saturation" 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:job (jobs.survival.get-food {:explore false :carry 0})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 25 :until {:source :job :kind :completed}}]
    :limit-s 40}
