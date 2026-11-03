@@ -26,8 +26,8 @@
   again the workstation of :profession at :pos.
   Needs: a profession, a wanted item (or enchantment) and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
-  most :max-price (nil: no limit). A villager seen before that steps out of view is waited for (three fruitless looks, then :gone). Says which villager it picked (info roll.villager). Waits (:continue) for the villager to lose
-  and take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
+  most :max-price (nil: no limit). A villager seen before that steps out of view is waited for (three fruitless looks, then :gone). Says which villager it picked (info roll.villager). The break, the wait for the villager to lose its job and
+  the place again are one urgent section (a night or food reflex waits for it). Waits (:continue) for the villager to take its job until the call's :wall-time; villagers take jobs only by day, so at night the wait's reason is
   :night-villagers-take-no-job. :ignore-zones? goes to the dig and place children; :ways (default all) goes to the place child, so #{:carried} places only a workstation already carried (else it waits :need, nothing is fetched or crafted). Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
@@ -61,6 +61,7 @@
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits for the villager's job included (:limit-reached)." :spec (a/int-in 1 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
+   ::lose-job-s {:default 15 :doc "Seconds after the break the roll polls for the villager to lose its job without yielding, so its urgent section holds; the scheduler's urgent wait cap (engine.core.schedule/urgent-wait-s): past it a held reflex cuts in anyway." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (settings/get settings ::poll-s))
@@ -77,27 +78,7 @@
 
 (def target [:villager :pos])
 
-(defn unfinished?
-  "Whether the call has broken the workstation or lifted the slab and not yet put it back."
-  [c]
-  (let [m (ctx/mem c)] (boolean (or (:broken m) (:slab m)))))
-
-(defn safe-roll
-  "safe-at-by-night the cell, but a sound alone holds nothing (threatened-seen: nobody judges it while the reflex is muted) and
-  nothing holds while the workstation or slab is out: the call puts it back first."
-  [base]
-  (with-meta
-    (fn [c]
-      (let [r (base c)]
-        (cond
-          (= :ok (first r)) r
-          (unfinished? c) (contract/ok :unfinished "the workstation is put back first")
-          (and (= :hostile-near (:reason (nth r 2))) (= :ok (first (ready/threatened-seen c))))
-          ((::ready/exposure (meta base)) c)
-          :else r)))
-    (meta base)))
-
-(def safe? (price/staying :work (safe-roll (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))))
+(def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c)))))))
 (def fit? ready/fed-fit?)
 
 
@@ -203,6 +184,15 @@
                                     why)))
   :continue)
 
+(defn ^:async wait-lose-job!
+  "The villager keeps its job after the break: a poll, then :again for the polls ::lose-job-s holds (the urgent section
+  holds; a limit is thrown only once it closes), else wait-job! (:continue)."
+  [c]
+  (if (< (:lose-polls (ctx/mem c) 0) (/ (settings/get settings ::lose-job-s) (poll-s)))
+    (do (ctx/update-mem! c update :lose-polls (fnil inc 0))
+        (if (= :continue (await (child/pause! c (poll-s) :villager-keeps-job))) :continue :again))
+    (await (wait-job! c :villager-keeps-job))))
+
 (defn ^:async walk!
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
   [c pos]
@@ -269,7 +259,7 @@
   "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop. A place refused
   with a mob in the cell (the villager stepped in) waits a poll and is placed again: :continue."
   [c slot job cargs]
-  (let [r (await (ctx/call c slot job (assoc cargs :checks (ready/unforced c {:safe? '(not (threatened-seen))}))))]
+  (let [r (await (ctx/call c slot job cargs))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (:data r)
@@ -305,18 +295,36 @@
         (await (ctx/act c :moveTo #js {:pos #js {:x (+ x (* n sx)) :y y :z (+ z (* n sz))} :range 0.1}))
         :again))))
 
-(defn ^:async dig!
-  "Break the workstation; the break is booked before the dig child runs, so a cut leaves it for the cleanup."
+(declare step!)
+
+(defn ^:async back-steps!
+  "Steps (step!) until the workstation this call broke is placed back: :again once it is, else what a step gave."
   [c]
-  (let [{:keys [pos]} (:args c)
-        slot (keyword (str "dig-" (rolls c)))
-        _ (await (flush-to-cell! c pos))
-        _ (ctx/update-mem! c #(-> % (assoc :broken true :stand (u/self-pos c)) (dissoc :crouched :reach-drops :recovers)))
-        r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
-    (if-not (ending-or-wait? r)
-      (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0))))
-          :again)
-      r)))
+  (let [r (await (pace/steps! c (fn ^:async step-back []
+                                  (let [r (await (step! c))]
+                                    (if (and (= :again r) (not (:broken (ctx/mem c)))) :back r)))))]
+    (if (= :back r) :again r)))
+
+(defn ^:async put-back!
+  "back-steps! as one urgent section (ctx/atomic :roll): a night or low-food reflex waits until the workstation is back."
+  [c]
+  (await (ctx/atomic c :urgent :roll #(back-steps! c))))
+
+(defn ^:async dig!
+  "Break the workstation and put it back (back-steps!), as one urgent section (ctx/atomic :roll); the break is booked
+  before the dig child runs, so a cut leaves it for the next round and the cleanup."
+  [c]
+  (await (ctx/atomic c :urgent :roll
+                     (fn ^:async dig-and-put-back []
+                       (let [{:keys [pos]} (:args c)
+                             slot (keyword (str "dig-" (rolls c)))
+                             _ (await (flush-to-cell! c pos))
+                             _ (ctx/update-mem! c #(-> % (assoc :broken true :lose-polls 0 :stand (u/self-pos c)) (dissoc :crouched :reach-drops :recovers)))
+                             r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+                         (if (ending-or-wait? r)
+                           r
+                           (do (ctx/update-mem! c update :rolls (fnil inc 0))
+                               (await (back-steps! c)))))))))
 
 (defn on-cell?
   "Whether the body's feet or head fill the cell pos."
@@ -491,7 +499,7 @@
       (cond
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
-        (and e (not= "unemployed" profession)) (await (wait-job! c :villager-keeps-job))
+        (and e (not= "unemployed" profession)) (await (wait-lose-job! c))
         (zero? (u/carried-count p item)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
@@ -540,4 +548,4 @@
 (defn ^:async round
   "The whole search: steps (a pace between) until found or stopped; it yields while the villager or a child waits."
   [c]
-  (await (pace/steps! c #(step! c))))
+  (await (pace/steps! c #(if (:broken (ctx/mem c)) (put-back! c) (step! c)))))

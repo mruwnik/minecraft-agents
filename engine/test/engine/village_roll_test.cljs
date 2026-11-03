@@ -10,7 +10,6 @@
             [engine.village-trade-test :as vt]
             [engine.contract :as contract]
             [jobs.lib.look :as look]
-            [jobs.lib.ready]
             [engine.test-util :as tu]
             [jobs.village.roll :as roll]))
 
@@ -641,19 +640,15 @@
           (is @cut "the cut came after the break")
           (is (= "lectern" (workstation p)) "the cleanup put it back"))))))
 
-(deftest the-workstation-out-or-the-slab-lifted-is-no-reason-to-wait
-  (let [later (contract/later :hostile-near "a hostile is near")
-        safe (roll/safe-roll (with-meta (fn [_] later) {:jobs.lib.ready/exposure (fn [_] (contract/ok :day "day"))}))
-        at (fn [m] (with-redefs [ctx/mem (constantly m) jobs.lib.ready/threatened-seen (fn [_] (contract/later :hostile-near "seen"))] (first (safe {}))))]
-    (are [m expected] (= expected (at m))
-      {} :later
-      {:rolls 2} :later
-      {:broken true} :ok
-      {:slab {:x 1}} :ok)))
-
-(deftest a-sound-alone-is-no-hold-for-a-roll
-  (let [base (with-meta (fn [_] (contract/later :hostile-near "a hostile is near")) {:jobs.lib.ready/exposure (fn [_] (contract/ok :day "day"))})]
-    (with-redefs [ctx/mem (constantly {}) jobs.lib.ready/threatened-seen (fn [_] (contract/ok :no-hostile-near "none"))]
-      (is (= :ok (first ((roll/safe-roll base) {})))))
-    (with-redefs [ctx/mem (constantly {}) jobs.lib.ready/threatened-seen (fn [_] (contract/later :hostile-near "seen"))]
-      (is (= :later (first ((roll/safe-roll base) {})))))))
+(deftest the-break-the-wait-for-the-job-to-go-and-the-place-are-one-urgent-section
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _ seen] (await (roll {:entities [(librarian [(offer "paper")])] :scripts [[(offer "enchanted_book")]]} {}))
+              marks (keep #(cond
+                             (= :section (:kind %)) [(if (:open %) :open :close) (:section %) (:holds %)]
+                             (and (= :action (:source %)) (= :started (:kind %)) (#{"dig" "place"} (:name %))) [(keyword (:name %))])
+                          @seen)]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
+          (is (= [[:open :roll :urgent] [:dig] [:place] [:close :roll nil]] (distinct marks))
+              "no gap where a night or food reflex may cut in with the workstation out"))))))

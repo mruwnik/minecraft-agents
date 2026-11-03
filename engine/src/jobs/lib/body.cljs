@@ -82,13 +82,6 @@
              (and (> (:until (:data m)) (:now view))
                   (empty? (mem/since view :hurt (:t m)))))))
 
-(defn heard-judged?
-  "Whether a hostile-near answer found heard-only mobs not worth acting on (a :heard-mute entry, lapsed or not) and the body
-  was not hurt since: a sound alone then holds no work (a job's threatened check), whatever the mute's length."
-  [view]
-  (boolean (when-let [m (mem/latest view :heard-mute)]
-             (empty? (mem/since view :hurt (:t m))))))
-
 (defn attacker-ids
   "The ids of the attackers the view's :hurt entries since t (ms) name."
   [view t]

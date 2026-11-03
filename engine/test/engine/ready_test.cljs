@@ -489,27 +489,21 @@
 
 (deftest threatened-keeps-the-triggers-visible-only-option
   (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
-        behind (tu/box 2 64 0 3 66 0 "stone")]
-    (are [args expected] (= expected (first (ready/threatened (with-entry (merge at-origin {:entities [far] :blocks behind}) args))))
+        behind (tu/box 2 64 -3 3 66 3 "stone")]
+    (are [args expected] (= expected (first (ready/threatened (worthless (with-entry (merge at-origin {:entities [far] :blocks behind}) args)))))
       {} :ok
       {:visible-only false} :later)))
 
-(deftest threatened-leaves-out-heard-mobs-a-lapsed-mute-judged-harmless
-  (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
-        world (merge at-origin {:entities [far] :blocks (tu/box 2 64 0 3 66 0 "stone")})
-        view (fn [& entries] {:now 100 :data (reduce (fn [d [k t]] (mem/add-entry d k {:t t :data {:until 50}} {:cap 8 :ttl :forever})) mem/empty-data entries)})
-        verdict (fn [v] (first (ready/threatened (assoc (with-entry world {:visible-only false}) :view (constantly v)))))]
-    (is (= :later (verdict (view))) "never judged: a heard mob holds the run")
-    (is (= :ok (verdict (view [:heard-mute 10]))) "its mute lapsed long ago: the run is not held for ever")
-    (is (= :later (verdict (view [:heard-mute 10] [:hurt 60]))) "hurt since: the unseen mob may be the one hitting")))
-
-(deftest threatened-seen-leaves-out-a-mob-only-heard-whatever-was-judged
-  (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
-        world (merge at-origin {:entities [far] :blocks (tu/box 2 64 0 3 66 0 "stone")})
-        c (with-entry world {:visible-only false})]
-    (is (= :later (first (ready/threatened c))) "never judged: a sound holds a plain run")
-    (is (= :ok (first (ready/threatened-seen (assoc c :id "other")))) "a short stay among others is not held by a sound")
-    (is (= :later (first (ready/threatened-seen (with-entry (merge at-origin {:entities [zombie]}) {})))) "a seen mob still holds")))
+(deftest threatened-prices-a-mob-only-heard-and-waits-on-no-reflex
+  (let [wall (tu/box 2 64 -3 3 66 3 "stone")
+        room (merge (tu/box -6 63 -6 6 68 6 "stone") (tu/box -5 64 -5 5 67 5 "air"))
+        verdict (fn [blocks worth]
+                  (let [s (ready/threatened (-> (with-entry (merge at-origin {:entities [(assoc zombie :pos {:x 7 :y 64 :z 0})] :blocks blocks}) {:visible-only false})
+                                                (assoc :worth (constantly worth) ::price/stay-s 30)))]
+                    [(first s) (:reason (nth s 2))]))]
+    (is (= [:later :hostile-near] (verdict wall 0)) "a way round the wall: doing nothing about it costs more than a worthless call")
+    (is (= [:ok :heard-priced] (verdict wall 1e9)) "the same sound under a call worth more than it costs: no wait for the reflex to judge it")
+    (is (= [:ok :no-hostile-near] (verdict room 0)) "the body shut in a room with no way in: the sound costs nothing")))
 
 (deftest threatened-is-read-once-per-window
   (let [c (ctx-of (merge at-origin {:entities [zombie]}))
@@ -1275,4 +1269,3 @@
                                                         :spoil {"cobblestone" [0 128 128]}}))]
     (is (= 3 (count worths)) "two stacks of stone and one of ore")
     (is (< (first worths) (last worths)) "a stone slot is the cheapest: a food stack pushes it out first")))
-
