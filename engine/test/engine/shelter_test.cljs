@@ -295,7 +295,7 @@
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :slept)))
           (is (= {:cap 10 :ttl (* 7 day-ms)} (mem/policy (mem/view (:store eng)) :slept))))))))
 
-(deftest sleep-warns-when-no-respawn-point-is-set
+(deftest sleep-records-the-spawn-bed-without-the-servers-chat-line
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -303,64 +303,9 @@
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.sleep) {})
           (await (run-until-empty eng 6))
-          (is (= 1 (count (emitted seen :spawn_not_set))))
-          (is (= :warn (:level (first (emitted seen :spawn_not_set))))))))))
-
-(deftest sleep-does-not-warn-when-the-respawn-point-was-set-or-already-there
-  (are [before? during?]
-       (async done
-         (tu/run-async done
-           (fn ^:async t []
-             (let [{:keys [eng p seen]} (setup {:time night :blocks {"6,64,0" "red_bed"}})
-                   spawn! #(mem/write! (:store eng) :spawn-set {:pos {:x 5 :y 64 :z 0}} {:cap 5 :ttl day-ms})]
-               (know-bed! eng {:x 6 :y 64 :z 0})
-               (when before? (spawn!))
-               (.override (.-world p) "sleep" (fn ^:async g [token a impl]
-                                                (when during? (spawn!))
-                                                (await (impl token a))))
-               (core/submit! eng '(jobs.survival.sleep) {})
-               (await (run-until-empty eng 6))
-               (is (= 1 (count (calls p "sleep"))))
-               (is (= [] (emitted seen :spawn_not_set)))))))
-    true false
-    false true))
-
-(defn ^:async spawn-bed-warns
-  "How many spawn_not_set warns a sleep gives when :spawn-bed was written two hours ago and a :spawn-reset follows or not."
-  [spawn-bed reset?]
-  (let [{:keys [eng seen clock]} (setup {:time night :blocks {"6,64,0" "red_bed"}})
-        store (:store eng)]
-    (know-bed! eng {:x 6 :y 64 :z 0})
-    (when spawn-bed
-      (mem/write! store :spawn-bed {:pos {:x 5 :y 64 :z 0}} {:cap 1 :ttl :forever})
-      (swap! clock + 7200000))
-    (when reset?
-      (mem/write! store :spawn-reset {} {:cap 5 :ttl day-ms}))
-    (core/submit! eng '(jobs.survival.sleep) {})
-    (await (run-until-empty eng 6))
-    (count (emitted seen :spawn_not_set))))
-
-(deftest sleep-keeps-the-spawn-bed-after-the-spawn-set-entry-expires
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= 0 (await (spawn-bed-warns true false))) "known spawn bed, server silent: no warn")
-        (is (= 1 (await (spawn-bed-warns true true))) "a spawn-reset after it clears it")
-        (is (= 1 (await (spawn-bed-warns false false))) "nothing known: warn")))))
-
-(deftest sleep-records-the-spawn-bed-when-the-respawn-point-is-set
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :blocks {"6,64,0" "red_bed"}})]
-          (know-bed! eng {:x 6 :y 64 :z 0})
-          (.override (.-world p) "sleep" (fn ^:async g [token a impl]
-                                           (mem/write! (:store eng) :spawn-set {:pos {:x 6 :y 64 :z 0}} {:cap 5 :ttl day-ms})
-                                           (await (impl token a))))
-          (core/submit! eng '(jobs.survival.sleep) {})
-          (await (run-until-empty eng 6))
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :spawn-bed)))
-          (is (= {:cap 1 :ttl :forever} (mem/policy (mem/view (:store eng)) :spawn-bed))))))))
+          (is (= {:cap 1 :ttl :forever} (mem/policy (mem/view (:store eng)) :spawn-bed)))
+          (is (= [] (emitted seen :spawn_not_set))))))))
 
 (deftest sleep-declines-in-the-day-and-beyond-the-bed-radius
   (are [world bed]

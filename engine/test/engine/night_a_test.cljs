@@ -320,8 +320,6 @@
     (is (= {:bed {:x 6 :y 64 :z 0}} (waiting {:time noon :blocks {"6,64,0" "red_bed"}} #(write! % :spawn-bed bed))))
     (is (= {:lost {:x 6 :y 64 :z 0} :why :seen-gone} (waiting {:time noon :blocks {"6,64,0" "stone"}} #(write! % :spawn-bed bed))))))
 
-(defn u-cell [{:keys [x y z]}] [x y z])
-
 (deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-leaves-it-as-its-respawn-bed
   (async done
     (tu/run-async done
@@ -330,8 +328,7 @@
               mid (atom nil)]
           (st/on-wait! p (fn [n] (case n
                                 1 (reset! mid {:sleeps (mapv st/arg-pos (st/calls p "sleep")) :placed (mapv :cell (ledger/open-entries (mem/view (:store eng))))})
-                                2 (do (mem/write! (:store eng) :spawn-bed {:pos (first (:sleeps @mid))} {:cap 1 :ttl :forever})
-                                      (fake/swap-self! p assoc :isSleeping false) (.setTime (.-world p) noon))
+                                2 (do (fake/swap-self! p assoc :isSleeping false) (.setTime (.-world p) noon))
                                 nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
@@ -342,7 +339,7 @@
             (is (= [foot] (:sleeps @mid)))
             (is (= [{:pos foot :own-zone false}] (mapv #(select-keys % [:pos :own-zone]) (st/emitted seen :night.bed-placed)))
                 "says where the bed went")
-            (is (= [(u-cell foot)] (:placed @mid)) "outside any own zone: entered in the ledger for the morning")
+            (is (= [] (:placed @mid)) "sleeping made it the respawn bed: no scaffold left in the ledger")
             (is (empty? (st/calls p "dig")) "the bed it slept in is its respawn bed: leave-shelter leaves it")
             (is (= [] (ledger/open-entries (mem/view (:store eng)))) "not scaffold any more")
             (is (empty? (st/emitted seen :spawn_lost)))

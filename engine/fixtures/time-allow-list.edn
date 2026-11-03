@@ -107,7 +107,4 @@
  "retreat-weighted-relocate/no-pit-site-holds-exposed"
  "sensing-survey-first/search-waits-the-night-in-a-room-without-timing-out"
  "shelter-night-hold/night-sleeps-wakes-and-completes"
- "sleep-spawn-bed-durable/durable-spawn-bed-stays-silent-after-the-spawn-set-expired"
- "sleep-spawn-bed-durable/expired-spawn-set-alone-warns"
- "sleep-spawn-bed-durable/newer-spawn-reset-invalidates-the-durable-bed"
 ]
