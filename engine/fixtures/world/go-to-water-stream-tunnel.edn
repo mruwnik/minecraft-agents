@@ -27,4 +27,24 @@
    :body {:at [6.5 0 20.5] :yaw 90 :settle-s 10}
    :act [[:job (jobs.movement.go-to {:pos #at [10 2 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}]
-   :after [[:body-near [10.5 2 8.5] 2]]}]}
+   :after [[:body-near [10.5 2 8.5] 2]]}
+  {:name "walk-up-stream-from-a-flooded-dead-end-corridor"
+   :blocks [[:fill [3 -1 4] [17 1 25] "stone"]
+            [:fill [10 1 5] [10 1 11] "air"]
+            [:fill [10 0 12] [10 1 19] "air"]
+            [:fill [6 0 20] [10 1 20] "air"]
+            [:set [10 1 6] "water"] [:set [10 0 20] "water"] [:set [9 0 20] "water"]]
+   :body {:at [6.5 0 20.5] :yaw 90 :settle-s 8}
+   :act [[:job (jobs.movement.go-to {:pos #at [10 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}]
+   :after [[:body-near [10.5 1 8.5] 2]]}
+  {:name "walk-up-a-tunnel-flooded-to-the-ceiling"
+   :blocks [[:fill [3 -1 4] [17 1 25] "stone"]
+            [:fill [10 1 5] [10 1 11] "air"]
+            [:fill [10 0 12] [10 1 19] "water"]
+            [:fill [6 0 20] [10 1 20] "water"]
+            [:set [10 1 6] "water"]]
+   :body {:at [6.5 0 20.5] :yaw 90 :settle-s 8}
+   :act [[:job (jobs.movement.go-to {:pos #at [10 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}]
+   :after [[:body-near [10.5 1 8.5] 2]]}]}
