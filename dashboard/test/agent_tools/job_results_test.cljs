@@ -166,3 +166,19 @@
 (deftest a-recorded-end-with-clipped-result-says-so
   (let [[e] (results/with-recorded [] "g" {"j1" {:status :stopped :result {:reason :x} :result-clipped true}} ["j1"])]
     (is (= {:reason :x :result-clipped true} (:data e)))))
+
+(deftest an-event-no-reader-takes-costs-only-that-event
+  (let [log [(event 1 "j4" :queued {}) (event 2 "j4" :memory_written {}) (event 3 "j4" :memory_written {}) (event 4 "j4" :completed {:status :completed})]
+        bad-seq 2
+        text (fn [events] (str "{:gap? false :events [" (apply str (map #(if (= bad-seq (:seq %)) "{:seq 2 :data {:why :lead: log out (bug 75)}}" (pr-str %)) events)) "]}"))
+        edn (fn [t] (js/Promise.resolve {:status 200 :content-type "application/edn" :text t}))
+        get! (fn [_ path _]
+               (if (= "/snapshot" path)
+                 (edn "{:generation-id \"g\" :cursor {:stream-id \"s\" :seq 4} :state {:next-id 5}}")
+                 (let [after (js/parseInt (second (re-find #"after=(\d+)" path)))
+                       size (js/parseInt (second (re-find #"limit=(\d+)" path)))]
+                   (edn (text (vec (take size (drop after log))))))))]
+    (async done
+      (-> (results/read! get! "sock" "j4" {})
+          (.then (fn [result] (is (= :completed (:status result))) (done))
+                 (fn [error] (is false (str "history read failed: " (.-message error))) (done)))))))

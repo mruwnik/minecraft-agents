@@ -143,7 +143,9 @@
                         (when-not (and (= 200 (:status response))
                                        (re-find #"(?i)^application/edn(?:;|$)" (or (:content-type response) "")))
                           (throw (js/Error. "job result history unavailable")))
-                        (reader/read-string (:text response)))))
+                        (try (reader/read-string (:text response))
+                             (catch :default e (throw (doto (js/Error. (str "unreadable body answer: " (.-message e)))
+                                                        (aset "code" "EUNREADABLE"))))))))
         snap (or snap (await (read "/snapshot")))
         recorded (when (seq record-ids)
                    (:results (await (read (str "/results?ids=" (str/join "," record-ids))))))
@@ -154,9 +156,19 @@
     (loop [after (max 0 (- target limit)) size 512 events [] partial? false]
       (let [attempt (try {:page (await (read (query after size)))}
                          (catch :default e
-                           (if (and (= "ERESPONSETOOLARGE" (.-code e)) (> size 1)) {:smaller? true} (throw e))))]
-        (if (:smaller? attempt)
+                           (cond
+                             (and (#{"ERESPONSETOOLARGE" "EUNREADABLE"} (.-code e)) (> size 1)) {:smaller? true}
+                             ;; one event the body wrote that no EDN reader takes (e.g. a keyword made of free text): skip it
+                             (= "EUNREADABLE" (.-code e)) {:skip? true}
+                             :else (throw e))))]
+        (cond
+          (:smaller? attempt)
           (recur after (max 1 (quot size 2)) events partial?)
+          (:skip? attempt)
+          (if (>= (inc after) target)
+            {:snapshot snap :recorded recorded :events events :gap? false :partial? true :truncated? (> target limit)}
+            (recur (inc after) 512 events true))
+          :else
           (let [page (:page attempt)]
             (if (and (:gap? page) (number? (:oldest-seq page)) (< after (dec (:oldest-seq page))))
               (recur (dec (:oldest-seq page)) size events true)
