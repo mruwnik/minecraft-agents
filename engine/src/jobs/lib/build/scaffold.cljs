@@ -127,6 +127,7 @@
         failed (when-not base (or stands [stand]))
         high (filter #(<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second %)) failed)]
     (ctx/update-mem! c #(-> (plan/count-fail (dissoc % :scaffold) (:cell m) :unreachable give-up)
+                            (update :no-scaffold (fnil conj #{}) (:cell m))
                             (update :scaffold-avoid (fnil into #{}) (if base [base] failed))
                             (update :scaffold-onto (fnil into #{}) high)))))
 

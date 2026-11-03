@@ -181,12 +181,23 @@
      :inner (when-not (plan/grounded-stands (:primitives c) (:pos cell) body-y facing planned bad)
               (seq (remove bad (plan/grounded (:primitives c) (plan/stand-cells (:pos cell) (second (:pos cell)) facing #{})))))}))
 
+(defn climb-first?
+  "Whether no stand on the ground sees the cell and the scaffold plans a pillar or a stand two or more above the body (a
+  roof cell seen only from above): the place job's wide search would only tour the unseen land."
+  [c cells cell]
+  (and (not (contains? (:no-scaffold (ctx/mem c)) (:pos cell)))
+       (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))
+       (let [r (scaffold/plan-for c cells (:pos cell) true)
+             up (+ 2 (js/Math.floor (:y (u/self-pos c))))]
+         (boolean (or (:pillar r) (some #(>= (second %) up) (:stand r)))))))
+
 (defn place-here?
   "Whether the cell in reach is placed from where the body stands: its eye sees it, or no stand of stand-choices does
-  (the place job's own walk then searches wider for one that sees it)."
+  and no climb is planned for it (the place job's own walk then searches wider for one that sees it)."
   [c cells cell]
   (or (aim/body-sees? c (:pos cell))
-      (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))))
+      (and (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))
+           (not (climb-first? c cells cell)))))
 
 (defn- open-cells
   "The open cells of cell's layer: those still to place or dig the same way, not given up."
@@ -249,7 +260,7 @@
   (let [body (u/self-pos c)
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
         stands (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing (set (map :pos cells)) (set (:bad-stands (ctx/mem c))))
-        grounded (when-not (contains? (:needs-scaffold (ctx/mem c)) (:pos cell)) (reaching c stands (:pos cell)))]
+        grounded (when-not (or (contains? (:needs-scaffold (ctx/mem c)) (:pos cell)) (climb-first? c cells cell)) (reaching c stands (:pos cell)))]
     (or (await (tunnel-to! c cells cell))
         (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
         (await (walk-to! c cells cell)))))
