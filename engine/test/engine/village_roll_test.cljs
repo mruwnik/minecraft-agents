@@ -242,6 +242,16 @@
           (is (= {:found false :reason :wall-time} (select-keys result [:found :reason])))
           (is (= "lectern" (workstation p))))))))
 
+(deftest a-villager-that-takes-no-job-gets-one-more-break-then-the-call-ends-no-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})] :keeps-job? true}
+                                      {:settings {:jobs.village.roll/take-job-s 10}}))]
+          (is (= {:found false :reason :no-job :status :stopped} (select-keys result [:found :reason :status])))
+          (is (= 1 (digs p)) "one break after the wait, none after the second")
+          (is (= "lectern" (workstation p))))))))
+
 (deftest a-restart-with-the-workstation-missing-places-it-first
   (async done
     (tu/run-async done

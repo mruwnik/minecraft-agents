@@ -35,6 +35,7 @@
   - condition-failed: :gone, :baby, :locked (an offer was already used, or the villager is above level 1: it has traded), :occupied (another block at :pos),
     :cell-unseen.
   - impossible: :nitwit.
+  - nothing-possible :no-job: the villager took no job in ::take-job-s (300) daytime seconds, nor after one more break and place.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
     read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
 
@@ -62,6 +63,7 @@
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::leg-s {:default 15 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::lose-job-s {:default 15 :doc "Seconds after the break the roll polls for the villager to lose its job without yielding, so its urgent section holds; the scheduler's urgent wait cap (engine.core.schedule/urgent-wait-s): past it a held reflex cuts in anyway." :spec (a/num-in 0 nil)}
+   ::take-job-s {:default 300 :doc "Daytime seconds the villager may stay without a job after the workstation is placed: then the workstation is broken and placed once more, and past that the call ends :no-job." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1800 :doc "Seconds one search may take." :spec (a/int-in 1 nil)}})
 (defn max-rolls [] (settings/get settings ::max-rolls))
 (defn poll-s [] (settings/get settings ::poll-s))
@@ -336,12 +338,24 @@
                        (let [{:keys [pos]} (:args c)
                              slot (keyword (str "dig-" (rolls c)))
                              _ (await (flush-to-cell! c pos))
-                             _ (ctx/update-mem! c #(-> % (assoc :broken true :lose-polls 0 :stand (u/self-pos c) :expect-carried (inc (u/carried-count (:primitives c) (item-of (:args c))))) (dissoc :crouched :reach-drops :recovers)))
+                             _ (ctx/update-mem! c #(-> % (assoc :broken true :lose-polls 0 :job-polls 0 :stand (u/self-pos c) :expect-carried (inc (u/carried-count (:primitives c) (item-of (:args c))))) (dissoc :crouched :reach-drops :recovers)))
                              r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
                          (if (ending-or-wait? r)
                            r
                            (do (ctx/update-mem! c update :rolls (fnil inc 0))
                                (await (back-steps! c)))))))))
+
+(defn ^:async wait-take-job!
+  "The villager has no job with the workstation placed: wait (daytime polls count, night ones do not, villagers claim
+  workstations only by day) up to ::take-job-s, then break and place the workstation once more, then end :no-job."
+  [c]
+  (let [m (ctx/mem c)]
+    (cond
+      (< (:job-polls m 0) (/ (settings/get settings ::take-job-s) (poll-s)))
+      (do (when-not (sh-sense/night? (:primitives c)) (ctx/update-mem! c update :job-polls (fnil inc 0)))
+          (await (wait-job! c :villager-takes-no-job)))
+      (not (:rebroke m)) (do (ctx/update-mem! c assoc :rebroke true) (await (dig! c)))
+      :else (stop! c :no-job))))
 
 (defn on-cell?
   "Whether the body's feet or head fill the cell pos."
@@ -535,10 +549,11 @@
       (and e (not (and (:seen (ctx/mem c)) (nil? (:away-since (ctx/mem c)))))) (do (ctx/update-mem! c #(-> % (assoc :seen true) (dissoc :away-since))) :again)
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)
-      (= "unemployed" profession) (await (wait-job! c :villager-takes-no-job))
+      (= "unemployed" profession) (await (wait-take-job! c))
       (not (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))) (await (walk! c (u/pos-of (.-pos e))))
       :else
-      (let [r (await (read-offers! c))]
+      (let [_ (ctx/update-mem! c dissoc :rebroke)
+            r (await (read-offers! c))]
         (cond
           (:found r) (found! c (:found r))
           (= :locked r) (stop! c :locked)
