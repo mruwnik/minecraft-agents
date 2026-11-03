@@ -13,7 +13,7 @@
   upgrade [id...] | decline [id...]   (add / never offer again the default triggers a restart offered; no IDs = all offered)
   add|put <id> --trigger <predefined> [--args EDN] [--job EDN]
   add|put <id> --when EDN --job EDN
-    [--persistence stop|retry|cooldown] [--cooldown-s N] [--cancel-cut true] [--for 10m] [--backoff EDN]
+    [--persistence stop|retry|cooldown] [--cooldown-s N] [--for 10m] [--backoff EDN]
   remove <id> | mute <id> [--for 10m] | unmute <id>
   move <id> --before <anchor>|--after <anchor> [--for 10m]
   reset <id> --property position|mute
@@ -59,9 +59,9 @@ A --when entry fires once unless --persistence says otherwise; show <id> gives a
 (def option-spec
   (into {:state {:type "string"} :worlds {:type "string"} :world {:type "string"} :by {:type "string" :default "agent"}}
         (map (fn [k] [k {:type "string"}]))
-        [:limit :offset :trigger :when :job :args :persistence :cooldown-s :cancel-cut :for :backoff :before :after :property]))
+        [:limit :offset :trigger :when :job :args :persistence :cooldown-s :for :backoff :before :after :property]))
 
-(def put-options [:trigger :when :job :args :persistence :cooldown-s :cancel-cut :for :backoff])
+(def put-options [:trigger :when :job :args :persistence :cooldown-s :for :backoff])
 (def allowed-options
   {:list [:limit :offset] :show [] :add put-options :put put-options :remove [] :mute [:for] :unmute []
    :move [:before :after :for] :reset [:property] :upgrade [] :decline []})
@@ -90,9 +90,6 @@ A --when entry fires once unless --persistence says otherwise; show <id> gives a
                    (let [n (js/Number (:cooldown-s v))]
                      (when-not (and (not (str/blank? (:cooldown-s v))) (js/Number.isFinite n) (>= n 0)) (fail "cooldown must be nonnegative"))
                      n))
-        cancel-cut (when (some? (:cancel-cut v))
-                     (when-not (#{"true" "false"} (:cancel-cut v)) (fail "--cancel-cut is true or false"))
-                     (= "true" (:cancel-cut v)))
         backoff (when (some? (:backoff v)) (one-form (:backoff v)))]
     (cond-> {}
       (some? (:trigger v)) (assoc :trigger (identifier (:trigger v)))
@@ -101,7 +98,6 @@ A --when entry fires once unless --persistence says otherwise; show <id> gives a
       (some? args) (assoc :args args)
       (some? persistence) (assoc :persistence persistence)
       (some? cooldown) (assoc :cooldown-s cooldown)
-      (some? cancel-cut) (assoc :cancel-cut? cancel-cut)
       (some? backoff) (assoc :backoff backoff))))
 
 (defn move-fields [v id]

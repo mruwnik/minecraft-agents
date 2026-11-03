@@ -2403,14 +2403,14 @@
    (let [worths (atom [])]
      (lit-check (dark-wait 300) false true not-worth {} worths)
      (lit-check no-light false true not-worth {} worths)
-     (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 ##Inf]] @worths) "the wait less the placing; no night left to wait out, any price"))))
+     (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; no night left to wait out, any price"))))
 
 (deftest a-never-lit-cell-at-night-fetches-torches-only-for-what-waiting-for-dawn-would-cost
   (let [worths (atom [])
         check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s) need/item-price (constantly 100)] (lit-check no-light false true obtain {} worths)))]
     (is (= [:later :ok :never] [(check 300 not-worth) (check 300 (contract/ok :ready "ready")) (check 0 not-worth)]))
     (is (= 300000 (:wait-ms (nth (with-redefs [sense/sky-in (constantly 300) need/item-price (constantly 100)] (lit-check-status no-light false true not-worth {} (atom []))) 2))) "deferred to dawn, not failed")
-    (is (= [["torch" 2 400] ["torch" 2 400] ["torch" 2 ##Inf]] @worths)
+    (is (= [["torch" 2 400] ["torch" 2 400] ["torch" 2 nil]] @worths)
         "at night the night left and the torches' price by day, by day any price")))
 
 (defn ^:async never-lit-status

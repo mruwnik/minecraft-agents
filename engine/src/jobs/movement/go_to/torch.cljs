@@ -119,7 +119,7 @@
   [c]
   (if (or (torch-fetching? c) (torch-fetch-open? c))
     (do (ctx/update-mem! c assoc :torch-fetched true :torch-fetching true)
-        (let [e (await (need/item! c "torch" torch-count (assoc (fetch-opts c) :means? true)))]
+        (let [e (await (need/item! c "torch" torch-count (fetch-opts c)))]
           (when-not (= :continue e)
             (ctx/update-mem! c dissoc :torch-fetching)
             (when-not (= :done (:kind e))

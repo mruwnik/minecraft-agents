@@ -587,25 +587,6 @@
           (is (= ["j1" "j3" "j1"] (ran seen)) "the cut job runs before j2")
           (is (= ["j2"] (listed eng))))))))
 
-(deftest a-reflex-with-cancel-cut-ends-the-listed-job-it-cut
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen p]} (setup {:inventory [{:name "bread" :count 3}]})
-              world (.-world p)]
-          (core/register-reflex! eng {:trigger :hurt :cancel-cut? true})
-          (core/submit! eng (list 'walk {:pos {:x 5 :y 64 :z 0}}) {})
-          (core/submit! eng '(count) {})
-          (.hold world "moveTo")
-          (let [walking (core/tick! eng)]
-            (await (in-act world "moveTo"))
-            (swap! (.. world -state) assoc-in [:self :health] 6)
-            (let [reflex-round (core/tick! eng)]
-              (await walking)
-              (await reflex-round)))
-          (is (= ["j2"] (listed eng)) "the cut job is cancelled, not resumed")
-          (is (= ["j1"] (->> @seen (filter #(= :cancelled (:kind %))) (map :job)))))))))
-
 (deftest a-comfort-reflex-cut-off-rests-its-cooldown-from-the-cut
   (let [eng {:now (constantly 50000)
              :state (atom {:register [{:id :a :level :comfort :persistence :cooldown :cooldown-s 600}

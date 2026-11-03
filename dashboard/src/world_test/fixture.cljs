@@ -892,14 +892,13 @@
   on the body's old spot while the case is being built. #at / #xyz markers anywhere in the entries are made absolute
   against origin."
   [body world register origin]
-  (mapv (fn [{:keys [id trigger persistence cooldown-s cancel-cut? job args backoff] condition :when}]
+  (mapv (fn [{:keys [id trigger persistence cooldown-s job args backoff] condition :when}]
           (let [id (name (or id trigger))
                 opt (fn [flag v f] (when (some? v) [flag (f v)]))]
             (-> [body "--world" world "put" id]
                 (into (if condition (opt "--when" condition pr-str) ["--trigger" (name trigger)]))
                 (into (opt "--persistence" persistence name))
                 (into (opt "--cooldown-s" cooldown-s str))
-                (into (opt "--cancel-cut" cancel-cut? str))
                 (into (opt "--job" job pr-str))
                 (into (opt "--args" args pr-str))
                 (into (opt "--backoff" backoff pr-str))

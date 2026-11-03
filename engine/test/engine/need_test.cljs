@@ -7,7 +7,6 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.waits :as waits]))
 
@@ -38,7 +37,7 @@
   "An engine with the caller job running (call-fn c) each round, obtain and get-tool as stoppers doing obtain-step and
   tool-step, and go-to as a walker that puts the body on its :pos. Each round's answer is appended to got; the caller
   ends on one other than :done."
-  [call-fn {:keys [obtain-step obtain-start tool-step caller-worth]}]
+  [call-fn {:keys [obtain-step obtain-start tool-step]}]
   (reset! got [])
   (reset! clock 1000000)
   (let [obtain (atom [])
@@ -56,7 +55,6 @@
               'jobs.items.get-tool (stopper tool (or tool-step (constantly nil)) nil)
               'jobs.movement.go-to walker
               'caller {:args {}
-                       :worth-of (when caller-worth (constantly caller-worth))
                        :round (fn ^:async r [c]
                                 (let [e (await (call-fn c))]
                                   (swap! got conj e)
@@ -79,50 +77,6 @@
 (defn give! [p item n] (swap! (fake/state p) update :inventory fake/add-to item n))
 
 (defn carried [p item] (fake/carried (:inventory @(fake/state p)) item))
-
-(defn lectern-worth [] (:value (cost/goal-value [{:name "lectern" :count 1}])))
-
-(deftest item!-prices-an-obtain-by-what-the-item-is-worth-when-the-caller-gave-no-worth
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1) nil))]
-          (is (pos? (lectern-worth)))
-          (is (= (lectern-worth) (:worth (first @obtain))) "an endless caller worth is not inherited: the item's own worth reaches the obtain child"))
-        (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1 {:worth 77}) nil))]
-          (is (= 77 (:worth (first @obtain))) "the caller's own worth stays"))))))
-
-(deftest an-essential-items-obtain-takes-a-larger-finite-caller-worth
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1) {:caller-worth 5000}))]
-          (is (= 5000 (:worth (first @obtain))) "a finite caller worth above the item's own reaches the obtain child"))
-        (let [{:keys [obtain]} (await (run! #(need/item! % "lectern" 1) {:caller-worth 0}))]
-          (is (= (lectern-worth) (:worth (first @obtain))) "a caller worth below the item's own gives the item's"))))))
-
-(deftest a-means-fetch-is-worth-at-least-a-death-so-a-pillar-still-fetches-far-dirt
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [death (fn [c] (cost/death-s (:primitives c) (ctx/view c)))
-              seen (atom nil)
-              {:keys [obtain]} (await (run! #(do (reset! seen (death %)) (need/blocks! % ["dirt"] 3)) nil))]
-          (is (>= (:worth (first @obtain)) @seen) "blocks under an endless caller are priced by a death, not the few seconds dirt is worth"))
-        (let [seen (atom nil)
-              {:keys [obtain]} (await (run! #(do (reset! seen (cost/death-s (:primitives %) (ctx/view %))) (need/item! % "torch" 2 {:means? true})) nil))]
-          (is (>= (:worth (first @obtain)) @seen) "a torch fetched as a means is priced the same"))))))
-
-(deftest the-start-check-prices-the-obtain-as-the-run-does
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [asked (atom nil)]
-          (await (run! #(do (with-redefs [ctx/child-status (fn [_ _ _ args] (reset! asked args) (contract/ok :ready "ready"))]
-                              (need/item-status % "lectern" 1 {} nil))
-                            :done)
-                       nil))
-          (is (= (lectern-worth) (:worth @asked)) "no worth given: the check asks with the item's worth, as fetch! does"))))))
 
 (deftest item!-passes-a-done-child
   (async done

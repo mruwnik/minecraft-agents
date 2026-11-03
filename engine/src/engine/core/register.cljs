@@ -129,7 +129,7 @@
   (let [t (trigger-def eng (:trigger spec))]
     (merge {:id (:trigger spec) :trigger (:trigger spec) :job (:job t)
             :persistence (:persistence t :retry) :cooldown-s (:cooldown-s t 0) :builtin? false}
-           (select-keys spec [:id :job :persistence :cooldown-s :cancel-cut? :level :builtin? :backoff])
+           (select-keys spec [:id :job :persistence :cooldown-s :level :builtin? :backoff])
            {:args (merge (:args t {}) (:args spec))})))
 
 (defn register-reflex!

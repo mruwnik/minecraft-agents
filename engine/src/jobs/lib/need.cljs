@@ -17,7 +17,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
-            [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
@@ -195,33 +194,16 @@
     (and worth (js/isFinite worth)) (assoc :worth worth)
     (and center (= job 'jobs.items.obtain)) (assoc :center center)))
 
-(defn item-worth
-  "Seconds an obtain of n of names is worth when its caller named none: what the item is worth to the body, or the caller's own worth when that is finite and larger (an item its parent cannot go on without, a pickaxe for a long dig); an endless caller worth is not inherited, so a lectern is never worth a cave trip."
-  [c names n means?]
-  (let [own (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n)
-        parent (ctx/worth c)
-        own (if means? (max own (cost/death-s (:primitives c) (ctx/view c))) own)]
-    (if (js/isFinite parent) (max own parent) own)))
-
-(defn priced
-  "Options o of an obtain fetch with a :worth: the caller's own when it gave one, else item-worth. Building blocks and an o with :means? true
-  (a torch, a bridge's block) are the caller's means to its goal, not the goal: worth at least a death, so a pillar or bridge still fetches a far block."
-  [c job args o]
-  (if (or (:worth o) (not= 'jobs.items.obtain job))
-    o
-    (assoc o :worth (item-worth c (or (some-> (:item args) vector) (:any-of args)) (:count args 1) (boolean (or (:any-of args) (:means? o)))))))
-
 (defn item-status
   "The start status of the jobs.items.obtain child item! would call now for n more of item under options o, worth `worth`
-  seconds to the caller (its :worth: the obtain's price must not pass it; nil: item-worth, as the run prices; ##Inf: any price; below 0: :later :not-worth,
+  seconds to the caller (its :worth: the obtain's price must not pass it; nil or ##Inf: any price; below 0: :later :not-worth,
   as no price is within it, and a call key :worth below 0 is refused)."
   [c item n o worth]
-  (let [worth (if (nil? worth) (item-worth c [item] n (boolean (:means? o))) worth)]
-    (if (and worth (neg? worth))
-      (contract/later :not-worth (str "obtain: worth " (js/Math.round worth) " s, below nothing") :worth worth)
-      (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
-                        (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
-                          (and worth (js/isFinite worth)) (assoc :worth worth))))))
+  (if (and worth (neg? worth))
+    (contract/later :not-worth (str "obtain: worth " (js/Math.round worth) " s, below nothing") :worth worth)
+    (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+                      (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
+                        (and worth (js/isFinite worth)) (assoc :worth worth)))))
 
 (defn item-price
   "Seconds the jobs.items.obtain child item-status would ask for n more of item under options o prices (its :not-worth status carries :price
@@ -242,7 +224,7 @@
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
   [c job args cause-reason wanted {:keys [slot return?] :as o}]
   (let [slot (or slot :need)
-        args (fetch-args job args (priced c job args o))
+        args (fetch-args job args o)
         want [job args]
         identity-of [job (dissoc args :count :avoid :spend :worth)]
         _ (when (not= identity-of (get-in (ctx/mem c) [:need/slot-want slot]))
