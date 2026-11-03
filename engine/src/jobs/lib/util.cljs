@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.ctx :as ctx]
             [engine.perception.rays :as rays]
+            [engine.perception.store :as store]
             [jobs.lib.memory-age :as memory-age]))
 
 (a/defargs settings
@@ -113,6 +114,15 @@
       (do (when (and *reads* (true? (some-> (sensed p pos) .-unknown))) (note-read! :guessed (cell-vec pos)))
           guess)))
 
+(defn remembered-opaque?
+  "Whether the perception remembers the cell holding a state the sight table says stops the eye."
+  [p pos]
+  (boolean
+   (when-let [per (aget p "perception")]
+     (let [[x y z] (if (map? pos) [(:x pos) (:y pos) (:z pos)] pos)
+           id (store/remembered-id (:st per) x y z)]
+       (and (>= id 0) (pos? (aget (.sightTable ^js (:raw per)) id)))))))
+
 (defn seen-facts
   "seen-block as cljs facts {:name :full-cube? :opaque? (stops the eye, as sight does) :waterlogged?}, or nil when the cell is unloaded or unknown."
   [p pos]
@@ -120,7 +130,7 @@
     (let [logged (some-> b .-properties .-waterlogged)]
       {:name (.-name b)
        :full-cube? (boolean (.-fullCube b))
-       :opaque? (boolean (.-opaque b))
+       :opaque? (or (true? (.-opaque b)) (remembered-opaque? p pos))
        :waterlogged? (or (true? logged) (= "true" logged))})))
 
 (defn block-facts
