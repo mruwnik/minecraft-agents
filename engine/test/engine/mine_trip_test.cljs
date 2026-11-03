@@ -135,6 +135,23 @@
             (is (nil? (:spare-tried (m/job-mem s))) "a wait that is not :not-worth does not give the spare up for the job")
             (is (empty? (m/events-of s :tool.spare-skipped)))))))))
 
+(deftest a-dear-spare-is-fetched-without-a-walk-to-look-for-wood
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig-status need/item-status
+              orig-fetch need/fetch!
+              opts (atom [])]
+          (set! need/item-status (fn [& _] [:ok "ok" {}]))
+          (set! need/fetch! (fn ^:async f [& args] (swap! opts conj (last args)) {:kind :failed}))
+          (try (await (m/scenario {:block "coal_ore" :count 1 :direction "east" :tunnel-length 4 :radius 8 :torches false :trip true}
+                                  (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}])
+                                  300))
+               (finally (set! need/item-status orig-status) (set! need/fetch! orig-fetch)))
+          (let [spare (filter #(= :spare (:slot %)) @opts)]
+            (is (seq spare) "the spare was fetched")
+            (is (every? #(false? (:explore %)) spare) "a saving of iron wear does not send the body walking to look for wood")))))))
+
 (def iron-world (assoc (rock-world {}) :inventory [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}]))
 
 (defn ^:async run-dig!
