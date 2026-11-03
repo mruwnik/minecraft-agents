@@ -173,6 +173,23 @@
             (is (= ran? (:ran @world)) (str "least " least))
             (is (= ending (stopped seen)) (str "least " least))))))))
 
+(def looking-field
+  "Its done? count only becomes true after a look, which the first can-start? asks for."
+  {:args no-args
+   :can-start? (fn [c] (if (:jobs.lib.look/looked (ctx/mem c)) (contract/ok :seen "seen") (contract/look :unseen "unseen")))
+   :done? (fn [c] (contract/later :not-done "not done" :done 0 :left (if (:jobs.lib.look/looked (ctx/mem c)) 4 9) :units :cells))
+   :quote-of (fn [_] {:uses {:job-time [1 1 1]} :done [0 4 4]})
+   :round (fn [c] (swap! world assoc :ran true) (ctx/end c :done nil))})
+
+(deftest the-least-all-check-uses-the-count-after-the-look-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'looking-field looking-field})]
+          (core/submit! eng '(looking-field {:least :all}) {})
+          (await (core/tick! eng))
+          (is (:ran @world) "left 4 after the look, not the 9 asked before it"))))))
+
 ;; ---------------------------------------------------------------- next-way
 
 (def failer {:args no-args :round (fn [c] (ctx/end c :nothing-possible :empty))})

@@ -391,6 +391,8 @@
         _ (when err (ctx/emit! c :done_failed :warn {:error (str (or (.-message err) err))}))
         done? (and d (ends? d))
         [start-s run-s] (if done? ss (await (looked def c ss)))
+        ;; a look round changes what done? counts; the least check must not read the count from before it
+        d (if (and (not done?) (not= [start-s run-s] ss)) (first (done-or-error def (assoc c :jobs.lib.check-cache/fresh true))) d)
         s (contract/all [start-s run-s])
         counted #(if fresh? (cond-> % d (update :report merge (contract/progress d))) (progress-ending c d %))
         failed #(counted (contract/ending :condition-failed (contract/status-cause %) nil))
