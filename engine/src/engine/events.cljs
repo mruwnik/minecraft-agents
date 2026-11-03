@@ -89,15 +89,24 @@
              (field :kind #":kind :([^\s,{}\[\]()]+)" kw)
              (field :level #":level :([^\s,{}\[\]()]+)" kw)]))))
 
-(defn seq-of-record [line file line-no]
+(defn parse-line [line]
+  (if (> (count line) (setting "max-line-bytes"))
+    (or (stub-record line) (reader/read-string line))
+    (try (fast/read-string line) (catch :default _ (reader/read-string line)))))
+
+(defn seq-of-record
+  "The record on line. A line that does not parse but shows a :seq (say a keyword the reader rejects) is served as a stub
+  marked :unreadable, so one bad line costs one event, not every page that reaches it."
+  [line file line-no]
   (let [record (try
-                 (if (> (count line) (setting "max-line-bytes"))
-                   (or (stub-record line) (reader/read-string line))
-                   (try (fast/read-string line) (catch :default _ (reader/read-string line))))
+                 (parse-line line)
                  (catch :default e
-                   (throw (ex-info (str "malformed complete event record in " file
-                                        " at line " line-no ": " (.-message e))
-                                   {:file file :line line-no}))))
+                   (or (some-> (stub-record line)
+                               (dissoc :truncated)
+                               (assoc :unreadable true :data {:unreadable-chars (count line)}))
+                       (throw (ex-info (str "malformed complete event record in " file
+                                            " at line " line-no ": " (.-message e))
+                                       {:file file :line line-no})))))
         n (:seq record)]
     (when-not (and (map? record) (integer? n) (pos? n))
       (throw (ex-info (str "invalid event record in " file " at line " line-no

@@ -365,9 +365,18 @@
 
 (deftest a-corrupt-line-is-reported-with-its-file
   (let [file (write-lines! [1 2] 10)]
-    (fs/appendFileSync file "{:seq 3 :pad\n")
-    (fs/appendFileSync file (str (pr-str {:seq 4}) "\n"))
+    (fs/appendFileSync file "{not-edn}\n")
     (is (thrown-with-msg? js/Error #"malformed complete event record" (seqs-after file 0 10)))))
+
+(deftest a-line-the-reader-rejects-is-one-marked-event-not-a-failed-page
+  (let [file (write-lines! [1 2] 10)]
+    (fs/appendFileSync file "{:seq 3 :time-ms 5 :source :system :kind :logged-out :why ]}\n")
+    (fs/appendFileSync file (str (pr-str {:seq 4}) "\n"))
+    (is (= [1 2 3 4] (seqs-after file 0 10)))
+    (is (= [4] (seqs-after file 3 10)))
+    (let [fd (fs/openSync file "r")
+          bad (nth (:records (events/records-from fd (.-size (fs/fstatSync fd)) file 0 10 one-page-bytes)) 2)]
+      (is (= {:seq 3 :time-ms 5 :source :system :kind :logged-out :unreadable true} (dissoc bad :data))))))
 
 (deftest a-line-ending-at-a-probe-size-is-read-whole
   (doseq [pad [500 520 1000 1030 2000 40000]]
