@@ -52,7 +52,7 @@
   :data, ending e's data and report over it); a reflex job ends with reflex.ended :cancelled and its trigger may fire
   again. by names who asked. A listed job that owes a cleanup (engine.core.cleanup) stays listed until it has run
   (job.cleaning_up now, job.cancelled then, e its ending); a cancel while it runs does not cut it. A death (by :death)
-  runs none."
+  runs none, and nor does a failed one (the scheduler skips it, so a cleanup could not run)."
   ([eng id] (cancel! eng id :agent))
   ([eng id by] (cancel! eng id by nil))
   ([eng id by e]
@@ -61,6 +61,7 @@
          inst (get-in (state eng) [:instances id])
          m (mem/job-mem (mem/view (:store eng)) id [])
          cleans? (and inst (not (:reflex inst)) (not= :death by)
+                      (not (contains? (:failed (state eng)) id))
                       (or (cleanup/closing? eng id []) (cleanup/owes? eng (first (job-of eng inst)) m)))]
      (when (= id (:id (running eng)))
        (free-owner! eng)

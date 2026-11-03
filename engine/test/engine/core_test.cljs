@@ -116,6 +116,7 @@
    'attention (tu/job attention-round)
    'attention-done (tu/job attention-done-round)
    'write-fail (tu/job write-fail-round)
+   'cleanup-fail (assoc (tu/job write-fail-round) :cleanup (fn [_ _] nil))
    'bad-result (tu/job bad-result-round)
    'spin (tu/job spin-round)
    'child child-job
@@ -357,6 +358,17 @@
             (is (some #(and (= :resolved (:kind %)) (= request-id (:request-id %))
                             (= :job-cancelled (:reason %))) @seen)
                 "cancellation resolves the parked failure request")))))))
+
+(deftest cancel-ends-a-failed-job-that-owes-a-cleanup-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)]
+          (core/submit! eng '(cleanup-fail) {})
+          (await (core/tick! eng))
+          (core/cancel! eng "j1")
+          (is (= [] (listed eng)) "a failed job is never ticked, so a cleanup would never run")
+          (is (= {} (:failed (core/state eng)))))))))
 
 (deftest a-throwing-reflex-job-is-dropped-with-the-same-warn
   (async done
