@@ -1077,7 +1077,7 @@
         off (fn [x y z] (max (- (js/Math.abs x) 1) (- (js/Math.abs z) 1) (- 63 y) (- y 66)))]
     (tu/set-sensed! p (fn [pos] (if (pos? (off (aget pos "x") (aget pos "y") (aget pos "z"))) #js {:unknown true :pos pos} (sensed pos))))
     (is (> 0.05 (with-redefs [sight/frontier-distance (fn [_ [x y z]] (off x y z))
-                              sight/unseen-solid-fn (fn [_] (fn [cell-y d] (base-rates/unseen-solid 64 (- cell-y 64) d false nil)))]
+                              sight/unseen-solid-fn (fn [_] (fn [cell-y d & _] (base-rates/unseen-solid 64 (- cell-y 64) d false nil)))]
                   (respond.pillar/pillar-climb p [0 64 0])))
         "only the cells beside the body seen, the dark beyond is a measured guess: no likely ledge beside the top")))
 

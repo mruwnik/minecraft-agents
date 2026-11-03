@@ -79,3 +79,16 @@
         cells (unseen-cells w)]
     (is (= (mapv #(> (chance %) 0.5) cells) (mapv verdict cells)))
     (is (< 1 (count (distinct (map verdict cells)))) "both verdicts occur")))
+
+(deftest an-unseen-cell-is-priced-by-its-nearest-frontier-s-light-not-the-feet-s
+  (let [w (seeing (tu/fake-on-floor {:blocks (assoc cave "3,65,0" "air")}))
+        fy (js/Math.floor (.-y (.-pos (.self w))))
+        q (look/near-share w)
+        near (remove #(= base-rates/unseen-d-max (frontier/distance w %)) (unseen-cells w))
+        chance (fn [] (mapv (look/unseen-solid-at-fn w) near))
+        priced (fn [lit?] (mapv (fn [[_ y _ :as c]] (base-rates/unseen-solid fy (- y fy) (frontier/distance w c) lit? q)) near))]
+    (with-redefs [look/feet-lit? (constantly true)
+                  look/remembered-light-fn (fn [_ _] (constantly 0))]
+      (is (seq near))
+      (is (= (priced false) (chance)) "lit feet, dark frontier: the dark table")
+      (is (not= (priced true) (chance))))))

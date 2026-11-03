@@ -467,26 +467,51 @@
                (let [^js raw (:raw per) l (.lightAt raw x y z)]
                  (and (<= 0 l) (== 1 (aget (light/table-now raw (:seeing-min (:opts per))) l))))))))
 
+(declare remembered-light-fn)
+
+(defn- frontier-value
+  "frontier/field-value for p: 2 * the cell's distance to the nearest frontier plus 1 when that frontier cell is lit by
+  perception's seeing rule (its remembered light, remembered-light-fn); nil without a perception's memory."
+  [p cell]
+  (when-let [per (aget p "perception")]
+    (when-let [^js raw (:raw per)]
+      (let [^js table (light/table-now raw (:seeing-min (:opts per)))
+            light-at (remembered-light-fn p raw)]
+        (frontier/field-value p cell
+                              (fn [x y z] (let [l (light-at x y z)] (and (<= 0 l) (== 1 (aget table l)))))
+                              (light/darken-now raw))))))
+
 (defn frontier-distance
   "frontier/distance: an unseen cell's distance to the nearest frontier, base-rates/unseen-d-max when none is nearer."
   [p cell]
-  (frontier/distance p cell))
+  (some-> (frontier-value p cell) (bit-shift-right 1)))
+
+(defn- frontier-lit?
+  "Whether the nearest frontier cell to the cell is lit; the feet's light (feet-lit?) when none lies within
+  base-rates/unseen-d-max."
+  [p cell d]
+  (let [v (when (< d base-rates/unseen-d-max) (frontier-value p cell))]
+    (if v (== 1 (bit-and v 1)) (feet-lit? p))))
 
 (defn unseen-solid-fn
   "(fn [cell-y d]) base-rates/unseen-solid for the body of primitives p: the chance an unseen cell at height cell-y, d from
   the nearest frontier, is solid, by the body's feet's height, the frontier taken lit as the feet are (feet-lit?) and q
-  its near-share; nil without a perception."
+  its near-share; nil without a perception. Given lit? (3 args) the frontier is taken as that, else as the feet are."
   [p]
   (when-let [[_ y] (and (aget p "perception") (feet-cell p))]
-    (let [lit? (feet-lit? p) q (near-share p)]
-      (fn [cell-y d] (base-rates/unseen-solid y (- cell-y y) d lit? q)))))
+    (let [feet-lit (feet-lit? p) q (near-share p)]
+      (fn
+        ([cell-y d] (base-rates/unseen-solid y (- cell-y y) d feet-lit q))
+        ([cell-y d lit?] (base-rates/unseen-solid y (- cell-y y) d lit? q))))))
 
 (defn unseen-solid-at-fn
   "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-distance (1, the likeliest
   open, without a memory), at its own height as the feet's, in the dark, without a perception."
   [p]
-  (let [solid-at (or (unseen-solid-fn p) #(base-rates/unseen-solid %1 0 %2 false nil))]
-    (fn [[_ y _ :as cell]] (solid-at y (or (frontier-distance p cell) 1)))))
+  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit?] (base-rates/unseen-solid y 0 d lit? nil)))]
+    (fn [[_ y _ :as cell]]
+      (let [d (or (frontier-distance p cell) 1)]
+        (solid-at y d (frontier-lit? p cell d))))))
 
 (defn unseen-solid?-fn
   "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5); kept by
