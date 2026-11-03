@@ -95,7 +95,7 @@
               reads (atom 0)
               wrap (fn [p] (let [raw (.-entities p)]
                              (aset p "entities" (fn [a]
-                                                  (when (and (= 64 (.-radius a)) (= 2 (swap! reads inc)))
+                                                  (when (and (= 64 (.-radius a) (.-max a)) (= 2 (swap! reads inc)))
                                                     (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [18 64 0]) es))))
                                                   (raw a)))
                              p))
