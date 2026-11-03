@@ -3,9 +3,14 @@
   water whose search goes on (no walk) swims to air when its air runs low, in manual mode as in any other."
   (:require [cljs.test :refer [deftest is async]]
             [engine.go-to-test :as gt]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.test-util :as tu :refer [box]]
-            [jobs.lib.near :as near]))
+            [jobs.lib.cost :as cost]
+            [jobs.lib.near :as near]
+            [jobs.movement.go-to.air :as air]
+            [jobs.movement.go-to.way-steps :as ways]
+            [jobs.movement.go-to.walk :as walk]))
 
 ;; a stone plain (top y 63) with a pond 6 deep (water y 58..63) from x 0 to x-end, z -4..4; the body on land west of it
 (defn pond [x-end]
@@ -289,3 +294,30 @@
               (is (string? (:text @out)) "the give-up says why in words")
               (is (= [[[7 64 -1] "timeout"] [[7 64 1] "timeout"]] (map (juxt :toward :status) (gt/events-of s :go-to.unstuck)))
                   "two swims a call, the stuck bank never reached"))))))))
+
+(defn ^:async judge-landing!
+  "The cells land-to-judge! walks to for a body afloat 6 blocks from the bank (no dry stand within 3), with another landing worth its price or not."
+  [worth-it?]
+  (let [p (tu/fake {:self {:pos {:x 6.5 :y 63 :z 0.5} :inWater true} :blocks (pond 12)})
+        walked (atom [])
+        m (atom {})]
+    (with-redefs [ctx/mem (fn [_] @m) ctx/update-mem! (fn [_ f & a] (apply swap! m f a))
+                  ways/escalating? (constantly true) air/surface! (fn [& _] (js/Promise.resolve nil))
+                  ctx/worth (constantly (if worth-it? ##Inf 0))
+                  near/walk-round! (fn [_ cell & _more] (swap! walked conj cell) (js/Promise.resolve nil))]
+      (await (walk/land-to-judge! {:primitives p} {:x 6.5 :y 63 :z 0.5} {:reason "goal-unloaded"} {})))
+    @walked))
+
+(deftest a-give-up-in-water-walks-to-a-dry-stand-farther-than-3
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[cell :as walked] (await (judge-landing! true))]
+          (is (= 1 (count walked)))
+          (is (< 3 (js/Math.hypot (- (:x cell) 6.5) (- (:z cell) 0.5))) (str "a bank farther than the old radius 3: " walked)))))))
+
+(deftest a-give-up-in-water-lands-no-more-once-another-landing-is-not-worth-its-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (empty? (await (judge-landing! false))))))))

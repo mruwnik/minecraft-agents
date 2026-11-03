@@ -29,6 +29,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.swim :as swim]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -524,16 +525,18 @@
 (defn ^:async land-to-judge!
   "A give-up for air or unloaded land (result :air, :air-lethal, :goal-unloaded) taken in water by a call that may
   escalate is judged from dry land (choose/air-pocket? reads the pocket the body swam out of): it swims to the air it
-  knows (air/surface!) and walks onto the nearest seen dry stand within 3 (air/dry-stand), at most max-landings a call
-  (mem :landings), before the give-up is judged; a replan from there would walk the same partial plan back into the water."
+  knows (air/surface!) and walks onto the nearest seen dry stand within the air-radius setting (air/dry-stand: its head
+  is out, so the swim there is not air-bound), while another landing is worth its price (cost/try-again? :walk-round of
+  the landings so far, mem :landings), before the give-up is judged; a replan from there would walk the same partial plan back into the water."
   [c pos result opts]
   (let [p (:primitives c)
         opts (dissoc opts :progress)]
     (when (and (#{:air :air-lethal :goal-unloaded} (some-> (:reason result) keyword))
-               (breath/in-water? p) (ways/escalating? c) (< (:landings (ctx/mem c) 0) max-landings))
+               (breath/in-water? p) (ways/escalating? c)
+               (cost/try-again? c :walk-round {:fails (:landings (ctx/mem c) 0)}))
       (ctx/update-mem! c update :landings (fnil inc 0))
       (await (air/surface! c opts pos))
-      (when-let [dry (and (breath/in-water? p) (air/dry-stand p pos js/Infinity (u/self-pos c) 3))]
+      (when-let [dry (and (breath/in-water? p) (air/dry-stand p pos js/Infinity (u/self-pos c) (swim/air-radius)))]
         (await (near/walk-round! (assoc c :to-air true) dry 0 opts))))))
 
 (def max-column-reaims "Times a learn-spent walk to a column re-aims at its newly seen ground before it gives up." 3)
