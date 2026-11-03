@@ -435,6 +435,17 @@
             (await (tick-n eng 3))
             (is (< gave-up (count (emitted seen :bed_unreachable))) "asks about the bed again once the entry expired")))))))
 
+(deftest bed-down-puts-its-carried-bed-down-when-the-seen-bed-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc unreachable-world :inventory [{:name "white_bed" :count 1}]))]
+          (core/submit! eng '(jobs.survival.bed-down {:answer :bed}) {})
+          (await (run-until-empty eng 30))
+          (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :bed-unreachable)))
+          (is (seq (calls p "place")) "the carried bed goes down once the seen one proved unreachable")
+          (is (empty? (entries eng :sleep-failed))))))))
+
 (deftest sleep-still-tries-a-different-bed-than-the-unreachable-one
   (async done
     (tu/run-async done

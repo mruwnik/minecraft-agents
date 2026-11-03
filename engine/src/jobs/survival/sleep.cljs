@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.child :as child]
+            [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.sense :as sense]
@@ -211,7 +212,7 @@
   (await (child/pause! c (settings/get settings ::pause-s) (:reason why)))
   :continue)
 
-(defn ^:async round [c]
+(defn ^:async step! [c]
   (let [p (:primitives c)
         bed (bed-of c)
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
@@ -234,3 +235,8 @@
                                     (give-up-unreachable! c bed walk)))
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
       :else (await (sleep-at! c bed)))))
+
+(defn ^:async round
+  "step! run by pace/steps!: as a reflex (the night trigger's job) a :continue (a hold, a quote still searching, a walk to go on) is another step, not a decline."
+  [c]
+  (await (pace/steps! c #(step! c))))
