@@ -85,7 +85,7 @@
   (is (= 0 (value [{:name "iron_ingot" :count 5}] :overrides {"iron_ingot" 0})))
   (is (< (value [{:name "iron_pickaxe"}] :overrides {"iron_ingot" 0}) (each "iron_pickaxe"))
       "worthless iron makes an iron pickaxe worth its sticks")
-  (is (= (* 2 (each "diamond")) (value [{:name "diamond"}] :overrides {"diamond" {:times 2}})))
+  (is (< (js/Math.abs (- (* 2 (each "diamond")) (value [{:name "diamond"}] :overrides {"diamond" {:times 2}}))) 2) "the dearer diamond also dears the pickaxe a body digs diamond ore with")
   (is (= (each "dirt") (value [{:name "dirt"}] :overrides {"raw_iron" 50})) "other items keep their value"))
 
 (deftest group-overrides-apply-to-every-item-of-the-group
@@ -97,7 +97,7 @@
 
 (deftest overrides-take-keywords-and-string-times
   (is (= 50 (value [{:name "raw_iron"}] :overrides {:raw_iron 50})))
-  (is (= (* 2 (each "diamond")) (value [{:name "diamond"}] :overrides {"diamond" {"times" 2}}))))
+  (is (< (js/Math.abs (- (* 2 (each "diamond")) (value [{:name "diamond"}] :overrides {"diamond" {"times" 2}}))) 2)))
 
 (deftest the-breakdown-names-the-main-contributors-first
   (let [r (v/item-value card-pile)]

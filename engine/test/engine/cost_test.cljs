@@ -437,10 +437,10 @@
   (is (nil? (cost/dig-cost "bedrock")) "never dug")
   (is (< 9 (cost/dig-cost "obsidian") 10) "hardness 50 with a diamond pickaxe: 188 ticks, uncapped"))
 
-(deftest a-block-needing-a-better-pickaxe-is-worth-that-pickaxe
+(deftest a-block-needing-a-better-pickaxe-is-worth-its-share-of-that-pickaxe
   (let [worth #(:value (cost/item-value [{:name % :count 1}]))]
-    (is (< (worth "diamond_pickaxe") (worth "obsidian")) "obsidian needs a diamond pickaxe a body without one must make")
-    (is (< (worth "iron_pickaxe") (worth "diamond")) "diamond ore needs an iron one")))
+    (is (< (cost/dig-cost "obsidian") (worth "obsidian")) "obsidian is worth its dig and more: a share of the diamond pickaxe over its 1561 uses")
+    (is (< (/ (worth "iron_pickaxe") 250) (worth "diamond")) "diamond ore carries an iron pickaxe's worth over its 250 uses")))
 
 (def spawn-far "A respawn far off: a death costs the walk back." {:x 5000 :y 64 :z 0})
 

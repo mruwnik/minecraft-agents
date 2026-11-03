@@ -329,21 +329,22 @@
                  (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table))))
 
 (defn tool-price-fn
-  "tier -> worth in table of the cheapest pickaxe of that harvest tier, 0 up to the :dig basis's default tier. A block that
-  needs a better pickaxe than the default is worth the tool a body starting without one must first make."
+  "tier -> worth per block of the cheapest pickaxe of that harvest tier (its table worth over its durability, one use per
+  block), 0 up to the :dig basis's default tier. Obtaining the tool itself is priced where it is obtained."
   [md basis table]
-  (let [pickaxes (keep #(let [n (.-name %)] (when (str/ends-with? n "_pickaxe") n)) (array-seq (.-itemsArray md)))
+  (let [pickaxes (filter #(and (str/ends-with? (.-name %) "_pickaxe") (pos? (or (.-maxDurability %) 0))) (array-seq (.-itemsArray md)))
         floor (get-in basis [:dig :default-tier])]
     (fn [tier]
       (if (<= tier floor)
         0
-        (let [w (->> pickaxes (filter #(<= tier (weapon/tool-tier %))) (keep #(let [w (get table %)] (when (and w (js/isFinite w)) w))) (apply min js/Infinity))]
+        (let [w (->> pickaxes (filter #(<= tier (weapon/tool-tier (.-name %)))) (keep #(let [w (get table (.-name %))] (when (and w (js/isFinite w)) (/ w (.-maxDurability %))))) (apply min js/Infinity))]
           (if (js/isFinite w) w 0))))))
 
 (defn build-table
   "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
   (default-basis with the deep-merged :basis): built again with the pickaxes' prices of the table before, once per harvest
-  tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs). The extra args only key table-for's memo."
+  tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs, so one pass would price it without the iron
+  pickaxe; three passes settle the diamond tier). The extra args only key table-for's memo."
   [version overrides basis & _]
   (let [md (minecraft-data version)
         basis* (full-basis basis)]
