@@ -36,7 +36,7 @@
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried, i.e. the carried count is below what it was before the break plus one, a spare in the bag does not stand in for it, after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -336,7 +336,7 @@
                        (let [{:keys [pos]} (:args c)
                              slot (keyword (str "dig-" (rolls c)))
                              _ (await (flush-to-cell! c pos))
-                             _ (ctx/update-mem! c #(-> % (assoc :broken true :lose-polls 0 :stand (u/self-pos c)) (dissoc :crouched :reach-drops :recovers)))
+                             _ (ctx/update-mem! c #(-> % (assoc :broken true :lose-polls 0 :stand (u/self-pos c) :expect-carried (inc (u/carried-count (:primitives c) (item-of (:args c))))) (dissoc :crouched :reach-drops :recovers)))
                              r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
                          (if (ending-or-wait? r)
                            r
@@ -489,7 +489,7 @@
                                                      (:ignore-zones? (:args c)) (assoc :ignore-zones? true)
                                                      (some? ways) (assoc :ways ways))))]
     (if-not (ending-or-wait? r)
-      (do (ctx/update-mem! c #(-> % (dissoc :broken)))
+      (do (ctx/update-mem! c #(-> % (dissoc :broken :expect-carried)))
           :again)
       r)))
 
@@ -517,7 +517,7 @@
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
         (and e (not= "unemployed" profession)) (await (wait-lose-job! c))
-        (zero? (u/carried-count p item)) (await (recover! c))
+        (< (u/carried-count p item) (:expect-carried (ctx/mem c) 1)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)

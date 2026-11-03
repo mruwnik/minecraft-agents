@@ -345,6 +345,16 @@
           (is (zero? (count (vt/calls p "place"))) "no place is tried without the item")
           (is (= "air" (workstation p))))))))
 
+(deftest a-lost-drop-is-not-covered-by-a-spare-lectern-in-the-bag
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :inventory [{:name "lectern" :count 1}]
+                                       :scripts [[(offer "paper")] [(offer "paper")]]
+                                       :wrap breaks-without-a-drop} {}))]
+          (is (= {:found false :status :stopped :reason :workstation-lost :rolls 1} (select-keys result [:found :status :reason :rolls])) "the first lost drop stops the roll")
+          (is (= "lectern" (workstation p)) "the spare is put back at the end: the cell stays shut"))))))
+
 (deftest the-body-beside-the-workstation-steps-flush-against-it-before-the-dig
   (async done
     (tu/run-async done
