@@ -1,18 +1,16 @@
 (ns jobs.village.trade
   (:require [clojure.string :as str]
             [jobs.lib.ready :as ready]
-            [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
             [jobs.lib.cond :as cond]
             [jobs.lib.need :as need]
             [engine.ctx :as ctx]
-            [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.trade-window :as tw]
             [jobs.lib.villager :as villager]
-            [jobs.lib.util :as u]
-            [jobs.lib.pace :as pace]))
+            [jobs.lib.util :as u]))
 
 (def meta {:tags [:goal]})
 
@@ -48,11 +46,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
-   ::chase-timeout-s {:default 15 :doc "Seconds one walk toward the villager may take: it wanders, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
-   ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
-
-(defn chase-timeout-s [] (settings/get settings ::chase-timeout-s))
+})
 
 (def ways need/fetch-ways)
 
@@ -134,38 +128,6 @@
   [c reason]
   (finish! c reason nil))
 
-(defn retry
-  "A step that failed but may be tried again: counted per call, the third in a row gives up."
-  [reason]
-  {:retry reason})
-
-(defn enchant-wants
-  "An :enchant arg as {name min-level}: a name (any level), or a map of names to minimum levels; nil for none."
-  [enchant]
-  (cond (string? enchant) {enchant 1} (map? enchant) enchant))
-
-(defn carries
-  "The enchantment of the gives that satisfies wants ({name min-level}), as {:name :level}; nil when none does."
-  [wants gives]
-  (some (fn [e] (when (>= (:level e 1) (get wants (:name e) ##Inf)) e)) (:enchants gives)))
-
-(defn choose
-  "Pick an offer from the read offers: {:offer o} with :price, or {:reason
-  r} (and :price, the cheapest open one, for \"price\"). :enchant is a name or a map name -> minimum level (any one of them)."
-  [offers {:keys [buy max-price payment enchant]}]
-  (let [mine (filter #(and (= buy (get-in % [:gives :item]))
-                           (or (nil? payment) (contains? payment (get-in % [:cost 0 :item])))
-                           (or (nil? enchant) (carries (enchant-wants enchant) (:gives %))))
-                     offers)
-        open (map #(assoc % :price (get-in % [:cost 0 :count])) (remove :disabled mine))
-        limit (fn [o] (cond (nil? max-price) ##Inf (fn? max-price) (max-price (get-in o [:cost 0 :item])) :else max-price))
-        fit (filter #(<= (:price %) (limit %)) open)]
-    (cond
-      (empty? mine) {:reason :no-offer}
-      (empty? open) {:reason :sold-out}
-      (empty? fit) {:reason :price :price (apply min (map :price open))}
-      :else {:offer (first (sort-by (juxt :price :index) fit))})))
-
 (def stopped-reason {"sold-out" :sold-out "payment" :payment-short "room" :no-room})
 
 (defn bought!
@@ -180,7 +142,7 @@
     (cond
       (contains? stopped-reason stopped) (give-up! c (stopped-reason stopped))
       (pos? gained) :again
-      :else (retry :incomplete))))
+      :else (tw/retry :incomplete))))
 
 (defn timed-out
   "A buy that hit the act time bound, as a bought result: the goods gained and the rest paid, from its inventory change."
@@ -204,14 +166,14 @@
       "bought" (bought! c r)
       "timeout" (if (.-inventoryChange r)
                   (bought! c (timed-out c r))
-                  (retry :timeout))
+                  (tw/retry :timeout))
       "no-item" (give-up! c :payment-short)
       "full" (give-up! c :no-room)
       "gone" (give-up! c (villager/gone-cause c))
       "cannot" (if (= "sold-out" (.-reason r))
                  (give-up! c :sold-out)
-                 (retry :no-such-offer))
-      (retry (keyword (.-reason r))))))
+                 (tw/retry :no-such-offer))
+      (tw/retry (keyword (.-reason r))))))
 
 (defn short-payment
   "The first cost stack of offer the body carries too little of for one trade: {:item i :count n-missing}, else nil."
@@ -250,95 +212,22 @@
         (do (ctx/update-mem! c assoc :room-tried true)
             :again)))))
 
-(defn offer-text
-  "One offer as a line: \"2 emerald -> 1 enchanted_book (mending 1)\"."
-  [{:keys [cost gives disabled]}]
-  (str (str/join " + " (map #(str (:count %) " " (:item %)) cost))
-       " -> " (:count gives) " " (:item gives)
-       (when-let [es (seq (:enchants gives))]
-         (str " (" (str/join ", " (map #(str (:name %) " " (:level %)) es)) ")"))
-       (when disabled " [sold out]")))
-
-(defn emit-offers!
-  "Say what the villager offers (profession, level, every offer with its enchantments), as a player reads the window."
-  [c kind villager r offers]
-  (ctx/emit! c kind :info
-             {:villager villager :profession (.-profession r) :level (.-level r) :offers offers
-              :enchants (vec (for [o offers e (get-in o [:gives :enchants])] (str (:name e) " " (:level e))))
-              :text (str "villager " villager " (" (.-profession r) " " (.-level r) ") offers: "
-                         (str/join "; " (map offer-text offers)))}))
-
-(defn ^:async read!
-  "Read the chosen villager's offers (event kind `kind`) and hand them to use! (c villager r offers); other windows
-  end, retry or skip the villager."
-  [c kind use!]
-  (let [villager (villager/chosen c)
-        r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
-        status (.-status r)]
-    (case status
-      "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)]
-             (emit-offers! c kind villager r offers)
-             (await (use! c villager r offers)))
-      "gone" (give-up! c (villager/gone-cause c))
-      "cannot" (cond
-                 (= "not-villager" (.-reason r)) (give-up! c :not-villager)
-                 (:villager (:args c)) (give-up! c :no-offers)
-                 :else (do (ctx/update-mem! c #(-> % (update :skipped (fnil conj #{}) villager) (dissoc :chosen)))
-                           :again))
-      "out-of-reach" (retry :unreachable)
-      (retry :window))))
-
 (defn ^:async trade!
   "Read the offers and buy from the chosen one: :again, an ending or a retry."
   [c]
   (let [{:keys [buy]} (:args c)
         payment (set (or (ctx/use c :payment) (cons currency (keys (get-in (ctx/left c) [:spend :items])))))
         spend-of #(get-in (ctx/left c) [:spend :items %] ##Inf)]
-    (await (read! c :trade.offers
+    (await (tw/read! c finish! :trade.offers
                   (fn ^:async buy-from [c _ _ offers]
-                    (let [{:keys [offer reason price]} (choose offers {:buy buy :payment payment :max-price spend-of})]
+                    (let [{:keys [offer reason price]} (tw/choose offers {:buy buy :payment payment :max-price spend-of})]
                       (if offer
                         (or (await (pay! c offer))
                             (await (room! c offer))
                             (await (buy! c offer)))
                         (finish! c reason (cond price {:price price}
                                                 (= :no-offer reason) {:text (str "no offer for " buy " paid with " (str/join ", " (sort payment)) "; offered: "
-                                                                                 (str/join "; " (map offer-text offers)))})))))))))
-
-(defn cell-of
-  "The cell [x y z] of the entity's feet."
-  [e]
-  (let [{:keys [x y z]} (u/pos-of (.-pos e))]
-    (mapv #(js/Math.floor %) [x y z])))
-
-(defn in-reach?
-  "Whether the body is within reach of villager e and a line from its eye to the villager's feet, middle or head clears
-  the collision boxes between (`hittable`: a player aims through the gap over a lectern or under a top slab; a glass wall blocks)."
-  [c e]
-  (and (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))
-       (not (false? (.-hittable e)))))
-
-(defn ^:async step!
-  "Find the villager, walk within reach with one go-to leg (it wanders), then act! (c) in reach. :again,
-  :continue (go-to yields), an ending or a retry."
-  [c act!]
-  (let [skipped (:skipped (ctx/mem c) #{})
-        ok? #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %))))
-        uuid (villager/pick! c ok?)
-        e (when uuid (villager/find-by-uuid (:primitives c) uuid))]
-    (cond
-      (and (nil? e) (await (villager/find-in-view! c ok? nil))) :again ; villagers count only while in view
-      (and (nil? uuid) (seq skipped)) (give-up! c :no-offers)
-      (nil? e) (give-up! c (villager/gone-cause c))
-      (in-reach? c e) (await (act! c))
-      :else
-      (let [r (await (child/call-chase* c :walk
-                                       {:pos (zipmap [:x :y :z] (cell-of e)) :entity (.-id e) :range (reach) :leg-s (chase-timeout-s)
-                                        :walk {:see true :ways #{:walk :clear-seal}}}))]
-        (cond
-          (= :continue r) :continue
-          (let [res (:data r)] (or (:arrived res) (:nearer res))) :again
-          :else (give-up! c :unreachable))))))
+                                                                                 (str/join "; " (map tw/offer-text offers)))})))))))))
 
 (defn hold-payment!
   "Reserve the carried units the trade may pay with (the currency unless it is bought, and the call's :spend items) so a reflex's make-room leaves them."
@@ -348,22 +237,7 @@
                 (not= currency (:buy (:args c))) (assoc currency :all))]
     (reserve/set-job-entries! c (vec (for [[i n] items] {:id (str (:id c) "-pay-" i) :item i :count n :strength 1 :by (:id c) :why "kept to pay the trade"})))))
 
-(defn ^:async run!
-  "steps (with a pace between) of step! with act! until one ends; a retry counts failures in a row, reset by
-  progress, and the third gives up. Yields only while go-to waits on the world. before! runs ahead of each step."
-  [c act! before!]
-  (let [fails (atom 0)]
-    (await (pace/steps! c (fn ^:async trade-step []
-                            (before! c)
-                            (let [r (await (step! c act!))]
-                              (cond
-                                (:retry r) (if (< (swap! fails inc) (u/max-failures))
-                                           :again
-                                           (finish! c (:retry r) nil))
-                                (= :again r) (do (reset! fails 0) :again)
-                                :else r)))))))
-
 (defn ^:async round
   "One call is the whole purchase."
   [c]
-  (await (run! c trade! hold-payment!)))
+  (await (tw/run! c finish! trade! hold-payment!)))

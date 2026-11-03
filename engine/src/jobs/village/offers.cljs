@@ -3,8 +3,8 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.ready :as ready]
-            [jobs.lib.villager :as villager]
-            [jobs.village.trade :as trade]))
+            [jobs.lib.trade-window :as tw]
+            [jobs.lib.villager :as villager]))
 
 (def meta {:tags [:goal]})
 
@@ -42,6 +42,11 @@
 
 (defn quote-of [_] {:uses {:job-time [0 5 ##Inf]}})
 
+(defn finish!
+  "End without offers: :condition-failed for a villager gone or no villager, else nothing-possible."
+  [c reason _]
+  (ctx/end c (if (#{:gone :not-villager} (:reason reason reason)) :condition-failed :nothing-possible) reason {}))
+
 (defn ^:async keep!
   "Book the offers read and end with them."
   [c villager r offers]
@@ -52,4 +57,4 @@
 (defn ^:async round
   "One call is the whole reading."
   [c]
-  (await (trade/run! c #(trade/read! % :trade.offers keep!) (fn [_]))))
+  (await (tw/run! c finish! #(tw/read! % finish! :trade.offers keep!) (fn [_]))))

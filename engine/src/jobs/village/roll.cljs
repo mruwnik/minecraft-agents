@@ -16,7 +16,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
-            [jobs.village.trade :as trade]))
+            [jobs.lib.trade-window :as tw]))
 
 (def doc
   "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, in sight)
@@ -174,7 +174,7 @@
 (defn found!
   "Book the matching offer; done? ends the job."
   [c offer]
-  (let [e (some->> (:enchant (:args c)) trade/enchant-wants (#(trade/carries % (:gives offer))))]
+  (let [e (some->> (:enchant (:args c)) tw/enchant-wants (#(tw/carries % (:gives offer))))]
     (ctx/update-mem! c assoc :offer (select-keys offer [:index :cost :gives])
                      :matched (when e (str (:name e) " " (:level e)))))
   :again)
@@ -234,9 +234,9 @@
         status (.-status r)]
     (case status
       "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)
-                 {:keys [offer]} (trade/choose offers {:buy want :max-price max-price :enchant enchant})]
+                 {:keys [offer]} (tw/choose offers {:buy want :max-price max-price :enchant enchant})]
              (u/progress! c)
-             (trade/emit-offers! c :roll.offers villager r offers)
+             (tw/emit-offers! c :roll.offers villager r offers)
              (cond
                (or (some #(pos? (:uses % 0)) offers) (< 1 (or (.-level r) 1))) :locked
                offer {:found offer}

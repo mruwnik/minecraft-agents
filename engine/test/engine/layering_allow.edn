@@ -32,6 +32,4 @@
  {:from jobs.survival.shut-in :to jobs.survival.dig-pocket :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.survival.shut-in :to jobs.survival.hide-out :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
  {:from jobs.survival.shut-in :to jobs.survival.wall-in :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
- {:from jobs.village.offers :to jobs.village.trade :rule :job-requires-same-family-job :why "reads offers through trade's find-walk-open steps (run!, read!)"}
- {:from jobs.village.roll :to jobs.village.trade :rule :job-requires-same-family-job :why "a sibling job required for its code: move the shared part to jobs.lib or the family helper, and call the job as a child"}
 ]
