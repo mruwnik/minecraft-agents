@@ -1,0 +1,24 @@
+;; Leo #80: bed-down walked at a bed it saw through a glass pane in a built stone wall and dug through the wall (go-to dig-route) to reach it.
+;; A body only walks to a bed. Room A (x 8..16, z 8..16, roofed, lit) holds the body, a carried bed and a stone wall at x 17 with one glass
+;; pane at [17 1 12]; room B (x 18..24) is a sealed stone box with a bed at [20 0 12] seen through the pane.
+;; Should-succeed: the carried bed goes down in room A and is slept in, and nothing is dug.
+;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match-id).
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :time-why :sleep
+  :plot {:light :sky}
+  :body {:at [12.5 0 12.5] :yaw 270 :settle-s 2}}
+ :cases
+ [{:name "a-bed-seen-through-a-wall-is-not-dug-to"
+   :blocks [[:fill [8 0 8] [17 3 16] "stone" :hollow] [:fill [9 0 9] [16 2 15] "air"]
+            [:fill [17 0 8] [25 3 16] "stone" :hollow] [:fill [18 0 9] [24 2 15] "air"]
+            [:set [17 1 12] "glass"] [:set [17 2 12] "glass"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [20 0 12] "red_bed[facing=east,part=foot]"] [:set [21 0 12] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :sleep-status :data {:sleeping 0 :needed 1}}]
+   :act [[:rcon "give $BODY white_bed 1"]
+         [:job (jobs.survival.bed-down {:answer :bed :roofed-only true})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
+            {:no-event {:source :job :kind :tidy.dug} :for-s 60}]
+   :limit-s 120}]}

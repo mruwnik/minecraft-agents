@@ -24,6 +24,7 @@
   the bed, a roofed room, else :bed-open. A body already asleep is done.
   Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
+  The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -191,7 +192,7 @@
         bed (bed-of c)
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
-        walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2})))]
+        walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2 :ways #{:walk :clear-seal}})))]
     (cond
       (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
       (= :continue walk) :continue

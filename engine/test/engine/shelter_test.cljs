@@ -461,6 +461,18 @@
           (is (empty? (calls p "sleep")))
           (is (re-find #"cannot reach the bed: .*walled in" (:text (first (emitted seen :bed_unreachable))))))))))
 
+(deftest sleep-never-digs-through-a-wall-to-reach-a-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :self {:pos {:x 12 :y 64 :z -8}} :blocks walled-bed-hut})]
+          (know-bed! eng {:x 12 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 20))
+          (is (= [] (calls p "dig")) "no zone covers the wall, but a walk to a bed does not dig")
+          (is (empty? (calls p "sleep")))
+          (is (= 1 (count (emitted seen :bed_unreachable)))))))))
+
 (def unreachable-world {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})
 
 (deftest sleep-remembers-an-unreachable-bed-for-ten-minutes
