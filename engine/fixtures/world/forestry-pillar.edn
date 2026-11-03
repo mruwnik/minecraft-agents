@@ -27,8 +27,9 @@
    :after [[:body-near [16.5 0 26.5] 3] [:item "dirt" [:>= 12]]]
    :limit-s 200}
   {:name "hurt-starving-body-leaves-the-pillar-and-ends"
-   ;; 1 hp at food about 3 (hungry, not starving) with no food cannot heal and may risk under a pillar's work, so the pillar's low-health hold would never end; the high logs are left
-   :body {:inventory [["dirt" 16]] :effects []}
+   ;; 1 hp at food about 3 (hungry, not starving) with no food cannot heal and may risk under a pillar's work, so the pillar's low-health hold would never end; the high logs are left.
+   ;; The spawnpoint is far: a death near the plot (a spawn bed left by an earlier case) is cheap, and the body may then fell by design
+   :body {:inventory [["dirt" 16]] :effects [] :spawnpoint [3000 0 0]}
    :act [[:rcon "effect give $BODY minecraft:hunger 7 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 19 minecraft:generic"]
          [:job (jobs.forestry.harvest-wood {:radius 16})]]
