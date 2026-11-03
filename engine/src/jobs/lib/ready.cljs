@@ -330,7 +330,7 @@
   (let [p (:primitives c)
         view (ctx/view c)
         hs (heard-dangers c)
-        worth (ctx/worth c)
+        worth (if (:worth c) (ctx/worth c) ##Inf)
         loss #(if (seq %) (hostile-loss/loss-over p view % (price/stay-s c)) 0)
         all (loss hs)
         heard (when (seq hs) (dawn/hostile-text (map #(dawn/describe p %) hs)))

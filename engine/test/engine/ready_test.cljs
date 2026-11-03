@@ -494,6 +494,10 @@
       {} :ok
       {:visible-only false} :later)))
 
+(deftest a-heard-price-with-no-engine-behind-the-ctx-reads-the-worth-as-infinite
+  (let [c (dissoc (assoc (with-entry (merge at-origin {:entities []}) {}) ::price/stay-s 30) :worth)]
+    (is (= :ok (first (ready/heard-price c))) "no :worth fn on the ctx: no throw, nothing heard is dearer than ##Inf")))
+
 (deftest threatened-prices-a-mob-only-heard-and-waits-on-no-reflex
   (let [wall (tu/box 2 64 -3 3 66 3 "stone")
         room (merge (tu/box -6 63 -6 6 68 6 "stone") (tu/box -5 64 -5 5 67 5 "air"))
