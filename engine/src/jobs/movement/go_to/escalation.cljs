@@ -593,6 +593,7 @@
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         args (cond-> args
+               (and (= :pillar step) (ways/way? c :clear-path)) (update :ways conj :roof)
                (and (= :clear-path step) (js/isFinite (dig-left-s c))) (assoc :max-dig-s (max 0 (dig-left-s c)))
                ;; the stair's kept drops outlive it: this call's walks must not spend them before the put-back
                (true? (:collect args)) (assoc :collect (:id c)))

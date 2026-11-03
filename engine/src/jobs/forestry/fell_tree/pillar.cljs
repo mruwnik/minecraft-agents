@@ -192,7 +192,7 @@
 
 (defn ^:async pillar-build!
   [c {:keys [plan]}]
-  (let [r (await (ctx/call c :build 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :ways #{:carried}
+  (let [r (await (ctx/call c :build 'jobs.access.pillar {:height (:height plan) :use {:blocks (pillar-blocks c)} :ways #{:carried :roof}
                                                          :ignore-zones? (:ignore-zones? (:args c)) :checks (ready/unforced c {:safe? '(not (exposed))})}))
         hold? (and (= :condition-failed (:kind r)) (= :low-health (get-in r [:cause :reason])) (ready/cannot-heal? c))
         e (if hold? r (waits/waiting-out c r))]

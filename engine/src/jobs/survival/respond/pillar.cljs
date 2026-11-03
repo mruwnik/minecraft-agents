@@ -171,7 +171,7 @@
   whether it ended short for a mob (one in its cell, or a hostile near a refused block or a knockback: the give-up's
   :mob). A refused block or a knockback is tried again while cost/try-again? :place says it pays, a try priced at its seconds and the loss of standing by the hostiles for them (try-s); a mob in the next cell ends it at once as evidence for the next decision."
   [c height item]
-  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried} :ignore-zones? true :try-s (try-s c)
+  (let [r (await (ctx/call c :pillar 'jobs.access.pillar {:height height :use {:blocks [item]} :ways #{:carried :roof} :ignore-zones? true :try-s (try-s c)
                                                           :settings {:jobs.access.pillar/mob-waits 0}}))]
     (if (contract/ending? r)
       {:built (:built (:data r) 0) :mob? (boolean (or (= :mob-in-cell (:reason (:data r))) (:mob (:data r))))}

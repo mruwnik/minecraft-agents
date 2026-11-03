@@ -195,6 +195,16 @@
           (is (empty? (of-kind seen :stopped)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
+(deftest a-pillar-without-the-roof-way-digs-no-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "dirt"}})]
+          (core/submit! eng (list job {:height 4 :ways #{:carried}}) {})
+          (await (ticks s eng 12))
+          (is (= "dirt" (block p [0 65 0])) "the roof is still there")
+          (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
+
 (deftest a-roof-of-eight-dirt-blocks-is-dug-through-at-the-roots-endless-worth
   (async done
     (tu/run-async done

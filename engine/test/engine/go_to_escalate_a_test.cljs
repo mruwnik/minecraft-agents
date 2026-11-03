@@ -202,6 +202,15 @@
           (is (= 2 (count (calls p "jumpPlace"))) "two blocks up, then a step onto the rim")
           (is (empty? (calls p "dig"))))))))
 
+(deftest a-go-to-without-the-clear-path-way-pillars-out-of-a-pit-without-digging-the-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (run-job! (merge in-pit {:blocks (assoc pit "0,65,0" "dirt") :inventory [{:name "dirt" :count 5}]})
+                                          {:pos [10 64 0] :range 1 :ways #{:walk :pillar}}))]
+          (is (seq (calls p "jumpPlace")) "it did try the pillar")
+          (is (empty? (calls p "dig")) "and dug nothing of the roof"))))))
+
 (deftest go-to-at-low-food-escalates-instead-of-giving-up-on-a-sprint-only-way
   (async done
     (tu/run-async done

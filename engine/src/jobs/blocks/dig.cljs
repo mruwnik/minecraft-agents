@@ -442,7 +442,7 @@
                     (or (:pillaring (ctx/mem c)) (not (b/roof-over-body? c (update (b/feet-cell c) 1 + 2))))
                     (pillar-height c pos))]
     (ctx/update-mem! c assoc :pillaring true)
-    (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried :roof} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (when-not (= :continue r) (ctx/update-mem! c assoc :pillared true))
       (cond (= :continue r) :continue
             (= :done (:kind r)) :again))))
