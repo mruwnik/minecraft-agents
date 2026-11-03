@@ -139,12 +139,11 @@
         (let [creeper (assoc (zombie 5.5 4.3 nil) :name "creeper")
               {:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 1.5} open-door [creeper])))
               choice (first (filter #(= :retreat.choice (:kind %)) @seen))
-              steps (mapv :target (filter #(= :retreat.target (:kind %)) @seen))]
+              cornered (filter #(= :retreat.cornered (:kind %)) @seen)]
           (is (false? (hs/door-open? p)) "the door is shut: it takes the creeper's line of sight")
           (is (= ["creeper 7"] (:blast choice)) "the flight says the creeper is within blast reach")
           (is (= [[] nil] [(:rooms choice) (:dropped choice)]) "and looks for no room: walls do not stop the blast")
-          (is (= [-1] (distinct (map #(nth % 2) steps)))
-              (str "the shut door does not end the flight: it steps to the far side of the room, " steps)))))))
+          (is (seq cornered) "the shut door does not end the flight: it goes on searching and finds the room's far side no gain over standing (a pocket 2.5 blocks deep)"))))))
 
 (def no-door {"5,64,2" "air" "5,65,2" "air"})
 

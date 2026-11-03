@@ -542,3 +542,15 @@
           (is (identical? base (await (price))) "the landing as it was: the kept price")
           (reset! seen? true)
           (is (not (identical? base (await (price)))) "an aged landing seen again, the store untouched: priced again"))))))
+
+(deftest a-chasers-race-to-a-route-cell-is-the-same-whichever-way-the-route-heads
+  ;; planner cells are block integers (corner) while mobs stand at real positions: the cell is raced at its centre, so
+  ;; a way east and its mirror west (about the block centre) arrive and are caught alike
+  (let [route (fn [dx] (let [c (fn [x t] {:x x :y 64 :z 0 :t t})
+                             cells (if (pos? dx) [(c 0 0) (c 3 1) (c 6 2)] [(c -1 0) (c -4 1) (c -7 2)])]
+                         {:end (select-keys (peek cells) [:x :y :z]) :cells cells :price 2}))
+        chaser (fn [x] [{:name "zombie" :mob "zombie" :pos {:x x :y 64 :z 0.5}}])
+        east (first (search/scored (chaser 5.5) {:x 0.5 :y 64 :z 0.5} [(route 1)]))
+        west (first (search/scored (chaser -5.5) {:x -0.5 :y 64 :z 0.5} [(route -1)]))]
+    (is (= (:arrive east) (:arrive west)))
+    (is (= (:caught-s east) (:caught-s west)))))
