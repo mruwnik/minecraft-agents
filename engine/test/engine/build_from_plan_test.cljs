@@ -472,6 +472,15 @@
     (is (not-any? (set room) (plan/grounded-stands p [6 64 6] 64 nil (set (map :pos cells)) #{})) "none when every plan cell is barred")
     (is (empty? (plan/stands-for p [6 64 6] 64 nil (set (map :pos cells)) #{})) "a seen cell no body can stand in is no fallback stand")))
 
+(deftest a-wall-cell-under-a-built-roof-with-an-open-room-beside-it-is-not-covered
+  (let [room (for [x (range 4 9) y [64 65]] [x y 5])
+        rock (into {} (for [x (range -3 16) y (range 63 68) z (range -3 12) :when (not ((set room) [x y z]))] [(str x "," y "," z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks rock}))
+        cells (conj (mapv (fn [pos] {:pos pos :want :clear :answer :match}) room)
+                    {:pos [6 65 6] :want "oak_slab" :item "oak_slab" :answer :missing}
+                    {:pos [6 66 6] :want "stone" :item "stone" :answer :match})]
+    (is (empty? (plan/covered p cells 64 #{})) "the clear room cells are stands")))
+
 (deftest a-stand-in-a-pocket-the-body-is-not-in-is-no-stand
   (let [open (set (for [x (range 4 9) y [64 65] z [5 7]] [x y z]))
         rock (into {} (for [x (range -3 16) y (range 63 67) z (range -3 12) :when (not (open [x y z]))] [(str x "," y "," z) "stone"]))
@@ -759,6 +768,13 @@
     {:crop "wheat"} #{"wheat_seeds"} nil
     :clear #{} nil))
 
+(deftest a-want-of-only-a-facing-is-placed-by-facing-not-by-a-click-made-before-the-walk
+  (are [want item f] (= f (fp-book/facing-only want item))
+    {:block "fence_gates" :facing :south} "oak_fence_gate" "south"
+    {:block "wall_torch" :facing :north} "torch" nil
+    {:block "oak_stairs" :facing :east :half :bottom} "oak_stairs" nil
+    "oak_slab" "oak_slab" nil))
+
 (deftest facing-ok-wants-the-body-on-the-far-side
   (are [facing body ok] (= ok (plan/facing-ok? facing [3 64 2] body))
     nil {:x 0.5 :y 64 :z 0.5} true
@@ -766,7 +782,9 @@
     "north" {:x 3.5 :y 64 :z 0.5} false
     "south" {:x 3.5 :y 64 :z 0.5} true
     "east" {:x 0.5 :y 64 :z 2.5} true
-    "east" {:x 3.5 :y 64 :z 4.5} false))
+    "east" {:x 3.5 :y 64 :z 4.5} false
+    "south" {:x 1.5 :y 64 :z 0.5} false
+    "south" {:x 2.9 :y 64 :z 0.5} true))
 
 (deftest a-corner-can-be-placed-from-inside-the-ring
   (let [planned (set (map first (map vector (conj ring [3 64 2]))))]

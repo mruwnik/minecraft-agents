@@ -66,6 +66,12 @@
   [m outcome e pos]
   (and (= :unreachable outcome) (:mouth m) (= :out-of-sight (or (:why (:data e)) (:why (:cause e)))) (< (get-in m [:tunnels pos] 0) (plan/tunnel-tries))))
 
+(defn facing-only
+  "The facing of a want whose only state is a facing (gate, door): the place job turns the body to it from where it ends up standing, which a click made here from the stand before its walk would not."
+  [want item]
+  (when (and (map? want) (= #{:block :facing} (set (keys want))) (re-find #"_(fence_gate|door)$" (str item)))
+    (plan/facing-of want)))
+
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
   is placed; a cell the rules skip counts a failure."
@@ -79,8 +85,8 @@
       :else
       (let [_ (ctx/update-mem! c assoc :placing pos)
             e (await (blocks/place-call! c (zipmap [:x :y :z] pos) item
-                                         {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                          :click (:click h) :clear false}))
+                                         (merge {:for-plan (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c))) :clear false}
+                                                (if-let [f (facing-only want item)] {:facing f} {:click (:click h)}))))
             outcome (blocks/place-outcome e)]
         (case outcome
           :continue :continue

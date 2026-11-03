@@ -66,7 +66,7 @@
     (when (and f (facing-step (name f))) (name f))))
 
 (defn facing-ok?
-  "Whether a body at body (feet position) looks toward cell [x y z] mostly in the direction facing (nil: any)."
+  "Whether a body at body (feet position) looks toward cell [x y z] within about 27 degrees of the direction facing (nil: any; near a diagonal the placed facing is a coin flip)."
   [facing [x _ z] body]
   (if-not facing
     true
@@ -75,7 +75,7 @@
           dz (- (+ z 0.5) (:z body))
           along (+ (* sx dx) (* sz dz))
           across (js/Math.abs (+ (* sz dx) (* sx dz)))]
-      (and (pos? along) (>= along across)))))
+      (and (pos? along) (>= along (* 2 across))))))
 
 (defn body-cells [{:keys [x y z]}]
   (let [fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
@@ -491,7 +491,7 @@
   furnace laid first, shut in on every side): searching for a stand floods the loaded land. A cell with a stand is placed."
   [p cells body-y bad]
   (let [built (into #{} (comp (filter #(and (= :match (:answer %)) (:item %) (not (:companion %)))) (map :pos)) cells)
-        planned (set (map :pos cells))]
+        planned (not-stands cells)]
     (filterv #(and (built (update (:pos %) 1 inc))
                    (not (grounded-stands p (:pos %) body-y (when-not (or (:click %) (:dig? %)) (facing-of (:want %))) planned bad)))
              (missing cells))))
