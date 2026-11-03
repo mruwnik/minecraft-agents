@@ -1,0 +1,7 @@
+{:id "training-row-start" :front :south
+ :note "Closes the west end of a training-cell row (its back passage); the corridor stays open as the way in."
+ :key {"#" [:any "cobblestone" "stone" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite" "tuff" "dirt"] "." :clear}
+ :layers [["#" "#" "#" "#" "#" "#" "#"]
+          ["#" "#" "#" "#" "#" "." "#"]
+          ["#" "#" "#" "#" "#" "." "#"]
+          ["#" "#" "#" "#" "#" "#" "#"]]}

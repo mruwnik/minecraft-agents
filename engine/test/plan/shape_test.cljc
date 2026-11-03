@@ -88,7 +88,9 @@
     {:id "x" :blueprint "hut"} ":at"
     {:id "x" :blueprint "hut" :at [0 64 0] :turn 45} ":turn"
     {:id "x" :blueprint "hut" :at [0 64 0] :want "stone"} ":want"
-    {:id "x" :blueprint "hut" :at [0 64 0] :box [[0 0 0] [1 1 1]]} ":box"))
+    {:id "x" :blueprint "hut" :at [0 64 0] :box [[0 0 0] [1 1 1]]} ":box"
+    {:id "x" :blueprint "hut" :at [0 64 0] :repeat {:n 0 :step [2 0 0]}} ":repeat"
+    {:id "x" :blueprint "hut" :at [0 64 0] :repeat {:n 3}} ":repeat"))
 
 (deftest a-herd-part-deep-enough-or-wanting-none-is-fine
   (are [part] (empty? (parts-erring (with-part part)))
@@ -149,7 +151,8 @@
 (def blueprints {"shed" shed})
 
 (deftest a-good-blueprint-has-no-errors
-  (is (= [] (shape/blueprint-errors shed "shed"))))
+  (is (= [] (shape/blueprint-errors shed "shed")))
+  (is (= [] (shape/blueprint-errors (assoc-in shed [:key "S"] [:any "stone" "cobblestone"]) "shed"))))
 
 (deftest blueprint-errors-say-what-is-wrong
   (are [bp fragment] (some #(str/includes? (:error %) fragment) (shape/blueprint-errors bp "shed"))
@@ -162,6 +165,7 @@
     (assoc shed :layers [["SSZ" "SSS"]]) "\"Z\""
     (assoc-in shed [:key "Q"] {:blueprint "hut"}) "blueprint"
     (assoc-in shed [:key "Q"] {:crop "wheat"}) "\"Q\""
+    (assoc-in shed [:key "Q"] [:any]) "\"Q\""
     (assoc-in shed [:key "QQ"] "stone") "one letter"
     (assoc shed :parts []) ":parts"
     (assoc shed :blueprint "hut") ":blueprint"
@@ -228,7 +232,8 @@
     {:block "oak_log" :axis :z} 270 {:block "oak_log" :axis :x}
     {:block "oak_sign" :rotation 0} 90 {:block "oak_sign" :rotation 4}
     {:block "oak_sign" :rotation 14} 90 {:block "oak_sign" :rotation 2}
-    {:block "oak_fence" :north true :east false} 90 {:block "oak_fence" :east true :south false}))
+    {:block "oak_fence" :north true :east false} 90 {:block "oak_fence" :east true :south false}
+    [:any "stone" {:block "oak_stairs" :facing :north}] 90 [:any "stone" {:block "oak_stairs" :facing :east}]))
 
 ;; ---------------------------------------------------------------- expanding a plan
 (def hill-farm
@@ -275,6 +280,16 @@
       {"shed-1/seat" [10 65 22] "shed-1/corner" [11 64 20]} (:spots e)
       {:id "shed-1" :where :blueprint :blueprint "shed" :at [10 64 20] :turn 90 :count 12}
       (select-keys (first (:parts e)) [:id :where :blueprint :at :turn :count]))))
+
+(deftest a-repeated-blueprint-places-n-turned-copies-a-step-apart-sharing-cells
+  (let [e (expanded {:id "row" :parts [{:id "row" :blueprint "shed" :at [0 64 0] :turn 180 :repeat {:n 3 :step [2 0 0]}}]})]
+    (are [expected actual] (= expected actual)
+      [] (:errors e)
+      (* 7 2 2) (count (:cells e))
+      (* 7 2 2) (:count (first (:parts e)))
+      {:block "oak_door" :facing :north :half :lower} (:want (cell-at e [5 65 0]))
+      {"row.0/seat" [0 65 0] "row.1/seat" [2 65 0] "row.2/seat" [4 65 0]}
+      (select-keys (:spots e) ["row.0/seat" "row.1/seat" "row.2/seat"]))))
 
 (deftest expansion-errors-name-the-part-or-the-assignment
   (are [plan errors] (= errors (:errors (expanded plan)))

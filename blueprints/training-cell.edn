@@ -1,0 +1,8 @@
+{:id "training-cell" :front :south
+ :note "One villager training cell of a row (village.roll): lectern under a top slab on the corridor (south) side, the villager's cell behind it, a back seal with a 1-high gap, a back passage. Walls x0 and x2 are shared: repeat it {:n n :step [2 0 0]} (turned with the part). The row needs training-row-start west of x0 and training-row-end east of the last x2."
+ :key {"#" [:any "cobblestone" "stone" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite" "tuff" "dirt"] "." :clear "L" "lectern" "s" {:block "wooden_slabs" :type :top}}
+ :layers [["###" "###" "###" "###" "###" "###" "###"]
+          ["###" "..." "###" "#.#" "#L#" "..." "###"]
+          ["###" "..." "#.#" "#.#" "#s#" "..." "###"]
+          ["###" "###" "###" "###" "###" "###" "###"]]
+ :spots {"lectern" [1 1 4] "villager" [1 1 3] "stand" [1 1 5] "back" [1 1 1]}}

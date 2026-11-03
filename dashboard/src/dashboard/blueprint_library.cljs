@@ -17,8 +17,14 @@
 (defn source-hash [source]
   (.digest (.update (.createHash crypto "sha256") source) "hex"))
 
+(defn drawn
+  "The want a cell is drawn and billed as: an :any's first choice."
+  [want]
+  (if (vector? want) (second want) want))
+
 (defn state-values [want]
-  (into {} (map (fn [[k v]] [k (shape/state-text v)])) (when (map? want) (dissoc want :block))))
+  (let [want (drawn want)]
+    (into {} (map (fn [[k v]] [k (shape/state-text v)])) (when (map? want) (dissoc want :block)))))
 
 (defn display-shapes
   "Schematic block geometry, independent of Minecraft collision data."
@@ -44,7 +50,8 @@
     :else unit))
 
 (defn exact-block [want]
-  (cond (string? want) want (map? want) (:block want)))
+  (let [want (drawn want)]
+    (cond (string? want) want (map? want) (:block want))))
 
 (defn bill [bp]
   (let [by-y (group-by #(second (:offset %)) (shape/blueprint-cells bp))

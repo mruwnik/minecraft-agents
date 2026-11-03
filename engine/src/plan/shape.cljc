@@ -48,7 +48,7 @@
 (def where-keys [:box :outline :cells :stair])
 (def area-part-keys #{:id :box :outline :cells :stair :want :note :herd})
 (def stair-keys #{:from :heading :to-y})
-(def blueprint-part-keys #{:id :blueprint :at :turn :note})
+(def blueprint-part-keys #{:id :blueprint :at :turn :repeat :note})
 (def blueprint-keys #{:id :front :key :layers :spots :note})
 
 (def air-names #{"air" "cave_air" "void_air"})
@@ -178,11 +178,24 @@
       (not (contains? part :want)) "a part needs a :want"
       :else (or (want-error (:want part)) (herd-error (:herd part)) (unknown-key-error part area-part-keys) (herd-fit-error part)))))
 
+(defn repeat? [r]
+  (and (map? r) (= #{:n :step} (set (keys r))) (pos-int? (:n r)) (coords? (:step r))))
+
+(defn copies
+  "The placements of a blueprint part: itself, or with :repeat {:n :step} n copies {:id \"id.i\" :at :turn}, :at moved by
+  i steps."
+  [{:keys [id at] copy :repeat :as part}]
+  (if-not copy
+    [part]
+    (mapv (fn [i] (assoc part :id (str id "." i) :at (mapv + at (mapv #(* i %) (:step copy))))) (range (:n copy)))))
+
 (defn blueprint-part-error [part]
   (cond
     (not (string? (:blueprint part))) ":blueprint must be the name of a blueprint"
     (not (coords? (:at part))) "a placed blueprint needs :at [x y z], its north-west bottom corner after turning"
     (not (contains? turns (get part :turn 0))) ":turn must be 0, 90, 180 or 270"
+    (not (or (nil? (:repeat part)) (repeat? (:repeat part))))
+    ":repeat must be {:n count :step [dx dy dz]}: n copies, each :step from the one before"
     :else (unknown-key-error part blueprint-part-keys)))
 
 (defn part-id? [id] (and (string? id) (re-matches #"[A-Za-z0-9_.-]+" id)))
@@ -234,8 +247,9 @@
   (cond
     (not (and (string? letter) (= 1 (count letter)))) (str "key " (pr-str letter) ": a key is one letter")
     (and (map? want) (contains? want :blueprint)) (str "key " (pr-str letter) ": a blueprint cannot contain a blueprint")
-    (not (or (= :clear want) (and (string? want) (not (str/blank? want))) (block-want? want)))
-    (str "key " (pr-str letter) ": a letter stands for a block, a block with state, or :clear")))
+    (not (or (= :clear want) (and (string? want) (not (str/blank? want))) (block-want? want)
+             (and (vector? want) (nil? (want-error want)))))
+    (str "key " (pr-str letter) ": a letter stands for a block, a block with state, [:any block ...] or :clear")))
 
 (defn layers-error [{:keys [layers] :as bp}]
   (if-not (and (vector? layers) (seq layers) (every? vector? layers) (every? #(every? string? %) layers))
@@ -309,8 +323,10 @@
 (defn turn-want
   "A block want as it stands after turning clockwise by turn degrees (see the ns doc for the state that turns)."
   [want turn]
-  (if-not (block-want? want)
-    want
+  (cond
+    (vector? want) (into [(first want)] (map #(turn-want % turn)) (rest want))
+    (not (block-want? want)) want
+    :else
     (let [connections (select-keys want sides)]
       (cond-> (apply dissoc want sides)
         (contains? want :facing) (update :facing turn-side turn)
@@ -386,7 +402,9 @@
   [blueprints part]
   (if (contains? part :blueprint)
     (if-let [bp (get blueprints (:blueprint part))]
-      {:cells (placed-cells bp part (:id part)) :spots (placed-spots bp part)}
+      (let [placements (copies part)]
+        {:cells (into [] (mapcat #(placed-cells bp % (:id part))) placements)
+         :spots (into {} (map #(placed-spots bp %)) placements)})
       {:error (str "no blueprint called " (pr-str (:blueprint part)))})
     (let [want (clear-air (:want part))]
       {:cells (mapv (fn [pos] {:pos pos :want want :part (:id part)}) (part-cells part))})))
@@ -413,7 +431,7 @@
      :spots spots
      :parts (mapv (fn [part {:keys [error]}]
                     (cond-> (merge {:id (:id part) :where (where-of part) :count (get held (:id part) 0)}
-                                   (select-keys part [:want :blueprint :at]))
+                                   (select-keys part [:want :blueprint :at :repeat]))
                       (contains? part :blueprint) (assoc :turn (get part :turn 0))
                       error (assoc :error error)))
                   (:parts plan) results)

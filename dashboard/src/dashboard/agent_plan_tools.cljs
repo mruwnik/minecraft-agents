@@ -91,7 +91,8 @@
                    (:blueprint part) (let [bp (get blueprints (:blueprint part))]
                                        (if bp (* (count (first (first (:layers bp))))
                                                  (count (first (:layers bp)))
-                                                 (count (:layers bp))) 0))
+                                                 (count (:layers bp))
+                                                 (get-in part [:repeat :n] 1)) 0))
                    :else (let [[[x1 y1 z1] [x2 y2 z2]] (or (:box part) (:outline part))]
                            (if (and x1 x2 y1 y2 z1 z2)
                              (let [width (inc (abs (- x2 x1)))

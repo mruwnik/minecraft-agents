@@ -32,10 +32,15 @@
     (is (= source (draft/editable-source result)))
     (is (= {:filename "tiny.edn" :text (str source "\n")} (draft/download source)))))
 
+(deftest an-any-of-want-is-drawn-and-billed-as-its-first-choice
+  (let [detail (lib/detail (pr-str (assoc-in tiny [:key "L"] [:any "birch_log" "oak_log"])) "tiny")]
+    (is (= [] (:errors detail)))
+    (is (= "birch_log" (:name (first (:preview detail)))))
+    (is (= 3 (get-in detail [:bill :total "birch_log"])))))
+
 (deftest invalid-native-palettes-and-unsupported-wants
   (doseq [[bp needle] [[(assoc-in tiny [:key "L"] {:crop "wheat"}) #"letter stands for"]
                        [(assoc-in tiny [:key "L"] {:tree "oak"}) #"letter stands for"]
-                       [(assoc-in tiny [:key "L"] [:any "oak_log" "birch_log"]) #"letter stands for"]
                        [(update tiny :key dissoc " ") #"not in the key"]
                        [(assoc tiny :materials {:wood {}}) #"unknown key :materials"]
                        [(assoc tiny :id "other") #":id must equal"]]]
