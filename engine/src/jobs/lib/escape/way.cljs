@@ -318,7 +318,7 @@
          height (when (pos? depth) (min depth (or rim-n depth)))
          pillar-blocks? (and (not (off :pillar)) height item (>= count height))
          headroom? (bs/passable? (block-at (escape/up feet 2)))
-         open-above? (and pillar-blocks? (let [unseen? (escape/unseen-of p)] (every? #(or (unseen? %) (bs/passable? (block-at %))) (map #(escape/up feet %) (range 2 (+ height 2))))))
+         open-above? (and pillar-blocks? (let [unseen? (escape/unseen-of p)] (every? #(or (and (unseen? %) (may-dig? %)) (bs/passable? (block-at %))) (map #(escape/up feet %) (range 2 (+ height 2))))))
          rise (min (escape/max-depth) (max depth (- (second goal) (second feet))))
          stair-dirs (remove #(skip [:stair (escape/heading-names %)]) (distinct (cond->> escape/cardinals dir (cons dir))))
          [stair rise] (if (or (off :stair) (not (pos? rise)))

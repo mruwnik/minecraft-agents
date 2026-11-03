@@ -28,7 +28,7 @@
 (def doc
   "Pillar up :height blocks (or until the feet are at :y) from the cell the body stands in, by jump-placing one block at a time under itself.
   Done (:already before the start) when the body stands on the ground with its feet at :y or above.
-  A roof over the head (one of the two cells above the feet) is dug out first, only when the call's :ways has :roof and what the dig destroys (a build's put-back) is worth the call's worth (else :ceiling, nothing dug); a sand or gravel column that falls into the body's cells is dug out at once, and each landing counts as a failure in a row (retry?: another is tried while it is worth its price, else :ceiling with the cells clear). One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
+  A roof over the head (one of the two cells above the feet) is dug out first, through the zone gate (a zoned roof cell is never dug, :ignore-zones? or not) and only when what the dig destroys (a build's put-back) is worth the call's worth (else :ceiling, nothing dug); a sand or gravel column that falls into the body's cells is dug out at once, and each landing counts as a failure in a row (retry?: another is tried while it is worth its price, else :ceiling with the cells clear). One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
@@ -86,7 +86,7 @@
 
 (def fit? ready/fed-fit?)
 
-(def ways (conj need/fetch-ways :roof))
+(def ways need/fetch-ways)
 
 (def target [])
 
@@ -400,18 +400,13 @@
         (await (look/look-at! c cell))))))
 
 (defn ^:async dig-one!
-  "Dig the cell at (a jobs.blocks.dig child, falling blocks accepted): the dig's outcome keyword."
-  [c [x y z]]
+  "Dig the cell at (a jobs.blocks.dig child, falling blocks accepted): the dig's outcome keyword. The call's
+  :ignore-zones? reaches the dig only when ignore? (a fallen block in the body's own cells), never for a roof."
+  [c [x y z] ignore?]
   (blocks/dig-outcome
    (await (blocks/dig-cell-ending! c {:x x :y y :z z}
                                    (cond-> {:accept #{:falling-block} :walk false :collect false :need-drop false}
-                                     (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))))
-
-(defn roof-way?
-  "Whether the call allows digging a roof (:roof in its :ways)."
-  [c]
-  (let [ways (:ways (ctx/frozen-call c))]
-    (or (nil? ways) (contains? ways :roof))))
+                                     (and ignore? (:ignore-zones? (:args c))) (assoc :ignore-zones? true))))))
 
 (defn roof-dear?
   "Whether what digging the roof cell `at` destroys (cost/destroyed-fn: a placed-looking block is someone's build) costs
@@ -427,9 +422,9 @@
   with the dig's outcome."
   [c l {:keys [at block] :as step}]
   (let [falling? (rules/falling? block)]
-    (if (or (not (roof-way? c)) (roof-dear? c at block) (and (not falling?) (not (retry? c))))
+    (if (or (roof-dear? c at block) (and (not falling?) (not (retry? c))))
       (finish! c l step)
-      (let [outcome (await (dig-one! c at))
+      (let [outcome (await (dig-one! c at false))
             block-at (access/sensed-at (:primitives c) nil)]
         (when-not falling? (u/failed! c))
         (case outcome
@@ -450,9 +445,9 @@
       (do
         (u/failed! c)
         (if-not (retry? c)
-          (do (await (dig-one! c cell))
+          (do (await (dig-one! c cell true))
               (finish! c l (give-up :ceiling :at cell :block (block-at cell) :dig :landed)))
-          (if (= :continue (await (dig-one! c cell))) :continue :again))))))
+          (if (= :continue (await (dig-one! c cell true))) :continue :again))))))
 
 (defn ^:async step!
   "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or the ending."

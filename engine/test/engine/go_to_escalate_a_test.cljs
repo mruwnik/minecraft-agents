@@ -202,15 +202,6 @@
           (is (= 2 (count (calls p "jumpPlace"))) "two blocks up, then a step onto the rim")
           (is (empty? (calls p "dig"))))))))
 
-(deftest a-go-to-without-the-clear-path-way-pillars-out-of-a-pit-without-digging-the-roof
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p]} (await (run-job! (merge in-pit {:blocks (assoc pit "0,65,0" "dirt") :inventory [{:name "dirt" :count 5}]})
-                                          {:pos [10 64 0] :range 1 :ways #{:walk :pillar}}))]
-          (is (seq (calls p "jumpPlace")) "it did try the pillar")
-          (is (empty? (calls p "dig")) "and dug nothing of the roof"))))))
-
 (deftest go-to-at-low-food-escalates-instead-of-giving-up-on-a-sprint-only-way
   (async done
     (tu/run-async done
@@ -747,6 +738,11 @@
   ;; a dark shaft shows the body only the cells beside it: the pillar is priced against the door, not left for when nothing else is
   (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)]
     (is (= :pillar (:step (escape-way/choose p [0 58 0] [6 64 0]))))))
+
+(deftest escape-choose-does-not-pillar-up-an-unseen-column-it-may-not-dig
+  (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)]
+    (is (= :pillar (:step (escape-way/choose p [0 58 0] [6 64 0] (constantly true)))))
+    (is (not= :pillar (:step (escape-way/choose p [0 58 0] [6 64 0] (fn [[x _ z]] (not= [0 0] [x z]))))) "a zoned roof cell unseen is the worse case: solid and not dug")))
 
 (deftest escape-choose-prices-the-unseen-roof-over-a-pit-by-the-chance-it-is-solid
   (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)
