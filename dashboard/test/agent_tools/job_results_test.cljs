@@ -182,3 +182,10 @@
       (-> (results/read! get! "sock" "j4" {})
           (.then (fn [result] (is (= :completed (:status result))) (done))
                  (fn [error] (is false (str "history read failed: " (.-message error))) (done)))))))
+
+(deftest a-villager-s-offers-fit-the-bound-whole
+  (let [offer {:buy {:item "emerald" :count 1} :buy-b {:item "paper" :count 24} :sell {:item "lectern" :count 1 :nbt {:a 1}} :uses 0 :max-uses 12}
+        {:keys [value truncated?]} (results/bounded {:offers (vec (repeat 12 offer))})]
+    (is (not truncated?))
+    (is (= 12 (count (:offers value))))
+    (is (= offer (last (:offers value))))))

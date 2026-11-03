@@ -24,7 +24,7 @@
 (defn bounded [value]
   (let [budget (volatile! 128)
         clipped (volatile! false)]
-    (letfn [(trim [v depth]
+    (letfn [(trim-in [budget v depth]
               (if (or (> depth 6) (not (pos? @budget)))
                 (do (vreset! clipped true) :truncated)
                 (do (vswap! budget dec)
@@ -32,11 +32,12 @@
                       (string? v) (if (> (count v) max-string-chars)
                                     (do (vreset! clipped true) (str (subs v 0 max-string-chars) "…")) v)
                       (map? v) (do (when (> (count v) 32) (vreset! clipped true))
-                                   (into {} (map (fn [[k x]] [(if (> (count (str k)) 80) (do (vreset! clipped true) (subs (str k) 0 80)) k) (trim x (inc depth))])) (take 32 v)))
+                                   (into {} (map (fn [[k x]] [(if (> (count (str k)) 80) (do (vreset! clipped true) (subs (str k) 0 80)) k) (if (= :offers k) ; own budget: a roll's offers are the point of the read
+ (trim-in (volatile! 512) x (inc depth)) (trim-in budget x (inc depth)))])) (take 32 v)))
                       (coll? v) (do (when (> (count v) 32) (vreset! clipped true))
-                                    (mapv #(trim % (inc depth)) (take 32 v)))
+                                    (mapv #(trim-in budget % (inc depth)) (take 32 v)))
                       :else v))))]
-      {:value (trim value 0) :truncated? @clipped})))
+      {:value (trim-in budget value 0) :truncated? @clipped})))
 
 (defn next-text
   "The :next calls of a job's ending (jobs.lib.next-call: {:job :args}, the job itself again last with :again) as one
