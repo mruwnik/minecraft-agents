@@ -4,7 +4,6 @@
 ;; zone) turns to another heading; a body moved off the stair does not end the mine :no-stone-found; the stone pickaxe is held for stone
 ;; and its break is told once. The descent runs to :level 4 (6 steps east from the surface cell [16 10 16]), then a 3 block tunnel.
 ;; Stone mass x 2..30, z 4..28, y 0..9 (surface feet y 10); the body faces east (yaw 270).
-;; The stair cases carry torches (the default): a stair open to the surface is judged by an unseen edge (a priced guess), and a call that hangs no torches cannot lower it.
 {:defaults
  {:tags [:mine :access :stairs] :time :any
   :plot {:height 24 :light :lit}
@@ -25,7 +24,7 @@
   {:name "stair-digs-through-gravel-in-the-line"
    ;; gravel over the cut cells of steps 3 and 4 (the stair passes :accept [:falling-block]): no :hazard stop, the descent goes on
    :blocks [[:fill [19 6 16] [19 9 16] "gravel"] [:fill [20 5 16] [20 9 16] "gravel"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :hazard}}}} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
@@ -33,7 +32,7 @@
   {:name "stair-through-a-cave-under-its-steps-with-filler-carried"
    ;; the cell under the floor of each step is air (a thin cave along the line): with cobblestone carried the stair goes on
    :blocks [[:set [17 7 16] "air"] [:set [18 6 16] "air"] [:set [19 5 16] "air"] [:set [20 4 16] "air"] [:set [21 3 16] "air"] [:set [22 2 16] "air"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :cave-below}}}} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]}
@@ -41,45 +40,45 @@
    ;; a cavern from the third step on (x 19..24, y 4..9, z 14..18, floor y 3): the steps' floors have no block beside or under them
    ;; but the last stone behind; cobblestone is carried
    :blocks [[:fill [19 4 14] [24 9 18] "air"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :direction :east})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :direction :east})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :mine.descent-stopped} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
    :after [[:block [19 6 16] "cobblestone"]]}
   {:name "table-in-the-first-step-turns-the-stair-to-another-heading"
    :blocks [[:set [17 10 16] "crafting_table"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.turned :data {:from "east"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]
    :after [[:block [17 10 16] "crafting_table"]]}
   {:name "foreign-zone-east-turns-the-stair-to-another-heading"
    ;; zone-margin 1: the default keeps a stair's start 7 blocks clear of the zone, so it would never face it
    :zones [{:name "far" :min [17 2 12] :max [22 11 20] :owner "SomeoneElse"}]
-   :act [[:job (jobs.gather.mine {:settings {:jobs.gather.mine.targets/zone-margin 1} :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:settings {:jobs.gather.mine.targets/zone-margin 1} :torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.turned :data {:from "east"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]
    :after [[:block [17 9 16] "stone"]]}
   {:name "stair-goes-on-beside-water-when-accepted-as-a-list"
    ;; sealed water beside the first steps; :accept given as a list reaches the stair, so no :hazard stop
    :blocks [[:set [17 10 17] "water"] [:set [17 9 17] "water"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :accept [:fluid-adjacent :falling-block]})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :accept [:fluid-adjacent :falling-block]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :hazard}}}} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]}
   {:name "unaccepted-gravel-in-the-third-step-turns-the-stair-to-another-heading"
    ;; with nothing accepted, gravel over the third step is a :hazard on that heading only; a player digs down on another side
    :blocks [[:fill [19 6 16] [19 10 16] "gravel"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :accept [:fluid-adjacent]})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :accept [:fluid-adjacent]})]]
    :expect [{:event {:source :job :kind :mine.turned :data {:from "east" :stop :hazard}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]}
   {:name "water-in-the-first-step-of-a-given-heading-turns-the-stair"
    :blocks [[:set [17 9 16] "water"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :heading :east})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :heading :east})]]
    :expect [{:event {:source :job :kind :mine.turned :data {:from "east"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]}
   {:name "body-moved-off-the-stair-does-not-end-no-stone-found"
    ;; after the first step a push puts the body on the surface beside the stair line
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]
          [:await {:source :job :kind :stair.step} 90]
          [:rcon "execute at $BODY run tp $BODY ~ ~4 ~3"]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]}
