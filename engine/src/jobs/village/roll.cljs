@@ -36,7 +36,7 @@
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body walked to it and to its far side and waited a few polls; nothing is placed), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :cell-open (the slab lifted for a drop could not be put back; the cell it covered is named), :workstation-lost (the broken workstation's drop is not carried after the body walked to it and to its far side and waited a few polls, or the slab over it could not be lifted; nothing is placed, the data names :drop-cell), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -369,16 +369,17 @@
                     :again))))))
 
 (defn ^:async recover!
-  "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): walk to where its drop
-  lies and take it through a gap (reach-drop!); failing that stand on its cell when the body can enter it, else stay at the cell's
-  edge, and wait a few polls for the drop to come; then end :workstation-lost. :again or :continue."
+  "The broken workstation is not carried (its drop slid out of reach, e.g. into the sealed cell beside it): lift a slab over the cell
+  and stand on the cell, so the open cell stays shut by the body (a villager walks out of a cell left open); after two polls
+  walk to where the drop lies and take it through a gap (reach-drop!); else stay at the cell's edge, and wait a few polls; then end :workstation-lost. :again or :continue."
   [c]
   (let [{:keys [pos]} (:args c)
         tries (:recovers (ctx/mem c) 0)]
     (cond
-      (>= tries 5) (stop! c :workstation-lost)
-      :else (or (await (reach-drop! c))
-                (await (gap/lift! c pos (rolls c)))
+      (>= tries 5) (ctx/end c :nothing-possible :workstation-lost
+                            (data-of c (cond-> {:drop-cell (gap/above pos)} (:lift-refused (ctx/mem c)) (assoc :slab-lift-refused (:lift-refused (ctx/mem c))))))
+      :else (or (await (gap/lift! c pos (rolls c)))
+                (when (>= tries 2) (await (reach-drop! c)))
                 (if (on-cell? c pos)
                   (do (ctx/update-mem! c update :recovers (fnil inc 0))
                       (await (child/pause! c 1 :picking-up-the-drop))
@@ -431,8 +432,8 @@
         (and e (not= "unemployed" profession)) (await (wait-job! c :villager-keeps-job))
         (zero? (u/carried-count p item)) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
-        (:slab (ctx/mem c)) (or (await (to-stand! c)) (await (gap/restore! c pos (rolls c))))
         :else (await (place-or-return! c)))
+      (and (= item block) (:slab (ctx/mem c))) (or (await (to-stand! c)) (await (gap/restore! c pos (rolls c))))
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job
       (nil? e) (cond
@@ -465,11 +466,12 @@
         block (u/seen-name (:primitives c) pos)
         r (cond
             (and (:slab (ctx/mem c)) (on-cell? c pos)) (await (clear-cell! c pos))
+            (and (:broken (ctx/mem c)) block (bs/air block) (pos? (u/carried-count (:primitives c) (item-of (:args c)))))
+            (await (place-or-return! c))
             (:slab (ctx/mem c)) (or (await (to-stand! c)) (await (gap/restore! c pos (rolls c))))
-            (not (and (:broken (ctx/mem c)) block (bs/air block) (pos? (u/carried-count (:primitives c) (item-of (:args c))))))
-            (ctx/end c :done nil)
-            (on-cell? c pos) (await (clear-cell! c pos))
-            :else (await (place-or-return! c)))]
+            :else (ctx/end c :done nil))]
+    (when (and (contract/ending? r) (not= :done (:kind r)) (:broken (ctx/mem c)) (some-> (u/seen-name (:primitives c) pos) bs/air))
+      (ctx/emit! c :roll.cell-open :warn {:pos pos :text (str "CELL OPEN: the " (item-of (:args c)) " at " (:x pos) "," (:y pos) "," (:z pos) " is not placed back")}))
     (if (= :again r) (await (cleanup c nil)) r)))
 
 (defn ^:async round
