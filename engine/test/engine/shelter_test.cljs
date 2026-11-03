@@ -446,6 +446,21 @@
           (is (seq (calls p "place")) "the carried bed goes down once the seen one proved unreachable")
           (is (empty? (entries eng :sleep-failed))))))))
 
+(deftest a-reflex-sleep-skips-a-bed-found-occupied-instead-of-holding-on-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:time night :blocks {"6,64,0" "red_bed"}})
+              eng (update eng :triggers assoc :sleeper {:name :sleeper :job '(jobs.survival.sleep) :args {}
+                                                        :persistence :cooldown :cooldown-s 10 :when (constantly true)})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (with-redefs [sh-beds/bed-free? (fn [& _] false)]
+            (core/register-reflex! eng {:trigger :sleeper})
+            (await (tick-n eng 4)))
+          (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :bed-unreachable)) "skipped for the night")
+          (is (empty? (filterv #(= :continued (:kind %)) @seen)) "no :continue from a reflex")
+          (is (empty? (declined-events seen :sleeper)) "ended, not declined"))))))
+
 (deftest sleep-still-tries-a-different-bed-than-the-unreachable-one
   (async done
     (tu/run-async done

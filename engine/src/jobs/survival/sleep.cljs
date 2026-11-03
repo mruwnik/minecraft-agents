@@ -23,7 +23,7 @@
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
-  Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
+  A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
   Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
@@ -223,6 +223,8 @@
         searching? (= :searching (some-> (:reason route) keyword))
         walk (when-not (or (taken?) no-way? searching?) (await (child/call-walk* c :go walk-args)))]
     (cond
+      (and (taken?) (:reflex c)) (do (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
+                                     (ctx/end c :nothing-possible :bed-occupied {:pos bed :text "the bed is occupied; skipped for ten minutes"}))
       (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
       no-way? (give-up-unreachable-now! c bed (no-walk-text route))
       (and searching? (:walk-failed (ctx/mem c))) (give-up-unreachable-now! c bed "cannot reach the bed on foot: the walk did not arrive and the search for another way does not end")
