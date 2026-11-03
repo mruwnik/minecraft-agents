@@ -191,6 +191,7 @@
  [jobs.survival.go-home :time]
  [jobs.survival.log-out :news-ms]
  [jobs.survival.log-out :offline-ms]
+ [jobs.survival.log-out :stay-ms]
  [jobs.survival.recover-drops :value-overrides]
  [jobs.survival.respond-to-hostile :radius]
  [jobs.survival.set-spawn :status]
