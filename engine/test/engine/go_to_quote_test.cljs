@@ -135,6 +135,12 @@
     (is (= ##Inf most))
     (is (true? (:estimate q)))))
 
+(deftest a-search-that-spent-its-node-budget-is-priced-like-a-search-going-on-but-is-no-wait
+  (let [q (pv/quote-of-route {:found false :reason :budget :near 30 :goal [30 64 0]} false false)
+        [_ mean _] (get-in q [:uses :job-time])]
+    (is (< (js/Math.abs (- mean (* 30 cost-planner/walk-floor (cost-planner/quote-unseen-factor)))) 1e-9) "a finite price, not too-expensive")
+    (is (nil? (:estimate q)) "callers that wait on an estimate would ask again for ever")))
+
 (deftest drop-cost-false-takes-no-two-block-drop
   (async done
     (tu/run-async done

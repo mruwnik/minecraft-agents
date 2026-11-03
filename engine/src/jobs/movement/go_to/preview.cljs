@@ -118,11 +118,12 @@
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
-  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a search still going on (:searching) is priced so too, from its :near blocks, marked :estimate true; none at all, or a refusal, is ##Inf unless escalating? (a way
+  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a search still going on (:searching) is priced so too, from its :near blocks, marked :estimate true; one that spent its node budget (:budget: not known yet, not no route) is priced so but is no estimate to wait on (callers go on with the price); none at all, or a refusal, is ##Inf unless escalating? (a way
   that changes the world may still get there). Health: the planned damage. :moves-to the goal. :risk the route's walk risk.
   `back?` (go-to :back): the time is the walk there and back, as the risk prices it."
   [{:keys [found seconds partial near reason damage goal] :as r} escalating? back?]
   (let [searching? (= :searching reason)
+        budget? (= :budget reason)
         legs (if back? 2 1)
         s (* legs (or seconds (:seconds partial) 0))
         [ex _ ez] (last (:waypoints partial))
@@ -131,7 +132,7 @@
         time (cond
                found [s s (* s (quote-most-factor))]
                (refusals reason) (get-in contract/too-expensive [:uses :job-time])
-               (or partial searching? escalating?) [s (+ s left-s) ##Inf]
+               (or partial searching? budget? escalating?) [s (+ s left-s) ##Inf]
                :else (get-in contract/too-expensive [:uses :job-time]))]
     (cond-> {:uses {:job-time time} :route (dissoc r :goal :risk)}
       (:risk r) (assoc :risk (:risk r))

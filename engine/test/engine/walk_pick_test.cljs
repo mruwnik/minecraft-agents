@@ -7,7 +7,8 @@
             [engine.library-test :as lib]
             [engine.test-util :as tu]
             [jobs.lib.util :as u]
-            [jobs.lib.walk-pick :as pick]))
+            [jobs.lib.walk-pick :as pick]
+            [jobs.movement.go-to.preview :as pv]))
 
 (defn ^:async picked
   "[best! of candidates {:id :bound :s} with go-to's quote stubbed to {:s s}, the ids quoted in order]."
@@ -77,6 +78,12 @@
     (is (zero? (pick/quoted-s c (contract/ending :done nil nil))) "already there")
     (is (infinite? (pick/quoted-s c (contract/ending :nothing-possible {:reason :no-path} nil))))
     (is (infinite? (pick/quoted-s c {:uses {:job-time [4 ##Inf ##Inf]}})))))
+
+(deftest a-quote-that-spent-its-node-budget-is-priced-and-no-way-the-pick-gives-up-on
+  (let [c {:primitives (tu/fake {})}
+        q (pv/quote-of-route {:found false :reason :budget :near 30 :goal [30 64 0]} false false)]
+    (is (js/isFinite (pick/quoted-s c q)) "the pick prices the walk, it is not out of reach")
+    (is (not (pick/no-way? q)) "no proof that the land is closed")))
 
 (deftest the-bound-is-never-more-than-go-tos-quote-of-a-straight-walk
   (async done
