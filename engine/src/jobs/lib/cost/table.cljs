@@ -185,8 +185,9 @@
       (mapv (fn [[item n]] {:name item :count n}) (block-yields md (deep-merge default-basis basis) b loot (crop? b loot))))))
 
 (defn block-sources
-  "{item name worth} of what blocks drop: the cheapest way, per item."
-  [md basis crafted]
+  "{item name worth} of what blocks drop: the cheapest way, per item. tool-price is the seconds of the pickaxe a block of that
+  tier needs, beyond the stone one every body is assumed to have (0 when none)."
+  [md basis crafted tool-price]
   (let [item? #(some? (aget (.-itemsByName md) %))]
     (reduce (fn [acc b]
               (let [name (.-name b)
@@ -198,7 +199,7 @@
                   acc
                   (let [cost (if crop
                                (+ (:farm-s basis) (get-in basis [:find :crop]))
-                               (+ (dig-seconds md basis b) (find-seconds md basis b)))]
+                               (+ (dig-seconds md basis b) (find-seconds md basis b) (tool-price (block-tier md b))))]
                     (reduce (fn [acc [item n]] (if (pos? n) (update acc item #(min (or % js/Infinity) (/ cost n))) acc))
                             acc (block-yields md basis b loot crop))))))
             {} (array-seq (.-blocksArray md)))))
@@ -277,10 +278,9 @@
   (let [b (aget (.-blocksByName md) (get-in basis [:gear :ref-block]))]
     (update basis :gear assoc :ref-hardness (.-hardness b) :ref-material (.-material b) :ref-tier (block-tier md b))))
 
-(defn build-table
-  "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
-  (default-basis with the deep-merged :basis). The extra args only key table-for's memo."
-  [version overrides basis & _]
+(defn build-table-with
+  "build-table's table, the blocks priced with tool-price (tier -> seconds, see block-sources)."
+  [version overrides basis tool-price]
   (let [md (minecraft-data version)
         basis (full-basis basis)
         items (array-seq (.-itemsArray md))
@@ -291,7 +291,7 @@
         smelts (smelt-sources names)
         foods-table (foods/table-for version)
         food-floor (fn [n] (if (contains? foods/harmful n) 0 (* (:food-point-s basis) (get-in foods-table [n :points] 0))))
-        sourced (merge-with min (block-sources md basis crafted) (mob-sources md basis))
+        sourced (merge-with min (block-sources md basis crafted tool-price) (mob-sources md basis))
         natural (into {} (map (fn [[n w]] [n (if (or (crafted n) (contains? smelts n) (used? md ingredients version n))
                                                   w
                                                   (* w (:junk-share basis)))]))
@@ -327,6 +327,29 @@
         table (fixpoint (merge natural unsourced))]
     (tier-floors basis overrides (set (keep #(when (number? (.-maxDurability %)) (.-name %)) items))
                  (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table))))
+
+(defn tool-price-fn
+  "tier -> worth in table of the cheapest pickaxe of that harvest tier, 0 up to the :dig basis's default tier. A block that
+  needs a better pickaxe than the default is worth the tool a body starting without one must first make."
+  [md basis table]
+  (let [pickaxes (keep #(let [n (.-name %)] (when (str/ends-with? n "_pickaxe") n)) (array-seq (.-itemsArray md)))
+        floor (get-in basis [:dig :default-tier])]
+    (fn [tier]
+      (if (<= tier floor)
+        0
+        (let [w (->> pickaxes (filter #(<= tier (weapon/tool-tier %))) (keep #(let [w (get table %)] (when (and w (js/isFinite w)) w))) (apply min js/Infinity))]
+          (if (js/isFinite w) w 0))))))
+
+(defn build-table
+  "{item name worth} for minecraft-data version with name overrides pinned (overrides: {name override}) and the basis
+  (default-basis with the deep-merged :basis): built again with the pickaxes' prices of the table before, once per harvest
+  tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs). The extra args only key table-for's memo."
+  [version overrides basis & _]
+  (let [md (minecraft-data version)
+        basis* (full-basis basis)]
+    (nth (iterate #(build-table-with version overrides basis (tool-price-fn md basis* %))
+                  (build-table-with version overrides basis (constantly 0)))
+         2)))
 
 (def table-for
   "build-table, memoized on what it reads: its arguments and the settings the hp and fall prices come from."
