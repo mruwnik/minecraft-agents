@@ -7,6 +7,8 @@
 ;; out of reach, and no ground is in pillar range, so from-plan lays a bridge row from the bank, builds the wall and takes the row back.
 ;; roof-hole-of-a-sealed-room: the one missing roof cell of a closed stone room; the only ground stand lies inside the sealed room, so the place walk ends no path:
 ;; from-plan then stands the body on a pillar outside instead of giving the cell up.
+;; dig-on-a-plateau-from-its-foot: two stone cells on top of an 8 high plateau, the body at its foot (as after a drop off the plot): its walk to a stand up there is
+;; blocked, so it is walked again with every way open (stairs up) and the cells are dug, not given up or held for ever.
 ;; roof-hole-in-the-middle-of-a-flat-roof: the hole is two cells in from every roof edge: the body pillars beside the wall and places from there or from the roof.
 {:defaults
  {:tags [:build :access :zones]
@@ -74,4 +76,13 @@
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
    :after [[:block [15 0 20] "stone"] [:block [16 0 20] "stone"] [:block [17 0 20] "stone"]
            [:not-block [16 -1 16] "dirt"] [:not-block [16 -1 17] "dirt"] [:item "dirt" [:>= 6]]]
-   :limit-s 270}]}
+   :limit-s 270}
+  {:name "dig-on-a-plateau-from-its-foot"
+   :plans [{:id "top" :metadata {:by "$body"}
+            :parts [{:id "t" :box [#at [15 7 25] #at [16 7 25]] :want :clear}]}]
+   :blocks [[:fill [8 0 20] [24 7 30] "stone"]]
+   :body {:at [15.5 0 15.5] :yaw 0 :inventory [["iron_pickaxe" 1] ["cobblestone" 64]]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:top"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 300 :of-job true}]
+   :after [[:block [15 7 25] "air"] [:block [16 7 25] "air"]]
+   :limit-s 330}]}

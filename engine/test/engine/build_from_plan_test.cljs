@@ -1674,6 +1674,20 @@
           (is (seq @opts))
           (is (every? (comp nil? :ways) @opts) "shut in by its own dig: go-to may pillar or stair out"))))))
 
+(deftest a-body-below-the-plot-it-cannot-walk-up-to-walks-with-escalation-and-then-counts-the-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "clear" :cells [[4 72 0]] :want :clear}]}
+              tower (into {} (for [x [3 4 5] z [-1 0 1] y (range 63 73) :when (or (< y 72) (= [x z] [4 0]))] [(h/cell-key x y z) "stone"]))
+              opts (atom [])
+              {:keys [eng]} (start {:inventory [{:name "iron_pickaxe" :count 1}] :blocks tower :self {:pos {:x 0.5 :y 64 :z 0.5}}} {"far" plan})
+              result (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :blocked)
+                         (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 12)))))]
+          (is (= #{:walk :clear-seal} (:ways (first @opts))) "the first walk to a stand 8 above only walks")
+          (is (some (comp nil? :ways) (rest @opts)) "after it was blocked the walk may stair or pillar up")
+          (is (= :unreachable (get-in result [:given-up [4 72 0]])) "a blocked climb with every way open is a failure"))))))
+
 (deftest a-body-go-to-finds-no-way-out-of-its-hole-for-stops-shut-in-at-once
   (async done
     (tu/run-async done

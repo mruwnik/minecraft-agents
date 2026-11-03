@@ -86,7 +86,7 @@
   (let [limit (give-up)
         w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))
         waited (await (near/risky-wait! c w))
-        climb? (and (not (:dig? cell)) (not (in-hole? c)) (<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second stand)))]
+        climb? (and (:ways opts) (not (:dig? cell)) (not (in-hole? c)) (<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second stand)))]
     (when (and (= :blocked w) (not waited) (not (sealed-in-shelter? c)))
       (ctx/update-mem! c #(cond-> (update % :bad-stands (fnil conj []) stand)
                             (not climb?) (walk-fail (:pos cell) :unreachable limit (u/self-pos c))
@@ -291,9 +291,11 @@
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
       :else
-      (let [shut? (or (in-hole? c) (shut-in-walk? c))
+      (let [above? #(<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second %))
+                  climbing? (and (above? stand) (some above? (:bad-stands (ctx/mem c))))
+            shut? (or (in-hole? c) (shut-in-walk? c))
             w (await (walk-stand! c cell stand (cond-> {:stay-s (stand-stay-s c cells cell stand)}
-                                               (not shut?) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
+                                               (not (or shut? climbing?)) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
         ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
         (when (and (= :there w) (:found cell) (not (:dig? cell)) (seq (in-reach c [cell])) (not (place-here? c cells cell)))
           (ctx/update-mem! c #(-> (update % :bad-stands (fnil conj []) stand) (walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c)))))
