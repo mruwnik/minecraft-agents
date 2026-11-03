@@ -745,3 +745,15 @@
         pillar-s #(escape-way/price p [0 58 0] {:step :pillar :height 6})]
     (is (< (at 0 pillar-s) (at 0.5 pillar-s)))
     (is (not= :pillar (at 1 #(:step (escape-way/choose p [0 58 0] [6 64 0])))) "a roof sure to be there is dug by hand: a way through the side is cheaper")))
+
+(deftest go-to-escalates-out-of-a-shaft-whose-surrounding-rock-it-cannot-see
+  ;; the planner proves the start sealed (:start-enclosed) though the room flood reads the unseen walls as open: it escalates
+  ;; (a pillar; the unseen roof is guessed rock, dug as air, and kept as air) instead of giving up "shut in"
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :sight 1.5
+                                                   :inventory [{:name "dirt" :count 8}]}
+                                                  {:pos [6 64 0] :range 1}))]
+          (is (= [:pillar] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
+          (is (not= :start-enclosed (:why @out))))))))

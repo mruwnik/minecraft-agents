@@ -213,9 +213,11 @@
 (defn step-now
   "next-step for the body as it stands, with ledger l, its feet and the base of its column."
   [c l feet base]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        sensed (access/sensed-at p blocks/hidden-guess)
+        air (set (::dug-air (ctx/mem c)))]
     (next-step (merge (access-inputs c)
-                      {:feet feet :base base :height (height-of c) :block-at (access/sensed-at p blocks/hidden-guess)
+                      {:feet feet :base base :height (height-of c) :block-at (fn [cell] (if (and (contains? air cell) (not ((access/seen-at p) cell))) "air" (sensed cell)))
                        :carried (pl/carried p) :item nil :items (blocks-of c) :ledger (ledger/cells l)}))))
 
 (defn blocks-short
@@ -352,6 +354,7 @@
         r (await (ctx/act c :jumpPlace #js {:item item :count 1}))]
     (if (pos? (or (.-placed r) 0))
       (do (ledger/remember! c (ledger/confirm l cell))
+          (ctx/update-mem! c update ::dug-air disj cell)
           (u/progress! c)
           (ctx/update-mem! c dissoc :mob-waits)
           :again)
@@ -418,6 +421,8 @@
       (let [outcome (await (dig-one! c at))
             block-at (access/sensed-at (:primitives c) nil)]
         (when-not falling? (u/failed! c))
+        ;; a cell the dig found air stays air for the next step even when the body never saw it (a guess reads it as rock)
+        (when (= :missing outcome) (ctx/update-mem! c update ::dug-air (fnil conj #{}) at))
         (case outcome
           :continue :continue
           (:dug :missing) (if (and (rules/falling? (block-at (up at 1))) (not= at (up (pl/feet-cell c) 1))

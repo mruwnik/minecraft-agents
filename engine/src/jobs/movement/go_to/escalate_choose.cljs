@@ -680,7 +680,8 @@
   (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never, is a wall), or the planner's
   reason proves the way needs the world changed and the body is shut in (reach-room/enclosed?, which already counts doors
   as opened: a door that leads nowhere, e.g. onto a step under its lintel, is no way out), or the search ran out of
-  land (:exhausted, after the walks that looked at every edge) in a mine or cave larger than a room. Never out of
+  land (:exhausted, after the walks that looked at every edge) in a mine or cave larger than a room, or the planner
+  proved the start sealed (:start-enclosed: the walls it could not see may be open ground to the room flood). Never out of
   the body's own shelter: it is shut in on purpose."
   [c tries result]
   (let [doors (some-> (:doors (:args c)) keyword)
@@ -699,7 +700,7 @@
              (and (walker-fault? result) (>= tries (max-blocked))
                   (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))
              (and (escalate-reason? result doors)
-                  (or (= :exhausted (some-> (:reason result) keyword))
+                  (or (#{:exhausted :start-enclosed} (some-> (:reason result) keyword))
                       @shut?))))))
 
 (defn climb-on?

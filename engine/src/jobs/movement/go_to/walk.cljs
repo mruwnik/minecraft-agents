@@ -738,7 +738,7 @@
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
                 looped? (and looped? (not learned-floor?) (not reach-new?))
                 result (cond-> result
-                         looped? (assoc :status :no-path :reason (if (escape/walk-enclosed? c) :start-enclosed :no-progress))
+                         looped? (assoc :status :no-path :reason (if (or (= :start-enclosed (some-> (:reason result) keyword)) (escape/walk-enclosed? c)) :start-enclosed :no-progress))
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 learned? (learned-round? result)
                 progress? (and (not looped?) (or (< left (dec best)) explored? nearer? learned-floor? reach-new? (and learned? (learned-near? result pos best))))
