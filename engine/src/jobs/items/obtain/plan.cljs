@@ -173,7 +173,7 @@
 
 (defn need-cost
   "Seconds to gather a need whose nearest block is seen, a lower bound (the walk's danger is go-to's to price): the
-  straight walk there, the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
+  straight walk there, the digs (none for water or lava: fished or filled, not dug), a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
   loot holds none), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
   the body's kit)."
   [c need]
@@ -188,7 +188,7 @@
                 (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
                   (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
                   js/Infinity))
-        dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))]
+        dig (+ (or kills 0) (* (:count need) (if (#{"water" "lava"} name) 0 (or (cost/dig-cost name) 0))))]
     (if (and (:ore? need) (below? c need) (unlit? p pos))
       (+ dig (cost/dark-way-s walk d (threats/body-of p)))
       (+ walk dig))))
