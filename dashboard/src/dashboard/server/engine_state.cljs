@@ -42,7 +42,7 @@
 (declare agent-entries)
 
 (defn edn-response [text]
-  (try (reader/read-string text) (catch :default e (throw (js/Error. (str "bad EDN from engine: " (ex-message e)))))))
+  (try (reader/read-string text) (catch :default e (throw (doto (js/Error. (str "bad EDN from engine: " (ex-message e))) (aset "badEdn" true))))))
 
 (defn event-socket-request! [target method request-path body]
   (js/Promise.
@@ -74,11 +74,22 @@
        (.setTimeout req event-socket-timeout-ms #(.destroy req (js/Error. "engine event API timed out")))
        (.end req text)))))
 
-(defn event-page! [body stream-id after limit]
-  (event-socket-request! body "GET"
-                         (str "/events?stream-id=" (js/encodeURIComponent stream-id)
-                              "&after=" after "&limit=" limit)
-                         nil))
+(defn event-page!
+  "One page of events after seq `after`. A page no EDN reader takes (an event holding e.g. a keyword made of free
+  text) is read again in halves, and a single such event is skipped, so one bad event never freezes the body's state.
+  The answer's :read-from is the seq the answered page starts after."
+  ([body stream-id after limit] (event-page! body stream-id after limit limit))
+  ([body stream-id after limit full]
+   (-> (event-socket-request! body "GET"
+                              (str "/events?stream-id=" (js/encodeURIComponent stream-id)
+                                   "&after=" after "&limit=" limit)
+                              nil)
+       (.then #(assoc % :read-from after))
+       (.catch (fn [e]
+                 (cond
+                   (not (.-badEdn e)) (throw e)
+                   (> limit 1) (event-page! body stream-id after (quot limit 2) full)
+                   :else (event-page! body stream-id (inc after) full full)))))))
 
 (defn state-cursor [snapshot]
   (let [cursor (:cursor snapshot)]
@@ -124,7 +135,7 @@
                                         (let [events (:events page)
                                               actual-reset? (or local-reset? gap-reset?)
                                               folded (ee/fold-engine (if actual-reset? ee/empty-engine (:folded previous)) events)
-                                              page-seq (last-seq events after)
+                                              page-seq (last-seq events (or (:read-from page) after))
                                               next-cursor {:stream-id (:stream-id (state-cursor snapshot))
                                                            :seq page-seq}
                                               cache {:snapshot snapshot :generation-id (:generation-id snapshot) :cursor next-cursor :folded folded

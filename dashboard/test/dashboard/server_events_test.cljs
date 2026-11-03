@@ -182,6 +182,31 @@
                              (set! srv-files/state-dir original-state-dir)
                              (.rmSync fs root #js {:recursive true :force true})))))))))
 
+(deftest an-event-no-reader-takes-does-not-freeze-the-live-cache
+  (async done
+    (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-badedn-test-"))
+          original-state-dir srv-files/state-dir
+          body {:world "w" :name "Mock"}
+          engine-dir (.join path root "worlds" "w" "agents" (:name body) "engine")
+          bad (assoc (ev 3 "g7") :data {:why (keyword "lead: log out (rolling blocked)")})
+          config (atom (assoc @(mock-config) :events [(ev 1 "g7") (ev 2 "g7") bad (ev 4 "g7")]))]
+      (.mkdirSync fs engine-dir #js {:recursive true})
+      (set! srv-files/state-dir root)
+      (run done
+           (fn []
+             (-> (mock-engine! (.join path engine-dir "events.sock") (atom {}) config)
+                 (.then (fn [mock]
+                          (with-redefs [srv-engine-state/live-engines (atom {})
+                                        srv-engine-state/live-errors (atom {})]
+                            (-> (srv-engine-state/refresh-live-engine! body)
+                                (.then (fn [cache]
+                                         (is (= 4 (get-in cache [:cursor :seq])))
+                                         (is (empty? @srv-engine-state/live-errors))))
+                                (.finally #(close-mock! mock))))))
+                 (.finally (fn []
+                             (set! srv-files/state-dir original-state-dir)
+                             (.rmSync fs root #js {:recursive true :force true})))))))))
+
 (deftest an-oversized-engine-event-response-is-refused
   (async done
     (let [root (.mkdtempSync fs (.join path (os/tmpdir) "dashboard-events-cap-"))
