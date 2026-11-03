@@ -314,6 +314,25 @@
           (await (ctx/act c :moveTo #js {:pos #js {:x (+ x (* n sx)) :y y :z (+ z (* n sz))} :range 0.1 :offset #js {:dx (cell-offset x) :dz (cell-offset z)}})))
         :again))))
 
+(defn ^:async flank!
+  "A villager named by id and not seen from where the body stands (a slab or the workstation hides the cell from a corridor
+  cell off to the side): step once to the cell beside the workstation nearest the body, where a player would stand to look
+  in. :continue while the walk goes on, else :again once it ended."
+  [c pos]
+  (let [p (:primitives c)
+        me (u/self-pos c)
+        open? (fn [x y z] (every? #(bs/passable? (u/seen-name p {:x x :y (+ y %) :z z})) [0 1]))
+        spots (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                    :let [x (+ (:x pos) dx) z (+ (:z pos) dz)]
+                    :when (open? x (:y pos) z)]
+                {:x (+ x 0.5) :y (:y pos) :z (+ z 0.5)})
+        spot (first (sort-by #(+ (js/Math.abs (- (:x %) (:x me))) (js/Math.abs (- (:z %) (:z me)))) spots))
+        r (when (and spot (not (u/within? me spot 0.6)))
+            (await (child/call-walk* c :flank {:pos spot :range 0.3 :ways #{:walk}})))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc :flanked true) :again))))
+
 (declare step!)
 
 (defn ^:async back-steps!
@@ -548,6 +567,7 @@
                  (await (approach! c pos))
                  (await (back-to-view! c pos)) :again
                  (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
+                 (and (not (:seen (ctx/mem c))) (not (:flanked (ctx/mem c)))) (await (flank! c pos))
                  (and (:seen (ctx/mem c)) (< (- (ctx/now c) (:away-since (ctx/mem c) (ctx/now c))) (* 1000 (away-s))))
                  (do (ctx/update-mem! c update :away-since #(or % (ctx/now c)))
                      (await (wait-job! c :villager-out-of-view)))

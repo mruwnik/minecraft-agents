@@ -226,6 +226,20 @@
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
           (is (pos? (count (vt/calls p "steer")))))))))
 
+(deftest a-named-villager-hidden-from-the-body-beside-the-workstation-is-looked-for-from-the-cell-beside-it-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "enchanted_book")])]
+                                       :self {:pos {:x 4.5 :y 64 :z 0.5}}
+                                       :wrap #(let [q (:p %)
+                                                    entities (.-entities q)
+                                                    walked? (fn [] (some (fn [call] (#{"goTo" "moveTo" "steer"} (.-name call))) (.-calls (.-world q))))]
+                                                (aset q "entities" (fn [a] (if (walked?) (.call entities q a) #js [])))
+                                                %)} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
+          (is (pos? (count (vt/calls p "steer"))) "the body stepped to a cell beside the workstation"))))))
+
 (deftest a-villager-seen-by-one-look-of-the-round-is-found-not-gone
   (async done
     (tu/run-async done
