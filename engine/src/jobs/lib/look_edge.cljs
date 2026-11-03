@@ -2,8 +2,9 @@
   "Look first, judge after: an unseen cell is open until looked at (a player walks up and looks). The unseen sides of the
   closed region the body stands in under a cover, and the unseen cells of a roof column, are looked at, nearest first, and
   walked towards when a look cannot show them, a walk only while its price (walk-risk/look-cost) and the walks before it
-  are bought by the call's worth. Memory keys :edge-looked, :edge-phase, :edge-spent, :edge-walked are the calling job's."
+  are bought by the call's worth. Memory keys :edge-looked, :edge-phase, :edge-spent, :edge-walked, :edge-t0 are the calling job's."
   (:require [jobs.lib.cost :as cost]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost.health :as cost-health]
             [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
@@ -116,6 +117,16 @@
   [c s worth]
   (cost/affords? (+ s (:edge-spent (ctx/mem c) 0)) worth))
 
+(defn pays?
+  "Whether one more cell look is bought from `worth`: the chance a look turns the night's choice falls with every cell looked
+  (cost/cell-looks), against the seconds each took on the clock so far (:edge-t0). A dark cell no look from here shows stays
+  unseen however often it is tried, so a finite worth ends the looking."
+  [c worth]
+  (let [{:keys [edge-looked edge-t0]} (ctx/mem c)
+        n (count edge-looked)
+        redo-s (if (and edge-t0 (pos? n)) (/ (- (clock/now) edge-t0) 1000 n) 0)]
+    (pos? (cost/cell-looks worth 1 n redo-s))))
+
 (defn walk-price
   "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than
   `worth` buys, or its seconds and the walks before it (affords-walk?) over it. A walk toward an unseen wall is priced,
@@ -141,7 +152,9 @@
          phase (get-in (ctx/mem c) [:edge-phase cell] 0)
          advance! #(ctx/update-mem! c assoc-in [:edge-phase cell] %)]
      (case phase
-       0 (do (advance! 1) (await (dig-look/look-at! c cell)))
+       0 (do (advance! 1)
+             (when-not (:edge-t0 (ctx/mem c)) (ctx/update-mem! c assoc :edge-t0 (clock/now)))
+             (await (dig-look/look-at! c cell)))
        (1 2) (let [p (:primitives c)
                    reach-to (last (filter #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
                    near (or to ((walkable-near-fn p (sh-sense/feet p)) reach-to))
@@ -152,7 +165,7 @@
                    w (if (and near (or price (= 2 phase)))
                        (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down}))
                        :none)]
-               (advance! (if (= :continue w) 2 3)))
+               (advance! (cond (= :continue w) 2 (= :none w) 4 :else 3)))
        3 (do (advance! 4) (await (dig-look/look-at! c cell)))
        (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))
      :again)))

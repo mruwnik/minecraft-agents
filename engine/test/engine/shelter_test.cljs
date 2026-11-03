@@ -15,6 +15,7 @@
             [jobs.survival.log-out :as lo]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
+            [jobs.lib.clock :as clock]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.shelter.beds :as sh-beds]
@@ -1685,6 +1686,16 @@
       (is (contains? cells [3 64 1]) "an unseen cell under the roof is looked at")
       (is (not (contains? cells [18 64 0])) "an unseen plain cell past the gap is not looked at")
       (is (every? (fn [[x]] (<= x 10)) cells)))))
+
+(deftest cell-looks-at-the-edge-end-when-their-seconds-outprice-the-chance-they-turn-the-night
+  (let [looked (fn [n] (set (map (fn [i] [i 0 0]) (range n))))
+        pays (fn [n t0 now worth] (with-redefs [ctx/mem (constantly {:edge-looked (looked n) :edge-t0 t0})
+                                                clock/now (constantly now)]
+                                    (look-edge/pays? {} worth)))]
+    (is (pays 0 nil 0 215) "the first look needs no history")
+    (is (pays 10 0 20000 215) "ten cells in 20 s: 2 s each against 215 s x 1/53")
+    (is (not (pays 100 0 200000 215)) "a hundred cells at 2 s each: 215 s x 1/143 is under 2 s")
+    (is (not (pays 0 nil 0 0)) "nothing to change, no look")))
 
 (deftest the-edge-walk-is-bought-by-its-price-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
