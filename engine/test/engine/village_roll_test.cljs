@@ -373,7 +373,7 @@
               [result p] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"2,65,0" "bamboo_slab"}
                                        :wrap digs-only-what-it-is-given} {}))]
           (is (= {:status :stopped :reason :workstation-lost} (select-keys result [:status :reason])) "no drop ever came")
-          (is (map? (:drop-cell result)) "the ending names the cell the drop lies in")
+          (is (= {:x 3 :y 64 :z 0} (:drop-cell result)) "the ending names the cell beyond the workstation from the dig stand")
           (is (= "bamboo_slab" (get-in @(fake/state p) [:blocks [2 65 0]])) "the slab over the cell stays: the cell is never opened")
           (is (= [[2 64 0]] @dug-cells) "only the workstation was dug"))))))
 

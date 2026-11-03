@@ -35,7 +35,7 @@
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body walked to it and to its far side and waited a few polls, ; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body walked to it and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
