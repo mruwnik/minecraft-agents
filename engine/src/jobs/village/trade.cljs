@@ -95,11 +95,13 @@
 (def can-start? (cond/and bad-args no-payment))
 
 (defn result
-  "{:bought n :paid {item n} :item :buy} so far."
+  "{:bought n :paid {item n} :item :buy} so far; {} for a call with no :buy (village.offers)."
   [c]
-  {:bought (bought c)
-   :paid (into {} (map (fn [[k v]] [(name k) v])) (:paid (ctx/mem c)))
-   :item (:buy (:args c))})
+  (if (:buy (:args c))
+    {:bought (bought c)
+     :paid (into {} (map (fn [[k v]] [(name k) v])) (:paid (ctx/mem c)))
+     :item (:buy (:args c))}
+    {}))
 
 (defn done?
   "Ok once :count items are bought (kept in memory and across a restart), with the purchase as its result."
@@ -123,7 +125,7 @@
         need (if (= :all least) (:count (:args c)) least)
         data (merge (result c) extra)]
     (cond
-      (>= (bought c) need) (ctx/end c :done nil data)
+      (and need (>= (bought c) need)) (ctx/end c :done nil data)
       (failed-conditions (:reason reason reason)) (ctx/end c :condition-failed reason data)
       :else (ctx/end c :nothing-possible reason data))))
 
@@ -266,26 +268,17 @@
               :text (str "villager " villager " (" (.-profession r) " " (.-level r) ") offers: "
                          (str/join "; " (map offer-text offers)))}))
 
-(defn ^:async trade!
-  "Read the offers and buy from the chosen one: :again, an ending or a retry."
-  [c]
-  (let [{:keys [buy]} (:args c)
-        villager (villager/chosen c)
-        payment (set (or (ctx/use c :payment) (cons currency (keys (get-in (ctx/left c) [:spend :items])))))
-        spend-of #(get-in (ctx/left c) [:spend :items %] ##Inf)
+(defn ^:async read!
+  "Read the chosen villager's offers (event kind `kind`) and hand them to use! (c villager r offers); other windows
+  end, retry or skip the villager."
+  [c kind use!]
+  (let [villager (villager/chosen c)
         r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
         status (.-status r)]
     (case status
-      "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)
-                 {:keys [offer reason price]} (choose offers {:buy buy :payment payment :max-price spend-of})]
-             (emit-offers! c :trade.offers villager r offers)
-             (if offer
-               (or (await (pay! c offer))
-                   (await (room! c offer))
-                   (await (buy! c offer)))
-               (finish! c reason (cond price {:price price}
-                                       (= :no-offer reason) {:text (str "no offer for " buy " paid with " (str/join ", " (sort payment)) "; offered: "
-                                                                        (str/join "; " (map offer-text offers)))}))))
+      "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)]
+             (emit-offers! c kind villager r offers)
+             (await (use! c villager r offers)))
       "gone" (give-up! c (villager/gone-cause c))
       "cannot" (cond
                  (= "not-villager" (.-reason r)) (give-up! c :not-villager)
@@ -294,6 +287,23 @@
                            :again))
       "out-of-reach" (retry :unreachable)
       (retry :window))))
+
+(defn ^:async trade!
+  "Read the offers and buy from the chosen one: :again, an ending or a retry."
+  [c]
+  (let [{:keys [buy]} (:args c)
+        payment (set (or (ctx/use c :payment) (cons currency (keys (get-in (ctx/left c) [:spend :items])))))
+        spend-of #(get-in (ctx/left c) [:spend :items %] ##Inf)]
+    (await (read! c :trade.offers
+                  (fn ^:async buy-from [c _ _ offers]
+                    (let [{:keys [offer reason price]} (choose offers {:buy buy :payment payment :max-price spend-of})]
+                      (if offer
+                        (or (await (pay! c offer))
+                            (await (room! c offer))
+                            (await (buy! c offer)))
+                        (finish! c reason (cond price {:price price}
+                                                (= :no-offer reason) {:text (str "no offer for " buy " paid with " (str/join ", " (sort payment)) "; offered: "
+                                                                                 (str/join "; " (map offer-text offers)))})))))))))
 
 (defn cell-of
   "The cell [x y z] of the entity's feet."
@@ -309,9 +319,9 @@
        (not (false? (.-hittable e)))))
 
 (defn ^:async step!
-  "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,
+  "Find the villager, walk within reach with one go-to leg (it wanders), then act! (c) in reach. :again,
   :continue (go-to yields), an ending or a retry."
-  [c]
+  [c act!]
   (let [skipped (:skipped (ctx/mem c) #{})
         ok? #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %))))
         uuid (villager/pick! c ok?)
@@ -320,7 +330,7 @@
       (and (nil? e) (await (villager/find-in-view! c ok? nil))) :again ; villagers count only while in view
       (and (nil? uuid) (seq skipped)) (give-up! c :no-offers)
       (nil? e) (give-up! c (villager/gone-cause c))
-      (in-reach? c e) (await (trade! c))
+      (in-reach? c e) (await (act! c))
       :else
       (let [r (await (child/call-chase* c :walk
                                        {:pos (zipmap [:x :y :z] (cell-of e)) :entity (.-id e) :range (reach) :leg-s (chase-timeout-s)
@@ -338,17 +348,22 @@
                 (not= currency (:buy (:args c))) (assoc currency :all))]
     (reserve/set-job-entries! c (vec (for [[i n] items] {:id (str (:id c) "-pay-" i) :item i :count n :strength 1 :by (:id c) :why "kept to pay the trade"})))))
 
-(defn ^:async round
-  "One call is the whole purchase: steps (with a pace between) until it ends; a retry counts failures in a row, reset by
-  a buy, and the third gives up. Yields only while go-to waits on the world."
-  [c]
+(defn ^:async run!
+  "steps (with a pace between) of step! with act! until one ends; a retry counts failures in a row, reset by
+  progress, and the third gives up. Yields only while go-to waits on the world. before! runs ahead of each step."
+  [c act! before!]
   (let [fails (atom 0)]
     (await (pace/steps! c (fn ^:async trade-step []
-                            (hold-payment! c)
-                            (let [r (await (step! c))]
+                            (before! c)
+                            (let [r (await (step! c act!))]
                               (cond
                                 (:retry r) (if (< (swap! fails inc) (u/max-failures))
                                            :again
                                            (finish! c (:retry r) nil))
                                 (= :again r) (do (reset! fails 0) :again)
                                 :else r)))))))
+
+(defn ^:async round
+  "One call is the whole purchase."
+  [c]
+  (await (run! c trade! hold-payment!)))

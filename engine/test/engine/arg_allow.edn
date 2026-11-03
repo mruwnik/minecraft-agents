@@ -201,6 +201,7 @@
  [jobs.village.roll :profession]
  [jobs.village.roll :villager]
  [jobs.village.roll :want]
+ [jobs.village.offers :villager]
  [jobs.village.trade :buy]
  [jobs.village.trade :count]
  [jobs.village.trade :villager]

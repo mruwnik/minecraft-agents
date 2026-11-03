@@ -21,7 +21,7 @@
      jobs.apiary.harvest
      jobs.apiary.guard
      jobs.apiary.maintain
-     jobs.village.trade
+     jobs.village.trade jobs.village.offers
      jobs.village.breed jobs.village.roll
      jobs.items.smelt
      jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.get-kit

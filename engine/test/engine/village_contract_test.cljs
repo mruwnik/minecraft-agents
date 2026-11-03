@@ -20,6 +20,7 @@
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [[sym args] [['jobs.village.breed {:target 3}]
                       ['jobs.items.give {:to "v-1" :count 2}]
+                      ['jobs.village.offers {:villager "v-1"}]
                       ['jobs.village.trade {:villager "v-1" :buy "bread" :count 2}]
                       ['jobs.village.roll {:villager "v-1" :pos [2 64 0] :profession "librarian" :want "enchanted_book"}]]]
     (is (some? (:can-start? (job sym))) (str sym " has can-start?"))

@@ -91,5 +91,6 @@
  jobs.time.noop
  jobs.village.breed
  jobs.village.roll
+ jobs.village.offers
  jobs.village.trade
 ]

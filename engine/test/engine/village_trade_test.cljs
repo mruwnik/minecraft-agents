@@ -475,3 +475,17 @@
           (is (= #{{:item "paper" :count 24} {:item "emerald" :count :all}} (set @seen))
               "a reflex's make-room keeps what the trade pays with")
           (is (empty? (reserve/entries (mem/view (:store eng)))) "released when the trade ends"))))))
+
+(deftest offers-reads-the-window-and-buys-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bare (villager [] {:id 2 :uuid "v-0" :pos {:x 0.5 :y 64 :z 0}})
+              {:keys [eng p seen]} (start {:world {:entities [bare (villager [(bread {})])] :inventory [{:name "emerald" :count 4}]}})
+              result (plain (await (child-outcome eng 'jobs.village.offers {} 80)))]
+          (is (= "v-1" (:villager result)))
+          (is (= "farmer" (:profession result)))
+          (is (= [{:cost [{:item "emerald" :count 1}] :gives {:item "bread" :count 1}}]
+                 (mapv #(select-keys % [:cost :gives]) (:offers result))))
+          (is (= {"emerald" 4} (inv p)))
+          (is (contains? (kinds seen) :trade.offers)))))))
