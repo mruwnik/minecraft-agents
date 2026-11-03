@@ -95,7 +95,7 @@
           (ctx/update-mem! c #(if (sightless? % outcome e pos)
                                 (-> (dissoc % :placing) (update :sightless (fnil conj #{}) pos))
                                 (cond-> (count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit)
-                                (and (= :unreachable outcome) (#{:budget :no-progress} (:why (:data e)))) (update :needs-scaffold (fnil conj #{}) pos)
+                                (and (= :unreachable outcome) (#{:budget :no-progress :out-of-sight} (:why (:data e)))) (update :needs-scaffold (fnil conj #{}) pos)
                                 (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0)))))
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused limit)))))))
 

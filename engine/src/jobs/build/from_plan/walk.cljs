@@ -20,7 +20,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.build.plan :as plan :refer [facing-of stands-for]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.build.from-plan.cells :refer [in-reach in-dig-reach exit-point buried? reaching seeing stand-reach rock-bound? retreat-dists step-back needs-tool?]]
+            [jobs.build.from-plan.cells :refer [in-reach in-dig-reach exit-point buried? reaching seeing stand-reach rock-bound? seen-open? retreat-dists step-back needs-tool?]]
             [jobs.build.from-plan.book :refer [walk-fail result-data]]))
 
 (a/defargs settings
@@ -141,17 +141,30 @@
 
 (defn look-price
   "Seconds the cheapest look at a cell shut in by rock adds to the build: 0 when a side is plan work still owed (a wrong
-  block to dig, an unseen cell to clear: the cell shows once that is done), else the least side's cut
-  (jobs.lib.stair-time), with its refill (cell-s) for a cell of the plan."
+  block to dig, an unseen cell to clear: the cell shows once that is done), else the cheapest way cut through the rock
+  from a cell the body has seen open to a side of the cell (jobs.lib.stair-time per cell cut, with its refill (cell-s) for
+  a cell of the plan); infinite when no open cell lies within the plan's box and two cells."
   [c cells cell]
   (let [by-pos (into {} (map (juxt :pos identity)) cells)
-        closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))]
-    (apply min (map (fn [n]
-                      (let [o (by-pos n)]
+        closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        p (:primitives c)
+        pts (map :pos cells)
+        [lo hi] (for [f [min max]] (mapv (fn [i] (apply f (map #(nth % i) pts))) [0 1 2]))
+        in-box? (fn [n] (every? true? (map (fn [v l h] (<= (- l 2) v (+ h 2))) n lo hi)))
+        cut-s (fn [n] (let [o (by-pos n)]
                         (cond (nil? o) (stair-time/cell-s)
                               (and (not (contains? closed n)) (or (:dig? o) (and (nil? (:found o)) (= :clear (:want o))))) 0
                               :else (+ (stair-time/cell-s) (cell-s)))))
-                    (sides (:pos cell))))))
+        start (:pos cell)]
+    (if (zero? (apply min (map cut-s (sides start))))
+      0
+      (loop [dist (into {} (map (fn [n] [n (cut-s n)])) (sides start)) done #{start}]
+        (let [[n d] (first (sort-by val (remove (comp done key) dist)))]
+          (cond (nil? n) ##Inf
+                (not (in-box? n)) (recur (dissoc dist n) (conj done n))
+                (seen-open? p n) (- d (cut-s n))
+                :else (recur (reduce (fn [m k] (if (or (done k) (contains? m k)) m (assoc m k (+ d (cut-s k))))) dist (sides n))
+                             (conj done n))))))))
 
 (defn look-verdict
   "For an unseen cell wanting a block, shut in by rock (rock-bound?): :defer when its look-price is 0, :look when that
@@ -251,6 +264,7 @@
   [c cells cell]
   (or (aim/body-sees? c (:pos cell))
       (and (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))
+           (not (contains? (:needs-scaffold (ctx/mem c)) (:pos cell)))
            (not (climb-first? c cells cell)))))
 
 (defn- open-cells

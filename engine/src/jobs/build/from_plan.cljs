@@ -64,7 +64,7 @@
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unseen).
   A cell shut in by rock (and other plan cells) on every side is tunnelled to (jobs.access.tunnel); faces never seen count as rock only for a cell within reach that the body has looked at, else it walks (go-to digs out of a pocket) first.
   An unseen cell wanting a block and shut in so is looked at from where the body stands, then priced (walk/look-verdict): it waits
-  while a side is plan work still owed, is tunnelled to when the cheapest cut to see it costs less than the chance it is not
+  while a side is plan work still owed, is tunnelled to when the cheapest way cut through the rock from open air seen to it costs less than the chance it is not
   solid already (the measured prior) times its worth, else it is left :unchecked (not owed, named in the result's :unchecked).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,

@@ -2543,6 +2543,33 @@
             (is (= [] (:missing result)) (pr-str result))
             (is (nil? (:status result)) "the build ends done")))))))
 
+(deftest an-unseen-cell-three-rock-cells-from-the-nearest-open-air-is-priced-by-the-whole-way-and-left-unchecked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inside (set (for [x (range 4 7) y (range 64 67) z (range 4 7)] [x y z]))
+              sides (fn [[x y z]] [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])
+              post [10 64 5]
+              rock (into {} (for [x (range -2 15) y (range 62 70) z (range -2 13)
+                                  :when (not (inside [x y z])) :when (not= post [x y z])]
+                              [(h/cell-key x y z) "stone"]))
+              targets (atom [])
+              tunnel (get registry/jobs 'jobs.access.tunnel)
+              {:keys [eng p]} (start {:blocks rock :floor [-30 -30 30 30] :self {:pos {:x 5.5 :y 64 :z 5.5}}
+                                      :inventory [{:name "dirt" :count 16} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+                                     {"own" {:id "own" :metadata {:by "Fake"} :parts [{:id "post" :cells [post] :want "dirt"}]}} []
+                                     {'jobs.access.tunnel (assoc tunnel :round (fn [c] (swap! targets conj (:target (:args c))) ((:round tunnel) c)))})
+              sensed (.-sensedAt p)
+              hidden? (fn [pos] (let [[x y z] (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"])]
+                                  (every? (fn [[a b c]] (let [n (sensed #js {:x a :y b :z c})] (and n (not= "air" (.-name n))))) (sides [x y z]))))]
+          (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (sensed pos))))
+          (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (let [b (sensed pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+          ;; the cell likely open (frontier 1): a one-cell cut would be worth a look, the three it takes is not
+          (let [result (with-redefs [look/frontier-distance (fn [_ _] 1)] (await (child-outcome eng job {:plan "own"} 600)))]
+            (is (= [] @targets) "no tunnel to look at a cell three rock cells in")
+            (is (= #{post} (set (:unchecked result))) (pr-str (select-keys result [:missing :given-up :unchecked :text])))
+            (is (nil? (:status result)) "the build ends done")))))))
+
 (deftest a-cell-tunnelled-to-from-a-closed-room-of-the-plan-leaves-the-room-wall-refilled
   (async done
     (tu/run-async done
