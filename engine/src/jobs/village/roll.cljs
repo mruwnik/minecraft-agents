@@ -280,6 +280,16 @@
     (when (and (= y (:y pos)) (= 1 (+ (Math/abs dx) (Math/abs dz))))
       (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5 (* 0.2 dx)) :y y :z (+ z 0.5 (* 0.2 dz))} :range 0.1})))))
 
+(defn line-open?
+  "Whether the n cells from the view spot along (sx, sz) have room for feet and head: a farther spot behind a wall is
+  reached only by walking round it, away from the cell."
+  [c {:keys [x y z]} n sx sz]
+  (let [p (:primitives c)
+        fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
+    (every? (fn [[k dy]]
+              (bs/passable? (u/seen-name p {:x (+ fx (* k sx)) :y (+ fy dy) :z (+ fz (* k sz))})))
+            (for [k (range 1 (inc n)) dy [0 1]] [k dy]))))
+
 (defn ^:async back-to-view!
   "The villager was seen but is out of view (the body moved, or the villager shifted in its cell): step to the spot it
   was first seen from, then one and two blocks farther from the workstation, where a slit shows more of the cell, as
@@ -292,7 +302,8 @@
             dz (- z (+ (:z pos) 0.5))
             [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
         (ctx/update-mem! c update :view-tries (fnil inc 0))
-        (await (ctx/act c :moveTo #js {:pos #js {:x (+ x (* n sx)) :y y :z (+ z (* n sz))} :range 0.1}))
+        (when (line-open? c view n sx sz)
+          (await (ctx/act c :moveTo #js {:pos #js {:x (+ x (* n sx)) :y y :z (+ z (* n sz))} :range 0.1})))
         :again))))
 
 (declare step!)

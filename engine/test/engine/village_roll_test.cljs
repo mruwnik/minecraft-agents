@@ -617,6 +617,17 @@
               result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls]))))))))
 
+(deftest a-farther-view-spot-behind-a-wall-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :self {:pos {:x 1.5 :y 64 :z 0.5}}
+                             :blocks {ws-key "lectern" "2,63,0" "stone" "0,64,0" "stone"}})
+              _ (hides-after-break! env 100000000 [(offer "paper")])
+              _ (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 120))
+              xs (map #(.-x (.-pos (.-args %))) (vt/calls (:p env) "moveTo"))]
+          (is (not-any? #(< % 1) xs) (pr-str xs)))))))
+
 (deftest a-roll-cut-after-the-break-places-the-workstation-back-in-its-cleanup
   (async done
     (tu/run-async done
