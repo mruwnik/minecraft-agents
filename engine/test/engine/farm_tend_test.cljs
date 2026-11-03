@@ -772,8 +772,30 @@
           (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (is (= #{(tend/recheck-ms)} (set (map #(:recheck-after-ms %) (events-of s :waiting))))))))))
 
-(deftest a-seen-block-over-an-unseen-cell-caps-it-so-no-walk-is-due-to-look-under
-  (let [s (setup (world (ground "grass_block" [[2 2] [3 2]]) {:blocks {(k 2 64 2) "stone"}}))
-        p (:p s)]
-    (is (tend/capped? p {:x 2 :y 63 :z 2}) "stone seen on top: walking there shows nothing more")
-    (is (not (tend/capped? p {:x 3 :y 63 :z 2})) "open air over the grass: a look may still show it")))
+(defn walk-due-with
+  "Whether tend's walk-due? holds over the one-column box at x 2 in a world with extra blocks, the cells unseen being the ground and, with crop?, the crop cell."
+  [extra crop?]
+  (let [s (setup (world (ground "grass_block" [[2 2]]) {:blocks extra}))
+        ground-pos {:x 2 :y 63 :z 2}
+        crop-pos {:x 2 :y 64 :z 2}]
+    (with-redefs [ctx/mem (constantly {}) tend/unseen-field-cells (constantly (if crop? [ground-pos crop-pos] [ground-pos])) tend/growing-out-of-view (constantly [])
+                  look/surveyed? (fn ([_] true) ([_ _] true))]
+      (boolean (tend/walk-due? (pass-ctx s 2 2))))))
+
+(deftest only-an-opaque-full-block-seen-over-the-ground-caps-it
+  (let [p (:p (setup (world (ground "grass_block" [[2 2] [3 2] [4 2] [5 2] [6 2]])
+                            {:blocks {(k 2 64 2) "stone" (k 4 64 2) "oak_slab" (k 5 64 2) "glass" (k 6 64 2) "water"}})))]
+    (are [x capped] (= capped (tend/capped? p {:x x :y 63 :z 2}))
+      2 true
+      3 false
+      4 false
+      5 false
+      6 false)))
+
+(deftest a-walk-is-not-due-to-look-under-a-full-block-over-the-ground-but-is-under-a-roof-slab-or-water
+  (is (not (walk-due-with {(k 2 64 2) "stone"} false)) "stone over the unseen ground: nothing a walk shows")
+  (is (walk-due-with {} true) "open crop cell above unseen cells")
+  (is (walk-due-with {(k 2 65 2) "stone"} true) "a roof over the crop cell does not cap: the crop layer is still to look at")
+  (is (walk-due-with {(k 2 64 2) "oak_slab"} false) "a slab is no cap")
+  (is (walk-due-with {(k 2 64 2) "glass"} false) "glass is looked through")
+  (is (walk-due-with {(k 2 64 2) "water"} false) "water is no cap"))

@@ -252,20 +252,21 @@
     (filter #(true? (some-> (u/sensed p %) .-unknown)) (field-cells c))))
 
 (defn capped?
-  "Whether a seen solid block lies over the cell: no walk shows what is under it."
+  "Whether a full block seen right over the ground cell pos covers it so no walk shows what is under: glass, ice and leaves are looked through."
   [p pos]
-  (let [above (u/sensed p (update pos :y inc))]
-    (boolean (and above (not (.-unknown above)) (not (bs/air (.-name above)))))))
+  (let [{:keys [name full-cube?]} (u/seen-facts p (update pos :y inc))]
+    (boolean (and full-cube? (not (re-find #"glass|_leaves$|^(ice|blue_ice|frosted_ice)$" name))))))
 
 (defn walk-due?
-  "The field's site when the run has not walked there and a field cell never seen and not capped by a seen block, no look from here would show one
+  "The field's site when the run has not walked there and a field cell never seen and not a ground cell capped by a seen full block, no look from here would show one
   (look/look-shows?) or the body looked round near here already, or a crop grows out of view (growing-out-of-view) where
   no look from here would show it: the run walks there first."
   [c]
   (let [site (site c)
         p (:primitives c)
         hidden? #(not (look/look-shows? p %))
-        unseen (seq (remove #(capped? p %) (unseen-field-cells c)))]
+        ground (set (ground-cells c))
+        unseen (seq (remove #(and (ground %) (capped? p %)) (unseen-field-cells c)))]
     (when (and site (not (:site-walked (ctx/mem c)))
                (or (and unseen (or (look/surveyed? c :near) (every? hidden? unseen)))
                    (some hidden? (growing-out-of-view c))))
