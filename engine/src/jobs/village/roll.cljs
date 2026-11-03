@@ -280,6 +280,12 @@
     (when (and (= y (:y pos)) (= 1 (+ (Math/abs dx) (Math/abs dz))))
       (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5 (* 0.2 dx)) :y y :z (+ z 0.5 (* 0.2 dz))} :range 0.1})))))
 
+(defn cell-offset
+  "Where in its cell a view spot lies, from the cell centre, at most 0.2 (what moveTo's :offset takes): the slit shows
+  the villager from the spot the body saw it from, not from anywhere in the cell."
+  [v]
+  (-> (- v (js/Math.floor v) 0.5) (max -0.2) (min 0.2)))
+
 (defn line-open?
   "Whether the n cells from the view spot along (sx, sz) have room for feet and head: a farther spot behind a wall is
   reached only by walking round it, away from the cell."
@@ -303,7 +309,7 @@
             [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
         (ctx/update-mem! c update :view-tries (fnil inc 0))
         (when (line-open? c view n sx sz)
-          (await (ctx/act c :moveTo #js {:pos #js {:x (+ x (* n sx)) :y y :z (+ z (* n sz))} :range 0.1})))
+          (await (ctx/act c :moveTo #js {:pos #js {:x (+ x (* n sx)) :y y :z (+ z (* n sz))} :range 0.1 :offset #js {:dx (cell-offset x) :dz (cell-offset z)}})))
         :again))))
 
 (declare step!)
