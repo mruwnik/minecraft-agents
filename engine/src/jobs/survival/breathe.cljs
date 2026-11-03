@@ -56,7 +56,7 @@
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..leg-length (32) blocks out, outward from the run's
     start only, inside swim-range (96) of it, at most max-legs (6) legs (a leg that moved starts afresh at its end).
-  Before it stops afloat it treads water for the tread-ms setting (3000) so the lungs refill and the head is out when it ends.
+  Before it stops afloat it treads water for the tread-ms setting (3000) so the lungs refill and the head is out when it ends; a mob that hit the body meanwhile is fought first.
   A mob that hits the body (a hostile within the fight radius and a hit within the window, jobs.survival.breathe.fight) is fought with
   jobs.combat.attack, holding where it floats, when the body can breathe (surfaced, still in water) or when the swim up has risen no
   higher for the stall seconds while drowning.
@@ -246,20 +246,23 @@
   block to place)."
   [c reason]
   (await (ctx/act c :swim (clj->js {:ms (settings/get settings ::tread-ms) :tread true})))
-  (let [m (ctx/mem c)
-        pos (u/self-pos c)
-        failed (:failed-headings m #{})]
-    (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason reason :headings (vec failed)} afloat-policy)
-    (ctx/end c :nothing-possible reason
-             {:text (if-let [t (first (:failed-land m))]
-                      (str "afloat; land at " (:x t) " " (:y t) " " (:z t) " was seen but the body could not get onto it"
-                           (when (= :no-blocks reason) " and has no block to step out on"))
-                      (str "afloat; no land within " (search-radius) " blocks or a swim of " (swim-range)
-                           (when (= :no-blocks reason) ", and no block to step out on")))
-              :unreached (count (:failed-land m))
-              :searched (search-radius) :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
-              :headings-failed (count failed) :around (around (:primitives c) pos)
-              :step (cond (= :no-blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall)})))
+  ;; a mob that hit the body while it trod water is fought before the run gives up (the next pass does it)
+  (if (fight/attacked? c)
+    :again
+    (let [m (ctx/mem c)
+          pos (u/self-pos c)
+          failed (:failed-headings m #{})]
+      (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason reason :headings (vec failed)} afloat-policy)
+      (ctx/end c :nothing-possible reason
+               {:text (if-let [t (first (:failed-land m))]
+                        (str "afloat; land at " (:x t) " " (:y t) " " (:z t) " was seen but the body could not get onto it"
+                             (when (= :no-blocks reason) " and has no block to step out on"))
+                        (str "afloat; no land within " (search-radius) " blocks or a swim of " (swim-range)
+                             (when (= :no-blocks reason) ", and no block to step out on")))
+                :unreached (count (:failed-land m))
+                :searched (search-radius) :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
+                :headings-failed (count failed) :around (around (:primitives c) pos)
+                :step (cond (= :no-blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall)}))))
 
 (defn max-steps [] (settings/get settings ::max-steps))
 
