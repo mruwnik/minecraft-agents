@@ -1,0 +1,24 @@
+;; A lake (x 10..24, z 2..18, 4 deep) on a stone plain; bedrock ridges at x 5 and 30 box the plain, so the only way to the goal is a submerged tunnel 100 cells long (far past a breath) under the east bank, up a shaft at x 125.
+;; Should-succeed: swimming-in-a-lake-lands-on-the-bank-and-gives-up-there (the go-to is refused for air; the body, 7 blocks from the nearest dry stand, walks out of the water onto a bank, unhurt, and the call ends unarrived).
+;; Should-fail: a-walled-lake-has-no-stand-and-gives-up-honestly (walls 6 high all round: no dry stand to reach; go-to ends unarrived within the limit, unhurt, without landing again and again).
+{:defaults
+ {:tags [:movement :water :air :go-to]
+  :time :any
+  :plot {:height 12 :length 128 :width 20}
+  :blocks [[:fill [0 0 0] [127 3 19] "stone"] [:fill [30 4 0] [30 9 19] "bedrock"] [:fill [5 4 0] [5 9 19] "bedrock"]
+           [:fill [10 0 2] [24 3 18] "water"]
+           [:fill [25 0 10] [124 1 10] "water"] [:fill [125 0 10] [125 3 10] "water"]]
+  :body {:at [17.5 3 10.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "swimming-in-a-lake-lands-on-the-bank-and-gives-up-there"
+   :act [[:job (jobs.movement.go-to {:pos #at [126 4 10] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 70 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [17.5 3 10.5] 6]]}
+  {:name "a-walled-lake-has-no-stand-and-gives-up-honestly"
+   :blocks [[:fill [9 4 1] [25 9 19] "stone"] [:fill [10 4 2] [24 9 18] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [126 4 10] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 70 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [17.5 3 10.5] 9]]}]}
