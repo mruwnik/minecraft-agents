@@ -14,6 +14,7 @@
             [engine.fast-pace :as fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as look]
             [jobs.lib.waits :as waits]
             [jobs.lib.near :as near]
@@ -42,6 +43,10 @@
                              (write! file data))))
     (set! fsu/read-edn (fn [file] (if (and (mem-file? file) (contains? @saved file)) (@saved file) (read-edn file))))
     saved))
+
+;; Whether the shard's real V8 heap is past dig-route's limit decides a kept route search's growth, so a test's outcome would
+;; follow what earlier namespaces left in the process (the capped heap of a full shard crosses it).
+(set! dig-route/heap-full? (constantly false))
 
 (def real-memory-disk-fixture
   "A :once fixture for the namespaces that read or break memory.edn on disk: the engine's memory saves are otherwise
