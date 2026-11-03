@@ -9,7 +9,7 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Read the offers of the villager :villager (uuid or entity id; nil: the nearest adult in sight that has offers, a
+  "Read the offers of the villager :villager (uuid or entity id; nil: the adult in sight cheapest to walk to (go-to quote, one readable from where the body stands first) that has offers, a
   villager that shows none is skipped for the next) and end; nothing is bought or paid. It finds, walks within reach
   and opens the window exactly as jobs.village.trade does (same causes: :gone, :not-villager, :unreachable,
   :no-offers, :window), and emits the info `trade.offers` (profession, level, every offer with an enchanted book's
@@ -19,7 +19,7 @@
   What was read is kept across a cut and restart.")
 
 (a/defargs args
-  {:villager {:doc "the villager's entity uuid or numeric entity id; nil: the nearest adult villager in sight, the next one when it has no offers" :spec villager/id? :default nil}})
+  {:villager {:doc "the villager's entity uuid or numeric entity id; nil: the adult villager in sight cheapest to walk to, the next one when it has no offers" :spec villager/id? :default nil}})
 
 (def target [:villager])
 

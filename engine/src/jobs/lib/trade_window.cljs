@@ -8,7 +8,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
-            [jobs.lib.villager :as villager]))
+            [jobs.lib.villager :as villager]
+            [jobs.lib.walk-pick :as pick]))
 
 (a/defargs settings
   {::chase-timeout-s {:default 15 :doc "Seconds one walk toward the villager may take: it wanders, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
@@ -101,12 +102,24 @@
   (and (u/within? (u/self-pos c) (u/pos-of (.-pos e)) (reach))
        (not (false? (.-hittable e)))))
 
+(defn ^:async choose-cheapest!
+  "Without :villager and before one is kept: the adult villager ok? accepts whose walk into reach costs least (go-to's
+  quote, 0 for one already readable from here; one whose profession reads as a job first, as villager/pick!), kept as the
+  chosen one. A villager behind a wall is dear however near it stands."
+  [c ok?]
+  (when-not (villager/chosen c)
+    (let [es (filter ok? (villager/adults (:primitives c)))
+          es (or (seq (remove #(= "unemployed" (.-profession %)) es)) es)
+          e (await (pick/pick-walk! c es (fn [e] {:pos (zipmap [:x :y :z] (cell-of e)) :range (reach) :see true :ways #{:walk :clear-seal}})))]
+      (when e (ctx/update-mem! c assoc :chosen (villager/ident e))))))
+
 (defn ^:async step!
   "Find the villager, walk within reach with one go-to leg (it wanders), then act! (c) in reach. :again,
   :continue (go-to yields), an ending (by finish!, (c reason extra)) or a retry."
   [c finish! act!]
   (let [skipped (:skipped (ctx/mem c) #{})
         ok? #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %))))
+        _ (await (choose-cheapest! c ok?))
         uuid (villager/pick! c ok?)
         e (when uuid (villager/find-by-uuid (:primitives c) uuid))]
     (cond

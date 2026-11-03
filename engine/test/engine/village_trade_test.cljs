@@ -504,3 +504,15 @@
                  (mapv #(select-keys % [:cost :gives]) (:offers result))))
           (is (= {"emerald" 4} (inv p)))
           (is (contains? (kinds seen) :trade.offers)))))))
+
+(deftest offers-without-a-villager-reads-the-one-cheapest-to-reach-not-the-nearest-across-a-trench
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trench (into {} (for [x (range 1 5) z (range -10 5)] [(str x ",63," z) "air"]))
+              across (villager [(bread {})] {:id 2 :uuid "v-across" :pos {:x 6.5 :y 64 :z 0.5}})
+              open (villager [(bread {})] {:id 3 :uuid "v-open" :pos {:x -8.5 :y 64 :z 0.5}})
+              {:keys [eng]} (start {:p (tu/seeing-all (tu/fake-on-floor {:entities [across open] :blocks trench}))})
+              result (plain (await (child-outcome eng 'jobs.village.offers {} 400)))]
+          (is (= "v-open" (:villager result))
+              "the villager 6 blocks off across a trench is a long way round; the one 8 blocks off on the same side is read"))))))

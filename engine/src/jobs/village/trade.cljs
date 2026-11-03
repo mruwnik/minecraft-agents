@@ -15,7 +15,7 @@
 (def meta {:tags [:goal]})
 
 (def doc
-  "Buy :count of :buy from the villager :villager (uuid or entity id; nil: the nearest adult in sight that has offers, a villager that shows none is skipped for the next, as a player opens one after another). One call is the whole purchase: find the villager
+  "Buy :count of :buy from the villager :villager (uuid or entity id; nil: the adult in sight cheapest to walk to (go-to quote, one readable from where the body stands first) that has offers, a villager that shows none is skipped for the next, as a player opens one after another). One call is the whole purchase: find the villager
   within jobs.lib.villager/search-radius (a named one out of view: first to where it was last seen), walk within reach of it (jobs.lib.trade-window ::reach), seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of jobs.lib.trade-window ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those paid with an item of the call's :use {:payment [..]}
@@ -40,7 +40,7 @@
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
 (a/defargs args
-  {:villager {:doc "the villager's entity uuid or numeric entity id; nil: the nearest adult villager in sight, the next one when it has no offers" :spec villager/id? :default nil}
+  {:villager {:doc "the villager's entity uuid or numeric entity id; nil: the adult villager in sight cheapest to walk to, the next one when it has no offers" :spec villager/id? :default nil}
    :buy {:doc "item name to buy" :spec a/item? :default nil}
    :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}})
 
