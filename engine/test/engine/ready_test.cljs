@@ -510,7 +510,14 @@
                                        s (ready/threatened (-> (with-entry world {:visible-only false})
                                                                (assoc :primitives p :worth (constantly 0) ::price/stay-s 30)))]
                                    [(first s) (:reason (nth s 2))]))
-        "its walls not yet seen: only the guess that they are open lets it in, so it looks before it waits")))
+        "its walls not yet seen: only the guess that they are open lets it in, so it looks before it waits")
+    (let [world (merge at-origin {:entities [(assoc zombie :pos {:x 7 :y 64 :z 0})] :blocks room})
+          p (sky/with-sky (tu/seeing-within (tu/fake (merge {:floor tu/walk-floor} world)) 4))
+          _ (game/select! p)
+          s (ready/threatened (-> (with-entry world {:visible-only false}) (assoc :primitives p :worth (constantly 0) ::price/stay-s 30)))
+          cells (:look-at (nth s 2))]
+      (is (and (seq cells) (every? #(and (vector? %) (= 3 (count %)) (every? number? %)) cells))
+          "the :look-at cells are [x y z] vectors, which the look round reads with nth"))))
 
 (deftest threatened-is-read-once-per-window
   (let [c (ctx-of (merge at-origin {:entities [zombie]}))

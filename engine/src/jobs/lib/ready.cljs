@@ -343,7 +343,7 @@
       (<= all worth) (contract/ok :heard-priced (str heard ": " (price/round1 all) " s over the stay, within the call's worth " (price/round1 worth) " s"))
       (and (seq guessed) (<= (loss sure) worth))
       (contract/look :heard-unseen (str heard ": its way to the body runs through cells not seen; look first")
-                     :look-at (mapv #(update-vals (danger/mob-pos p %) js/Math.floor) guessed))
+                     :look-at (mapv #(mapv (fn [k] (js/Math.floor (k (danger/mob-pos p %)))) [:x :y :z]) guessed))
       :else (contract/later :hostile-near (str "a hostile is near: " heard ": " (price/round1 all) " s over the stay, more than the call's worth " (price/round1 worth) " s")
                             :loss all :worth worth :recheck-after-ms walk-risk/recheck-ms))))
 
