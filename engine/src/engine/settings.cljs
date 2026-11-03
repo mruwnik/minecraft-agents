@@ -305,7 +305,7 @@
   [overrides f]
   (let [saved @state
         restore! #(reset! state saved)]
-    (reset! state {:body nil :specs {} :values overrides :layers (zipmap (keys overrides) (repeat :test))})
+    (reset! state {:body nil :specs (:specs saved) :values overrides :layers (zipmap (keys overrides) (repeat :test))})
     (let [result (try (f) (catch :default e (restore!) (throw e)))]
       (if (and result (fn? (.-then result)))
         (-> result

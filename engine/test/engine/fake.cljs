@@ -33,6 +33,7 @@
             [engine.fake.unequip :as unequip]
             [engine.fake.use-on :as use-on]
             [engine.game :as game]
+            [engine.settings :as settings]
             [engine.senses :as senses]
             [engine.sight :as sight]
             [engine.fake.node :as node]))
@@ -41,6 +42,12 @@
 (def blocks-mod (delay (node/require-here "./js/blocks.mjs")))
 (def chat-mod (delay (node/require-here "./js/chat.mjs")))
 (def vehicle-mod (delay (node/require-here "./js/vehicle.mjs")))
+
+(defn load-js-settings!
+  "Declare the js/settings.mjs keys in the settings state, as engine.main does, so js-setting reads the real defaults."
+  []
+  (swap! settings/state update :specs #(merge (settings/js-specs (.-SPECS (node/require-here "./js/settings.mjs"))) %)))
+
 (def dig-registry
   "The real registry (with the dig-materials fix) and its Block class: clearTime is the real maths, not a table."
   (delay (let [cjs #(let [m (node/require-here %)] (or (.-default m) m))
@@ -56,8 +63,6 @@
 (def item-middle 0.125) ; a drop rests on its cell floor, 0.25 high (the real entity aims at height/2 above its feet)
 (def hit-range senses/hit-range)
 (def fake-body-id -1)
-(def offline-default-ms (* 5 60 1000))
-(def offline-max-ms (* 24 60 60 1000))
 (def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
 (def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch" "oak_leaves" "ice" "slime_block"})
@@ -862,6 +867,7 @@
   version and server rules from, as select! does for the live one."
   ([] (create {}))
   ([spec]
+   (load-js-settings!)
    (let [state (atom (initial-state spec))
          spec (if (object? spec) (js->clj spec :keywordize-keys true) spec)
          listeners (atom #{})
@@ -930,7 +936,7 @@
          acts (assoc acts "offline"
                      (fn ^:async offline-act [token a]
                                (let [ms (.-ms a)
-                                     wanted (js/Math.floor (min (if (nil? ms) offline-default-ms ms) offline-max-ms))
+                                     wanted (js/Math.floor (min (if (nil? ms) ((settings/js-reader) "prim/offline-default-ms") ms) ((settings/js-reader) "prim/offline-max-ms")))
                                      released (atom nil)]
                                  (reset! away (js/Promise. (fn [resolve] (reset! released resolve))))
                                  (swap! state assoc :offline true)

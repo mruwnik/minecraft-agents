@@ -404,7 +404,7 @@
                (let [p (owned {:offlineScale 0})
                      r (await (act p "offline" args))]
                  (is (= expected (.-ms r)) (str "args " args))))
-             [[{} 300000] [{:ms 99999999} 600000]])))))
+             [[{} 300000] [{:ms 99999999} 86400000]])))))
 
 (deftest fake-offline-with-a-stale-token-rejects-with-cut
   (async-test

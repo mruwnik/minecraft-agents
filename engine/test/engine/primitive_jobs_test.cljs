@@ -68,10 +68,9 @@
   (let [p (tu/fake {})
         job-time #(get-in (quote-of :craft p {:item "stick" :count %}) [:uses :job-time 2])]
     (is (= 10 (job-time 1)))
-    (is (= 60 (job-time 20)) "no setting loaded: the default bound")
+    (is (= 60 (job-time 20)) "the setting default bounds the quote")
     (settings/with-settings {:prim/craft-max-s 8}
-      #(do (swap! settings/state assoc :specs (settings/js-specs #js {"prim/craft-max-s" #js {:default 60 :spec #js ["num-in" 0 nil] :doc "d"}}))
-           (is (= 8 (job-time 20)) "the setting bounds the quote")))))
+      #(is (= 8 (job-time 20)) "an override bounds the quote"))))
 
 (deftest a-wait-is-quoted-its-time-and-offline-its-reconnect-too
   (let [p (tu/fake {})]

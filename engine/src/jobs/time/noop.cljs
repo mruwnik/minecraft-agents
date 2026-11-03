@@ -52,7 +52,7 @@
       (ctx/update-mem! c assoc :until (+ (ctx/now c) (total-ms c))))
     (loop [owed (left-ms c)]
       (if (pos? owed)
-        (let [ms (min owed (primitive/js-setting "prim/wait-max-ms" 10000))]
+        (let [ms (min owed (primitive/js-setting "prim/wait-max-ms"))]
           (await (ctx/act c :wait #js {:ms ms :why why}))
           (recur (min (- owed ms) (left-ms c))))
         (ctx/end c :done nil {:waited-s (:seconds (:args c) 0)})))))
