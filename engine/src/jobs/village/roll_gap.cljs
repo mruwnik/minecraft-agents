@@ -18,8 +18,8 @@
 
 (defn ^:async lift!
   "Dig the slab above pos (once per call) so the body can stand in the cell and take a drop from anywhere in the villager's
-  cell; the slab's name and type are booked in mem :slab first and the drop search starts afresh. :again, :continue, a stop,
-  or nil when there is no slab or it was lifted already."
+  cell; the slab's name and type are booked in mem :slab first and the drop search starts afresh. :again, :continue, or nil when there is no slab, it was lifted already or it was lifted just now (the caller
+  steps into the cell at once: no pace between, the villager walks out of an open cell)."
   [c pos n]
   (let [m (ctx/mem c)
         b (when-not (or (:slab m) (:lift-refused m)) (u/seen-block (:primitives c) (above pos)))]
@@ -27,7 +27,7 @@
       (ctx/update-mem! c assoc :slab {:name (.-name b) :type (some-> b .-properties (aget "type"))} :reach-drops 0)
       (ctx/emit! c :roll.slab-lifted :info {:pos (above pos) :slab (.-name b) :text (str "lifting the slab over the workstation cell at " (:x pos) "," (:y pos) "," (:z pos))})
       (let [r (await (run! c (keyword (str "lift-slab-" n)) 'jobs.blocks.dig {:pos (above pos) :collect true}))]
-        (cond (= ::ok r) :again
+        (cond (= ::ok r) nil
               (= :continue r) :continue
               :else (do (ctx/update-mem! c #(-> % (dissoc :slab) (assoc :lift-refused (or (:reason r) :refused))))
                         (ctx/emit! c :roll.slab-lift-refused :warn {:pos (above pos) :why (:reason r)
