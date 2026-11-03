@@ -31,7 +31,7 @@
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? seal-exit shuts-out? off-low-floor support-looks retreat-dists fill-order]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
-            [jobs.build.from-plan.walk :refer [give-up cell-s trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here?]]
+            [jobs.build.from-plan.walk :refer [give-up cell-s trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here? unpriced price-buried! look-verdict]]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
 (def meta {:tags [:goal]})
@@ -63,6 +63,9 @@
   the end it is given up with jobs.lib.placement's reason (:no-support, :never-seen, after a look at any floor or neighbour never seen; :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unseen).
   A cell shut in by rock (and other plan cells) on every side is tunnelled to (jobs.access.tunnel); faces never seen count as rock only for a cell within reach that the body has looked at, else it walks (go-to digs out of a pocket) first.
+  An unseen cell wanting a block and shut in so is looked at from where the body stands, then priced (walk/look-verdict): it waits
+  while a side is plan work still owed, is tunnelled to when the cheapest cut to see it costs less than the chance it is not
+  solid already (the measured prior) times its worth, else it is left :unchecked (not owed, named in the result's :unchecked).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
   is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}].
@@ -74,7 +77,7 @@
   fill, not listed :wrong.
   done? holds when no cell is owed, none came out wrong; the engine then ends it :done.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
-  :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
+  :want}] :refused [...] :fetch-failed {item {:failed :why}} :unchecked [[x y z] ...]}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
   :refused when the rules refuse the rest, nothing-possible :shut-in; each with :next (jobs.lib.next-call: an obtain per short item, then the build again). For a block placed in the wrong state, :found names the state it came out in.
@@ -257,6 +260,10 @@
         standing (let [cell (first (filter #(mine (:pos %)) wanted))]
                    (when (and cell (not= (:pos cell) (:stepped-off (ctx/mem c)))) cell))
         dig-near (remove #(shut-in? c %) (in-dig-reach c digs))
+        buried (unpriced c cells given-up)
+        hidden (unseen cells given-up)
+        ;; a cell that shows once its owed side is worked waits for that work, not a tunnel of its own
+        hidden-now (let [h (remove #(= :defer (look-verdict c cells %)) hidden)] (if (seq h) h hidden))
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
       (<= (settings/get settings ::budget-streak) (:budget-streak (ctx/mem c) 0))
@@ -298,11 +305,12 @@
                            :continue
                            (recur (rest left)))
                          :again))
-      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells (into todo (unseen cells given-up)) (nearest layer) (give-up)) :again)
+      (seq buried) (do (trace! c :price-buried! (:pos (first buried))) (await (price-buried! c (nearest buried))))
+      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells (into todo hidden) (nearest layer) (give-up)) :again)
       (seq todo) (await (reach-cell! c cells (nearest layer)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))
-      (seq (unseen cells given-up)) (await (reach-cell! c cells (nearest (unseen cells given-up))))
+      (seq hidden) (await (reach-cell! c cells (nearest hidden-now)))
       standing (do (ctx/update-mem! c assoc :leave (exit-of c cells) :stepped-off (:pos standing))
                    :again)
       :else (let [before (ctx/mem c)]

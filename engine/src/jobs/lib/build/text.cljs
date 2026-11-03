@@ -8,7 +8,7 @@
             [jobs.lib.build.plan :refer [owed kept-ground shortage left-text shortage-text fill-spent]]))
 
 (defn summary
-  "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}, with :filled (the fill blocks placed) and :fill-spent (plan/fill-spent) when any."
+  "What a build of cells left, from the job memory m: {:placed :missing :short :given-up :wrong :refused}, with :filled (the fill blocks placed) and :fill-spent (plan/fill-spent) when any, :unchecked (buried cells left unseen, plan/unseen) when any."
   [c cells m sturdy-ground]
   (let [kept? (kept-ground c cells sturdy-ground)
         left (owed cells)
@@ -24,6 +24,7 @@
     (cond-> {:placed (:placed m 0) :missing (mapv :pos left) :short (shortage left (storage/carried-totals (u/inventory (:primitives c))))
              :given-up given-up :wrong wrong :refused refused}
       wood (assoc :wood wood)
+      (some :unchecked cells) (assoc :unchecked (mapv :pos (filter :unchecked cells)))
       (seq (:filled m)) (assoc :filled (count (:filled m)) :fill-spent (fill-spent c m)))))
 
 (defn fetch-failed-text

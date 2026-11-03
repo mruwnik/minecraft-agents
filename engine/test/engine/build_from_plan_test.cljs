@@ -14,6 +14,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.base-rates :as base-rates]
+            [jobs.lib.look :as look]
             [jobs.lib.reserve :as reserve]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
@@ -2491,6 +2493,41 @@
           (is (= "oak_fence" (block p [12 64 5])))
           (is (every? #(= "dirt" (block p %)) room) (pr-str (remove #(= "dirt" (block p %)) room)))
           (is (empty? (:missing result)) (pr-str result)))))))
+
+(deftest a-closed-room-of-the-plan-buried-in-rock-leaves-its-hidden-edges-unchecked-not-tunnelled-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shell (for [x (range 3 8) y (range 63 68) z (range 3 8)
+                          :when (or (#{63 67} y) (#{3 7} x) (#{3 7} z))]
+                      [x y z])
+              inside (set (for [x (range 4 7) y (range 64 67) z (range 4 7)] [x y z]))
+              sides (fn [[x y z]] [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])
+              edges (set (remove #(some inside (sides %)) shell))
+              rock (into {} (for [x (range -2 15) y (range 62 70) z (range -2 13)
+                                  :when (not (inside [x y z]))]
+                              [(h/cell-key x y z) "stone"]))
+              plan {:id "own" :metadata {:by "Fake"} :parts [{:id "room" :cells (vec shell) :want "dirt"}]}
+              targets (atom [])
+              tunnel (get registry/jobs 'jobs.access.tunnel)
+              {:keys [eng p]} (start {:blocks (merge rock (into {} (for [c shell] [(apply h/cell-key c) "dirt"])))
+                                      :floor [-30 -30 30 30] :self {:pos {:x 5.5 :y 64 :z 5.5}}
+                                      :inventory [{:name "dirt" :count 64} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+                                     {"own" plan} [] {'jobs.access.tunnel (assoc tunnel :round (fn [c] (swap! targets conj (:target (:args c))) ((:round tunnel) c)))})
+              sensed (.-sensedAt p)
+              ;; a player sees a block only through an open side: a cell with none reads never seen
+              hidden? (fn [pos] (let [[x y z] (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"])]
+                                  (every? (fn [[a b c]] (let [n (sensed #js {:x a :y b :z c})] (and n (not= "air" (.-name n))))) (sides [x y z]))))]
+          (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (sensed pos))))
+          (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (let [b (sensed pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+          ;; sealed in the room the body sees no frontier: each hidden cell gets the measured prior of the far bucket
+          (let [run (fn ^:async r [] (with-redefs [look/frontier-distance (fn [_ _] base-rates/unseen-d-max)] (await (child-outcome eng job {:plan "own"} 600))))
+                result (await (run))]
+            (is (every? #(= "dirt" (block p %)) shell) (pr-str (remove #(= "dirt" (block p %)) shell)))
+            (is (= [] @targets) "no tunnel through the room to look at its edges")
+            (is (= edges (set (:unchecked result))) (pr-str (select-keys result [:missing :given-up :unchecked :text])))
+            (is (= [] (:missing result)) (pr-str result))
+            (is (nil? (:status result)) "the build ends done")))))))
 
 (deftest a-cell-tunnelled-to-from-a-closed-room-of-the-plan-leaves-the-room-wall-refilled
   (async done

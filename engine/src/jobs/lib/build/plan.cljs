@@ -416,8 +416,12 @@
         cells (when usable?
                 (let [carried (set (keys carried-map))]
                   (let [cells (prepared (judged (:primitives c) answer part carried-map wood) carried (:misplaced (ctx/mem c) {}) (own-kept c))
-                        kept? (kept-ground c cells (sturdy-ground? c))]
-                    (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
+                        kept? (kept-ground c cells (sturdy-ground? c))
+                        unchecked (:unchecked (ctx/mem c) #{})]
+                    (mapv #(cond-> %
+                             (and (:short? %) (kept? %)) (dissoc :short?)
+                             (and (nil? (:found %)) (contains? unchecked (:pos %))) (assoc :unchecked true))
+                          cells))))
         trouble (or (when-let [nw (:not-worth filled)]
                       (str "the fill under the floor costs " (js/Math.round (:price nw)) " s, more than the build is worth"
                            (when (:worth nw) (str " (" (js/Math.round (:worth nw)) " s)"))))
@@ -493,9 +497,10 @@
   (filterv :dig? cells))
 
 (defn unseen
-  "The cells with an item, or to clear, that nobody can see now (unloaded), not given up."
+  "The cells with an item, or to clear, that nobody can see now (unloaded), not given up, nor :unchecked (memory
+  :unchecked: a buried cell whose look a job priced over what a wrong one would cost)."
   [cells given-up]
-  (filterv #(and (nil? (:found %)) (or (:item %) (= :clear (:want %))) (not (:companion %)) (not (contains? given-up (:pos %)))) cells))
+  (filterv #(and (nil? (:found %)) (or (:item %) (= :clear (:want %))) (not (:companion %)) (not (:unchecked %)) (not (contains? given-up (:pos %)))) cells))
 
 (defn short-wrong
   "The cells holding a wrong block that cannot be dug yet: the body carries none of the item."

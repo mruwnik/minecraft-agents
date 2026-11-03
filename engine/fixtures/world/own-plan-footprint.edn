@@ -84,15 +84,17 @@
    :plans [{:id "room" :metadata {:by "$body"}
             :parts [{:id "shell" :box [#at [8 1 8] #at [12 5 12]] :want "dirt"}
                     {:id "inside" :box [#at [9 2 9] #at [11 4 11]] :want :clear}
-                    {:id "post" :cells [#at [16 2 10]] :want "dirt"}]}]
-   :blocks [[:fill [4 0 4] [20 9 16] "stone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"] [:set [16 2 10] "air"]]
-   ;; 64 dirt: the shell's edges and corners are unseen from inside, so the plan reckons them owed until it sees them
+                    {:id "post" :cells [#at [16 2 10]] :want :clear}]}]
+   :blocks [[:fill [4 0 4] [20 9 16] "stone"] [:fill [8 1 8] [12 5 12] "dirt"] [:fill [9 2 9] [11 4 11] "air"]]
+   ;; 64 dirt: the shell's edges and corners are unseen from inside, owed until the build prices their looks (left :unchecked).
+   ;; The post is a stone cell to clear: a hidden cell wanting dirt would be priced as likely solid already, not walked to.
    :body {:at [10.5 2 10.5] :inventory [["dirt" 64] ["stone_pickaxe" 1] ["stone_shovel" 1]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:room"})]]
    :expect [{:event {:source :job :kind :go-to.restored} :within-s 150 :of-job true}
             {:count-event {:source :job :kind :go-to.dug-own-build} :for-s 150 :at-most 2}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 150 :until {:source :job :kind :go-to.restored} :of-job true}]
-   :after [[:block [16 2 10] "dirt"] [:block [8 2 10] "dirt"]]
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 150 :until {:source :job :kind :go-to.restored} :of-job true}
+            {:event {:source :job :kind :completed :data {:kind :done}} :within-s 170 :of-job true}]
+   :after [[:block [16 2 10] "air"] [:block [8 2 10] "dirt"]]
    :limit-s 180}
   {:name "stair-through-own-plan-wall-when-not-spared"
    :plans [{:id "hut" :metadata {:by "$body"}

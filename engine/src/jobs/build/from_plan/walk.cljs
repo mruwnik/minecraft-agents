@@ -10,6 +10,8 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.escape :as escape]
+            [jobs.lib.look :as look]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -135,6 +137,56 @@
   [c cell]
   (or (rock-bound? (:primitives c) cell) (contains? (:sightless (ctx/mem c)) (:pos cell))))
 
+(defn sides [[x y z]] [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])
+
+(defn look-price
+  "Seconds the cheapest look at a cell shut in by rock adds to the build: 0 when a side is plan work still owed (a wrong
+  block to dig, an unseen cell to clear: the cell shows once that is done), else the least side's cut
+  (jobs.lib.stair-time), with its refill (cell-s) for a cell of the plan."
+  [c cells cell]
+  (let [by-pos (into {} (map (juxt :pos identity)) cells)
+        closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))]
+    (apply min (map (fn [n]
+                      (let [o (by-pos n)]
+                        (cond (nil? o) (stair-time/cell-s)
+                              (and (not (contains? closed n)) (or (:dig? o) (and (nil? (:found o)) (= :clear (:want o))))) 0
+                              :else (+ (stair-time/cell-s) (cell-s)))))
+                    (sides (:pos cell))))))
+
+(defn look-verdict
+  "For an unseen cell wanting a block, shut in by rock (rock-bound?): :defer when its look-price is 0, :look when that
+  price is under the chance it does not hold a solid block already (jobs.lib.look/unseen-solid-at-fn, the measured
+  prior) times its worth (cell-s and its item's value), else :skip; nil for any other cell."
+  [c cells cell]
+  (when (and (nil? (:found cell)) (:item cell) (not (:unchecked cell)) (rock-bound? (:primitives c) cell))
+    (let [price (look-price c cells cell)
+          p-wrong (- 1 ((look/unseen-solid-at-fn (:primitives c)) (:pos cell)))
+          worth (+ (cell-s) (:value (cost/item-value [{:name (:item cell) :count 1}])))]
+      (cond (zero? price) :defer
+            (< price (cost/chance-times p-wrong worth)) :look
+            :else :skip))))
+
+(defn unpriced
+  "The unseen cells of look-verdict :skip, or shut in within :reach and not looked at yet: price-buried! settles them before
+  any walk."
+  [c cells given-up]
+  (let [looked (:rock-looked (ctx/mem c) #{})
+        here (u/self-pos c)]
+    (filter #(when-let [v (look-verdict c cells %)]
+               (or (= :skip v) (and (not (contains? looked (:pos %))) (<= (u/eye-dist here (:pos %)) (plan/reach)))))
+            (plan/unseen cells given-up))))
+
+(defn ^:async price-buried!
+  "An unpriced cell: within :reach and not looked at, a look at it; else memory :unchecked (no longer owed, named in the
+  result). :again."
+  [c cell]
+  (let [pos (:pos cell)]
+    (if (and (not (contains? (:rock-looked (ctx/mem c)) pos)) (<= (u/eye-dist (u/self-pos c) pos) (plan/reach)))
+      (do (ctx/update-mem! c update :rock-looked (fnil conj #{}) pos)
+          (await (dig-look/look-at! c pos)))
+      (ctx/update-mem! c update :unchecked (fnil conj #{}) pos))
+    :again))
+
 (defn ^:async tunnel-to!
   "A cell shut in by rock: with a pickaxe, cut a way (jobs.access.tunnel) to the deepest such cell, so the body stands in the
   plan's cells and fills them while backing out; without one the cell is given up :no-tool at once. :continue while the
@@ -160,7 +212,9 @@
                     :again)))
             (let [body (u/self-pos c)
                   _ (ctx/update-mem! c update :mouth #(or % (mapv js/Math.floor [(:x body) (:y body) (:z body)])))
-                  open (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (contains? closed (:pos %))) (shut? %)) cells)
+                  open (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (:unchecked %)) (not (contains? closed (:pos %))) (shut? %)
+                                     (contains? #{nil :look} (look-verdict c cells %)))
+                               cells)
                   deepest (if (seq open) (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %))) open) cell)
                   r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
