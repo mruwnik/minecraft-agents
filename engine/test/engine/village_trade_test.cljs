@@ -289,9 +289,10 @@
           (swap! clock + 700)
           (core/tick! (:eng a))
           (loop [i 0]
-            (when (and (< i 100) (nil? (:bought (core/job-memory (:eng a) "j1"))))
+            (when (and (< i 500) (not @cut))
               (await (js/Promise. (fn [ok] (js/setTimeout ok 20))))
               (recur (inc i))))
+          (is @cut "the second read was cut")
           (is (= 1 (:bought (core/job-memory (:eng a) "j1"))) "the first buy was booked before the cut")
           (let [b (start {:p p :dir dir})]
             (await (run-until-empty (:eng b) 40))
