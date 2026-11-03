@@ -92,7 +92,7 @@
   "The dry run of go-to call c (args with the body's food and the walk limits): its route, {:found true ...} or {:found
   false :reason ...} (report), with :goal the cell planned to, :nodes the search's expansions and :risk the walk risk of
   its plan (jobs.lib.walk-risk/estimate: past a plan not found, the rest priced as walk-risk prices it); a refusal {:found
-  false :reason :text}; :searching (with :near, the blocks to the goal) when the search spent its round budget: it goes on at the next quote of the same walk (walk.search/searches)."
+  false :reason :text}; :searching (with :near, the blocks to the goal) when the search spent its round budget: it goes on at the next quote of the same walk (walk.search/searches). The quote's search holds at most wworld/unknown-max-nodes nodes, then ends :budget: over land the body never saw it would flood to the planner's limit over many quotes."
   [c]
   (let [{:keys [doors range tolls one-way unknown]} (:args c)
         refusal (gaim/args-refusal c)
@@ -102,7 +102,7 @@
       (nil? (wworld/path-world (:primitives c))) {:found false :reason :unsupported :text "the body cannot sense the world for path planning"}
       :else
       (let [doors (or doors :shut)
-            policy (cond-> (wworld/body-policy c)
+            policy (cond-> (assoc (wworld/body-policy c) :max-nodes (wworld/unknown-max-nodes))
                      (not= :never doors) (update :moves conj :open))
             spec (when unknown (wworld/with-seeds (wworld/unknown-spec c) [(:x pos) (:y pos) (:z pos)] nil))
             plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false

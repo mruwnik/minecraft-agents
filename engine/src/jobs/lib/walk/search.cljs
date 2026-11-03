@@ -137,7 +137,7 @@
   (:drown-prices, :damage-weight, :damage-budget, :max-drop) change at every hit: go-on? bounds them (health-drift).
   A :goal-seen fn (go-to's :see, new each round, the goal is in the key) counts only as being there."
   [policy]
-  (cond-> (dissoc policy :air-seen :air-used :goal-seen)
+  (cond-> (dissoc policy :air-seen :air-used :goal-seen :max-nodes)
     (contains? policy :air-used) (assoc :under true)
     (contains? policy :goal-seen) (assoc :goal-seen true)
     (contains? policy :health) (dissoc :health :drown-prices :damage-weight :damage-budget :max-drop)))
@@ -187,7 +187,7 @@
   planner's stopAtEdge, so one toward a goal that is unloaded names the first loaded-edge node it expands as its frontier
   and ends after a sweep of the land round it, not after searching all loaded land."
   [c walled to range weight policy key known & [flood]]
-  {:key key :t (now c) :walled walled :r nil :unlimited nil :air-used (:air-used policy) :health (:health policy)
+  {:key key :t (now c) :walled walled :r nil :unlimited nil :air-used (:air-used policy) :health (:health policy) :max-nodes (:max-nodes policy)
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
@@ -198,14 +198,15 @@
                                                (unchecked-set "stopAtEdge" true))))})
 
 (defn go-on?
-  "Whether the kept search goes on at this call: it plans the same (key k), is younger than search-max-age-ms, and did
+  "Whether the kept search goes on at this call: it plans the same (key k) and, unless it is over, with the same policy :max-nodes (a quote's cap), is younger than search-max-age-ms, and did
   not begin with the goal unloaded that pw (this call's pathWorld) has loaded since. A search's snapshot keeps the
   land as it first read it, so one begun with the goal unloaded never floods the goal; a new one can prove it walled in.
   policy: this call's; its :air-used (seconds of air used now, nil with the head out) past the search's own by more than
   air-drift, or its :health (hp now under water) below the search's own by more than health-drift: a new search plans
   with the air or hp left."
-  [c kept k ^js pw to {:keys [air-used health]}]
+  [c kept k ^js pw to {:keys [air-used health max-nodes]}]
   (and (= k (:key kept))
+       (or (:within kept) (= max-nodes (:max-nodes kept)))
        (<= (- (or air-used 0) (or (:air-used kept) 0)) air-drift)
        (or (nil? health) (nil? (:health kept)) (<= (- (:health kept) health) health-drift))
        (< (- (now c) (:t kept)) search-max-age-ms)

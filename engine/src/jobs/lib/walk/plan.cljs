@@ -23,11 +23,12 @@
 
 (defn box-of
   "wide-box with the policy's :y-margin (go-to's) as its yMargin and its :y-below (go-to's dive floor) as its yBelow,
-  the blocks below the lower of body and goal alone."
+  the blocks below the lower of body and goal alone. Its :max-nodes (a quote's) is the planner's maxNodes."
   [policy]
   (cond-> wide-box
     (some? (:y-margin policy)) (assoc :yMargin (:y-margin policy))
-    (some? (:y-below policy)) (assoc :yBelow (:y-below policy))))
+    (some? (:y-below policy)) (assoc :yBelow (:y-below policy))
+    (some? (:max-nodes policy)) (assoc :maxNodes (:max-nodes policy))))
 
 (def chunk-expansions
   "Expansions a search of the walking plans (plan-from! and plan-within!) runs between yields to the event

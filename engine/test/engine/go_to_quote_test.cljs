@@ -216,6 +216,20 @@
           (is (= :searching (:reason out)) "the node budget of one round, not a clock, ends it")
           (is (true? (:estimate quote)) "priced as a straight line until the search ends"))))))
 
+(deftest a-goal-no-seen-route-reaches-ends-the-quote-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/fake {:blocks (merge (floor -150 -150 150 150) (box 40 64 -150 41 70 150 "stone")) :self {:pos {:x 0 :y 64 :z 1}}})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now #(deref clock)})})
+              out (loop [n 1]
+                    (let [route (get-in (await (quote-reply eng {:pos [100 64 1] :range 0})) [:quote :route])]
+                      (if (and (= :searching (:reason route)) (< n 12)) (recur (inc n)) route)))]
+          (is (false? (:found out)))
+          (is (not= :searching (:reason out)) "a quote's search holds at most the node budget, not the planner's 200000"))))))
+
 (defn pond
   "Land at y 63 from x 0 to 20 and z -10 to 10, with a pond of water over x 5-15 and z -8 to 8 (stone beneath at y 61)."
   []
