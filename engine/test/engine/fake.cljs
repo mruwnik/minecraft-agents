@@ -57,7 +57,7 @@
 (def hit-range senses/hit-range)
 (def fake-body-id -1)
 (def offline-default-ms (* 5 60 1000))
-(def offline-max-ms (* 10 60 1000))
+(def offline-max-ms (* 24 60 60 1000))
 (def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
 (def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch" "oak_leaves" "ice" "slime_block"})

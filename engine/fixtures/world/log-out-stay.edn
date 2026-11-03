@@ -10,4 +10,12 @@
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 220]]
    :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :for-s 120 :at-most 0}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 250}]
-   :after [[:memory {:entries {:log-out [{:data {:status "ok" :ms [:>= 149000]}}]}}]]}]}
+   :after [[:memory {:entries {:log-out [{:data {:status "ok" :ms [:>= 149000]}}]}}]]}
+ {:name "a-stay-longer-than-ten-minutes-is-one-unbroken-stint"
+   :limit-s 800
+   :act [[:http :submit (jobs.survival.log-out {:stay-ms 660000}) [] {:ok true}]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 760]]
+   :expect [{:count-event {:source :body :kind :online} :for-s 640 :at-most 0}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 780}]
+   :after [[:memory {:entries {:log-out [{:data {:status "ok" :ms [:>= 659000]}}]}}]]}]}

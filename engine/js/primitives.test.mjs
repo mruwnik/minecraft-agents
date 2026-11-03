@@ -976,7 +976,7 @@ test('events of the new bot reach listeners and the old bot goes quiet', async (
   assert.deepEqual(seen.map(e => e.kind), ['offline', 'online', 'chat'])
 })
 
-const clampCases = [[undefined, 5 * MIN], [null, 5 * MIN], [100 * MIN, 10 * MIN], [0, 0], [12.7, 12]]
+const clampCases = [[undefined, 5 * MIN], [null, 5 * MIN], [48 * 60 * MIN, 24 * 60 * MIN], [0, 0], [12.7, 12]]
 for (const [ms, expected] of clampCases) {
   test(`offline with ms ${ms} waits ${expected}`, async () => {
     const { p } = await online({ timeScale: 1e-6 })

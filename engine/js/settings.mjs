@@ -14,7 +14,7 @@ export const SPECS = {
   'prim/settle-quiet-ms': { default: 150, spec: ['int-in', 0, null], doc: "A container transfer closes its window only after this long without a slot update, in ms." },
   'prim/settle-cap-ms': { default: 1500, spec: ['int-in', 0, null], doc: "A container transfer closes its window after this long at most, in ms." },
   'prim/offline-default-ms': { default: 300000, spec: ['int-in', 0, null], doc: "How long offline waits for the body to come back when not told, in ms." },
-  'prim/offline-max-ms': { default: 600000, spec: ['int-in', 0, null], doc: "Longest offline wait a caller may ask for, in ms." },
+  'prim/offline-max-ms': { default: 86400000, spec: ['int-in', 0, null], doc: "Longest offline wait a caller may ask for, in ms." },
   'prim/jump-place-max': { default: 8, spec: ['int-in', 1, null], doc: "Most blocks one jump-place pillar rises." },
   'prim/jump-place-block-s': { default: 2, spec: ['int-in', 0, null], doc: "Time allowed per block of a jump-place pillar, in seconds." },
   'prim/rise-wait-ms': { default: 800, spec: ['int-in', 0, null], doc: "How long a swim waits for the body to rise, in ms." },
