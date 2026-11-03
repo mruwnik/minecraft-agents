@@ -47,6 +47,10 @@
 (deftest a-tunnel-dug-from-a-hut-at-night-is-not-a-walk-out
   (is (= :ok (kind strip-tunnel/safe? rt/night-hut {:heading "east"}))))
 
+(deftest a-tunnel-stretch-stays-the-seconds-of-the-steps-it-has-left-not-a-long-stay
+  (is (= [7.2 4.8] (mapv #(/ (js/Math.round (* 10 (strip-tunnel/stay-s (ctx rt/tunnel %)))) 10)
+                         [{:limit 3 :steps 0} {:limit 3 :steps 1}]))))
+
 (deftest jobs-going-to-a-place-judge-that-place
   (are [check arg] (= [:ok :later] [(kind check rt/night-hut {arg inside}) (kind check rt/night-hut {arg outside})])
     fell-tree/safe? :at
