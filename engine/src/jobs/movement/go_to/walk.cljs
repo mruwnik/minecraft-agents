@@ -263,6 +263,11 @@
   (when (#{:present :absent} floor)
     (cut/count-floor! c floor kind)))
 
+(defn absent-floors
+  "How many unseen floors the call's walks found not there so far (all kinds)."
+  [c]
+  (reduce + 0 (map #(:absent % 0) (vals (cut/floor-counts c)))))
+
 (defn explore-spent!
   "Give up :explore-spent with the tour so far (tour)."
   [c pos]
@@ -591,6 +596,7 @@
 
       :else
       (let [_ (forget-known-land! c)
+            absent-before (absent-floors c)
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
@@ -727,12 +733,15 @@
                 _ (note-fault! c walked)
                 _ (await (look-at-stuck! c walked))
                 unstuck? (await (unstick/swim-out! c pos walked))
+                learned-floor? (> (absent-floors c) absent-before)
+                reach-new? (and (:edge-mode (ctx/mem c)) (> left (inc (or (:reach (ctx/mem c)) best))))
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
+                looped? (and looped? (not learned-floor?) (not reach-new?))
                 result (cond-> result
                          looped? (assoc :status :no-path :reason (if (escape/walk-enclosed? c) :start-enclosed :no-progress))
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 learned? (learned-round? result)
-                progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (and learned? (learned-near? result pos best))))
+                progress? (and (not looped?) (or (< left (dec best)) explored? nearer? learned-floor? reach-new? (and learned? (learned-near? result pos best))))
                 edge-start? (and (not progress?) (:unknown c) (= :budget (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c))))
                 ;; land closed by the rock guess is not searched to its end: a call that cannot dig tours its rim first
                 rock-start? (and (not progress?) (not edge-start?) (= :exhausted (some-> (:reason result) keyword)) (not (:rock-edge (ctx/mem c)))
@@ -744,6 +753,7 @@
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
+            (when (:edge-mode (ctx/mem c)) (ctx/update-mem! c assoc :reach (max left (or (:reach (ctx/mem c)) best))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore/restore-next! c))
             (cond
               rock-start?
