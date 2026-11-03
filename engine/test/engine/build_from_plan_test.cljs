@@ -461,6 +461,16 @@
   (is (nil? (text/wood-hint "spruce_planks" {"spruce_log" 4})))
   (is (nil? (text/wood-hint "stone" {"oak_log" 16}))))
 
+(deftest a-wall-cell-over-a-room-the-plan-wants-clear-is-placed-from-the-room
+  (let [room (for [x (range 4 9) y [64 65]] [x y 5])
+        rock (into {} (for [x (range -3 16) y (range 63 67) z (range -3 12) :when (not ((set room) [x y z]))] [(str x "," y "," z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks rock}))
+        cells (conj (mapv (fn [pos] {:pos pos :want :clear :answer :match}) room) {:pos [6 64 6] :want "oak_slab" :answer :missing})
+        stands (plan/grounded-stands p [6 64 6] 64 nil (plan/not-stands cells) #{})]
+    (is (seq stands))
+    (is (every? (set room) stands) "only cells of the open room are stands")
+    (is (not-any? (set room) (plan/grounded-stands p [6 64 6] 64 nil (set (map :pos cells)) #{})) "none when every plan cell is barred")))
+
 (deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done
     (tu/run-async done

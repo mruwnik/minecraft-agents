@@ -81,6 +81,11 @@
   (let [fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
     #{[fx fy fz] [fx (inc fy) fz]}))
 
+(defn not-stands
+  "The positions of the plan's cells no stand may be: all but those it wants clear, which the body stands in once open."
+  [cells]
+  (into #{} (comp (remove #(= :clear (:want %))) (map :pos)) cells))
+
 (defn stand-cells
   "Cells one to three blocks beside cell (or diagonally off it) at height y, where a body stands to place it: for a
   facing, only straight out on the side it faces away from; never a planned cell."

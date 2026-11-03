@@ -210,7 +210,7 @@
   beside it standable when the plan's own cells count as open (inner)."
   [c cells cell]
   (let [body-y (js/Math.floor (:y (u/self-pos c)))
-        planned (set (map :pos cells))
+        planned (plan/not-stands cells)
         bad (set (:bad-stands (ctx/mem c)))
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))]
     {:all (stands-for (:primitives c) (:pos cell) body-y facing planned bad)
@@ -298,7 +298,7 @@
   [c cells cell]
   (let [body (u/self-pos c)
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
-        stands (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing (set (map :pos cells)) (set (:bad-stands (ctx/mem c))))
+        stands (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing (plan/not-stands cells) (set (:bad-stands (ctx/mem c))))
         grounded (when-not (or (contains? (:needs-scaffold (ctx/mem c)) (:pos cell)) (climb-first? c cells cell)) (reaching c stands (:pos cell)))]
     (or (await (tunnel-to! c cells cell))
         (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
