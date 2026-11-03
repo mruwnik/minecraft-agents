@@ -139,10 +139,10 @@
 
 (defn stands-for
   "The stand cells to place or dig cell-pos from: those standable (grounded-stands), else the cell-height candidates as
-  they are (unloaded land); never a planned cell or one in bad."
+  they are (unloaded land: a cell the body has seen and cannot stand in is none); never a planned cell or one in bad."
   [p cell-pos body-y facing planned bad]
   (or (grounded-stands p cell-pos body-y facing planned bad)
-      (remove bad (ground-stands p (remove bad (stand-cells cell-pos (second cell-pos) facing planned))))))
+      (remove bad (ground-stands p (remove (fn [[x y z]] (or (bad [x y z]) (u/seen-block p {:x x :y y :z z}))) (stand-cells cell-pos (second cell-pos) facing planned))))))
 
 (defn shortage
   "{item n} of the missing cells' items beyond what is carried (carried {item n})."

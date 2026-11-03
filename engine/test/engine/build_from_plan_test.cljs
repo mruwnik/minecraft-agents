@@ -469,7 +469,8 @@
         stands (plan/grounded-stands p [6 64 6] 64 nil (plan/not-stands cells) #{})]
     (is (seq stands))
     (is (every? (set room) stands) "only cells of the open room are stands")
-    (is (not-any? (set room) (plan/grounded-stands p [6 64 6] 64 nil (set (map :pos cells)) #{})) "none when every plan cell is barred")))
+    (is (not-any? (set room) (plan/grounded-stands p [6 64 6] 64 nil (set (map :pos cells)) #{})) "none when every plan cell is barred")
+    (is (empty? (plan/stands-for p [6 64 6] 64 nil (set (map :pos cells)) #{})) "a seen cell no body can stand in is no fallback stand")))
 
 (deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done
