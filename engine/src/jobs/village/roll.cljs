@@ -76,7 +76,27 @@
 
 (def target [:villager :pos])
 
-(def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c)))))))
+(defn unfinished?
+  "Whether the call has broken the workstation or lifted the slab and not yet put it back."
+  [c]
+  (let [m (ctx/mem c)] (boolean (or (:broken m) (:slab m)))))
+
+(defn safe-roll
+  "safe-at-by-night the cell, but a sound alone holds nothing (threatened-seen: nobody judges it while the reflex is muted) and
+  nothing holds while the workstation or slab is out: the call puts it back first."
+  [base]
+  (with-meta
+    (fn [c]
+      (let [r (base c)]
+        (cond
+          (= :ok (first r)) r
+          (unfinished? c) (contract/ok :unfinished "the workstation is put back first")
+          (and (= :hostile-near (:reason (nth r 2))) (= :ok (first (ready/threatened-seen c))))
+          ((::ready/exposure (meta base)) c)
+          :else r)))
+    (meta base)))
+
+(def safe? (price/staying :work (safe-roll (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))))
 (def fit? ready/fed-fit?)
 
 

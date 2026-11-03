@@ -10,6 +10,7 @@
             [engine.village-trade-test :as vt]
             [engine.contract :as contract]
             [jobs.lib.look :as look]
+            [jobs.lib.ready]
             [engine.test-util :as tu]
             [jobs.village.roll :as roll]))
 
@@ -599,3 +600,20 @@
               (recur (inc i))))
           (is @cut "the cut came after the break")
           (is (= "lectern" (workstation p)) "the cleanup put it back"))))))
+
+(deftest the-workstation-out-or-the-slab-lifted-is-no-reason-to-wait
+  (let [later (contract/later :hostile-near "a hostile is near")
+        safe (roll/safe-roll (with-meta (fn [_] later) {:jobs.lib.ready/exposure (fn [_] (contract/ok :day "day"))}))
+        at (fn [m] (with-redefs [ctx/mem (constantly m) jobs.lib.ready/threatened-seen (fn [_] (contract/later :hostile-near "seen"))] (first (safe {}))))]
+    (are [m expected] (= expected (at m))
+      {} :later
+      {:rolls 2} :later
+      {:broken true} :ok
+      {:slab {:x 1}} :ok)))
+
+(deftest a-sound-alone-is-no-hold-for-a-roll
+  (let [base (with-meta (fn [_] (contract/later :hostile-near "a hostile is near")) {:jobs.lib.ready/exposure (fn [_] (contract/ok :day "day"))})]
+    (with-redefs [ctx/mem (constantly {}) jobs.lib.ready/threatened-seen (fn [_] (contract/ok :no-hostile-near "none"))]
+      (is (= :ok (first ((roll/safe-roll base) {})))))
+    (with-redefs [ctx/mem (constantly {}) jobs.lib.ready/threatened-seen (fn [_] (contract/later :hostile-near "seen"))]
+      (is (= :later (first ((roll/safe-roll base) {})))))))

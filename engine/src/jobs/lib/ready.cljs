@@ -312,15 +312,25 @@
       (str ": " (dawn/hostile-text [(dawn/describe p e)]))
       "")))
 
+(defn threatened-by
+  "threatened; with heard-too? false a heard-only mob never counts."
+  [c heard-too?]
+  (if (check-cache/cached c [::threatened heard-too?]
+                          #(hostile-loss/hostile-near? (:primitives c) (ctx/view c)
+                                                       (cond-> (trigger-args c) (or (not heard-too?) (body/heard-judged? (ctx/view c))) (assoc :ignore-heard? true))))
+    (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first (an exclusive run pauses the hostile reflex)"))
+    (contract/ok :no-hostile-near "no hostile near")))
+
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry); heard-only
   mobs the reflex already judged harmless (body/heard-judged?) are left out, so a run is not held by a sound for ever."
   [c]
-  (if (check-cache/cached c ::threatened
-                          #(hostile-loss/hostile-near? (:primitives c) (ctx/view c)
-                                                       (cond-> (trigger-args c) (body/heard-judged? (ctx/view c)) (assoc :ignore-heard? true))))
-    (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first (an exclusive run pauses the hostile reflex)"))
-    (contract/ok :no-hostile-near "no hostile near")))
+  (threatened-by c true))
+
+(defn threatened-seen
+  "threatened for a short stay among others (a village): a sound alone holds nothing, a mob must be seen or remembered."
+  [c]
+  (threatened-by c false))
 
 (defn unarmed-threatened
   "Later :hostile-near while no weapon is carried and a hostile with a way to the body is known within jobs.lib.dawn's

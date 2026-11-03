@@ -503,6 +503,14 @@
     (is (= :ok (verdict (view [:heard-mute 10]))) "its mute lapsed long ago: the run is not held for ever")
     (is (= :later (verdict (view [:heard-mute 10] [:hurt 60]))) "hurt since: the unseen mob may be the one hitting")))
 
+(deftest threatened-seen-leaves-out-a-mob-only-heard-whatever-was-judged
+  (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
+        world (merge at-origin {:entities [far] :blocks (tu/box 2 64 0 3 66 0 "stone")})
+        c (with-entry world {:visible-only false})]
+    (is (= :later (first (ready/threatened c))) "never judged: a sound holds a plain run")
+    (is (= :ok (first (ready/threatened-seen (assoc c :id "other")))) "a short stay among others is not held by a sound")
+    (is (= :later (first (ready/threatened-seen (with-entry (merge at-origin {:entities [zombie]}) {})))) "a seen mob still holds")))
+
 (deftest threatened-is-read-once-per-window
   (let [c (ctx-of (merge at-origin {:entities [zombie]}))
         asked (atom 0)]
