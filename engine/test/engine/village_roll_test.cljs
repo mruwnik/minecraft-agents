@@ -439,6 +439,25 @@
           (is (some #(and (= 4.5 (first %)) (= 0.5 (second %))) goals)
               "the body presses up against the wall nearest the drop, so a gap in it lets the pickup reach through"))))))
 
+(deftest the-walks-to-a-lost-drop-carry-its-worth-so-they-do-not-tour-the-land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args (atom [])
+              spy (fn [env]
+                    (let [j (get (:jobs (:eng env)) 'jobs.movement.go-to)]
+                      (assoc-in env [:eng :jobs 'jobs.movement.go-to]
+                                (assoc j :round (fn ^:async spy [c]
+                                                  (swap! args conj (:args c))
+                                                  (await ((:round j) c)))))))
+              drop {:id 90 :name "item" :kind "item" :pos {:x 4.5 :y 64 :z 0.5} :item {:name "lectern" :count 1}}
+              _ (await (roll {:entities [(librarian [(offer "paper")]) drop] :self {:pos {:x 1.5 :y 64 :z 0.5}}
+                              :wrap (comp spy breaks-without-a-drop)} {}))
+              drop-walks (filter #(#{#{:walk}} (:ways %)) @args)]
+          (is (seq drop-walks))
+          (is (every? #(js/isFinite (:worth %)) drop-walks)
+              "a walk to the drop is priced by the drop's worth: the inherited root worth is unbounded and the walk roamed 35 blocks off for it"))))))
+
 (defn body-cell [w]
   (let [pos (get-in w [:self :pos])]
     (mapv js/Math.floor (if (map? pos) [(:x pos) (:y pos) (:z pos)] pos))))

@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.blocks :as b]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.villager :as villager]
@@ -475,6 +476,12 @@
                   (await (ctx/act c :steer (walk/steer-args 8 (crouch-decider [[(:x stand) (:z stand) 0] (conj in 20) [(:x stand) (:z stand) 0]]))))
                   :again)))))))
 
+(defn drop-worth
+  "Seconds the broken workstation's drop is worth (cost/find-worth), what a walk to it may spend: a walk to a drop behind a wall
+  must not tour the land for it."
+  [c]
+  (cost/find-worth nil [(item-of (:args c))] (u/self-pos c) 1))
+
 (defn ^:async reach-drop!
   "Take the drop through a gap in a wall (a back passage behind a sealed cell): the first try walks (go-to, walk only) within pickup
   range of the drop's spot, later tries to the far side of it from where the body stood, then presses up against whatever keeps the body
@@ -486,8 +493,8 @@
     (when spot
       (ctx/update-mem! c update :reach-drops (fnil inc 0))
       (let [r (await (child/call-walk* c (keyword (str "reach-drop-" n)) (if (zero? n)
-                                                       {:pos spot :range 2.5 :ways #{:walk}}
-                                                       {:pos (far-side c spot) :range 1.2 :ways #{:walk}})))]
+                                                       {:pos spot :range 2.5 :ways #{:walk} :worth (drop-worth c)}
+                                                       {:pos (far-side c spot) :range 1.2 :ways #{:walk} :worth (drop-worth c)})))]
         (cond
           (= :continue r) :continue
           :else (do (when (:arrived (:data r))
@@ -513,7 +520,7 @@
                   (do (ctx/update-mem! c update :recovers (fnil inc 0))
                       (await (child/pause! c 1 :picking-up-the-drop))
                       :continue)
-                  (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk}}))]
+                  (let [r (await (child/call-walk* c :to-drop {:pos pos :range 0 :ways #{:walk} :worth (drop-worth c)}))]
                     (cond (= :continue r) :continue
                           (:arrived (:data r)) :again
                           :else (do (ctx/update-mem! c update :recovers (fnil inc 0))
