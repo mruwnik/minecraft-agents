@@ -183,6 +183,24 @@
           (.then (fn [result] (is (= :completed (:status result))) (done))
                  (fn [error] (is false (str "history read failed: " (.-message error))) (done)))))))
 
+(deftest a-page-the-body-cannot-read-costs-only-its-bad-event
+  (let [log [(event 1 "j4" :queued {}) (event 2 "j4" :memory_written {}) (event 3 "j4" :memory_written {}) (event 4 "j4" :completed {:status :completed})]
+        bad-seq 2
+        edn (fn [t] (js/Promise.resolve {:status 200 :content-type "application/edn" :text t}))
+        get! (fn [_ path _]
+               (if (= "/snapshot" path)
+                 (edn "{:generation-id \"g\" :cursor {:stream-id \"s\" :seq 4} :state {:next-id 5}}")
+                 (let [after (js/parseInt (second (re-find #"after=(\d+)" path)))
+                       size (js/parseInt (second (re-find #"limit=(\d+)" path)))
+                       page (vec (take size (drop after log)))]
+                   (if (some #(= bad-seq (:seq %)) page)
+                     (js/Promise.resolve {:status 500 :content-type "application/edn" :text "{:ok false, :reason :internal-error}"})
+                     (edn (str "{:gap? false :events " (pr-str page) "}"))))))]
+    (async done
+      (-> (results/read! get! "sock" "j4" {})
+          (.then (fn [result] (is (= :completed (:status result))) (done))
+                 (fn [error] (is false (str "history read failed: " (.-message error))) (done)))))))
+
 (deftest a-villager-s-offers-fit-the-bound-whole
   (let [offer {:buy {:item "emerald" :count 1} :buy-b {:item "paper" :count 24} :sell {:item "lectern" :count 1 :nbt {:a 1}} :uses 0 :max-uses 12}
         {:keys [value truncated?]} (results/bounded {:offers (vec (repeat 12 offer))})]

@@ -141,6 +141,9 @@
                (.then (get! socket-path endpoint
                             {:signal signal :timeout-ms (max 1 (min 3000 (- deadline (js/Date.now)))) :max-bytes 262144})
                       (fn [response]
+                        ;; The body answers 500 when a retained log line is one its own reader refuses; a smaller page narrows it to that event.
+                        (when (= 500 (:status response))
+                          (throw (doto (js/Error. "body could not read the page") (aset "code" "EUNREADABLE"))))
                         (when-not (and (= 200 (:status response))
                                        (re-find #"(?i)^application/edn(?:;|$)" (or (:content-type response) "")))
                           (throw (js/Error. "job result history unavailable")))
