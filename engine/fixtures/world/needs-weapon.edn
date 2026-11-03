@@ -24,13 +24,14 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
             {:count-event {:source :job :kind :obtain.exploring} :for-s 25 :at-most 3}]
    :limit-s 40}
-  ;; Cards 1c50b7f5, 96c23f9a: the reflex fires with no hostile near, so a sword is worth its goal price (about 10 s), not a loss averted: with no wood in sight the obtain looks only as far as that pays, a first leg of about 4 s does. A sealed lit room.
-  {:name "no-wood-in-sight-searches-only-as-far-as-a-sword-is-worth"
+  ;; Cards 1c50b7f5, 96c23f9a, 3d1a53105: the reflex fires with no hostile near, so a sword is worth its goal price (about 30 s). With no wood in sight (a sealed lit room) the obtain's search is priced at what its logs usually cost (about 600 s), more than the sword is worth, so the trigger holds :not-worth and no search starts.
+  {:name "no-wood-in-sight-holds-when-the-search-costs-more-than-a-sword-is-worth"
    :time :any
    :blocks [[:fill [8 0 8] [24 4 24] "glowstone" :hollow]]
    :body {:at [16.5 1 16.5]}
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 20}
-            {:event {:source :job :kind :obtain.exploring} :within-s 25}]
+   :expect [{:event {:source :reflex :kind :held :context {:reflex-id :needs-weapon} :data {:reason :not-worth}} :within-s 20}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 15}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 15}]
    :limit-s 40}
   ;; Should-stay: a sword put in a chest by name is not taken back by the reflex (it would fetch it from that chest).
   {:name "sword-put-away-by-name-stays-in-the-chest"
