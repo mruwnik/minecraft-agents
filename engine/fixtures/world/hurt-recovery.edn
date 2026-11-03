@@ -43,7 +43,7 @@
   {:name "fragile-body-held-by-a-zombie-on-every-side-leaves-once-the-hold-has-cost-the-way-out"
    ;; a glass block [15..17 1..3 15..17] with the body's two cells hollowed out, on the open plot; the sides and the lid
    ;; are its own :shelter blocks. A NoAI zombie 5 east could walk to any side were it open. The body holds, then
-   ;; leaves by the west, the side farthest from it (its seal cleanup then takes every glass block back).
+   ;; leaves by the west, the side farthest from it; its seal cleanup then leaves every glass block the zombie's field holds.
    :time :day :time-why :dawn-decision
    :limit-s 400
    :blocks [[:fill [15 1 15] [17 3 17] "glass"] [:fill [16 1 16] [16 2 16] "air"]]
@@ -65,7 +65,7 @@
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30}
             {:event {:source :job :kind :completed} :within-s 360 :of-job true}]
-   :after [[:not-block [15 1 16] "glass"]]}
+   :after [[:not-block [15 1 16] "glass"] [:block [17 1 16] "glass"] [:block [17 2 16] "glass"]]}
   {:name "fragile-body-leaves-its-seal-by-day-with-nothing-near"
    :time :day :time-why :dawn-decision
    :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]

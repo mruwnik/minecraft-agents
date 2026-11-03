@@ -72,10 +72,10 @@
 (defn blocker
   "Why entry e cannot be dug now, as {:reason ...detail}, or nil. in: {:feet :block-at :zones :footprints :ledger
   :accept :floor-at (block-at over what was seen, no guess: the cell under the body's floor must be seen solid) :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
-  :hostile-near? (a known hostile could reach or shoot the body through the shelter's blocks) :opens-dark? (fn of a cell: it opens onto a dark cell, so a shelter's block stays)
+  :hostile-near? (a known hostile could reach or shoot the body through the shelter's blocks) :threat-at? (fn of a cell: a known threat's field holds the cell or one beside it, so taking a shelter's block opens a wall onto it) :opens-dark? (fn of a cell: it opens onto a dark cell, so a shelter's block stays)
   :bucket? (an empty bucket is carried: a poured water source is scooped, not dug)
   :lava-near? (fn of a cell: the risk of going there, for seen lava near it, is over the block's worth; such a block is left unless :lava-adjacent is accepted)}."
-  [{:keys [feet block-at floor-at accept can-clear? hostile-near? opens-dark? keep-at-night? bucket? lava-near?] :as in} {:keys [cell purpose item]}]
+  [{:keys [feet block-at floor-at accept can-clear? hostile-near? threat-at? opens-dark? keep-at-night? bucket? lava-near?] :as in} {:keys [cell purpose item]}]
   (let [[fx fy fz] feet
         [x y z] cell
         below (rules/offset cell 0 -1 0)]
@@ -83,6 +83,7 @@
       (nil? (block-at cell)) {:reason :not-loaded}
       (= "water" item) (when-not bucket? {:reason :no-bucket})
       (and hostile-near? (shelter-purposes purpose)) {:reason :hostile-near}
+      (and threat-at? (shelter-purposes purpose) (threat-at? cell)) {:reason :danger}
       (and opens-dark? (not (false? keep-at-night?)) (shelter-purposes purpose) (opens-dark? cell)) {:reason :night}
       (and can-clear? (not (can-clear? (block-at cell)))) {:reason :no-tool :block (block-at cell)}
       (and lava-near? (not (accept :lava-adjacent)) (lava-near? cell)) {:reason :lava-near}

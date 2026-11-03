@@ -180,6 +180,18 @@
 (deftest nothing-left-is-a-finish
   (is (= {:step :finish :open []} (step :entries []))))
 
+(deftest a-shelter-block-stays-while-a-threat-field-holds-its-cell
+  (let [seal (entry [3 64 1] :purpose :shelter)
+        pillar (entry [3 65 1])
+        held #(= [3 64 1] %)]
+    (is (= [{:cell [3 64 1] :item "dirt" :reason :danger}]
+           (:open (step :entries [seal] :threat-at? held :block-at (lookup [3 64 1] "dirt"))))
+        "the body is away from the mob, yet the wall opens onto it")
+    (is (= {:step :dig :cell [3 65 1] :item "dirt"}
+           (step :entries [pillar] :threat-at? (constantly true) :block-at (lookup [3 65 1] "dirt"))))
+    (is (= {:step :dig :cell [3 64 1] :item "dirt"}
+           (step :entries [seal] :threat-at? (constantly false) :block-at (lookup [3 64 1] "dirt"))))))
+
 (deftest a-retreat-plug-stays-while-a-hostile-is-near
   (let [plug (entry [3 64 1] :purpose :retreat-plug)
         pillar (entry [3 65 1])]
