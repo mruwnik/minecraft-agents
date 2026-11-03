@@ -366,6 +366,32 @@
           (is (some #(and (= 4.5 (first %)) (= 0.5 (second %))) goals)
               "the body presses up against the wall nearest the drop, so a gap in it lets the pickup reach through"))))))
 
+(defn body-cell [w]
+  (let [pos (get-in w [:self :pos])]
+    (mapv js/Math.floor (if (map? pos) [(:x pos) (:y pos) (:z pos)] pos))))
+
+(defn picks-up-crouched-in-the-cell!
+  "The drop lies in the villager's cell behind the workstation: the fake gives it to a body that sneaks into the emptied
+  workstation cell (pickup reach covers the cell behind from there), as the game does."
+  [p]
+  (add-watch (fake/state p) :crouch-pickup
+             (fn [_ state _ w]
+               (when (and (= [2 64 0] (body-cell w)) (get-in w [:controls :sneak])
+                          (not-any? #(= "lectern" (:name %)) (:inventory w)))
+                 (swap! state update :inventory conj {:name "lectern" :count 1}))))
+  p)
+
+(deftest a-drop-in-the-cell-behind-is-taken-crouched-in-the-emptied-workstation-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "paper")])] :self {:pos {:x 1.5 :y 64 :z 0.5}}
+                                       :scripts [[(offer "enchanted_book")]]
+                                       :wrap (fn [env] (picks-up-crouched-in-the-cell! (:p env)) (breaks-without-a-drop env))} {}))]
+          (is (= {:found true :rolls 1} (select-keys result [:found :rolls])) "the drop was taken and the lectern placed back")
+          (is (= "lectern" (workstation p)))
+          (is (not= [2 64 0] (body-cell @(fake/state p))) "the body sneaked back out of the cell"))))))
+
 (def dug-cells (atom []))
 
 (defn digs-only-what-it-is-given

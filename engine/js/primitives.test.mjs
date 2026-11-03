@@ -2189,6 +2189,16 @@ test('a bound bot has the body half-width, the initial one and a reconnected one
   await p.close()
 })
 
+test('a bound bot simulates a 1.5 high box while it sneaks (vanilla crouching), 1.8 else', () => {
+  const bot = stubBot(world)
+  const heights = []
+  bot.physics.simulatePlayer = () => heights.push(bot.physics.playerHeight)
+  createPrimitivesFromBot(bot, { timeScale: SCALE })
+  bot.physics.simulatePlayer({ control: { sneak: true } })
+  bot.physics.simulatePlayer({ control: { sneak: false } })
+  assert.deepEqual(heights, [1.5, 1.8])
+})
+
 test('a bound bot reads blocks through the server-shape wrapper, once per reconnect', async () => {
   const first = stubBot(world)
   first.registry = { ...first.registry, blocksByName: { bamboo: { id: 1 }, pointed_dripstone: { id: 2 } } }

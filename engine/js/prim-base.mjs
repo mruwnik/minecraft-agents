@@ -20,6 +20,15 @@ export const KINDS = ['hostile', 'passive', 'player', 'item', 'other']
 // every moveTo came back blocked); a swim toward a rim, flush against its wall, only climbs out when wider.
 export const BODY_HALF_WIDTH = constants.bodyHalfWidth
 export const EYE_HEIGHT = constants.eyeHeight
+// Vanilla's crouching pose is 1.5 high, prismarine-physics keeps 1.8: a sneaking body fits under a top slab, as a player's does.
+const CROUCH_HEIGHT = 1.5
+export const crouchBox = physics => {
+  const simulate = physics.simulatePlayer
+  physics.simulatePlayer = (state, world) => {
+    physics.playerHeight = state.control.sneak ? CROUCH_HEIGHT : constants.bodyHeight
+    return simulate(state, world)
+  }
+}
 export const PLAN_REASONS = { NoPath: 'noPath', Timeout: 'planTimeout' } // goto's rejection names that say why it gave up
 // A wedged body stands perfectly still, a bobbing or climbing one does not; 4 s leaves room for the pathfinder's 3.5 s stuck reset.
 export const CLIMBABLE = /^(ladder|vine|scaffolding|weeping_vines(_plant)?|twisting_vines(_plant)?|cave_vines(_plant)?)$/

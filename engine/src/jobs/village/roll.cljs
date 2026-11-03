@@ -16,6 +16,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
+            [jobs.lib.walk :as walk]
             [jobs.lib.trade-window :as tw]))
 
 (def doc
@@ -35,7 +36,7 @@
     :cell-unseen.
   - impossible: :nitwit.
   - nothing-possible: :no-match (::max-rolls, 20, rolls without a match), :unreachable, :window (offers could not be
-    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body walked to it and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
+    read three times), :place-failed (no room to step off the cell), :workstation-lost (the broken workstation's drop is not carried after the body sneaked into the emptied cell (the pickup reach then covers the cell behind), walked to the drop and to its far side and waited a few polls; nothing is placed, the data names :drop-cell, the cell the drop lies in, and no block above the cell is ever dug), or the ending of the dig or place child.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid or numeric entity id" :spec villager/id? :default nil}
@@ -310,7 +311,7 @@
   (let [{:keys [pos]} (:args c)
         slot (keyword (str "dig-" (rolls c)))
         _ (await (flush-to-cell! c pos))
-        _ (ctx/update-mem! c assoc :broken true :stand (u/self-pos c))
+        _ (ctx/update-mem! c #(-> % (assoc :broken true :stand (u/self-pos c)) (dissoc :crouched :reach-drops :recovers)))
         r (await (child! c slot 'jobs.blocks.dig (cond-> {:pos pos :collect true} (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (if-not (ending-or-wait? r)
       (do (ctx/update-mem! c #(-> % (update :rolls (fnil inc 0))))
@@ -367,6 +368,46 @@
       (assoc spot :x (+ (:x spot) (* 2 (js/Math.sign dx))))
       (assoc spot :z (+ (:z spot) (* 2 (js/Math.sign dz)))))))
 
+(defn crouch-decider
+  "A steer decide function: sneaking, straight to each [x z hold] of legs in turn, held there hold ticks; a leg not reached in
+  40 ticks is left as it is. Done after the last leg."
+  [legs]
+  (let [leg (volatile! 0)
+        ticks (volatile! 0)
+        held (volatile! 0)]
+    (fn [js-pose]
+      (let [[tx tz hold] (get legs @leg)
+            x (.-x js-pose) z (.-z js-pose)
+            at? (and (<= (js/Math.abs (- tx x)) 0.1) (<= (js/Math.abs (- tz z)) 0.1))]
+        (vswap! ticks inc)
+        (when at? (vswap! held inc))
+        (if (or (> @held hold) (>= @ticks 40))
+          (do (vswap! leg inc) (vreset! ticks 0) (vreset! held 0)
+              (if (< @leg (count legs)) #js {:controls #js {:sneak true :forward false}} #js {:done true}))
+          (if at?
+            #js {:controls #js {:sneak true :forward false}}
+            #js {:controls #js {:sneak true :forward true} :yaw (js/Math.atan2 (- x tx) (- z tz))}))))))
+
+(defn ^:async crouch-in!
+  "Take a drop that slid into the cell behind the emptied workstation cell (a villager's cell): sneak from the dig stand into
+  the workstation cell, up against its far side, so the pickup reach covers the whole cell behind, hold a second and sneak back.
+  A crouching body is 1.5 high, so it fits under a top slab over the cell where a villager (1.95) does not: the cell stays
+  shut and nothing is dug. Once a break. :again (after a walk back to the stand, or the crouch), or nil."
+  [c]
+  (let [{:keys [pos]} (:args c)
+        stand (:stand (ctx/mem c))]
+    (when (and stand (not (:crouched (ctx/mem c))))
+      (or (await (to-stand! c))
+          (do (ctx/update-mem! c assoc :crouched true)
+              (when (u/within? (u/self-pos c) stand 1.5)
+                (let [dx (- (+ (:x pos) 0.5) (:x stand))
+                      dz (- (+ (:z pos) 0.5) (:z stand))
+                      [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])
+                      in [(+ (:x pos) 0.5 (* 0.2 sx)) (+ (:z pos) 0.5 (* 0.2 sz))]]
+                  (ctx/emit! c :roll.crouch-in :info {:pos pos :text (str "the " (item-of (:args c)) " drop is out of reach: sneaking into its emptied cell to take it")})
+                  (await (ctx/act c :steer (walk/steer-args 8 (crouch-decider [[(:x stand) (:z stand) 0] (conj in 20) [(:x stand) (:z stand) 0]]))))
+                  :again)))))))
+
 (defn ^:async reach-drop!
   "Take the drop through a gap in a wall (a back passage behind a sealed cell): the first try walks (go-to, walk only) within pickup
   range of the drop's spot, later tries to the far side of it from where the body stood, then presses up against whatever keeps the body
@@ -399,7 +440,8 @@
       (>= tries 5) (let [spot (or (drop-spot c pos (item-of (:args c))) pos)]
                      (ctx/end c :nothing-possible :workstation-lost
                               (data-of c {:drop-cell {:x (js/Math.floor (:x spot)) :y (js/Math.floor (:y spot)) :z (js/Math.floor (:z spot))}})))
-      :else (or (await (reach-drop! c))
+      :else (or (await (crouch-in! c))
+                (await (reach-drop! c))
                 (if (on-cell? c pos)
                   (do (ctx/update-mem! c update :recovers (fnil inc 0))
                       (await (child/pause! c 1 :picking-up-the-drop))

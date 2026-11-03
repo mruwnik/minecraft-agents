@@ -24,7 +24,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { BODY_HALF_WIDTH, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, learnHostile, clearDeathState, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, crouchBox, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, learnHostile, clearDeathState, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -197,7 +197,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   let lastTick = Date.now() // of the current bot's physics; the watchdog below reads it
   let stalled = false
   const bindEvents = target => {
-    if (target.physics) target.physics.playerHalfWidth = BODY_HALF_WIDTH
+    if (target.physics) { target.physics.playerHalfWidth = BODY_HALF_WIDTH; crouchBox(target.physics) }
     wrapBlockAt(target) // physics collides with bamboo/dripstone where the server has them, not at minecraft-data's fixed box
     const unguard = avoidEnderStare(target)
     const untrace = traceSteps(target, process.env.MC_STEP_TRACE)
