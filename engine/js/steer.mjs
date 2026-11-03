@@ -5,12 +5,34 @@
 import vec3 from 'vec3'
 import { liveSnapshot } from './path/live-snapshot.mjs'
 import { setting } from './settings.mjs'
+import constants from '../src/engine/constants.json' with { type: 'json' }
 
 const { Vec3 } = vec3
+const STAND_HEIGHT = constants.bodyHeight
+const CROUCH_HEIGHT = 1.5
 
 const CLIMBABLE = new Set(['ladder', 'vine', 'scaffolding', 'twisting_vines', 'twisting_vines_plant', 'weeping_vines', 'weeping_vines_plant', 'cave_vines', 'cave_vines_plant'])
 const WATER_PLANTS = new Set(['kelp', 'kelp_plant', 'seagrass', 'tall_seagrass'])
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
+// true when a standing box at the feet would overlap a block (a crouched body under a low ceiling cannot stand up)
+export const cannotStand = (bot) => {
+  const p = bot.entity.position
+  const half = bot.physics?.playerHalfWidth ?? 0.3
+  const cells = []
+  for (const dx of [-half, half]) for (const dz of [-half, half]) cells.push([Math.floor(p.x + dx), Math.floor(p.z + dz)])
+  const cols = [...new Set(cells.map(c => c.join(',')))].map(c => c.split(',').map(Number))
+  const top = p.y + STAND_HEIGHT
+  const low = p.y + CROUCH_HEIGHT
+  for (const [cx, cz] of cols) {
+    for (let y = Math.floor(low); y < Math.ceil(top); y++) {
+      const block = bot.blockAt(new Vec3(cx, y, cz))
+      const hit = (block?.shapes ?? []).some(s => y + s[1] < top - 1e-7 && y + s[4] > low + 1e-7 &&
+        cx + s[0] < p.x + half && cx + s[3] > p.x - half && cz + s[2] < p.z + half && cz + s[5] > p.z - half)
+      if (hit) return true
+    }
+  }
+  return false
+}
 const reasonOf = err => String(err).slice(0, 200)
 
 // what the client climbs at the feet: a climbable, or an open trapdoor over a ladder of its own facing (vanilla, and
@@ -80,7 +102,9 @@ export function createSteer ({ act, getBot, badArgs }) {
       let ticks = 0
       const release = () => {
         bot.removeListener('physicsTick', onTick)
+        const stayLow = bot.controlState?.sneak && cannotStand(bot)
         bot.clearControlStates()
+        if (stayLow) bot.setControlState('sneak', true)
       }
       const onTick = () => {
         try {

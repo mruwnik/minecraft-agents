@@ -121,6 +121,22 @@ test('a cut mid-jump releases jump, sprint and forward', async () => {
   assert.equal(bot.listenerCount('physicsTick'), bot.base)
 })
 
+// a body crouched under a top slab must not stand up inside it when the steer is cut (vanilla keeps the crouch there)
+const slabCases = [
+  ['under a top slab', { '0,64,0': 'oak_slab' }, { '0,64,0': [[0, 0.5, 0, 1, 1, 1]] }, ['sneak']],
+  ['with open air above', {}, {}, []]
+]
+for (const [name, blocks, shapes, held] of slabCases) {
+  test(`a cut while sneaking ${name} leaves sneak ${held.length ? 'held' : 'released'}`, async () => {
+    const { bot, p } = rig({ pos: [0.5, 63, 0.5], blocks, shapes })
+    const { result } = await start(p, bot, () => ({ controls: { sneak: true } }))
+    bot.emit('physicsTick')
+    p.setOwner('other')
+    await assert.rejects(result, { code: 'cut' })
+    assert.deepEqual(Object.keys(bot.controlState).filter(k => bot.controlState[k]), held)
+  })
+}
+
 test('a timeout resolves timeout with the pose and releases the controls', async () => {
   const { bot, p } = rig({ pos: [4.5, 64, 0.5] })
   const { result } = await start(p, bot, () => walking, { timeoutS: 1 })

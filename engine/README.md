@@ -167,7 +167,6 @@ Bounds are 1 to 60 s per call (most 2 to 10 s). `jumpPlace` pillars up: sneak to
 stop at the first failure. `swim` without `toward` holds jump until the eyes (1.62 up, not the head top) are out of water, ending `blocked` when the body rises no higher with a ceiling over it for `prim/swim-blocked-ms` (300); with `toward` it climbs out
 onto a rim; with `tread` it then keeps jump held for the rest of `ms` (ends `timeout`); `hold` also steers back to the centre of the starting cell against a current, from the yaw, so it runs beside another act; `until` ends a hold `filled` once that cell holds a block. Every bound bot has collision half-width 5079/16384, just under 0.31 (0.3 left the body flush against block faces and rejected every move), and a collision clip with a tolerance of 1e-7 on every axis (`js/clip-tolerance.mjs`: a box a rounding step into a face is held at it). The engine's physical constants (body widths, height, eye height, step height, gravity, the clip tolerance, the hostiles' chase speeds) are in `src/engine/constants.json`, the one copy: cljs reads it through `engine.constants`, the JS side imports the file.
 Acting while asleep first leaves the bed.
-A sneaking body's client box is 1.5 high (vanilla crouching; `prim-base` `crouchBox`), so a steer with `sneak` fits under a top slab.
 
 **Offline is body state.** `offline` quits the bot, emits `offline`, waits `ms`, reconnects with the same params (3 tries),
 rebinds the library bot, emits `online`. While offline: `self()` is `{status: 'offline'}`, `entities` returns `[]`,
