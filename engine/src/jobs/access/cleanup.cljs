@@ -22,6 +22,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.threats :as threats]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
@@ -152,11 +153,19 @@
                  (some (fn [{:keys [reach]}] (some (fn [[dx dy dz]] (reach (+ x dx) (+ y dy) (+ z dz))) beside)) (threats/threats-of c))))))
 
 (defn threat-at-fn
-  "A fn of a cell: whether the field of a known threat holds the cell or one beside it (danger-ahead? without the flight)."
+  "A fn of a cell: whether the field (walk and line of fire) of a known hostile, seen or heard, holds the cell were it open:
+  taking the block back would open the wall onto that mob, however far the body has gone."
   [c]
-  (let [ts (threats/threats-of c)]
-    (fn [[x y z]]
-      (boolean (some (fn [{:keys [reach]}] (some (fn [[dx dy dz]] (reach (+ x dx) (+ y dy) (+ z dz))) beside)) ts)))))
+  (let [p (:primitives c)
+        hostiles (delay (vec (for [e (danger-q/known-hostiles p (danger-q/known-scan) {})
+                                   :let [pos (danger-q/mob-pos p e)] :when (and pos (.-name e))]
+                               {:mob (.-name e) :pos pos})))
+        kind-at (reach/mob-lookup p)
+        arrow-at (reach/arrow-lookup p)]
+    (memoize
+      (fn [[x y z :as cell]]
+        (let [lookups {:kind-at (danger-q/opened-lookup kind-at [cell]) :arrow-at (danger-q/opened-lookup arrow-at [cell])}]
+          (boolean (some #(some? ((field/reach-fn (field/field p % lookups)) x y z)) @hostiles)))))))
 
 (defn floor-at
   "block-at for the cell under a floor block: what the body has seen, else the item of an entry of the ledger l in that cell,

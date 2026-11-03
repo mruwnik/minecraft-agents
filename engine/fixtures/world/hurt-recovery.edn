@@ -42,11 +42,11 @@
    :after [[:block [17 1 16] "glass"] [:block [17 2 16] "glass"] [:not-block [15 1 16] "stone"]]}
   {:name "fragile-body-held-by-a-zombie-on-every-side-leaves-once-the-hold-has-cost-the-way-out"
    ;; a glass block [15..17 1..3 15..17] with the body's two cells hollowed out, on the open plot; the sides and the lid
-   ;; are its own :shelter blocks. A NoAI zombie 5 east could walk to any side were it open. The body holds, then
+   ;; are its own :shelter blocks. A NoAI zombie 5 east (under a stone roof: by day it would burn up) could walk to any side were it open. The body holds, then
    ;; leaves by the west, the side farthest from it; its seal cleanup then leaves every glass block the zombie's field holds.
    :time :day :time-why :dawn-decision
    :limit-s 400
-   :blocks [[:fill [15 1 15] [17 3 17] "glass"] [:fill [16 1 16] [16 2 16] "air"]]
+   :blocks [[:fill [15 1 15] [17 3 17] "glass"] [:fill [16 1 16] [16 2 16] "air"] [:fill [19 4 14] [24 4 18] "stone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [15 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
                                               {:cell #at [15 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
                                               {:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
