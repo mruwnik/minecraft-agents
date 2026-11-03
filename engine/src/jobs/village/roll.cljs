@@ -502,10 +502,16 @@
         r (await (child! c slot 'jobs.blocks.place (cond-> {:pos pos :item item :through false}
                                                      (:ignore-zones? (:args c)) (assoc :ignore-zones? true)
                                                      (some? ways) (assoc :ways ways))))]
-    (if-not (ending-or-wait? r)
-      (do (ctx/update-mem! c #(-> % (dissoc :broken :expect-carried)))
-          :again)
-      r)))
+    (if (ending-or-wait? r)
+      r
+      (let [expect (:expect-carried (ctx/mem c))
+            have (u/carried-count (:primitives c) item)]
+        (ctx/update-mem! c #(dissoc % :broken :expect-carried))
+        (if (and expect (< have (dec expect)))
+          (ctx/end c :nothing-possible :workstation-lost
+                   (data-of c {:carried have :expected (dec expect)
+                               :text (str "the bag holds " have " " item " after the place, " (dec expect) " expected: one is missing")}))
+          :again)))))
 
 (defn ^:async place-or-return!
   "place!, after a walk back to the dig's stand when the body is elsewhere (to-stand!)."

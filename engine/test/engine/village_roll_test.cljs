@@ -365,6 +365,33 @@
           (is (= {:found false :status :stopped :reason :workstation-lost :rolls 1} (select-keys result [:found :status :reason :rolls])) "the first lost drop stops the roll")
           (is (= "lectern" (workstation p)) "the spare is put back at the end: the cell stays shut"))))))
 
+(defn eats-a-second-lectern-on-the-place
+  "env whose dig child picks the drop up, and whose workstation, once placed back, takes one more lectern out of the bag:
+  a loss no pickup count shows."
+  [env]
+  (let [state (fake/state (:p env))
+        j (get (:jobs (:eng env)) 'jobs.blocks.dig)
+        env (assoc-in env [:eng :jobs 'jobs.blocks.dig]
+                      (assoc j :round (fn ^:async stubbed [c]
+                                        (swap! state #(-> % (assoc-in [:blocks ws-pos] "air") (update :inventory conj {:name "lectern" :count 1})))
+                                        (ctx/end c :done nil {:dug true :collected 1}))))]
+    (add-watch state :eat
+               (fn [_ _ old w]
+                 (when (and (= "air" (get-in old [:blocks ws-pos])) (= "lectern" (get-in w [:blocks ws-pos])))
+                   (swap! state update-in [:inventory 0 :count] dec))))
+    env))
+
+(deftest a-lectern-missing-from-the-bag-after-the-place-ends-workstation-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result _] (await (roll {:entities [(librarian [(offer "paper")])] :inventory [{:name "lectern" :count 2}]
+                                       :scripts [[(offer "paper")] [(offer "paper")]]
+                                       :wrap eats-a-second-lectern-on-the-place} {}))]
+          (is (= {:status :stopped :reason :workstation-lost :carried 1 :expected 2}
+                 (select-keys result [:status :reason :carried :expected]))
+              "the roll stops at the first lectern that is gone, not after 20 digs"))))))
+
 (deftest the-body-beside-the-workstation-steps-flush-against-it-before-the-dig
   (async done
     (tu/run-async done
