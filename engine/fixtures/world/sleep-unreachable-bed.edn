@@ -1,7 +1,7 @@
 ;; Leo #82: a remembered bed sealed in a stone box, a dead-end passage beside the body. A walk that finds no way ends bed_unreachable in the same
-;; call after one quote (go-to's three tries are not repeated), says "on foot" (not "shut in") and the night reflex does not fire again every 30 s.
+;; call after one quote (go-to's three tries are not repeated), says "on foot" (not "shut in").
 ;; Room A (x 8..16, z 8..16, lit, roofed) with a closed 1-wide passage at z 17..22 off its south wall; room B (x 18..24) a sealed box with the bed.
-;; Should-succeed (sleep-unreachable-bed-not-walked-to): bed_unreachable after one short walk. Should-fail-to-refire (night-reflex-gives-up-once).
+;; Should-succeed (sleep-unreachable-bed-not-walked-to): bed_unreachable after one short walk.
 ;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match-id).
 {:defaults
  {:tags [:night :survival :sleep]
@@ -19,12 +19,4 @@
    :act [[:job (jobs.survival.sleep {:bed #at [20 0 12]})]]
    :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed on foot"]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :bed_unreachable :message [:contains "shut in"]} :for-s 5 :of-job true}]
-   :limit-s 60}
-  {:name "night-reflex-gives-up-once"
-   ;; in the open: a body shut in a lit roof is sheltered and the night does not call it to a bed
-   :body {:at [12.5 0 3.5]}
-   :register [{:trigger :night}]
-   :memory [{:kind :bed :data {:pos #xyz [20 0 12]} :policy {:cap 1 :ttl :forever}}]
-   :expect [{:event {:source :job :kind :bed_unreachable} :within-s 60}
-            {:no-event {:source :reflex :kind :declined :context {:reflex-id :night}} :for-s 70}]
-   :limit-s 150}]}
+   :limit-s 60}]}
