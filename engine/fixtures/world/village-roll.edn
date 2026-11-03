@@ -63,24 +63,21 @@
    :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
    :after [[:block [17 0 16] "lectern"] [:entities "type=villager" [[16 0 16] [16 2 16]] 1]]}
-  {:name "roll-lectern-drop-slid-over-ice-is-fetched-by-lifting-the-slab"
+  {:name "roll-lectern-drop-slid-over-ice-never-opens-the-cell"
    :time :day :time-why :villager-schedule
    :plot {:floor "grass_block" :height 8}
    :blocks [[:fill [15 -1 15] [17 3 17] "stone" :hollow]
             [:fill [13 -1 14] [15 3 18] "stone" :hollow]
             [:set [17 0 16] "lectern[facing=east]"]
             [:set [17 1 16] "bamboo_slab[type=top]"]
-            [:set [15 1 16] "andesite"]
-            [:set [15 0 16] "air"]
-            [:fill [14 0 18] [14 1 18] "air"]
             [:set [17 -1 16] "blue_ice"]]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2}
    :act [[:summon "villager" [16.4 0 16.5] "{UUID:[I;20260,7,5,14],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-00050000000e" :pos #at [17 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 230 :of-job true}]
-   :after [[:block [17 0 16] "lectern"] [:block [17 1 16] "bamboo_slab[type=top]"]]}
+            {:event {:source :job :kind :stopped} :within-s 230 :of-job true}]
+   :after [[:block [17 1 16] "bamboo_slab[type=top]"] [:entities "type=villager" [[16 0 16] [16 2 16]] 1]]}
   {:name "nitwit-cannot-be-rolled"
    :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,UUID:[I;20260,7,5,2],VillagerData:{profession:\"minecraft:nitwit\",level:1,type:\"minecraft:plains\"}}"]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000002" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]

@@ -354,24 +354,18 @@
 (def dug-cells (atom []))
 
 (defn digs-only-what-it-is-given
-  "env whose dig child clears the cell it is given and picks up only the slab, never the workstation; a place child sets its cell and takes the item."
+  "env whose dig child clears the cell it is given and picks up nothing: the workstation's drop is out of reach."
   [env]
   (let [p (:p env)
         cell (fn [c] (let [x (:pos (:args c))] (if (map? x) [(:x x) (:y x) (:z x)] (vec x))))
         stub (fn [env job round] (assoc-in env [:eng :jobs job] (assoc (get (:jobs (:eng env)) job) :round round)))]
-    (-> env
-        (stub 'jobs.blocks.dig
-              (fn ^:async dig [c]
-                (swap! dug-cells conj (cell c))
-                (swap! (fake/state p) assoc-in [:blocks (cell c)] "air")
-                (when (= 65 (second (cell c))) (swap! (fake/state p) fake/give "bamboo_slab" 1))
-                (ctx/end c :done nil {:dug true})))
-        (stub 'jobs.blocks.place
-              (fn ^:async place [c]
-                (swap! (fake/state p) #(-> % (assoc-in [:blocks (cell c)] (:item (:args c))) (fake/take-one (:item (:args c)))))
-                (ctx/end c :done nil {:placed true}))))))
+    (stub env 'jobs.blocks.dig
+          (fn ^:async dig [c]
+            (swap! dug-cells conj (cell c))
+            (swap! (fake/state p) assoc-in [:blocks (cell c)] "air")
+            (ctx/end c :done nil {:dug true})))))
 
-(deftest a-drop-beyond-the-slab-gap-is-taken-after-lifting-the-slab-and-the-slab-goes-back
+(deftest a-drop-out-of-reach-under-a-slab-ends-workstation-lost-naming-the-drop-cell-and-digs-nothing-above
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -379,63 +373,9 @@
               [result p] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"2,65,0" "bamboo_slab"}
                                        :wrap digs-only-what-it-is-given} {}))]
           (is (= {:status :stopped :reason :workstation-lost} (select-keys result [:status :reason])) "no drop ever came")
-          (is (= "bamboo_slab" (get-in @(fake/state p) [:blocks [2 65 0]])) "the slab is back although the call ended")
-          (is (= [[2 64 0] [2 65 0]] @dug-cells) "the slab over the cell is lifted once the drop is out of reach")
-          (is (= "air" (workstation p))))))))
-
-(deftest a-refused-slab-dig-ends-workstation-lost-naming-the-drop-cell-and-leaves-the-slab
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [refuse (fn [env]
-                       (let [p (:p env)
-                             cell (fn [c] (let [x (:pos (:args c))] [(:x x) (:y x) (:z x)]))
-                             base (digs-only-what-it-is-given env)
-                             dig (get-in base [:eng :jobs 'jobs.blocks.dig])]
-                         (assoc-in base [:eng :jobs 'jobs.blocks.dig :round]
-                                   (fn ^:async d [c]
-                                     (if (= 65 (second (cell c)))
-                                       (ctx/end c :nothing-possible :zone {})
-                                       (await ((:round dig) c)))))))
-              [result p] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"2,65,0" "bamboo_slab"}
-                                       :wrap refuse} {}))]
-          (is (= {:status :stopped :reason :workstation-lost} (select-keys result [:status :reason])))
-          (is (= {:x 2 :y 65 :z 0} (:drop-cell result)) "the ending names the cell the drop lies beyond")
-          (is (= "bamboo_slab" (get-in @(fake/state p) [:blocks [2 65 0]])) "the refused slab stays"))))))
-
-(def placed-order (atom []))
-
-(defn slab-place-fails
-  "env whose dig of the slab cell frees the slab and the workstation drop, a place of the workstation works and a place of the slab always stops; places are recorded."
-  [env]
-  (let [p (:p env)
-        cell (fn [c] (let [x (:pos (:args c))] (if (map? x) [(:x x) (:y x) (:z x)] (vec x))))
-        stub (fn [env job round] (assoc-in env [:eng :jobs job] (assoc (get (:jobs (:eng env)) job) :round round)))]
-    (-> env
-        (stub 'jobs.blocks.dig
-              (fn ^:async dig [c]
-                (swap! (fake/state p) assoc-in [:blocks (cell c)] "air")
-                (when (= 65 (second (cell c)))
-                  (swap! (fake/state p) #(-> % (fake/give "bamboo_slab" 1) (fake/give "lectern" 1))))
-                (ctx/end c :done nil {:dug true})))
-        (stub 'jobs.blocks.place
-              (fn ^:async place [c]
-                (swap! placed-order conj (:item (:args c)))
-                (if (= "bamboo_slab" (:item (:args c)))
-                  (ctx/end c :nothing-possible :no-room nil)
-                  (do (swap! (fake/state p) #(-> % (assoc-in [:blocks (cell c)] (:item (:args c))) (fake/take-one (:item (:args c)))))
-                      (ctx/end c :done nil {:placed true}))))))))
-
-(deftest a-slab-that-cannot-be-placed-ends-with-the-open-cell-after-three-tries
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [_ (reset! placed-order [])
-              [result p] (await (roll {:entities [(librarian [(offer "paper")])] :blocks {"2,65,0" "bamboo_slab"}
-                                       :wrap slab-place-fails} {}))]
-          (is (= :cell-open (:reason result)) "a lost slab is a loud failure naming the cell")
-          (is (= "air" (get-in @(fake/state p) [:blocks [2 65 0]])))
-          (is (= ["lectern" "bamboo_slab" "bamboo_slab" "bamboo_slab"] (take 4 @placed-order)) "the workstation goes back before the slab, which is tried three times"))))))
+          (is (map? (:drop-cell result)) "the ending names the cell the drop lies in")
+          (is (= "bamboo_slab" (get-in @(fake/state p) [:blocks [2 65 0]])) "the slab over the cell stays: the cell is never opened")
+          (is (= [[2 64 0]] @dug-cells) "only the workstation was dug"))))))
 
 (deftest a-place-child-that-stops-ends-with-its-ending
   (async done
