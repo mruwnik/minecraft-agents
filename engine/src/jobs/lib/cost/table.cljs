@@ -41,7 +41,7 @@
    :farm-s 4
    :min-drop-chance 0.05
    :drop-chance {"apple" 0.005 "wheat_seeds" 0.125 "stick" 0.02} ;; vanilla's, where minecraft-data lists 1 (leaves' sticks)
-   :dig {:hardness-s 1.5 :unfit-s 5 :max-hardness 5 :min-s 0.25 :default-tier 2} ;; seconds of dig per hardness at speed 1: 30 ticks with the block's tool tier, 100 without (vanilla)
+   :dig {:hardness-s 1.5 :unfit-s 5 :min-s 0.25 :default-tier 2} ;; seconds of dig per hardness at speed 1: 30 ticks with the block's tool tier, 100 without (vanilla)
    :find {:terrain 0.1
           :crop 0 ;; the walk to a ripe crop: none at the margin (the field is the farm's); a goal's is value/measured-worth's
           :wood 12 ;; a log, stem, hyphae, wood or bamboo block, or bamboo itself (jungles alone): the walk to a tree

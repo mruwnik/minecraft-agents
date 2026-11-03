@@ -19,8 +19,8 @@
   "Seconds digging a block of hardness with a tool of mining speed, as the game takes it: whole ticks, 30 x hardness / speed
   for a tool that harvests the block, 100 x hardness / speed for one that cannot (:unfit-s). harvests? defaults to true."
   ([dig speed hardness] (dig-time dig speed hardness true))
-  ([{:keys [hardness-s unfit-s max-hardness min-s]} speed hardness harvests?]
-   (let [ticks (Math/ceil (- (/ (* 20 (if harvests? hardness-s unfit-s) (min max-hardness hardness)) speed) 1e-9))]
+  ([{:keys [hardness-s unfit-s min-s]} speed hardness harvests?]
+   (let [ticks (Math/ceil (- (/ (* 20 (if harvests? hardness-s unfit-s) hardness) speed) 1e-9))]
      (max min-s (/ ticks 20)))))
 
 (defn hit-saved

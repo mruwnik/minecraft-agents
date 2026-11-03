@@ -434,7 +434,8 @@
 
 (deftest dig-cost-is-the-item-base-s-dig-term
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))
-  (is (nil? (cost/dig-cost "bedrock")) "never dug"))
+  (is (nil? (cost/dig-cost "bedrock")) "never dug")
+  (is (< 9 (cost/dig-cost "obsidian") 10) "hardness 50 with a diamond pickaxe: 188 ticks, uncapped"))
 
 (def spawn-far "A respawn far off: a death costs the walk back." {:x 5000 :y 64 :z 0})
 
