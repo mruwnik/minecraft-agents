@@ -77,7 +77,7 @@
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-00050000000e" :pos #at [17 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
    :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped} :within-s 230 :of-job true}]
-   :after [[:block [17 1 16] "bamboo_slab[type=top]"] [:entities "type=villager" [[16 0 16] [16 2 16]] 1]]}
+   :after [[:block [17 1 16] "bamboo_slab[type=top]"] [:entities "type=villager" [[16 0 16] [16 2 16]] 1] [:body-near [17 0 16] 10]]}
   {:name "roll-goes-on-with-a-zombie-only-heard-behind-the-wall"
    :time :day :time-why :villager-schedule
    :plot {:floor "grass_block" :height 8}
