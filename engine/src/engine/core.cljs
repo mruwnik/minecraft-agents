@@ -264,6 +264,7 @@
              :exclusive (atom nil)
              :exclusive-t (atom nil)
              :away (atom nil)
+             :bag (atom nil)
              :waiting (atom {})
              :activity (atom nil)
              :holds (atom {})

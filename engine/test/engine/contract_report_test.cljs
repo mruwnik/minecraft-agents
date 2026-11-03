@@ -168,6 +168,26 @@
           (await (core/tick! eng))
           (is (= {:uses {:items {"bread" 1}}} (tally eng id []))))))))
 
+(deftest a-pickup-between-acts-is-booked-as-a-yield
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup)
+              id (core/submit! eng '(eats) {})
+              fired (atom false)]
+          (.override (.-world p) "eat"
+                     (fn [token a impl]
+                       (-> (impl token a)
+                           (.then (fn [r]
+                                    (when-not @fired
+                                      (reset! fired true)
+                                      (js/setTimeout #(swap! (fake/state p) update-in [:inventory 1 :count] + 2) 50))
+                                    r)))))
+          (await (core/tick! eng))
+          (await (js/Promise. (fn [ok] (js/setTimeout ok 100))))
+          (await (core/tick! eng))
+          (is (= 2 (get-in (tally eng id []) [:yields :items "oak_log"]))))))))
+
 (deftest health-counts-only-the-chosen-causes
   (async done
     (tu/run-async done

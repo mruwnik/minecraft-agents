@@ -41,21 +41,33 @@
   (when (seq delta)
     (update-frames! eng root (frame-paths slots) #(update % :tally contract/add delta))))
 
+(defn count-gap!
+  "Book as yields what the bag gained between the last act's end and this act's start (before, a snapshot): a pickup the
+  inventory view showed only after the act returned, or made while no act ran, is in no act's delta."
+  [eng root slots before]
+  (let [last-bag @(:bag eng)]
+    (when (and last-bag (:inventory before))
+      (add-delta! eng root slots (contract/act-delta {:inventory last-bag} {:inventory (:inventory before)})))))
+
 (defn count-act!
   "Add what the act since before (a snapshot) used and yielded to every frame from root down to slots, from the bag as it reads now."
   [eng root slots before]
-  (add-delta! eng root slots (contract/act-delta before (snapshot eng))))
+  (let [after (snapshot eng)]
+    (reset! (:bag eng) (:inventory after))
+    (add-delta! eng root slots (contract/act-delta before after))))
 
 (defn ^:async count-act-settled!
   "count-act! for an act that returned: when it seems to have used items, the bag is read again after a beat and that
   read counts. Not for a failed or cut act, which must not wait."
   [eng root slots before]
-  (let [first-delta (contract/act-delta before (snapshot eng))]
-    (add-delta! eng root slots
-                (if (seq (get-in first-delta [:uses :items]))
-                  (do (await (js/Promise. (fn [ok] (js/setTimeout ok (* settle-ticks (settings/physics-ms (:primitives eng)))))))
-                      (contract/act-delta before (snapshot eng)))
-                  first-delta))))
+  (let [first-after (snapshot eng)
+        first-delta (contract/act-delta before first-after)
+        [after delta] (if (seq (get-in first-delta [:uses :items]))
+                        (do (await (js/Promise. (fn [ok] (js/setTimeout ok (* settle-ticks (settings/physics-ms (:primitives eng)))))))
+                            (let [a (snapshot eng)] [a (contract/act-delta before a)]))
+                        [first-after first-delta])]
+    (reset! (:bag eng) (:inventory after))
+    (add-delta! eng root slots delta)))
 
 (defn count-trip!
   "Book an act's walk or dig on every frame from root down to slots (the :trip of the report): from the position before it, to

@@ -75,6 +75,7 @@
         _ (when-not quiet? (emit! eng (merge fields {:source :action :kind :started :args (js->clj args)})))
         from (when (trip-acts k) (self-pos p))
         before (tally/snapshot eng)
+        _ (tally/count-gap! eng root slots before)
         away-record (when (= :offline k) (log-out-record eng root id args ((:now eng))))
         _ (when away-record
             (reset! (:away eng) away-record)
