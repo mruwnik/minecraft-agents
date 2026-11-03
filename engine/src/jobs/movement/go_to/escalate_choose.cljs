@@ -676,7 +676,7 @@
             (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* (stair-dark-factor c) (- (second goal) (second feet)) (escape-way/new-stair-step-s (:primitives c))))) :cheaper))))))
 
 (defn escalate?
-  "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) and no door or gate borders where it can walk
+  "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?) or off behind a gap nothing fills (gap-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) and no door or gate borders where it can walk
   (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never, is a wall), or the planner's
   reason proves the way needs the world changed and the body is shut in (reach-room/enclosed?, which already counts doors
   as opened: a door that leads nowhere, e.g. onto a step under its lintel, is no way out), or the search ran out of
@@ -690,6 +690,7 @@
          ;; the cheap checks first: drop-fill and air-pocket? flood the body's land
          (or (shelter-exit? c result)
              (some? (gap-fill c result (skips c)))
+             (gap-walled? c result (skips c))
              (sprint-only? result)
              (dive? c result)
              (goal-walled? c result shut?)
