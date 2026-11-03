@@ -68,7 +68,7 @@
 
 (a/defargs args
   {:pos {:doc "the block to dig, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :collect {:doc "pick up what the dig dropped (needs a free slot)" :spec boolean? :default true}
+   :collect {:doc "pick up what the dig dropped (needs a free slot); this walks to the drops even with :walk false, so a caller that must keep its cell passes false" :spec boolean? :default true}
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
    :see {:doc "true: dig only from where the eye sees the block (jobs.lib.aim: nothing seen solid in the way, as a player aims), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough, the game lets a dig pass through blocks" :spec boolean? :default true}
