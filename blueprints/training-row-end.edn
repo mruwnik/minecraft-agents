@@ -1,7 +1,7 @@
 {:id "training-row-end" :front :south
  :note "Closes the east end of a training-cell row: a fence gate joins the corridor's end to the back passage (villagers do not open gates; the owner brings them in this way)."
  :key {"#" [:any "cobblestone" "stone" "cobbled_deepslate" "deepslate" "andesite" "diorite" "granite" "tuff" "dirt"] "." :clear "G" {:block "fence_gates" :facing :south}}
- :layers [["##" "##" "##" "##" "##" "##" "##"]
-          ["##" ".#" ".#" "G#" ".#" ".#" "##"]
-          ["##" ".#" ".#" ".#" ".#" ".#" "##"]
-          ["##" "##" "##" "##" "##" "##" "##"]]}
+ :layers [["##" "##" "##" "##" "##" "##" "##" "##"]
+          ["##" ".#" ".#" ".#" "G#" ".#" ".#" "##"]
+          ["##" ".#" ".#" ".#" ".#" ".#" ".#" "##"]
+          ["##" "##" "##" "##" "##" "##" "##" "##"]]}

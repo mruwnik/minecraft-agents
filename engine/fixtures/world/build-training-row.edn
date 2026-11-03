@@ -1,14 +1,14 @@
 ;; Card 233e81bd: a librarian training row is the blueprints training-row-start, training-cell repeated n times
 ;; ({:repeat {:n n :step [2 0 0]}}, walls shared) and training-row-end, built by build.from-plan; village.roll then rolls a
 ;; cell from the corridor (the roll case stands the n = 1 row by hand, as the blueprints place it). Row floor = the plot floor (y -1, grass counts as the dirt choice of the wall want), corridor
-;; z 15 at y 0..1 entered from the west at x 10, lecterns at [12 0 14] and [14 0 14], roof y 2.
+;; z 16 at y 0..1 entered from the west at x 10, lecterns at [12 0 15] and [14 0 15], roof y 2.
 ;; The last case digs the row out of a stone mass instead (the Leo row was dug into rock).
 ;; Should-succeed: every case.
 {:defaults
  {:tags [:build :village] :time :day :time-why :villager-schedule
   :plot {:height 12}
   :limit-s 900
-  :body {:at [5.5 0 15.5] :yaw -90 :settle-s 3 :effects [["resistance" 900 4]]
+  :body {:at [5.5 0 16.5] :yaw -90 :settle-s 3 :effects [["resistance" 900 4]]
          :inventory [["iron_pickaxe" 2] ["torch" 16] ["cobblestone" 192] ["lectern" 2] ["oak_slab" 2] ["oak_fence_gate" 1]]}}
  :cases
  [{:name "training-row-of-two-cells-is-built"
@@ -18,32 +18,32 @@
                     {:id "end" :blueprint "training-row-end" :at #at [16 -1 10]}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 800 :of-job true}]
-   :after [[:block [12 0 14] "lectern"] [:block [14 0 14] "lectern"] [:block [12 1 14] "oak_slab"] [:block [14 1 14] "oak_slab"]
-           [:block [12 0 13] "air"] [:block [12 1 13] "air"] [:block [12 1 12] "air"] [:block [12 0 12] "cobblestone"]
-           [:block [13 0 13] "cobblestone"] [:block [12 2 13] "cobblestone"] [:block [13 0 11] "air"]
-           [:block [16 0 13] "oak_fence_gate"] [:block [16 0 15] "air"] [:block [10 0 11] "cobblestone"] [:block [17 0 15] "cobblestone"]]}
+   :after [[:block [12 0 15] "lectern"] [:block [14 0 15] "lectern"] [:block [12 1 15] "oak_slab"] [:block [14 1 15] "oak_slab"]
+           [:block [12 0 14] "air"] [:block [12 1 14] "air"] [:block [12 1 13] "air"] [:block [12 0 13] "cobblestone"]
+           [:block [13 0 14] "cobblestone"] [:block [12 2 14] "cobblestone"] [:block [13 0 11] "air"] [:block [13 0 12] "air"]
+           [:block [16 0 14] "oak_fence_gate"] [:block [16 0 16] "air"] [:block [10 0 11] "cobblestone"] [:block [17 0 16] "cobblestone"]]}
   {:name "villager-in-a-training-cell-is-rolled-from-the-corridor"
-   :blocks [[:fill [10 0 10] [15 2 16] "cobblestone"] [:fill [10 0 15] [14 1 15] "air"] [:fill [11 0 11] [14 1 11] "air"]
-            [:set [12 1 12] "air"] [:fill [14 0 12] [14 1 12] "air"] [:fill [12 0 13] [12 1 13] "air"]
-            [:set [14 0 13] "oak_fence_gate[facing=south]"] [:set [14 1 13] "air"] [:fill [14 0 14] [14 1 14] "air"]
-            [:set [12 0 14] "lectern"] [:set [12 1 14] "oak_slab[type=top]"]]
-   :body {:at [12.5 0 15.5] :yaw 0}
-   :act [[:summon "villager" [12.5 0 13.5] "{UUID:[I;20261,1,3,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :blocks [[:fill [10 0 10] [15 2 17] "cobblestone"] [:fill [10 0 16] [14 1 16] "air"] [:fill [11 0 11] [14 1 12] "air"]
+            [:set [12 1 13] "air"] [:fill [14 0 13] [14 1 13] "air"] [:fill [12 0 14] [12 1 14] "air"]
+            [:set [14 0 14] "oak_fence_gate[facing=south]"] [:set [14 1 14] "air"] [:fill [14 0 15] [14 1 15] "air"]
+            [:set [12 0 15] "lectern"] [:set [12 1 15] "oak_slab[type=top]"]]
+   :body {:at [12.5 0 16.5] :yaw 0}
+   :act [[:summon "villager" [12.5 0 14.5] "{UUID:[I;20261,1,3,1],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:wait-s 2]
-         [:job (jobs.village.roll {:villager "00004f25-0000-0001-0000-000300000001" :pos #at [12 0 14] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 2}})]]
+         [:job (jobs.village.roll {:villager "00004f25-0000-0001-0000-000300000001" :pos #at [12 0 15] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 2}})]]
    :expect [{:event {:source :job :kind :roll.offers} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-match}} :within-s 200 :of-job true}]
-   :after [[:block [12 0 14] "lectern"] [:block [12 1 14] "oak_slab"]]}
+   :after [[:block [12 0 15] "lectern"] [:block [12 1 15] "oak_slab"]]}
   {:name "training-row-is-dug-out-of-rock"
-   :blocks [[:fill [9 0 8] [20 4 18] "stone"] [:fill [9 1 15] [9 2 15] "air"] [:set [8 0 15] "stone"]]
-   :body {:at [8.5 1 15.5]}
+   :blocks [[:fill [9 0 8] [20 4 19] "stone"] [:fill [9 1 16] [9 2 16] "air"] [:set [8 0 16] "stone"]]
+   :body {:at [8.5 1 16.5]}
    :plans [{:id "row" :metadata {:by "$body"}
             :parts [{:id "start" :blueprint "training-row-start" :at #at [10 0 10]}
                     {:id "cell" :blueprint "training-cell" :at #at [11 0 10] :repeat {:n 2 :step [2 0 0]}}
                     {:id "end" :blueprint "training-row-end" :at #at [16 0 10]}]}]
    :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 800 :of-job true}]
-   :after [[:block [12 1 14] "lectern"] [:block [14 1 14] "lectern"] [:block [12 2 14] "oak_slab"] [:block [14 2 14] "oak_slab"]
-           [:block [12 1 13] "air"] [:block [12 2 13] "air"] [:block [12 2 12] "air"] [:not-block [12 1 12] "air"]
-           [:not-block [13 1 13] "air"] [:block [13 1 11] "air"] [:block [16 1 13] "oak_fence_gate"] [:block [16 1 15] "air"]
-           [:not-block [10 1 11] "air"] [:not-block [17 1 15] "air"] [:not-block [14 3 10] "air"]]}]}
+   :after [[:block [12 1 15] "lectern"] [:block [14 1 15] "lectern"] [:block [12 2 15] "oak_slab"] [:block [14 2 15] "oak_slab"]
+           [:block [12 1 14] "air"] [:block [12 2 14] "air"] [:block [12 2 13] "air"] [:not-block [12 1 13] "air"]
+           [:not-block [13 1 14] "air"] [:block [13 1 11] "air"] [:block [13 1 12] "air"] [:block [16 1 14] "oak_fence_gate"] [:block [16 1 16] "air"]
+           [:not-block [10 1 11] "air"] [:not-block [17 1 16] "air"] [:not-block [14 3 10] "air"]]}]}

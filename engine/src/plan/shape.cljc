@@ -181,13 +181,23 @@
 (defn repeat? [r]
   (and (map? r) (= #{:n :step} (set (keys r))) (pos-int? (:n r)) (coords? (:step r))))
 
+(defn turn-step
+  "A step [dx dy dz] given at turn 0 as it points after turning clockwise by turn degrees."
+  [[dx dy dz] turn]
+  (case (quot (mod turn 360) 90)
+    1 [(- dz) dy dx]
+    2 [(- dx) dy (- dz)]
+    3 [dz dy (- dx)]
+    [dx dy dz]))
+
 (defn copies
   "The placements of a blueprint part: itself, or with :repeat {:n :step} n copies {:id \"id.i\" :at :turn}, :at moved by
-  i steps."
-  [{:keys [id at] copy :repeat :as part}]
+  i steps, the step turning with the part."
+  [{:keys [id at turn] copy :repeat :as part}]
   (if-not copy
     [part]
-    (mapv (fn [i] (assoc part :id (str id "." i) :at (mapv + at (mapv #(* i %) (:step copy))))) (range (:n copy)))))
+    (let [step (turn-step (:step copy) (or turn 0))]
+      (mapv (fn [i] (assoc part :id (str id "." i) :at (mapv + at (mapv #(* i %) step)))) (range (:n copy))))))
 
 (defn blueprint-part-error [part]
   (cond

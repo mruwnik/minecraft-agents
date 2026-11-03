@@ -282,14 +282,21 @@
       (select-keys (first (:parts e)) [:id :where :blueprint :at :turn :count]))))
 
 (deftest a-repeated-blueprint-places-n-turned-copies-a-step-apart-sharing-cells
-  (let [e (expanded {:id "row" :parts [{:id "row" :blueprint "shed" :at [0 64 0] :turn 180 :repeat {:n 3 :step [2 0 0]}}]})]
+  (let [e (expanded {:id "row" :parts [{:id "row" :blueprint "shed" :at [4 64 0] :turn 180 :repeat {:n 3 :step [2 0 0]}}]})]
     (are [expected actual] (= expected actual)
       [] (:errors e)
       (* 7 2 2) (count (:cells e))
       (* 7 2 2) (:count (first (:parts e)))
-      {:block "oak_door" :facing :north :half :lower} (:want (cell-at e [5 65 0]))
-      {"row.0/seat" [0 65 0] "row.1/seat" [2 65 0] "row.2/seat" [4 65 0]}
+      {:block "oak_door" :facing :north :half :lower} (:want (cell-at e [1 65 0]))
+      {"row.0/seat" [4 65 0] "row.1/seat" [2 65 0] "row.2/seat" [0 65 0]}
       (select-keys (:spots e) ["row.0/seat" "row.1/seat" "row.2/seat"]))))
+
+(deftest a-repeat-step-turns-with-the-part
+  (are [turn step] (= step (shape/turn-step [2 0 0] turn))
+    0 [2 0 0]
+    90 [0 0 2]
+    180 [-2 0 0]
+    270 [0 0 -2]))
 
 (deftest expansion-errors-name-the-part-or-the-assignment
   (are [plan errors] (= errors (:errors (expanded plan)))
