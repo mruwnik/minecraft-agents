@@ -47,7 +47,9 @@
 (defn place "The nearest seen ore cell to pick, nil for none." [c]
   (some-> (ore-pick/candidates c (assoc (opts-of c) :skipped (:left (opts-of c)))) first :pos (update-vals js/Math.floor)))
 
-(def safe? (price/staying :long (ready/safe-at-or-roaming place)))
+(defn work-s "Mean seconds picking the seen ores takes." [c] (* s-per-ore (count (seen-cells c (opts-of c)))))
+
+(def safe? (price/with-stay (ready/safe-at-or-roaming place) work-s true))
 
 (defn can-start?
   [c]
@@ -57,7 +59,7 @@
 
 (defn quote-of
   [c]
-  (let [t (* s-per-ore (count (seen-cells c (opts-of c))))]
+  (let [t (work-s c)]
     {:uses {:job-time [0 t (* 3 t)]} :done [0 1 1]}))
 
 (defn ^:async step

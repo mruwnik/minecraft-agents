@@ -115,7 +115,13 @@
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; unset: bare-handed when no tool can be fetched (jobs.access.stair)" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
-(def safe? (price/staying :long (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true)))
+(defn work-s
+  "Mean seconds the tunnel to its target takes: the cells still to cut at stair-time's seconds a cell."
+  [c]
+  (let [t (target-of c)]
+    (* (if t (cells-estimate (reach/standing-vec (:primitives c)) t) 0) (stair-time/cell-s))))
+
+(def safe? (price/with-stay (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true) work-s true))
 
 (declare quote-of)
 
@@ -149,9 +155,8 @@
             checks/zones-read not-refused))
 
 (defn quote-of [c]
-  (let [feet (reach/standing-vec (:primitives c))
-        t (target-of c)
-        s (* (if t (cells-estimate feet t) 0) (stair-time/cell-s))]
+  (let [t (target-of c)
+        s (work-s c)]
     (cond-> {:uses {:job-time [(* 0.5 s) s (max (* 4 s) (time-s))]}}
       t (assoc :moves-to t))))
 

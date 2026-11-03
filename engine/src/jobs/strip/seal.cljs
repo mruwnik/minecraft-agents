@@ -48,7 +48,9 @@
 
 (def defaults {:spend {:job-time ::job-time-s} :use {:blocks :seal}})
 
-(def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (:at (:args %))))))
+(declare work-s)
+
+(def safe? (price/with-stay (ready/safe-at-by-night #(a/cell (:at (:args %)))) #(work-s %) true))
 
 (def fit? ready/ok)
 
@@ -205,8 +207,11 @@
       (checks/child-under-way? c) (apply contract/later :wrapping-up "seal: the section is shut, wrapping up" data)
       :else (apply contract/ok :sealed (str "seal sealed: placed " placed) data))))
 
+(defn work-s "Mean seconds sealing the open cells of the section takes." [c]
+  (* (settings/get settings ::s-per-cell) (if (= :ok (first (bad-args c))) (count (open-cells c)) 0)))
+
 (defn quote-of [c]
-  (let [t (* (settings/get settings ::s-per-cell) (if (= :ok (first (bad-args c))) (count (open-cells c)) 0))]
+  (let [t (work-s c)]
     {:uses {:job-time [0 t (max t (settings/get settings ::job-time-s))]}}))
 
 (defn ^:async round [c]

@@ -17,6 +17,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.strip :as strip]
             [jobs.lib.tool-kind :as kind]
@@ -365,7 +366,11 @@
   [c]
   (when-let [{:keys [from to]} (seg-of (:segment (:args c)))] (stock/torch-way c (inc (abs (- to from))) true)))
 
-(def safe? (price/staying :long (ready/dark-near-ok torch-way place (ready/safe-at-by-night place))))
+(defn work-s "Mean seconds cutting the segment's cells takes (stair-time's seconds a cell)." [c]
+  (let [{:keys [from to]} (seg-of (:segment (:args c)))]
+    (* (max 1 (- (or to 0) (or from 0))) (stair-time/cell-s))))
+
+(def safe? (price/with-stay (ready/dark-near-ok torch-way place (ready/safe-at-by-night place)) work-s true))
 
 (def fit? (ready/fed-fit-for :long))
 
@@ -392,6 +397,6 @@
 
 (defn quote-of [c]
   (let [{:keys [from to]} (seg-of (:segment (:args c)))]
-    {:uses {:job-time [1 (max 1 (- (or to 0) (or from 0))) (settings/get settings ::job-time-s)]}}))
+    {:uses {:job-time [1 (work-s c) (settings/get settings ::job-time-s)]}}))
 
 (def meta {:tags [:mine :light]})

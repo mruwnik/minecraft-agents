@@ -40,7 +40,9 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (price/staying :long (ready/safe-at-or #(a/cell (:near (:args %))) ready/safe-if-lit)))
+(def looting-s "Mean seconds emptying the cart takes." 20)
+
+(def safe? (price/with-stay (ready/safe-at-or #(a/cell (:near (:args %))) ready/safe-if-lit) (constantly looting-s) true))
 
 (def fit? (ready/fed-fit-for :long))
 
@@ -93,7 +95,7 @@
                       :result result))))
 
 (defn quote-of [_c]
-  {:uses {:job-time [5 20 (settings/get settings ::job-time-s)]}})
+  {:uses {:job-time [5 looting-s (settings/get settings ::job-time-s)]}})
 
 (defn ^:async empty-cart!
   "Move every stack of the cart into the bag (a jobs.storage.withdraw :entity child): \"ok\", :continue while it waits, else

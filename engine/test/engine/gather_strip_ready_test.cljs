@@ -14,6 +14,7 @@
             [jobs.gather.get-seeds :as get-seeds]
             [jobs.gather.cast-obsidian :as cast-obsidian]
             [jobs.gather.mine :as mine]
+            [jobs.strip.all :as strip-all]
             [jobs.strip.corridor :as corridor]
             [jobs.strip.loot-cart :as loot-cart]
             [jobs.strip.seal :as seal]
@@ -70,8 +71,16 @@
   (is (= [:later :ok] [(kind fell-tree/safe? tree-outside {:radius 16 :ignore-zones? true}) (kind fell-tree/safe? rt/night-hut {:radius 16 :ignore-zones? true})])
       "a sheltered body is not sent out to a tree in the dark; with no tree there is nothing to leave for"))
 
-(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 (def segment {:y 64 :axis :x :line 0 :from 0 :to 8 :open-ends #{}})
+
+(deftest strip-jobs-stay-their-own-work-seconds-not-a-long-stay
+  (is (= [9.6 120 20]
+         [(/ (js/Math.round (* 10 (corridor/work-s (ctx rt/tunnel {:segment segment})))) 10)
+          (strip-all/work-s (ctx rt/tunnel {:site "s"}))
+          loot-cart/looting-s])
+      "an 8-cell corridor, an unread site (one segment) and a cart each stay their quote's mean, not risk/work-s :long"))
+
+(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 (def zombie-day (assoc rt/open-night :time st/noon :entities [zombie]))
 
 (deftest a-corridor-with-a-reachable-zombie-is-later-through-safe

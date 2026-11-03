@@ -275,7 +275,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site %)))))))
+(def safe? (price/with-stay (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site %))))) work-s true))
 
 (def fit? (ready/fed-fit-for :long))
 

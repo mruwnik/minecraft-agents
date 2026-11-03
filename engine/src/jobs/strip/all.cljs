@@ -162,7 +162,10 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site/site %)))))))
+(defn work-s "Mean seconds the strip of the site's segments takes (120 a segment, one before the site is read)." [c]
+  (* 120 (max 1 (count (:segments (site/site c))))))
+
+(def safe? (price/with-stay (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site/site %))))) work-s true))
 
 (declare quote-of)
 
@@ -186,6 +189,6 @@
       (apply contract/later :stripping "strip all: segments left to strip" data))))
 
 (defn quote-of [c]
-  {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site/site c))))) (settings/get settings ::job-time-s)]}})
+  {:uses {:job-time [1 (work-s c) (settings/get settings ::job-time-s)]}})
 
 (def meta {:tags [:goal :mine]})
