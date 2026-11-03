@@ -24,13 +24,18 @@
     (or (some-> (:away eng) deref)
         {:by :connection :why :connection-lost})))
 
+(defn why-value
+  "A plain word becomes a keyword; free text stays a string, since a keyword made from it prints as unreadable EDN."
+  [why]
+  (if (re-matches #"[a-z][a-z0-9-]*" (or why "away")) (keyword (or why "away")) why))
+
 (defn log-out-record
   "The away record of an offline act by instance id of root job root, starting at now."
   [eng root id args now]
   (let [ms (.-ms args)]
     (cond-> {:by (keyword (some-> (get-in (state eng) [:instances root :spec]) expr/label))
              :job id
-             :why (keyword (or (.-why args) "away"))}
+             :why (why-value (.-why args))}
       (number? ms) (assoc :back-at (+ now (min ms 600000))))))
 
 (defn note-activity!

@@ -2,7 +2,9 @@
   "An offline body answers self() with just {status: 'offline'}: events, memory
   writes and tick failures must not choke on the missing pos."
   (:require [cljs.test :refer [deftest is async]]
+            [cljs.reader :as reader]
             [engine.core :as core]
+            [engine.core.activity :as activity]
             [engine.event-api :as event-api]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -128,3 +130,8 @@
     (is (= {:by :connection :why :connection-lost} (core/away eng)))
     (is (= {:ok false :reason :offline :offline {:by :connection :why :connection-lost}}
            (event-api/inventory-view eng)))))
+
+(deftest away-record-why-prints-as-readable-edn
+  (doseq [why ["lead: log out (rolling blocked, bug 75)" "logged-out-to-stay-away" nil]]
+    (let [rec (activity/log-out-record (core/create {:primitives (tu/fake {}) :jobs {} :triggers {} :dir (tu/tmp-dir) :now (constantly 0) :body "Fake"}) 'r 1 #js {:ms 5 :why why} 0)]
+      (is (= rec (reader/read-string (pr-str rec)))))))
