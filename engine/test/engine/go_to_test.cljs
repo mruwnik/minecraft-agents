@@ -1027,7 +1027,7 @@
         (let [{:keys [out] :as s} (await (go! {:blocks flat} {:pos [38 64 0] :range 0}))
               writes (events-of s :memory_written)]
           (is (= {:arrived true} @out) (pr-str @out))
-          (is (<= (count writes) 12) (str (count writes) " memory writes on a 38 block walk")))))))
+          (is (<= (count writes) 12) (str (count writes) " memory writes on a 38 block walk " (pr-str (map (juxt :job :memory) writes)))))))))
 
 (deftest a-call-that-yields-continue-is-no-longer-open
   (async done

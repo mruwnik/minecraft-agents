@@ -43,3 +43,13 @@
     (goal/note! (ctx-of s "j1") goal-a)
     (goal/note! (ctx-of s "j2" [] :ore-seen) {:x 0 :y 0 :z 0})
     (is (= goal-a (goal/interrupted-goal (mem/view s) "j9")) "the errand's walk, though written last, is not kept")))
+
+(deftest clearing-a-walk-with-no-goal-writes-nothing
+  (let [s (store) writes (atom 0)
+        c (-> (ctx-of s "j1")
+              (update :forget (fn [f] (fn [& a] (swap! writes inc) (apply f a)))))]
+    (goal/clear! c)
+    (goal/note! c goal-a)
+    (goal/clear! c)
+    (goal/clear! c)
+    (is (= 1 @writes) "only the clear that dropped a goal is a write")))

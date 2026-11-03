@@ -16,15 +16,21 @@
 
 (defn- mine? [c] #(and (= (:job %) (:root c)) (= (:slots %) (:slots c))))
 
+(defn- own-entries [c] (filter (comp (mine? c) :data) (ctx/entries c kind)))
+
 (defn note!
   "This call's walk is open toward goal."
   [c goal]
   (when (nil? (:reflex c))
-    (when-not (some #(= goal (:goal (:data %))) (filter (comp (mine? c) :data) (ctx/entries c kind)))
-      (ctx/forget-where! c kind (mine? c))
-      (ctx/remember! c kind {:job (:root c) :slots (:slots c) :goal goal} {:cap 8 :ttl ttl-ms}))))
+    (let [own (own-entries c)]
+      (when-not (some #(= goal (:goal (:data %))) own)
+        (when (seq own) (ctx/forget-where! c kind (mine? c)))
+        (ctx/remember! c kind {:job (:root c) :slots (:slots c) :goal goal} {:cap 8 :ttl ttl-ms})))))
 
-(defn clear! "This call's walk has ended." [c] (ctx/forget-where! c kind (mine? c)))
+(defn clear!
+  "This call's walk has ended. Writes only when it left a goal."
+  [c]
+  (when (seq (own-entries c)) (ctx/forget-where! c kind (mine? c))))
 
 (defn interrupted-goal
   "The goal of the most recently noted open walk of a job other than root-id's; nil when none."
