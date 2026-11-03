@@ -803,7 +803,7 @@
                              (cond (not= :out w) w
                                    (breath/in-water? p) (ending/end-in-water! c)
                                    :else :again))
-      (and (not sheltered) (seq @edge) (let [w (await (look-priced c bed-way))] (when (look-edge/pays? c w) (reset! look-worth w))))
+      (and (not sheltered) (seq @edge) (let [w (await (look-priced c bed-way))] (when (look-edge/pays? c w @edge) (reset! look-worth w))))
       (do (hold/busy! c) (await (look-edge/look! c @edge nil @look-worth)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)) (not (and bed-way (await (walkable-bed c)))))
       (do (when-not sheltered (hold/sheltered! c :dug-in))

@@ -118,14 +118,16 @@
   (cost/affords? (+ s (:edge-spent (ctx/mem c) 0)) worth))
 
 (defn pays?
-  "Whether one more cell look is bought from `worth`: the chance a look turns the night's choice falls with every cell looked
-  (cost/cell-looks), against the seconds each took on the clock so far (:edge-t0). A dark cell no look from here shows stays
-  unseen however often it is tried, so a finite worth ends the looking."
-  [c worth]
+  "Whether looking at the pending `cells` is bought from `worth`: the region is a shelter only if every one of them proves
+  closed (cost/closed-chance of that many unseen), a saving of worth at that chance, against looking at all of them at the
+  seconds each has taken on the clock so far (:edge-t0), look-s before the first. Many unseen cells, or cells no look from
+  here shows (they stay unseen and each costs its seconds), are never bought."
+  [c worth cells]
   (let [{:keys [edge-looked edge-t0]} (ctx/mem c)
         n (count edge-looked)
-        redo-s (if (and edge-t0 (pos? n)) (/ (- (clock/now) edge-t0) 1000 n) 0)]
-    (pos? (cost/cell-looks worth 1 n redo-s))))
+        each-s (if (and edge-t0 (pos? n)) (/ (- (clock/now) edge-t0) 1000 n) (cost/look-s 1))
+        k (count cells)]
+    (> (* worth (cost/closed-chance 0 k)) (* k each-s))))
 
 (defn walk-price
   "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than
