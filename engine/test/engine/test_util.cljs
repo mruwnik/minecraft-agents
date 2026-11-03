@@ -200,15 +200,24 @@
     p))
 
 (defn seeing-within
-  "p whose sensing reads only blocks within r of the body's current position; a farther cell is {:unknown true}, as
-  one never seen (a look around reveals nothing beyond r)."
+  "p whose sensing reads only blocks within r of the body's current position, plus the cells it dug, placed or clicked
+  (as perception's touching remembers them); any other farther cell is {:unknown true}, as one never seen (a look around
+  reveals nothing beyond r)."
   [p r]
-  (let [near? (fn [pos] (let [s (.-pos (.self p))]
-                          (<= (js/Math.hypot (- (.-x pos) (.-x s)) (- (.-y pos) (.-y s)) (- (.-z pos) (.-z s))) r)))]
+  (let [touched (atom #{})
+        cell-of (fn [pos] [(js/Math.floor (.-x pos)) (js/Math.floor (.-y pos)) (js/Math.floor (.-z pos))])
+        near? (fn [pos] (let [s (.-pos (.self p))]
+                          (or (contains? @touched (cell-of pos))
+                              (<= (js/Math.hypot (- (.-x pos) (.-x s)) (- (.-y pos) (.-y s)) (- (.-z pos) (.-z s))) r))))]
     (set-sensed! p (fn [pos] (if (near? pos) (.blockAt (oracle p) pos) #js {:unknown true})))
     (aset p "seenBlockAt" (fn [pos] (if (near? pos)
                                       (let [b (.blockAt (oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0})
                                       #js {:unknown true :pos pos})))
+    (doseq [name ["dig" "place" "jumpPlace" "useOn"]]
+      (when-let [f (aget p name)]
+        (aset p name (fn [token ^js a]
+                       (let [touch #(when-let [pos (some-> a .-pos)] (swap! touched conj (cell-of pos)))]
+                         (-> (.call f p token a) (.then (fn [r] (touch) r) (fn [e] (touch) (throw e)))))))))
     p))
 
 (defn short-walks!

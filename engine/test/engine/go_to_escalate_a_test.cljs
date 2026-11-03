@@ -748,7 +748,7 @@
 
 (deftest go-to-escalates-out-of-a-shaft-whose-surrounding-rock-it-cannot-see
   ;; the planner proves the start sealed (:start-enclosed) though the room flood reads the unseen walls as open: it escalates
-  ;; (a pillar; the unseen roof is guessed rock, dug as air, and kept as air) instead of giving up "shut in"
+  ;; (a pillar; the roof it digs is found air and remembered as air, as perception's touching does) and arrives
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -756,4 +756,4 @@
                                                    :inventory [{:name "dirt" :count 8}]}
                                                   {:pos [6 64 0] :range 1}))]
           (is (= [:pillar] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
-          (is (not= :start-enclosed (:why @out))))))))
+          (is (true? (:arrived @out)) (pr-str @out)))))))
