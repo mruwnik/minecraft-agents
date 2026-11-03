@@ -863,6 +863,16 @@
                             :data {:dug [{:cell [1 65 0] :block "stone"}]}})
     (is (= {:placed {:all 1 :bad 1} :apart {:all 1 :bad 0}} (:guess-looks (ctx/mem c))) "the cell past the stop is no look")))
 
+(deftest a-cut-dig-route-through-the-bodys-own-build-is-walked-before-its-holes-are-put-back
+  (let [{:keys [eng]} (gt/setup {:blocks {}})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        run! (fn [e] (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-pending) (assoc :escalation e)))
+               (esc/escalated! c [20 2 10] e true)
+               (select-keys (ctx/mem c) [:restore-now :restore-pending]))]
+    (.setOwner (:primitives eng) "tx")
+    (is (= {:restore-pending true} (run! {:step :dig-route :own-cut true})) "walk through first")
+    (is (= {:restore-now true :restore-pending true} (run! {:step :clear-path :own-cut true})) "a door's cut is closed behind at once")))
+
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})
