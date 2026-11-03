@@ -416,6 +416,15 @@
                   [sx sz] (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
               {:x (+ (:x pos) 0.5 sx) :y (:y pos) :z (+ (:z pos) 0.5 sz)}))))
 
+(defn expect-after-unseen-break
+  "The count the bag should hold once the drop of a workstation found gone (no dig of this call booked it) is picked up: what it holds
+  now, one more when a drop of the item lies near the cell, at least 1 (a workstation to place)."
+  [c pos item]
+  (let [have (u/carried-count (:primitives c) item)
+        dropped? (seq (filter #(and (= item (.-name (.-item %))) (u/within? (u/pos-of (.-pos %)) pos 4))
+                              (look/seen-items (:primitives c) {:radius 4 :max 32})))]
+    (max 1 (if dropped? (inc have) have))))
+
 (defn far-side
   "The point 2 blocks beyond spot on the line from the body through it, along the longer axis: the other side of the wall or cell the drop lies in."
   [c spot]
@@ -553,10 +562,10 @@
       (nil? block) (await (approach! c pos))
       (bs/air block)
       (cond
-        (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true) :again)
+        (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true :expect-carried (expect-after-unseen-break c pos item)) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
         (and e (not= "unemployed" profession)) (await (wait-lose-job! c))
-        (< (u/carried-count p item) (:expect-carried (ctx/mem c) 1)) (await (recover! c))
+        (< (u/carried-count p item) (:expect-carried (ctx/mem c))) (await (recover! c))
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place-or-return! c)))
       (not= item block) (stop! c :occupied)

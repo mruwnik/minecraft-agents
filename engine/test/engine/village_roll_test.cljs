@@ -279,6 +279,19 @@
           (is (zero? (digs p)))
           (is (= "lectern" (workstation p))))))))
 
+(deftest a-restart-with-the-workstation-missing-and-a-drop-beside-it-does-not-place-a-spare
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(vt/villager nil {:profession "unemployed" :level 1})
+                                                  {:id 90 :name "item" :kind "item" :pos {:x 3.5 :y 64 :z 0.5} :item {:name "lectern" :count 1}}]
+                                       :inventory [{:name "lectern" :count 2}]
+                                       :blocks {ws-key "air" "3,64,0" "air"}}
+                                      {}))]
+          (is (= {:status :stopped :reason :workstation-lost} (select-keys result [:status :reason]))
+              "the roll went for the lying drop first; the old fallback of 1 placed the spare and went on")
+          (is (= "lectern" (workstation p)) "the spare is put back at the end"))))))
+
 (deftest a-workstation-in-anothers-zone-is-not-broken
   (async done
     (tu/run-async done
