@@ -139,6 +139,7 @@
 (def caught-on? danger/caught-on?)
 (def reach-s danger/reach-s)
 (def arrival-s danger/arrival-s)
+(def centred danger/centred)
 (defn melee-reach [] (danger/melee-reach))
 (def body-speed danger/body-speed)
 (def flee-walk-speed danger/flee-walk-speed)

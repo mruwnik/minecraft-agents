@@ -254,6 +254,12 @@
   [food mob-names]
   (every? #(pos? (closing-rate food %)) mob-names))
 
+(defn centred
+  "Block cell c ({:x :y :z} integers, as the planner's steps) at its centre, where a body walks and mobs are positioned:
+  a race to a cell is measured there, not at its corner."
+  [c]
+  (-> c (update :x + 0.5) (update :z + 0.5)))
+
 (defn way-blocks
   "Blocks a chaser at pos covers to within ::melee-reach of `at`: way when known, else the straight line less the reach."
   [pos at way]

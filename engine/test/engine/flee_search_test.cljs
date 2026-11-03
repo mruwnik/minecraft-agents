@@ -554,3 +554,12 @@
         west (first (search/scored (chaser -5.5) {:x -0.5 :y 64 :z 0.5} [(route -1)]))]
     (is (= (:arrive east) (:arrive west)))
     (is (= (:caught-s east) (:caught-s west)))))
+
+(deftest a-goal-is-beaten-to-alike-whichever-way-it-lies
+  ;; the goal is a block cell: raced at its centre, a goal east and its mirror west are beaten alike
+  (doseq [food [20 6]
+          x [3 4 5 6 7 8]]
+    (let [chasers (fn [px] [{:name "zombie" :mob "zombie" :pos {:x px :y 64 :z 0.5}}])
+          east (search/beaten-to? (chasers (+ x 3.5)) {:x 0.5 :y 64 :z 0.5} food {:x x :y 64 :z 0})
+          west (search/beaten-to? (chasers (- (+ x 3.5))) {:x -0.5 :y 64 :z 0.5} food {:x (dec (- x)) :y 64 :z 0})]
+      (is (= east west) (str "x " x " food " food)))))

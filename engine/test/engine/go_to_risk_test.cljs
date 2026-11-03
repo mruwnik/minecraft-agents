@@ -965,3 +965,11 @@
         c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}
                               :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 3}}]})]
     (is (< (risk/way-risk-s c goal cells 0) (risk/way-risk-s c goal cells 20)))))
+
+(deftest a-walks-catchers-are-the-same-whichever-way-the-walk-heads
+  ;; route cells are block integers: raced at their corners a walk east lost half a block to its mirror west
+  (let [route (fn [dx] (mapv (fn [x t] {:x (if (pos? dx) x (dec (- x))) :y 64 :z 0 :t t}) [0 4] [0 0.8]))
+        chaser (fn [dx x] [{:mob "zombie" :pos {:x (if (pos? dx) x (- x)) :y 64 :z 0.5}}])]
+    (doseq [t (range 0.5 2.5 0.05)
+            :let [at (fn [dx] (risk/live-catchers (chaser dx 8.5) (assoc-in (route dx) [1 :t] t)))]]
+      (is (= (count (at 1)) (count (at -1))) (str "t " t)))))

@@ -403,7 +403,7 @@
   ([p e goal route]
    (and (not (combat/ranged? e))
         (if route
-          (cost/caught-on? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :route route})
+          (cost/caught-on? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :route (mapv cost/centred route)})
           (cost/catches? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :from (u/pos-of (.-pos (.self p))) :to goal
                           :food (or (.-food (.self p)) 20) :step 1})))))
 
@@ -411,7 +411,7 @@
   "Blocks from q to the nearest point of the walk from body to goal: body and the cells after it on route (their centres) when given, else the straight segment."
   [body goal route q]
   (if route
-    (reduce min (u/dist q body) (map #(u/dist q {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))}) (rest route)))
+    (reduce min (u/dist q body) (map #(u/dist q (cost/centred %)) (rest route)))
     (danger/way-distance body goal q)))
 
 (defn leads-away?

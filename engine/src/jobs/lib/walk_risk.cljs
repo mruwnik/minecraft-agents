@@ -73,7 +73,7 @@
   (filterv (fn [{:keys [mob chaser pos fled remembered]}]
              (and (not (or fled remembered))
                   (or (= :projectile (threat/damage-type mob))
-                      (cost/caught-on? {:chaser (or chaser mob) :pos pos :route route}))))
+                      (cost/caught-on? {:chaser (or chaser mob) :pos pos :route (mapv cost/centred route)}))))
            known))
 
 (defn remembered-near-way
