@@ -23,10 +23,22 @@
        (throw (data/fail :invalid-duration "claim duration must be 100ms..7d")))
      ms)))
 
+(defn join-negative-values
+  "`--center -3,4,5` as `--center=-3,4,5`: parseArgs reads a value starting with a dash as a missing value."
+  [argv spec]
+  (loop [[a b & more :as args] argv out []]
+    (cond
+      (empty? args) out
+      (and (string? a) (string? b) (str/starts-with? a "--") (not (str/includes? a "="))
+           (= "string" (:type (get spec (keyword (subs a 2)))))
+           (re-matches #"-\d[\d.,-]*" b))
+      (recur more (conj out (str a "=" b)))
+      :else (recur (rest args) (conj out a)))))
+
 (defn parse-options [argv spec]
   ;; Node's parseArgs returns a null-prototype values object; js->clj does not
   ;; convert those objects. Its values are only strings and booleans.
-  (let [parsed (parseArgs #js {:args (clj->js argv) :allowPositionals true :options (clj->js spec)})
+  (let [parsed (parseArgs #js {:args (clj->js (join-negative-values argv spec)) :allowPositionals true :options (clj->js spec)})
         values (.-values parsed)]
     {:positionals (vec (array-seq (.-positionals parsed)))
      :values (into {} (map (fn [key] [(keyword key) (aget values key)]) (array-seq (js/Object.keys values))))}))

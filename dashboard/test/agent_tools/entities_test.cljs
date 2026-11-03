@@ -46,6 +46,8 @@
       (is (= :invalid-center (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--center" "1,2"]))))
       (is (= :invalid-center (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--center" "1,,3"]))))
       (is (= :invalid-radius (error-reason #(entities/options ["ProbeMove" "--world" "w" "--state" state "--radius" ""]))))
+      (is (= {:x -333.5 :y 63 :z -798.5}
+             (:center (entities/options ["ProbeMove" "--world" "w" "--state" state "--center" "-333.5,63,-798.5"]))))
       (finally (close)))))
 
 (deftest compact-rows-carry-the-numeric-entity-id
