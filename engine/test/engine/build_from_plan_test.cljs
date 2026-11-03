@@ -472,6 +472,15 @@
     (is (not-any? (set room) (plan/grounded-stands p [6 64 6] 64 nil (set (map :pos cells)) #{})) "none when every plan cell is barred")
     (is (empty? (plan/stands-for p [6 64 6] 64 nil (set (map :pos cells)) #{})) "a seen cell no body can stand in is no fallback stand")))
 
+(deftest a-wall-cell-under-a-built-roof-with-an-open-room-beside-it-is-not-covered
+  (let [room (for [x (range 4 9) y [64 65]] [x y 5])
+        rock (into {} (for [x (range -3 16) y (range 63 68) z (range -3 12) :when (not ((set room) [x y z]))] [(str x "," y "," z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks rock}))
+        cells (conj (mapv (fn [pos] {:pos pos :want :clear :answer :match}) room)
+                    {:pos [6 65 6] :want "oak_slab" :item "oak_slab" :answer :missing}
+                    {:pos [6 66 6] :want "stone" :item "stone" :answer :match})]
+    (is (empty? (plan/covered p cells 64 #{})) "the clear room cells are stands")))
+
 (deftest a-stand-in-a-pocket-the-body-is-not-in-is-no-stand
   (let [open (set (for [x (range 4 9) y [64 65] z [5 7]] [x y z]))
         rock (into {} (for [x (range -3 16) y (range 63 67) z (range -3 12) :when (not (open [x y z]))] [(str x "," y "," z) "stone"]))
@@ -1788,7 +1797,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/fake {:floor [-30 -30 30 30] :self {:pos [4.5 64 0.5]}})
-              c {:primitives p :view (constantly {:data {} :now 0}) :update-mem (constantly nil)}
+              c {:primitives p :view (constantly {:data {} :now 0}) :update-mem (constantly nil) :emit (constantly nil)}
               row (mapv (fn [x] {:pos [x 64 3] :want "dirt"}) (range 5 12))
               walked (atom nil)]
           ;; [4 64 2] is nearest but reaches only the row's west half; [8 64 2] reaches all of it

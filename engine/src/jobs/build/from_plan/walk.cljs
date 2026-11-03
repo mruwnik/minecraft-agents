@@ -279,9 +279,15 @@
   [c cells cell]
   (trace! c :walk-to! (:pos cell))
   (let [{:keys [all inner]} (stand-choices c cells cell)
+        every all
         all (if (or (in-hole? c) (shut-in-walk? c)) all (reachable-stands c all))
         stands (or (seq (seeing c all (:pos cell))) (seq (reaching c all (:pos cell))) inner all)
-        stand (second (first (sort-by first (map (juxt #(stand-price c cells cell %) identity) stands))))]
+        priced (sort-by first (map (juxt #(stand-price c cells cell %) identity) stands))
+        stand (second (first priced))
+        _ (ctx/emit! c :build.stand-choice :info
+                     {:cell (:pos cell) :candidates (mapv vec every) :reachable (mapv vec all) :inner (mapv vec inner)
+                      :priced (mapv (fn [[s st]] [(vec st) s]) priced) :chosen (some-> stand vec)
+                      :dropped (mapv vec (remove (set (map second priced)) every))})]
     (cond
       (not stand)
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))

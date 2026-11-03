@@ -491,7 +491,7 @@
   furnace laid first, shut in on every side): searching for a stand floods the loaded land. A cell with a stand is placed."
   [p cells body-y bad]
   (let [built (into #{} (comp (filter #(and (= :match (:answer %)) (:item %) (not (:companion %)))) (map :pos)) cells)
-        planned (set (map :pos cells))]
+        planned (not-stands cells)]
     (filterv #(and (built (update (:pos %) 1 inc))
                    (not (grounded-stands p (:pos %) body-y (when-not (or (:click %) (:dig? %)) (facing-of (:want %))) planned bad)))
              (missing cells))))
