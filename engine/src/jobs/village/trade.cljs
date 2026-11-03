@@ -16,7 +16,7 @@
 
 (def doc
   "Buy :count of :buy from the villager :villager (uuid or entity id; nil: the nearest adult in sight that has offers, a villager that shows none is skipped for the next, as a player opens one after another). One call is the whole purchase: find the villager
-  within jobs.lib.villager/search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),
+  within jobs.lib.villager/search-radius, walk within reach of it (jobs.lib.trade-window ::reach), seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of jobs.lib.trade-window ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those paid with an item of the call's :use {:payment [..]}
   (default emerald plus the items named in :spend {:items {item n}}, e.g. {\"paper\" 24} to sell 24 paper for an emerald; any other item, diamond too, is never spent) and whose price (the adjusted count of the first cost stack) is within what the call's :spend
