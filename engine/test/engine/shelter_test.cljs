@@ -51,11 +51,6 @@
 
 (def dark {:light-default [0 0]})
 
-(defn gave-ups
-  "The go-to children that gave up (child_ended with the cause :unreachable)."
-  [seen]
-  (filterv #(= :unreachable (get-in % [:ending :cause :reason])) (emitted seen :child_ended)))
-
 (defn seen-fake
   "A fake body looking up, wrapped in perception after one sight pass: it knows only what it has seen."
   [world]
@@ -459,7 +454,7 @@
           (core/submit! eng '(jobs.survival.sleep) {})
           (await (run-until-empty eng 20))
           (is (empty? (calls p "sleep")))
-          (is (re-find #"cannot reach the bed: .*walled in" (:text (first (emitted seen :bed_unreachable))))))))))
+          (is (re-find #"cannot reach the bed on foot: .*goal enclosed" (:text (first (emitted seen :bed_unreachable))))))))))
 
 (deftest sleep-never-digs-through-a-wall-to-reach-a-bed
   (async done
@@ -471,7 +466,9 @@
           (await (run-until-empty eng 20))
           (is (= [] (calls p "dig")) "no zone covers the wall, but a walk to a bed does not dig")
           (is (empty? (calls p "sleep")))
-          (is (= 1 (count (emitted seen :bed_unreachable)))))))))
+          (is (empty? (tu/walked-to eng)) "go-to's quote finds the bed walled in, so the body does not set out (a walk into a dead end first; a reflex firing one round at a time never reached three tries)")
+          (is (= 1 (count (emitted seen :bed_unreachable))))
+          (is (not (re-find #"shut in" (:text (first (emitted seen :bed_unreachable)))))))))))
 
 (def unreachable-world {:time night :blocks {"6,64,0" "red_bed"} :unreachable ["6,64,0"]})
 
@@ -485,13 +482,13 @@
           (await (run-until-empty eng 20))
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (entries eng :bed-unreachable)))
           (is (= {:cap 5 :ttl 600000} (mem/policy (mem/view (:store eng)) :bed-unreachable)))
-          (let [gave-up (count (gave-ups seen))]
+          (let [gave-up (count (emitted seen :bed_unreachable))]
             (core/submit! eng '(jobs.survival.sleep) {})
             (is (nil? (core/tick! eng)) "declines while the entry is fresh")
-            (is (= gave-up (count (gave-ups seen))))
+            (is (= gave-up (count (emitted seen :bed_unreachable))))
             (swap! clock + 600001)
             (await (tick-n eng 3))
-            (is (< gave-up (count (gave-ups seen))) "tries the bed again once the entry expired: three more fruitless go-to rounds")))))))
+            (is (< gave-up (count (emitted seen :bed_unreachable))) "asks about the bed again once the entry expired")))))))
 
 (deftest sleep-still-tries-a-different-bed-than-the-unreachable-one
   (async done

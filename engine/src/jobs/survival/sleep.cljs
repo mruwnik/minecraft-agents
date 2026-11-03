@@ -25,6 +25,7 @@
   Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
+  Before each walk go-to's quote is asked: when it finds no route (the land is closed, the bed walled in), the body does not move and the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -131,6 +132,33 @@
   (let [s (sh-beds/sleep-walk-s (:primitives c) (bed-of c))]
     {:uses {:job-time [0 s (max (* 3 s) 10)]} :done [0 1 1]}))
 
+(def walk-ways #{:walk :clear-seal})
+
+(def no-way-reasons
+  "Reasons of a go-to quote that found no route because the land the body can walk is closed, the bed walled in or cut off, or the only
+  way leads to the edge of what is loaded (:partial); other reasons (the search goes on, a body mid-jump, an unloaded goal, a refused call) say nothing of the bed."
+  #{:exhausted :start-enclosed :goal-enclosed :goal-cut-off :partial})
+
+(defn no-walk-text
+  "Words for a quote route that found none (its :reason), without a claim about the body being shut in."
+  [route]
+  (str "cannot reach the bed on foot: no walk leads there from here"
+       (when-let [r (some-> (:reason route) name)] (str " (" (str/replace r "-" " ") ")"))))
+
+(defn no-way-quote?
+  "Whether go-to's quoted route says no walk reaches the bed (found false, for one of no-way-reasons)."
+  [route]
+  (and (false? (:found route)) (contains? no-way-reasons (some-> (:reason route) keyword))))
+
+(defn give-up-unreachable-now!
+  "Warn bed_unreachable, remember the bed in :bed-unreachable (so the night stops holding for it) and end nothing-possible, at once."
+  [c bed text]
+  (ctx/emit! c :bed_unreachable :warn {:text text})
+  (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
+  (when-let [seen (u/seen-name (:primitives c) bed)]
+    (when-not (.endsWith seen "_bed") (sh-spawn/lose-spawn! c bed :gone)))
+  (ctx/end c :nothing-possible :bed-unreachable {:pos bed :text text}))
+
 (defn give-up-unreachable! [c bed walk]
   (let [why (some-> (get-in walk [:data :text]) (str/replace #"^gave up walking to \[[^\]]*\]: " ""))
         text (str "cannot reach the bed" (some->> why (str ": ")))
@@ -192,9 +220,13 @@
         bed (bed-of c)
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
-        walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2 :ways #{:walk :clear-seal}})))]
+        walk-args {:pos bed :range 2 :ways walk-ways}
+        route (when-not (taken?) (:route (await (ctx/quote c 'jobs.movement.go-to walk-args))))
+        no-way? (no-way-quote? route)
+        walk (when-not (or (taken?) no-way?) (await (child/call-walk* c :go walk-args)))]
     (cond
       (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
+      no-way? (give-up-unreachable-now! c bed (no-walk-text route))
       (= :continue walk) :continue
       (not= :done (:kind walk)) (give-up-unreachable! c bed walk)
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
