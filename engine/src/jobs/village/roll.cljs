@@ -456,6 +456,9 @@
       (not= item block) (stop! c :occupied)
       ;; villagers count only while in view; one seen before may have stepped away while it lost its job
       (nil? e) (cond
+                 ;; far from the workstation the villager is out of sight: go to the cell first, as a player would
+                 (and (not (:seen (ctx/mem c))) (not (:approached (ctx/mem c))) (not (u/within? (u/self-pos c) pos (reach))))
+                 (await (approach! c pos))
                  (await (back-to-view! c pos)) :again
                  (await (villager/find-in-view! c not-nitwit? look/hazards-only)) :again
                  (and (:seen (ctx/mem c)) (< (- (ctx/now c) (:away-since (ctx/mem c) (ctx/now c))) (* 1000 (away-s))))

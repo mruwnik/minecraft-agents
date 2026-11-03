@@ -213,6 +213,20 @@
                                      :wrap #(do (ls/entities-after-look (:p %)) %)} {}))]
           (is (= {:found true :rolls 0} (select-keys result [:found :rolls]))))))))
 
+(deftest a-villager-out-of-view-far-from-the-workstation-is-walked-to-not-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (roll {:entities [(librarian [(offer "enchanted_book")])]
+                                       :self {:pos {:x 14.5 :y 64 :z 0.5}}
+                                       :wrap #(let [q (:p %)
+                                                    entities (.-entities q)
+                                                    walked? (fn [] (some (fn [call] (#{"goTo" "moveTo" "steer"} (.-name call))) (.-calls (.-world q))))]
+                                                (aset q "entities" (fn [a] (if (walked?) (.call entities q a) #js [])))
+                                                %)} {}))]
+          (is (= {:found true :rolls 0} (select-keys result [:found :rolls])))
+          (is (pos? (count (vt/calls p "steer")))))))))
+
 (deftest a-villager-seen-by-one-look-of-the-round-is-found-not-gone
   (async done
     (tu/run-async done
