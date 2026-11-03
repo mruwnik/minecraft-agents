@@ -528,10 +528,9 @@
       (update (meta safe) ::exposure #(some-> % (lift (fn [_ ok] ok))))))))
 
 (defn safe-at-build
-  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok, the stay (work-s c) seconds of the job's own work,
-  a long stay when work-s is not given."
-  ([f] (price/staying :long (dark-near-ok f (safe-at-by-night f))))
-  ([f work-s] (price/with-stay (dark-near-ok f (safe-at-by-night f)) work-s true)))
+  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok, the stay (work-s c) seconds of the job's own work."
+  [f work-s]
+  (price/with-stay (dark-near-ok f (safe-at-by-night f)) work-s true))
 
 (defn chest-place "The cell of the chest of c's job (the :chest arg or the known :chest place), nil: none." [c] (storage/chest-of (ctx/view c) (:args c)))
 

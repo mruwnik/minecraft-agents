@@ -121,7 +121,8 @@
         ok? #(not (or (= "nitwit" (.-profession %)) (skipped (villager/ident %))))
         _ (await (choose-cheapest! c ok?))
         uuid (villager/pick! c ok?)
-        e (when uuid (villager/find-by-uuid (:primitives c) uuid))]
+        e (when uuid (villager/find-by-uuid (:primitives c) uuid))
+        _ (when (and e (:memory-walked (ctx/mem c))) (ctx/update-mem! c dissoc :memory-walked))]
     (cond
       (and (nil? e) (await (villager/find-in-view! c ok? nil))) :again ; villagers count only while in view
       (and (nil? uuid) (seq skipped)) (finish! c :no-offers nil)

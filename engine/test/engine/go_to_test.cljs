@@ -1027,7 +1027,7 @@
         (let [{:keys [out] :as s} (await (go! {:blocks flat} {:pos [38 64 0] :range 0}))
               writes (events-of s :memory_written)]
           (is (= {:arrived true} @out) (pr-str @out))
-          (is (< (count writes) 19) (str (count writes) " memory writes on a 38 block walk, expected under one per two blocks " (pr-str (map (juxt :job :memory) writes)))))))))
+          (is (< (count writes) 17) (str (count writes) " memory writes on a 38 block walk, expected the measured 11-13 plus a margin, far under one per two blocks " (pr-str (map (juxt :job :memory) writes)))))))))
 
 (deftest a-call-that-yields-continue-is-no-longer-open
   (async done

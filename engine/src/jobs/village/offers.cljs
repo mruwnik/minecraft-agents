@@ -31,7 +31,18 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def can-start? (constantly (contract/ok :start "nothing needed")))
+(defn villager-known
+  "Ok when a villager to read is in sight (the named one, else any adult) or the named one is remembered; else a look."
+  [c]
+  (let [p (:primitives c)
+        id (:villager (:args c))]
+    (if (if id
+          (or (villager/find-by-uuid p id) (some-> (aget p "rememberedEntity") (.call p id)))
+          (seq (villager/adults p)))
+      (contract/ok :villager "a villager is known")
+      (contract/look :no-villager "no villager in view"))))
+
+(def can-start? villager-known)
 
 (defn done?
   "Ok once the offers are read (kept in memory), with them as its result."

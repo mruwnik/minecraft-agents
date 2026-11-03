@@ -1176,7 +1176,7 @@
       8 :hostiles {:leg-s 1})))
 
 (deftest a-dark-build-place-within-the-no-spawn-radius-is-no-wait-for-light
-  (are [to expected] (= expected (lit 0 15 #(kind (ready/safe-at-build (constantly to)) open-night)))
+  (are [to expected] (= expected (lit 0 15 #(kind (ready/safe-at-build (constantly to) (constantly 1)) open-night)))
     {:x 15 :y 64 :z 0} :ok
     {:x 40 :y 64 :z 0} :later))
 
@@ -1185,8 +1185,8 @@
         world (assoc open-night :blocks (tu/box 30 63 -5 50 63 5 "stone"))
         kind-of (fn [check] (first (check (assoc (dissoc (ctx-of world) ::price/stay-s) :worth (constantly 300)))))]
     (is (= [:later :ok]
-           (lit 0 15 #(mapv kind-of [(ready/safe-at-build far) (ready/safe-at-build far (constantly 1))])))
-        "a one-second job at a dark far place goes ahead; with no work-s it is priced the 600 s :long stay")))
+           (lit 0 15 #(mapv kind-of [(ready/safe-at-build far (constantly 600)) (ready/safe-at-build far (constantly 1))])))
+        "a one-second job at a dark far place goes ahead; a 600 s one waits")))
 
 (deftest the-dark-near-the-body-is-lifted-for-a-job-whose-torches-cost-less-than-the-dark
   (are [torch-way expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly torch-way) (constantly {:x 15 :y 64 :z 0}) (ready/safe-at-by-night (constantly {:x 15 :y 64 :z 0}))) open-night)))

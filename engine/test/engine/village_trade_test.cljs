@@ -10,6 +10,7 @@
             [jobs.lib.reserve :as reserve]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
+            [jobs.village.offers :as offers]
             [jobs.village.trade :as trade]))
 
 (def clock
@@ -517,3 +518,31 @@
               result (plain (await (child-outcome eng 'jobs.village.offers {} 400)))]
           (is (= "v-open" (:villager result))
               "the villager 6 blocks off across a trench is a long way round; the one 8 blocks off on the same side is read"))))))
+
+(deftest offers-starts-only-when-a-villager-is-known
+  (are [entities args expected]
+       (= expected (first (offers/can-start? {:args args :primitives (tu/fake-on-floor {:entities entities})})))
+    [] {} :look
+    [] {:villager "v-1"} :look
+    [(villager [(bread {})])] {} :ok
+    [(villager [(bread {})])] {:villager "v-1"} :ok))
+
+(deftest a-second-out-of-view-event-walks-to-the-remembered-place-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (trade {:entities [(villager [(bread {})] {:pos {:x 12.5 :y 64 :z 0.5}})]
+                                        :inventory [{:name "emerald" :count 10}]}
+                                       {:count 2}
+                                       (fn [p]
+                                         (let [entities (.-entities p)
+                                               walks #(count (filter (fn [call] (#{"goTo" "moveTo" "steer"} (.-name call))) (.-calls (.-world p))))
+                                               after-buy (atom nil)]
+                                           (.override (.-world p) "trade" (fn ^:async f [token args impl]
+                                                                            (if (and (= "buy" (.-op args)) (nil? @after-buy))
+                                                                              (do (reset! after-buy (walks))
+                                                                                  (await (impl token (js/Object.assign #js {} args #js {:times 1}))))
+                                                                              (await (impl token args)))))
+                                           (aset p "entities" (fn [q] (if (and (pos? (walks)) (not= @after-buy (walks))) (.call entities p q) #js [])))
+                                           (aset p "rememberedEntity" (fn [id] (when (= "v-1" id) #js {:x (+ 12.5 (walks)) :y 64 :z 0.5})))))))]
+          (is (= {:bought 2 :paid {"emerald" 2} :item "bread"} result)))))))

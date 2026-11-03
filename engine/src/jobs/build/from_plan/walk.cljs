@@ -294,7 +294,7 @@
           :again)
       :else
       (let [above? #(<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second %))
-                  climbing? (and (above? stand) (some above? (:bad-stands (ctx/mem c))))
+            climbing? (and (above? stand) (some above? (:bad-stands (ctx/mem c))))
             shut? (or (in-hole? c) (shut-in-walk? c))
             w (await (walk-stand! c cell stand (cond-> {:stay-s (stand-stay-s c cells cell stand)}
                                                (not (or shut? climbing?)) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
