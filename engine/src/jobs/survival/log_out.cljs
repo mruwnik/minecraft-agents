@@ -22,6 +22,9 @@
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
   night. Waits for night (:not-night); impossible once a log-out
   was unsupported (:log-out-unsupported).
+  With :stay-ms and/or :until (wall-clock epoch ms; both: the later) it works at any hour and stays offline that long
+  (the stint's end is kept in the job's memory, so a restart does not start it over): chained offline stints of the
+  primitive's cap each, one per round, then back; :spend :job-time is the stay. No night rule, no sleep-count wait.
   Stays away :offline-ms, at most until morning; until morning when back-unsafe (the death coming back to the spot risks,
   jobs.lib.cost/death-chance over the known threats, costs more than the longer stint, or the body is hurt past healing). Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
@@ -30,7 +33,9 @@
   Memory: writes :log-out {:ms :status :assumed} (cap 10, one in-game day); :assumed when no sleeper was known at the start (the night does not stay out again on the news not coming).")
 
 (a/defargs args
-  {:offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
+  {:stay-ms {:doc "stay offline this long, at any hour (with :until: whichever ends later)" :spec (a/num-in 0 nil)}
+   :until {:doc "stay offline until this wall-clock instant, epoch ms, at any hour" :spec (a/num-in 0 nil)}
+   :offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
    :news-ms {:doc "back at night, how long to wait for the sleep count" :spec (a/num-in 0 nil) :default 3000}})
 
 (def log-out-policy {:cap 10 :ttl sh-clock/ms-per-day})
@@ -53,13 +58,40 @@
     (contract/never :log-out-unsupported "a log-out was unsupported")
     (contract/ok :log-out-supported "log-out not known unsupported")))
 
-(def can-start? (cond/and (checks/night :not-night) supported))
+(defn staying?
+  "Whether the call asks for a stay (:stay-ms or :until)."
+  [c]
+  (or (some? (:stay-ms (:args c))) (some? (:until (:args c)))))
+
+(defn night-or-stay [c]
+  (if (staying? c)
+    (contract/ok :staying "a stay is asked, any hour")
+    (contract/asked c (checks/night :not-night))))
+
+(def can-start? (cond/and night-or-stay supported))
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}
    ::return-s {:default 1.4 :doc "Seconds a body back online stands at its spot before it can answer a mob there (back-death-cost): the mean of the trial bodies' 12 returns (event logs, 2026-10-25) whose hostile-near fired within 2.5 s, a mob there at the return, from :online to respond's first decision (hostile.decided; median 1.2, 1.1 to 2.4 s)." :spec (a/num-in 0 nil)}})
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(defn stay-deadline
+  "Wall-clock ms the stay ends: the one kept in the job's memory, else from now and the args (nil without a stay)."
+  [c]
+  (or (:stay-until (ctx/mem c))
+      (let [{:keys [stay-ms until]} (:args c)
+            now (ctx/now c)]
+        (when (staying? c)
+          (max (if stay-ms (+ now stay-ms) 0) (or until 0))))))
+
+(defn default-time
+  "The call's default :spend :job-time: ::job-time-s, or the stay (and the return) when one is asked."
+  [{:keys [stay-ms until]}]
+  (let [from-now (max (or stay-ms 0) (if until (- until (js/Date.now)) 0))]
+    (if (or stay-ms until)
+      (+ (/ from-now 1000) (settings/get settings ::job-time-s))
+      (settings/get settings ::job-time-s))))
+
+(def defaults {:spend {:job-time default-time}})
 
 (def meta {:category :phase :part-of '[jobs.survival.night] :tags [:outranks-comfort]})
 
@@ -110,7 +142,9 @@
           :else (min (:offline-ms (:args c)) until-morning))))
 
 (defn ^:async quote-of [c]
-  (let [s (/ (+ (away-ms c) (:news-ms (:args c))) 1000)]
+  (let [s (if (staying? c)
+            (/ (max 0 (- (stay-deadline c) (ctx/now c))) 1000)
+            (/ (+ (away-ms c) (:news-ms (:args c))) 1000))]
     {:uses {:job-time [0 s s]}}))
 
 (defn ^:async log-out! [c]
@@ -128,4 +162,24 @@
       "unsupported" (ctx/end c :impossible :unsupported out)
       (ctx/end c :nothing-possible (keyword how) out))))
 
-(defn ^:async round [c] (await (log-out! c)))
+(defn ^:async stay! [c]
+  (let [deadline (stay-deadline c)
+        _ (ctx/update-mem! c assoc :stay-until deadline)
+        left (- deadline (ctx/now c))]
+    (if (<= left 0)
+      (ctx/end c :done nil {:ms (:stayed-ms (ctx/mem c) 0) :how "ok"})
+      (let [r (await (ctx/act c :offline #js {:ms left :why "logged-out-to-stay-away"}))
+            how (.-status r)
+            stayed (+ (:stayed-ms (ctx/mem c) 0) (or (.-ms r) 0))]
+        (ctx/update-mem! c assoc :stayed-ms stayed)
+        (cond
+          (not= "ok" how) (do (ctx/remember! c :log-out {:ms stayed :status how :assumed true} log-out-policy)
+                              (case how
+                                "cut" (ctx/end c :done nil {:ms stayed :how how})
+                                "unsupported" (ctx/end c :impossible :unsupported {:ms stayed :how how})
+                                (ctx/end c :nothing-possible (keyword how) {:ms stayed :how how})))
+          (>= (ctx/now c) deadline) (do (ctx/remember! c :log-out {:ms stayed :status how :assumed true} log-out-policy)
+                                        (ctx/end c :done nil {:ms stayed :how how}))
+          :else :continue)))))
+
+(defn ^:async round [c] (if (staying? c) (await (stay! c)) (await (log-out! c))))

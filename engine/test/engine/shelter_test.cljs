@@ -12,6 +12,7 @@
             [engine.blocks-dig-test :as bd]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.survival.log-out :as lo]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.look-edge :as look-edge]
@@ -504,6 +505,27 @@
           (is (= ["logged-out-for-sleeping-player"] (mapv #(.-why (.-args %)) (calls p "offline"))))
           (is (= [{:ms 30000 :status "ok" :assumed true}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
+
+(deftest log-out-with-a-stay-chains-capped-stints-at-any-hour
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time noon})
+              asked (atom [])]
+          (.override (.-world p) "offline"
+                     (fn [_ a _]
+                       (let [ms (min 600000 (.-ms a))]
+                         (swap! asked conj (.-ms a))
+                         (swap! clock + ms)
+                         #js {:status "ok" :ms ms})))
+          (let [out (await (tu/child-outcome eng 'jobs.survival.log-out {:stay-ms 1500000} 6))]
+            (is (= [1500000 900000 300000] @asked) "each stint asks what is left; the primitive caps it")
+            (is (= :done (:status out)))
+            (is (= [{:ms 1500000 :status "ok" :assumed true}] (entries eng :log-out)))))))))
+
+(deftest log-out-stay-prices-its-spend-from-the-stay
+  (is (> (lo/default-time {:stay-ms 21600000}) 21600))
+  (is (< (lo/default-time {}) 3600)))
 
 (deftest log-out-declines-by-day
   (let [{:keys [eng]} (setup {:time noon})]

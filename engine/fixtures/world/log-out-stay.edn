@@ -1,0 +1,13 @@
+;; Card 58984acc: log-out with :stay-ms works by day and keeps the body offline that long, then it comes back and the job is done.
+{:defaults
+ {:tags [:survival :tool]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 260}
+ :cases
+ [{:name "stay-keeps-the-body-offline-at-any-hour-then-it-returns"
+   :act [[:http :submit (jobs.survival.log-out {:stay-ms 150000}) [] {:ok true}]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
+         [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 220]]
+   :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :for-s 120 :at-most 0}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 250}]
+   :after [[:memory {:entries {:log-out [{:data {:status "ok" :ms [:>= 149000]}}]}}]]}]}
