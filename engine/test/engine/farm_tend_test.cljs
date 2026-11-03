@@ -771,3 +771,9 @@
           (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
           (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (is (= #{(tend/recheck-ms)} (set (map #(:recheck-after-ms %) (events-of s :waiting))))))))))
+
+(deftest a-seen-block-over-an-unseen-cell-caps-it-so-no-walk-is-due-to-look-under
+  (let [s (setup (world (ground "grass_block" [[2 2] [3 2]]) {:blocks {(k 2 64 2) "stone"}}))
+        p (:p s)]
+    (is (tend/capped? p {:x 2 :y 63 :z 2}) "stone seen on top: walking there shows nothing more")
+    (is (not (tend/capped? p {:x 3 :y 63 :z 2})) "open air over the grass: a look may still show it")))

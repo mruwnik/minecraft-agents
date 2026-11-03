@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
@@ -250,15 +251,21 @@
   (let [p (:primitives c)]
     (filter #(true? (some-> (u/sensed p %) .-unknown)) (field-cells c))))
 
+(defn capped?
+  "Whether a seen solid block lies over the cell: no walk shows what is under it."
+  [p pos]
+  (let [above (u/sensed p (update pos :y inc))]
+    (boolean (and above (not (.-unknown above)) (not (bs/air (.-name above)))))))
+
 (defn walk-due?
-  "The field's site when the run has not walked there and a field cell was never seen, no look from here would show one
+  "The field's site when the run has not walked there and a field cell never seen and not capped by a seen block, no look from here would show one
   (look/look-shows?) or the body looked round near here already, or a crop grows out of view (growing-out-of-view) where
   no look from here would show it: the run walks there first."
   [c]
   (let [site (site c)
         p (:primitives c)
         hidden? #(not (look/look-shows? p %))
-        unseen (seq (unseen-field-cells c))]
+        unseen (seq (remove #(capped? p %) (unseen-field-cells c)))]
     (when (and site (not (:site-walked (ctx/mem c)))
                (or (and unseen (or (look/surveyed? c :near) (every? hidden? unseen)))
                    (some hidden? (growing-out-of-view c))))
