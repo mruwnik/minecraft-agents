@@ -5,7 +5,7 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
     npm install
     npm test          # shadow-cljs compile dashboard-test && node out/test.cjs
     npm run build     # compiles :server (out/server.cjs) and :ui (out/public/js)
-    npm start         # launcher (start.mjs): build, then run out/server.cjs on PORT (default 3701, 127.0.0.1 only); stays in the foreground
+    npm start         # launcher (start.mjs): build, then run out/server.cjs on PORT (default 3701, 127.0.0.1 only unless `DASHBOARD_HOST=0.0.0.0 npm start`: then any Host is accepted, Origin and content-type checks stay, `/api/restart` stays loopback-peer only); stays in the foreground
     npm run restart   # ask the running launcher to rebuild and restart the server (POST /api/restart)
     node --test js/launcher.test.mjs   # the launcher's pure decisions
 

@@ -1,5 +1,5 @@
 (ns dashboard.server
-  "The dashboard server: plain node http on 127.0.0.1; this file routes requests. Engine bodies are read from their local event service
+  "The dashboard server: plain node http on 127.0.0.1 (or DASHBOARD_HOST); this file routes requests. Engine bodies are read from their local event service
   and engine.edn."
   (:require [dashboard.blueprint-library :as blueprint-lib]
             [dashboard.chat :as chat]
@@ -144,5 +144,5 @@
     (shutdown-on-signals! server)
     (-> (load-view-mount)
         (.then (fn [_]
-                 (.listen server port "127.0.0.1"
-                          #(println (str "dashboard on http://127.0.0.1:" port " (root " root ")"))))))))
+                 (.listen server port guard/bind-host
+                          #(println (str "dashboard on http://" guard/bind-host ":" port " (root " root ")"))))))))

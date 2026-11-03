@@ -24,6 +24,15 @@
     {:content-type "text/plain"} {:status 415 :error "Content-Type must be application/json"}
     {:content-type nil} {:status 415 :error "Content-Type must be application/json"}))
 
+(deftest open-bind
+  (are [overrides expected] (= expected (guard/refusal (merge good {:loopback-only? false} overrides)))
+    {:host "192.168.1.5:3705" :origin "http://192.168.1.5:3705"} nil
+    {:host "box.lan:3705" :origin nil} nil
+    {:host "192.168.1.5:3705" :origin "http://evil.com"} {:status 403 :error "bad Origin"}
+    {:host "192.168.1.5:3705" :origin "http://192.168.1.5:3705" :content-type "text/plain"} {:status 415 :error "Content-Type must be application/json"}
+    {:host "192.168.1.5:3701"} {:status 403 :error "bad Host"}
+    {:host nil} {:status 403 :error "bad Host"}))
+
 (deftest method-gate
   (are [method expected] (= expected (guard/method-refusal method))
     "POST" nil
