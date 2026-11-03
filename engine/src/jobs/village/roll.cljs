@@ -268,7 +268,7 @@
   "Run a dig or place child in a slot of its own per roll; its result when done, :continue, or a stop. A place refused
   with a mob in the cell (the villager stepped in) waits a poll and is placed again: :continue."
   [c slot job cargs]
-  (let [r (await (ctx/call c slot job cargs))]
+  (let [r (await (ctx/call c slot job (assoc cargs :checks (ready/unforced c {:safe? '(not (threatened-seen))}))))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (:data r)

@@ -712,6 +712,7 @@
    'exposed {:args [] :type :status :doc "the place of the frame's own safe? is exposed (dark)"
              :fn #(lcond/not exposure-of)}
    'threatened {:args [] :type :status :doc "a hostile is near (ready/threatened)" :fn #(lcond/not threatened)}
+   'threatened-seen {:args [] :type :status :doc "a hostile seen or remembered is near; a sound alone is not (ready/threatened-seen)" :fn #(lcond/not threatened-seen)}
    'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or while starving (food 0, or hurt with food unreachable) no hostile is near"
                           :fn (fn [] #(or-starving (own-export :safe?) %))}
    'healthy {:args [] :type :status :doc "health is enough and the body is not poisoned (fit?)" :fn (fn [] fit?)}

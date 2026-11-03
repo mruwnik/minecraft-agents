@@ -85,7 +85,7 @@
    :blocks [[:fill [12 -1 12] [20 3 20] "stone" :hollow] [:fill [13 0 13] [19 2 19] "air"]
             [:set [13 1 13] "torch"] [:set [19 1 19] "torch"] [:set [16 0 16] "lectern"]]
    :body {:at [14.5 0 16.5] :yaw 270 :settle-s 2}
-   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,16],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
+   :act [[:summon "villager" [16.5 0 17.5] "{UUID:[I;20260,7,5,17],VillagerData:{profession:\"minecraft:librarian\",level:1,type:\"minecraft:plains\"}}"]
          [:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 3]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000011" :pos #at [16 0 16] :profession "librarian" :want "netherite_ingot" :settings {:jobs.village.roll/max-rolls 3}})]]
