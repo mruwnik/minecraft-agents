@@ -13,6 +13,8 @@
   :limit-s 90}
  :cases
  [{:name "unarmed-go-to-past-a-skeleton-and-a-zombie-flees-back-not-on"
+   ;; a walled hall (z 14..19, x 8..60): in the open plot go-to routes round the mobs 12 blocks off and the reflex never fires; here the only way on is past them
+   :blocks [[:fill [8 0 13] [60 3 13] "stone"] [:fill [8 0 20] [60 3 20] "stone"]]
    :act [[:summon "skeleton" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "zombie" [22.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
