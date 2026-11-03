@@ -50,13 +50,14 @@
           (is (= 1 (carried p "obsidian")))
           (is (= 1 (carried p "water_bucket")) "the bucket is full again"))))))
 
-(deftest at-the-tables-worth-a-lava-walk-costing-more-than-the-obsidian-is-refused-not-worth
+(deftest at-the-tables-worth-the-walk-beside-lava-is-too-risky-so-obsidian-is-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [res p]} (await (obtain (world lava-lake [pick {:name "water_bucket" :count 1}]) {}))]
           (is (not= :done (:status res)) (pr-str res))
-          (is (= :not-worth (:reason res)) (pr-str res))
+          (is (= :unreachable (:reason res)) (pr-str res))
+          (is (= :risky (get-in res [:ending :because :because :cause :reason])) "go-to's quote: lava near the way costs more hp than the worth affords")
           (is (zero? (carried p "obsidian"))))))))
 
 (deftest a-mine-child-that-dug-the-obsidian-and-still-collects-is-kept-not-replaced-by-a-pour
