@@ -148,6 +148,6 @@
    :offline (entry [:ms :why] [] #{"ok"} (fails #{} #{})
                    (fn [_ {:keys [ms]}]
                      (let [s (/ (min (or ms (js-setting "prim/offline-default-ms" 300000))
-                                     (js-setting "prim/offline-max-ms" 600000))
+                                     (js-setting "prim/offline-max-ms" 86400000))
                                 1000)]
                        {:uses {:job-time [0 s (+ s (reconnect-s))]}})))})
