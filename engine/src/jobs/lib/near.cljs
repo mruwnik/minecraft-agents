@@ -307,7 +307,7 @@
   caller chasing something that moves; default one 60 s go-to steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always one try (the job counts its own
-  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin and :max-damage (the walk.world settings for this walk), :dive (false: the walk plans no dive, the setting jobs.lib.walk.world/dive), :stay-s (seconds the job works at the goal, go-to's arg: the danger there is priced over them; nil: a click's), :worth (the goal's
+  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin and :max-damage (the walk.world settings for this walk), :dive (false: the walk plans no dive, the setting jobs.lib.walk.world/dive), :stay-s (seconds the job works at the goal, go-to's arg: the danger there is priced over them; nil: a click's), go-to's call key :worth (the goal's
   worth, default ctx/worth): a body already in range whose stay costs more than it is worth is :blocked (in-range!); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
   ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks floor y-margin dive max-damage stay-s worth] :or {doors :shut dangers true look-round true one-way :closed}}]
@@ -328,6 +328,7 @@
                           checks (assoc :checks checks)
                           floor (assoc :floor floor)
                           stay-s (assoc :stay-s stay-s)
+                          worth (assoc :worth worth)
                           (seq walk-settings) (assoc :settings walk-settings)
                           ways (assoc :ways ways))
                    e (await (if leg-s

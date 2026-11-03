@@ -257,12 +257,17 @@
                :when (lava/beside-lava? p cell)]
            (zipmap [:x :y :z :factor] (conj cell lava-side-toll))))))
 
+(defn cluster-worth
+  "Seconds the items of the target pos's cluster are worth: what the walk to it and the cut toward it are both priced at."
+  [c pos targets]
+  (worth c (count (targets/cluster-of pos targets))))
+
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
   is blocked from here; a body within reach that cannot get closer digs from there. :there, :partial or :blocked
   (jobs.lib.near/go-near!, the dig's seconds its :stay-s and the item its :worth), or :risky when it stands within the range
-  already and the dig there costs more than the item is worth."
-  [c pos]
+  already and the dig there costs more than the item is worth. The :worth is the target's cluster's (cluster-worth), also go-to's."
+  [c pos targets]
   (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
         close? (not (or (mw/stay-level? (:args c)) (drop-in-line? c pos)))
         range (if close? 1 (reach))
@@ -270,7 +275,7 @@
                                      (assoc (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))}))
                                                            (when close? (lava-side-tolls c pos))
                                                            (cost/dig-cost (u/seen-name (:primitives c) pos)))
-                                            :worth (worth c 1))))]
+                                            :worth (cluster-worth c pos targets))))]
     (cond
       (and (= :blocked walked) (near/risky-stay? c)) :risky
       (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach))) :there
@@ -302,14 +307,14 @@
       (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
       (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
                                                (skip! c pos) :again)
-      (some? pos) (let [walked (await (walk-to-dig! c pos))
+      (some? pos) (let [walked (await (walk-to-dig! c pos targets))
                         cell (access/cell pos)
                         float? (and (= :blocked walked) (floating? c (targets/cluster-of pos targets)))
                         cut (when (and (= :blocked walked) (not float?) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
                                        (not (#{:off-plan :needs-health :damage-budget} (result/why (near/last-walk c))))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
                               (let [cluster (targets/cluster-of pos targets)
-                                    r (await (cut-to-drop! c cell (worth c (count cluster)) (set (map access/cell cluster))))]
+                                    r (await (cut-to-drop! c cell (cluster-worth c pos targets) (set (map access/cell cluster))))]
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
                     (cond

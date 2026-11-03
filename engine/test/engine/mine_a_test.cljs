@@ -664,6 +664,21 @@
           (is (some #(and (= -12 (:x (:pos %))) (pos? (:stay-s %))) @(:go-tos s)) (pr-str @(:go-tos s)))
           (is (finished? s)))))))
 
+;; the walk to a vein is priced at the whole vein, as the cut toward it is (go-to's :worth carries the cluster's)
+(deftest the-walk-to-a-vein-carries-the-veins-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walk-worth (fn ^:async walk-worth* [cells]
+                           (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge floor (zipmap cells (repeat "sand")))}}))]
+                             (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
+                             (await (settings/with-settings cheap-sand (fn ^:async run [] (await (run-ticks s 30)))))
+                             (:worth (first (filter :worth @go-tos)))))
+              one (await (walk-worth ["-12,64,0"]))
+              three (await (walk-worth ["-12,64,0" "-13,64,0" "-14,64,0"]))]
+          (is (some? one))
+          (is (= (* 3 one) three)))))))
+
 ;; with no death remembered, or one faded (cost.death memory-ms), the stay in the dark is no threat's: dug first
 (deftest a-target-in-reach-in-the-dark-is-dug-first-while-its-stay-is-within-its-worth
   (async done
