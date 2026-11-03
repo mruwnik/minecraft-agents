@@ -68,12 +68,14 @@
 
 (def ways need/fetch-ways)
 
+(declare work-s)
+
 (def safe?
   (ready/ok-when-near (fn [c] (let [{:keys [pos error]} (b/parse (:args c))]
                                 (and (not error)
                                      (or (b/in-reach? c pos (:see (:args c)))
                                          (and (torch/light-items (:item (:args c))) (cost/near-body? (:primitives c) pos))))))
-                      (ready/safe-at-build (fn [c] (a/cell (:pos (:args c)))))))
+                      (ready/safe-at-build (fn [c] (a/cell (:pos (:args c)))) #(work-s %))))
 
 (def fit? ready/ok)
 
@@ -186,10 +188,16 @@
                  {:units :blocks :done (if held 1 0) :left (if held 0 1)
                   :result (when held {:placed false :pos pos :item held :reason :already})})))
 
+(defn walk-s [c]
+  (let [{:keys [pos error]} (parse c)]
+    (if (or error (b/in-reach? c pos (:see (:args c)))) 0 (u/eye-dist (u/self-pos c) pos))))
+
+(defn work-s "Mean seconds the placing takes: the walk to reach the cell, then the place." [c] (+ 1 (/ (walk-s c) 4)))
+
 (defn quote-of [c]
-  (let [{:keys [pos items error]} (parse c)
-        walk (if (or error (b/in-reach? c pos (:see (:args c)))) 0 (u/eye-dist (u/self-pos c) pos))]
-    {:uses (cond-> {:job-time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}
+  (let [{:keys [items]} (parse c)
+        walk (walk-s c)]
+    {:uses (cond-> {:job-time [0.5 (work-s c) (+ 10 walk)]}
              (= 1 (count items)) (assoc :items {(first items) [1 1 1]}))}))
 
 (defn finish!

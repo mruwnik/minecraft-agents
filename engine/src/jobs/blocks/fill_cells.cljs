@@ -125,7 +125,9 @@
                             open
                             (sort-by (juxt :y #(u/dist here %)) open))))))
 
-(def safe? (ready/safe-at-build (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c))))))))
+(declare work-s)
+
+(def safe? (ready/safe-at-build (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c)))))) #(work-s %)))
 
 (defn soft-ok?
   "Whether soft-reserved blocks may go in cell pos: a call in danger, at a cell where the block can be taken out safely later."
@@ -235,10 +237,12 @@
     (checks/goal (and (empty? left) (not (:collect (ctx/mem c)))) [:filled (if (pos? mended) (str "filled " mended " cells" (room-hint c)) "no cell is owed")] [:owed (str (count left) " cells are owed")]
                  {:units :cells :done mended :left (count left) :result {:mended mended :left left :placed (:placed (ctx/mem c) [])}})))
 
+(defn work-s "Mean seconds the owed cells take." [c] (* 3 (count (owed c))))
+
 (defn quote-of
   [c]
   (let [n (count (owed c))
-        t (* 3 n)]
+        t (work-s c)]
     {:uses {:job-time [0 t (* 3 t)]}
      :done [0 n n]}))
 

@@ -13,6 +13,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.build.from-plan :as from-plan]
+            [jobs.build.from-plan.walk :as fp-walk]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-patch :as pen-patch]
             [jobs.lib.pen-read :as pen-read]
@@ -216,7 +217,9 @@
 
 (def ways (into [:build :patch] need/fetch-ways))
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-build work-place/spot))
+(declare work-s)
+
+(def safe? (ready/safe-at-build work-place/spot #(work-s %)))
 (def fit? (ready/fed-fit-for :long))
 
 (defn builder-items
@@ -267,6 +270,9 @@
                  [:owed (str "pen of " plan " is not finished")]
                  {:units :cells :done (get-in (ctx/mem c) [:built :placed] 0) :left (if trouble 0 (count (plan/owed cells)))
                   :result (when answer (result-of c answer))})))
+
+(defn work-s "Mean seconds the open cells of the plan take (jobs.build.from-plan's cell time)." [c]
+  (* (count (plan/owed (:cells (judged-plan c)))) (fp-walk/cell-s)))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (build-args c))) [:uses :yields]))

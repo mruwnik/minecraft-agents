@@ -217,7 +217,9 @@
 
 (def meta {:category :phase :part-of '[jobs.movement.go-to jobs.access.stair]})
 
-(def safe? (ready/safe-at-build (constantly nil)))
+(declare work-s)
+
+(def safe? (ready/safe-at-build (constantly nil) #(work-s %)))
 
 (def fit? ready/fit-armed)
 
@@ -243,9 +245,11 @@
       (contract/ok :nothing-to-do "nothing is offered to clean up" :units :cells :done done :left 0 :result (result-of c []))
       (contract/later :cleaning "cells are offered" :units :cells :done done :left (count (picked-entries c))))))
 
+(defn work-s "Mean seconds the cells offered take." [c] (* 4 (max 1 (count (picked-entries c)))))
+
 (defn quote-of [c]
-  (let [n (max 1 (count (picked-entries c)))]
-    {:uses {:job-time [(* 0.5 n) (* 4 n) (max (* 4 n) (time-s))]}}))
+  (let [s (work-s c)]
+    {:uses {:job-time [(* 0.5 s) s (max s (time-s))]}}))
 
 ;; ------------------------------------------------------------------ steps
 

@@ -168,7 +168,9 @@
 
 (def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-build work-place/spot))
+(declare work-s)
+
+(def safe? (ready/safe-at-build work-place/spot #(work-s %)))
 (def fit? ready/fed-fit?)
 (def can-start? (cond/and bad-args no-zones all-refused))
 (def can-run? no-zones)
@@ -184,11 +186,15 @@
                {:units :cells :done (:dug (ctx/mem c) 0) :left (if (box-error (:args c)) 0 (count (pending c)))
                 :result (when-not (box-error (:args c)) (result-of c))}))
 
+(defn solid-blocks [c]
+  (if (box-error (:args c)) [] (remove bs/air (map #(u/seen-name (:primitives c) %) (cells (:args c))))))
+
+(defn work-s "Mean seconds the cells still solid take." [c] (* (count (solid-blocks c)) (settings/get settings ::cell-s)))
+
 (defn quote-of [c]
-  (let [p (:primitives c)
-        blocks (if (box-error (:args c)) [] (remove bs/air (map #(u/seen-name p %) (cells (:args c)))))
+  (let [blocks (solid-blocks c)
         n (count blocks)
-        s (* n (settings/get settings ::cell-s))]
+        s (work-s c)]
     {:uses (cond-> {:job-time [(* 0.5 s) s (* 4 s)]}
              (pos? n) (assoc :wear (choose/dig-wear c blocks)))
      :done [0 n n]}))

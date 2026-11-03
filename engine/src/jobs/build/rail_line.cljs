@@ -12,6 +12,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
+            [jobs.build.from-plan.walk :as fp-walk]
             [jobs.build.rail-spans :as spans]
             [jobs.build.rail-stock :as stock]
             [jobs.lib.placement :as placement]
@@ -215,7 +216,9 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-build work-place/spot))
+(declare work-s)
+
+(def safe? (ready/safe-at-build work-place/spot #(work-s %)))
 (def fit? (ready/fed-fit-for :long))
 
 (def can-start? (cond/and plan-problem ready-problem))
@@ -242,6 +245,9 @@
                  [:owed (str "rail line " plan " is not sound")]
                  {:units :cells :done placed :left (if trouble 0 (count (plan/owed cells)))
                   :result (when proof (assoc proof :built (some-> (:built (ctx/mem c)) (still-wrong cells (block-at c)))))})))
+
+(defn work-s "Mean seconds the open cells of the plan take (jobs.build.from-plan's cell time)." [c]
+  (* (count (plan/owed (:cells (judged-plan c)))) (fp-walk/cell-s)))
 
 (defn ^:async quote-of [c]
   (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :worth :ignore-zones?]))) [:uses :yields]))

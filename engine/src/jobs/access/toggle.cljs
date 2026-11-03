@@ -64,7 +64,9 @@
 (defn max-closer [] (settings/get settings ::max-closer))
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))
+(def work-s "Mean seconds the toggle takes." 2)
+
+(def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c)))) (constantly work-s)))
 
 (def fit? ready/ok)
 
@@ -174,7 +176,7 @@
                    :result (merge {:pos pos :wanted state :reason (if clicked :changed :already) :block (.-name b) :now (click/props-of b)} clicked))
       (contract/later :not-yet "the block is not in the wanted state" :units :toggles :done 0 :left 1))))
 
-(defn quote-of [_c] {:uses {:job-time [0.1 2 (time-s)]}})
+(defn quote-of [_c] {:uses {:job-time [0.1 work-s (time-s)]}})
 
 (defn reach
   "The reach the walk aims for now: :reach, less one for each walk closer after a click out of reach (at least 1)."

@@ -1180,6 +1180,14 @@
     {:x 15 :y 64 :z 0} :ok
     {:x 40 :y 64 :z 0} :later))
 
+(deftest a-build-job-stays-its-own-work-seconds-not-a-long-stay
+  (let [far (constantly {:x 40 :y 64 :z 0})
+        world (assoc open-night :blocks (tu/box 30 63 -5 50 63 5 "stone"))
+        kind-of (fn [check] (first (check (assoc (dissoc (ctx-of world) ::price/stay-s) :worth (constantly 300)))))]
+    (is (= [:later :ok]
+           (lit 0 15 #(mapv kind-of [(ready/safe-at-build far) (ready/safe-at-build far (constantly 1))])))
+        "a one-second job at a dark far place goes ahead; with no work-s it is priced the 600 s :long stay")))
+
 (deftest the-dark-near-the-body-is-lifted-for-a-job-whose-torches-cost-less-than-the-dark
   (are [torch-way expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly torch-way) (constantly {:x 15 :y 64 :z 0}) (ready/safe-at-by-night (constantly {:x 15 :y 64 :z 0}))) open-night)))
     {:blocks 20 :carried 4} :ok

@@ -63,8 +63,9 @@
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
 (def defaults {:use {:tools :shovel} :spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-build work-place/spot))
-(declare quote-of)
+(declare work-s quote-of)
+
+(def safe? (ready/safe-at-build work-place/spot #(work-s %)))
 
 (def fit? (ready/trip-fed (ready/fed-fit-for :long) work-place/spot #(quote-of %)))
 
@@ -180,10 +181,17 @@
                  [:pathed "every cell is a path"] [:owed "cells are left to path"]
                  {:units :cells :done (count (:pathed (ctx/mem c))) :left (if cs (count (pending c)) 0) :result (result-of c)})))
 
-(defn quote-of [c]
+(defn unpathed
+  "The cells still to path."
+  [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))
-        p (:primitives c)
-        n (count (remove #(= "dirt_path" (u/seen-name p %)) cs))
+        p (:primitives c)]
+    (remove #(= "dirt_path" (u/seen-name p %)) cs)))
+
+(defn work-s "Mean seconds the cells still to path take." [c] (* 2 (count (unpathed c))))
+
+(defn quote-of [c]
+  (let [n (count (unpathed c))
         s (shovel c)]
     {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and s (pos? n)) (assoc :wear {s [n n n]}))
      :done [0 n n]}))

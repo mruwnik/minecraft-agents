@@ -9,6 +9,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.world :as known]
             [jobs.lib.ready :as ready]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
@@ -59,7 +60,9 @@
 (def can-run? build/plan-problem)
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-build work-place/spot))
+(declare work-s)
+
+(def safe? (ready/safe-at-build work-place/spot #(work-s %)))
 (def fit? (ready/fed-fit-for :long))
 
 (declare cells-of wrong-shapes)
@@ -276,6 +279,9 @@
         answer (known/plan c plan)]
     (when (and answer (not (:broken answer)))
       (plan/loosened (plan/judged p answer part (set (keys (storage/carried-totals (u/inventory p)))) nil)))))
+
+(defn work-s "Mean seconds the open cells of the plan take (jobs.build.from-plan's cell time)." [c]
+  (* (count (plan/owed (check-cache/cached c [:cells-of (:args c)] #(cells-of c)))) (fp-walk/cell-s)))
 
 (defn ^:async round
   "Build in steps (pace/steps!); :continue while a walk or the dig child waits on the world."

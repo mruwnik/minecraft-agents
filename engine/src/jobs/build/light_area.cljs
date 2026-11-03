@@ -167,7 +167,9 @@
 (defn ^:async round [c]
   (await (pace/steps! c #(step! c))))
 
-(def safe? (ready/safe-at-build (fn [c] (some->> (area c) first (zipmap [:x :y :z])))))
+(declare work-s)
+
+(def safe? (ready/safe-at-build (fn [c] (some->> (area c) first (zipmap [:x :y :z]))) #(work-s %)))
 
 (def fit? ready/ok)
 
@@ -181,6 +183,8 @@
                    :result {:torches (:torches (ctx/mem c) []) :uncovered []})
       (contract/later :dark (str (count spots) " torches to hang") :units :torches :done hung))))
 
+(defn work-s "Mean seconds hanging the torches still to hang takes." [c] (* 8 (count (:spots (lighting c)))))
+
 (defn quote-of [c]
   (let [n (count (:spots (lighting c)))]
-    {:uses {:job-time [0 (* 8 n) (* 20 (max 1 n))] :items {"torch" [0 n n]}}}))
+    {:uses {:job-time [0 (work-s c) (* 20 (max 1 n))] :items {"torch" [0 n n]}}}))

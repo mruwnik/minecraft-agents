@@ -97,7 +97,9 @@
   (let [looked (:looked (ctx/mem c) #{})]
     (filterv #(and (not (looked %)) (look/unknown? (:primitives c) %)) unseen)))
 
-(def safe? (ready/safe-at-build #(a/cell (centre %))))
+(declare work-s)
+
+(def safe? (ready/safe-at-build #(a/cell (centre %)) #(work-s %)))
 
 (defn can-start?
   [c]
@@ -116,10 +118,12 @@
                  [:open (str left " openings are left")]
                  {:units :cells :done sealed :left left :result {:sealed sealed}})))
 
+(defn work-s "Mean seconds sealing the openings found takes." [c] (* 3 (count (:open (found c)))))
+
 (defn quote-of
   [c]
   (let [n (count (:open (found c)))
-        t (* 3 n)]
+        t (work-s c)]
     {:uses {:job-time [0 t (* 3 t)]} :done [0 n n]}))
 
 (defn fill-args [c cells]

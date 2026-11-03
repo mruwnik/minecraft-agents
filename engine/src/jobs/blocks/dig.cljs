@@ -211,7 +211,9 @@
                       :pos pos :recheck-after-ms (* 1000 (sh-sense/sky-in p)) :wait-ms (* 1000 (sh-sense/sky-in p)))
       (contract/ok :allowed "no night shelter block"))))
 
-(def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))
+(declare work-s)
+
+(def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c)))) #(work-s %)))
 
 (def fit? ready/ok)
 
@@ -233,10 +235,15 @@
                  {:units :blocks :done (if air? 1 0) :left (if air? 0 1)
                   :result (when air? {:dug false :pos pos :block block :reason :already-clear})})))
 
+(defn walk-s [c]
+  (let [{:keys [pos]} (b/parse (:args c))]
+    (if (and pos (not (b/in-reach? c pos))) (/ (u/eye-dist (u/self-pos c) pos) 4) 0)))
+
+(defn work-s "Mean seconds the dig takes: the walk to reach the block, then the dig." [c] (+ 2 (walk-s c)))
+
 (defn quote-of [c]
-  (let [{:keys [pos]} (b/parse (:args c))
-        walk (if (and pos (not (b/in-reach? c pos))) (/ (u/eye-dist (u/self-pos c) pos) 4) 0)]
-    {:uses {:job-time [1 (+ 2 walk) (+ 20 (* 2 walk))]}}))
+  (let [walk (walk-s c)]
+    {:uses {:job-time [1 (work-s c) (+ 20 (* 2 walk))]}}))
 
 (def done-reasons #{:dug :already-clear})
 

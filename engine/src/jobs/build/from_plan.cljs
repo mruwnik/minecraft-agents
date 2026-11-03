@@ -123,7 +123,11 @@
   [c]
   (check-cache/cached c [:planned (:args c)] #(planned c)))
 
-(def safe? (light/lights-itself (ready/safe-at-build work-place/spot) #(:cells (judged-plan %))))
+(defn work-s "Mean seconds the open cells of the plan take." [c]
+  (let [{:keys [cells trouble]} (judged-plan c)]
+    (* (if trouble 0 (count (owed cells))) (cell-s))))
+
+(def safe? (light/lights-itself (ready/safe-at-build work-place/spot work-s) #(:cells (judged-plan %))))
 (declare quote-of)
 
 (def fit? (ready/trip-fed (ready/fed-fit-for :long) work-place/spot #(quote-of %)))
@@ -206,7 +210,7 @@
   (let [{:keys [cells trouble]} (judged-plan c)
         open (if trouble [] (owed cells))
         n (count open)
-        s (* n (cell-s))
+        s (work-s c)
         items (frequencies (keep :item (vals (into {} (map (juxt :pos identity)) open))))
         ;; a door, gate or trapdoor out of sight for 10 s reads unknown (owed), so the done check may find a built one owed
         ;; where this quote, read a moment later, sees it: the quote allows for them, else a :least call ends at once
