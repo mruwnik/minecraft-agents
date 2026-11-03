@@ -74,7 +74,7 @@
         (let [world (merge {:entities [(cow 7 6)]} (stacks "wheat"))
               reads (atom 0)
               wrap (fn [p] (let [raw (.-entities p)]
-                             (aset p "entities" (fn [a] (if (and (= 64 (.-radius a)) (= 3 (swap! reads inc))) #js [] (raw a))))
+                             (aset p "entities" (fn [a] (if (and (= 64 (.-radius a) (.-max a)) (= 2 (swap! reads inc))) #js [] (raw a))))
                              p))
               out (atom nil)
               parent {:round (fn ^:async recording-round [c]
