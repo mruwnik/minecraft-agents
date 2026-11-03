@@ -330,7 +330,7 @@
   (let [p (:primitives c)
         view (ctx/view c)
         hs (heard-dangers c)
-        worth (if (:worth c) (ctx/worth c) ##Inf)
+        worth (ctx/worth c)
         loss #(if (seq %) (hostile-loss/loss-over p view % (price/stay-s c)) 0)
         all (loss hs)
         heard (when (seq hs) (dawn/hostile-text (map #(dawn/describe p %) hs)))
@@ -669,7 +669,7 @@
                                      (some->> (own-trip c place quote-fn) (home-food/trip-fetch c)))]
       (if to
         (contract/ok :trip-food (str "fetching food for the trip first: " to " points")
-                     :look-first ['jobs.survival.fetch-trip-food {:carry to :go-on? (< go-on-s (if (:worth c) (ctx/worth c) ##Inf))}])
+                     :look-first ['jobs.survival.fetch-trip-food {:carry to :go-on? (< go-on-s (ctx/worth c))}])
         s))))
 
 (defn fit-to-forage
