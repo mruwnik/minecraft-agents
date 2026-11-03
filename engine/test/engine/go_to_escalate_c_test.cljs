@@ -1116,3 +1116,23 @@
     (is (= (+ (escape-way/price p [0 64 0] {:step :dig-route :cells planks} (constantly 1)) (cost/put-back-s "oak_planks"))
            (escape-way/price p [0 64 0] {:step :dig-route :cells planks}))
         "a way's price holds the put-back of a cell that is not the body's own; the caller prices its own")))
+
+(def tunnel-over-room
+  "A 1-wide 2-tall tunnel (x 0, y 64..65, z 0..3) in solid stone, closed at both ends, whose floor (y 63) roofs a room
+  below (x -3..3, y 60..62, z -3..3); a work row (x -3..3, y 64..65, z 6..8) lies beyond a wall two thick (z 4..5)."
+  (apply dissoc
+         (box -6 58 -6 6 68 12 "stone")
+         (concat (for [y [64 65] z (range 0 4)] (str "0," y "," z))
+                 (for [x (range -3 4) y [60 61 62] z (range -3 4)] (str x "," y "," z))
+                 (for [x (range -3 4) y [64 65] z (range 6 9)] (str x "," y "," z)))))
+
+(deftest go-to-from-a-closed-tunnel-digs-the-wall-to-the-goal-not-the-floor-over-the-room-below
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-job! {:blocks tunnel-over-room :self {:pos {:x 0.5 :y 64 :z 1.5}} :inventory [{:name "stone_pickaxe" :count 1}]}
+                                               {:pos [0 64 7] :range 0}))
+              dug (map #(js->clj (.-args %) :keywordize-keys true) (calls p "dig"))]
+          (is (true? (:arrived @out)))
+          (is (seq dug))
+          (is (every? #(>= (get-in % [:pos :y]) 64) dug) "no cell under the tunnel's floor is dug"))))))
