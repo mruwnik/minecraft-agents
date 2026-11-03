@@ -783,14 +783,18 @@
       (boolean (tend/walk-due? (pass-ctx s 2 2))))))
 
 (deftest only-an-opaque-full-block-seen-over-the-ground-caps-it
-  (let [p (:p (setup (world (ground "grass_block" [[2 2] [3 2] [4 2] [5 2] [6 2]])
-                            {:blocks {(k 2 64 2) "stone" (k 4 64 2) "oak_slab" (k 5 64 2) "glass" (k 6 64 2) "water"}})))]
+  (let [p (:p (setup (world (ground "grass_block" [[2 2] [3 2] [4 2] [5 2] [6 2] [7 2] [8 2] [9 2]])
+                            {:blocks {(k 2 64 2) "stone" (k 4 64 2) "oak_slab" (k 5 64 2) "glass" (k 6 64 2) "water"
+                                      (k 7 64 2) "oak_leaves" (k 8 64 2) "ice" (k 9 64 2) "slime_block"}})))]
     (are [x capped] (= capped (tend/capped? p {:x x :y 63 :z 2}))
       2 true
       3 false
       4 false
       5 false
-      6 false)))
+      6 false
+      7 false
+      8 false
+      9 false)))
 
 (deftest a-walk-is-not-due-to-look-under-a-full-block-over-the-ground-but-is-under-a-roof-slab-or-water
   (is (not (walk-due-with {(k 2 64 2) "stone"} false)) "stone over the unseen ground: nothing a walk shows")

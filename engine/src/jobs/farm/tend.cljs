@@ -254,8 +254,8 @@
 (defn capped?
   "Whether a full block seen right over the ground cell pos covers it so no walk shows what is under: glass, ice and leaves are looked through."
   [p pos]
-  (let [{:keys [name full-cube?]} (u/seen-facts p (update pos :y inc))]
-    (boolean (and full-cube? (not (re-find #"glass|_leaves$|^(ice|blue_ice|frosted_ice)$" name))))))
+  (let [{:keys [full-cube? opaque?]} (u/seen-facts p (update pos :y inc))]
+    (boolean (and full-cube? opaque?))))
 
 (defn walk-due?
   "The field's site when the run has not walked there and a field cell never seen and not a ground cell capped by a seen full block, no look from here would show one

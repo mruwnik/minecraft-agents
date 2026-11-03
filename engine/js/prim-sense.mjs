@@ -3,6 +3,7 @@
 // derives isDay, raining, thundering, visible, hittable and sleeping and drops what a player would not see.
 
 import { fullCube } from './block-shape.mjs'
+import { blocksSight } from './sight.mjs'
 import { stateProperties } from './use-on.mjs'
 import { mobFields } from './interact.mjs'
 import { leashFields } from './leash.mjs'
@@ -139,11 +140,11 @@ export function createSense (env) {
   }
 
   // {name, pos}, plus the crop `age` as a number when the block has one, plus all its state `properties` when it has any,
-  // plus `fullCube: true` when its collision shape fills the cell
+  // plus `fullCube: true` when its collision shape fills the cell, `opaque: true` when it stops the eye (sight.mjs)
   const blockInfo = (block, withProps = true) => {
     const properties = stateProperties(block)
     const age = properties.age
-    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(withProps && Object.keys(properties).length > 0 && { properties }), ...(fullCube(block) && { fullCube: true }) }
+    return { name: block.name, pos: xyz(block.position), ...(age !== undefined && { age: Number(age) }), ...(withProps && Object.keys(properties).length > 0 && { properties }), ...(fullCube(block) && { fullCube: true }), ...(blocksSight(block) && { opaque: true }) }
   }
 
   const blockAt = pos => {

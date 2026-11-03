@@ -60,7 +60,7 @@
 (def offline-max-ms (* 10 60 1000))
 (def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
-(def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch"})
+(def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch" "oak_leaves" "ice" "slime_block"})
 ;; plants and small fittings have no collision box in the real game, so they do not stop the eye either
 (def no-box-see-through
   #"^(wheat|carrots|potatoes|beetroots|fern|large_fern|dead_bush|sugar_cane|kelp|seagrass|tall_seagrass|cobweb|lever|vine|ladder|rail|dandelion|poppy|sunflower|lilac|rose_bush|peony)$|_(sapling|sign|flower|button|pressure_plate|rail|stem)$")
@@ -1095,6 +1095,7 @@
                       (when (contains? (:ages w) pos) (aset o "age" (get-in w [:ages pos])))
                       (when (seq props) (aset o "properties" (to-js props)))
                       (when (full-cube? block) (aset o "fullCube" true))
+                      (when-not (sight-passes? block) (aset o "opaque" true))
                       o))))
               "pathWorld" (fn [unknown] (let [{:keys [snapshot table space]} (steer/path-world @state)]
                                           #js {:snapshot (if unknown (let [w @state] (steer/masked snapshot unknown (into #{} (map first) (steer/buried w)) w)) snapshot) :table table :space space}))

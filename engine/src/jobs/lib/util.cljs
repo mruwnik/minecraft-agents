@@ -114,12 +114,13 @@
           guess)))
 
 (defn seen-facts
-  "seen-block as cljs facts {:name :full-cube? :waterlogged?}, or nil when the cell is unloaded or unknown."
+  "seen-block as cljs facts {:name :full-cube? :opaque? (stops the eye, as sight does) :waterlogged?}, or nil when the cell is unloaded or unknown."
   [p pos]
   (when-let [b (seen-block p pos)]
     (let [logged (some-> b .-properties .-waterlogged)]
       {:name (.-name b)
        :full-cube? (boolean (.-fullCube b))
+       :opaque? (boolean (.-opaque b))
        :waterlogged? (or (true? logged) (= "true" logged))})))
 
 (defn block-facts

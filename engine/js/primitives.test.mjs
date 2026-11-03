@@ -523,7 +523,7 @@ test('the primitives have no raw block scan (jobs read perception seenBlocks; bl
 
 test('blockAt gives a name and a plain position', () => {
   const { p } = rig(world)
-  assert.deepEqual(p.blockAt(at(2, 64, 0)), { name: 'oak_log', pos: at(2, 64, 0), fullCube: true })
+  assert.deepEqual(p.blockAt(at(2, 64, 0)), { name: 'oak_log', pos: at(2, 64, 0), fullCube: true, opaque: true })
 })
 
 test('body events: health drop is hurt, death and respawn are forwarded, unsubscribe works', () => {
