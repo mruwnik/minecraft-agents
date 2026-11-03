@@ -28,7 +28,7 @@
 (def doc
   "Pillar up :height blocks (or until the feet are at :y) from the cell the body stands in, by jump-placing one block at a time under itself.
   Done (:already before the start) when the body stands on the ground with its feet at :y or above.
-  A roof over the head (one of the two cells above the feet) is dug out first, only when the call's :ways has :roof (else :ceiling, nothing dug); a sand or gravel column that falls into the body's cells is dug out at once, and each landing counts as a failure in a row (retry?: another is tried while it is worth its price, else :ceiling with the cells clear). One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
+  A roof over the head (one of the two cells above the feet) is dug out first, only when the call's :ways has :roof and what the dig destroys (a build's put-back) is worth the call's worth (else :ceiling, nothing dug); a sand or gravel column that falls into the body's cells is dug out at once, and each landing counts as a failure in a row (retry?: another is tried while it is worth its price, else :ceiling with the cells clear). One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
@@ -413,6 +413,13 @@
   (let [ways (:ways (ctx/frozen-call c))]
     (or (nil? ways) (contains? ways :roof))))
 
+(defn roof-dear?
+  "Whether what digging the roof cell `at` destroys (cost/destroyed-fn: a placed-looking block is someone's build) costs
+  more than the call's worth."
+  [c at block]
+  (let [p (:primitives c)]
+    (> ((cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z}))) block at false) (ctx/worth c))))
+
 (defn ^:async dig-ceiling!
   "A diggable roof over the head is dug out (a jobs.blocks.dig child, by hand when no tool harvests it), up to
   a dug block is a failure in a row (retry?; a falling block's column is one obstacle, see clear-landed!); after a dig
@@ -420,7 +427,7 @@
   with the dig's outcome."
   [c l {:keys [at block] :as step}]
   (let [falling? (rules/falling? block)]
-    (if (or (not (roof-way? c)) (and (not falling?) (not (retry? c))))
+    (if (or (not (roof-way? c)) (roof-dear? c at block) (and (not falling?) (not (retry? c))))
       (finish! c l step)
       (let [outcome (await (dig-one! c at))
             block-at (access/sensed-at (:primitives c) nil)]

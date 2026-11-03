@@ -205,6 +205,16 @@
           (is (= "dirt" (block p [0 65 0])) "the roof is still there")
           (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
 
+(deftest a-roof-of-a-build-dearer-than-the-calls-worth-is-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "bookshelf"}})]
+          (core/submit! eng (list job {:height 4 :worth 5}) {})
+          (await (ticks s eng 12))
+          (is (= "bookshelf" (block p [0 65 0])) "someone's bookshelf stays")
+          (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
+
 (deftest a-roof-of-eight-dirt-blocks-is-dug-through-at-the-roots-endless-worth
   (async done
     (tu/run-async done
