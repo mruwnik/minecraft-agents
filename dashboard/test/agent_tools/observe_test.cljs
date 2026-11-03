@@ -995,6 +995,11 @@
           (is (= ["obs.lock"] (vec (.readdirSync fs dir))) "the stale lock is renamed away and removed")
           (release))))))
 
+(deftest a-lock-released-meanwhile-has-no-owner
+  (with-lock-dir
+    (fn [dir]
+      (is (true? (observe-lock/lock-owner-gone? (.join path dir "gone.lock")))))))
+
 (deftest acquire-refuses-a-fresh-lock-with-no-pid-yet
   (with-lock-dir
     (fn [dir]

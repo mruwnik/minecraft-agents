@@ -42,7 +42,9 @@
     (if pid?
       (or (not (process-alive? pid))
           (and recorded (let [now (process-start-time pid)] (and now (not= now recorded)))))
-      (>= (- (js/Date.now) (.-mtimeMs (.statSync fs dir))) pidless-lock-stale-ms))))
+      ;; a lock released since the caller saw it exists belongs to nobody
+      (try (>= (- (js/Date.now) (.-mtimeMs (.statSync fs dir))) pidless-lock-stale-ms)
+           (catch :default e (if (= "ENOENT" (code-of e)) true (throw e)))))))
 
 (defn take-reclaim-mutex!
   "Reclaimers take turns through a mutex dir beside the lock. One left by a crashed reclaimer (older than
