@@ -77,11 +77,11 @@
       (wplan/plan-steps pw r)))))
 
 (defn bot-at
-  "A bot standing at feet cell [x y z], at its middle or at the point px pz inside it."
+  "A bot standing at feet cell [x y z], at its middle or at the point px pz inside it, moving at vx along x."
   ([cell] (bot-at cell nil))
-  ([[x y z] [px pz]]
+  ([[x y z] [px pz vx]]
   (let [{:keys [vec3]} @lib]
-    #js {:entity #js {:position (new vec3 (or px (+ x 0.5)) y (or pz (+ z 0.5))) :velocity (new vec3 0 0 0) :onGround true :isInWater false
+    #js {:entity #js {:position (new vec3 (or px (+ x 0.5)) y (or pz (+ z 0.5))) :velocity (new vec3 (or vx 0) 0 0) :onGround true :isInWater false
                       :isInLava false :isInWeb false :isCollidedHorizontally false :isCollidedVertically false
                       :elytraFlying false :yaw 0 :pitch 0 :effects #js {} :attributes #js {}}
          :jumpTicks 0 :jumpQueued false :fireworkRocketDuration 0 :version version :inventory #js {:slots #js []}})))

@@ -63,3 +63,13 @@
     2 63 [] :no-plan
     3 62 [[14 63 -5 14 64 5 "stone" {}]] :arrived
     3 62 [[14 60 -5 14 60 5 "stone" {}]] :arrived))
+
+(deftest a-slow-body-on-the-takeoff-cell-after-a-replan-still-crosses-a-gap-of-1
+  (let [vxs [0.02 0.04 0.0535 0.058 0.07 0.0827]
+        fracs [0.8 0.85 0.9 0.94 0.98]
+        misses (for [vx vxs f fracs
+                     :let [st (with-redefs [ex/policy hungry]
+                                (:status (:done (sp/walk (course 1) [9 64 0] [16 64 0] [(+ 9 f) 0.5 vx]))))]
+                     :when (not= :arrived st)]
+                 [vx f st])]
+    (is (empty? misses))))
