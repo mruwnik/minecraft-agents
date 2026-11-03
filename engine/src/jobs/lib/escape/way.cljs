@@ -21,13 +21,20 @@
 
 (defn walk-s [a b] (:cost (cost/walk-cost {:distance (apply js/Math.hypot (map - b a))})))
 
+(def read-line-cells "Line cells read for their seen state; the rest of a farther goal's line is priced all unseen, unread." 512)
+
 (defn rest-s-fn
   "(rest-s cell): jobs.lib.cost seconds of the walk on from cell to goal along the straight line, its unseen cells at
-  the unseen price (wworld/unseen-share)."
+  the unseen price (wworld/unseen-share); only the first read-line-cells of the line are looked at."
   [p goal]
   (let [kind-at (reach/seen-lookup p reach/kind-of :ground)
         share (wworld/unseen-share p)]
-    (memoize (fn [cell] (+ (walk-s cell goal) (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (escape/line-cells cell goal))))))))
+    (memoize (fn [cell]
+               (let [n (js/Math.ceil (apply js/Math.hypot (map - goal cell)))
+                     far (max 0 (- n 1 read-line-cells))]
+                 (+ (walk-s cell goal)
+                    (cost/unseen-route-s share kind-at (map #(zipmap [:x :y :z] %) (take read-line-cells (escape/line-cells cell goal))))
+                    (* far (cost/unseen-step-s share))))))))
 
 (defn priced-spot
   "The cheapest cell (jobs.lib.cost seconds: the walk there, plus the walk on to goal along the straight line with its

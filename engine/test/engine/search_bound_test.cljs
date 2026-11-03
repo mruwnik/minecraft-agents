@@ -5,6 +5,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.escape :as escape]
+            [jobs.lib.reach :as reach]
             [jobs.lib.escape.way :as escape-way]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.lib.walk-risk :as risk]
@@ -58,3 +59,12 @@
     (let [c (assoc (ctx-at 0) :worth (constantly 40))]
       (is (= 40 (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})))
       (is (esc/replans-spent? (ctx-at 1e9) {:replan-budget {:since 0 :fallback-s (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})}})))))
+
+(deftest pricing-the-rest-of-a-line-to-a-far-goal-reads-a-bounded-number-of-cells
+  (let [reads (atom 0)]
+    (with-redefs [reach/seen-lookup (fn ([_ _ _] (fn [& _] (swap! reads inc) :ground)) ([_ _] (fn [& _] :ground)) ([_] (fn [& _] :ground)))]
+      (let [near ((escape-way/rest-s-fn (:primitives (ctx-at 0)) [0 64 0]) [-1000 64 0])
+            before @reads
+            far ((escape-way/rest-s-fn (:primitives (ctx-at 0)) [0 64 0]) [-1000000 64 0])]
+        (is (< (- @reads before) (* 4 escape-way/read-line-cells)))
+        (is (> far near))))))
