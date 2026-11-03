@@ -232,7 +232,8 @@
     (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (= @now (:state (:data %)))) (mem/entries view :bed-walk-unsafe)))))
 
 (defn beds-to-use
-  "The beds a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius or the live
+  "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place within radius (a bed set with
+  jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds, nearest first, and the live
   :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
@@ -250,6 +251,9 @@
                              (not (walk-unsafe? p view pos))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (distinct (concat (some-> (seen-bed p ok?) vector)
+                        (let [standing (sh-spawn/standing-beds p view radius)
+                              placed (mem/place view :bed)]
+                          (when (and placed (some #{placed} standing) (ok? placed)) [placed]))
                         (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p (min 16 radius)) (some-> (sh-spawn/spawn-bed-pos p view) vector))
                              distinct
                              (sort-by #(u/dist (u/self-pos {:primitives p}) %))

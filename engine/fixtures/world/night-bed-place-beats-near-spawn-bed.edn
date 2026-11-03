@@ -1,0 +1,21 @@
+;; Night bed choice: a bed set as the :bed place is the first choice, though an older respawn bed (:spawn-bed) is nearer
+;; (Leo: the night walked to the old bed in the villager quarters, occupied, instead of the bed the agent had set).
+;; Should-succeed: the body sleeps in the far bed set as :bed. Should-fail: it walks to the near spawn bed and sleeps there.
+;; Needs the night (bed use is decided by the clock).
+{:defaults
+ {:tags [:night :survival :bed]
+  :time :night :time-why :sleep
+  :plot {:length 64 :width 16 :height 8}
+  :blocks [[:set [20 3 6] "glowstone"] [:set [34 3 6] "glowstone"]
+           [:set [14 0 6] "red_bed[facing=east,part=foot]"] [:set [15 0 6] "red_bed[facing=east,part=head]"]
+           [:set [40 0 6] "red_bed[facing=east,part=foot]"] [:set [41 0 6] "red_bed[facing=east,part=head]"]]
+  :body {:at [6.5 0 6.5] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 130}
+ :cases
+ [{:name "the-bed-place-is-slept-in-though-an-old-spawn-bed-is-nearer"
+   :memory [{:kind :bed :data {:pos #xyz [40 0 6]} :policy {:cap 1 :ttl :forever}}
+            {:kind :spawn-bed :data {:pos #xyz [14 0 6]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 100]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 100}]
+   :after [[:body-near [40.5 0 6.5] 3]]}]}

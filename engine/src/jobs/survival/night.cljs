@@ -558,17 +558,21 @@
                 false)))))
 
 (defn ^:async walkable-bed
-  "The bed the night walks to now: of the beds sh-beds/beds-to-use names, the one whose walk go-to quotes cheapest (cheapest-walk!; the first
+  "The bed the night walks to now: of the beds sh-beds/beds-to-use names, the :bed place when it leads them (no bed is seen) and its walk is safe, else the one whose walk go-to quotes cheapest (cheapest-walk!; the first
   when none is priced; no time limit, a far bed's walk is weighed against staying by bed-walk-safe?), if its walk bed-walk-safe? finds fine, unless a bed-down is already under way; :searching while a quote's search goes on; else nil."
   [c]
   (let [p (:primitives c)
         beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c))) {:price (sense/fails-to c)}))
         walk #(hash-map :pos % :range 2)
+        placed (mem/place (ctx/view c) :bed)
+        set-bed (when (= placed (first beds)) placed)
+        set-safe? (and set-bed (not (:bed-down (ctx/mem c))) (await (bed-walk-safe? c set-bed)))
+        beds (if (or (:bed-down (ctx/mem c)) set-safe?) (if set-safe? [set-bed] beds) (remove #{set-bed} beds))
         picked (when (seq beds) (await (cheapest-walk! c beds {:target walk :walk walk :limit-s ##Inf})))
         bed (if (map? picked) (:pick picked) (first beds))]
     (cond
       (= :searching picked) :searching
-      (and bed (or (:bed-down (ctx/mem c)) (await (bed-walk-safe? c bed)))) bed)))
+      (and bed (or (:bed-down (ctx/mem c)) set-safe? (await (bed-walk-safe? c bed)))) bed)))
 
 (defn emit-answers! [c pick prices]
   (let [shown (into {} (map (fn [[k v]] [k (price/round1 v)])) prices)]

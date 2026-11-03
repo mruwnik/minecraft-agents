@@ -90,6 +90,18 @@
     (is (false? (bed-for (assoc-in world [:blocks "20,64,0"] "air") (seed {:x 20 :y 64 :z 0})))
         "seen not to be a bed")))
 
+(deftest a-bed-set-as-the-bed-place-comes-before-a-nearer-old-spawn-bed
+  (let [world {:time night :floor tu/walk-floor :blocks {"10,64,0" "red_bed" "30,64,0" "red_bed"}}
+        near {:x 10 :y 64 :z 0}
+        set-bed {:x 30 :y 64 :z 0}
+        p (tu/fake world)
+        {:keys [eng]} (st/setup {})]
+    (st/looked-round! eng p)
+    (mem/write! (:store eng) :spawn-bed {:pos near} {:cap 1 :ttl :forever})
+    (st/know-bed! eng set-bed)
+    (let [view (mem/view (:store eng))]
+      (is (= [set-bed near] (take 2 (sh-beds/beds-to-use p view (sh-beds/bed-radius view) (constantly true))))))))
+
 (deftest a-body-already-safe-at-night-does-not-hold
   (is (false? (holds? {:time night :blocks closed-hut} (fn [_]))) "shut in a high closed room, dark or not")
   (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0")} (fn [_]))) "a hole in the roof: not shut in")
