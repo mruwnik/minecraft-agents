@@ -386,19 +386,50 @@
   (assoc (get registry/jobs 'jobs.movement.go-to) :quote-of
          (fn ^:async q [c] (let [pos (vec (:pos (:args c)))] (swap! asked conj pos) (f pos)))))
 
+(defn planned-entries [s] (mapv #(:entry %) (events-of s :tunnel.plan)))
+
+(defn bounded-first-or-second
+  "A go-to quoting the first-asked entry as q1 and every other as q2."
+  [asked q1 q2]
+  (quoting-by-entry asked (fn [pos] (if (= pos (first @asked)) q1 q2))))
+
+(def unbounded {:uses {:job-time [5 5 ##Inf]} :route {:found false :reason :budget}})
+(def bounded {:uses {:job-time [5 5 40]} :route {:found true}})
+
 (deftest a-line-is-priced-by-the-upper-bound-of-its-entry-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [asked (atom [])
-              go-to (quoting-by-entry asked (fn [pos] (if (= pos (first @asked))
-                                                         {:uses {:job-time [5 5 ##Inf]} :route {:found false :reason :budget}}
-                                                         {:uses {:job-time [5 5 40]} :route {:found true}})))
+              s (setup {:blocks ground} {:target [6 57 0]} (fn [_])
+                       :jobs {'jobs.movement.go-to (bounded-first-or-second asked unbounded bounded)})
+              {:keys [out]} (await (tick-out! s))]
+          (is (= :reached (:reason @out)) (pr-str @out))
+          (is (<= 2 (count @asked)))
+          (is (= (second @asked) (first (planned-entries s))) "the bounded line, not the cheaper-dig unbounded one"))))))
+
+(deftest a-cheaper-dig-line-with-a-bounded-walk-is-kept-over-a-later-unbounded-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              s (setup {:blocks ground} {:target [6 57 0]} (fn [_])
+                       :jobs {'jobs.movement.go-to (bounded-first-or-second asked bounded unbounded)})
+              {:keys [out]} (await (tick-out! s))]
+          (is (= :reached (:reason @out)) (pr-str @out))
+          (is (= (first @asked) (first (planned-entries s)))))))))
+
+(deftest a-best-entry-still-estimated-waits-and-is-taken-once-settled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              go-to (quoting-by-entry asked (fn [pos] (assoc bounded :estimate (< (count (filter #{pos} @asked)) 2))))
               s (setup {:blocks ground} {:target [6 57 0]} (fn [_]) :jobs {'jobs.movement.go-to go-to})
               {:keys [out]} (await (tick-out! s))]
           (is (= :reached (:reason @out)) (pr-str @out))
-          (is (<= 2 (count @asked)) "the unbounded line is not taken while a bounded one exists")
-          (is (not= (first @asked) (second @asked))))))))
+          (is (< 1 (count (filter #{(first @asked)} @asked))) "the first entry is asked again after its estimate")
+          (is (= 1 (count (planned-entries s)))))))))
 
 (deftest a-lone-line-with-no-upper-bound-is-still-taken
   (async done
