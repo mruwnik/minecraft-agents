@@ -85,10 +85,17 @@
   "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once."
   [p region]
   (let [flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x region) (:y region) (:z region)))))
-        roofed (set (filter (fn [[cx cy cz]] (let [cell {:x cx :y cy :z cz}] (or (sh-sense/roofed? p (sh-sense/room-roof-height) cell) (unseen-roof? p cell)))) flood))
+        seen-roof? (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz}))
+        roofed (set (filter (fn [[cx cy cz :as c]] (or (seen-roof? c) (unseen-roof? p {:x cx :y cy :z cz}))) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
-                                    (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (and (flood n) (not (roofed n))))) [[1 0] [-1 0] [0 1] [0 -1]])))
-        stands (remove exit? (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) roofed))]
+                                    (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (if (flood n) (not (seen-roof? n)) (not (sh-sense/solid-at? p {:x (n 0) :y (n 1) :z (n 2)}))))) [[1 0] [-1 0] [0 1] [0 -1]])))
+        inside (loop [seen #{} todo (list [(:x region) (:y region) (:z region)])]
+                 (if-let [[cx cy cz :as c] (first todo)]
+                   (if (or (seen c) (not (flood c)) (exit? c))
+                     (recur seen (rest todo))
+                     (recur (conj seen c) (into (rest todo) (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ cx dx) (+ cy dy) (+ cz dz)]))))
+                   seen))
+        stands (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) (filter inside roofed))]
     (fn [[x y z]]
       (let [best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) stands))]
         (when best {:x (best 0) :y (best 1) :z (best 2)})))))
