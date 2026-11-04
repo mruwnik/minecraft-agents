@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { emitOf, lightTable, lightTableCached, tableCacheName, relightBox, boxIndex } from './light.mjs'
+import { emitOf, lightTable, lightTableCached, tableCacheName, relightBox, boxIndex, sectionLight } from './light.mjs'
 
 const require = createRequire(import.meta.url)
 const registry = require('prismarine-registry')('26.1')
@@ -246,4 +246,36 @@ test('the cache file name changes with the installed block data versions', () =>
   assert.notEqual(tableCacheName('26.1', a), tableCacheName('26.1', { ...a, 'minecraft-data': '3.117.0' }))
   assert.notEqual(tableCacheName('26.1', a), tableCacheName('26.1', { ...a, 'prismarine-block': '1.24.0' }))
   assert.equal(tableCacheName('26.1', a), tableCacheName('26.1', { ...a }))
+})
+
+test('sectionLight equals relightBox over the 48^3 box of the 27 sections, with and without sources', () => {
+  const TORCH = sid('torch')
+  const wall = table.filter.findIndex((f, i) => f === 15 && table.emit[i] === 0 && table.faces[i] === 0)
+  let seed = 7
+  const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
+  const n = 48
+  for (const scene of ['dark', 'torches', 'sky', 'both']) {
+    const ids = Array.from({ length: 27 }, (_, j) => (j === 13 || rnd() < 0.7 ? Uint16Array.from({ length: 4096 }, () => (rnd() < 0.05 ? 0 : 1 + (rnd() < 0.5 ? AIR : STONE))) : null))
+    const bits = ids.map((s) => (s && (scene === 'sky' || scene === 'both') ? Uint8Array.from({ length: 512 }, () => (rnd() < 0.5 ? 255 : 0)) : null))
+    if (scene === 'torches' || scene === 'both') for (const s of ids) if (s) for (let k = 0; k < 20; k++) s[Math.floor(rnd() * 4096)] = 1 + TORCH
+    const states = new Int32Array(n ** 3)
+    const sky = new Uint8Array(n ** 3)
+    for (let b = 0; b < 3; b++) for (let c = 0; c < 3; c++) for (let a = 0; a < 3; a++) {
+      const j = (b * 3 + c) * 3 + a
+      for (let i = 0; i < 4096; i++) {
+        const k = ((16 * b + (i >> 8)) * n + 16 * c + ((i >> 4) & 15)) * n + 16 * a + (i & 15)
+        const v = ids[j] ? ids[j][i] : 0
+        const id = v > 0 ? v - 1 : wall
+        states[k] = id
+        sky[k] = bits[j] && v > 0 && table.filter[id] < 15 && (bits[j][i >> 3] & (1 << (i & 7))) ? 15 : 0
+      }
+    }
+    const out = relightBox({ table, states, sky, block: new Uint8Array(n ** 3), size: [n, n, n], interiorSky: true })
+    const want = new Uint8Array(4096)
+    for (let i = 0; i < 4096; i++) {
+      const k = ((16 + (i >> 8)) * n + 16 + ((i >> 4) & 15)) * n + 16 + (i & 15)
+      want[i] = (out.sky[k] << 4) | out.block[k]
+    }
+    assert.deepEqual(sectionLight(table, ids, bits), want, scene)
+  }
 })

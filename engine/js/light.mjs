@@ -117,7 +117,7 @@ export function lightTableCached (registry, version, dir = tableCacheDir) {
   if (read && read.length % 3 === 0) {
     const n = read.length / 3
     const part = (i) => new Uint8Array(read.buffer, read.byteOffset + i * n, n).slice()
-    return { emit: part(0), filter: part(1), faces: part(2), relight: relightBox }
+    return { emit: part(0), filter: part(1), faces: part(2), relight: relightBox, sectionLight }
   }
   const table = lightTable(registry)
   const tmp = `${file}.${process.pid}.tmp`
@@ -126,7 +126,7 @@ export function lightTableCached (registry, version, dir = tableCacheDir) {
     fs.writeFileSync(tmp, Buffer.concat([table.emit, table.filter, table.faces]))
     fs.renameSync(tmp, file)
   } catch { /* an unwritable cache only costs the build next time */ }
-  return { ...table, relight: relightBox }
+  return { ...table, relight: relightBox, sectionLight }
 }
 
 export const boxIndex = (size, x, y, z) => (y * size[2] + z) * size[0] + x
@@ -220,4 +220,65 @@ export function relightBox ({ table, states, sky, block, size, interiorSky = fal
   seedAll(outSky, interiorSky)
   flood(outSky, filter, faces, states, size, true)
   return { sky: outSky, block: outBlock }
+}
+
+const wallIds = new WeakMap()
+// the state of the table that lets no light through and gives none: what a section never seen is to the flood
+function wallOf (table) {
+  let w = wallIds.get(table)
+  if (w !== undefined) return w
+  const { emit, filter, faces } = table
+  w = 0
+  while (!(filter[w] === 15 && emit[w] === 0 && faces[w] === 0)) w++
+  wallIds.set(table, w)
+  return w
+}
+
+const SECTION_BOX = 48
+const boxScratch = { states: new Int32Array(SECTION_BOX ** 3), sky: new Uint8Array(SECTION_BOX ** 3), block: new Uint8Array(SECTION_BOX ** 3) }
+
+// The packed light (sky << 4 | block) of the 4096 cells of one 16^3 section by cell index (y << 8 | z << 4 | x), from the 27
+// sections round it: ids[i] and fullSky[i] for the section at offset (a, b, c) in 0..2, i = (b * 3 + c) * 3 + a, null for one
+// not in memory (a wall). Cell ids are state id + 1, 0 never seen (a wall); fullSky is a bit per cell (Uint8Array(512)) of
+// the cells last seen at full sky. relightBox over the 48^3 box, except that a box with no light source (no emitter, no
+// sky bit on a transparent cell) is dark without it.
+export function sectionLight (table, ids, fullSky) {
+  const n = SECTION_BOX
+  const { states, sky, block } = boxScratch
+  const { emit, filter } = table
+  const wall = wallOf(table)
+  let sources = false
+  sky.fill(0)
+  block.fill(0)
+  for (let b = 0; b < 3; b++) {
+    for (let c = 0; c < 3; c++) {
+      for (let a = 0; a < 3; a++) {
+        const j = (b * 3 + c) * 3 + a
+        const sid = ids[j]
+        const bits = fullSky[j]
+        for (let y = 0; y < 16; y++) {
+          for (let z = 0; z < 16; z++) {
+            const k0 = ((16 * b + y) * n + 16 * c + z) * n + 16 * a
+            if (!sid) { states.fill(wall, k0, k0 + 16); continue }
+            const i0 = y * 256 + z * 16
+            for (let x = 0; x < 16; x++) {
+              const v = sid[i0 + x]
+              const id = v > 0 ? v - 1 : wall
+              states[k0 + x] = id
+              if (emit[id] > 0) sources = true
+              if (bits && v > 0 && filter[id] < 15 && (bits[(i0 + x) >> 3] & (1 << ((i0 + x) & 7)))) { sky[k0 + x] = 15; sources = true }
+            }
+          }
+        }
+      }
+    }
+  }
+  const res = new Uint8Array(4096)
+  if (!sources) return res
+  const out = relightBox({ table, states, sky, block, size: [n, n, n], interiorSky: true })
+  for (let i = 0; i < 4096; i++) {
+    const k = ((16 + (i >> 8)) * n + 16 + ((i >> 4) & 15)) * n + 16 + (i & 15)
+    res[i] = (out.sky[k] << 4) | out.block[k]
+  }
+  return res
 }

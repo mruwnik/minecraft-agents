@@ -11,45 +11,18 @@
   measured. Flooded per section over the 27 sections round it, kept until a cell in them changes."
   (:require [engine.perception.store :as store]))
 
-(def ^:private ^:const n 48)
-(def ^:private ^:const cells 110592)
 (def ^:private max-kept "Sections whose light is kept per body, past which the kept ones are dropped." 1024)
-
-(def ^:private scratch
-  (delay #js {:states (js/Int32Array. cells) :block (js/Uint8Array. cells) :sky (js/Uint8Array. cells)}))
-
-(defn- opaque-id
-  "A state of the table that lets no light through and gives none: what a cell never seen is to the flood."
-  [^js table]
-  (let [^js filt (.-filter table) ^js emit (.-emit table) ^js faces (.-faces table)]
-    (loop [i 0] (if (and (== 15 (aget filt i)) (zero? (aget emit i)) (zero? (aget faces i))) i (recur (inc i))))))
 
 (defn- section-light
   "Uint8Array(4096) by store/cell-index: the packed light (sky << 4 | block) of section cx sy cz from memory, by
-  light.mjs's relight over the 27 sections round it."
+  light.mjs's relight over the 27 sections round it (its sectionLight)."
   [^js table ^js store cx sy cz]
-  (let [^js s @scratch
-        ^js states (.-states s) ^js sky (.-sky s) ^js block (.-block s)
-        ^js t-filter (.-filter table)
-        wall (opaque-id table)]
-    (.fill block 0)
-    (dotimes [a 3] (dotimes [b 3] (dotimes [c 3]
-      (let [^js sec (.get store (store/section-key (+ cx a -1) (+ sy b -1) (+ cz c -1)))
-            ^js ids (some-> sec .-ids)
-            ^js bits (some-> sec .-sky)]
-        (dotimes [i 4096]
-          (let [k (+ (* (+ (* (+ (* 16 b) (bit-shift-right i 8)) n) (* 16 c) (bit-and (bit-shift-right i 4) 15)) n) (* 16 a) (bit-and i 15))
-                v (if ids (aget ids i) 0)
-                id (if (pos? v) (dec v) wall)]
-            (aset states k id)
-            (aset sky k (if (and bits (pos? v) (< (aget t-filter id) 15) (pos? (bit-and (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7))))) 15 0))))))))
-    (let [^js out (.relight table #js {:table table :states states :sky sky :block block :size #js [n n n] :interiorSky true})
-          ^js lsky (.-sky out) ^js lblock (.-block out)
-          res (js/Uint8Array. 4096)]
-      (dotimes [i 4096]
-        (let [k (+ (* (+ (* (+ 16 (bit-shift-right i 8)) n) 16 (bit-and (bit-shift-right i 4) 15)) n) 16 (bit-and i 15))]
-          (aset res i (bit-or (bit-shift-left (aget lsky k) 4) (aget lblock k)))))
-      res)))
+  (let [ids #js [] bits #js []]
+    (dotimes [b 3] (dotimes [c 3] (dotimes [a 3]
+      (let [^js sec (.get store (store/section-key (+ cx a -1) (+ sy b -1) (+ cz c -1)))]
+        (.push ids (some-> sec .-ids))
+        (.push bits (some-> sec .-sky))))))
+    (.sectionLight table table ids bits)))
 
 (defn- neighbours-mask
   "The sections of the 27 round cx sy cz that are in memory, as bits, and the latest write among them."
