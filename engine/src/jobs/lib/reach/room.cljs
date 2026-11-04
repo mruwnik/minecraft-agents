@@ -91,6 +91,15 @@
                          ns)))]
     (= :closed (flood next-cells [x y z] budget)))))
 
+(defn walks-beyond?
+  "Whether the body can walk (over kind-at) to a cell more than dist blocks from where it stands, sideways: out of its hole
+  or room into open ground, however large the room."
+  [p kind-at dist]
+  (let [{:keys [x y z]} (standing-cell p kind-at)
+        d2 (* dist dist)]
+    (not (:closed? (flood-visit #(forward kind-at %1 %2 %3) [x y z] ##Inf
+                                (fn [c] (> (+ (js/Math.pow (- (aget c 0) x) 2) (js/Math.pow (- (aget c 2) z) 2)) d2)))))))
+
 (defn enclosed-over
   "Whether the body is shut in: it can walk to fewer than budget cells over base (a kind-at) with the cells of solid (a set
   of [x y z]) treated as solid blocks (what if they were filled). False with no body position."

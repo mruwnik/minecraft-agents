@@ -209,8 +209,8 @@
        (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
        (contract/ok :sheltered (str "sheltered at " where))
        (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
-       (and (not (sh-sense/dark-outside? p)) (sh-inside/near-shut-in? p shelter))
-       (contract/ok :sheltered (str "in the hole cut out of its shelter by day: go-to climbs out, the walk is priced once out, at " where))
+       (and (sh-sense/sky-reaches-from-above? p (sh-sense/feet p)) (sh-sense/lit-here? p (sh-sense/feet p)) (sh-inside/near-shut-in? p shelter))
+       (contract/ok :sheltered (str "in the hole cut out of its shelter, the sky's light reaching it: go-to climbs out, the walk is priced once out, at " where))
        @room @room
        (and (contains? lowered-by :look) (hidden-below? p to))
        (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))

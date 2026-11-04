@@ -12,21 +12,21 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]))
 
-(def hole-cells
-  "Cells the walk from a cut-open roof's hole reaches before the body counts as out of it: the shelter room is far smaller."
-  64)
+(def spawn-free-radius
+  "Blocks round a player in which no mob spawns (the vanilla rule, spherical): a dark cell nearer than this to the body is no danger."
+  24)
 
 (defn shut-in?
   "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out) or an entry
   that ended :sealed false. With a
   pit :start, when below that height and walled in (a pit left by a stair is open). With a :door, when a door cell is solid. With neither, when under a solid
-  block within roof-height, or in a hole whose walk reaches fewer than hole-cells cells (a roof cut open is no way out until the body can walk out)."
+  block within roof-height, or in a hole it cannot walk spawn-free-radius blocks out of (a roof cut open is no way out until the body can walk out)."
   [p {:keys [start door room sealed]}]
   (cond
     (or room (false? sealed)) false
     start (and (< (:y (sh-sense/feet p)) (:y start)) (reach-room/enclosed? p :ground))
     door (boolean (some #(sh-sense/solid-at? p %) door))
-    :else (or (sh-sense/roofed? p (sh-sense/roof-height)) (reach-room/enclosed? p :ground #{} hole-cells))))
+    :else (or (sh-sense/roofed? p (sh-sense/roof-height)) (not (reach-room/walks-beyond? p (reach/world-kinds p reach-room/body-kind-of :ground) spawn-free-radius)))))
 
 (defn near-shut-in?
   "Whether the body stands off the entry's :pos, within 3 blocks sideways and 4 up or down, and is shut in by it (shut-in?):
@@ -52,10 +52,6 @@
   [p {:keys [cell]}]
   (let [b (u/seen-block p cell)]
     (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
-
-(def spawn-free-radius
-  "Blocks round a player in which no mob spawns (the vanilla rule, spherical): a dark cell nearer than this to the body is no danger."
-  24)
 
 (def dark-cells-of
   "room -> its dark spawnable cells, read once per room object (a region's room is shared by all its cells)."

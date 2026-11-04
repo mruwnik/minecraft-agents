@@ -41,7 +41,7 @@
         view (mem/view (:store eng))]
     (is (true? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} view)) "day, roofed in its own shelter")
     (is (false? (fires? {:time st/night :blocks {"0,66,0" "stone"}} view)) "at night a body already in it is safe: the queue runs")
-    (is (false? (fires? {:time st/noon :blocks (into {} (for [x (range -6 7) z (range -6 7)] [(str x ",63," z) "dirt"]))} view)) "not shut in: nothing overhead, open ground round")
+    (is (false? (fires? {:time st/noon :blocks (into {} (for [x (range -26 27) z (range -26 27)] [(str x ",63," z) "dirt"]))} view)) "not shut in: nothing overhead, open ground round")
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}} view)) "elsewhere than the shelter")
     (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} (mem/view (:store (:eng (st/setup {}))))))
         "no shelter entry")))
