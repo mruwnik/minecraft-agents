@@ -282,6 +282,17 @@
           (is (= [[3 64 2] "ring"] (distinct @targets)) "the target, and the plan whose footprint the tunnel may cut")
           (is (= {[3 64 2] :unreachable} (:given-up result)) "a tunnel that fails gives the cell up"))))))
 
+(deftest a-tunnel-that-is-already-at-its-end-and-leaves-the-cell-shut-is-tried-then-the-cell-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              tunnel {:round (fn ^:async w [c] (swap! calls inc) (ctx/end c :done :already {:reason :already}))}
+              {:keys [eng]} (rock-start [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}] tunnel)
+              result (await (child-outcome eng job {:plan "ring"} 200))]
+          (is (= {[3 64 2] :unreachable} (:given-up result)) "the shut cell is not walked to for ever")
+          (is (< (plan/tunnel-tries) @calls)))))))
+
 (deftest a-cell-never-seen-beyond-a-pocket-wall-is-walked-to-not-tunnelled-to
   (async done
     (tu/run-async done

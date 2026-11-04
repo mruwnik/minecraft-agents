@@ -172,8 +172,8 @@
 (defn ^:async tunnel-to!
   "A cell shut in by rock: with a pickaxe, cut a way (jobs.access.tunnel) to the deepest such cell, so the body stands in the
   plan's cells and fills them while backing out; without one the cell is given up :no-tool at once. :continue while the
-  tunnel waits, :again once it is cut or failed (a failure counts against the cell), nil when the cell is open to air or
-  the body already stands at the end of the way. A cell beyond the body's reach with faces never seen is walked to first (rock-bound?)."
+  tunnel waits, :again once it is cut or failed (a failure counts against the cell; a tunnel already at its end counts a try, and
+  fails the cell after tunnel-tries), nil when the cell is open to air. A cell beyond the body's reach with faces never seen is walked to first (rock-bound?)."
   [c cells cell]
   (let [p (:primitives c)
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
@@ -201,8 +201,12 @@
                   r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
               (= :continue r) :continue
-              (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil
-              (= :done (:kind r)) (do (ctx/update-mem! c #(-> (update % :sightless disj (:pos deepest)) (update-in [:tunnels (:pos deepest)] (fnil inc 0)))) :again)
+              (= :done (:kind r))
+              (let [already? (= :already (:reason (:data r)))]
+                (ctx/update-mem! c #(cond-> (-> (update % :sightless disj (:pos deepest)) (update-in [:tunnels (:pos deepest)] (fnil inc 0)))
+                                      (and already? (<= (plan/tunnel-tries) (get-in % [:tunnels (:pos deepest)] 0)))
+                                      (walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c))))
+                :again)
               :else (do (ctx/update-mem! c walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c)) :again)))))))))
 
 (defn stand-choices
