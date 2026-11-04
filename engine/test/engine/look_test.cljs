@@ -8,7 +8,9 @@
             [engine.test-util :as tu]
             [jobs.explore.look :as explore-look]
             [jobs.lib.cost.base-rates :as base-rates]
+            [engine.perception.store :as store]
             [jobs.lib.look :as look]
+            [jobs.lib.seen-light :as seen-light]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
@@ -412,3 +414,16 @@
       (is (= [] (look/room-air-unseen p)))
       (is (< (spawn-light/chance-at p cell false 0) (spawn-light/chance-at p cell false)))
       (is (spawn-light/dawn-lowers? p cell)))))
+
+(deftest remembered-light-never-passes-a-cell-the-body-has-not-seen
+  ;; a remembered torch two cells from a seen air cell with an unseen cell between: the seen cell stays dark
+  (let [^js table @fake-raw/light-table
+        torch (first (filter #(and (== 14 (aget (.-emit table) %)) (zero? (aget (.-filter table) %))) (range (.-length (.-emit table)))))
+        sec #js {:ids (js/Uint16Array. 4096) :wrote 1}
+        st #js {:stores (js/Map.) :dim "overworld" :writes 1 :lightTable table}
+        put! (fn [x id] (aset (.-ids sec) (store/cell-index x 0 0) (inc id)))]
+    (.set (store/store-of st "overworld") (store/section-key 0 0 0) sec)
+    (put! 0 0) (put! 2 torch) (put! 3 0)
+    (let [f (seen-light/light-fn #js {:perception {:st st}})]
+      (is (= 0 (bit-and (f 0 0 0) 15)) "behind an unseen cell")
+      (is (= 13 (bit-and (f 3 0 0) 15)) "beside the torch's neighbour on the seen side: 14 less a cell"))))
