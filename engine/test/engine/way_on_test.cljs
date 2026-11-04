@@ -56,7 +56,7 @@
 (defn dead-end [known] (- 1 (cost/way-on-chance (way-on/way-counts known [0 64 0]))))
 
 (deftest the-ways-out-of-open-ground-and-a-corridor-go-on-and-a-pocket-ends
-  (is (= {:k 1 :n 1} (way-on/way-counts open-ground [0 64 0])) "open ground: its stands share one fate, one way on")
+  (is (< (dead-end open-ground) 0.1) "open ground: its frontier is many ways, a way on seldom ends")
   (is (= {:k 2 :n 2} (way-on/way-counts open-corridor [0 64 0])) "a 1-wide corridor open at both ends: two ways, both go on (the walls beside it are no ways)")
   (is (< (dead-end open-corridor) (dead-end corridors) (dead-end pocket)) "a corridor with three stubs and shut ends: some ways end")
   (is (> (dead-end pocket) 0.5) "a shut pocket: the way ends")
@@ -94,7 +94,7 @@
                       (aset a (store/cell-index x y z) 0))
                     a)))]
     (is (pos? (:n (way-on/way-counts known [0 64 0]))) "a body that has not seen its own footing still counts the ground ahead")
-    (is (= {:k 1 :n 1} (way-on/way-counts known [0 64 0])))))
+    (is (< (dead-end known) 0.1) "and it reads as open ground")))
 
 (deftest seen-ground-past-a-wide-unseen-gap-is-not-counted
   (let [gap (set (for [x (range -8 9) z (range -8 9) y [63 64 65] :when (and (<= (max (js/Math.abs x) (js/Math.abs z)) 5) (not= [x z] [0 0]))] [x y z]))

@@ -23,6 +23,8 @@
                             :else 2))))
            a)))
 
+(def ^:private exit-gap "Cells apart that two openings of one place are two ways: a wide frontier is several ways, a corridor's mouth one." 3)
+
 (def ^:private way-cap "Most unseen ways scan lists." 6)
 
 (defn cell-fn
@@ -79,8 +81,9 @@
 (defn scan
   "{:k :n :ways} over the seen stands a body could walk to, nearest start ([x y z] feet cell) first (at most ::sample of them,
   breadth first over the ways between them, and at most 8 times that many expanded): n the stands whose every side is seen
-  that lead out or not, joined into one trial where neighbouring stands share the fate (a corridor or a hall counts once, a
-  fork's shut branch apart from its open one), k the trials from whose stands a way onward, not back through the stand
+  that lead out or not, joined into one trial where neighbouring stands share the fate (a closed corridor or hall counts
+  once, a fork's shut branch apart from its open one; an open place counts once per opening exit-gap cells from the others,
+  so open ground is many ways and a corridor's mouth one), k the trials from whose stands a way onward, not back through the stand
   they were entered by, leads out to cells not seen (or to stands past the sample); the rest are dead ends: a shut
   corridor, a closed room (a wall beside a way is no way). A stand with a side not seen is
   left uncounted, as is a level way with a cell not seen within 2 cells of start, gone through (the cells by the feet a
@@ -135,15 +138,29 @@
                       (aset open i unseen?)
                       (when counted? (.push found i))
                       (recur (inc i) (if counted? (inc stands) stands) found))))]
-    (let [status (js/Map.)
+    (let [apart (fn [opens]
+                  (count (reduce (fn [kept j]
+                                   (if (some #(<= (max (js/Math.abs (- (aget qx %) (aget qx j))) (js/Math.abs (- (aget qz %) (aget qz j)))) exit-gap) kept)
+                                     kept
+                                     (conj kept j)))
+                                 [] opens)))
+          status (js/Map.)
           group (js/Map.)
           root (fn root [i] (let [p (.get group i)] (if (== p i) i (root p))))]
       (doseq [i counted] (.set status i (boolean (out? i))) (.set group i i))
       (doseq [i counted j (aget adj i)]
         (when (and (.has status j) (= (.get status i) (.get status j)))
           (.set group (root i) (root j))))
-      (let [roots (set (map root counted))]
-        {:k (count (filter #(.get status %) roots)) :n (count roots) :ways (mapv vec ways)}))))
+      (let [roots (set (map root counted))
+            exits (js/Map.)]
+        (dotimes [j (.-length qx)]
+          (when (aget open j)
+            (when-let [r (loop [i (aget qp j)] (cond (neg? i) nil (.has status i) (root i) :else (recur (aget qp i))))]
+              (when (.get status r) (.set exits r (conj (.get exits r []) j))))))
+        (let [ways-of (fn [r] (if (.get status r) (max 1 (apart (.get exits r []))) 1))
+              k (reduce + (map ways-of (filter #(.get status %) roots)))
+              dead (count (remove #(.get status %) roots))]
+          {:k k :n (+ k dead) :ways (mapv vec ways)})))))
 
 (defn way-counts
   "{:k :n} of scan."
