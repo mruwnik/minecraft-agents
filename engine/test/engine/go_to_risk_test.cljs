@@ -3,6 +3,7 @@
   with the figures in the reason; unseen ground is priced at the worse case (Q16)."
   (:require [cljs.test :refer [are deftest is async]]
             [engine.core :as core]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -393,6 +394,28 @@
         s (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells))]
     (is (= :ok (first s)) (str "a lone zombie by the way at full health: the walk's price is within what it buys, " (pr-str s)))))
 
+(deftest a-blow-mid-walk-asks-go-to-s-check-again-for-a-hostile-known-at-the-first-plan
+  ;; old code re-asked only for a hostile newly near the way: an exclusive walk replanned in place under a drowned's blows
+  (let [hurt (atom [])
+        c (assoc (finite-worth (ready-test/ctx-of {:time st/noon :blocks (tu/box 0 64 0 0 65 0 "stone") :self {:pos {:x 0.5 :y 66 :z 0.5} :health 20 :food 20}
+                                                   :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x -9.5 :y 64 :z 0.5}}]}))
+                 :view (fn [] {:now 36000000 :data {:entries {:hurt @hurt}}}) :update-mem (fn [_ _]))
+        check (reprice/check c {:x 30 :y 64 :z 0} nil)
+        plan (plan-of straight-cells)]
+    (is (nil? (check plan true)) "the zombie behind: the walk leads away from it")
+    (swap! (fake/state (:primitives c)) update :self assoc :health 3)
+    (swap! (fake/state (:primitives c)) assoc-in [:entities 0 :pos] [4.5 64 0.5])
+    (is (nil? (check plan false)) "it is ahead now, but known near the way and no blow: not asked again")
+    (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
+    (is (contains? #{:later :never} (first (:risk (check plan false)))) "its blow asks again, and the price holds the walk")))
+
+(deftest a-walk-past-the-zombie-at-the-pillar-s-foot-is-priced-ok-at-a-goal-worth-arrival
+  (let [c (ready-test/ctx-of {:time st/noon :blocks (tu/box 0 64 0 0 65 0 "stone") :self {:pos {:x 0 :y 66 :z 0} :health 20 :food 20}
+                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})
+        s (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells))]
+    (is (infinite? (ctx/worth c)) "a plain go-to is worth arrival")
+    (is (= :ok (first s)) (pr-str s))))
+
 (def pool-world {:time st/noon :blocks (tu/box -2 64 -2 2 66 2 "water")})
 
 (deftest a-hostile-at-the-heels-holds-the-walk-with-the-head-under-water
@@ -402,6 +425,12 @@
     (is (true? (breath/head-under? (:primitives (at 1.5)))) "water over the eye cell")
     (is (= :later (first (reprice/status (at 1.5) {:x -30 :y 64 :z 0} nil))) "the walk leads toward the hostile")
     (is (= :ok (first (reprice/status (at -9.5) {:x 30 :y 64 :z 0} nil))) "away from it, air first")))
+
+(deftest the-head-under-water-prices-a-plan-through-the-walk-s-price
+  (let [c (finite-worth (ready-test/ctx-of (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true :health 20 :food 20}
+                                                  :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x 12.5 :y 64 :z 0.5}}])))]
+    (is (true? (breath/head-under? (:primitives c))))
+    (is (= :ok (first (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells)))) "an affordable hostile ahead: air first")))
 
 (deftest a-dive-slice-yield-surfaces-only-short-of-air-or-held
   ;; old code swam up on every :continue, so a dive that fits its air (a search slice under water) was cut short
