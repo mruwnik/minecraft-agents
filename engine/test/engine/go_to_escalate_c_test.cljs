@@ -63,11 +63,15 @@
   (is (false? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :door}}))))
   (is (false? (boolean (choose/refused-drop? {:reason :exhausted :one-way {:kind :drop}})))))
 
-(deftest an-exhausted-search-from-high-above-the-goal-is-dug-down
-  (let [ex {:reason :exhausted}]
-    (is (true? (boolean (choose/drop-stranded? [0 13 0] {:x 6 :y 0 :z 0} ex))))
-    (is (false? (boolean (choose/drop-stranded? [0 3 0] {:x 6 :y 0 :z 0} ex))) "a drop the walk takes needs no stair")
-    (is (false? (boolean (choose/drop-stranded? [0 13 0] {:x 6 :y 0 :z 0} {:reason :budget}))))))
+(deftest an-exhausted-search-above-a-goal-deeper-than-a-survivable-fall-is-dug-down
+  (let [p (tu/fake {})
+        ex {:reason :exhausted}
+        pos {:x 6 :y 0 :z 0}
+        stranded? (fn [max-damage feet result] (choose/drop-stranded? {:primitives p :args {:max-damage max-damage}} feet pos result))]
+    (is (true? (stranded? 0 [0 13 0] ex)) "the fall to the goal costs hp the call allows none of")
+    (is (false? (stranded? 20 [0 13 0] ex)) "a fall the call's damage budget pays is no stranding")
+    (is (false? (stranded? 0 [0 13 0] {:reason :budget})))
+    (is (false? (stranded? 0 [0 -5 0] ex)) "a goal above is no stair down")))
 
 (deftest escape-enclosed-counts-doors-as-walls-under-doors-never
   (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
