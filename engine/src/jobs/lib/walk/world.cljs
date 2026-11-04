@@ -127,6 +127,13 @@
 
 (def ^:private unloaded-id 0xFFFF)
 
+(defn- under-of
+  "Whether the mask reads unseen cells as water: the spec's :under when it carries one (a mask taken from a plan's snapshot,
+  so a look-ahead reads the cells as the plan did however the body bobs in shallow water), else the body's head being under."
+  [p ^js unknown]
+  (let [u (some-> unknown (aget "under"))]
+    (if (boolean? u) u (breath/head-under? p))))
+
 (defn rock-beyond "The setting ::rock-beyond, nil when off." [] (or (settings/get settings ::rock-beyond) nil))
 
 (defn rock-guess?
@@ -134,7 +141,7 @@
   an unseen cell k + 1 from the nearest frontier at the feet's height is more likely solid than open (look/unseen-solid-fn:
   measured over the body's own kind of sight, so how far it sees in the dark does not move it), the body's head is out of water, and the mask is neither :edge nor without-rock."
   [p ^js unknown]
-  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (not (breath/head-under? p))
+  (boolean (and unknown (not (.-edge unknown)) (not (.-noRock unknown)) (not (under-of p unknown))
                 (when-let [k (rock-beyond)]
                   (when-let [solid-at (look/unseen-solid-fn p)]
                     (> (solid-at (:y (sh-sense/feet p)) (inc k)) 0.5))))))
@@ -192,12 +199,12 @@
    (when (fn? (.-pathWorld p))
      (let [table (blocks/default-state-table)
            known (when unknown (memory-sections p))
-           under? (when known (breath/head-under? p))
+           under? (when known (under-of p unknown))
            stone (first (blocks/state-ids table "stone"))
            k (when (and known (rock-guess? p unknown)) (rock-beyond))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
+                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :under (boolean under?) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
                                          :changed (memory-age/changed-fn (aget p "perception"))
                                          :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]

@@ -36,3 +36,17 @@
         (let [{:keys [out p]} (await (gs/run-go-to (assoc flat-world :radius 16) {:pos [80 64 0] :range 1 :unknown true}
                                                    (gs/looking {:light-default [15 0]})))]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
+
+(deftest a-mask-taken-from-a-plan-keeps-its-reading-of-unseen-cells-as-the-head-bobs
+  (let [p (tu/fake flat-world)
+        raw (fake-raw/create p)
+        per (perception/create raw {:now (constantly 1000000) :radius 16 :ray-deg 4})
+        w (perception/wrap p per)
+        _ (aset w "rawWorld" raw)
+        _ (perception/pass! per)
+        id-of #(.-id (wworld/unknown-of %))
+        dry (wworld/path-world w (wworld/unknown-spec))
+        wet (wworld/path-world w (doto (wworld/unknown-spec) (unchecked-set "under" true)))
+        again (wworld/path-world w (wworld/unknown-of wet))]
+    (is (not= (id-of dry) (id-of wet)))
+    (is (= (id-of wet) (id-of again)) "a look-ahead over the plan's own mask reads unseen cells as the plan did")))
