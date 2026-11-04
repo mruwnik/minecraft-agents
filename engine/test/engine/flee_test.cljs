@@ -92,6 +92,14 @@
 
 ;; ------------------------------------------------------------------ the table and the rule
 
+(deftest a-body-inside-the-death-radius-is-kept-only-from-stepping-nearer-the-death
+  (let [spots [{:x 0 :y 64 :z 0}]
+        from {:x 10 :y 64 :z 0}]
+    (is (true? (respond.state/near-died? spots {:x 8 :y 64 :z 0} from)) "nearer the death, inside the radius")
+    (is (false? (respond.state/near-died? spots {:x 10 :y 64 :z 6} from)) "inside the radius but farther off")
+    (is (false? (respond.state/near-died? spots {:x 20 :y 64 :z 0} from)) "outside the radius")
+    (is (true? (respond.state/near-died? spots {:x 11 :y 64 :z 0})) "no from: inside the radius is enough")))
+
 (deftest a-mob-stops-chasing-past-its-range-out-of-line-or-with-no-way
   (let [now 10000 lost-ms 4000
         chasing {:mob "zombie" :distance 10 :in-line? true :way? true}]

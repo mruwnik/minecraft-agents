@@ -32,12 +32,13 @@
    :after [[:body-far [48.5 0 16.5] 14]]
    :limit-s 50}
   {:name "armed-body-approaches-a-lone-skeleton"
-   ;; unarmoured on hard, the walk past its arrows prices over the risk the body affords: go-to waits, no fight
+   ;; unarmoured with a sword the fight is the cheaper answer (live: fight 152, flee 351) or go-to waits (:risky): either is sound, running from it is not
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :act [[:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :for-s 30}]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton"}} :within-s 40}
+            {:no-event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :for-s 30}
+            {:no-event {:source :body :kind :died} :for-s 30}]
    :limit-s 70}
   {:name "iron-body-approaches-a-lone-skeleton"
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
@@ -48,11 +49,13 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
    :limit-s 70}
-  {:name "armed-body-steps-out-of-range-of-a-lone-skeleton-with-nothing-past-it"
+  {:name "armed-body-beside-a-lone-skeleton-fights-it"
+   ;; a sword in reach of a lone archer: closing is cheaper than a walk under its arrows (live: fight 155, flee 280)
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}
-            {:no-event {:source :action :kind :done :data {:name "attack"}} :for-s 30}]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
+            {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 40}
+            {:no-event {:source :body :kind :died} :for-s 30}]
    :limit-s 40}
   {:name "armed-body-fights-a-lone-skeleton-it-fled-twice"
    ;; on hard, three walks under its arrows cost more than closing on it

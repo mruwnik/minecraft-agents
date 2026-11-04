@@ -79,9 +79,13 @@
     []))
 
 (defn near-died?
-  "Whether pos lies within ::died-radius of one of spots."
-  [spots pos]
-  (boolean (some #(<= (u/dist % pos) (settings/get settings ::died-radius)) spots)))
+  "Whether pos lies within ::died-radius of one of spots and, given from (where the body stands), nearer to it than from
+  is: a body already inside the radius is not kept from stepping along its edge."
+  ([spots pos] (near-died? spots pos nil))
+  ([spots pos from]
+   (boolean (some #(let [d (u/dist % pos)]
+                     (and (<= d (settings/get settings ::died-radius)) (or (nil? from) (< d (u/dist % from)))))
+                  spots))))
 
 (defn dark-end?
   "A fn of a feet cell: whether it is dark (look/dark-fn) when ::prefer-lit? holds, else nil."
@@ -95,7 +99,7 @@
   [c]
   (let [spots (died-spots c)]
     (cond-> []
-      (seq spots) (conj #(near-died? spots %))
+      (seq spots) (conj (let [from (u/self-pos c)] #(near-died? spots % from)))
       (dark-end? (:primitives c)) (conj (dark-end? (:primitives c))))))
 
 (defn tried? [c option] (contains? (:tried (ctx/mem c)) option))

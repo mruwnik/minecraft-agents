@@ -44,7 +44,7 @@
   {:name "hut-seen-only-from-outside-is-looked-into-from-the-door"
    :body {:at [16.5 0 21.5] :yaw 180 :effects [["resistance" 600 4]]}
    :act [[:wait-s 2] [:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :retreat.choice :data {:lean [:near #at [16 0 17] 3]}} :within-s 25}
+   :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
   ;; card 659f5e6d: a creeper chasing from afar is not led to the door (it would follow and blow the door, chest and bed): no run into the hut

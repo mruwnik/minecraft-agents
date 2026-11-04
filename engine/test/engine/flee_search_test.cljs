@@ -348,6 +348,12 @@
     (is (nil? (search/pick [(end-of 6 0 9)] {:never? wet?})) "never? leaves none: cornered")
     (is (= {:x -6 :y 64 :z 0} (search/pick ends {:hazards [{:x 6 :y 64 :z 1}]})) "a route past a hazard is left out")))
 
+(deftest an-avoided-place-on-the-first-leg-leaves-the-end-out-though-the-end-is-clear
+  (let [past (end-of 20 0 9 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3} {:x 20 :y 64 :z 0 :t 10}])
+        other (end-of 0 12 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 0 :y 64 :z 5 :t 3} {:x 0 :y 64 :z 12 :t 10}])
+        near-5? #(< (js/Math.abs (- (:x %) 5)) 2)]
+    (is (= {:x 0 :y 64 :z 5} (search/pick [past other] {:avoid [near-5?]})))))
+
 (deftest the-unseen-cells-the-routes-stopped-before-are-where-to-look-nearest-first-each-once
   (let [ends [(end-of 4 0 1 :found? false :s 0.8 :unseen [5 64 0])
               (end-of 2 0 1 :found? false :s 0.4 :unseen [2 64 -1])
