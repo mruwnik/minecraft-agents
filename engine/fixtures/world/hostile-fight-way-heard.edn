@@ -1,8 +1,9 @@
 ;; Card b56a866b (Wicken j3766): the fight's price counts mobs heard near the way to the seen mob: a skeleton with a zombie heard past it is
 ;; fled, a lone one fought. The body is full-health with an iron sword: hurt to 13 hp (and with a wooden sword) it hides in a pit instead (pit 113 s,
-;; fight 490-509 s against a skeleton 4 blocks off), so the heard zombie would change nothing. The zombie stands behind a stone wall
+;; fight 490-509 s against a skeleton 4 blocks off, flee 571 s), so the heard zombie would change nothing; the last case pins that hurt choice.
+;; The zombie stands behind a stone wall
 ;; (heard, not seen; the wall's ends leave a way round). Both mobs are NoAI (no shots), the skeleton helmeted.
-;; Sealed stone box x 2..28, y 0..4, z 10..22, lit by a sea lantern roof, an obsidian floor (the body carries no pickaxe: no pit).
+;; Sealed stone box x 2..28, y 0..4, z 10..22, lit by a sea lantern roof, an obsidian floor (the body carries no pickaxe, but a bare hand digs a pit in a softer floor).
 {:defaults
  {:tags [:hostile :survival :combat]
   :time :any
@@ -20,4 +21,14 @@
   {:name "a-lone-skeleton-is-fought-at-full-health"
    :act [[:summon "skeleton" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :fight :mob "skeleton"}} :within-s 20}]
+   :limit-s 60}
+  {:name "a-hurt-body-with-a-skeleton-in-sight-hides-in-a-pit"
+   :blocks [[:fill [2 -1 10] [28 -1 22] "sea_lantern"]]
+   :body {:inventory [["wooden_sword" 1]]}
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 7 minecraft:generic"] [:wait-s 4]
+         [:summon "skeleton" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee :cover :pit}} :within-s 20}
+            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]
    :limit-s 60}]}
