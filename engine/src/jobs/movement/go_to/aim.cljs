@@ -74,6 +74,12 @@
                                          (column/stands? kind-at (+ x dx) (+ y dy) (+ z dz))))
                    (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dy dz])))))
 
+(defn door-near?
+  "Whether a seen door or gate stands within 3 blocks sideways of the cell [x y z], at its feet or head height."
+  [p [x y z]]
+  (boolean (some (fn [[dx dy dz]] (some-> (u/seen-block p {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) .-name reach/openable?))
+                 (for [dx (range -3 4) dy [0 1] dz (range -3 4)] [dx dy dz]))))
+
 (defn in-seen-ground?
   "Under :unknown, whether the y goal pos is a position in the ground with no seen stand within the :range arg of it: a
   seen cell that is not free, or an unseen one under a seen solid cell of its column within :y-slack (the roof of a
@@ -89,7 +95,8 @@
                       me (u/self-pos c)
                       roofed? (and (keyword-identical? :unknown k)
                                    (<= (js/Math.hypot (- x (:x me)) (- z (:z me))) column/approach-range)
-                                   (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (tuning/y-slack)))))]
+                                   (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (tuning/y-slack))))
+                                   (not (door-near? (:primitives c) cell)))]
                   (and (or roofed? (not (or (keyword-identical? :unknown k) (kinds/free? k) door?)))
                        (not (seen-stand-within? ka cell (:range (:args c) 1))))))))
 
