@@ -44,7 +44,7 @@
               _ (core/submit! eng '(jobs.survival.night) {})
               log (await (with-child-log #(tu/run-until-empty eng 40)))
               args (nth (first (filter #(= :enclose (first %)) log)) 2)]
-          (is (= ##Inf (:worth args)) "no answer's price chose the wall-in, so nothing is to be saved by turning it back: not the night's open-gain"))))))
+          (is (< 0 (:worth args) ##Inf) "a price (what the other answers cost more), not the unbounded shortcut and not the night's open-gain"))))))
 
 (defn nothing-placed-at-the-start?
   "No block was placed near the start (x below 5): a bare roof is no shelter, so the body may wall itself in at the home it walked to."

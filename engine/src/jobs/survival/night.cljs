@@ -69,7 +69,7 @@
   - else the cheapest of shelter-prices (bed-down/answers): jobs.survival.shut-in {:for :night, its :worth the next way's price less the shelter's, shut-worth} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; priced again while another site may be left, at most max-sites), a niche (pocket way, once; with no site left, out of the failed pit and a look round first), a flee, or exposed, the night left in the open here (a shut-in that quotes no way here is called first all the same: its ending marks the sites failed, so a flee is not priced to ground beside them): one shelter.exposed warn, a log-out stint, and the round ends nothing-possible :exposed; the trigger fires again after its cooldown and the night looks again (a bed or sleeper that turned up is taken then). A shut-in, niche or flee in flight is called again until it ends.
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise. The walk's :worth is flee-worth (the next way's price less the shelter on arrival), so go-to's unseen-floor turn-back does not end it.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
-  Every child call carries its own :worth, never the night's open-gain: shut-in the shelter's or niche's shut-worth (##Inf with no price: the wall-in of a breached room), light-area the cost of the cheapest wall, pit or pocket less its own, get-food the hunger worth.
+  Every child call carries its own :worth, never the night's open-gain: shut-in the shelter's or niche's shut-worth (the enclose wall-in of a breached room: answer-worth, ##Inf with no other priced), light-area the cost of the cheapest wall, pit or pocket less its own, get-food the hunger worth.
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
   Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-spent, :edge-walked, :edge-t0, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
   Muting :night does not end a running night job: cancel it too.")
@@ -190,7 +190,7 @@
       (= :done (:kind l)) (do (when-not (:sheltered (ctx/mem c)) (hold/sheltered! c :logged-out)) :again)
       :else (do (ctx/update-mem! c assoc :log-out-failed true) :again))))
 
-(declare shut-worth flee-worth)
+(declare shut-worth flee-worth answer-worth)
 
 (defn walk-worth
   "The worth of a walk to answer (shut-worth over prices, the walk free), at least taken-at, the answer's price when it is taken
@@ -347,20 +347,21 @@
                   (ending/end-exposed! c))))))
 
 (defn niche-args
-  "worth: the niche answer's (shut-worth); ##Inf where no price chose it (the pocket after a failed site)."
+  "worth: the niche answer's shut-worth over the other answers (answer-worth :niche)."
   [worth]
   {:ways #{:pocket} :for :night :worth worth :settings {:jobs.survival.dig-pocket/walk-radius (sites/niche-reach)}})
 
 (defn ^:async niche-quote
-  "sin/shelter-quote of shut-in's quote of a niche (niche-args), asked once a pass (walk-pick/once!)."
+  "sin/shelter-quote of shut-in's quote of a niche (niche-args), asked once a pass (walk-pick/once!). Quoted at ##Inf: the call's
+  worth is made from this price, so it cannot be known here."
   [c]
-  (await (pick/once! c :niche (fn ^:async f [] (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in (dissoc (niche-args ##Inf) :worth))))))))
+  (await (pick/once! c :niche (fn ^:async f [] (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in (niche-args ##Inf))))))))
 
 (defn ^:async niche!
   "Out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.shut-in digs a pocket
   into a hillside or wall within niche-reach; the blocks that plug it are the :shelter entry's door (written by shut-in). Whatever it ends in, it is tried once (:niche :tried; :running
-  while the call goes on)."
-  [c pit]
+  while the call goes on). worth is the call's :worth the pick's shut-worth, else (answer-worth :niche)."
+  [c pit worth]
   (hold/busy! c)
   (if pit
     (let [r (await (dig-leave/climb! c {:start pit} nil))]
@@ -368,7 +369,7 @@
       :again)
     (if-not (look/surveyed? c)
       (do (await (look/look-around! c)) :again)
-      (let [d (await (ctx/call c :niche 'jobs.survival.shut-in (niche-args (:niche-worth (ctx/mem c) ##Inf))))]
+      (let [d (await (ctx/call c :niche 'jobs.survival.shut-in (niche-args worth)))]
         (if (= :continue d)
           (ctx/update-mem! c assoc :niche :running)
           (do (ctx/update-mem! c assoc :niche :tried)
@@ -385,7 +386,8 @@
 (defn ^:async enclose!
   "At a cave target (:enclose is its feet cell): wall in with shut-in's walls way, one call. Sealed in: :dug-in, held until
   morning (dig-in-leave/leave! opens the door). Stopped or declined: shut-in has marked the site failed, and the
-  roofed body ends the night :roofed. A body that is no longer at the cell forgets the target."
+  roofed body ends the night :roofed. A body that is no longer at the cell forgets the target. The call's :worth is what the other
+  answers cost more than the wall-in (answer-worth :shelter), ##Inf with none priced."
   [c]
   (let [p (:primitives c)
         pos (:enclose (ctx/mem c))
@@ -393,7 +395,7 @@
     (if (not= pos (sh-sense/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (hold/busy! c)
-            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :worth ##Inf}))]
+            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :worth (await (answer-worth c :shelter))}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
@@ -666,8 +668,7 @@
         (case pick
           :shelter (do (ctx/update-mem! c assoc :shelter-worth (shut-worth prices :shelter))
                        (await (shelter! c)))
-          :niche (do (ctx/update-mem! c assoc :niche-worth (shut-worth prices :niche))
-                     (await (niche! c (pit-site/pit-start c))))
+          :niche (await (niche! c (pit-site/pit-start c) (shut-worth prices :niche)))
           :flee (await (flee/flee! c (assoc t :worth (flee-worth prices t))))
           (if (next prices) (stay! c prices) (await (exposed! c))))))))
 
@@ -682,14 +683,16 @@
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
           (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
-          (and (ctx/way? c :shelter) (await (light/wanted? c))) (await (light/light! c))
-          (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
-          (or (= :exposed sheltered) (pit-site/exposed-here? c) (:pit-trapped (ctx/mem c))) (await (exposed! c))
-          (:digging (ctx/mem c)) (await (shelter! c))
-          (= :running (:niche (ctx/mem c))) (await (niche! c nil))
-          (and (:no-site (ctx/mem c)) (not= :tried (:niche (ctx/mem c))) (pit-site/pit-start c)) (await (niche! c (pit-site/pit-start c)))
-          (and (:no-site (ctx/mem c)) (not (look/surveyed? c))) (do (hold/busy! c) (await (look/look-around! c)) :again)
-          :else (await (shelter-answer! c)))))
+          :else (if-let [lw (and (ctx/way? c :shelter) (await (light/worth c)))]
+                  (await (light/light! c lw))
+                  (cond
+            (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
+            (or (= :exposed sheltered) (pit-site/exposed-here? c) (:pit-trapped (ctx/mem c))) (await (exposed! c))
+            (:digging (ctx/mem c)) (await (shelter! c))
+            (= :running (:niche (ctx/mem c))) (await (niche! c nil (await (answer-worth c :niche))))
+            (and (:no-site (ctx/mem c)) (not= :tried (:niche (ctx/mem c))) (pit-site/pit-start c)) (await (niche! c (pit-site/pit-start c) (await (answer-worth c :niche))))
+            (and (:no-site (ctx/mem c)) (not (look/surveyed? c))) (do (hold/busy! c) (await (look/look-around! c)) :again)
+            :else (await (shelter-answer! c)))))))
 
 (defn ^:async night-prices
   "bed-down/answers from here: :bed (bed, its walk's price from :bed-walk, else with carried? the carried bed here) and :sealed only
@@ -730,6 +733,12 @@
   "room-worth over the night's prices."
   [prices closed]
   (max 0 (- (apply min ##Inf (vals (dissoc prices closed))) (get prices closed 0))))
+
+(defn ^:async answer-worth
+  "shut-worth of closed over the answers priced from here (shelter-prices); ##Inf while the search for a flee goes on or with no other priced."
+  [c closed]
+  (let [r (await (shelter-prices c))]
+    (if (= :searching r) ##Inf (shut-worth (first r) closed))))
 
 (defn ^:async room-worth
   "Seconds shutting the room the body stands in is worth (Q54), as home-worth: what the cheapest way left while it stays

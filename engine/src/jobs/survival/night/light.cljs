@@ -42,30 +42,28 @@
       (> crafts (min (torch/fuel-held p) (torch/stick-supply p))) ##Inf
       :else (+ (get-in q [:uses :job-time 1] ##Inf) (* (settings/get settings ::craft-s) crafts)))))
 
-(defn ^:async wanted?
+(defn ^:async worth
   "Once a night: the body stands in a sealed room whose only fault is a dark spawnable cell beyond the spawn-free radius, holds
-  torches or coal, and lighting quotes no more than the cheapest wall, pit or pocket; then :light-worth, what the wall, pit or
-  pocket costs more, is the worth of the light call."
+  torches or coal, and lighting quotes no more than the cheapest wall, pit or pocket; then the light call's :worth, what the wall,
+  pit or pocket costs more; else nil."
   [c]
   (let [p (:primitives c)]
-    (and (not (:light-tried (ctx/mem c)))
+    (when (and (not (:light-tried (ctx/mem c)))
          (or (pos? (torch/torches-held p)) (pos? (torch/fuel-held p)))
-         (sh-inside/dark-room-at? p (sh-sense/feet p))
-         (let [light (await (light-cost c (:cells (reach-room/room p (sh-sense/feet p)))))]
-           (when (< light ##Inf)
-             (let [ways (await (way-cost c))]
-               (when (<= light ways)
-                 (ctx/update-mem! c assoc :light-worth (- ways light))
-                 true)))))))
+         (sh-inside/dark-room-at? p (sh-sense/feet p)))
+      (let [light (await (light-cost c (:cells (reach-room/room p (sh-sense/feet p)))))]
+        (when (< light ##Inf)
+          (let [ways (await (way-cost c))]
+            (when (<= light ways) (- ways light))))))))
 
 (defn ^:async light!
-  "jobs.build.light-area over the room's cells, called again while it goes on; once it ends, :light-tried, whatever came of it
-  (the next pass finds the room safe, or digs in as before)."
-  [c]
+  "jobs.build.light-area over the room's cells with worth (worth), called again while it goes on; once it ends, :light-tried, whatever
+  came of it (the next pass finds the room safe, or digs in as before)."
+  [c worth]
   (hold/busy! c)
   (let [p (:primitives c)
         cells (:cells (reach-room/room p (sh-sense/feet p)))
-        d (await (ctx/call c :light 'jobs.build.light-area (cond-> {:cells cells} (some? (:light-worth (ctx/mem c))) (assoc :worth (:light-worth (ctx/mem c))))))]
+        d (await (ctx/call c :light 'jobs.build.light-area {:cells cells :worth worth}))]
     (when-not (= :continue d)
       (ctx/update-mem! c assoc :light-tried true))
     :again))

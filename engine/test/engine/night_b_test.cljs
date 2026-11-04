@@ -604,6 +604,20 @@
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))
 
+(deftest the-niche-shut-in-carries-the-niche-answers-shut-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})
+              _ (st/refuse-cell! p [0 63 0])
+              _ (core/submit! eng '(jobs.survival.night) {})
+              log (await (with-child-log #(core/tick! eng)))
+              args (nth (first (filter #(= :niche (first %)) log)) 2)
+              prices (:prices (last (filter #(= :niche (:pick %)) (st/emitted seen :night.answers))))
+              others (apply min (vals (dissoc prices :niche)))]
+          (is (< (Math/abs (- (:worth args) (- others (:niche prices)))) 0.11)
+              "what the cheapest other answer costs more than the niche (the prices are rounded), never the night's open-gain"))))))
+
 (deftest the-niche-is-walled-again-when-left-at-dawn
   (async done
     (tu/run-async done
