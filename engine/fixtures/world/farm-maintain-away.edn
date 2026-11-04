@@ -1,12 +1,13 @@
 ;; farm.maintain far from its field walks there first (one go-to), then tends it, as a player would; it neither declines :not-worth
 ;; nor digs or tills cells from where the body stands. Field x 60..62, z 16..19 on grass: farmland y -1 (water in row z 17), ripe wheat y 0.
+;; Surface plot by day: the open sky over the unseen field is the evidence that it is lit (in a sealed lit cell its far end is a priced dark guess).
 ;; The field is big enough that its harvest is worth more than the 56 block walk (3 cells were not: the body rightly declined :not-worth).
 ;; Should-succeed: a lone maintain with the body 56 blocks off reaches the field and cuts the wheat.
 ;; Should-fail (control): none; the body on the field cuts the same wheat without a walk.
 {:defaults
  {:tags [:farm :maintain :jobs]
-  :time :any
-  :plot {:floor "grass_block" :length 80 :width 32}
+  :time :day :time-why :sunlit-ground
+  :plot {:floor "grass_block" :length 80 :width 32 :light :sky}
   :blocks [[:fill [60 -1 16] [62 -1 19] "farmland[moisture=7]"] [:fill [60 -2 17] [62 -2 17] "stone"] [:fill [60 -1 17] [62 -1 17] "water"]
            [:fill [60 0 16] [62 0 16] "wheat[age=7]"] [:fill [60 0 18] [62 0 19] "wheat[age=7]"]]
   :body {:effects [["resistance" 600 4]]}
