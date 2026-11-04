@@ -539,7 +539,7 @@
           ;; it fights when the roof holds it in, else when the fight is the cheapest answer priced (a cover is a flight): the
           ;; prices are never pinned. A fight with the mob only heard has nothing in sight to swing at: it ends done, leaving the mob (muted)
           (doseq [[world spec held? heard-only? why]
-                  [[{:time 14000 :entities [heard]} respond false false "no roof: no hold, the mob is seen and the prices decide"]
+                  [[{:time 14000 :entities [heard]} respond false true "no roof: no hold, the prices decide (a fight leaves the mob it cannot reach muted)"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} respond true true "roofed, heard only: it stays"]
                    [{:time 14000 :blocks roofed-passage :entities [heard]} stay false true "stay-inside off: no hold, the prices decide"]
                    [{:time 1000 :blocks roofed-passage :entities [heard]} respond true true "day: it stays too (the roof, not the clock)"]]]
