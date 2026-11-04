@@ -29,14 +29,22 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"2,64,0" "red_bed"} :inventory st/wall-stack :skipNight false})
-              asleep-at-hold (atom nil)]
+              asleep-at-hold (atom nil)
+              asleep-after-left (atom :unset)]
           (st/know-bed! eng {:x 2 :y 64 :z 0})
+          ;; read at the next pricing after bed-left: with the respawn bed recorded by the sleep a log-out is cheap, so the
+          ;; same tick goes on through log-outs and lies down again for the last seconds of the night
+          (add-watch seen ::left
+                     (fn [_ _ _ evs]
+                       (when (and (= :unset @asleep-after-left) (= :night.answers (:kind (peek evs)))
+                                  (some #(= :night.bed-left (:kind %)) evs))
+                         (reset! asleep-after-left (asleep? p)))))
           (st/dawn-after! p 40 (fn [n] (when (= n 3) (reset! asleep-at-hold (asleep? p)) (sleep-count! p 1 4))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-until eng #(seq (st/emitted seen :night.bed-left)) 60))
           (is (true? @asleep-at-hold) "alone, its sleep skips the night: it lay down and stayed")
           (is (= [:shelter] (mapv :answer (st/emitted seen :night.bed-left))) "three more must sleep: lying in the open all night is dearer than sheltering")
-          (is (not (asleep? p)) "out of the bed"))))))
+          (is (false? @asleep-after-left) "out of the bed"))))))
 
 (deftest a-carried-bed-is-shut-in-before-it-is-lain-in-on-a-night-that-does-not-skip
   (async done
