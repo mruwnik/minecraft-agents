@@ -247,16 +247,15 @@ test('main end: a failing shard with a large output reaches a pipe reader throug
     fs.writeFileSync(path.join(root, 'engine/test/x_test.cljs'), '(ns x-test)\n')
     fs.writeFileSync(path.join(root, 'engine/out/test.cjs'), "process.stdout.write('y'.repeat(300000) + 'END\\n'); process.exitCode = 1\n")
     const r = spawnSync(process.execPath, [path.join(root, 'tools/test-shards.mjs'), '--shards', '1', '--slots', '1'], {
-      cwd: root, maxBuffer: 1e7, encoding: 'utf8', env: { ...process.env, RES_SLOT_DIR: path.join(root, 'slots'), TEST_EVENTS: '' } })
+      cwd: root, maxBuffer: 1e7, encoding: 'utf8', env: { ...process.env, LIVE_TESTS_NONCE: 'n0', RES_SLOT_DIR: path.join(root, 'slots'), TEST_EVENTS: '' } })
     assert.equal(r.status, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /shard 0 FAILED/)
     assert.match(r.stdout, /END\n/)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
-test('refusal: a hand run is refused; run_tests (nonce) and integration (MC_INTEGRATION=1) pass', () => {
+test('refusal: a hand run is refused; run_tests (nonce) passes', () => {
   assert.match(refusal({}), /run_tests/)
-  assert.match(refusal({ MC_INTEGRATION: '0' }), /refusing/)
+  assert.doesNotMatch(refusal({}), /MC_INTEGRATION|integration-worktree/)
   assert.equal(refusal({ LIVE_TESTS_NONCE: 'n0' }), null)
-  assert.equal(refusal({ MC_INTEGRATION: '1' }), null)
 })
