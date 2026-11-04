@@ -31,7 +31,7 @@
               at-target (filter #(= {:x 1.5 :y 63.5 :z 0.5} (:pos %)) (looks p))
               walks (count (filter #(and (= :child_started (:kind %)) (re-find #"/walk$" (:job %))) @seen))]
           (is (<= 1 (count at-target) (inc walks)) "place looks at the cell once, and each of its walks (go-to) once at its goal while it is unseen")
-          (is (<= (count (looks p)) 120) "the walks do not look at landing and ahead cells that rock hides (179 looks before, 98 after)"))))))
+          (is (<= (count (looks p)) 90) "the walks do not look at landing and ahead cells that rock hides (179 looks before, 98 after, 82 with the look over an edge skipping ground an earlier look showed)"))))))
 
 (deftest pillar-looks-at-an-unseen-ceiling-before-it-gives-up
   (async done

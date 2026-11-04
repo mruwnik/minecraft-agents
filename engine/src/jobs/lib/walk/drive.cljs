@@ -161,11 +161,14 @@
     (when (and (<= (js/Math.abs (- x ax)) 1) (<= (js/Math.abs (- z az)) 1) (not= [x z] [ax az])
                (not (lip-unsafe? c {:from at :floor cell})))
       (await (lean-to! c (lip at cell))))
-    (loop [points (keep identity (cons (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))
-                                       (edge-points pos y #(unseen-round? p %))))]
+    (when-let [pt (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))]
+      (await (ctx/act c :look (clj->js {:pos pt})))
+      (look/see! c))
+    (loop [points (edge-points pos y #(unseen-round? p %))]
       (when-let [pt (first points)]
-        (await (ctx/act c :look (clj->js {:pos pt})))
-        (look/see! c)
+        (when (unseen-round? p (mapv #(js/Math.floor (% pt)) [:x :y :z]))
+          (await (ctx/act c :look (clj->js {:pos pt})))
+          (look/see! c))
         (recur (rest points))))))
 
 (defn ^:async follow!
