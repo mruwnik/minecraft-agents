@@ -20,6 +20,19 @@
          [:summon "zombie" [12.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:0b,duration:2400}]}"]]
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :given-up}} :within-s 25}
             {:event {:source :job :kind :retreat.choice :data {:goal [:any] :goal-why [:not :given-up]}} :within-s 80}]}
+  {:name "goal-given-up-is-leaned-to-again-once-the-memory-lapses-held-zombie"
+   ;; the zombie comes after the 30 s :goal-off memory has lapsed (the slowed body is still far from the goal), and is held, so
+   ;; it never beats the body to the goal: the flight leans to it (a later lost-ground gives the goal up again, so no more is pinned)
+   :plot {:height 12 :length 64 :width 32 :light :sky}
+   :body {:at [8.5 0 16.5] :effects [["resistance" 900 4] ["slowness" 900 5]]}
+   :memory [{:kind :goal-off :data {:goal #at [56 0 16] :why :lost-ground} :policy {:cap 4 :ttl 30000}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [56 0 16] :range 2})]
+         [:await {:source :job :kind :planned} 20]
+         [:wait-s 33]
+         [:until-pos {:x-min 40} 40]
+         [:summon "zombie" [36.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.choice :data {:goal [:any] :goal-why [:not :given-up] :lean [:any]}} :within-s 100}]
+   :limit-s 110}
   {:name "goal-straight-up-a-column-has-no-route-no-leg"
    :blocks [[:fill [19 0 15] [21 29 17] "stone"]]
    :plot {:height 31 :light :sky}
