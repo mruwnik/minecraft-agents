@@ -604,3 +604,13 @@
         land (arrive nil)]
     (is (= land (arrive (constantly 0))) "no water shown: land speed")
     (is (< land (arrive (constantly 3)) (arrive (constantly 100))) "water shown slows it, over the whole way at most")))
+
+(deftest a-flight-with-an-unseen-cell-to-look-at-names-the-cells-in-its-price
+  (let [caught (fn [& more] (apply end-of 4 0 1 :found? false :caught? true :caught-s 0.6 more))]
+    (is (= [[5 64 0]] (:look (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {} nil))))
+    (is (not (contains? (search/caught-chance [(caught)] {:k 10 :n 10} {} nil) :look)))))
+
+(deftest a-search-whose-every-route-was-exhausted-corners-the-flight
+  (is (= {:chance 1 :cornered? true} (search/caught-chance (with-meta [] {:planned 12 :unrouted {"exhausted" 12}}) {:k 0 :n 0} {} nil)))
+  (is (< (:chance (search/caught-chance (with-meta [] {:planned 12 :unrouted {"exhausted" 11 "over-budget" 1}}) {:k 0 :n 0} {} nil)) 1)
+      "a route lost to the node budget leaves a way unknown"))

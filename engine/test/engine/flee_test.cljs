@@ -971,7 +971,7 @@
           (await (run-job! s 'pricer {}))
           (let [[chased dead fresh] @prices]
             (is (not= chased dead) (str "the zombie at 2 blocks catches the flight; dead, it chases nothing " (pr-str @prices)))
-            (is (= fresh dead) "the price asked again is the one asked afresh")))))))
+            (is (= (dissoc fresh :way-scan) (dissoc dead :way-scan)) "the price asked again is the one asked afresh (the way scan only records the ways sampled, which the first ask's looks change)")))))))
 
 (deftest a-flight-target-behind-the-body-is-looked-at-first
   (async done

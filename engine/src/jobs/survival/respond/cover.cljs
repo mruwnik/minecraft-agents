@@ -157,7 +157,9 @@
   (let [hs (homes c rooms blast?)]
     (assoc (await (respond.goal/judge! c hs covered? (dead-end-covers c))) :homes hs)))
 
-(defn ^:async caught-chance!
+(declare caught-chance!)
+
+(defn ^:async caught-chance-once!
   "{:chance :seconds :cornered?} of the flight's next step from where the body stands (flee-search/caught-chance), for
   the fight-or-flee weighing, from what that step judges by: its chasers (flight/look over the memory flee! resumes,
   flight/resume-flight), their cover-fn and blast, its rooms (survey, kept nowhere), its stair up (way-up: a seen way,
@@ -166,7 +168,7 @@
   with (wworld/way-scan, for jobs.lib.walk.way-log). Kept (memory :caught-chance) for a
   flee step's seconds (flee-search ::step-s) while its cell, its looks, its chasers and its stair up stay the same.
   specs: the covers' specs the decision priced, its dead ends' covers (dead-end-covers)."
-  ([c] (await (caught-chance! c nil)))
+  ([c] (await (caught-chance-once! c nil)))
   ([c specs]
   (let [p (:primitives c)
         now (ctx/now c)
@@ -186,6 +188,18 @@
             chance (cond-> chance (and chance scan) (assoc :way-scan scan) (:refuge-s chance) (assoc :hide-s (hide-out/quiet-s)))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance)))))
+
+(defn ^:async caught-chance!
+  "caught-chance-once!, after a look at the cells its flight would look at first (:look): a way that may be there is
+  priced after the glance the flight takes anyway, not before it."
+  ([c] (await (caught-chance! c nil)))
+  ([c specs]
+   (let [r (await (caught-chance-once! c specs))]
+     (if-let [cells (:look r)]
+       (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
+           (await (dig-look/look-unknown! c cells))
+           (await (caught-chance! c specs)))
+       r))))
 
 (defn ^:async look-ahead!
   "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes not looked at
