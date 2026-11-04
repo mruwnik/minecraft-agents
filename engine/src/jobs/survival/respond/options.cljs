@@ -12,6 +12,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.memory-age :as memory-age]
@@ -249,7 +250,9 @@
         ways (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options)
         specs (if given (select-keys given ways) (covers c ways))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
-        mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
+        mobs (mapv #(let [m (hostile/mob-near (:primitives c) %)]
+                      (assoc m :burns (death-spot/burns-by-day? (:primitives c) (:name m) (danger-q/mob-pos (:primitives c) %))))
+                   hostiles)
         body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)
         answer #(cost/cover-answer {:equipment equipment :mobs mobs} %)

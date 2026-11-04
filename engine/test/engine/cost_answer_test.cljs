@@ -610,3 +610,8 @@
         build (:damage (cost/build-answer {:mobs [zombie] :seconds 2}))
         cover (:damage (cost/cover-answer {:mobs [zombie]} {:open-s 2 :seconds 32}))]
     (is (> cover build) "a pillar's build begins after the same measured start as a run: the mob 7 off arrives meanwhile")))
+
+(deftest a-cover-only-delays-a-mob-that-does-not-burn-by-day
+  (let [stays #(:stays (cost/cover-answer {:mobs [(assoc (mob "zombie" 3) :burns %)]} {:open-s 2 :seconds 32}))]
+    (is (= 1 (stays false)) "no open sky over it: the mob is still there when the hide ends")
+    (is (< (stays true) 1) "burning under open sky it may pass")))
