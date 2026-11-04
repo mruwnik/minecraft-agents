@@ -127,20 +127,26 @@ export const isolate = (engineDir, tag, root = RUN_ROOT, nss = null) => {
   const runDir = path.join(root, `mc-test-run-${tag}`)
   const srcRuntime = path.join(engineDir, 'out/test/cljs-runtime')
   const runtime = path.join(runDir, 'out/test/cljs-runtime')
-  fs.rmSync(runDir, { recursive: true, force: true })
-  fs.mkdirSync(runtime, { recursive: true })
-  if (nss) narrowBundle(engineDir, nss, runDir)
-  else fs.copyFileSync(path.join(engineDir, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
-  const wanted = nss
-    ? [...fs.readFileSync(path.join(runDir, 'out/test.cjs'), 'utf8').matchAll(/^SHADOW_IMPORT\("(.+)"\);$/gm)].flatMap((m) => [m[1], `${m[1]}.map`])
-    : fs.readdirSync(srcRuntime)
-  for (const f of wanted) {
-    if (fs.existsSync(path.join(runtime, f)) || !fs.existsSync(path.join(srcRuntime, f))) continue
-    fs.copyFileSync(path.join(srcRuntime, f), path.join(runtime, f))
+  const cleanup = () => fs.rmSync(runDir, { recursive: true, force: true })
+  cleanup()
+  try {
+    fs.mkdirSync(runtime, { recursive: true })
+    if (nss) narrowBundle(engineDir, nss, runDir)
+    else fs.copyFileSync(path.join(engineDir, 'out/test.cjs'), path.join(runDir, 'out/test.cjs'))
+    const wanted = nss
+      ? [...fs.readFileSync(path.join(runDir, 'out/test.cjs'), 'utf8').matchAll(/^SHADOW_IMPORT\("(.+)"\);$/gm)].flatMap((m) => [m[1], `${m[1]}.map`])
+      : fs.readdirSync(srcRuntime)
+    for (const f of wanted) {
+      if (fs.existsSync(path.join(runtime, f)) || !fs.existsSync(path.join(srcRuntime, f))) continue
+      fs.copyFileSync(path.join(srcRuntime, f), path.join(runtime, f))
+    }
+    fs.symlinkSync(path.join(engineDir, 'node_modules'), path.join(runDir, 'node_modules'))
+    fs.symlinkSync(path.join(engineDir, 'test'), path.join(runDir, 'test'))
+  } catch (e) {
+    cleanup() // a half-written copy would sit on the full disk until the stale sweep
+    throw e
   }
-  fs.symlinkSync(path.join(engineDir, 'node_modules'), path.join(runDir, 'node_modules'))
-  fs.symlinkSync(path.join(engineDir, 'test'), path.join(runDir, 'test'))
-  return { runDir, cleanup: () => fs.rmSync(runDir, { recursive: true, force: true }) }
+  return { runDir, cleanup }
 }
 
 // Removes the run dirs of dead pids (a SIGKILLed run leaves its copy in RAM): <root>/mc-test-run-<digits> and the test process's

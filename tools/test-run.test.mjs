@@ -141,6 +141,15 @@ test('isolate: copies the bundle and runtime, links test and node_modules, clean
   assert.equal(fs.existsSync(runDir), false)
 })
 
+test('isolate: a failed copy leaves no run dir behind', (t) => {
+  const src = fs.mkdtempSync('/tmp/test-run-src-')
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  fs.mkdirSync(`${src}/out/test/cljs-runtime/unreadable.js`, { recursive: true })
+  fs.writeFileSync(`${src}/out/test.cjs`, 'bundle')
+  assert.throws(() => isolate(src, 'unit-fail', '/tmp'))
+  assert.equal(fs.existsSync('/tmp/mc-test-run-unit-fail'), false)
+})
+
 const ns = (n) => `new cljs.core.Symbol(null,"${n.replaceAll('_', '-')}","x",1,null)`
 const testData = (nss) => `return shadow.test.env.reset_test_data_BANG_(cljs.core.PersistentHashMap.fromArrays([${nss.map(ns).join(',')}],[${nss.map((n) => `cljs.core.with_meta(new cljs.core.PersistentArrayMap(null, 1, ["a]},[\\"b", [(${n}.f)]], null), null)`).join(',')}]));`
 
