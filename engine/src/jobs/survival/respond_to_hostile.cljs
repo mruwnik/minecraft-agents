@@ -261,9 +261,10 @@
     (let [cs (options/covers c cover-ways)
           pillar (when-not (state/tried? c :pillar) (options/pillar-cover c near))]
       (when-not (:pit cs) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))
-      (cond-> cs
-        pillar (assoc :pillar pillar)
-        sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing)))))))
+      (update-vals (cond-> cs
+                     pillar (assoc :pillar pillar)
+                     sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))
+                   #(merge (options/exits-of c) %)))))
 
 (defn cover-answers
   "{way answer} of the covers specs (cover-specs) against mobs [hostile/mob-near's] wearing equipment (cost/cover-answer:
@@ -286,7 +287,7 @@
           door-cover (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false)
           closed (cost/closed-chance seen unseen)
           answer (cost/look-answer body {:equipment equipment :mobs mobs :looks (* 2 (count headings))
-                                         :outcomes [[closed #(assoc (now-of %) :door (cost/cover-answer {:equipment equipment :mobs % :then then} door-cover))]
+                                         :outcomes [[closed #(assoc (now-of %) :door (cost/cover-answer {:equipment equipment :mobs % :then then} (merge (options/exits-of c) door-cover)))]
                                                     [(- 1 closed) #(dissoc (now-of %) :door)]]}
                                    (u/self-pos c))]
       (when answer

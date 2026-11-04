@@ -618,7 +618,7 @@
 
 (deftest a-cover-is-worth-its-cheapest-exit-the-sun-a-log-out-or-the-fight-owed
   (let [fight {:damage 5 :hit 3 :seconds 5}
-        price (fn [burns args] (cost/answer-price (body 20) (cost/cover-answer (merge {:mobs [(assoc (mob "zombie" 3) :burns burns)] :then [(update fight :seconds * 1000)]} args) {:open-s 2 :seconds 32}) here))]
+        price (fn [burns args] (cost/answer-price (body 20) (cost/cover-answer {:mobs [(assoc (mob "zombie" 3) :burns burns)] :then [(update fight :seconds * 1000)]} (merge {:open-s 2 :seconds 32} args)) here))]
     (is (< (price true {:dawn-s 100}) (price true {:dawn-s 900})) "a burner is waited out: dusk costs more than just before dawn")
     (is (= (price false {:dawn-s 100}) (price false {})) "the sun is no exit from a mob that does not burn")
     (is (< (price false {:log-out-s 60}) (price false {})) "a log-out ends the stay of a mob that stays")))

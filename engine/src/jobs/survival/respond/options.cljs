@@ -12,7 +12,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.shelter.clock :as clock]
             [jobs.survival.log-out :as log-out]
             [jobs.lib.block-sets :as bs]
@@ -242,6 +241,12 @@
     (when (seq missing) (ctx/update-mem! c assoc ::covers kept))
     (select-keys (:v kept) ways)))
 
+(defn exits-of
+  "{:dawn-s :log-out-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left, and a
+  log-out's stint (nil when unsupported)."
+  [c]
+  {:dawn-s (second (get-in (clock/night-left-quote c) [:uses :job-time])) :log-out-s (log-out/stint-s c)})
+
 (defn cornered-covers
   "{option cover} of the cornered options not yet tried that shut the body in or lift it: :plug the walls, :plug-dig
   the cheaper of a pit and a pocket (none at home), :pillar (pillar-cover). given: the ways' covers to read them from
@@ -252,21 +257,19 @@
         ways (mapcat (fn [[option ways]] (when (and (open? option) (not (and home? (= :plug-dig option)))) ways)) cover-options)
         specs (if given (select-keys given ways) (covers c ways))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
-        mobs (mapv #(let [m (hostile/mob-near (:primitives c) %)]
-                      (assoc m :burns (and (death-spot/bare-headed? %) (death-spot/burns-by-day? (:primitives c) (:name m) (danger-q/mob-pos (:primitives c) %)))))
-                   hostiles)
+        mobs (mapv #(hostile/mob-near (:primitives c) %) hostiles)
         body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)
-        dawn-s (second (get-in (clock/night-left-quote c) [:uses :job-time]))
-        answer #(cost/cover-answer {:equipment equipment :mobs mobs :dawn-s dawn-s :log-out-s (log-out/stint-s c)} %)
+        answer #(cost/cover-answer {:equipment equipment :mobs mobs} (merge (exits-of c) %))
         death (cost/meet-death body at)
         price #(cost/answer-price* body (answer %) at death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]
-    (cond-> {}
-      (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
-      (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
-      pillar (assoc :pillar pillar)))))
+    (update-vals (cond-> {}
+                   (cheaper (:plug cover-options)) (assoc :plug (cheaper (:plug cover-options)))
+                   (cheaper (:plug-dig cover-options)) (assoc :plug-dig (cheaper (:plug-dig cover-options)))
+                   pillar (assoc :pillar pillar))
+                 #(merge (exits-of c) %)))))
 
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),

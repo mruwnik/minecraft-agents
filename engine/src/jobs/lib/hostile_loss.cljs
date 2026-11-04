@@ -8,6 +8,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.shot :as shot]
             [jobs.lib.util :as u]))
 
@@ -32,6 +33,8 @@
   {:name (.-name e) :held (.-held e)
    :distance (danger-q/mob-distance p e (when (and (breath/swimming? p) (not (breath/head-under? p)) (danger-q/seen-only? e))
                                         (assoc (u/pos-of (.-pos (.self p))) :y (breath/start-y p))))
+   :burns (boolean (and (contains? threat/burns-in-sun (.-name e)) (death-spot/bare-headed? e)
+                        (death-spot/burns-by-day? p (.-name e) (danger-q/mob-pos p e))))
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 
 (defn body-at
