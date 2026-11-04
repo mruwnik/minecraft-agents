@@ -45,7 +45,7 @@
     furnace's own status.")
 
 (a/defargs args
-  {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen within 32 blocks that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
+  {:furnace {:doc "furnace, blast furnace or smoker position [x y z] or {:x :y :z}; when nil the nearest one the body has seen that cooks :item (or anything carried) is chosen (smelt.furnace says which), or the job ends with no-furnace-seen" :spec ::a/pos :default nil}
    :item {:doc "what to smelt, or a list of them (an input; a product such as cooked_chicken or iron_ingot means its input, charcoal the carried log there is most of; an item no furnace cooks ends not-smeltable at once); the first smeltable thing carried when nil, " :spec (a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many; all carried (at most one stack) when nil" :spec (a/int-in 0 nil) :default nil}
    :fuel {:doc "fuel item to load; the best carried when nil" :spec a/item? :default nil}
@@ -59,12 +59,11 @@
    ::grace-ms {:default 6000 :doc "How long a furnace may look unlit after a load before it counts as stuck, in ms." :spec (a/int-in 0 nil)}
    ::recheck-ms {:default 6000 :doc "How often the furnace is looked at again, in ms." :spec (a/int-in 0 nil)}
    ::fetch-fuels {:default ["coal" "charcoal"] :doc "Fuel items fetched first when :fuel is nil, the first preferred." :spec (a/coll-of a/item?)}
-   ::fetch-wood-fuels {:default ["oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"] :doc "Fuel items fetched when the ::fetch-fuels fetch found too little, the first preferred." :spec (a/coll-of a/item?)}
-   ::seen-radius {:default 32 :doc "Blocks within which a furnace counts as seen." :spec (a/int-in 0 nil)}})
+   ::fetch-wood-fuels {:default ["oak_planks" "spruce_planks" "birch_planks" "jungle_planks" "acacia_planks" "dark_oak_planks"] :doc "Fuel items fetched when the ::fetch-fuels fetch found too little, the first preferred." :spec (a/coll-of a/item?)}})
 (defn slack-ms [] (settings/get settings ::slack-ms))
 (defn grace-ms [] (settings/get settings ::grace-ms))
 (defn recheck-ms [] (settings/get settings ::recheck-ms))
-(defn seen-radius [] (settings/get settings ::seen-radius))
+(def seen-radius "How far a furnace counts as seen: all that perception remembers." look/memory-radius)
 (defn fetch-fuels [] (settings/get settings ::fetch-fuels))
 (defn fetch-wood-fuels [] (settings/get settings ::fetch-wood-fuels))
 
@@ -100,7 +99,7 @@
   (and (sf/own-possible? c) (not= :ok (first (ready/exposed (assoc c ::price/stay-s (cook-s c)) pos)))))
 
 (defn nearest-furnace
-  "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
+  "The nearest furnace, blast furnace or smoker the body has seen seen, still that block now, that
   cooks item, that no zone or claim of another bars (or, when item is nil, anything carried; any kind when nothing carried is smeltable) and that a walk has not
   found unreachable (furnace/unreachable-furnaces); nil when none."
   [c item]
@@ -108,7 +107,7 @@
         barred? (fn [pos] (some #(access/container-refusal c % pos) [:put :take]))
         kinds (filter (fn [kind] (some #(sp/smelts? kind %) names)) (keys sp/cook-ticks))
         ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
-    (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius (seen-radius) :max 16 :live? true})
+    (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius seen-radius :max 16 :live? true})
          (some #(when (and (ok? (:name %)) (not (contains? (furnace/unreachable-furnaces c) (:pos %))) (not (barred? (:pos %))) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
 
 (defn needs-attention?

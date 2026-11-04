@@ -106,17 +106,6 @@
           (is (= {:item "bread" :made 1 :status :done} (dissoc result :text)))
           (is (empty? (tu/walked-to eng))))))))
 
-(deftest craft-without-a-table-in-reach-names-the-nearest-known-one
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[result p seen eng] (await (settings/with-settings {::craft/table-radius 40}
-                                          #(craft {:inventory [{:name "wheat" :count 3}] :blocks {"60,64,0" "crafting_table"}} {:item "bread" :ways #{:carried}})))]
-          (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
-          (is (empty? (tu/walked-to eng)))
-          (is (str/includes? (:text result) "[60 64 0]"))
-          (is (str/includes? (:text result) "60 blocks")))))))
-
 (deftest craft-walks-to-a-known-table-30-off-within-the-default-radius
   (async done
     (tu/run-async done
@@ -431,13 +420,12 @@
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (= 1 (count (tu/walked-to eng))) "walked to the remembered cell once, not again"))))))
 
-(deftest craft-ignores-a-handed-over-table-beyond-the-radius
+(deftest craft-ignores-a-handed-over-table-beyond-what-perception-remembers
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p seen eng] (await (settings/with-settings {::craft/table-radius 8}
-                                          #(craft {:inventory [{:name "wheat" :count 3}] :blocks {"20,64,0" "crafting_table"}}
-                                                  {:item "bread"})))]
+        (let [[result p seen eng] (await (craft {:inventory [{:name "wheat" :count 3}] :blocks {"80,64,0" "crafting_table"}}
+                                                  {:item "bread"}))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :no-table} (dissoc result :text)))
           (is (empty? (tu/walked-to eng)))
           (is (empty? (filter #(str/starts-with? (name (:kind %)) "craft.") @seen)) "the ending carries it"))))))
