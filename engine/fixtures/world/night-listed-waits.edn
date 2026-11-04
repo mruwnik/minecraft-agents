@@ -3,10 +3,10 @@
 ;; Case 1: home = a stone slab over 3x3 cells 15 east of the body, a NoAI zombie 3 behind it: waiting :hostile-near, no ending.
 ;; Case 2: dig-pit :for :night standing on thick open stone completes its pit (the standalone night path).
 ;; Case 3: the same with a NoAI zombie 5 off on the dig side: the pit is still dug and roofed (it never ends :lays-open).
-;; Needs night: run with --allow-time --time-log <the shared time log>.
+;; Runs by day: the code under test reads the job's :for arg, and the helmeted NoAI zombie does not burn.
 {:defaults
  {:tags [:night :survival]
-  :time :night
+  :time :any
   :mobs :keep
   :plot {:height 10 :length 64 :width 32}
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 16] ["stone_pickaxe" 1]] :settle-s 4}}
@@ -25,7 +25,6 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :limit-s 80}
   {:name "dig-pit-for-night-with-a-zombie-five-off-completes-roofed"
-   :time-why :night-light
    :blocks [[:fill [0 -6 0] [63 -1 31] "stone"]]
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.dig-pit {:for :night})]]
