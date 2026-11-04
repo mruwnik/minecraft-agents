@@ -297,6 +297,8 @@
             (some #(when-let [b (block-at %)] (not (bs/air b))) cut))) :again
       :else {:reason :step-failed :cell next-feet})))
 
+(def return-ways "A cliff between the body and its stair is dug through, as a player with a pickaxe would; no stair or pillar inside a stair." #{:walk :clear-seal :clear-path})
+
 (defn ^:async return!
   "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of
   step at-step, at most max-returns times per call, when within return-reach or go-to quotes a whole way back no longer
@@ -309,8 +311,8 @@
         redo-s (stair-time/steps-s dir (or at-step 0))]
     (when (and (< (or returns 0) (max-returns))
                (or (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach))
-                   (await (price/walk-back-worth? c cell redo-s))))
-      (let [r (await (child/call-walk* c :return (ready/forage-walk c (child/walk-into-args :return cell))))]
+                   (await (price/walk-back-worth? c cell redo-s return-ways))))
+      (let [r (await (child/call-walk* c :return (ready/forage-walk c (assoc (child/walk-into-args :return cell) :ways return-ways))))]
         (when-not (= :continue r)
           (ctx/update-mem! c update :returns (fnil inc 0))
           (let [arrived (= cell (reach/standing-vec (:primitives c)))]

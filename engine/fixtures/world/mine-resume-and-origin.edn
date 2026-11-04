@@ -6,6 +6,7 @@
 ;; f5ffa4f1: :heading :west beats the way the body faces (east).
 ;; cc56de38: a stair 8 steps down, the body moved 35 off it onto the same mass: the walk back is cheaper than cutting the
 ;; steps again, so it walks back though past ::return-reach. Should-fail: :off-stair (2 steps cut: the far case above).
+;; Stair-off-on-open-ground: the body is shoved onto the ground south of the rock; a pickaxe digs back to the stair (a cliff between).
 ;; Stone mass x 2..30, z 8..24, y 0..6 (cases 1, 3, 4); the stair case has its own mass.
 {:defaults
  {:tags [:mine :access :jobs] :time :any
@@ -52,6 +53,16 @@
    :expect [{:event {:source :job :kind :completed :data {:steps 9}} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :off-stair}} :for-s 200 :until {:source :job :kind :completed}}]
    :limit-s 240}
+  {:name "stair-off-on-open-ground-beside-the-rock-is-dug-back-to"
+   :plot {:height 20 :length 64 :width 32}
+   :blocks [[:fill [8 0 8] [60 9 24] "stone"]]
+   :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 9})]
+         [:await {:source :job :kind :stair.step :data {:at #at [18 2 16]}} 150]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~34 ~8 ~0"]]
+   :expect [{:event {:source :job :kind :completed :data {:steps 9}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :off-stair}} :for-s 220 :until {:source :job :kind :completed}}]
+   :limit-s 260}
   {:name "rerun-along-an-old-corridor-digs-new-rock"
    :blocks [[:fill [3 0 16] [14 1 16] "air"] [:set [8 0 16] "torch"] [:set [18 0 16] "iron_ore"]]
    :body {:at [3.5 0 16.5]}

@@ -474,6 +474,16 @@
             (is (= ending (or (:reason @out) (:status @out))) (str "cell-s " cell-s))
             (is (= (= :done ending) (boolean (seq (events-of s :stair.return)))))))))))
 
+(deftest a-stair-whose-body-stands-past-a-cliff-digs-back-to-its-line
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cliff (into {} (for [x (range -40 41) y (range 50 70) z (range 3 6)] [(str x "," y "," z) "stone"]))
+              yard (into {} (for [x (range -40 41) y (range 50 65) z (range 6 13)] [(str x "," y "," z) "stone"]))
+              {:keys [out] :as s} (await (stair! {:blocks (merge ground cliff yard)} east (move-after-digs 1 [3 65 8])))]
+          (is (= :done (:status @out)))
+          (is (some :arrived (events-of s :stair.return))))))))
+
 (deftest off-stair-stands-once-the-walks-back-are-used-up-and-says-where-the-body-is
   (async done
     (tu/run-async done
