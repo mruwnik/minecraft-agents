@@ -1,0 +1,29 @@
+;; jobs.items.collect-drops dig-to! (card 65546ccc, db43539ed): a drop seen through a long glass wall costs more to dig to than it is worth, and the way round is rock the
+;; body has never seen; it walks the seen tunnel to the corner, from where the way round is in sight, and goes that way (go-to's own walk or dig-to!'s frontier walk: either leaves the glass whole).
+;; Tunnel x 5, z 16..23 (the body at its north end, the corner at the south); way round z 23, x 6..17 east to the chamber x 18..22, z 16..23 holding the drop at [20.5 0 18.5],
+;; seen through glass x 6..17, z 16..21; a stone wall z 22 hides the way round from the tunnel's north end.
+{:defaults
+ {:tags [:collect-drops :jobs] :time :any
+  :plot {:light :lit :height 12 :floor "stone"}
+  :blocks [[:fill [3 0 8] [25 5 28] "stone"]
+           [:fill [5 0 16] [5 1 23] "air"]
+           [:fill [6 0 16] [17 1 21] "glass"]
+           [:fill [18 0 16] [22 1 23] "air"]
+           [:fill [6 0 23] [17 1 23] "air"]
+           [:set [5 2 17] "glowstone"] [:set [5 2 21] "glowstone"] [:set [7 2 23] "glowstone"] [:set [10 2 23] "glowstone"] [:set [13 2 23] "glowstone"] [:set [16 2 23] "glowstone"]
+           [:set [19 2 17] "glowstone"] [:set [21 2 22] "glowstone"]]
+  :body {:at [5.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "way-round-seen-from-the-corner-is-walked-to-for-a-drop-dearer-through-the-glass"
+   :act [[:summon "item" [20.5 0 18.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
+         [:job (jobs.items.collect-drops {:near #at [20 0 18] :radius 20 :dig true})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}]
+   :after [[:item "oak_log" 1] [:block [10 0 18] "glass"] [:block [14 0 17] "glass"] [:block [8 1 20] "glass"]]}
+  ;; should fail: no tunnel past the first cell, so no way round to walk to: the drop is left and the glass stays
+  {:name "no-frontier-toward-the-drop-leaves-it"
+   :blocks [[:fill [5 0 17] [5 1 23] "stone"]]
+   :act [[:summon "item" [20.5 0 18.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
+         [:job (jobs.items.collect-drops {:near #at [20 0 18] :radius 20 :dig true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :none-collected}} :within-s 100 :of-job true}]
+   :after [[:item "oak_log" 0] [:block [10 0 18] "glass"]]}]}
