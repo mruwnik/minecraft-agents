@@ -54,12 +54,12 @@
    :expect [{:count-event {:source :job :kind :retreat.target} :for-s 70 :at-least 3}
             {:no-event {:source :job :kind #{:retreat_sealed :retreat_blocked}} :for-s 70}]
    :limit-s 80}
-  {:name "lone-zombie-with-blocks-pillars-before-any-flee-step"
+  {:name "lone-zombie-it-can-outrun-is-fled-not-pillared-from"
    :plot {:height 12 :length 64 :width 32}
    :body {:at [12.5 0 16.5] :inventory [["dirt" 20]]}
    :act [[:summon "zombie" [6.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 30}
-            {:no-event {:source :job :kind :retreat.target} :for-s 30 :until {:source :job :kind :child_ended :data {:slot :pillar :status :done}}}]
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 30}
+            {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 30}]
    :limit-s 45}
   {:name "refused-end-at-a-drop-edge-is-not-retried"
    :plot {:height 12 :light :sky}
