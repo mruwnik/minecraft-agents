@@ -214,7 +214,7 @@
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted} the nodes
-  expanded, the targets planned (the search ends with the best so far once the seconds its nodes cost (cost/search-cell-s each) reach the first chaser's time to contact: a decision made after contact is no escape) and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers :covers :covers-key}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
+  expanded, the targets planned (the search ends with the best so far once the seconds it has taken on the clock reach the first chaser's time to contact (a cold search costs 50 times the measured cost/search-cell-s a node): a decision made after contact is no escape) and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers :covers :covers-key}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
   unseen dead end, they corner the body: :trapped, the cheapest cornered answer to them (cost/cornered-answers: the fight,
   or a cover of (:covers) {way {:open-s :seconds :fails}}, a fn called at the first dead end only, those the cornered step
   would take where the body stands; :covers-key what they depend on past the body and its kit), with no mob known the death of
@@ -247,12 +247,13 @@
         spawn-kill (delay (cost/spawn-kill body pos))
         share (spawn-light/share-of p false nil)
         slow (pace)
+        t0 (clock/now)
         contact-s (arrive-at (remove :calm? chasers) pos)]
     (if (nil? ring-world)
       []
       (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {}]
         (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0))
-                (and (pos? planned) (<= contact-s (* nodes (cost/search-cell-s)))))
+                (and (pos? planned) (<= contact-s (/ (- (clock/now) t0) 1000))))
           (with-meta out {:nodes nodes :planned planned :unrouted unrouted})
           (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
                 ^js res (await (plan-to! c pw policy (query c t)
