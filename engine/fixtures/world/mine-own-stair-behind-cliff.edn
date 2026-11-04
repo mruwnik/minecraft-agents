@@ -1,0 +1,18 @@
+;; Card 52e391de (8786aaa0): the descent's walk back to its own earlier stair digs through a cliff in the way, as a player with a pickaxe would,
+;; instead of cutting a new stair from the lawn. Same stone mass and old stair as mine-own-stair; a 3-thick, 9-high stone ridge (x 28..30, z 0..35, the plot width) stands between the body (x 36) and the stair top (x 25).
+;; Should-succeed: the ore is mined; the ridge is cut through (a gap at the body's row z 16); no new stair starts on the lawn at x 36 (cells x 34..36 stay stone below the lawn).
+;; Live 2026-11-04: 2 of 4 runs passed; the others held "searching" at the stair for 90 rounds and the body ran out of heap (card in the board: Bug: mine walk-back quote search never ends).
+{:defaults
+ {:tags [:mine :jobs :stairs]
+  :plot {:length 48 :width 36 :height 12}
+  :blocks [[:fill [4 -16 12] [40 -1 20] "stone"] [:fill [25 -1 16] [25 1 16] "air"] [:fill [24 -2 16] [24 0 16] "air"] [:fill [23 -3 16] [23 -1 16] "air"] [:fill [22 -4 16] [22 -2 16] "air"] [:fill [21 -5 16] [21 -3 16] "air"] [:fill [20 -6 16] [20 -4 16] "air"]
+           [:fill [28 0 0] [30 8 35] "stone"]]
+  :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [25 -2 16] #at [24 -3 16] #at [23 -4 16] #at [22 -5 16] #at [21 -6 16] #at [20 -7 16]]}}]
+  :body {:at [36.5 0 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "descent-digs-through-a-cliff-to-its-own-stair"
+   :blocks [[:set [8 -10 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:torches true :block "iron_ore" :count 1 :direction :west :level #at [16 -10 16] :tunnel-length 14 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 280 :of-job true}]
+   :after [[:item "raw_iron" 1] [:block [29 0 16] "air"] [:block [35 -1 16] "stone"] [:block [34 -1 16] "stone"] [:block [36 -1 16] "stone"]]}]}
