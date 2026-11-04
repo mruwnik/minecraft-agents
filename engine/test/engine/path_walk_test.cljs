@@ -507,6 +507,23 @@
             (is (= "found" (:status (first plan))))
             (is (= calls (second plan)) "as many calls as with the tolls still")))))))
 
+(deftest a-quote-s-search-goes-on-while-a-danger-walks-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              c {:primitives p}
+              [_ calls] (await (budgeted-calls (walkways true) {:x 0.5 :y 64 :z 0.5} [6 64 0] 32))]
+          (reset! wsearch/searches {})
+          (let [plan (await (tu/with-expansion-budget 16
+                              (fn ^:async run []
+                                (loop [n 1]
+                                  (let [pw (wworld/with-dangers (.pathWorld p) #js [#js {:mob "zombie" :x (+ 400 (* 8 n)) :y 64 :z 400 :close 1 :radius 3 :rate 4}])
+                                        plan (await (walk/plan-walk! c pw [6 64 0] 0 (walk/default-weight) {:budget 32 :quoted true}))]
+                                    (if (and (= "searching" (:status plan)) (< n 100)) (recur (inc n)) [plan n]))))))]
+            (is (= "found" (:status (first plan))))
+            (is (= calls (second plan)) "as many calls as with the danger still: it moved past its 4-block key cell each call")))))))
+
 ;; another plan between a quote's rounds must not restart it: the first goal's search ends after the same number of its own calls
 (deftest a-kept-search-survives-another-plan-between-its-rounds
   (async done

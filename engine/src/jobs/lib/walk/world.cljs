@@ -407,14 +407,10 @@
 
 (defn tolls-key
   "What a kept search's key holds of pw's tolls (with-tolls, with-edges): the cells with their factors and the edges with
-  their seconds, nil for none. A cell's factors count by their power of two: ones that follow the body's health or breath
-  (flood tolls) or a mob's moves (threat tolls) drift at every quote, and a key that changed with them would restart the
-  search each time, so a quote that needs more than one round never ended."
+  their seconds, nil for none."
   [pw]
   (when-let [^js t (.-tolls pw)]
-    (let [coarse (fn [f] (if (and (number? f) (pos? f) (js/isFinite f)) (js/Math.round (js/Math.log2 f)) f))
-          list (some->> (.-list t) (mapv #(-> % (update :factor coarse) (update :trample-factor coarse))))]
-      (if-let [rows (.-edgeRows t)] [list rows] list))))
+    (if-let [rows (.-edgeRows t)] [(.-list t) rows] (.-list t))))
 
 (defn avoid-key
   "What a kept search's key holds of pw's avoided cells (with-avoid): the cells, nil for none."
