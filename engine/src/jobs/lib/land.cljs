@@ -1,14 +1,13 @@
 (ns jobs.lib.land
   "The one test for a cell a body can stand on dry: feet and head air or a passable plant, over a solid block that is no fluid, plant or hazard."
-  (:require [jobs.lib.block-sets :as bs]
-            [jobs.lib.blocks :as b]))
+  (:require [jobs.lib.block-sets :as bs]))
 
 (def unsafe-below (into (into bs/fluids bs/bad-floor) #{"seagrass" "tall_seagrass" "kelp" "kelp_plant"}))
 
 (defn floor?
   "Whether a block name can be stood on: not air, a fluid, a plant or a hazard."
   [below]
-  (boolean (and below (not (bs/air below)) (not (bs/fluids below)) (not (b/clearable below))
+  (boolean (and below (not (bs/air below)) (not (bs/fluids below)) (not (bs/clearable below))
                 (not (contains? unsafe-below below)))))
 
 (defn land-cell?

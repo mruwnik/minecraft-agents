@@ -1,6 +1,7 @@
 (ns jobs.lib.shelter.inside
   "Whether the body is shut in its shelter, safe from the night where it stands, and what a walk would leave."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.click :as click]
             [jobs.lib.danger :as danger]
@@ -277,13 +278,39 @@
                                [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
                        cells)))))
 
+(defn rim-open?
+  "Whether, over some cell of the room (cells [x y z]), below the first solid or unseen block of its column, a cell beside the column is
+  open over a floor a mob stands on or one not yet seen: a mob on that rim drops in. Unseen counts as open."
+  [p cells]
+  (let [open? (fn [cell] (not (sh-sense/solid-at? p cell)))
+        floor? (fn [cell] (or (nil? (u/seen-block p cell)) (fill/stand-on? p cell)))]
+    (boolean
+     (some (fn [[x y z]]
+             (->> (range (+ y 2) (+ y 2 (sh-sense/room-roof-height)))
+                  (take-while #(let [cell {:x x :y % :z z}] (and (some? (u/seen-block p cell)) (open? cell))))
+                  (some (fn [h] (some (fn [[dx dz]] (let [n {:x (+ x dx) :y h :z (+ z dz)}]
+                                                      (and (open? n) (floor? (update n :y dec)))))
+                                      [[1 0] [-1 0] [0 1] [0 -1]])))))
+           cells))))
+
+(defn pocket-open?
+  "Whether the body stands in a pit (a one-cell room, or a room roofed over every cell) whose cell over the head is open and
+  whose rim a mob can stand on (rim-open?): a mob on the rim drops in, or a spider climbs in, though no walker's flood does."
+  [p]
+  (let [feet (sh-sense/feet p)
+        cells (or (some-> (:cells (reach-room/room p feet)) seq) [[(:x feet) (:y feet) (:z feet)]])]
+    (and (not (fill/sealed? p (update feet :y + 2)))
+         (or (= 1 (count cells)) (every? (fn [[x y z]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x x :y y :z z})) cells))
+         (rim-open? p cells))))
+
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands: safe-room-at? its feet and not reached-from-outside?, its head not inside a block, not afloat
-  (a swimmer is in no shelter), and not danger-inside?. The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
+  (a swimmer is in no shelter), not danger-inside?, and not pocket-open?. The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
   (let [feet (sh-sense/feet p)]
     (boolean (and (not (breath/in-water? p)) (not (sh-sense/head-in-block? p)) (safe-room-at? p feet) (not (reached-from-outside? p feet))
-                  (not (danger-inside? p feet))))))
+                  (not (danger-inside? p feet))
+                  (not (pocket-open? p))))))
 
 (defn night-sheltered
   "At night, awake and safe from it (safe-from-night?), the kind of shelter the body is in (:dug-in the one shelter says

@@ -7,6 +7,7 @@
             [engine.contract :as contract]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access :as access]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -39,7 +40,7 @@
   - {:reason :no-support :pos}: no solid neighbour to place against (not for boats).
   - {:reason :not-loaded :pos}.
 
-  A plant, flower or snow layer in the cell (jobs.lib.blocks/clearable) is dug first with a jobs.blocks.dig child (no tool
+  A plant, flower or snow layer in the cell (jobs.lib.block-sets/clearable) is dug first with a jobs.blocks.dig child (no tool
   needed, the drop is not collected); so is a leaves block alone in the way of the eye to a cell within reach (:see). When the walk to a stand that sees the cell fails, the first seen terrain block in the line within twice the reach (jobs.lib.blocks/through-natural; not :for-plan's own cell) is dug (a jobs.blocks.dig child), as a player does. Out of reach, the round walks within 3 cells (go-to child). In reach it places
   through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken.
@@ -122,10 +123,10 @@
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn clears?
-  "Whether the call digs block out of the cell before placing (jobs.lib.blocks/clearable, unless :clear is false). An
+  "Whether the call digs block out of the cell before placing (jobs.lib.block-sets/clearable, unless :clear is false). An
   invisible light block cannot be dug and is overwritten by the placement."
   [c block]
-  (and (:clear (:args c) true) (b/clearable block) (not= "light" block)))
+  (and (:clear (:args c) true) (bs/clearable block) (not= "light" block)))
 
 (defn place-verdict
   "The rules' place verdict for pos, a plant there counted as gone (it is dug first). A block without collision

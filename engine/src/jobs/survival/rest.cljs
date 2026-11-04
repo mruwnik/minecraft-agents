@@ -1,5 +1,6 @@
 (ns jobs.survival.rest
-  (:require [engine.args :as a]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -85,7 +86,7 @@
     (let [p (:primitives c)
           names (flight/blocks c)
           have (reduce + 0 (map :count (lb/carried c names)))
-          need (max (settings/get settings ::spare-blocks) (count (dig-cells/open-cells p (sh-sense/feet p))))]
+          need (max (settings/get settings ::spare-blocks) (count (fill/open-cells p (sh-sense/feet p))))]
       (= :done (:kind (await (child/run!* c :blocks 'jobs.items.obtain {:any-of names :count (+ have need) :explore false})))))))
 
 (defn ^:async shelter!

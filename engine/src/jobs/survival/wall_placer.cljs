@@ -1,6 +1,7 @@
 (ns jobs.survival.wall-placer
   "A cornered body's seal (jobs.survival.respond-flight): the open cells round it filled with carried blocks."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -49,7 +50,7 @@
   [c cells left]
   (let [owed (set left)]
     (->> cells
-         (remove #(or (seal/sealed? (:primitives c) %) (owed %)))
+         (remove #(or (fill/sealed? (:primitives c) %) (owed %)))
          (into #{}))))
 
 (defn ^:async fill-one!
@@ -100,7 +101,7 @@
     (let [p (:primitives c)
           feet (sh-sense/feet p)
           r (await (fill-one! c cells))]
-      (if (and (= :placed r) (< n (max-places)) (= feet (sh-sense/feet p)) (not-every? #(seal/sealed? p %) cells))
+      (if (and (= :placed r) (< n (max-places)) (= feet (sh-sense/feet p)) (not-every? #(fill/sealed? p %) cells))
         (recur (inc n))
         (if (= :placed r) :ok r)))))
 
@@ -116,7 +117,7 @@
           (flight/fire-spots c))))
 
 (defn facing-first
-  "cells (dig-cells/fill-cells order) with the sides towards the nearest of shooters first, each side's feet cell then its
+  "cells (fill/fill-cells order) with the sides towards the nearest of shooters first, each side's feet cell then its
   head cell, so the first blocks stop arrows; the roof support and the roof stay last. As given with no shooter
   (seal! then orders by nearest-first of the melee hostiles)."
   [feet shooters cells]
@@ -131,7 +132,7 @@
                cells))))
 
 (defn nearest-first
-  "cells (dig-cells/fill-cells order) with the side cells (feet and head height) nearest the nearest of threats ({:x :y :z})
+  "cells (fill/fill-cells order) with the side cells (feet and head height) nearest the nearest of threats ({:x :y :z})
   first; the roof support and the roof keep their order after them (a block needs a neighbour to be placed against).
   As given with no threat."
   [feet threats cells]
@@ -145,19 +146,19 @@
 (defn stuck-door?
   "Whether cell holds a door a hand cannot shut (iron) standing open: no wall, and nothing can be placed into it."
   [p cell]
-  (let [b (seal/open-openable p cell)]
+  (let [b (fill/open-openable p cell)]
     (and b (= :iron (click/kind-of (.-name b))))))
 
 (defn door-free-spot
   "A side neighbour of feet to stand in that the walls can enclose, because no stuck-door? is among its fill cells, or nil: its feet and
   head cells are seen free, its floor is solid and it is no door cell."
   [p feet]
-  (let [free? #(let [f (u/seen-facts p %)] (and f (not (:full-cube? f)) (not (seal/open-openable p %))))]
-    (first (for [[dx dz] dig-cells/sides
+  (let [free? #(let [f (u/seen-facts p %)] (and f (not (:full-cube? f)) (not (fill/open-openable p %))))]
+    (first (for [[dx dz] fill/sides
                  :let [n (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
                  :when (and (free? n) (free? (update n :y inc))
                             (:full-cube? (u/seen-facts p (update n :y dec)))
-                            (not-any? #(stuck-door? p %) (dig-cells/fill-cells (constantly false) n nil #(dig-cells/stand-on? p %))))]
+                            (not-any? #(stuck-door? p %) (fill/fill-cells (constantly false) n nil #(fill/stand-on? p %))))]
              n))))
 
 (defn ^:async step-from-door!
@@ -166,7 +167,7 @@
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)]
-    (when (and (not (:door-stepped (ctx/mem c))) (some #(stuck-door? p %) (dig-cells/fill-cells (constantly false) feet nil #(dig-cells/stand-on? p %))))
+    (when (and (not (:door-stepped (ctx/mem c))) (some #(stuck-door? p %) (fill/fill-cells (constantly false) feet nil #(fill/stand-on? p %))))
       (when-let [spot (door-free-spot p feet)]
         (let [r (await (ctx/call c :door-step 'jobs.movement.go-to {:pos {:x (+ (:x spot) 0.5) :y (:y spot) :z (+ (:z spot) 0.5)} :range 0}))]
           (when-not (= :continue r) (ctx/update-mem! c assoc :door-stepped true))
@@ -185,10 +186,10 @@
   [c]
   (let [threats (into (shooters c) (melee-spots c))
         p (:primitives c)
-        _ (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells p (sh-sense/feet p) threats))))
+        _ (await (look/look-unknown! c (map lb/cell (fill/open-cells p (sh-sense/feet p) threats))))
         radius (danger-q/hostile-radius)
         blocks (flight/blocks c)
-        open (dig-cells/open-cells p (sh-sense/feet p) threats)
+        open (fill/open-cells p (sh-sense/feet p) threats)
         free (remove #(occupied? c %) open)
         cells (if (seq (shooters c)) (facing-first (sh-sense/feet p) (shooters c) free) (nearest-first (sh-sense/feet p) (melee-spots c) free))
         ]
@@ -209,7 +210,7 @@
             :failed (refuse! c (or (:seal-reason (ctx/mem c)) :fill-refused) (or (:seal-refusal (ctx/mem c)) "the walls could not be placed"))
             :wait :again
             :hit :hit
-            (let [left (dig-cells/open-cells p (sh-sense/feet p) threats)]
+            (let [left (fill/open-cells p (sh-sense/feet p) threats)]
               (cond
                 (empty? left) :sealed
                 (every? #(occupied? c %) left) (refuse! c :cells-occupied "every cell left open is taken")
@@ -222,7 +223,7 @@
   more are owed, :hit when a melee mob hit the body during the step (the caller decides anew), :failed when a hostile stands in one (not with :for :night: the place is tried and a mob in its cell waited out), none is carried, a
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone).
-  A door standing open in a side cell is no wall (seal/sealed?): it is shut. Cells it has not sensed (a ceiling
+  A door standing open in a side cell is no wall (fill/sealed?): it is shut. Cells it has not sensed (a ceiling
   out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
   area (the wall cell then fails no-support); the wall cells themselves are a last resort.
   An open iron door in a side cell can be neither shut nor filled: the body first steps to a spot not beside it (step-from-door!)."

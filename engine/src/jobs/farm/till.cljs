@@ -60,8 +60,8 @@
 (def fit? (ready/fit-for :work))
 (defn max-cells [] (settings/get settings ::max-cells))
 (def ground-cover
-  "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
-  (into b/clearable #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "sunflower" "lilac" "rose_bush" "peony"}))
+  "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (bs/clearable) and the tall flowers."
+  (into bs/clearable #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "sunflower" "lilac" "rose_bush" "peony"}))
 (defn max-tries [] (settings/get settings ::max-tries))
 
 (defn span

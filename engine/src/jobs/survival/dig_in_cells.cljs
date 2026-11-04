@@ -1,7 +1,8 @@
 (ns jobs.survival.dig-in-cells
   "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.shut-in,
   its ways (wall-in, dig-pit, dig-pocket, enter-room), plug-way, block-arrow-gap and the retreat jobs use them."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.args :as a]
             [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
@@ -13,10 +14,6 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
-
-(def sides [[1 0] [-1 0] [0 1] [0 -1]])
-
-(def corners "The diagonal neighbours: a mob standing there still reaches the body." [[1 1] [1 -1] [-1 1] [-1 -1]])
 
 (def hazards
   "Blocks that are or hold a fluid: a cell opened beside or under one fills."
@@ -34,11 +31,11 @@
   (some (fn [[dx dz]]
           (let [cell {:x (+ x dx) :y y :z (+ z dz)}]
             (when (wet? p cell) (u/seen-name p cell))))
-        sides))
+        fill/sides))
 
 (def around-deltas "The cell itself and its six neighbours." (cons [0 0 0] rules/neighbour-deltas))
 
-(def beside-deltas "The cell itself and its four side neighbours." (cons [0 0 0] (map (fn [[dx dz]] [dx 0 dz]) sides)))
+(def beside-deltas "The cell itself and its four side neighbours." (cons [0 0 0] (map (fn [[dx dz]] [dx 0 dz]) fill/sides)))
 
 (defn lava-around
   "The seen lava cells among cell shifted by deltas (around-deltas, beside-deltas)."
@@ -63,48 +60,6 @@
           (let [st (await (lb/place-cell! c lava item {:ignore-zones? true}))]
             (if (#{:placed :already} st) (recur more) (fail! lava (str "place " (or st "failed")))))
           (fail! lava "no block to seal with"))))))
-
-(defn stand-on?
-  "Whether a mob can stand on the top of the block at cell: a full cube or any other floor (slab, stair, farmland, path,
-  soul sand, chest, carpet; jobs.lib.land/floor?), not a fence, wall, pane or bars (too tall to stand on) or a cell not loaded."
-  [p cell]
-  (let [b (u/seen-block p cell)]
-    (boolean (and b
-                  (not (re-find seal/mob-proof-shapes (.-name b)))
-                  (or (.-fullCube b) (land/floor? (.-name b)))))))
-
-(defn fill-cells
-  "The cells to fill around the feet cell, in placement order: sides at feet
-  height, sides at head height, a support beside the roof cell (a block needs a
-  solid face neighbour to be placed against, and the roof cell has none until
-  the support exists; none when one of the four is placed already or the roof cell is sealed; else the one farthest from
-  threats ({:x :y :z}), the +x one with none), then the roof cell above the head; only those the
-  predicate sealed? (cell -> bool) does not hold for. A corner cell (diagonal, feet or head height) is among them only
-  when a mob could stand in it: an open one on a floor it stands on (stand-on?, cell -> bool), or above a corner
-  that is one; the corners follow the sides."
-  [sealed? {:keys [x y z]} threats stand-on?]
-   (let [roof {:x x :y (+ y 2) :z z}
-         supports (for [[dx dz] sides] {:x (+ x dx) :y (+ y 2) :z (+ z dz)})
-         gap (fn [{cx :x cy :y cz :z}]
-               (apply min (map #(u/dist {:x (+ cx 0.5) :y (+ cy 0.5) :z (+ cz 0.5)} %) threats)))
-         support (if (empty? threats) (first supports) (apply max-key gap supports))
-         at (fn [dy [dx dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-         corner-cells (fn [corner]
-                        (let [feet-c (at 0 corner)
-                              feet-stand? (and (not (sealed? feet-c)) (stand-on? (at -1 corner)))]
-                          (cond-> []
-                            feet-stand? (conj feet-c)
-                            (or feet-stand? (stand-on? feet-c)) (conj (at 1 corner)))))]
-     (filterv #(not (sealed? %))
-              (concat (for [dy [0 1] d sides] (at dy d))
-                      (mapcat corner-cells corners)
-                      (when-not (or (sealed? roof) (some sealed? supports)) [support])
-                      [roof]))))
-
-(defn open-cells
-  "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats."
-  ([p feet] (open-cells p feet nil))
-  ([p feet threats] (fill-cells #(seal/sealed? p %) feet threats #(stand-on? p %))))
 
 (defn support-deltas
   "The neighbours of cell a block placed there may be clicked against by a body standing at feet: all six, but the one
@@ -155,7 +110,7 @@
   cell above it, else nil."
   [placed {:keys [x y z]}]
   (let [at (fn [[dx dz] dy] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-        feet-placed (filter #(contains? placed (at % 0)) sides)
+        feet-placed (filter #(contains? placed (at % 0)) fill/sides)
         both (first (filter #(contains? placed (at % 1)) feet-placed))
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
@@ -167,14 +122,14 @@
   (and (or (sh-sense/roofed? p roof-height)
            (and (= :walls mode)
                 (let [{:keys [x y z]} (sh-sense/feet p)]
-                  (some #(seal/sealed? p {:x x :y (+ y %) :z z}) (range 1 (inc roof-height))))))
-       (or (not= :walls mode) (empty? (open-cells p (sh-sense/feet p))))))
+                  (some #(fill/sealed? p {:x x :y (+ y %) :z z}) (range 1 (inc roof-height))))))
+       (or (not= :walls mode) (empty? (fill/open-cells p (sh-sense/feet p))))))
 
 (defn supported?
   "Whether a block placed in cell has a side neighbour to be placed against: one whose collision shape fills its cell
   (full-cube?; the place step needs a collision box, so a flower or a crop is no support)."
   [p {:keys [x y z]}]
-  (boolean (some (fn [[dx dz]] (:full-cube? (u/seen-facts p {:x (+ x dx) :y y :z (+ z dz)}))) sides)))
+  (boolean (some (fn [[dx dz]] (:full-cube? (u/seen-facts p {:x (+ x dx) :y y :z (+ z dz)}))) fill/sides)))
 
 (defn dig-plan
   "{:roof :depth} for a pit dug from start: the roof goes at start when a side of it is solid (the pit is 2 deep), else
@@ -221,7 +176,7 @@
   (boolean (some (fn [[dx dz]]
                    (let [n (assoc roof :x (+ (:x roof) dx) :z (+ (:z roof) dz))]
                      (and (not= n open) (or (:full-cube? (u/seen-facts p n)) (and (nil? (u/seen-name p n)) (dig-look/rock-solid? p n))))))
-                 sides)))
+                 fill/sides)))
 
 (defn pit-shapes
   "The pits that may be dug from feet (pit-steps), straight first: straight down only when the body knows the
@@ -231,7 +186,7 @@
   (let [straight (when-let [{:keys [depth]} (dig-plan p feet)]
                    (let [shape (pit-steps feet nil depth)]
                      (when (every? #(known-solid? p (:floor %)) (:steps shape)) shape)))
-        zigzag (for [[dx dz :as side] sides
+        zigzag (for [[dx dz :as side] fill/sides
                      :let [b (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))
                            depth (cond (roof-held? p feet b) 2
                                        (roof-held? p (update b :y dec) (update feet :y dec)) 3)]
@@ -244,7 +199,7 @@
   with a side open, where the shaft opens out (its :start, the height to climb to); nil when a side is open at feet
   height, or the column meets a solid cell or runs on for 32 cells first."
   [p {:keys [x y z]}]
-  (let [open-side? (fn [yy] (some (fn [[dx dz]] (not (sh-sense/solid-at? p {:x (+ x dx) :y yy :z (+ z dz)}))) sides))]
+  (let [open-side? (fn [yy] (some (fn [[dx dz]] (not (sh-sense/solid-at? p {:x (+ x dx) :y yy :z (+ z dz)}))) fill/sides))]
     (when-not (open-side? y)
       (loop [yy (inc y)]
         (cond

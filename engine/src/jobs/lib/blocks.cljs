@@ -52,11 +52,6 @@
   (or (pos? (u/free-slots p))
       (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
 
-(def clearable
-  "What jobs.blocks.place digs out of a cell before placing: the replaceable plants and snow layer
-  (block-sets/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
-  (into (set/difference bs/replaceable bs/air bs/fluids) bs/flowers))
-
 (defn drops-of
   "The item names block-name drops by minecraft-data (tool and enchantment ignored), or the block's own name when
   the data does not list it."
@@ -392,7 +387,7 @@
 (defn support-name?
   "Whether a block name is one to place against (not air, a fluid or a plant)."
   [n]
-  (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (clearable n)))))
+  (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (bs/clearable n)))))
 
 (defn support?
   "Whether a neighbour of pos is a block to place against; a face the body has not seen is not one."

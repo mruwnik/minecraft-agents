@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-pocket
-  (:require [jobs.lib.cost.health :as cost-health]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [jobs.lib.cost.health :as cost-health]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -224,7 +225,7 @@
   "The refuge pit-cells/pit-round! digs for a shaft down from feet: a zigzag over the first open side, ::sink-depth deep, with nothing to plug."
   [c feet]
   (let [p (:primitives c)
-        side (first (filter (fn [[dx dz]] (dig-cells/open-cell? p (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz)))) dig-cells/sides))
+        side (first (filter (fn [[dx dz]] (dig-cells/open-cell? p (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz)))) fill/sides))
         {:keys [steps]} (dig-cells/pit-steps feet side (settings/get settings ::sink-depth))]
     (when side {:kind :sink :sink true :anchor feet :steps steps :plugs [] :roof (update feet :y inc) :cells (pit/plan-cells {:steps steps})})))
 

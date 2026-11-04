@@ -1,6 +1,7 @@
 (ns jobs.survival.respond.doors
   "Shutting a door, gate or trapdoor on the threat in a flight (retreat, night)."
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.click :as click]
             [jobs.lib.look :as look]
@@ -39,7 +40,7 @@
     (->> (for [x (range (- fx r) (+ fx r 1)) y (range (dec fy) (+ fy 3)) z (range (- fz r) (+ fz r 1))]
            {:x x :y y :z z})
          (keep (fn [cell]
-                 (when-let [b (seal/open-openable p cell)]
+                 (when-let [b (fill/open-openable p cell)]
                    (when (= :openable (click/kind-of (.-name b)))
                      (let [low (lower-half b cell)]
                        {:cell low :name (.-name b) :half (:half (click/props-of b))})))))
@@ -67,7 +68,7 @@
   (let [p (:primitives c)]
     (when-let [door (door-for c threats)]
       (when-let [{:keys [doors unseen?]} (room-lib/room-doors c (sh-sense/feet p))]
-        (let [open (filter #(seal/open-openable p (:cell %)) doors)]
+        (let [open (filter #(fill/open-openable p (:cell %)) doors)]
           (when (some #(= (door-key (:cell door)) (door-key (:cell %))) open)
             {:n (count open) :unseen? unseen?}))))))
 
@@ -115,7 +116,7 @@
   [c room]
   (let [clicked (:doors-clicked (ctx/mem c) #{})]
     (->> (:doors room)
-         (filter #(seal/open-openable (:primitives c) (:cell %)))
+         (filter #(fill/open-openable (:primitives c) (:cell %)))
          (remove #(clicked (door-key (:cell %))))
          (sort-by #(u/dist (u/self-pos c) (room-lib/mid (:cell %))))
          first)))
@@ -135,7 +136,7 @@
   cell inside it first, as also when it stands in the door's own cell (a step that gets no nearer gives the door up for
   the flight). :again."
   [c {:keys [cell inside]}]
-  (let [b (seal/open-openable (:primitives c) cell)
+  (let [b (fill/open-openable (:primitives c) cell)
         in-door? (click/standing-in? (u/self-pos c) cell (:half (click/props-of b)))]
     (if (and (not in-door?) (<= (u/dist (u/self-pos c) (room-lib/mid cell)) (door-reach)))
       (await (shut-door! c {:cell cell :name (.-name b)}))

@@ -1,7 +1,8 @@
 (ns jobs.survival.shut-in-night
   "What jobs.survival.shut-in adds for :for :night: the :shut-in-failed memory of a way that failed on a site, the :shelter
   entry and the sealed/unsealed events."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -84,7 +85,7 @@
                        (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)
         cells-text (pr-str (mapv u/cell-vec cells))]
     (when (and (seq placed) (not sealed?))
-      (let [open (dig-cells/open-cells p feet)]
+      (let [open (fill/open-cells p feet)]
         (ctx/emit! c :shut-in.unsealed :warn
                    {:pos feet :placed (mapv :cell placed) :open open
                     :text (str "NOT sealed in: placed " (count placed) " blocks at " cells-text

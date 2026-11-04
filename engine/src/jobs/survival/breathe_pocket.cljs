@@ -2,7 +2,8 @@
   "Air made where a drowning body is, for jobs.survival.breathe when it sees none. From solid ground: jobs.survival.shut-in's
   pocket way digs a 2-deep pocket beside the body (feet and head height), steps in and plugs the opening behind it; the
   water left inside has no source and drains (make!). Afloat: a carried block placed under the feet comes first (footing!)."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
@@ -56,7 +57,7 @@
       (nil? item) {:why :no-block}
       (not (footed? p)) {:why :afloat}
       :else
-      (do (doseq [[dx dz] dig-cells/sides
+      (do (doseq [[dx dz] fill/sides
                   :let [f (-> feet (update :x + dx) (update :z + dz))]
                   {:keys [x y z]} [f (update f :y inc)]]
             (when (look/unknown? p [x y z]) (await (look/look-at! c [x y z]))))

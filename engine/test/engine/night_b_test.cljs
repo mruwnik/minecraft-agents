@@ -463,10 +463,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor})]
-          (doseq [cell [[0 67 0] [1 64 0] [-1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 65 1] [0 65 -1] [1 66 0] [-1 66 0] [0 66 1] [0 66 -1]]]
+          (doseq [cell [[0 67 0] [1 64 0] [-1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 65 1] [0 65 -1]]]
             (swap! (.-state (.-world p)) assoc-in [:blocks cell] "stone"))
-          (is (true? (sh-inside/safe-from-night? p)) "the pit reads safe")
-          (is (true? (way/pocket-open? p)) "though a mob on the rim reaches the open fill cell")
+          (is (true? (sh-inside/pocket-open? p)) "a mob on the rim reaches the open fill cell")
+          (is (false? (sh-inside/safe-from-night? p)) "so the pit is not safe from the night")
+          (is (true? (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))) "and the night trigger fires")
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (is (empty? (st/emitted seen :completed)) "the night is not done while the fill cell is open"))))))

@@ -85,7 +85,7 @@
                          (if (contains? m pos)
                            (m pos)
                            (let [n (u/seen-name p {:x (pos 0) :y (pos 1) :z (pos 2)})] (vswap! memo assoc pos n) n))))
-        open? (fn [n] (and n (or (bs/air n) (bs/fluids n) (b/clearable n))))
+        open? (fn [n] (and n (or (bs/air n) (bs/fluids n) (bs/clearable n))))
         reachable? (fn [[px py pz]] (some (fn [[dx dy dz]] (open? (seen [(+ px dx) (+ py dy) (+ pz dz)]))) neighbours))]
     (every? (fn [pos] (or (seen pos) (not (reachable? pos))))
             (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)])))))
@@ -123,7 +123,7 @@
   "Whether the block at pos is seen and neither air, fluid nor clearable."
   [p pos]
   (let [n (u/seen-name p pos)]
-    (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n)))))
+    (and n (not (bs/air n)) (not (bs/fluids n)) (not (bs/clearable n)))))
 
 (defn contained?
   "Whether the cell's four sides are seen solid and its underside is not seen open (farmland hides what it rests on until

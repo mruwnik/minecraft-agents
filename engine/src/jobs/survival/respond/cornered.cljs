@@ -1,6 +1,7 @@
 (ns jobs.survival.respond.cornered
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar]]
             [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! back-off-search! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
@@ -184,7 +185,7 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         corner? (fn [{:keys [x z]}] (and (== 1 (js/Math.abs (- x (:x feet)))) (== 1 (js/Math.abs (- z (:z feet))))))
-        open (set (filter corner? (dig-cells/open-cells p feet)))]
+        open (set (filter corner? (fill/open-cells p feet)))]
     (boolean (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)
                                  cell {:x (int (js/Math.floor x)) :y (int (js/Math.floor y)) :z (int (js/Math.floor z))}]
                              (or (open cell) (open (update cell :y inc)))))

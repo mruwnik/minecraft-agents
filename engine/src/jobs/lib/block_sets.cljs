@@ -2,7 +2,8 @@
   "The named sets of block names every job reads, each defined once. They differ on purpose: air is only open
   cells; replaceable is what a placement overwrites; passable? is what a body walks through; harms-in-cell and
   bad-floor are what hurts to stand in or on."
-  (:require [plan.shape :as shape]))
+  (:require [clojure.set :as set]
+            [plan.shape :as shape]))
 
 (def air "Open cells (plan.shape/air-names); the invisible light block counts: a body walks through it." (conj shape/air-names "light"))
 
@@ -31,6 +32,12 @@
   #{"dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip"
     "oxeye_daisy" "cornflower" "lily_of_the_valley" "torchflower" "pink_petals" "wildflowers" "short_dry_grass"
     "tall_dry_grass" "bush" "firefly_bush" "sunflower" "lilac" "rose_bush" "peony" "pitcher_plant" "wither_rose"})
+
+
+(def clearable
+  "What jobs.blocks.place digs out of a cell before placing: the replaceable plants and snow layer
+  (block-sets/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
+  (into (set/difference replaceable air fluids) flowers))
 
 (def harms-in-cell
   "Blocks that hurt a body standing in or on them."

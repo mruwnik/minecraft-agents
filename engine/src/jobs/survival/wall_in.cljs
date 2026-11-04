@@ -1,5 +1,6 @@
 (ns jobs.survival.wall-in
-  (:require [engine.args :as a]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -51,7 +52,7 @@
 (defn why-not
   "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; {:stop :lava-adjacent} with :on-lava :stop when a cell to fill holds lava; nil otherwise."
   [c]
-  (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
+  (let [cells (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)
         have (reduce + (map :count (lb/carried c (flight/blocks c))))]
     (cond
@@ -73,7 +74,7 @@
 (def door-cells "Wall cells dug again to step out by day (jobs.lib.dig-in-leave/leave!: the door at the feet and the head)." 2)
 
 (defn quote-of [c]
-  (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
+  (let [cells (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)]
     (way/quote-of c (if (why-not c) ##Inf (+ (* open (way/place-s c)) (way/zone-penalty c {:place cells}) (half-built-s c open)))
                   (settings/get settings ::job-time-s)
@@ -116,7 +117,7 @@
   [c]
   (some->> (seq (arrivals c)) (map first) (reduce min)))
 
-(defn open-count [c] (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))
+(defn open-count [c] (count (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))
 
 (defn half-built-s
   "Seconds a wall left half built (fewer carried blocks than open cells, so a gap stays open for the whole stay,

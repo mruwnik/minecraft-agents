@@ -1,5 +1,6 @@
 (ns jobs.survival.bed-down
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [jobs.lib.block-sets :as bs]
             [engine.game :as game]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
@@ -88,12 +89,12 @@
 
 (defn seal-cells
   "The cells to fill round a bed layout's row (stand, foot, head) to shut it in: its sides at feet and head height, a
-  roof support on the side behind the stand, and the roof over the row; those not seal/sealed? already."
+  roof support on the side behind the stand, and the roof over the row; those not fill/sealed? already."
   [p {:keys [stand foot head]}]
   (let [row [stand foot head]
         in-row? (set row)
         support (-> (merge-with - (merge-with + stand stand) foot) (update :y + 2))]
-    (vec (distinct (remove #(seal/sealed? p %)
+    (vec (distinct (remove #(fill/sealed? p %)
                            (concat (for [r row [dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [0 1]
                                          :let [side {:x (+ (:x r) dx) :y (:y r) :z (+ (:z r) dz)}]
                                          :when (not (in-row? side))]

@@ -17,9 +17,9 @@
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
-(defn solid? [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))
+(defn solid? [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (bs/clearable n))))
 
-(defn free? [n] (boolean (and n (or (bs/air n) (b/clearable n)))))
+(defn free? [n] (boolean (and n (or (bs/air n) (bs/clearable n)))))
 
 (defn home-cell?
   "Whether a table in pos would spoil a room: on a bed, or in the cell beside a door (the way in and out)."

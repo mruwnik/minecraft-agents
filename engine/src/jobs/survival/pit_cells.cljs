@@ -1,6 +1,7 @@
 (ns jobs.survival.pit-cells
   "A cornered body's pit and side pocket (jobs.survival.respond-flight): where one fits, digging it and plugging it."
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -184,7 +185,7 @@
          _ (await (sense/decide! c ::roof-support #(dig-cells/dig-plan p feet) {:price (sense/fails-to c)}))
          plan #(pit-plan c feet blocks)]
      (or (plan)
-         (do (await (look/look-unknown! c (for [[dx dz] dig-cells/sides, dy [0 -1 1]]
+         (do (await (look/look-unknown! c (for [[dx dz] fill/sides, dy [0 -1 1]]
                                             [(+ (:x feet) dx) (+ (:y feet) dy) (+ (:z feet) dz)])))
              (plan))
          (stop-of c blocks feet)))))
@@ -214,7 +215,7 @@
   [c feet [dx dz] blocks]
   (let [p (:primitives c)
         at (fn [dist dy [px pz]] {:x (+ (:x feet) (* dist dx) px) :y (+ (:y feet) dy) :z (+ (:z feet) (* dist dz) pz)})
-        perp (for [[sx sz] dig-cells/sides :when (zero? (+ (* sx dx) (* sz dz)))] [sx sz])
+        perp (for [[sx sz] fill/sides :when (zero? (+ (* sx dx) (* sz dz)))] [sx sz])
         dug (for [dist [1 2] dy [0 1]] (at dist dy [0 0]))
         walls (concat (for [dist [1 2] dy [-1 2]] (at dist dy [0 0]))
                       (for [dist [1 2 3] dy [0 1] d (if (= 3 dist) (cons [0 0] perp) perp)] (at dist dy d)))
@@ -312,7 +313,7 @@
   "{:hand (pocket-site by hand) :carried (pocket-site with a carried tool)} at feet from one read of each side. in: as
   pick-pocket's, blocks: flight/blocks."
   [c feet in blocks]
-  (let [fits (keep #(pocket-fit c feet % blocks) dig-cells/sides)]
+  (let [fits (keep #(pocket-fit c feet % blocks) fill/sides)]
     {:hand (pick-pocket c in (map :cells fits))
      :carried (pick-pocket c in (keep #(when (:harvest? %) (:cells %)) fits))}))
 
@@ -382,7 +383,7 @@
   carried, a cell holding a block that does not seal, or the place refused)."
   [c {:keys [plugs roof]}]
   (let [p (:primitives c)
-        cells (vec (remove #(seal/sealed? p %) (conj plugs roof)))]
+        cells (vec (remove #(fill/sealed? p %) (conj plugs roof)))]
     (cond
       (empty? cells) :hidden
       (nil? (lb/pick c (flight/blocks c))) (stop :no-blocks "nothing to roof the pit with")
@@ -427,7 +428,7 @@
 (defn ^:async look-cell!
   "Look at the cell to dig when it or one of its sides is unknown, so the checks read what is there."
   [c {:keys [x y z]}]
-  (let [cells (cons [x y z] (for [[dx dz] dig-cells/sides] [(+ x dx) y (+ z dz)]))]
+  (let [cells (cons [x y z] (for [[dx dz] fill/sides] [(+ x dx) y (+ z dz)]))]
     (when (some #(look/unknown? (:primitives c) %) cells)
       (await (look/look-at! c [x y z])))))
 

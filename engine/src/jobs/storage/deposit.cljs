@@ -168,7 +168,7 @@
   [c cells]
   (let [p (:primitives c)
         tried (:chest-tried (ctx/mem c) #{})
-        solid? (fn [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))]
+        solid? (fn [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (bs/clearable n))))]
     (vec (for [[x y z] cells
                [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                :let [pos {:x (+ x dx) :y y :z (+ z dz)}]

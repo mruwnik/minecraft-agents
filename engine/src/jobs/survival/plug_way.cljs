@@ -11,7 +11,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.pace :as pace]
-            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -19,7 +18,6 @@
             [jobs.lib.tools :as tools]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.respond.state :as flight]
-            [jobs.lib.util :as u]
             [jobs.survival.wall-placer :as wall-placer]))
 
 (a/defargs settings
@@ -46,35 +44,6 @@
   [c cells]
   (if (refused? c cells) (settings/get settings ::trespass-s) 0))
 
-(defn rim-open?
-  "Whether, over some cell of the room (cells [x y z]), below the first solid or unseen block of its column, a cell beside the column is
-  open over a floor a mob stands on or one not yet seen: a mob on that rim drops in. Unseen counts as open."
-  [p cells]
-  (let [open? (fn [cell] (not (sh-sense/solid-at? p cell)))
-        floor? (fn [cell] (or (nil? (u/seen-block p cell)) (dig-cells/stand-on? p cell)))]
-    (boolean
-     (some (fn [[x y z]]
-             (->> (range (+ y 2) (+ y 2 (sh-sense/room-roof-height)))
-                  (take-while #(let [cell {:x x :y % :z z}] (and (some? (u/seen-block p cell)) (open? cell))))
-                  (some (fn [h] (some (fn [[dx dz]] (let [n {:x (+ x dx) :y h :z (+ z dz)}]
-                                                      (and (open? n) (floor? (update n :y dec)))))
-                                      [[1 0] [-1 0] [0 1] [0 -1]])))))
-           cells))))
-
-(defn pocket-open?
-  "Whether the body stands in a pit (a one-cell room, or a room roofed over every cell, the roof far over, that a mob on the rim drops into: rim-open?) with a fill cell still open: a mob on the rim or a spider
-  reaches it though no walker's flood does."
-  [p]
-  (let [feet (sh-sense/feet p)
-        cells (:cells (reach-room/room p feet))]
-    (and (boolean (seq (dig-cells/open-cells p feet)))
-         (or (= 1 (count cells)) (and (every? (fn [[x y z]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x x :y y :z z})) cells) (rim-open? p cells))))))
-
-(defn safe-from-night?
-  "sh-inside/safe-from-night? and not pocket-open?: the pit's fill cell is still open to a mob on the rim, or a spider."
-  [p]
-  (and (sh-inside/safe-from-night? p) (not (pocket-open? p))))
-
 (defn enclosed?
   "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?) and, in a pit, no open fill cell (pocket-open?); else a roof within ::roof-height over no open cell round the feet, or, with the call's
   :room way, a roof over a room that is not breached, with no open door."
@@ -82,7 +51,7 @@
   (let [p (:primitives c)
         roof (sh-sense/roof-height)]
     (boolean (if (= :night (:for (:args c)))
-               (safe-from-night? p)
+               (sh-inside/safe-from-night? p)
                (and (not (sh-sense/head-in-block? p))
                     (or (dig-cells/sealed-in? p :walls roof)
                         (and (ctx/way? c :room) (sh-sense/roofed? p roof) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)) (nil? (room-lib/gap c)))))))))

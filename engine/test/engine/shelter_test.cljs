@@ -1,7 +1,8 @@
 (ns engine.shelter-test
   "Surviving the night: the night trigger and the night, sleep,
   log-out and dig-in jobs against the fake world."
-  (:require [cljs.test :refer [deftest is are async]]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [cljs.test :refer [deftest is are async]]
             [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -1479,14 +1480,14 @@
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
         roofed #(= 66 (:y %))]
-    (is (= 10 (count (dig-cells/fill-cells none feet nil none))) "sides, support, roof")
-    (is (= 8 (count (dig-cells/fill-cells roofed feet nil roofed))) "a sealed roof cell needs no support")))
+    (is (= 10 (count (fill/fill-cells none feet nil none))) "sides, support, roof")
+    (is (= 8 (count (fill/fill-cells roofed feet nil roofed))) "a sealed roof cell needs no support")))
 
 (deftest fill-cells-include-the-corners-a-mob-could-stand-in
   (let [feet {:x 0 :y 64 :z 0}
         floor? #(= 63 (:y %))
         corner? (fn [c] (and (not= 0 (:x c)) (not= 0 (:z c)) (<= 64 (:y c) 65)))
-        corners (fn [sealed?] (set (filter corner? (dig-cells/fill-cells sealed? feet nil sealed?))))]
+        corners (fn [sealed?] (set (filter corner? (fill/fill-cells sealed? feet nil sealed?))))]
     (is (= 8 (count (corners floor?))) "on flat ground a mob stands in every corner, feet and head height")
     (is (= #{{:x 1 :y 65 :z 1}} (corners #(or (floor? %) (= {:x 1 :y 64 :z 1} %) (and (corner? %) (not= {:x 1 :y 65 :z 1} %)))))
         "a rock corner at feet height leaves its head cell as a stand")
@@ -1498,7 +1499,7 @@
         slab {:x 1 :y 63 :z 1}
         corners (fn [stand-on?]
                   (set (filter #(and (not= 0 (:x %)) (not= 0 (:z %)) (<= 64 (:y %) 65))
-                               (dig-cells/fill-cells floor? feet nil stand-on?))))]
+                               (fill/fill-cells floor? feet nil stand-on?))))]
     (is (= #{{:x 1 :y 64 :z 1} {:x 1 :y 65 :z 1}}
            (set (filter #(= [1 1] [(:x %) (:z %)]) (corners #(or (floor? %) (= slab %))))))
         "a corner floor that is no full cube but is stood on (a slab top) is walled out")
@@ -1509,7 +1510,7 @@
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
         beside? (fn [cell] (= 1 (+ (Math/abs (:x cell)) (Math/abs (:z cell)))))
-        supports (fn [sealed? threats] (filterv #(and (= 66 (:y %)) (beside? %)) (dig-cells/fill-cells sealed? feet threats sealed?)))]
+        supports (fn [sealed? threats] (filterv #(and (= 66 (:y %)) (beside? %)) (fill/fill-cells sealed? feet threats sealed?)))]
     (is (= [{:x 1 :y 66 :z 0}] (supports none [])) "no threat: the +x side")
     (is (= [{:x -1 :y 66 :z 0}] (supports none [{:x 4.5 :y 66 :z 0.5}])) "a zombie on the +x side: the -x one")
     (is (= [] (supports #(= {:x 0 :y 66 :z 1} %) [{:x 4.5 :y 66 :z 0.5}])) "one placed already: no other")))
@@ -1832,7 +1833,7 @@
                                                         (for [x (range -6 7) z (range -6 7) y (range 55 64)
                                                               :when (not (and (zero? x) (zero? z) (>= y 62)))] [(str x "," y "," z) "stone"])
                                                         (for [x (range -6 7) z (range -6 7)] [(str x ",70," z) "stone"])
-                                                        (when ring? (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not (and (zero? x) (zero? z)))] [(str x "," y "," z) "stone"]))))})]
+                                                        (when ring? (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not (and (zero? x) (zero? z) (= 65 y)))] [(str x "," y "," z) "stone"]))))})]
                   (swap! (fake/state raw-p) assoc :light-default [0 0])
                   (fake/swap-self! raw-p assoc :pos [0.5 62 0.5])
                   raw-p))]

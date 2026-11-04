@@ -1,6 +1,7 @@
 (ns jobs.survival.night.flee
   "Fleeing: when no shelter can be dug here, walk to somewhere safer (a bed, a roofed place, a cave or overhang, or natural ground)."
-  (:require [jobs.lib.cost.health :as cost-health]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [jobs.lib.cost.health :as cost-health]
             [jobs.lib.choose :as choose]
             [clojure.set :as set]
             [engine.contract :as contract]
@@ -92,9 +93,9 @@
   (let [p (:primitives c)
         have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/filler-names c :shelter) (sites/wall-value)))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
-        sealed? (fn [cell] (and (dig-cells/known-solid? p cell) (seal/sealed? p cell)))]
+        sealed? (fn [cell] (and (dig-cells/known-solid? p cell) (fill/sealed? p cell)))]
     (when (and (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (up f 1))) (pit-site/clear-of-failed? c f))
-      (let [cells (dig-cells/fill-cells sealed? f nil #(dig-cells/stand-on? p %))]
+      (let [cells (fill/fill-cells sealed? f nil #(fill/stand-on? p %))]
         (when (and (<= (count cells) have) (not-any? #(access/trespass-refusal c :place %) cells))
           (count cells))))))
 

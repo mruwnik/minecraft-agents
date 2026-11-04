@@ -1,5 +1,6 @@
 (ns jobs.blocks.fill-cells
-  (:require [clojure.string :as string]
+  (:require [jobs.lib.shelter.fill :as fill]
+            [clojure.string :as string]
             [engine.args :as a]
             [jobs.lib.waits :as waits]
             [jobs.lib.block-sets :as bs]
@@ -98,8 +99,8 @@
     (into []
           (comp (keep (fn [cell]
                         (cond
-                          (and shut? (seal/open-openable p cell)) [cell :shut]
-                          (and in-place? (seal/sealed? p cell)) nil
+                          (and shut? (fill/open-openable p cell)) [cell :shut]
+                          (and in-place? (fill/sealed? p cell)) nil
                           :else (if-let [n (u/seen-name p cell)]
                                   [cell (seal/kind n)]
                                   (when in-place? [cell :open])))))

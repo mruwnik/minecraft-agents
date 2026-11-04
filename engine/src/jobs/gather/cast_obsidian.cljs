@@ -68,7 +68,7 @@
   "Whether the seen block at cell can be clicked: not air, fluid or a plant."
   [p cell]
   (let [n (u/seen-name p cell)]
-    (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))))
+    (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (bs/clearable n))))))
 
 (defn supported?
   "Whether a bucket can be emptied at cell: a solid block below it or beside it to click."

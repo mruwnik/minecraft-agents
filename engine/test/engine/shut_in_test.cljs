@@ -13,6 +13,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.survival.plug-way :as way]))
 
 (def cobble [{:name "cobblestone" :count 20}])
@@ -97,7 +98,7 @@
         cells [[0 64 0] [1 64 0]]
         sensed u/sensed
         rim-open (fn [unseen] (with-redefs [u/sensed (fn [p pos] (if (= unseen [(:x pos) (:y pos) (:z pos)]) #js {:unknown true} (sensed p pos)))]
-                                (way/rim-open? p cells)))]
+                                (sh-inside/rim-open? p cells)))]
     (is (false? (rim-open nil)) "walled to the roof, every rim cell seen")
     (is (true? (rim-open [2 66 0])) "a rim cell not seen yet may be open: a mob there drops in")))
 

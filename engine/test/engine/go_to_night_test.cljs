@@ -145,7 +145,7 @@
   [round-fn]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (sky/with-sky (tu/fake-on-floor (far-hut {})))
+        p (sky/with-sky (tu/fake-on-floor (update (far-hut {}) :blocks merge (into {} (for [x (range 4 7) z (range -1 2)] [(str x ",63," z) "stone"])))))
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker {:round round-fn}) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
