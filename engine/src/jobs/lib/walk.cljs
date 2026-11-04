@@ -438,7 +438,7 @@
   "Whether a sensed block b stops a body that took its cell for air: a full block, or a door, gate or trapdoor not open."
   [^js b]
   (boolean (and b (or (true? (.-fullCube b))
-                      (and (click/kind-of (.-name b))
+                      (and (#{:openable :iron} (click/kind-of (.-name b)))
                            (not (contains? #{true "true"} (some-> (.-properties b) (aget "open")))))))))
 
 (def ^:private panel-spans

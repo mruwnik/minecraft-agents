@@ -72,12 +72,14 @@
 
 (deftest a-shut-door-the-plan-took-for-air-is-found-ahead-unless-the-plan-opens-it
   (let [steps [(step 0 64 0 :walk) (step 1 64 0 :walk) (step 2 64 0 :walk) (step 3 64 0 :walk)]
+        lever (fn [] #js {:sensedAt (fn [_] #js {:name "lever" :fullCube false :properties #js {:powered false}})})
         door (fn [open] #js {:sensedAt (fn [pos] (if (and (= 2 (.-x pos)) (= 64 (.-y pos)))
                                                    #js {:name "oak_door" :fullCube false :properties #js {:open open}}
                                                    #js {:name "air" :fullCube false}))})]
     (is (= [2 64 0] (walk/solid-ahead (door false) steps)) "a shut door is in the way of a plan made over unseen cells")
     (is (nil? (walk/solid-ahead (door true) steps)) "an open one is not")
-    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans")))
+    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans"))
+    (is (nil? (walk/solid-ahead (lever) steps)) "a lever or button is no wall; only blocks a hand opens are")))
 
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
