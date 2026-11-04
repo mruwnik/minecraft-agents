@@ -294,16 +294,17 @@
 (defn swim-fn
   "A fn of a point to the blocks of the straight line from `from` to it (sampled each half block) that the body knows to be
   water (feet and the cell under in breath/swimmable, as breath/swimming?): a chaser is timed at its swim speed only
-  over water that is shown, else at its land speed."
+  over water that is shown, else at its land speed. Memoised per point: a search scores the same cells many times."
   [c from]
   (let [p (:primitives c)
         wet? #(let [cell (mapv js/Math.floor [(:x %) (:y %) (:z %)])
                     at (fn [dy] (contains? breath/swimmable (u/seen-name p {:x (cell 0) :y (+ dy (cell 1)) :z (cell 2)})))]
                 (and (at 0) (at -1)))]
-    (fn [to]
-      (let [n (max 1 (js/Math.ceil (* 2 (u/dist from to))))
-            at (fn [i] (merge-with #(+ %1 (* (/ i n) (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z])))]
-        (* 0.5 (count (filter #(wet? (at %)) (range (inc n)))))))))
+    (memoize
+     (fn [to]
+       (let [n (max 1 (js/Math.ceil (* 2 (u/dist from to))))
+             at (fn [i] (merge-with #(+ %1 (* (/ i n) (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z])))]
+         (* 0.5 (count (filter #(wet? (at %)) (range (inc n))))))))))
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
