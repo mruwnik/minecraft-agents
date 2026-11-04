@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.access.zones :as zones]
+            [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
@@ -103,15 +104,27 @@
   (when (and pos (not (:ignore-zones? (:args c))))
     (not-empty (cost/zone-tolls (zone-cells c (u/self-pos c) pos)))))
 
-(def roof-reach "Blocks above a water cell that are looked at for air." 12)
+(defn roof-reach
+  "Blocks above a water cell that are looked at for air: the ones the body's breath lets it swim up (jobs.lib.breath/air-left-s at
+  cost/wet-move-s of a swim up). Air higher is out of reach: the cell is a drowning trap whatever lies there."
+  [c]
+  (js/Math.floor (/ (breath/air-left-s (.self (:primitives c))) (cost/wet-move-s {} :swim-up))))
+
+(defn flood-factor
+  "Times its own seconds a roofed water cell costs more to swim: a drowning to death (cost/drown-prices of the body's health and
+  absorption at cost/hp-seconds) spread over the body's breath (breath/air-left-s), so crossing a breath's worth of it costs one death."
+  [c]
+  (let [self (.self (:primitives c))
+        pool (+ (.-health self) (or (.-absorption self) 0))]
+    (/ (peek (cost/drown-prices pool (cost/hp-seconds))) (breath/air-left-s self))))
 
 (def air-names #{"air" "cave_air" "void_air"})
 
 (defn roofed?
-  "Whether the water column above cell [x y z] ends, within roof-reach, in a seen block that is not air: nowhere to surface."
-  [p [x y z]]
+  "Whether the water column above cell [x y z] ends, within reach blocks, in a seen block that is not air: nowhere to surface."
+  [p reach [x y z]]
   (loop [dy 1]
-    (let [n (when (<= dy roof-reach) (u/seen-name p {:x x :y (+ y dy) :z z}))]
+    (let [n (when (<= dy reach) (u/seen-name p {:x x :y (+ y dy) :z z}))]
       (cond
         (or (nil? n) (air-names n)) false
         (= "water" n) (recur (inc dy))
@@ -123,19 +136,20 @@
   itself in water: it may swim out or in. Re-read at every plan, so water that comes into sight re-prices the route."
   [c pos]
   (let [p (:primitives c)
+        reach (roof-reach c)
         feet (u/self-pos c)
         wet? (fn [m] (= "water" (u/seen-name p {:x (js/Math.floor (:x m)) :y (js/Math.floor (:y m)) :z (js/Math.floor (:z m))})))]
     (when-not (or (wet? feet) (wet? (update feet :y inc)) (wet? pos))
       (->> (look/seen-blocks p {:names ["water"] :radius (min 32 (+ (margin) (js/Math.ceil (u/dist feet pos)))) :max (max-cells) :live? true})
            (map (fn [{:keys [pos]}] [(:x pos) (:y pos) (:z pos)]))
-           (filter #(roofed? p %))
+           (filter #(roofed? p reach %))
            vec
            not-empty))))
 
 (defn flood-walk-tolls
   "go-to's :tolls for the roofed water seen near a walk from the body to pos (flood-cells). nil when there is none."
   [c pos]
-  (when pos (some-> (flood-cells c pos) cost/flood-tolls)))
+  (when pos (some-> (flood-cells c pos) (cost/flood-tolls (flood-factor c)))))
 
 (defn walk-tolls
   "go-to's :tolls for a walk from the body to pos ({:x :y :z}): the farm cells it has seen near the walk and, unless the job

@@ -234,3 +234,16 @@
           (is (= #{[10 64 0] [11 64 0] [12 64 0] [10 65 0] [11 65 0] [12 65 0]} (cells dry)) "the roofed room only, not the open pool")
           (is (every? #(< 1 (:factor %)) dry) "a price, not a wall")
           (is (nil? swimmer) "a body already in water may swim out"))))))
+
+(deftest the-roof-reach-and-the-toll-follow-the-bodys-breath-and-health
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [probe (fn ^:async probe [extra] (await (in-round (setup {} [] extra) (fn [c] {:reach (tc/roof-reach c) :factor (tc/flood-factor c)}))))
+              whole (await (probe nil))
+              hurt (await (probe {:self {:health 4}}))
+              winded (await (probe {:self {:oxygen 4}}))]
+          (is (< 1 (:factor whole)) "swimming roofed water costs more than its seconds")
+          (is (< (:factor hurt) (:factor whole)) "a hurt body has less to lose to the drowning")
+          (is (< (:reach winded) (:reach whole)) "a body low on breath surfaces from fewer blocks")
+          (is (<= 1 (:reach winded)) (pr-str winded)))))))
