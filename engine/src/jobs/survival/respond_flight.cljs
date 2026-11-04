@@ -30,7 +30,7 @@
      arrows), then a safe home (planned, not caught, reached first), else the best open end; a pocket only when no heading is
      open at all. The goal is walked to while jobs.survival.respond.goal/verdict holds (the same priced route, a safer home,
      a death there). It leaves out ends below the flight's floor under rock, near a :hazard, in water while one is dry (all with
-     a drowned chasing), then those within respond.state/::died-radius of a recent :died place, then dark ones
+     a drowned chasing), then dark ones
      (respond.state/::prefer-lit?), each only while another end is open. An end go-to then finds no floor under is left out
      and the step chosen again (respond.step slow-step-cap in a row).
      Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.

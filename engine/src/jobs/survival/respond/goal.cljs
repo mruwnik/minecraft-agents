@@ -82,14 +82,12 @@
 (defn verdict
   "Pure: why a flight does not go to goal, its end e in the flight's search, nil when it may: :hostile-nearer when
   beaten? (a chaser gets there first even against a straight walk: flee-search/beaten-to?), flee-search/safe-why
-  (:no-way: not planned whole, :past-hostile, :hostile-nearer); :died-there: within flight/::died-radius of a place the
-  body died; :home-safer: home (safe-home) lies elsewhere (farther than same-place from it)."
-  [goal e {:keys [home died beaten?]}]
+  (:no-way: not planned whole, :past-hostile, :hostile-nearer); :home-safer: home (safe-home) lies elsewhere (farther than same-place from it)."
+  [goal e {:keys [home beaten?]}]
   (cond
     beaten? :hostile-nearer
     (nil? e) :no-way
     (search/safe-why e) (search/safe-why e)
-    (flight/near-died? died goal) :died-there
     (and home (> (u/dist home goal) (same-place))) :home-safer))
 
 (declare under-floor? margin)
@@ -112,7 +110,7 @@
               (given-up? c goal) :given-up
               (under-floor? c goal) :under-floor
               :else (verdict goal (search/named ends goal)
-                             {:home home :died (flight/died-spots c)
+                             {:home home
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn block-at-fn

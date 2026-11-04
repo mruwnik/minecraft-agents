@@ -23,8 +23,6 @@
    ::far-flight {:default 16 :doc "Blocks a flight must move the body to tell the agent (hostile.fled)." :spec (a/num-in 0 nil)}
    ::chain-window-ms {:default 60000 :doc "Flights this close together (end to end) add up to one move for hostile.fled." :spec (a/int-in 0 nil)}
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}
-   ::died-radius {:default 12 :doc "Blocks around a place the body died within which a flee step does not end, nor a goal lie, while another end is open; 0: off." :spec (a/num-in 0 nil)}
-   ::died-ttl-ms {:default 3600000 :doc "Milliseconds after a death during which a flight keeps away from the place (::died-radius)." :spec (a/int-in 0 nil)}
    ::jump-blocks {:default 24 :doc "Blocks between two steps of a flight that no step could cover (a teleport, a respawn): the flight's measure for hostile.fled starts again there." :spec (a/num-in 0 nil)}
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.shelter.sense/dark-fn) while a lit end is open." :spec boolean?}
@@ -70,23 +68,6 @@
   [c]
   (vec (:dead (ctx/mem c))))
 
-(defn died-spots
-  "The places the body died within ::died-ttl-ms (body memory :died), as positions; none with ::died-radius 0."
-  [c]
-  (if (pos? (settings/get settings ::died-radius))
-    (let [now (ctx/now c)]
-      (vec (keep #(when (< (- now (:t %)) (settings/get settings ::died-ttl-ms)) (:pos (:data %))) (ctx/entries c :died))))
-    []))
-
-(defn near-died?
-  "Whether pos lies within ::died-radius of one of spots and, given from (where the body stands), nearer to it than from
-  is: a body already inside the radius is not kept from stepping along its edge."
-  ([spots pos] (near-died? spots pos nil))
-  ([spots pos from]
-   (boolean (some #(let [d (u/dist % pos)]
-                     (and (<= d (settings/get settings ::died-radius)) (or (nil? from) (< d (u/dist % from)))))
-                  spots))))
-
 (defn dark-end?
   "A fn of a feet cell: whether it is dark (look/dark-fn) when ::prefer-lit? holds, else nil."
   [p]
@@ -95,12 +76,10 @@
       (fn [{:keys [x y z]}] (= 1 (at x y z))))))
 
 (defn avoid-ends
-  "flee-search/pick's :avoid fns for a step of the flight: near a death, then dark ground."
+  "flee-search/pick's :avoid fns for a step of the flight: dark ground."
   [c]
-  (let [spots (died-spots c)]
-    (cond-> []
-      (seq spots) (conj (let [from (u/self-pos c)] #(near-died? spots % from)))
-      (dark-end? (:primitives c)) (conj (dark-end? (:primitives c))))))
+  (cond-> []
+    (dark-end? (:primitives c)) (conj (dark-end? (:primitives c)))))
 
 (defn tried? [c option] (contains? (:tried (ctx/mem c)) option))
 

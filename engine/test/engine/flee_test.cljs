@@ -94,14 +94,6 @@
 
 ;; ------------------------------------------------------------------ the table and the rule
 
-(deftest a-body-inside-the-death-radius-is-kept-only-from-stepping-nearer-the-death
-  (let [spots [{:x 0 :y 64 :z 0}]
-        from {:x 10 :y 64 :z 0}]
-    (is (true? (respond.state/near-died? spots {:x 8 :y 64 :z 0} from)) "nearer the death, inside the radius")
-    (is (false? (respond.state/near-died? spots {:x 10 :y 64 :z 6} from)) "inside the radius but farther off")
-    (is (false? (respond.state/near-died? spots {:x 20 :y 64 :z 0} from)) "outside the radius")
-    (is (true? (respond.state/near-died? spots {:x 11 :y 64 :z 0})) "no from: inside the radius is enough")))
-
 (deftest a-mob-stops-chasing-past-its-range-out-of-line-or-with-no-way
   (let [now 10000 lost-ms 4000
         chasing {:mob "zombie" :distance 10 :in-line? true :way? true}]
@@ -1224,30 +1216,23 @@
 
 (defn ^:async target-after
   "The end cover/flight-target! picks (its :retreat.search event's :picked, {:x :y :z}) for a zombie to the east, with
-  the :died spots and settings given."
-  [{:keys [light light-default time blocks]} died settings-map]
+  a zombie death remembered at each of the died positions."
+  [{:keys [light light-default time blocks]} died]
   (let [out (atom nil)
         s (assoc-in (setup-sensed (cond-> {:entities [(zombie 7 5 {})]} time (assoc :time time) blocks (assoc :blocks blocks))) [:eng :jobs 'targeter] (looking-targeter out))]
     (when light-default (swap! (fake/state (:raw s)) assoc :light light :light-default light-default))
-    (doseq [pos died] (mem/write! (:store (:eng s)) :died {:pos pos} {:cap 4 :ttl :forever}))
-    (let [{:keys [seen]} (await (settings/with-settings settings-map #(run-job! s 'targeter {:step 6})))]
+    (doseq [pos died] (mem/write! (:store (:eng s)) :deaths {:pos pos :cause "zombie" :death-t (- @(:clock s) 4000)} core/deaths-policy))
+    (let [{:keys [seen]} (await (run-job! s 'targeter {:step 6}))]
       (some->> @seen (filter #(= :retreat.search (:kind %))) last :picked (zipmap [:x :y :z])))))
-
-(deftest a-verdict-drops-a-goal-near-a-place-the-body-died
-  (let [spot {:x -22 :y 64 :z 3}
-        goal {:x -20 :y 64 :z 0}]
-    (is (= :died-there (respond.goal/verdict goal (run-end goal 4 9) {:died [spot]})))
-    (is (nil? (respond.goal/verdict goal (run-end goal 4 9) {:died [{:x -22 :y 64 :z 40}]})) "a death far from the goal")))
 
 (deftest a-flight-does-not-run-toward-a-place-the-body-died
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plain (await (target-after {} [] {}))
-              out (await (target-after {} [plain] {}))
-              off (await (target-after {} [plain] {:jobs.survival.respond.state/died-radius 0}))]
-          (is (> (u/dist out plain) 12) (str "a death where the flight would end turns it away: " (pr-str plain) " " (pr-str out)))
-          (is (= plain off) "radius 0 turns it off"))))))
+        (let [dark {:light {} :light-default [0 0]}
+              plain (await (target-after dark []))
+              out (await (target-after dark [plain]))]
+          (is (> (u/dist out plain) 12) (str "a recent mob death where the flight would end is priced into that end, so it takes another: " (pr-str plain) " " (pr-str out))))))))
 
 (deftest a-flight-prefers-lit-ground-to-dark
   (async done
@@ -1257,8 +1242,8 @@
         lit (into {} (for [x (range -30 4) z (range 2 13) y [63 64 65]] [[x y z] [0 8]]))
               torches (into {} (for [x (range -30 4 6)] [(str x ",64,14") "torch"]))
               world {:time 18000 :light-default [15 0] :light lit :blocks torches}
-              out (await (target-after world [] {}))
-              day-dark (await (target-after (assoc world :time 1000 :light-default [0 0]) [] {}))]
+              out (await (target-after world []))
+              day-dark (await (target-after (assoc world :time 1000 :light-default [0 0]) []))]
           (is (> (:z out) 1) (str "west and south-west are dark, north-west is lit: " (pr-str out)))
           (is (> (:z day-dark) 1) (str "dark is a light check, not the clock: dark seen ground by day is left out too " (pr-str day-dark))))))))
 
