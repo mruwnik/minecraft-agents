@@ -161,6 +161,7 @@
   of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
   A cell begun stays the one worked on while it is still pending, however the walk reorders the nearest-first list. A walk is priced once, at its start, with the seconds the job's walks spent before it (:edge-spent), so walks one after
   another are bought from what the call's worth leaves.
+  A cell within sight range of the feet that the first look left unseen is tried at once: a walk shows no more of it.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
   place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given."
   ([c cells] (look! c cells nil))
@@ -177,7 +178,8 @@
              (await (dig-look/look-at! c cell)))
        (1 2) (let [p (:primitives c)
                    reach-to (last (filter #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
-                   near (or to ((walkable-near-fn p (sh-sense/feet p)) reach-to))
+                   close? (some-> (look/near-of p) (>= (u/dist (sh-sense/feet p) {:x (first cell) :y (second cell) :z (nth cell 2)})))
+                   near (when-not close? (or to ((walkable-near-fn p (sh-sense/feet p)) reach-to)))
                    spent (:edge-spent (ctx/mem c) 0)
                    price (when (and near (= 1 phase)) (walk-price c near worth))
                    _ (when price (ctx/update-mem! c assoc :edge-spent (+ spent price)))
