@@ -140,6 +140,22 @@
     (is (< 3 (count asks)) "each call is one slice")
     (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) done))))
 
+(deftest a-resumed-search-whose-read-cell-changed-meanwhile-begins-again
+  (let [changes (atom {})
+        w0 (world {[20 4 6] "air" [20 5 6] "air"})
+        w (fn [c] (or (@changes c) (w0 c)))
+        opts {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 40}
+        ask #(dr/route-resumed [:t 4] w [0 10 0] [20 4 6] opts)
+        whole (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000))
+        lavaed (first (:dig whole))
+        _ (.clear dr/kept)
+        _ (ask)
+        _ (swap! changes assoc lavaed "lava")
+        end (loop [i 0] (let [r (ask)] (if (and (= {:problem :searching} r) (< i 300)) (recur (inc i)) r)))]
+    (is (some? lavaed))
+    (is (seq (:dig end)))
+    (is (not-any? #{lavaed} (:dig end)) "the route is found again without the cell seen as lava")))
+
 (deftest a-resumed-search-past-a-dear-wall-prices-the-wall-first-and-keeps-one-search-a-caller
   ;; the goal in an obsidian shell in rock: every way digs obsidian, and a search that learns it only on reaching the
   ;; shell searches the ball of rock cheaper than that first

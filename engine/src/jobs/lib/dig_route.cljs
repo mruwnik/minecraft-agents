@@ -112,7 +112,8 @@
                                          :fluid (boolean (bs/fluids n)) :falling (boolean (falling n))}]
                               (.set kinds n k) k)))
         read (js/Map.)
-        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))] (.set read i k) k))))
+        read-at (js/Map.)
+        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))] (.set read i k) (.set read-at i [x y z]) k))))
         priced (js/Map.)
         dig-at (fn [n x y z] (let [i (key x y z)] (if (.has priced i) (.get priced i) (let [s (dig-s n [x y z])] (.set priced i s) s))))
         unseen-cell? (let [m (js/Map.)] (fn [x y z] (let [i (key x y z) u (.get m i)] (if (some? u) u (let [u (or (unboxed? x y z) (boolean (unseen? [x y z])))] (.set m i u) u)))))
@@ -342,6 +343,12 @@
     (fn [n]
       (let [start (.-size done)
             limit (+ start n)
+            ;; whether a cell read in an earlier slice reads otherwise now
+            stale? (fn [] (let [out (volatile! false)]
+                            (.forEach read (fn [k i] (let [[x y z] (.get read-at i)]
+                                                       (when (not= (.-name k) (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))
+                                                         (vreset! out true)))))
+                            @out))
             a (or @answer
                   ;; a physical limit: the heap holds no more
                   (when (and full? (full?)) (let [e (ended)] (if (:dig e) e {:problem :too-big})))
@@ -360,7 +367,7 @@
                         (>= (.-size done) limit) (do (heap-push! queue top) nil)
                         :else (do (.add done ck) (expand! ck) (recur)))))))]
         (vreset! answer a)
-        [a (- (.-size done) start)]))))
+        [a (- (.-size done) start) stale?]))))
 
 (defn body-prices
   "route's prices for the body of primitives p, as go-to prices its walks: a step's walk-cost, a fall's hp (fall-damage at
@@ -443,16 +450,21 @@
   "route, but a search that spends its nodes (:max-nodes) is kept under key and
   gone on by the next call with the same key: {:problem :searching} till it ends, priced as priced-search ({:problem
   :too-big} once the heap is full with no route in hand). A key names the caller and the search ([job-id :kind from goal]):
-  the caller's search under another key is dropped (its question changed), and one never asked again falls out of kept."
+  the caller's search under another key is dropped (its question changed), and one never asked again falls out of kept.
+  An answer of a search gone on over several calls is kept only if every cell the search read still reads as it did (a
+  cave, a lava pool or a wall seen meanwhile): else the search begins again."
   [key block-at from goal opts]
   (let [caller (pr-str (vec (take 2 key)))
-        key (pr-str key)
+        skey (pr-str key)
         [k run] (.get kept caller)
-        run (or (when (= k key) run) (priced-search block-at from goal opts))
+        resumed (when (= k skey) run)
+        run (or resumed (priced-search block-at from goal opts))
         nodes (get opts :max-nodes (settings/get settings ::max-nodes))
-        [a] (run nodes)]
+        [a _ stale?] (run nodes)]
     (.delete kept caller)
-    (when-not a
-      (.set kept caller [key run])
-      (when (> (.-size kept) kept-max) (.delete kept (.-value (.next (.keys kept))))))
-    (or a {:problem :searching})))
+    (if (and resumed a (not= :too-big (:problem a)) (stale?))
+      (route-resumed key block-at from goal opts)
+      (do (when-not a
+            (.set kept caller [skey run])
+            (when (> (.-size kept) kept-max) (.delete kept (.-value (.next (.keys kept))))))
+          (or a {:problem :searching})))))
