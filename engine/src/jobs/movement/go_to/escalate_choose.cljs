@@ -397,7 +397,8 @@
                                        (map (fn [z] [gx fy z]) (leg fz gz))
                                        (map (fn [y] [gx y gz]) (leg fy gy)))
                          floored? (fn [[x y z]] (let [f (seen-floor [x (dec y) z])]
-                                                  (and f (not= f access/hidden-guess) (not (dig-route/open? f)))))
+                                                  (and f (not (dig-route/open? f))
+                                                       (or (not= f access/hidden-guess) (true? (some-> (sensed x y z) .-unknown))))))
                          cell-s (fn [[x y z :as cell]]
                                   (let [b (sensed x y z)
                                         unseen? (true? (some-> b .-unknown))
