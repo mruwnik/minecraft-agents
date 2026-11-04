@@ -128,7 +128,6 @@
               world (-> base
                         (update :blocks #(merge % ring (shift % 20)))
                         (update :states #(merge % (shift % 20)))
-                        (update :light merge (into {} (for [x (range 3 8) y [64 65] z (range 5 9)] [[x y z] [0 0]])))
                         (assoc :time night))
               {:keys [eng p]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
           (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))

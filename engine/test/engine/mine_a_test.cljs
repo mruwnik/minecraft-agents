@@ -659,18 +659,21 @@
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds there are priced
 (defn near-sand-by-a-death
   "The sand east within reach, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
-  sand: the setup map with :go-tos, the go-to args of each walk round."
-  [age-ms n]
-  (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge floor {"3,64,0" "sand" "-12,64,0" "sand"})}}))
+  sand: the setup map with :go-tos, the go-to args of each walk round. Roofed: under the roof, the sand's neighbourhood
+  is dark to the body's memory."
+  ([age-ms n] (near-sand-by-a-death age-ms n false))
+  ([age-ms n roofed?]
+  (let [blocks {"3,64,0" "sand" "-12,64,0" "sand"}
+        [s go-tos] (spy-go-to (if roofed? (start-shaded blocks) (start {:world {:blocks (merge floor blocks)}})))
         _ (swap! (fake/state (:p s)) assoc :worldSpawn [0 64 0])
         now @(:clock s)]
     (when age-ms
       (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now age-ms)} core/deaths-policy))
     (core/submit! (:eng s) (spec {:block "sand" :count n :ways #{:seen}}) {})
-    (assoc s :go-tos go-tos)))
+    (assoc s :go-tos go-tos))))
 
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds
-;; there are priced (go-near!'s in-range stay) against the sand's worth, and the walk west carries the dig's seconds
+;; there are priced (the death toll does not read light, so this world is unroofed) (go-near!'s in-range stay) against the sand's worth, and the walk west carries the dig's seconds
 (deftest a-target-in-reach-of-a-recent-death-is-dug-last
   (async done
     (tu/run-async done
@@ -697,15 +700,16 @@
           (is (some? one))
           (is (= (* 3 one) three)))))))
 
-;; with no death remembered, or one faded (cost.death memory-ms), the stay is no threat's: dug first
-(deftest a-target-in-reach-with-no-fresh-death-is-dug-first-while-its-stay-is-within-its-worth
+;; with no death remembered, or one faded (cost.death memory-ms), the stay in the dark is no threat's: dug first
+(deftest a-target-in-reach-in-the-dark-is-dug-first-while-its-stay-is-within-its-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [age-ms [nil 7200000]]
-          (let [s (near-sand-by-a-death age-ms 1)]
+          (let [s (near-sand-by-a-death age-ms 1 true)]
             (await (run-ticks s 30))
             (is (= [3 64 0] (first (dug-cells s))) (pr-str age-ms))
+            (is (zero? (bit-shift-right (lk/known-light-at (:p s) 3 65 0) 4)) "the premise: no sky light over the sand in memory (torch light of the body's own aside)")
             (is (empty? (events-of s :near.risky-stay)) (pr-str age-ms))))))))
 
 ;; a risky skip is priced again on every scan: once the death has faded (cost.death memory-ms) the body walks back to
