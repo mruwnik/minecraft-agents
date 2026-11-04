@@ -7,13 +7,13 @@
 //  Each shard is killed when no test has finished for stallLimitS (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test and the namespaces not reached.
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
-//  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to /tmp/mc-test-run-<pid>/out (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in /tmp/mc-test-run-<pid>-shard-<i>.log (path printed).
+//  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to ~/.cache/mc-test-run/mc-test-run-<pid>/out (disk, not tmpfs) (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile, heavyWaitBody } from './res-slot.mjs'
-import { WHOLE_RUN_CAP_S, lastFinished, isolate, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
+import { WHOLE_RUN_CAP_S, lastFinished, isolate, RUN_ROOT, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
@@ -194,7 +194,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     const o = shardOutcome(r.code, mine)
     finished.push({ ok: o.ok, lines: mine })
     if (o.ok) { console.log(`shard ${r.i}: ok (${r.nss.length} ns)`); continue }
-    const log = `/tmp/mc-test-run-${process.pid}-shard-${r.i}.log`
+    const log = path.join(RUN_ROOT, `mc-test-run-${process.pid}-shard-${r.i}.log`)
     fs.writeFileSync(log, r.out)
     bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${failureDump(r.out)}`)
   }

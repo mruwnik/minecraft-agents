@@ -5,6 +5,7 @@
 //  res-slot 'tests' slot sized by the namespace count (needMb), killed when no test has finished for stallLimitS (MC_TEST_STALL_S overrides, MC_TEST_FIRST_S the 300 s allowed to the first finished test; a spinning test too, the watchdog is this parent) so a hung test frees its slot, and after WHOLE_RUN_CAP_S (MC_TEST_TIMEOUT_S overrides).
 //  More than MAX_QUALIFIED <ns>/<deftest> specs run as several node runs in turn (shadow finds none from 9); exit SHORT_RC when fewer tests finished than were named.
 //  Only the requested -test namespaces are loaded (narrowBundle: imports and shadow.test registry cut from the source, only the imported files copied; engine.timing-test, the timing / TEST_EVENTS=1 @@test reporter, always stays); full and shard runs keep the whole bundle.
+import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
@@ -119,7 +120,10 @@ export const lastFinished = (lines) =>
 
 // Private copy of the bundle; fixtures resolve as <out>/../test, npm deps through node_modules.
 // With nss (targeted run) the bundle is narrowed from the source dir first and only the files it imports (+ .map) are copied.
-export const isolate = (engineDir, tag, root = '/tmp', nss = null) => {
+// On disk, not /tmp (tmpfs = RAM): a full copy is 336 MB and several runs hold one at once.
+export const RUN_ROOT = path.join(os.homedir(), '.cache/mc-test-run')
+
+export const isolate = (engineDir, tag, root = RUN_ROOT, nss = null) => {
   const runDir = path.join(root, `mc-test-run-${tag}`)
   const srcRuntime = path.join(engineDir, 'out/test/cljs-runtime')
   const runtime = path.join(runDir, 'out/test/cljs-runtime')
@@ -141,8 +145,11 @@ export const isolate = (engineDir, tag, root = '/tmp', nss = null) => {
 
 // Removes the run dirs of dead pids (a SIGKILLed run leaves its copy in RAM): <root>/mc-test-run-<digits> and the test process's
 // <root>/engine-test-<digits>-<random> temp dirs (engine/test/engine/test_util.cljs tmp-dir) and the failing-shard logs <root>/mc-test-run-<digits>-shard-<n>.log (tools/test-shards.mjs); never a live pid.
-export const sweepStale = (root = '/tmp', alive = (pid) => pidAlive(pid)) => {
+export const sweepStale = (roots = [RUN_ROOT, '/tmp'], alive = (pid) => pidAlive(pid)) => [].concat(roots).flatMap((root) => sweepRoot(root, alive))
+
+const sweepRoot = (root, alive) => {
   const removed = []
+  if (!fs.existsSync(root)) return removed
   for (const name of fs.readdirSync(root)) {
     const m = /^(?:mc-test-run-(\d+)(?:-shard-\d+\.log)?|engine-test-(\d+)-.+)$/.exec(name)
     if (!m || alive(Number(m[1] ?? m[2]))) continue
@@ -281,7 +288,7 @@ const main = async () => {
   const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
   const stallS = Number(process.env.MC_TEST_STALL_S) || stallLimitS(slowestPriorMs(nss, (readText(path.join(engine, 'out/test-timings.jsonl'))).split('\n')))
   sweepStale()
-  const { runDir, cleanup } = isolate(engine, process.pid, '/tmp', nss)
+  const { runDir, cleanup } = isolate(engine, process.pid, RUN_ROOT, nss)
   let child = null
   cleanupOnExit(process, cleanup, (sig) => child && killTree(child.pid, sig))
   // Checked on the private copy: a concurrent targeted compile of other namespaces in this checkout can replace engine/out under us (test-engine recompiles once on MISSING_RC).

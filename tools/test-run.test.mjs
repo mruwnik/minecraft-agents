@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, slowestLines, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, chunkSpecs, minTests, finishedCount, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, slowestLines, watchStall, stallMessage, needMb, lastFinished, isolate, RUN_ROOT, narrowBundle, missingNss, chunkSpecs, minTests, finishedCount, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -345,4 +345,15 @@ test('minTests: deftests named outside a requested whole namespace, plus one for
 
 test('finishedCount: counts finished test vars, not the started line or a half-written one', () => {
   assert.equal(finishedCount(['{"started":1}', '{"var":"#\'a/b","ms":3}', '{"var":"#\'a/c","ms":3}', '{"var":', '']), 2)
+})
+
+test('isolate: the default root is on disk, not tmpfs /tmp (a full copy is 336 MB of RAM there)', (t) => {
+  const src = fs.mkdtempSync('/tmp/test-run-src-')
+  t.after(() => fs.rmSync(src, { recursive: true, force: true }))
+  fs.mkdirSync(`${src}/out/test/cljs-runtime`, { recursive: true })
+  fs.writeFileSync(`${src}/out/test.cjs`, '')
+  const { runDir, cleanup } = isolate(src, `unit-root-${process.pid}`)
+  t.after(cleanup)
+  assert.equal(path.dirname(runDir), RUN_ROOT)
+  assert.ok(!RUN_ROOT.startsWith('/tmp'))
 })
