@@ -183,6 +183,13 @@
   [c result]
   (boolean (and (= :exhausted (some-> (:reason result) keyword)) (goal-aim/see-cell c))))
 
+(defn refused-drop?
+  "Whether a give-up with result is a :one-way end whose refused step is a fall: the goal is seen below and the only
+  nearer way is a drop the walk will not take, so a free body digs down to it as a player who won't jump does."
+  [result]
+  (and (= :one-way (some-> (:reason result) keyword))
+       (= :drop (some-> (:one-way result) :kind keyword))))
+
 (defn goal-walled?
   "Whether a give-up with result is a free body's (not escape/walk-enclosed?) whose goal the planner proved walled in, or whose
   search spent its node budget (:budget) with the body within budget-near of the goal (:goal-left): a goal that close
@@ -694,6 +701,7 @@
              (sprint-only? result)
              (dive? c result)
              (goal-walled? c result shut?)
+             (and (refused-drop? result) (not @shut?))
              (some? (drop-fill c result (skips c) (end/feet-cell c)))
              (air-pocket? c result)
              (and (walker-fault? result) (>= tries (max-blocked))

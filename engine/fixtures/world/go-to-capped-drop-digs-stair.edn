@@ -1,0 +1,21 @@
+;; A stone block y 0..12 (the body on top at feet y 13, x 8.5) standing free on open floor; the goal on the floor east of it, seen from the top. Every way off is a
+;; 13 drop; with :spend {:health 0} the body takes none, and a player who won't jump digs a stair down the face.
+{:defaults
+ {:tags [:movement]
+  :time :any
+  :plot {:height 18}
+  :blocks [[:fill [1 0 1] [15 12 30] "stone"]]
+  :body {:at [8.5 13 16.5] :settle-s 2 :inventory [["iron_pickaxe" 1]]}
+  :limit-s 150}
+ :cases
+ [{:name "capped-body-digs-a-stair-down-the-face-to-a-goal-below"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :spend {:health 0}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "capped-body-without-a-pickaxe-stays-on-top"
+   :body {:at [8.5 13 16.5] :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :spend {:health 0}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 120 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [22.5 0 16.5] 4]]}]}

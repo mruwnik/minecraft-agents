@@ -58,6 +58,11 @@
     (is (false? (ok? {:reason :abilities :kind :break} :never)))
     (is (false? (ok? {:reason :stuck} :never)))))
 
+(deftest a-one-way-end-at-a-refused-drop-is-dug-down-but-a-closed-door-one-is-not
+  (is (true? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :drop :at [0 70 0]}}))))
+  (is (false? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :door}}))))
+  (is (false? (boolean (choose/refused-drop? {:reason :exhausted :one-way {:kind :drop}})))))
+
 (deftest escape-enclosed-counts-doors-as-walls-under-doors-never
   (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
         p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))]

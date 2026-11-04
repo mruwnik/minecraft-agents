@@ -6,6 +6,7 @@
   - A goal that is lava, stands over lava or has lava on all four sides (escalate-choose/goal-lava?) is refused at once when the walk finds it walled in: no way is made, in or out; the dig rules below are for an acceptable goal that is walled in.
   - A goal cut off by a drop (:goal-cut-off, or :goal-enclosed with a drop edge in its region) is bridged: a carried block fills the floor beyond the drop edge nearest the body that it can step onto (escalate-choose/drop-fill, gap-fill; a go-to.escalated {:step :fill-gap}) when that is no dearer than the stair, pillar or dig the escape would make (jobs.lib.cost.ways/fill-cost: placing, the block spent, a fetch when the pack runs low), then it walks again.
   - :dig-out: a body sealed in its own shelter (a :shelter entry) when the walk finds no way, leaves it first at any hour (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); the way out is priced before it is cut (start-hold: a dearer-than-waiting cut holds :risky for dawn). Not at a dark sky while the body is :dug-in (sh-inside/night-sheltered): it waits for light, as the readiness checks do.
+  - A free body whose walk ends :one-way at a drop it refuses (escalate-choose/refused-drop?) digs toward the goal below as for an out-of-sight goal (dig-way), not stopping when the stair's last cell brings the goal into sight.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs), makes a way instead of giving up, one child job
     each (jobs.lib.escape.way/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
@@ -49,7 +50,7 @@
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill out-of-sight? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
@@ -291,7 +292,7 @@
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
         lava-goal? (and (= :goal-enclosed (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in (or out of sight) digs straight into it when it can
-        dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword)) (out-of-sight? c result)))
+        dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword)) (out-of-sight? c result) (and (refused-drop? result) (not @shut?))))
         ;; a buried body whose plan ran out of land read the rock round it as rock: to a goal no higher than it is
         ;; across (a stair climbs to that) it digs toward it leg by leg, the last one into it; else the ways out as before
         rock-dig? (and (#{:exhausted :start-enclosed} (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c)))

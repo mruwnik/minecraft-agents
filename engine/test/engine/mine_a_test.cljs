@@ -605,25 +605,22 @@
 (deftest an-open-platform-over-unseen-floor-tries-the-unseen-sides-and-ends-on-them-with-or-without-a-cap
   ;; a look is the way to learn a floor, so the sides are tried whether the budget or a cap refuses the 13 drop; the
   ;; floors felt for turn out not there. Uncapped it ends on them (:unseen-floors), never :needs-health at full health.
-  ;; Capped, each absent floor learned counts as progress and the body digs a stair into the platform; it never takes
-  ;; the drop (no hurt, still up on the platform), leaves the ore and ends unreachable. (go-to gives up there instead of
-  ;; digging the stair on down, card 3f90e07b.)
+  ;; Capped, it never takes the drop (no hurt): it digs a stair down the platform's face to the ore and mines it.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[settings end-key end] [[{} :why :unseen-floors] [{:jobs.lib.walk.world/max-damage 0} :reason :unreachable]]]
+        (doseq [[settings status got ore why] [[{} :stopped 0 "iron_ore" :unseen-floors] [{:jobs.lib.walk.world/max-damage 0} :completed 1 "air" nil]]]
           (let [s (await (drop-to-ore 77 false settings))
                 e (done-event s)
                 learned (mapcat :learned (events-of s :replan))]
-            (is (= [:stopped 0] ((juxt :status :got) e)) (pr-str settings))
+            (is (= [status got] ((juxt :status :got) e)) (pr-str settings))
             (is (seq learned) (pr-str settings))
             (is (every? (fn [[x y z]] (contains? #{nil "air"} (block-at s x y z))) learned)
                 (str (pr-str settings) ": every floor learned absent is air"))
-            (is (= "iron_ore" (block-at s 6 63 0)) (pr-str settings))
             (is (= 20 (.-health (.self (:p s)))) (str (pr-str settings) ": no drop hurt the body"))
-            (is (>= (second (feet s)) 73) (str (pr-str settings) ": still on the platform"))
-            (is (every? (fn [[x y z]] (and (<= -4 x 0) (<= 64 y 76) (<= -4 z 4))) (dug-cells s)) (str (pr-str settings) ": digs only into the platform"))
-            (is (= end (get-in e [:because :cause end-key])) (pr-str settings (get-in e [:because :cause])))))))))
+            (is (every? (fn [[x y z]] (and (<= -4 x 6) (<= 63 y 76) (<= -4 z 4))) (dug-cells s)) (str (pr-str settings) ": digs only the platform and its stair"))
+            (is (= ore (block-at s 6 63 0)) (pr-str settings))
+            (is (= why (get-in e [:because :cause :why])) (pr-str settings))))))))
 
 (deftest a-drop-of-five-blocks-to-a-seen-ore-is-taken
   (async done
