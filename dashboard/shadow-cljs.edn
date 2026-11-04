@@ -1,8 +1,8 @@
 ;; shadow-cljs builds for the dashboard and the body engine (one server per checkout). See README.md.
 ;; Both engine builds run from `compile` (never :advanced), so externs inference is off. Engine outputs go to ../engine/out.
 ;; Idle servers return heap and malloc memory (measured 1.75 GB -> ~0.6-0.8 GB); compile times unchanged. Not TieredStopAtLevel=1 (2.5x slower).
-;; -Xss512k, CICompilerCount=2, ReservedCodeCacheSize=64m and MALLOC_ARENA_MAX=2 (tools/compile) cut the compile peak RSS 1606 -> 1374 MB.
-{:jvm-opts ["-Xmx1G" "-Xss512k" "-XX:CICompilerCount=2" "-XX:ReservedCodeCacheSize=64m" "-XX:G1PeriodicGCInterval=20000" "-XX:MinHeapFreeRatio=10" "-XX:MaxHeapFreeRatio=30" "-XX:TrimNativeHeapInterval=10000"]
+;; MALLOC_ARENA_MAX=2 (tools/compile) trims native memory. Not -Xss512k (deep forms overflow), CICompilerCount=2 (slower cold compiles) or a small ReservedCodeCacheSize (the code cache fills and the JIT stops): their RSS gain was never measured apart.
+{:jvm-opts ["-Xmx1G" "-XX:G1PeriodicGCInterval=20000" "-XX:MinHeapFreeRatio=10" "-XX:MaxHeapFreeRatio=30" "-XX:TrimNativeHeapInterval=10000"]
  :source-paths ["src" "test" "bench-src" "../engine/src" "../engine/test" "../engine/test-support"] ; ../engine/src before ../engine/test: the registry finds jobs/ and triggers/ on the first path that has them
  :dependencies [[reagent "1.3.0"]
                 [re-frame "1.4.3"]]
