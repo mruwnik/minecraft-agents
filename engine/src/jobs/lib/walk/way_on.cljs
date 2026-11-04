@@ -79,9 +79,10 @@
 (defn scan
   "{:k :n :ways} over the seen stands a body could walk to, nearest start ([x y z] feet cell) first (at most ::sample of them,
   breadth first over the ways between them, and at most 8 times that many expanded): n the stands whose every side is seen
-  (but one entered from a seen stand with no other way on: the corridor it is in counts once), k those from which a way onward,
-  not back through the stand they were entered by, leads out to cells not seen (or to stands past the sample); the
-  rest are dead ends: a shut corridor, a closed room (a wall beside a way is no way). A stand with a side not seen is
+  that lead out or not, joined into one trial where neighbouring stands share the fate (a corridor or a hall counts once, a
+  fork's shut branch apart from its open one), k the trials from whose stands a way onward, not back through the stand
+  they were entered by, leads out to cells not seen (or to stands past the sample); the rest are dead ends: a shut
+  corridor, a closed room (a wall beside a way is no way). A stand with a side not seen is
   left uncounted, as is a level way with a cell not seen within 2 cells of start, gone through (the cells by the feet a
   body looking ahead has not seen); farther unseen cells are the worse case, not passed. known: (fn [cx sy cz]) the
   memory's ids + 1 of a section. :ways: the first way into cells not seen (a stand and a side [x y z d], not the cells by the feet), nearest the start first, at most way-cap of them."
@@ -93,13 +94,12 @@
         ways #js []
         adj #js [#js []]
         open #js [false]
-        seen-all #js [false]
         index (js/Map. #js [#js [(str sx "," sy "," sz) 0]])
         visit! (fn [x y z from]
                  (let [key (str x "," y "," z)
                        j (or (.get index key)
                              (let [j (.-length qx)]
-                               (.set index key j) (.push qx x) (.push qy y) (.push qz z) (.push qp from) (.push adj #js []) (.push open false) (.push seen-all false)
+                               (.set index key j) (.push qx x) (.push qy y) (.push qz z) (.push qp from) (.push adj #js []) (.push open false)
                                j))]
                    (.push (aget adj from) j)))
         out? (fn [s]
@@ -131,15 +131,19 @@
                                                      (when (< (.-length ways) way-cap) (.push ways #js [x y z d])))
                                                    (recur (inc d) true))
                                   :else (recur (inc d) (or unseen? (neg? up) (neg? down)))))))
-                          seen? (and (pos? i) (not unseen?))
-                          p (aget qp i)
-                          counted? (and seen? (not (and (pos? p) (aget seen-all p) (== 2 (.-length (aget adj p))) (.includes (aget adj p) (aget qp p)))))]
+                          counted? (and (pos? i) (not unseen?))]
                       (aset open i unseen?)
-                      (aset seen-all i seen?)
                       (when counted? (.push found i))
                       (recur (inc i) (if counted? (inc stands) stands) found))))]
-    (let [n (.-length counted)]
-      {:k (count (filter out? counted)) :n n :ways (mapv vec ways)})))
+    (let [status (js/Map.)
+          group (js/Map.)
+          root (fn root [i] (let [p (.get group i)] (if (== p i) i (root p))))]
+      (doseq [i counted] (.set status i (boolean (out? i))) (.set group i i))
+      (doseq [i counted j (aget adj i)]
+        (when (and (.has status j) (= (.get status i) (.get status j)))
+          (.set group (root i) (root j))))
+      (let [roots (set (map root counted))]
+        {:k (count (filter #(.get status %) roots)) :n (count roots) :ways (mapv vec ways)}))))
 
 (defn way-counts
   "{:k :n} of scan."
