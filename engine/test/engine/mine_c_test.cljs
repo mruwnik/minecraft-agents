@@ -612,6 +612,7 @@
 (deftest a-walk-whose-search-ran-out-is-cut-past-like-an-unreachable-one
   (is (true? (drops/cut-after? {:kind :stopped :cause {:why :budget}})))
   (is (true? (drops/cut-after? {:kind :stopped :cause {:why :detour}})))
+  (is (true? (drops/cut-after? {:kind :stopped :cause {:why :unseen-floor-dark}})))
   (is (false? (drops/cut-after? {:kind :stopped :cause {:why :door-stuck}}))))
 
 (deftest a-drop-is-lost-only-when-judged-from-near-the-dug-cell
@@ -872,3 +873,18 @@
     (is (seq asks) "the first call is cut short")
     (is (= [1 64 0] (last (settings/with-settings {:jobs.lib.dig-route/max-nodes 1}
                             #(loop [n 0] (let [r (drops/drop-cut c [2 64 0] 100)] (if (and (= :searching r) (< n 200)) (recur (inc n)) r)))))))))
+
+(defn seeded-rand [seed]
+  (let [a (atom seed)]
+    (fn [] (swap! a (fn [x] (mod (+ (* x 1103515245) 12345) 2147483648))) (/ @a 2147483648))))
+
+(deftest a-walk-refused-for-dark-floor-beside-a-dug-cell-is-cut-past
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [seed [5 8 9]]
+          (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} :rand (seeded-rand seed)})]
+            (hide-drop-until-beside! (:p s) [2 64 0] (atom []))
+            (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
+            (await (run-ticks s 40))
+            (is (= 1 (get (inv s) "raw_iron")) (str "seed " seed ": the drop is cut to and picked up"))))))))

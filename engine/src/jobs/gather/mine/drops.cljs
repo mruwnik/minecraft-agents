@@ -284,8 +284,9 @@
       (boolean (seq unseen)))))
 
 (def search-ended-whys
-  "go-to's :why of a walk whose search ended without a verdict on the cell (a big open cave ate the budget): the dug cell may still be walled in."
-  #{:budget :search-spent :moved-while-searching :no-progress})
+  "go-to's :why of a walk whose search ended without a verdict on the cell (a big open cave ate the budget, or the floor on the way is
+  too dark to see): the dug cell may still be walled in."
+  #{:budget :search-spent :moved-while-searching :no-progress :unseen-floor-dark})
 
 (defn cut-after?
   "Whether the blocked walk res (go-to's ending) leaves a cut beside the dug cell worth trying: a verdict on the cell, a detour,
