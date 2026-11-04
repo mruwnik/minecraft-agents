@@ -188,7 +188,7 @@
       (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
       (when-let [seen (u/seen-name (:primitives c) bed)]
         (when-not (.endsWith seen "_bed") (sh-spawn/lose-spawn! c bed :gone))))
-    (if (= :done r) (ctx/end c :nothing-possible :bed-unreachable {:pos bed :text text}) r)))
+    (if (= :done r) (ctx/end c :nothing-possible :bed-unreachable (cond-> {:pos bed :text text} priced? (assoc :priced true))) r)))
 
 (defn fail-ending
   "u/fail!'s answer r (:continue to retry, :done once given up) as this call's: the retry, or nothing-possible cause."

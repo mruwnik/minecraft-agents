@@ -575,6 +575,16 @@
           (is (re-find #"costs more hp" (:text @out)) "the refusal names the night's price, not a closed land")
           (is (empty? (calls p "dig"))))))))
 
+(deftest go-to-sealed-in-bedrock-by-night-keeps-the-plain-shut-in-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bedrock (dissoc (box -1 64 -1 1 66 1 "bedrock") "0,64,0" "0,65,0")
+              {:keys [out]} (await (run-in-shelter! 14000 [8 64 0] 1 {:args {:worth 0} :blocks bedrock}))]
+          (is (= false (:arrived @out)))
+          (is (not (re-find #"costs more hp" (:text @out))) "no way out to dig: a higher worth would not help, so the price is not named")
+          (is (re-find #"no walkable way" (:text @out))))))))
+
 (deftest go-to-sealed-in-its-own-shelter-by-night-digs-out-for-a-goal-that-must-be-reached
   (async done
     (tu/run-async done
