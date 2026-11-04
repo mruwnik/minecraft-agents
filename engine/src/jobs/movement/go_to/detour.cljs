@@ -9,8 +9,6 @@
 (a/defargs settings
   {::ratio {:default 4 :doc "Times the distance to its goal at the call's start that a go-to's found way under ground may be long, when most of it is unseen, before a dug way is weighed." :spec (a/num-in 1 nil)}
    ::unseen-share {:default 0.5 :doc "The share of a way's cells the body has never seen from which the way counts as unseen." :spec (a/num-in 0 1)}
-   ::sealed-ratio {:default 2 :doc "Times the distance to its goal that a way to a goal sealed by seen solid blocks may be long, when most of it is unseen, before a dug way is weighed (at least ::sealed-floor blocks)." :spec (a/num-in 1 nil)}
-   ::sealed-floor {:default 12 :doc "Blocks a way to a goal sealed by seen solid blocks may always be long before a dug way is weighed." :spec (a/num-in 0 nil)}
    ::floor {:default 48 :doc "Blocks a go-to's found way under ground may always be long, however near the goal, before a dug way is weighed." :spec (a/num-in 0 nil)}})
 
 (defn ratio [] (settings/get settings ::ratio))
@@ -23,21 +21,27 @@
   (reduce + (map (fn [a b] (js/Math.hypot (- (:x b) (:x a)) (- (:y b) (:y a)) (- (:z b) (:z a)))) steps (rest steps))))
 
 (defn allowed
-  "Blocks a way to a goal straight blocks off at the call's start may be long; sealed?: the goal's seen surroundings are solid."
-  [straight sealed?]
-  (if sealed?
-    (max (settings/get settings ::sealed-floor) (* (settings/get settings ::sealed-ratio) straight))
-    (max (floor) (* (ratio) straight))))
+  "Blocks a way to a goal straight blocks off at the call's start may be long; dug-blocks (sealed-blocks) the walk
+  blocks the dug way to a goal sealed by seen solid blocks costs, else nil."
+  [straight dug-blocks]
+  (or dug-blocks (max (floor) (* (ratio) straight))))
+
+(defn sealed-blocks
+  "Walk blocks that take as long as digging straight blocks through a goal's sealed surroundings, clear-ms the ms each
+  block of them takes to break (cost/dig-cells-s): a loop longer than that costs more than the dug way."
+  [straight clear-ms]
+  (/ (cost/dig-cells-s (repeat (js/Math.ceil straight) clear-ms)) (cost/walk-step-s)))
 
 (defn refusal
   "{:detour true :route :straight :allowed} (whole blocks) when steps are longer than allowed for a goal straight blocks
-  off (sealed?: allowed) and at least ::unseen-share of their cells answer unseen? (fn [x y z]); else nil."
-  ([steps straight unseen?] (refusal steps straight unseen? false))
-  ([steps straight unseen? sealed?]
-  (let [route (length steps)
-        unseen (count (filter (fn [{:keys [x y z]}] (unseen? (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))) steps))]
-    (when (and (> route (allowed straight sealed?)) (>= unseen (* (unseen-share) (count steps))))
-      {:detour true :route (js/Math.round route) :straight (js/Math.round straight) :allowed (js/Math.round (allowed straight sealed?))}))))
+  off (dug-blocks: allowed's) and at least ::unseen-share of their cells answer unseen? (fn [x y z]); else nil."
+  ([steps straight unseen?] (refusal steps straight unseen? nil))
+  ([steps straight unseen? dug-blocks]
+   (let [route (length steps)
+         unseen (count (filter (fn [{:keys [x y z]}] (unseen? (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))) steps))
+         ok (allowed straight dug-blocks)]
+     (when (and (> route ok) (>= unseen (* (unseen-share) (count steps))))
+       {:detour true :route (js/Math.round route) :straight (js/Math.round straight) :allowed (js/Math.round ok)}))))
 
 (defn price
   "{:extra-s :worth-s} of a refused way (refusal's :route and :straight): the walk past the straight line (cost/walk-cost)

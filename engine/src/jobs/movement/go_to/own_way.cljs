@@ -23,7 +23,7 @@
   - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
     walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
     ::detour/floor blocks) when half or more of its cells were never seen before it weighs a dug way (escalate-choose/detour-way); a goal sealed
-    by seen solid blocks on all six sides bounds any body so, to ::detour/sealed-ratio times that distance (at least ::detour/sealed-floor);
+    by seen solid blocks on all six sides bounds any body so, to the walk a dug way to it costs (detour/sealed-blocks);
     with none it walks the way when its walk past the straight line costs no more than the goal is worth (the call's
     :worth, else a tour's; mem :detour-ok), else gives up :why :detour with :route, :straight, :allowed (blocks), :extra-s
     and :worth-s before it sets out. See jobs.movement.go-to.detour."
@@ -32,6 +32,7 @@
             [jobs.lib.stair-memory :as stair-mem]
             [jobs.lib.near :as near]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.climb :as climb]
@@ -118,13 +119,14 @@
   (let [p (:primitives c)
         kind-at (kinds/seen-kind-at p)
         unseen? #(keyword-identical? :unknown (kind-at %1 %2 %3))
-        sealed? (let [[gx gy gz] (mapv #(js/Math.floor (% pos)) [:x :y :z])]
-                  (every? (fn [[dx dy dz]] (keyword-identical? :solid (kind-at (+ gx dx) (+ gy dy) (+ gz dz))))
-                          [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+        dug-blocks (let [[gx gy gz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
+                         near (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]] [(+ gx dx) (+ gy dy) (+ gz dz)])]
+                     (when (every? (fn [[x y z]] (keyword-identical? :solid (kind-at x y z))) near)
+                       (detour/sealed-blocks straight (/ (reduce + (map (fn [[x y z]] (tools/clear-ms p (.-name (u/seen-block p {:x x :y y :z z})))) near)) (count near)))))
         bound? (and (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
     (fn [{:keys [status steps] :as plan} first?]
       (or (when stair-check (stair-check plan first?))
-          (when (and bound? (= "found" status) (not (:detour-ok (ctx/mem c))) (or sealed? (sh-sense/buried? p))) (detour/refusal steps straight unseen? sealed?))))))
+          (when (and bound? (= "found" status) (not (:detour-ok (ctx/mem c))) (or dug-blocks (sh-sense/buried? p))) (detour/refusal steps straight unseen? dug-blocks))))))
 
 (defn straight-from!
   "Blocks from the goal the call's first walk round found the body, d then (memory :detour-from)."

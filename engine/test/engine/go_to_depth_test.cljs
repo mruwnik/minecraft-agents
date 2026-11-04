@@ -672,9 +672,9 @@
           (is (< (js/Math.abs (- (* (count digs) cell-s) (:dug-s (:escalation @out)))) 1e-6)
               (pr-str [(count digs) cell-s (:escalation @out)])))))))
 
-;; A pocket goal (3 64 6) sealed by seen stone on every side, 6 blocks from the body; the only walk is 20 blocks round the
-;; loop, under the old 48-block floor. The body stands in the open.
-(def short-loop (merge (floor 63 0 0 10 0) (floor 63 10 0 10 6) (floor 63 0 6 10 6)))
+;; A pocket goal (3 64 6) sealed by seen stone on every side, 6 blocks from the body; the only walk is 40 blocks round the
+;; loop, under the old 48-block floor but dearer than digging the 6 blocks. The body stands in the open.
+(def short-loop (merge (floor 63 0 0 20 0) (floor 63 20 0 20 6) (floor 63 0 6 20 6)))
 (def sealed-goal [3 64 6])
 (def sealed-pocket (merge short-loop (box 1 64 1 9 65 5 "stone") {"4,64,6" "stone" "3,65,6" "stone" "3,64,5" "stone" "3,64,7" "stone" "2,64,6" "stone"}))
 
@@ -686,7 +686,9 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated)))))))))
 
-(deftest a-way-to-a-sealed-goal-is-bound-tighter
-  (are [sealed? out] (= out (detour/refusal (mapv #(update % :x * 2) line-20) 6 (constantly true) sealed?))
-    true {:detour true :route 40 :straight 6 :allowed 12}
-    false nil))
+(deftest a-way-to-a-sealed-goal-is-bound-by-the-walk-a-dug-way-costs
+  (let [loop-40 (mapv #(update % :x * 2) line-20)
+        dug (detour/sealed-blocks 6 500)]
+    (is (< 6 dug 40) "digging 6 stone blocks takes longer than walking them, shorter than the 40-block loop")
+    (is (= (js/Math.round dug) (:allowed (detour/refusal loop-40 6 (constantly true) dug))) "the loop is refused at the dug way's walk")
+    (is (nil? (detour/refusal loop-40 6 (constantly true) (detour/sealed-blocks 6 5000))) "a dug way dearer than the loop is not preferred")))
