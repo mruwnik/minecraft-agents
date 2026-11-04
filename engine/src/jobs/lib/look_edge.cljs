@@ -7,6 +7,7 @@
             [jobs.lib.clock :as clock]
             [jobs.lib.cost.health :as cost-health]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -161,7 +162,7 @@
   of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
   A cell begun stays the one worked on while it is still pending, however the walk reorders the nearest-first list. A walk is priced once, at its start, with the seconds the job's walks spent before it (:edge-spent), so walks one after
   another are bought from what the call's worth leaves.
-  A cell within sight range of the feet that the first look left unseen is tried at once: a walk shows no more of it.
+  A cell the first look left unseen is tried at once when a walk shows no more of it: it is in sight range in a clear line from the feet, or in range but hidden by a wall that no stand cell sees past, or the stand cell nearest it is where the body stands.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
   place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given."
   ([c cells] (look! c cells nil))
@@ -178,8 +179,13 @@
              (await (dig-look/look-at! c cell)))
        (1 2) (let [p (:primitives c)
                    reach-to (last (filter #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
-                   close? (some-> (look/near-of p) (>= (u/dist (sh-sense/feet p) {:x (first cell) :y (second cell) :z (nth cell 2)})))
-                   near (when-not close? (or to ((walkable-near-fn p (sh-sense/feet p)) reach-to)))
+                   target (zipmap [:x :y :z] (map + cell [0.5 0.5 0.5]))
+                   feet (sh-sense/feet p)
+                   eye-at (fn [{:keys [x y z]}] {:x (+ 0.5 x) :y (+ y game/eye-height) :z (+ 0.5 z)})
+                   in-range? (fn [at] (some-> (look/near-of p) (>= (u/dist at {:x (first cell) :y (second cell) :z (nth cell 2)}))))
+                   near (or to ((walkable-near-fn p feet) reach-to))
+                   shown-from? (fn [at] (and (in-range? at) (look/line-clear? p (eye-at at) target)))
+                   near (when-not (or (shown-from? feet) (and near (u/within? feet near 1)) (and (in-range? feet) near (not (shown-from? near)))) near)
                    spent (:edge-spent (ctx/mem c) 0)
                    price (when (and near (= 1 phase)) (walk-price c near worth))
                    _ (when price (ctx/update-mem! c assoc :edge-spent (+ spent price)))

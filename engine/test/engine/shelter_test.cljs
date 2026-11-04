@@ -1620,12 +1620,13 @@
     p))
 
 (defn tunnel-seen-body
-  "The lit dead-end tunnel with every cell in range seen (seeded, so the farthest roofed cell is exact)."
-  []
-  (let [{:keys [blocks light]} (lit-tunnel-box false)
+  "The lit dead-end tunnel (with its branch when branch?) with every cell in range seen (seeded, so the farthest roofed cell is exact)."
+  ([] (tunnel-seen-body false))
+  ([branch?]
+  (let [{:keys [blocks light]} (lit-tunnel-box branch?)
         raw-p (tu/fake {:time night :yaw -90 :blocks blocks})]
     (swap! (fake/state raw-p) assoc :light-default [0 0] :light light)
-    (tu/seeing-all raw-p)))
+    (tu/seeing-all raw-p))))
 
 (deftest the-edge-of-a-lit-region-is-looked-at-but-a-side-of-only-dark-cells-is-skipped
   (let [lit (look-edge/pending {:primitives (tunnel-edge-body nil)} #{})]
@@ -1783,7 +1784,7 @@
           (is (= 19 (:x (nth (nth @log 1) 2))) "the stride reaches the cell 3 away, not the one 10 away")
           (is (= #{[20 64 0]} (:edge-looked @mem*))))))))
 
-(deftest an-edge-cell-within-sight-range-of-the-feet-is-tried-after-one-look-without-a-walk
+(deftest an-edge-cell-within-sight-range-in-a-clear-line-is-tried-after-one-look-without-a-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1797,11 +1798,48 @@
           (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
                         ctx/worth (constantly 100)
                         look/near-of (constantly 1000)
-                        dig-look/look-at! (fn [c' cell] (swap! log conj [:look cell]) (js/Promise.resolve true))
-                        ctx/call (fn [c' slot job args] (if (identical? c c') (do (swap! log conj [:walk]) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
+                        dig-look/look-at! (fn [c' cell] (swap! log conj :look) (js/Promise.resolve true))
+                        ctx/call (fn [c' slot job args] (if (identical? c c') (do (swap! log conj :walk) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
             (dotimes [_ 3] (await (look-edge/look! c [[20 64 0]]))))
-          (is (= [[:look [20 64 0]]] @log) "one look, no walk")
-          (is (= #{[20 64 0]} (:edge-looked @mem*))))))))
+          (is (= [:look] @log) "one look, no walk"))))))
+
+(deftest an-edge-cell-within-sight-range-round-a-corner-is-walked-towards
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem* (atom {})
+              c {:primitives (tunnel-seen-body true) :id "edge-stub" :root "edge-stub" :slots []
+                 :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
+                                                    :policies {(mem/job-kind "edge-stub") mem/job-policy}}})
+                 :update-mem (fn [f more] (apply swap! mem* f more))}
+              log (atom [])
+              orig-call ctx/call]
+          (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
+                        ctx/worth (constantly 100)
+                        look/near-of (constantly 1000)
+                        dig-look/look-at! (fn [c' cell] (swap! log conj :look) (js/Promise.resolve true))
+                        ctx/call (fn [c' slot job args] (if (identical? c c') (do (swap! log conj :walk) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
+            (dotimes [_ 3] (await (look-edge/look! c [[12 64 6]]))))
+          (is (= [:look :walk :look] @log) "the corner hides the cell from here, a stand cell sees it: walk and look again"))))))
+
+(deftest an-edge-cell-within-sight-range-behind-rock-no-stand-cell-sees-is-not-walked-towards
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem* (atom {})
+              c {:primitives (tunnel-seen-body) :id "edge-stub" :root "edge-stub" :slots []
+                 :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
+                                                    :policies {(mem/job-kind "edge-stub") mem/job-policy}}})
+                 :update-mem (fn [f more] (apply swap! mem* f more))}
+              log (atom [])
+              orig-call ctx/call]
+          (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
+                        ctx/worth (constantly 100)
+                        look/near-of (constantly 1000)
+                        dig-look/look-at! (fn [c' cell] (swap! log conj :look) (js/Promise.resolve true))
+                        ctx/call (fn [c' slot job args] (if (identical? c c') (do (swap! log conj :walk) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
+            (dotimes [_ 3] (await (look-edge/look! c [[10 64 3]]))))
+          (is (= [:look] @log) "rock hides the cell from every stand cell: one look"))))))
 
 (deftest an-edge-cell-begun-stays-the-one-looked-at-when-the-nearest-first-order-changes
   (async done

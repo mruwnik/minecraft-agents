@@ -124,6 +124,20 @@
                     (keyword-identical? :solid kind) false
                     :else (recur (inc k) cell)))))))))
 
+(defn line-clear?
+  "Whether no seen solid lies on the segment from eye to pt before the cells beside pt's own: nothing hides pt from eye
+  but its own darkness (a solid so near would have been seen), so a walk would show no more of it. The cells beside pt are
+  left out: a wall cell is reached past its own wall's seen cells. False without a perception."
+  [p eye pt]
+  (let [n (inc (int (* 4 (js/Math.hypot (- (:x pt) (:x eye)) (- (:y pt) (:y eye)) (- (:z pt) (:z eye))))))
+        at (fn [k] (let [t (/ k n)] (mapv #(js/Math.floor (+ (% eye) (* t (- (% pt) (% eye))))) [:x :y :z])))
+        end (at n)
+        beside? (fn [cell] (every? #(<= (js/Math.abs (- (cell %) (end %))) 1) [0 1 2]))]
+    (and (some? (.-sensedAt p))
+         (not-any? (fn [cell] (let [b (u/seen-block p (zipmap [:x :y :z] cell))]
+                                (and b (keyword-identical? :solid (reach/kind-of b)))))
+                 (remove beside? (distinct (map at (range (inc n)))))))))
+
 (def hazards-only
   "A want for a look that searches for entities: no block is wanted, only the hazards every targeted look checks."
   {})
