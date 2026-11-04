@@ -352,12 +352,12 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.craft"}} :within-s 60 :of-job true}]
    :after [[:item "stick" [:>= 4]]]
    :limit-s 80}
-  ;; fe853845: at night in a sealed shelter with nothing to do the night job is done at once (:already); it is never "waiting :not-night"
+  ;; fe853845: at night in a sealed shelter with nothing to do the night job is done (it looks up first: the roof is unseen at the start, so not :already); it is never "waiting :not-night"
   {:name "night-job-in-a-sealed-hut-is-done-and-is-not-waiting-not-night"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5]}
    :act [[:job (jobs.survival.night)]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :cause :already}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :status :completed :kind :done}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-night}} :for-s 30}]
    :limit-s 40}]}
