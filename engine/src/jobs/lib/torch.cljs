@@ -22,6 +22,11 @@
   (let [names (set (map :name (u/inventory p)))]
     (some names torch-items)))
 
+(defn torch-item
+  "The torch item to hang or ask for: the kind carried, else the plain torch."
+  [p]
+  (or (carried-torch p) "torch"))
+
 (defn fuel-held
   "How many coal and charcoal are carried: each makes 4 torches with a stick."
   [p]

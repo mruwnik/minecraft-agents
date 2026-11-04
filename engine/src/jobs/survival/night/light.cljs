@@ -34,7 +34,7 @@
   [c cells]
   (let [p (:primitives c)
         q (await (ctx/quote c 'jobs.build.light-area {:cells cells}))
-        need (get-in q [:uses :items "torch" 1] 0)
+        need (get-in q [:uses :items (torch/torch-item p) 1] 0)
         short (max 0 (- need (torch/torches-held p)))
         crafts (js/Math.ceil (/ short 4))]
     (cond

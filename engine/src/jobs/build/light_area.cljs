@@ -151,11 +151,11 @@
       :else
       (let [o (b/place-outcome (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place
                                                 (merge (select-keys (:args c) [:ignore-zones?])
-                                                       {:pos spot :item "torch" :ways (need/pass-ways c)})))))]
+                                                       {:pos spot :item (torch/torch-item (:primitives c)) :ways (need/pass-ways c)})))))]
         (case o
           :continue :continue
           (:placed :already) (do (ctx/update-mem! c update :torches (fnil conj []) spot) :again)
-          :need (ctx/end c :condition-failed {:reason :need :item "torch"}
+          :need (ctx/end c :condition-failed {:reason :need :item (torch/torch-item (:primitives c))}
                          {:torches (:torches (ctx/mem c) []) :uncovered (:uncovered (lighting c))})
           :refused (do (ctx/update-mem! c update :failed (fnil conj []) spot)
                        (if (empty? (:spots (lighting c)))
@@ -187,4 +187,4 @@
 
 (defn quote-of [c]
   (let [n (count (:spots (lighting c)))]
-    {:uses {:job-time [0 (work-s c) (* 20 (max 1 n))] :items {"torch" [0 n n]}}}))
+    {:uses {:job-time [0 (work-s c) (* 20 (max 1 n))] :items {(torch/torch-item (:primitives c)) [0 n n]}}}))

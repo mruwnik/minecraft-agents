@@ -42,6 +42,14 @@
           (is (= 1 (count (torch-cells p room))))
           (is (every? (fn [[x _ z]] (and (<= 1 x 7) (<= 1 z 7))) (torch-cells p room)) "a corner torch would leave the far corner unlit"))))))
 
+(deftest a-body-with-only-soul-torches-hangs-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[{:keys [p]} r] (await (run room (constantly false) {:boxes [[[0 64 0] [8 64 8]]]} [{:name "soul_torch" :count 16}]))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (pos? (count (torch-cells p room)))))))))
+
 (deftest near-lights-the-cells-round-the-body
   (async done
     (tu/run-async done
