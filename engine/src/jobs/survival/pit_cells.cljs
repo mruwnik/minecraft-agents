@@ -147,17 +147,20 @@
       shape)))
 
 (defn shape-stop
-  "The first thing that rules shape out, step by step as the digs would meet it, as a stop, nil when none does."
+  "The first thing that rules shape out, step by step as the digs would meet it, as a stop, nil when none does. A stop only
+  from a cell not seen yet (:unseen) gives way to a material-stop: what the dig yields to roof with does not wait for a look."
   [c blocks {:keys [steps roof prep]}]
-  (let [p (:primitives c)]
-    (or (some (fn [{:keys [dig floor]}]
-                (or (some #(cell-stop p %) dig)
-                    (when-not (look/rock-solid? p floor)
-                      (cond-> (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
-                        (nil? (u/seen-name p floor)) (assoc :unseen true)))))
-              steps)
-        (over-stop p roof)
-        (material-stop c blocks (concat prep (mapcat :dig steps))))))
+  (let [p (:primitives c)
+        site (or (some (fn [{:keys [dig floor]}]
+                         (or (some #(cell-stop p %) dig)
+                             (when-not (look/rock-solid? p floor)
+                               (cond-> (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
+                                 (nil? (u/seen-name p floor)) (assoc :unseen true)))))
+                       steps)
+                 (over-stop p roof))]
+    (if (:unseen site)
+      (or (material-stop c blocks (concat prep (mapcat :dig steps))) site)
+      (or site (material-stop c blocks (concat prep (mapcat :dig steps)))))))
 
 (defn stop-of
   "Why no pit fits at feet: a stop. Water where the body stands, a pit that fits only with no hostile in the way (:hostile-near), no roof to place against (:no-roof-support), no pit whose

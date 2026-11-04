@@ -58,6 +58,15 @@
           (is (= [:nothing-possible :no-way] (ending-of e)))
           (is (= :no-blocks (get-in e [:data :stops :pit :reason]))))))))
 
+(deftest a-pit-with-nothing-to-roof-it-is-dropped-unbegun-though-the-rock-under-it-is-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (await (surface {:blocks seen/ground :inventory [{:name "wooden_sword" :count 1}]}))
+              e (await (shut-in! p {:ways #{:pit}}))]
+          (is (= [] (get-in e [:data :tried])) "the pit is priced out, not tried")
+          (is (= [:pit] (get-in e [:data :dropped]))))))))
+
 (deftest a-plug-the-server-answers-occupied-is-a-try-that-failed-nothing-possible
   (async done
     (tu/run-async done

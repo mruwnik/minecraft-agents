@@ -168,7 +168,7 @@
   [c]
   (let [kept (:pit (ctx/mem c))
         plan (if (and kept (pit/pit-index kept (sh-sense/feet (:primitives c)))) kept (await (pit/plan! c)))]
-    (if-let [stop (or (:stop plan) (when-not kept (or (spared-stop c plan) (trespass-stop c plan))))]
+    (if-let [stop (or (when (:stop plan) plan) (when-not kept (or (spared-stop c plan) (trespass-stop c plan))))]
       (way/stop! c stop)
       (do (when (and (night/night? c) (not kept))
             (ctx/remember! c :shut-in-failed {:pos (sh-sense/feet (:primitives c)) :way :pit :reason :interrupted} night/failed-policy))
