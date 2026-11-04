@@ -50,7 +50,7 @@
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
@@ -441,7 +441,8 @@
     (let [shut-reason? (and (not (sh-inside/sheltered-in c))
                             (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result)))]
       (when shut-reason? (await (look-round! c (end/feet-cell c))))
-      (end/give-up! c pos result (when (and shut-reason? (escape/walk-enclosed? c)) {:shut-in true})))))
+      (end/give-up! c pos result (cond (night-refusal? c result) {:escalation {:step :none :why :night-risk}}
+                                       (and shut-reason? (escape/walk-enclosed? c)) {:shut-in true})))))
 
 (defn escalated!
   "The child made a way (or part of one, done false): start a climb's next way at once when it made all of it

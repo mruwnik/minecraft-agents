@@ -258,7 +258,8 @@
       (= :continue walk) :continue
       (not= :done (:kind walk)) (let [_ (ctx/update-mem! c assoc :walk-failed true)
                                   after (:route (await (ctx/quote c 'jobs.movement.go-to quote-args)))]
-                                  (if (or (no-way-quote? after) (= :budget (some-> (:reason after) keyword)))
+                                  (if (and (or (no-way-quote? after) (= :budget (some-> (:reason after) keyword)))
+                                           (not= :night-risk (some-> (get-in walk [:data :escalation :why]) keyword)))
                                     (give-up-unreachable-now! c bed (no-walk-text after))
                                     (give-up-unreachable! c bed walk)))
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})

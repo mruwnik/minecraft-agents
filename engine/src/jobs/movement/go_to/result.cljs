@@ -95,6 +95,7 @@
 (def escalation-reason-words
   {:no-tool "no pickaxe" :no-dig "nothing it may dig" :no-headroom "no room above the head"
    :past-worth "every way left costs more than the goal is worth, priced over the rock it guesses"
+   :night-risk "leaving the shelter at night costs more hp than the call's worth buys"
    :zone "a stair or dig is refused by another's zone, claim or plan (pass :ignore-zones? or ask)"})
 
 (defn escalation-words

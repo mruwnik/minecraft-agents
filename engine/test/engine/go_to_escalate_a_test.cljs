@@ -572,6 +572,7 @@
         (let [{:keys [out p seen]} (await (run-in-shelter! 14000 [8 64 0] 1 {:args {:worth 0}}))]
           (is (empty? (events-of seen :go-to.escalated)) "the dark outside is waited out, the first dig never happens")
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (re-find #"costs more hp" (:text @out)) "the refusal names the night's price, not a closed land")
           (is (empty? (calls p "dig"))))))))
 
 (deftest go-to-sealed-in-its-own-shelter-by-night-digs-out-for-a-goal-that-must-be-reached
