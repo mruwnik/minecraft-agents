@@ -76,9 +76,16 @@
   [world]
   (setup world 1000))
 
+(defn seeded-rand
+  "A deterministic stream of floats in [0, 1) (LCG), so the ray jitter of every pass is the same in each run."
+  [seed]
+  (let [s (atom seed)]
+    (fn [] (/ (swap! s #(mod (+ (* % 1664525) 1013904223) 4294967296)) 4294967296))))
+
 (defn setup-seeing
   "As setup, the body seeing through perception (engine.perception/wrap) as it does live; light is [sky block] for
-  every cell when given (jobs that look round only in the dark); :radius in world sets the sight radius (default 16)."
+  every cell when given (jobs that look round only in the dark); :radius in world sets the sight radius (default 16); :rand
+  the ray jitter (default a seeded stream)."
   ([world light] (setup-seeing world light 0))
   ([world light ms]
   (let [clock (atom 1000000)
@@ -87,7 +94,7 @@
         _ (when light (swap! (fake/state raw) assoc :light-default light))
         now (tu/act-clock clock raw ms)
         p (perception/wrap raw (perception/create (fake-raw/create raw) (cond-> {:radius (:radius world 16) :ray-deg (:ray-deg world 2) :now now}
-                                                                          (:rand world) (assoc :rand (:rand world)))))
+                                                                          true (assoc :rand (:rand world (seeded-rand 1))))))
         eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :raw raw :seen seen :clock clock})))
