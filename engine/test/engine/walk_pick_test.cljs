@@ -110,3 +110,14 @@
         far {:pos {:x 3000 :y 64 :z 0}}]
     (is (= :not-worth (:reason (pick/not-worth c far (fn [] 1)))))
     (is (nil? (pick/not-worth c far (fn [] ##Inf))) "an endless worth affords any finite walk")))
+
+(deftest a-ranking-quote-carries-an-endless-worth-unless-the-walk-names-one
+  ;; the calling job's worth (the night's, 0 at times) must not refuse a route the walk then takes at its own worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom [])]
+          (with-redefs [ctx/quote (fn ([_ _ args] (swap! seen conj args) (js/Promise.resolve {})) ([_ _ args _] (swap! seen conj args) (js/Promise.resolve {})))]
+            (await (pick/quote! nil {:pos {:x 1 :y 64 :z 1}}))
+            (await (pick/quote! nil {:pos {:x 1 :y 64 :z 1} :worth 7})))
+          (is (= [##Inf 7] (mapv :worth @seen))))))))

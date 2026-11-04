@@ -88,7 +88,7 @@
   [c pos]
   (let [p (:primitives c)]
     (and (:commute? (:args c)) (sh/in-ground? p (ctx/view c))
-         (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range arrive-range})))]
+         (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range arrive-range :worth ##Inf})))]
            (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sin/time-s (sin/shelter-quote (await (ctx/quote c 'jobs.survival.shut-in {:ways #{:walls :pit} :for :night})))))))))))
 
 (defn ^:async round [c]

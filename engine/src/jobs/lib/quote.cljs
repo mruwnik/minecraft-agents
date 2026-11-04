@@ -35,7 +35,7 @@
 (defn walk-args
   "The go-to args of the walk to pos and back with category's stay there priced at the goal."
   [pos category]
-  {:pos pos :back true :stay-s (risk/work-s category)})
+  {:pos pos :back true :stay-s (risk/work-s category) :worth ##Inf})
 
 (defn standard
   "The quote-of of a job that walks to its place (f c) ({:x :y :z}, nil: works where it stands) and works there as category:
