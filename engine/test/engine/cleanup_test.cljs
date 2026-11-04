@@ -252,10 +252,11 @@
 
 (deftest the-trigger-ignores-scaffold-not-worth-a-walk
   (let [p (tu/fake {:blocks {"0,54,0" "dirt" "0,62,0" "dirt" "10,64,0" "dirt" "10,67,0" "stone" "12,64,0" "dirt"}})
-        died (fn [& es] (doto (trigger-store (vec es) []) (mem/write! :died {:pos {:x 14 :y 64 :z 0}} {:cap 1 :ttl :forever})))]
+        died (fn [& es] (doto (trigger-store (vec es) []) (mem/write! :deaths {:pos {:x 14 :y 64 :z 0} :cause "lava" :death-t 0} core/deaths-policy)))]
     (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below")
     (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")
-    (is (false? (fires? p (died (entry [12 64 0])) [])) "within the died radius of a death")
+    (is (false? (fires? p (died (entry [12 64 0])) [])) "where a terrain death counts (sight never clears it)")
+    (is (true? (fires? p (died (entry [20 64 0])) [])) "past the cells that killed")
     (is (false? (fires? p (trigger-store [(entry [10 64 0])] []) [])) "under a roof while the body is in the open")))
 
 (deftest the-trigger-waits-for-light-and-for-no-hostile-near

@@ -37,6 +37,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.expiry :as expiry]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]))
@@ -45,12 +46,10 @@
   {::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; the scaffold-left trigger ignores a deeper one (a cave, a pit)." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; the scaffold-left trigger does not offer a roofed one from the open." :spec (a/int-in 0 nil)}
    ::reach {:default u/bucket-reach :doc "Cells whose centre is this close to the eye are dug from where the body stands, in blocks (jobs.access.cleanup digs them; the scaffold-left trigger walks to the rest)." :spec (a/num-in 0 nil)}
-   ::ttl-s {:default 3600 :doc "Seconds a scaffold entry stays its placer's before it is an orphan (the scaffold-left trigger takes it back). Twice the longest placing call's job time (go-to, stair, build from-plan: 1800 s), its cuts allowed for." :spec (a/num-in 1 nil)}
-   ::died-radius {:default 24 :doc "Blocks around a place the body died within which the scaffold-left trigger does not offer a scaffold." :spec (a/num-in 0 nil)}})
+   ::ttl-s {:default 3600 :doc "Seconds a scaffold entry stays its placer's before it is an orphan (the scaffold-left trigger takes it back). Twice the longest placing call's job time (go-to, stair, build from-plan: 1800 s), its cuts allowed for." :spec (a/num-in 1 nil)}})
 
 (defn max-below [] (settings/get settings ::max-below))
 (defn roof-height [] (settings/get settings ::roof-height))
-(defn died-radius [] (settings/get settings ::died-radius))
 (defn dig-reach [] (settings/get settings ::reach))
 
 (defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
@@ -85,10 +84,10 @@
     (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))
 
 (defn died-near-of
-  "A fn of a cell: whether a :died entry of view lies within died-radius of it."
-  [view]
-  (let [spots (keep (comp :pos :data) (mem/entries view :died))]
-    (fn [[x y z]] (boolean (some #(<= (u/dist % {:x x :y y :z z}) (died-radius)) spots)))))
+  "A fn of a cell: whether a remembered death of c, not seen clear since, counts for it (death-spot/covers?: its killer's field, or the terrain radius)."
+  [c]
+  (let [spots (death-spot/uncleared c)]
+    (fn [[x y z]] (boolean (some #(death-spot/covers? c % {:x x :y y :z z}) spots)))))
 
 (def seal-clear-radius "Blocks round a goal or the feet within which go-to and leave-shelter take back the body's own seals." 3)
 

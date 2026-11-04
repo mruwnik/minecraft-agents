@@ -1234,6 +1234,17 @@
               out (await (target-after dark [plain]))]
           (is (> (u/dist out plain) 12) (str "a recent mob death where the flight would end is priced into that end, so it takes another: " (pr-str plain) " " (pr-str out))))))))
 
+(deftest a-flight-in-a-lit-world-turns-from-an-unseen-death-place-not-a-seen-clear-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [lit {:light {} :light-default [15 0]}
+              plain (await (target-after lit []))
+              unseen (with-redefs [look/seen-block (constantly {:unknown true})] (await (target-after lit [plain])))
+              clear (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1000})] (await (target-after lit [plain])))]
+          (is (> (u/dist unseen plain) 12) (str "the death place was not looked at since: priced into that end " (pr-str plain) " " (pr-str unseen)))
+          (is (= plain clear) (str "looked at since and lit: seen clear, the end stays " (pr-str plain) " " (pr-str clear))))))))
+
 (deftest a-flight-prefers-lit-ground-to-dark
   (async done
     (tu/run-async done

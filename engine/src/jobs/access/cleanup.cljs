@@ -184,7 +184,7 @@
   [c l]
   (let [p (:primitives c)
         in {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
-            :died-near? (ledger/died-near-of (ctx/view c)) :block-at (access/sensed-at p "air")
+            :died-near? (ledger/died-near-of c) :block-at (access/sensed-at p "air")
             :ledger (ledger/cells l)}]
     #(ledger/walk-blocker in %)))
 
