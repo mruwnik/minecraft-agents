@@ -275,6 +275,14 @@
        (and (not walk?) (< (count steps) (count dry))) (assoc :stopped-short true)
        (and walk? past (not refused)) (assoc :one-way-taken {:kind (nth executor/move-names (.-move ow)) :at [(.-x ow) (.-y ow) (.-z ow)]})))))
 
+(defn unfinished-like
+  "The body's unfinished search that plans the same walk as key k from the same cell, whatever its dangers, tolls and avoided
+  cells (the last four parts of a key): a quote that waits on its search for rounds is priced by the world as it began, not
+  restarted by every mob that moves or toll that drifts, which would never end it."
+  [who k]
+  (let [same (vec (take 6 k))]
+    (first (filter #(and (not (:within %)) (= same (vec (take 6 (:key %))))) (vals (get @searches who))))))
+
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
   (searches) when it plans the same thing from the same cell. A search that ends is plan-walk!'s answer; one that does not
@@ -285,7 +293,9 @@
   [c pw to range weight {:keys [policy walls one-way frontier budget progress quoted] :or {progress true}}]
   (let [t (clock/now)
         who (:primitives c)
-        k (search-key c to range weight policy walls pw)
+        k0 (search-key c to range weight policy walls pw)
+        near-kept (when quoted (unfinished-like who k0))
+        k (if (and near-kept (nil? (get-in @searches [who k0]))) (:key near-kept) k0)
         kept (get-in @searches [who k])
         known (when frontier (known-cells! c to range))
         on? (and (go-on? c kept k pw to policy) (or quoted (not (:quote-only kept))))
