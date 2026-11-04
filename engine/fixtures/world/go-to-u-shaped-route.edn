@@ -1,0 +1,17 @@
+;; Card d4b1eb0b: the only known way to the goal leads away from it, through a pocket the search floods before it reaches the way out.
+;; A bedrock pocket (x 150..300, z 0..55, open to the west, wall z 56 on its south side, wall x 300 at its back) holds the body at its back;
+;; the goal is 20 blocks east, behind the back wall; the way is 140 west, round the pocket's side wall, 160 east along the free strip z 57..63.
+;; The search finds the whole way inside its node budget here (no :go-to.edge-tour seen), so this pins the arrival only.
+;; go-to must arrive (or give the detour up by its price), not end :explore-spent / :tour-spent on a tour of the pocket's edge.
+{:defaults
+ {:tags [:movement :planner :large]
+  :time :any
+  :plot {:height 12 :length 340 :width 64}
+  :blocks [[:fill [150 -1 56] [300 11 56] "bedrock"] [:fill [300 -1 0] [300 11 55] "bedrock"]]
+  :body {:at [290.5 0 28.5]}
+  :limit-s 400}
+ :cases
+ [{:name "u-shaped-route-arrives"
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 28] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 380 :of-job true}]
+   :after [[:body-near [310.5 0 28.5] 3]]}]}
