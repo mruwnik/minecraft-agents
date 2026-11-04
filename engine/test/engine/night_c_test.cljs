@@ -276,7 +276,8 @@
       (fn ^:async t []
         (let [walled-near (into {"-18,66,0" "stone"}
                                 (for [x [-19 -18 -17] y [64 65] z [-1 0 1] :when (not= [x z] [-18 0])] [(str x "," y "," z) "stone_bricks"]))
-              world (assoc lit-world :blocks (merge wide-ground walled-near (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split k ","))] (str (+ x 12) "," y "," z)) v])) home-roof)))
+              torches (into {} (for [x [3 9 15 19]] [(str x ",64,1") "torch"])) ; the body remembers block light only from sources it saw: live light alone no longer lights the route
+              world (assoc lit-world :blocks (merge wide-ground walled-near torches (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split k ","))] (str (+ x 12) "," y "," z)) v])) home-roof)))
               {:keys [eng p]} (await (night-at-home world {:x -18 :y 64 :z 0} {:roofed-places [:home :cabin]}))]
           (mem/write! (:store eng) :cabin {:pos {:x 22 :y 64 :z 0}} mem/place-policy)
           (await (tu/run-until-empty eng 80))

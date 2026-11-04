@@ -137,10 +137,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world sealed-cave []) [f/own-zone])]
-          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
+          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 69)] [[x y z] [0 0]]))) ; dark below the roof's top two layers: a cut through them lets the sky down the stair, as in the game
           (await (obtain! s {:worth (logs-worth 20) :item "oak_log" :count 1 :explore true} 900))
           (is (seq (f/events-of s :stair.step)) "a stair was cut up through the roof")
-          (is (every? #(<= 70 (get-in % [:from 1])) (f/events-of s :obtain.exploring)) "no walk to look for trees starts under the roof (the stone tops at y 70: the stair's last cut has its head in the open)")
+          (is (every? (fn [{[x y z] :from}] (every? #(= "air" (fake/block-name @(fake/state (:p s)) [x (+ y %) z])) (range 1 8)))
+                      (f/events-of s :obtain.exploring))
+              "no walk to look for trees starts under the roof: the stone over its start is cut through (the stair's last cut has its head in the open)")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
 
 (defn rock-room
@@ -277,7 +279,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world narrow-cave []) [f/own-zone])]
-          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
+          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 69)] [[x y z] [0 0]]))) ; dark below the roof's top two layers: a cut through them lets the sky down the stair, as in the game
           (await (obtain! s {:worth (logs-worth 20) :item "oak_log" :count 1 :explore true} 900)) ; after the failed last leg, one more look sees the tree: a first retry wins at the measured mean (answer/retry-chance)
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "the tree the search saw was felled, not named a stop"))))))
 
