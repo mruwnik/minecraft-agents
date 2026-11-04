@@ -205,8 +205,7 @@
   (exposed-price: the hostiles known there once),
   and by day that shelter's morning and, in the ground (its work goes on here), the walk back (cost/commute-s's); :home with a carried bed (it goes down there) loses the night as :bed
   does, plus the work its walk loses, less spawn-worth there. :exposed the night left in the open where the body stands (or the worst cell
-  it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers; with nobody
-  asleep its stints last the night, priced as a way busy all of it.
+  it gets up to). :log-out (log-out?): jobs.survival.log-out's quoted seconds, the night left to the sleepers.
   Every way that keeps the body awake (all but :bed, :sealed and :log-out, and :bed too when refused) also costs the skip
   the other players online wait for (sh-sleepers/skip-wait-s)."
   [c {:keys [bed walk-s log-out? niche flee home]}]
@@ -237,8 +236,7 @@
         sheltered? (if (or bed asleep?) (sh-beds/bed-sheltered? p at) (or (sh-beds/bed-sheltered? p feet) into-home?))
         body (respawn-body c)
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
-        out-s (when log-out? (cond-> (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1])
-                               (not (sh-sleepers/others-asleep? p view)) (max (cost/night-way-s in-ground? left {:busy-s left}))))
+        out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))
         here (await (dig-in-quote c))]
     (cond-> {:exposed (way-s {:open-s (open left)})}
       (js/isFinite (:seconds here)) (assoc :shelter (dig here))
@@ -271,7 +269,7 @@
         (and (false? (.-onGround self)) (not (.-inWater self)) (nil? (.-vehicle self))))))
 
 (defn log-out-open?
-  "Whether a log-out is an answer now: someone else sleeps or is online (sh-sleepers/log-out-for-sleepers?) and the body is not mid-danger."
+  "Whether a log-out is an answer now: another player sleeps and the body is the only one awake (sh-sleepers/log-out-for-sleepers?), and it is not mid-danger."
   [c]
   (and (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))
        (not (mid-danger? c))))

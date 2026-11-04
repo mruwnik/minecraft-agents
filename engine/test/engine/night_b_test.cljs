@@ -62,33 +62,15 @@
           (await (tu/run-until-empty eng 3))
           (is (= 1 (count (st/calls p "offline")))))))))
 
-(deftest a-log-out-stint-ends-at-morning-and-lasts-till-then-for-a-body-hurt-past-healing
+(deftest a-log-out-stint-lasts-till-morning
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (tu/each-async
-                [[23000 {} 25050 "a stint shorter than :offline-ms ends at morning"]
-                 [20000 {} 30000 "else it lasts :offline-ms"]
-                 [20000 {:health 3 :food 20} 30000 "fragile but healing on full food"]
-                 [20000 {:health 3 :food 12} 175050 "fragile, food under 18: away until morning, not back to the dark"]]
-                (fn ^:async one [[time self ms why]]
-                  (let [{:keys [eng p]} (st/setup {:time time :self self})]
-                    (sleep-count! p 1 2)
-                    (core/submit! eng '(jobs.survival.log-out) {})
-                    (await (tu/run-until-empty eng 3))
-                    (is (= [ms] (st/ms-of-offline p)) why)))))))))
-
-(deftest a-log-out-stint-lasts-till-morning-when-coming-back-costs-more-than-the-longer-stint
-  (doseq [[entities world ms why] [[[zombie] {:self {:health 10}} 175050 "a zombie with a way to a body at 10 hp, no respawn bed: away until morning, not back beside it"]
-                                   [[zombie] {:self {:health 10} :inventory [{:name "diamond_sword" :count 1}]} 30000 "the same zombie a diamond sword answers: the death it risks is worth less than the longer stint"]
-                                   [[zombie] {:self {:health 10} :inventory [{:name "cobblestone" :count 32}]} 175050 "a block for every open cell carried, but on open ground the zombie strikes through whichever side is still open while every cell goes up: away until morning"]
-                                   [[(assoc zombie :pos {:x 38 :y 64 :z 0})] {} 30000 "a zombie beyond its follow range: back after :offline-ms"]
-                                   [[{:id 9 :name "skeleton" :kind "hostile" :pos {:x 14 :y 64 :z 0} :health 20}] {:self {:health 4}} 175050 "a skeleton with a line of fire is a known threat to a body it can kill in the stint: away until morning"]
-                                   [[] {} 30000 "no hostile known: back after :offline-ms"]]]
-    (is (= ms (log-out/away-ms {:primitives (tu/fake (merge {:floor tu/walk-floor :time 20000 :entities entities} world))
-                                :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
-                                :view (fn [] {:data mem/empty-data :now 0})}))
-        why)))
+        (let [{:keys [eng p]} (st/setup {:time 20000})]
+          (sleep-count! p 1 2)
+          (core/submit! eng '(jobs.survival.log-out) {})
+          (await (tu/run-until-empty eng 3))
+          (is (= [175050] (st/ms-of-offline p)) "one stint to morning, no 30 s check-back"))))))
 
 (deftest coming-back-costs-more-the-weaker-and-the-barer-the-body-and-more-with-a-known-hostile
   (let [cost (fn [entities world]
@@ -104,16 +86,6 @@
     (is (pos? strong-sword) "a known zombie still risks something")
     (is (< (cost [] {:self {:health 10}}) weak-bare) "no known hostile: only the spawn prior is left, less than with one known")))
 
-(deftest a-log-out-stint-with-blocks-for-a-dead-end-seal-is-the-short-one-where-open-ground-is-not
-  (let [tunnel (set (for [x (range 0 9) y [64 65]] [x y 0]))
-        rock (into {} (for [x (range -3 11) y (range 62 68) z (range -2 3) :when (not (tunnel [x y z]))] [(str x "," y "," z) "stone"]))
-        away (fn [inventory] (log-out/away-ms {:primitives (tu/fake {:time 20000 :blocks rock :self {:health 10} :inventory inventory
-                                                                     :entities [(assoc zombie :pos {:x 5.5 :y 64 :z 0.5})]})
-                                               :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
-                                               :view (fn [] {:data mem/empty-data :now 0})}))]
-    (is (= 30000 (away [{:name "cobblestone" :count 32}])) "one open side: two placements shut it before the zombie strikes")
-    (is (= 175050 (away [])) "no block to shut it with: away until morning")))
-
 (deftest coming-back-online-to-a-dark-spot-risks-the-stay-prices-death-for-the-same-seconds
   (let [c {:primitives (tu/fake {:floor tu/walk-floor :time 20000}) :args {:offline-ms 30000} :id "j1" :slots []
            :engine {:warned (atom #{})} :view (fn [] {:data mem/empty-data :now 0})}
@@ -128,7 +100,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stint (await (log-out-child {:time night} {:offline-ms 20000 :news-ms 0}))]
+        (let [stint (await (log-out-child {:time night} {:news-ms 0}))]
           (is (= :done (:status stint)))
           (is (= "ok" (:how stint))))))))
 
@@ -146,7 +118,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [job (get registry/jobs 'jobs.survival.log-out)
-              q (await ((:quote-of job) {:primitives (tu/fake {:time night}) :args {:offline-ms 20000 :news-ms 3000}
+              q (await ((:quote-of job) {:primitives (tu/fake {:time night}) :args {:news-ms 3000}
                                            :view (fn [] {:data mem/empty-data :now 0})}))]
           (is (nil? (contract/quote-problem q)))
           (is (<= 3 (second (get-in q [:uses :job-time])))))))))
@@ -370,6 +342,7 @@
         (let [{:keys [eng p seen clock]} (st/setup {:time night :inventory [{:name "iron_pickaxe" :count 1}]
                                                        :blocks (into {} (for [x (range -4 5) z (range -4 5) y (range 54 64)] [(str x "," y "," z) "cobblestone"]))})]
           (st/refuse-placing! p)
+          (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
           ;; the 2nd wait (an exposed hold) is cut by a higher reflex 11 minutes on: the night was lengthened
           ;; with time set, so dig-in's own 10-minute futile entry has expired
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))

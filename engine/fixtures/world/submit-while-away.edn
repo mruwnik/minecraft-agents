@@ -8,12 +8,12 @@
   :limit-s 120}
  :cases
  [{:name "submit-during-log-out-says-logged-out"
-   :act [[:http :submit (jobs.survival.log-out {:offline-ms 20000 :news-ms 500}) [] {:ok true}]
+   :act [[:http :submit (jobs.survival.log-out {:stay-ms 20000 :news-ms 500}) [] {:ok true}]
          [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name \"away-probe\" :pos {:x 1 :y 64 :z 1}})"] {:ok true :hint [:contains "logged out"]}]]
    :expect [{:count-event {:source :job :kind :queued :data {:name "jobs.memory.set-place"}} :for-s 5 :at-least 1}]}
   {:name "submit-wait-during-log-out-finishes-after-log-in"
-   :act [[:http :submit (jobs.survival.log-out {:offline-ms 20000 :news-ms 500}) [] {:ok true}]
+   :act [[:http :submit (jobs.survival.log-out {:stay-ms 20000 :news-ms 500}) [] {:ok true}]
          [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name \"away-probe\" :pos {:x 1 :y 64 :z 1}})" "--wait" "--timeout" "90s"] {:ok true :wait {:wake :job-finished :result :completed}}]]
    :expect [{:count-event {:source :job :kind :queued :data {:name "jobs.memory.set-place"}} :for-s 5 :at-least 1}]}]}

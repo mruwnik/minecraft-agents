@@ -120,11 +120,12 @@
     (is (false? (holds? (assoc world :time noon) (status! 1 2))) "by day")
     (is (false? (holds? (assoc-in world [:self :isSleeping] true) (status! 1 2))) "asleep itself")))
 
-(deftest night-holds-for-another-player-online-while-the-night-can-skip
-  (let [world {:time night :blocks roof :players ["Alex"]}]
-    (is (true? (holds? world (fn [_]))) "awake, the body holds up the other's skip")
-    (is (false? (holds? world (status! 0 3))) "the count needs more players than there are: no skip to hold up")
-    (is (false? (holds? (dissoc world :players) (fn [_]))) "alone")))
+(deftest night-holds-only-for-a-sleeper-the-body-alone-can-leave-for
+  (let [world {:time night :blocks roof}]
+    (is (false? (holds? (assoc world :players ["Alex"]) (fn [_]))) "another player awake and none asleep: no log-out")
+    (is (false? (holds? (assoc world :players ["Alex" "Bo"]) (status! 1 3))) "a sleeper but another awake player who may stay on: the vote is not completed")
+    (is (true? (holds? (assoc world :players ["Alex"]) (status! 1 2))) "a sleeper and the body the only one awake")
+    (is (false? (holds? world (fn [_]))) "alone")))
 
 (deftest a-count-sent-while-the-body-lay-in-bed-counts-the-body-itself
   (let [world {:time night :blocks roof}
@@ -357,7 +358,7 @@
             (is (empty? (st/emitted seen :spawn_lost)))
             (is (= [] (:list (core/state eng))))))))))
 
-(deftest a-carried-bed-is-not-lain-in-the-open-on-a-night-that-needs-more-sleepers
+(deftest a-carried-bed-is-lain-in-the-open-when-no-log-out-completes-the-vote
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -366,9 +367,9 @@
           (sleep-count! p 1 4)
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 10))
-          (is (empty? (st/calls p "sleep")) "lying in the open skips nothing: it would be a night spent exposed")
-          (is (empty? (st/calls p "place")) "the bed stays in the bag")
-          (is (= ["logged-out-for-sleeping-player"] (offline-why p)) "logged out while the other sleeps"))))))
+          (is (= 1 (count (st/calls p "sleep"))) "two others awake: no log-out is open, lying down beats the night exposed")
+          (is (empty? (st/calls p "offline")))
+)))))
 
 (deftest the-night-keeps-a-carried-bed-the-reserve-register-holds-in-the-bag
   (async done
@@ -392,7 +393,7 @@
           (is (= [foot] (mapv st/arg-pos (st/calls p "sleep"))))
           (is (true? (:slept r)) (pr-str r)))))))
 
-(deftest a-sleeper-on-the-server-logs-the-body-out-for-a-short-stint
+(deftest a-sleeper-on-the-server-logs-the-body-out-till-morning
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -401,7 +402,7 @@
           (sleep-count! p 1 2)
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 10))
-          (is (= [30000] (st/ms-of-offline p)))
+          (is (= [475050] (st/ms-of-offline p)) "one stint to morning, no check-back")
           (is (= ["logged-out-for-sleeping-player"] (offline-why p)))
           (is (= [] (st/calls p "place")) "not dug in")
           (is (= [] (:list (core/state eng))) "ended at morning"))))))
@@ -417,34 +418,6 @@
           (await (tu/run-until-empty eng 10))
           (is (= 1 (count (st/calls p "offline"))))
           (is (= ["bread"] (distinct (map #(aget (.-args %) "item") (st/calls p "eat")))) "a bite before the stint"))))))
-
-(deftest the-body-stays-out-while-someone-sleeps-and-the-news-is-unknown-until-morning
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
-          (on-return! p clock (fn [n] (case n
-                                        1 (sleep-count! p 1 2)
-                                        2 nil
-                                        (.setTime (.-world p) noon))))
-          (sleep-count! p 1 2)
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tu/run-until-empty eng 30))
-          (is (= 3 (count (st/calls p "offline"))) "out again after a count of one and after no news; back by day")
-          (is (= [] (st/calls p "place"))))))))
-
-(deftest once-nobody-sleeps-the-body-shelters-instead
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
-          (on-return! p clock (fn [_] (sleep-count! p 0 1)))
-          (sleep-count! p 1 2)
-          (st/dawn-after! p 2)
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 12))
-          (is (= 1 (count (st/calls p "offline"))))
-          (is (pos? (count (st/calls p "place"))) "dug in"))))))
 
 (deftest a-bed-comes-before-a-sleeper
   (async done

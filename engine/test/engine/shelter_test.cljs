@@ -254,8 +254,8 @@
         (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :blocks {"0,66,0" "stone"}})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (await (tick-n eng 3))
-          (is (< 1 (count (calls p "offline"))) "the roof does not matter; out again while the sleeper sleeps")
-          (is (= (min 10 (count (calls p "offline"))) (count (entries eng :log-out))) "each stint booked (cap 10)"))))))
+          (is (= 1 (count (calls p "offline"))) "the roof does not matter; out until morning while the sleeper sleeps")
+          (is (= 1 (count (entries eng :log-out))) "the stint booked"))))))
 
 (def own-shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built})
 
@@ -476,16 +476,16 @@
 
 ;; ----------------------------------------------------------------- log-out
 
-(deftest log-out-goes-offline-for-a-short-stint
+(deftest log-out-goes-offline-till-morning
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night})]
           (core/submit! eng '(jobs.survival.log-out) {})
           (await (run-until-empty eng 3))
-          (is (= [30000] (mapv #(.-ms (.-args %)) (calls p "offline"))))
+          (is (= [475050] (mapv #(.-ms (.-args %)) (calls p "offline"))))
           (is (= ["logged-out-for-sleeping-player"] (mapv #(.-why (.-args %)) (calls p "offline"))))
-          (is (= [{:ms 30000 :status "ok" :assumed true}] (entries eng :log-out)))
+          (is (= [{:ms 475050 :status "ok" :assumed true}] (entries eng :log-out)))
           (is (= {:cap 10 :ttl day-ms} (mem/policy (mem/view (:store eng)) :log-out))))))))
 
 (deftest log-out-with-a-stay-chains-capped-stints-at-any-hour
@@ -907,12 +907,12 @@
    ["drowning" {:self {:inWater true :oxygen 4}
                 :blocks {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water" "0,67,0" "water"}} false]])
 
-(deftest another-player-online-and-awake-logs-the-body-out-unless-it-is-mid-danger
+(deftest the-only-player-awake-logs-the-body-out-for-a-sleeper-unless-it-is-mid-danger
   (async done
     (tu/run-async done
       (walls-cheap (fn ^:async t []
         (let [run (fn ^:async r [{:keys [self blocks entities]}]
-                    (let [{:keys [eng p]} (setup {:time night :self (or self {}) :players ["Sam"] :entities (into [awake] entities)
+                    (let [{:keys [eng p]} (setup {:time night :self (or self {}) :players ["Sam"] :entities (into [awake sleeper] entities)
                                                   :inventory wall-stack :blocks (merge floor blocks)})]
                       (core/submit! eng '(jobs.survival.night) {})
                       (await (tick-n eng 8))
@@ -1134,7 +1134,6 @@
             (await (tick-nights eng clock 2))
             (is (= places (count (calls p "place"))) "the failed sites are not dug in again")
             (is (pos? (count (calls p "offline"))) "logged out, not held")
-            (is (< 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "the night fires again after its cooldown")
             (is (= [] (declined-events seen :night)))
             (is (pos? (notified seen)) "the queued job ran between firings")))))))
 
@@ -1239,6 +1238,7 @@
         (let [{:keys [eng p seen clock]} (setup (assoc futile-world :floor [-4 -4 4 4]))
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
+          (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
           (let [held {:futile (entries eng :shut-in-failed) :places (count (calls p "place")) :digs (count (calls p "dig"))}]
@@ -1357,6 +1357,7 @@
         (let [{:keys [eng p clock]} (setup {:time night :blocks floor :inventory wall-stack :floor [-4 -4 4 4]})
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
+          (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 8))
           (is (= {:way :walls :reason :failed-steps} (select-keys (first (entries eng :shut-in-failed)) [:way :reason])) "written in the first firing")

@@ -25,8 +25,7 @@
   With :stay-ms and/or :until (wall-clock epoch ms; both: the later) it works at any hour and stays offline that long
   (the stint's end is kept in the job's memory, so a restart does not start it over): chained offline stints of the
   primitive's cap each, one per round, then back; :spend :job-time is the stay. No night rule, no sleep-count wait.
-  Stays away :offline-ms, at most until morning; until morning when back-unsafe (the death coming back to the spot risks,
-  jobs.lib.cost/death-chance over the known threats, costs more than the longer stint, or the body is hurt past healing). Back while it is still night, it waits :news-ms for the server's sleep
+  Stays away until morning (the skip wakes everyone then). Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
   Ends with the result {:ms :how}. How is ok, cut, unsupported or closed.
@@ -35,7 +34,6 @@
 (a/defargs args
   {:stay-ms {:doc "stay offline this long, at any hour (with :until: whichever ends later)" :spec (a/num-in 0 nil)}
    :until {:doc "stay offline until this wall-clock instant, epoch ms, at any hour" :spec (a/num-in 0 nil)}
-   :offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
    :news-ms {:doc "back at night, how long to wait for the sleep count" :spec (a/num-in 0 nil) :default 3000}})
 
 (def log-out-policy {:cap 10 :ttl sh-clock/ms-per-day})
@@ -124,22 +122,10 @@
     (cost/route-death-cost body {:cells [(assoc at :s secs)] :spawns (spawn-light/spawns-at p at secs)
                                  :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))} at)))
 
-(defn back-unsafe
-  "Why coming back online at night to the spot the body leaves costs more than staying away until morning, as text, else
-  nil: its back-death-cost is more than the seconds the longer stint adds (until-morning-ms less the stint of :offline-ms), or the body is
-  hurt-past-healing?."
-  [c until-morning-ms]
-  (let [self (.self (:primitives c))
-        more-s (/ (- until-morning-ms (min (:offline-ms (:args c)) until-morning-ms)) 1000)
-        risk (back-death-cost c)]
-    (cond (> risk more-s) (str "coming back risks a death worth " (js/Math.round risk) " s, more than " (js/Math.round more-s) " s more away")
-          (hurt-past-healing? self) (str "health " (.toFixed (.-health self) 1) " and food " (.-food self) " heal nothing"))))
-
-(defn away-ms [c]
-  (let [until-morning (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
-    (cond (not (pos? until-morning)) (:offline-ms (:args c))
-          (back-unsafe c until-morning) until-morning
-          :else (min (:offline-ms (:args c)) until-morning))))
+(defn away-ms
+  "How long the stint lasts: till morning, so the sleepers' night is not cut by a short check-back."
+  [c]
+  (max 0 (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))))
 
 (defn ^:async quote-of [c]
   (let [s (if (staying? c)
@@ -148,8 +134,6 @@
     {:uses {:job-time [0 s s]}}))
 
 (defn ^:async log-out! [c]
-  (when-let [why (let [until (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))] (and (pos? until) (back-unsafe c until)))]
-    (ctx/emit! c :log-out.till-morning :info {:text (str "staying logged out until morning: " why)}))
   (let [assumed (not (sh-sleepers/asleep-known? (:primitives c) (ctx/view c)))
         r (await (ctx/act c :offline #js {:ms (away-ms c) :why "logged-out-for-sleeping-player"}))
         how (.-status r)

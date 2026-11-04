@@ -101,7 +101,7 @@
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
               p (tu/fake {:time 14000 :entities [sleeper] :offlineScale 0.01})
-              eng (core/create {:primitives p :jobs registry/jobs :triggers (assoc real-triggers/all :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:offline-ms 20000 :news-ms 0}) :persistence :cooldown :cooldown-s 30
+              eng (core/create {:primitives p :jobs registry/jobs :triggers (assoc real-triggers/all :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:stay-ms 20000}) :persistence :cooldown :cooldown-s 30
                          :when (fn [w _ _] (boolean (seq (sh-sleepers/sleeping-players w 128))))}) :dir (tu/tmp-dir)
                                 :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]

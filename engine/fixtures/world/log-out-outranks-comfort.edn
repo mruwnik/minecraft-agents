@@ -11,7 +11,7 @@
  :cases
  [{:name "queued-log-out-starts-from-a-cut-needs-weapon-without-refire"
    :act [[:wait-s 6]
-         [:http :submit (jobs.survival.log-out {:offline-ms 3000 :news-ms 500}) [] {:ok true}]
+         [:http :submit (jobs.survival.log-out {:stay-ms 3000 :news-ms 500}) [] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 90]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 20}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.log-out"}} :within-s 90}

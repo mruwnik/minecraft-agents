@@ -350,10 +350,10 @@
           (is (empty? (st/calls p "sleep"))))))))
 
 (defn ^:async log-out-asked
-  "The :log-out? bed-down/carried-answer hands answers, for a body at night with another player online and world's extra entities."
+  "The :log-out? bed-down/carried-answer hands answers, for a body at night with another player asleep and world's extra entities."
   [world]
   (let [asked (atom nil)
-        c {:primitives (tu/seeing-all (tu/fake-on-floor (merge {:time night :players ["Sam"]} world))) :args {} :id "j" :root "j" :slots []
+        c {:primitives (tu/seeing-all (tu/fake-on-floor (merge {:time night :players ["Alex"]} (update world :entities #(conj (vec %) sleeper))))) :args {} :id "j" :root "j" :slots []
            :view (fn [] {:now 0 :data mem/empty-data}) :engine {:warned (atom #{})}}]
     (with-redefs [bed-down/answers (fn ^:async answers [_ opts] (reset! asked (:log-out? opts)) {:exposed 1})]
       (await (bed-down/carried-answer c)))

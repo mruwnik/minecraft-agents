@@ -46,7 +46,7 @@
           :pest {:name :pest :job '(respawn-away) :persistence :cooldown :cooldown-s 30
                  :when (fn [w _ _] (pest-near? w))}
           :probe {:name :probe :job '(nop) :when (fn [_ _ _] (swap! probes inc) false)}
-          :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:offline-ms 20000 :news-ms 0}) :persistence :cooldown :cooldown-s 30
+          :sleeper-out {:name :sleeper-out :job '(jobs.survival.log-out {:stay-ms 20000}) :persistence :cooldown :cooldown-s 30
                          :when (fn [w _ _] (boolean (seq (sh-sleepers/sleeping-players w 128))))}}))
 
 (defn setup [spec]

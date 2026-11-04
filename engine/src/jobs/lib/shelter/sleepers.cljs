@@ -86,15 +86,30 @@
         others (others-online p)]
     (if (or skipping (and needed (> needed (inc others)))) 0 (* others left))))
 
+(defn sleepers-known
+  "How many other players are known asleep tonight: the larger of those in sight and tonight's latest count less the
+  body's own place (counts-self?)."
+  [p view]
+  (let [status (sh-clock/latest-since view :sleep-status (sh-clock/tonight p view))
+        counted (- (:sleeping (:data status) 0) (if (counts-self? p view status) 1 0))]
+    (max (count (sleeping-players p (default-player-radius))) counted)))
+
+(defn awake-others
+  "How many other players are online and not known asleep: each would have to log out too for the sleepers to skip the
+  night, and none is known to (unknown is the worse case)."
+  [p view]
+  (max 0 (- (others-online p) (sleepers-known p view))))
+
 (defn log-out-open?
-  "Night, someone else asleep (others-asleep?) or online with a skip to wait for (skip-wait-s), and no log-out tonight
-  that failed (unsupported, closed)."
+  "Night, another player known asleep (others-asleep?), the body the only one awake (awake-others 0, so its log-out
+  completes the vote), and no log-out tonight that failed (unsupported, closed)."
   [p view]
   (let [out (sh-clock/latest-since view :log-out (sh-clock/tonight p view))]
     (and (sh-sense/night? p)
          (not (log-out-unsupported? view))
          (or (nil? out) (contains? #{"ok" "cut"} (:status (:data out))))
-         (or (others-asleep? p view) (pos? (skip-wait-s p view 1))))))
+         (others-asleep? p view)
+         (zero? (awake-others p view)))))
 
 (defn log-out-for-sleepers?
   "log-out-open? for a body awake."

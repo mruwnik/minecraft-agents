@@ -189,7 +189,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (call! (spawn-world {:blocks {"2,64,0" "red_bed"} :players ["Alex" "Bo"] :inventory st/wall-stack}) 'jobs.survival.bed-down {} (constantly nil)))]
+        (let [e (await (call! (spawn-world {:blocks {"2,64,0" "red_bed"} :players ["Alex"] :inventory st/wall-stack}) 'jobs.survival.bed-down {}
+                         (fn [eng] (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 3} nil))))]
           (is (= [:condition-failed :bed-open] (ending-of e)))
           (is (true? (:bed-open (:data e)))))))))
 
