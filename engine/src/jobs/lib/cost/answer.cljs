@@ -34,8 +34,7 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.cost.planner :as planner]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.cost.value :as value :refer [counted-chance]]
-            [jobs.lib.cost.weapon :as weapon]))
+            [jobs.lib.cost.value :as value :refer [counted-chance]]))
 
 (a/defargs settings
   {::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
@@ -68,9 +67,9 @@
 
 (defn hit-range
   "Blocks from the body within which mob {:name :held} lands its blows: a trident's throw, a bow's shot, else a melee reach."
-  [{:keys [name] :as m}]
+  [m]
   (cond (= threat/trident-kind (threat/kind m)) trident-range
-        (contains? weapon/ranged-mobs name) bow-range
+        (threat/ranged? m) bow-range
         :else (danger/melee-reach)))
 
 (defn blast-damage

@@ -5,6 +5,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.combat :as combat]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.world-files :as ew]
@@ -1656,6 +1657,14 @@
     (is (= [] (shot/shot-spots [(entry {:attacker {:name "zombie"} :dir {:x 1 :z 0}}) (entry {:damageType "arrow"})]
                                  {:x 0 :y 64 :z 0} 12))
         "a melee hit, and a shot with no way known, give no spot")))
+
+(deftest a-drowned-with-a-trident-is-a-shooter-and-a-bare-one-is-not
+  (let [spots #(shot/shot-spots [{:data {:attacker % :dir {:x 1 :z 0}}}] {:x 0.5 :y 64 :z 0.5} 12)]
+    (is (seq (spots {:name "drowned" :held "trident"})))
+    (is (empty? (spots {:name "drowned"})))
+    (is (combat/ranged? #js {:name "drowned" :held "trident"}))
+    (is (not (combat/ranged? #js {:name "drowned"})))
+    (is (combat/ranged? #js {:name "skeleton"}))))
 
 (deftest cover-from-an-unseen-shooter-is-the-far-side-of-a-wall
   (let [p (tu/fake-on-floor {:blocks (tu/box 3 64 -2 3 66 2 "stone")})

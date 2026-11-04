@@ -225,6 +225,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     // (damages) and the last one's fields; engine.hurt turns them into the causes.
     let damages = []
     const fresh = list => list.filter(d => Date.now() - d.at < setting('prim/damage-fresh-ms'))
+    const heldName = e => (e.heldItem ?? e.equipment?.[0])?.name
     const onDamage = packet => {
       if (packet.entityId !== target.entity?.id) return
       const source = packet.sourceCauseId > 0 ? target.entities?.[packet.sourceCauseId - 1] : undefined
@@ -237,7 +238,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       damages.push({
         at: Date.now(),
         damageType: target.damageTypeNames?.[packet.sourceTypeId],
-        ...(source && { attacker: { id: source.id, name: source.name ?? source.username } }),
+        ...(source && { attacker: { id: source.id, name: source.name ?? source.username, ...(heldName(source) && { held: heldName(source) }) } }),
         ...(len > 0 && { dir: { x: (from.x - me.x) / len, z: (from.z - me.z) / len } })
       })
     }
