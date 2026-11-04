@@ -26,8 +26,8 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [99.5 1 8.5] 3]]}
-  ;; night, open sky: the dark wait must not be taken under water; the body swims up first and walks (no drowning)
-  {:name "submerged-at-night-surfaces-and-walks"
+  ;; open sky: no dark wait is taken under water; the body swims up first and walks (no drowning)
+  {:name "submerged-surfaces-and-walks"
    :time :any
    :plot {:height 10 :length 40 :width 16}
    :blocks [[:fill [3 0 7] [30 3 9] "stone"]
