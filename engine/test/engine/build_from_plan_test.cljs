@@ -427,7 +427,7 @@
   (let [e {:cause {:why :out-of-sight}}]
     (is (fp-book/sightless? {:mouth [0 64 0] :tunnels {[1 1 1] (dec (plan/tunnel-tries))}} :unreachable e [1 1 1]))
     (is (not (fp-book/sightless? {:mouth [0 64 0] :tunnels {[1 1 1] (plan/tunnel-tries)}} :unreachable e [1 1 1])))
-    (is (not (fp-book/sightless? {:tunnels {}} :unreachable e [1 1 1])) "no tunnel cut by this build: given up as before")))
+    (is (fp-book/sightless? {:tunnels {}} :unreachable e [1 1 1]) "no tunnel cut yet: the first one is cut, not the cell given up")))
 
 (deftest breaking-the-rock-round-a-cell-takes-a-tool-only-when-the-block-needs-one
   (let [cell {:pos [3 64 0]}]

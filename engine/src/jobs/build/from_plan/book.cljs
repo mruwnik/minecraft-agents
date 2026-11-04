@@ -80,9 +80,9 @@
                                                    ", where the body stood: the way in may close, the plan has no door there")}))))
 
 (defn sightless?
-  "Whether an :unreachable outcome of a place or dig is a cell no stand sees, in a build that cut into rock and has not tunnelled to the cell too often: it is tunnelled to, not given up."
+  "Whether an :unreachable outcome of a place or dig is a cell no stand sees (a block placed before it hides it) and the build has not tunnelled to the cell too often: it is tunnelled to, not given up."
   [m outcome e pos]
-  (and (= :unreachable outcome) (:mouth m) (= :out-of-sight (or (:why (:data e)) (:why (:cause e)))) (< (get-in m [:tunnels pos] 0) (plan/tunnel-tries))))
+  (and (= :unreachable outcome) (= :out-of-sight (or (:why (:data e)) (:why (:cause e)))) (< (get-in m [:tunnels pos] 0) (plan/tunnel-tries))))
 
 (defn facing-only
   "The facing of a want whose only state is a facing (gate, door): the place job turns the body to it from where it ends up standing, which a click made here from the stand before its walk would not."
