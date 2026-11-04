@@ -72,26 +72,31 @@
   [c pos]
   (boolean (access/trespass-refusal (assoc (access/rules-input c) :feet nil) :place pos)))
 
-(defn seen-poses
-  "Cells of the rooms behind the doors the body has seen, nearest door first, none that a zone refuses at either side of a
-  door (starts reads at most the jobs.lib.rooms max-doors doors)."
+(defn seen-starts
+  "The rooms behind the doors the body has seen as {:pos :door}, nearest door first, none that a zone refuses at either side
+  of a door (starts reads at most the jobs.lib.rooms max-doors doors)."
   [c]
   (let [starts (room-lib/starts (:primitives c) nil)
         refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))]
-    (->> starts (remove #(refused-door? (:door %))) (map :pos))))
+    (remove #(refused-door? (:door %)) starts)))
+
+(defn seen-poses
+  "Cells of the rooms behind the doors the body has seen (seen-starts)."
+  [c]
+  (map :pos (seen-starts c)))
 
 (defn nearest-seen
-  "{:pos} of the closed room behind a door the body has seen that it walks to in fewest steps over the blocks it has seen
-  (a room it finds no walk to last), nil when none; a room whose inside is not seen yet counts (the walk shows it), but
+  "{:pos} of the closed room behind a door the body has seen whose door it walks to in fewest steps over the blocks it has
+  seen (a door it finds no walk to last), nil when none; a room whose inside is not seen yet counts (the walk shows it), but
   only when no door side is a known closed room (the open ground outside a door reads unseen too). Read-only (a quote
   runs this), so nothing is cached."
   [c]
   (let [p (:primitives c)
-        poses (seen-poses c)
+        starts (seen-starts c)
         feet (sh-sense/feet p)
-        by-steps (fn [ps] (first (sort-by #(or (reach-room/walk-steps p feet %) ##Inf) ps)))]
-    (some->> (or (by-steps (filter #(room-lib/refuge-room? p %) poses))
-                 (by-steps (filter #(reach-room/unseen-room? p %) poses)))
+        door-steps (memoize (fn [door] (or (reach-room/walk-steps p feet door) ##Inf)))
+        pick (fn [ok?] (->> starts (filter #(ok? p (:pos %))) (sort-by #(door-steps (:door %))) first :pos))]
+    (some->> (or (pick room-lib/refuge-room?) (pick reach-room/unseen-room?))
              (hash-map :pos))))
 
 (defn unclosable?
