@@ -76,15 +76,33 @@
 
 (def dark-by-the-near-sand (into {} (for [x [3 4 5 6 7] y [64 65] z [-1 0 1]] [[x y z] [0 0]])))
 
+(def roof-over-the-near-sand
+  "A roof wide enough that the sky's light, spread sideways under it a cell less each, is dark where the near sand is."
+  (into {} (for [x (range -8 15) z (range -10 11)] [(str x ",66," z) "andesite"])))
+
+(def dark-under-the-roof
+  "The fake world's light table for the roof, the floor and the air between: the body sees none of them at full sky, so none seeds its memory's flood."
+  (into {} (for [x (range -8 15) z (range -10 11) y (range 63 67)] [[x y z] [0 0]])))
+
+(def ground-under-the-roof
+  "The floor the roof's columns would otherwise take away (the world lays its floor only in columns nothing is built in)."
+  (into {} (for [x (range -8 15) z (range -10 11)] [(str x ",63," z) floor-block])))
+
+(defn start-shaded
+  "start for a world of blocks with the roof over the near sand, the light table set before the first sight pass."
+  [blocks]
+  (let [p (tu/fake-on-floor {:blocks (merge ground-under-the-roof floor roof-over-the-near-sand blocks) :floor-block floor-block :inventory [{:name "torch" :count 10}]})]
+    (swap! (fake/state p) assoc :light dark-under-the-roof)
+    (start {:p p})))
+
 ;; the sand east is half as far, but a creeper killed the body beside it a minute ago in the dark: the walk there is priced with it
 (deftest a-target-by-a-recent-death-is-dug-last
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
-              _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand)
+        (let [s (start-shaded {"6,64,0" "sand" "-12,64,0" "sand"})
               now @(:clock s)]
-          (mem/write! (:store (:eng s)) :deaths {:pos {:x 6 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 5 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
@@ -108,9 +126,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
-              _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand)]
-          (mem/write! (:store (:eng s)) :hurt {:health 4 :amount 3 :attacker {:name "spider"} :pos {:x 6 :y 64 :z 0}})
+        (let [s (start-shaded {"6,64,0" "sand" "-12,64,0" "sand"})]
+          (mem/write! (:store (:eng s)) :hurt {:health 4 :amount 3 :attacker {:name "spider"} :pos {:x 5 :y 64 :z 0}})
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
