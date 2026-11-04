@@ -395,18 +395,19 @@
 
 (def unbounded {:uses {:job-time [5 5 ##Inf]} :route {:found false :reason :budget}})
 (def bounded {:uses {:job-time [5 5 40]} :route {:found true}})
+(def found-dear {:uses {:job-time [5 5 100]} :route {:found true}})
 
-(deftest a-line-is-priced-by-the-upper-bound-of-its-entry-walk
+(deftest a-line-is-priced-by-the-upper-bound-of-its-entry-walk-among-found-routes
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [asked (atom [])
               s (setup {:blocks ground} {:target [6 57 0]} (fn [_])
-                       :jobs {'jobs.movement.go-to (bounded-first-or-second asked unbounded bounded)})
+                       :jobs {'jobs.movement.go-to (bounded-first-or-second asked found-dear bounded)})
               {:keys [out]} (await (tick-out! s))]
           (is (= :reached (:reason @out)) (pr-str @out))
           (is (<= 2 (count @asked)))
-          (is (= (second @asked) (first (planned-entries s))) "the bounded line, not the cheaper-dig unbounded one"))))))
+          (is (= (second @asked) (first (planned-entries s))) "both found: the lower upper bound wins over the first-asked cheaper-dig line"))))))
 
 (deftest a-cheaper-dig-line-with-a-bounded-walk-is-kept-over-a-later-unbounded-one
   (async done
