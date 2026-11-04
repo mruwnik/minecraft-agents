@@ -442,11 +442,14 @@
 (defn solid-ahead
   "The first feet or head cell of the next look-ahead-steps steps that the body now knows blocks the way (blocks-way?), or
   nil. A cell the plan took for air because it was unseen is seen from nearer by the time a later leg starts: the next plan
-  opens a shut door it now knows."
+  opens a shut door it now knows. A step with a cell centre (:cx) stands beside a thin panel, not in it: a shut door, gate
+  or trapdoor there is no block in its way."
   [p steps]
   (let [opens (wwatch/opens-cells steps)]
-    (first (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]
-                 :when (and (not (opens [x y' z])) (blocks-way? (u/sensed p {:x x :y y' :z z})))]
+    (first (for [{:keys [x y z cx]} (take look-ahead-steps (rest steps)) y' [y (inc y)]
+                 :let [b (u/sensed p {:x x :y y' :z z})]
+                 :when (and (not (opens [x y' z]))
+                            (if (nil? cx) (blocks-way? b) (true? (some-> b .-fullCube))))]
              [x y' z]))))
 
 (defn ^:async look-ahead!
