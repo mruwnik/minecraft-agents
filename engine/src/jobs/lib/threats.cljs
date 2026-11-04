@@ -105,9 +105,9 @@
 
 (defn sensed-mobs
   "The real dangers primitives p senses (jobs.lib.danger/dangers within its known-scan: seen or heard, with a way to the
-  body or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :chaser (cost/mob-kind) :pos}]."
+  body or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :held :chaser (cost/mob-kind) :pos}]."
   [p danger-opts]
-  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
+  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :held (.-held e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
         (danger-q/dangers p (danger-q/known-scan) {:ranged-radius (danger-q/known-scan)} danger-opts)))
 
 (defn remembered-spots
@@ -165,7 +165,7 @@
         fled (vec (remove #(contains? now-keys (:key %)) (remembered-spots c)))
         known-keys (into now-keys (map :key) fled)
         here (u/pos-of (.-pos (.self p)))]
-    (->> (concat (for [{:keys [key name chaser pos]} sensed] {:mob name :pos pos :weight 1 :key key :chaser chaser})
+    (->> (concat (for [{:keys [key name held chaser pos]} sensed] {:mob name :held held :pos pos :weight 1 :key key :chaser chaser})
                  (for [{:keys [mob pos key]} fled] {:mob mob :pos pos :weight 1 :key key :fled true})
                  (remove #(contains? known-keys (:key %)) (sightings c))
                  (for [{:keys [cause pos weight mob?] :as d} (death-spot/recent c)
@@ -221,8 +221,8 @@
         dying (delay (death-body c))
         cap (cost/threat-factor-cap body)
         ts (->> (threats-of c)
-                (filter #(= :flee (cost/stance body (:mob %))))
-                (mapv #(assoc % :toll (cost/threat-factor body (:mob %) (:weight %))))
+                (filter #(= :flee (cost/stance body (cost/mob-of-threat %))))
+                (mapv #(assoc % :toll (cost/threat-factor body (cost/mob-of-threat %) (:weight %))))
                 (filterv #(pos? (:toll %))))]
     (fn [{:keys [x y z] :as pos}]
       (let [in (filterv (fn [{:keys [reach]}] (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))) ts)]
@@ -261,7 +261,7 @@
         cap (cost/threat-factor-cap body)
         by-cell (js/Map.)]
     (doseq [{:keys [mob weight key] :as t} threats
-            :let [f (cost/threat-factor body mob weight)]
+            :let [f (cost/threat-factor body (cost/mob-of-threat t) weight)]
             :when (pos? f)
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)

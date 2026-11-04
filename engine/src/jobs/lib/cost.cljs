@@ -124,6 +124,7 @@
 
 (def route-danger danger/route-danger)
 (def stance danger/stance)
+(def mob-of-threat danger/mob-of-threat)
 (def danger-rate danger/danger-rate)
 (def hurt-rate danger/hurt-rate)
 (def danger-opts danger/danger-opts)

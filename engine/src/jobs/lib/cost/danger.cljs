@@ -131,19 +131,31 @@
   {:stances {:flee (settings/get settings ::flee-factor) :fight (settings/get settings ::fight-factor)}
    :max-rate (settings/get settings ::max-rate)})
 
+(defn mob-of-threat
+  "{:name :held} of a threat entry {:mob :held ...}."
+  [{:keys [mob held]}]
+  {:name mob :held held})
+
+(defn name-of [m] (if (map? m) (:name m) m))
+
+(defn mob-kind-of
+  "The threat kind of m, a mob name or {:name :held} (a drowned holding a trident is its own kind)."
+  [m]
+  (threat/kind (if (map? m) m {:name m})))
+
 (defn stance
-  "How the planner prices mob-name alone: :fight when a fight with it leaves fight/default-reserve health (never a creeper), else :flee."
-  [{:keys [health equipment weapon]} mob-name]
-  (if (and (not= "creeper" mob-name)
+  "How the planner prices mob m (a name, or {:name :held}) alone: :fight when a fight with it leaves fight/default-reserve health (never a creeper), else :flee."
+  [{:keys [health equipment weapon]} m]
+  (if (and (not= "creeper" (name-of m))
            (fight/leaves-reserve? {:health health :reserve fight/default-reserve
-                                   :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})}))
+                                   :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name (name-of m) :distance 0}]})}))
     :fight
     :flee))
 
 (defn hurt-rate
-  "hp a second mob-name takes off a body wearing equipment while it can reach it."
-  [equipment mob-name]
-  (threat/mob-hurt (armour/armour-stats equipment) mob-name 1))
+  "hp a second mob m (a name, or {:name :held}) takes off a body wearing equipment while it can reach it."
+  [equipment m]
+  (threat/mob-hurt (armour/armour-stats equipment) (mob-kind-of m) 1))
 
 (defn danger-rate
   "hp a second near mob-name costs body {:health :equipment :weapon} (see the ns doc). opts: danger-opts (default none)."

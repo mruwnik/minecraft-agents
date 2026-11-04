@@ -23,6 +23,10 @@
     armed "zombie" :fight
     armed "creeper" :flee))
 
+(deftest a-drowned-with-a-trident-hurts-by-its-throw-not-its-bare-hands
+  (is (> (cost/hurt-rate nil {:name "drowned" :held "trident"}) (cost/hurt-rate nil "drowned")))
+  (is (= (cost/hurt-rate nil "drowned") (cost/hurt-rate nil {:name "drowned" :held "stick"}))))
+
 (deftest rate-falls-with-a-weapon-and-armour-and-is-the-hp-a-second-not-the-price
   (let [rate #(/ (js/Math.round (* 100 (cost/danger-rate %1 %2))) 100)]
     (is (= 4 (rate unarmed "zombie")) "3 dps x 4 (flee), capped at 4")
