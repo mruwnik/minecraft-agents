@@ -20,6 +20,8 @@
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where within 60 s a hostile was within 16 blocks of the spot or hurt the body there (k) of all (n), whatever the spot's light (the logs carry none): node tools/event-counts.mjs spot-returns, 2026-10-23."}
    ::hit-rate {:default 0.6 :doc "Hits a zombie lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::hit-rate-hits {:default 195 :doc "Hits counted behind ::hit-rate, (card 162067ad, 2026-10-21: zombie 195 hits over 121 fights): the shape, + 0.5, of its Gamma posterior (hit-rate-shape). No tools/ recount yet (card 76d72c81)." :spec (a/num-in 0 nil)}
+   ::arrow-hits {:default 190 :doc "Arrows that hit the body of those counted behind ::arrow-shots (node tools/event-counts.mjs arrow-shots)." :spec (a/int-in 0 nil)}
+   ::arrow-shots {:default 351 :doc "Arrows shot at the body in the trial logs: n of the arrow hit chance (arrow-hit-chance)." :spec (a/int-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
@@ -69,15 +71,30 @@
 
 (def max-follow-range (apply max (vals follow-ranges)))
 
-(def arrow-blow
-  "Damage one skeleton arrow deals at normal difficulty: 3.8, the mean of the 197 unarmoured one-arrow hurts in the trial logs
-  (136 of 3.0, 49 of 2.5, 12 of 3.5 on the trial server's easy, vanilla's min(d/2 + 1, d) of 4, 3 and 5; node tools/event-counts.mjs, card b858ed2e)."
-  3.8)
+(defn arrow-blow
+  "Mean damage of one skeleton arrow before the difficulty's scaling, at difficulty d (vanilla: ceil(1.6 x (2 + t)), t
+  triangular about 0.11 d, half-width 0.57425; the trial logs' 197 one-arrow hurts average 3.81 at easy, this gives 3.88)."
+  [d]
+  (let [m (* 0.11 d) w 0.57425
+        above (fn [j] (let [s (- (/ j 1.6) 2)]
+                        (cond (<= s (- m w)) 1
+                              (>= s (+ m w)) 0
+                              (<= s m) (- 1 (/ (* (- s (- m w)) (- s (- m w))) (* 2 w w)))
+                              :else (/ (* (- (+ m w) s) (- (+ m w) s)) (* 2 w w)))))
+        c0 (js/Math.ceil (* 1.6 (+ 2 (- m w))))]
+    (+ c0 (reduce + (map above (range c0 12))))))
 
 (def mob-hit
-  "Damage one hit of a mob deals at normal difficulty. Unknown mobs count as 3."
-  {"skeleton" arrow-blow "stray" arrow-blow "parched" arrow-blow "bogged" arrow-blow "zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "spider" 2 "cave_spider" 3
+  "Damage one hit of a mob deals at normal difficulty, bow mobs apart (mob-blow). Unknown mobs count as 3."
+  {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "spider" 2 "cave_spider" 3
    "witch" 3 "drowned_trident" 8 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
+
+(def bow-mobs #{"skeleton" "stray" "parched" "bogged"})
+
+(defn mob-blow
+  "Damage one hit of mob-name deals before the difficulty's scaling: a bow mob's arrow (arrow-blow), else its mob-hit."
+  [mob-name]
+  (if (contains? bow-mobs mob-name) (arrow-blow (difficulty)) (get mob-hit mob-name 3)))
 
 (def door-breakers
   "Mobs that break a wooden door down, with the difficulty from which they do (vanilla BreakDoorGoal): a vindicator
@@ -290,19 +307,27 @@
 
 (def measured-hit-rate #{"zombie" "husk" "drowned" "zombie_villager"})
 
-(def bow-mobs #{"skeleton" "stray" "parched" "bogged"})
-
 (defn shot-rate
   "Arrows a second of a skeleton kind (vanilla AbstractSkeleton: a 20-tick draw plus an attack interval of 20 ticks on hard, 40 otherwise),
-  every one counted a hit (how many miss is not measured), at the cost difficulty or difficulty d."
+  at the cost difficulty or difficulty d. Arrows that hit are fewer (bow-hit-rate)."
   ([] (shot-rate (difficulty)))
   ([d] (if (= 3 d) 0.5 (/ 1 3))))
 
+(defn arrow-hit-chance
+  "Posterior mean of the chance an arrow shot at the body hits: Beta over ::arrow-hits of ::arrow-shots, uniform prior."
+  []
+  (/ (+ 1 (settings/get settings ::arrow-hits)) (+ 2 (settings/get settings ::arrow-shots))))
+
+(defn bow-hit-rate
+  "Arrows that hit a second of a skeleton kind: its shot-rate times arrow-hit-chance."
+  []
+  (* (shot-rate) (arrow-hit-chance)))
+
 (defn lone-hit-rate
-  "Hits a second of a lone sword fight: the measured rates of the zombie family and spiders, a skeleton's shot-rate, else one a second."
+  "Hits a second of a lone sword fight: the measured rates of the zombie family and spiders, a skeleton's bow-hit-rate, else one a second."
   [mob-name]
   (cond (= trident-kind mob-name) (settings/get settings ::trident-rate)
-        (contains? bow-mobs mob-name) (shot-rate)
+        (contains? bow-mobs mob-name) (bow-hit-rate)
         (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
         (contains? #{"spider" "cave_spider"} mob-name) (settings/get settings ::spider-hit-rate)
         :else 1))
@@ -318,13 +343,13 @@
 
 (defn base-threat
   "{:threat :hits} of mob-name over seconds of exposure, before armour; hits is the expected count (rate x seconds, rate
-  default a skeleton's shot-rate, else one a second)."
+  default a skeleton's bow-hit-rate, else one a second)."
   ([mob-name seconds] (base-threat mob-name seconds nil))
   ([mob-name seconds rate]
    (if (= "creeper" mob-name)
      {:threat (difficulty-scale (creeper-blast)) :hits 1}
-     (let [hits (* seconds (or rate (if (contains? bow-mobs mob-name) (shot-rate) 1)))]
-       {:threat (* hits (difficulty-scale (get mob-hit mob-name 3))) :hits hits}))))
+     (let [hits (* seconds (or rate (if (contains? bow-mobs mob-name) (bow-hit-rate) 1)))]
+       {:threat (* hits (difficulty-scale (mob-blow mob-name))) :hits hits}))))
 
 (defn mob-hurt
   "The damage mob-name deals over seconds of exposure to a body with armour stats (jobs.lib.cost.armour/armour-stats),

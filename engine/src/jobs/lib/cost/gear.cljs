@@ -51,7 +51,7 @@
   "Seconds one use of item saves against the stone tool or the bare body (0 when it saves none)."
   [{:keys [gear] :as basis} item]
   (let [{:keys [ref-mob]} gear
-        ref-hit (get threat/mob-hit ref-mob)
+        ref-hit (threat/mob-blow ref-mob)
         ref-mob-hp (get weapon/mob-max-health ref-mob)]
     (max 0
          (cond

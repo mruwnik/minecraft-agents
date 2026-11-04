@@ -139,7 +139,7 @@
         (let [pile (into dt/death-pile-of-the-field-report
                          (map #(hash-map :name (str "iron_" %) :count 1)
                               ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"]))
-              pack (for [i (range 6)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 18.5 i) :y 64 :z 3.5}})
+              pack (for [i (range 24)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 18.5 (mod i 6)) :y 64 :z (+ 3.5 (quot i 6))}})
               {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) pack))})]
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
           (core/submit! eng job {})

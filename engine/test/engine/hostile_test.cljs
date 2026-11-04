@@ -257,7 +257,7 @@
         measured (pick (settings/get answer/settings ::answer/flee-meets))
         sure (pick {:k 1000000 :n 1000000})]
     (is (= :flee (:answer measured)) (str "the fist fight under its arrows costs more than the walk and the meet it may bring: " (:prices measured)))
-    (is (= :fight (:answer sure)) (str "a meet again for certain would make the walk the fight and more: " (:prices sure)))))
+    (is (> (:flee (:prices sure)) (:flee (:prices measured))) (str "a meet again for certain costs the walk more: " (:prices sure) (:prices measured)))))
 
 (deftest a-flight-down-a-dead-end-past-its-chaser-is-priced-caught
   ;; the old weighing priced every flight at the 0.15 prior, whatever the flee search found
@@ -1558,8 +1558,8 @@
     (is (= 1.875 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
     (is (= (* 4 (threat/creeper-exchange)) (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
         "a creeper: 4 swings at the measured exchange each (hit-and-back), not the blast")
-    (is (< (js/Math.abs (- (* (+ 2.5 (/ 10 cost/walk-speed)) (/ 1 3) 2.9) (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))) 1e-9)
-        "a skeleton shoots while the body closes 10 blocks at the walk speed and fights it 2.5 s: a shot every 3 s, an arrow 2.9 on easy")))
+    (is (< (js/Math.abs (- (* (+ 2.5 (/ 10 cost/walk-speed)) (/ 1 3) (/ 191 353) (+ 1 (/ (threat/arrow-blow 1) 2))) (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))) 1e-9)
+        "a skeleton shoots while the body closes 10 blocks at the walk speed and fights it 2.5 s: a shot every 3 s, hitting at the measured chance, an arrow the easy difficulty's")))
 
 (defn walked? [{:keys [eng]}] (pos? (count (tu/walked-to eng))))
 (defn fled-by-walker? [{:keys [p] :as s}]
@@ -1890,7 +1890,7 @@
   (let [near {:name "skeleton" :distance 4}
         cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs %})
         round2 #(/ (js/Math.round (* 100 %)) 100)]
-    (is (= [1.25 3.74] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
+    (is (= [0.68 2.05] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
     (is (= :fight (:answer (cost/decide {:health 20 :food 20 :level 0 :carried 0 :respawn {:x 40 :y 64 :z 0}}
                                         {:fight (cost/fight-answer {:weapon "iron_sword" :equipment iron-armour :mobs [near near]})
                                          :flee (cost/flee-answer {:food 20 :equipment iron-armour :mobs [(assoc near :follow 16) (assoc near :follow 16)]})}
@@ -2104,13 +2104,14 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
-(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-on-hard
-  ;; on easy and normal a step out of its range, met again only by cost.answer ::flee-meets, comes within 2 s of the fight
+(deftest a-body-in-full-iron-with-a-sword-walks-away-from-a-lone-skeleton-at-10-on-hard-within-a-few-percent-of-the-fight
+  ;; arrows that hit only at the measured chance make the walk away (met again only by cost.answer ::flee-meets) a near tie with closing on it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
               {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 3} #(flight-round respond world)))
               [e] (filter #(= :hostile.decided (:kind %)) @seen)]
-          (is (= :fight (:decision e)) (str "the arrows on the walk away cost more than closing on it: " (:prices e))))))))
+          (is (= :flee (:decision e)) (str "the walk away is the cheaper: " (:prices e)))
+          (is (< (js/Math.abs (- (:fight (:prices e)) (:flee (:prices e)))) (* 0.05 (:fight (:prices e)))) (pr-str (:prices e))))))))
 

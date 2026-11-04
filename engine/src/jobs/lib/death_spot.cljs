@@ -25,7 +25,7 @@
 (defn mob-cause?
   "Whether `cause` (the killer's name, else a damage type like fall or lava) is a mob the danger code knows; any other is a death by terrain."
   [p cause]
-  (boolean (and cause (or (contains? threat/mob-hit cause) (threat/hostile? (game/version-of p) {:name cause})))))
+  (boolean (and cause (or (contains? threat/mob-hit cause) (contains? threat/bow-mobs cause) (threat/hostile? (game/version-of p) {:name cause})))))
 
 (defn hurt-cause
   "What hurt the body in a :hurt entry's data: the attacker's name, else the damage type, else the block cause."

@@ -16,14 +16,25 @@
 (deftest every-skeleton-variant-is-ranged-and-priced
   (doseq [mob ["skeleton" "stray" "parched" "bogged"]]
     (is (contains? weapon/ranged-mobs mob) mob)
-    (is (= threat/arrow-blow (get threat/mob-hit mob)) mob)))
+    (is (contains? threat/bow-mobs mob) mob)))
 
-(deftest a-skeleton-shoots-vanillas-cadence-for-the-difficulty-and-each-arrow-blows-the-measured-mean
-  (doseq [[d rate blow] [[1 (/ 1 3) 2.9] [2 (/ 1 3) 3.8] [3 0.5 5.7]]]
+(deftest an-arrow-blows-vanillas-mean-for-the-difficulty
+  (doseq [[d blow] [[1 3.877] [2 4.052] [3 4.226]]]
+    (is (< (js/Math.abs (- blow (threat/arrow-blow d))) 1e-3) (str "difficulty " d))))
+
+(deftest an-arrow-hits-at-the-posterior-mean-of-the-counts
+  (is (< (js/Math.abs (- (/ 191 353) (threat/arrow-hit-chance))) 1e-9))
+  (settings/with-settings {::threat/arrow-hits 0 ::threat/arrow-shots 0}
+    (fn [] (is (= 0.5 (threat/arrow-hit-chance)) "no counts: uniform prior"))))
+
+(deftest a-skeleton-shoots-vanillas-cadence-and-the-arrows-that-hit-blow-the-difficultys-mean
+  (doseq [[d shots scale] [[1 (/ 1 3) #(min (+ (/ % 2) 1) %)] [2 (/ 1 3) identity] [3 0.5 #(* 1.5 %)]]]
     (settings/with-settings {::threat/difficulty d}
       (fn []
-        (is (= rate (threat/lone-hit-rate "skeleton")) (str "shots a second at difficulty " d))
-        (is (< (js/Math.abs (- (* 10 rate blow) (:threat (threat/base-threat "skeleton" 10 rate)))) 1e-9) (str "10 s of arrows at difficulty " d))))))
+        (let [rate (* shots (/ 191 353))]
+          (is (< (js/Math.abs (- rate (threat/lone-hit-rate "skeleton"))) 1e-9) (str "hits a second at difficulty " d))
+          (is (< (js/Math.abs (- (* 10 rate (scale (threat/arrow-blow d))) (:threat (threat/base-threat "skeleton" 10)))) 1e-9)
+              (str "10 s of arrows at difficulty " d)))))))
 
 (deftest remaining-health-estimates-what-is-left-of-a-mob
   (is (= 8 (weapon/remaining-health {:name "zombie" :hits 2 :damage 6})) "20 less two iron sword hits")
