@@ -190,13 +190,31 @@
 
 (declare shut-worth)
 
+(defn walk-worth
+  "The worth of a walk to answer (shut-worth over prices, the walk free), at least taken-at, the answer's price when it is taken
+  whatever the others cost; finite: with no other way priced, taken-at."
+  [prices answer taken-at]
+  (let [w (shut-worth prices answer)]
+    (max (if (infinite? w) 0 w) (or taken-at 0))))
+
+(defn ^:async bed-worth
+  "Seconds the walk to bed is worth: what the next way (bed-down/answers, the walk free) costs more than the bed (shut-worth), at
+  least the bed's price with its walk when overdue for sleep (bed-down/cheapest takes the bed whatever the others cost: the phantoms
+  it keeps off are not priced, so the bed is worth the price it is taken at). Finite."
+  [c bed answer]
+  (let [free (await (bed-down/answers c {:bed bed :walk-s 0 :log-out? (log-out-wanted? c)}))
+        walk (:bed-walk (ctx/mem c))
+        with-walk (when (and (bed-down/overdue? c) (= bed (:bed walk)))
+                    (:bed (await (bed-down/answers c {:bed bed :walk-s (:walk-s walk) :log-out? (log-out-wanted? c)}))))]
+    (walk-worth free answer with-walk)))
+
 (defn ^:async bed-down-step
   "Sleep in bed, or put the carried bed down (bed nil) and sleep, answer :sealed its row shut in first: jobs.survival.bed-down. Asleep it is :sheltered :slept;
   the next pass chooses again. While the child goes on (:continue) job memory :bed-down holds {:bed bed :answer answer}, so the next
-  pass calls it again rather than choosing anew. The call's :worth is shut-worth over the night's prices with the walk free: what reaching the bed saves against the next way, which the walk is judged against; overdue, the bed is taken whatever it costs: worth ##Inf, arrive. In a closed home (jobs.lib.rooms/closed-home?) the bed goes down under the roof only (:roofed-only)."
+  pass calls it again rather than choosing anew. The call's :worth is shut-worth over the night's prices with the walk free: what reaching the bed saves against the next way, which the walk is judged against; overdue, at least the bed's price with its walk (bed-worth). In a closed home (jobs.lib.rooms/closed-home?) the bed goes down under the roof only (:roofed-only)."
   [c bed answer]
   (hold/busy! c)
-  (let [worth (when bed (if (bed-down/overdue? c) ##Inf (shut-worth (await (bed-down/answers c {:bed bed :walk-s 0 :log-out? (log-out-wanted? c)})) (or answer :bed))))
+  (let [worth (when bed (await (bed-worth c bed (or answer :bed))))
         d (await (ctx/call c :bed-down 'jobs.survival.bed-down
                                  (cond-> {}
                                    bed (assoc :bed bed)

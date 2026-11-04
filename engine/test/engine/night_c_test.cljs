@@ -714,3 +714,10 @@
   (let [q {:uses {:job-time [30 120 ##Inf]} :route {:found false :reason :partial :unseen-floors true :near 96}}]
     (is (= {:found true :seconds 120} (select-keys (night/budget-priced {:primitives (tu/fake {})} q) [:found :seconds])))
     (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route dissoc :unseen-floors)))))))
+
+(deftest a-walks-worth-is-what-the-next-way-costs-more-than-the-answer-and-is-finite
+  (let [prices {:bed 30 :shelter 100 :log-out 70 :exposed 400}]
+    (is (= 40 (night/walk-worth prices :bed nil)) "the next way (log-out 70) less the bed 30")
+    (is (= 0 (night/walk-worth {:bed 50 :shelter 20} :bed nil)) "a dearer bed gains nothing")
+    (is (= 90 (night/walk-worth {:bed 50 :shelter 20} :bed 90)) "taken whatever it costs (overdue): at least its price with the walk")
+    (is (= 0 (night/walk-worth {:bed 30} :bed nil)) "no other way priced: not infinite")))
