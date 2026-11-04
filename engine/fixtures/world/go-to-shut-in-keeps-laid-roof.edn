@@ -1,0 +1,26 @@
+;; A body at the bottom of a 2x1 shaft whose top is a 2-block dirt roof laid flush with the stone top, carrying dirt and a pickaxe, go-to a goal
+;; 11 east on the top. A 2-block stone wall at the shaft's foot opens to a stair trench that climbs to the top. Dirt over open air is a laid roof,
+;; priced as a build (cost/placed-roof?), not free natural dirt; the way out takes the door, not the roof.
+;; Plot lit roofed, stone x 10..28, y -4..1; shaft x 16..17 z 16, feet y -3; roof dirt [16 1 16] [17 1 16]; door stone x 18..19 y -3; trench stairs x 20..24.
+;; Should-succeed: arrival at the goal and both roof blocks still dirt.
+;; Should-fail: a roof block dug (the body pillared out through it) or no arrival.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 14 :length 40}
+  :blocks [[:fill [10 -4 10] [28 1 22] "stone"]
+           [:fill [16 -3 16] [17 0 16] "air"]
+           [:fill [16 1 16] [17 1 16] "dirt"]
+           [:fill [20 -3 16] [20 1 16] "air"]
+           [:fill [21 -2 16] [21 1 16] "air"]
+           [:fill [22 -1 16] [22 1 16] "air"]
+           [:fill [23 0 16] [23 1 16] "air"]
+           [:set [24 1 16] "air"]
+           [:fill [18 -3 16] [19 -3 16] "stone"]]
+  :body {:at [16.5 -3 16.5] :settle-s 3 :inventory [["dirt" 8] ["iron_pickaxe" 1]]}
+  :limit-s 150}
+ :cases
+ [{:name "shut-in-body-leaves-by-the-door-and-keeps-the-dirt-roof"
+   :act [[:job (jobs.movement.go-to {:pos #at [27 2 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:block [16 1 16] "dirt"] [:block [17 1 16] "dirt"] [:body-near [27.5 2 16.5] 3]]}]}

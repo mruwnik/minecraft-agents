@@ -66,20 +66,24 @@
 (def soil #"^(?:dirt|coarse_dirt|grass_block|podzol|mud|clay|sand|red_sand|gravel)$")
 
 (defn placed-roof?
-  "True when the soil block at cell looks like a roof someone laid: known open air under it (or under the soil column it
-  tops, one block more) and a soil neighbour beside it, itself over open air, so a flat span. Natural overhangs are rarer
-  than a laid roof, and a wrong guess only prices a put-back. (sensed cell) is a sensed block or nil."
+  "True when the soil block at cell looks like a roof someone laid: it sits in a soil run at most 2 thick with known open
+  air under and over the run, and a soil neighbour beside it is such a run too, so a thin flat span (the ceiling of a
+  tunnel dug through soil has soil over it, and is not one). Natural thin arches are rarer than laid roofs, and a wrong
+  guess only prices a put-back. (sensed cell) is a sensed block or nil."
   [sensed [x y z]]
   (let [name-at (fn [c] (let [b (sensed c)] (when-not (or (nil? b) (true? (.-unknown b))) (.-name b))))
         open? (fn [c] (boolean (some-> (name-at c) bs/air)))
         soil? (fn [c] (boolean (some->> (name-at c) (re-find soil))))
-        roof? (fn [[cx cy cz]] (and (soil? [cx cy cz])
-                                    (or (open? [cx (dec cy) cz])
-                                        (and (soil? [cx (dec cy) cz]) (open? [cx (- cy 2) cz])))))]
-    (boolean
-     (and (roof? [x y z])
-          (let [ry (if (soil? [x (dec y) z]) (dec y) y)]
-            (some #(roof? [(+ x (first %)) ry (+ z (second %))]) [[1 0] [-1 0] [0 1] [0 -1]]))))))
+        thin? (fn [cx cy cz]
+                (and (soil? [cx cy cz])
+                     (let [run (fn [dy] (loop [k 1] (cond (open? [cx (+ cy (* dy k)) cz]) k
+                                                          (and (< k 3) (soil? [cx (+ cy (* dy k)) cz])) (recur (inc k)))))
+                           down (run -1) up (run 1)]
+                       (boolean (and down up (<= (+ down up -1) 2))))))]
+    (and (thin? x y z)
+         (boolean (some (fn [[dx dz]] (or (thin? (+ x dx) y (+ z dz)) (thin? (+ x dx) (dec y) (+ z dz))
+                                          (thin? (+ x dx) (inc y) (+ z dz))))
+                        [[1 0] [-1 0] [0 1] [0 -1]])))))
 
 (defn destroyed-fn
   "(fn [n cell own?]) destroyed-s of digging block n at cell, the block over it and the crop's age read by
