@@ -95,7 +95,8 @@
    :leave-drops {:doc "true: dig on with a full pack and leave the stone lying, as a player escaping does (go-to); unset: wait :no-free-slot" :spec boolean? :default false}
    :collect {:doc "true: pick up each dig's drop while the pack has room for it and keep it from the stair's floors (keep-for-put-back!), so the cut can be put back; a job instance id (go-to's break-out of its own pen): the same, held by that job until it ends or clears it" :spec (a/or-of boolean? string?) :default false}
    :not-protected? {:doc "true (go-to's escalation): stops :not-diggable at a protected block (jobs.lib.escape/diggable?), including one first seen while digging" :spec boolean? :default false}
-   :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}})
+   :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}
+   :spare {:doc "cells [x y z] the stair never digs (a plan's finished work): such a cell refuses :footprint" :spec (a/coll-of ::a/pos) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}

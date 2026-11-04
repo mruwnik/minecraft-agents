@@ -112,6 +112,7 @@
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :through {:doc "the id of a plan the tunnel is cut for (a build reaching cells in rock): its footprint is no obstacle" :spec string? :default nil}
+   :spare {:doc "cells [x y z] the tunnel never digs (a plan's finished work): a line through one is refused :footprint" :spec (a/coll-of ::a/pos) :default nil}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; unset: bare-handed when no tool can be fetched (jobs.access.stair)" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
@@ -287,7 +288,7 @@
   (let [cells (ln/line-cells plan)
         e (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
                            {:dir dir :heading heading :ways (need/call-ways c) :need-drop (:need-drop (:args c)) :y ((cells (:steps plan)) 1) :on-lava (:on-lava (:args c) :seal)
-                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :through (:through (:args c))})))]
+                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :through (:through (:args c)) :spare (:spare (:args c))})))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
@@ -361,10 +362,10 @@
   "The first leg of a diagonal target: a kept tunnel child to the waypoint (its stand is in the target's column), then
   the plan is chosen again from there. :again or :continue; else the job ends with the leg's stop."
   [c w]
-  (let [{:keys [ways accept ignore-zones? on-lava max-length need-drop through]} (:args c)
+  (let [{:keys [ways accept ignore-zones? on-lava max-length need-drop through spare]} (:args c)
         e (waits/waiting-out c (await (ctx/call c :leg 'jobs.access.tunnel
                            (cond-> {:target w :max-length max-length :accept accept :need-drop need-drop
-                                    :ignore-zones? ignore-zones? :on-lava on-lava :through through}
+                                    :ignore-zones? ignore-zones? :on-lava on-lava :through through :spare spare}
                              (some? ways) (assoc :ways ways)))))]
     (cond
       (= :continue e) :continue

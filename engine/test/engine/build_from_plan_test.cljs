@@ -2628,3 +2628,24 @@
           (is (= "dirt" (block p [11 64 5])))
           (is (every? #(= "dirt" (block p %)) shell) (pr-str (remove #(= "dirt" (block p %)) shell)))
           (is (empty? (:missing result)) (pr-str result)))))))
+
+(deftest a-cell-tunnelled-to-from-a-closed-room-of-the-plan-never-digs-a-built-cell-that-costs-to-put-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shell (for [x (range 3 8) y (range 63 68) z (range 3 8)
+                          :when (or (#{63 67} y) (#{3 7} x) (#{3 7} z))]
+                      [x y z])
+              inside (set (for [x (range 4 7) y (range 64 67) z (range 4 7)] [x y z]))
+              rock (into {} (for [x (range -2 15) y (range 62 70) z (range -2 13)
+                                  :when (not (inside [x y z])) :when (not= [x y z] [11 64 5])]
+                              [(h/cell-key x y z) "stone"]))
+              plan {:id "own" :metadata {:by "Fake"} :parts [{:id "room" :cells (vec shell) :want "lectern"}
+                                                            {:id "post" :cells [[11 64 5]] :want "lectern"}]}
+              {:keys [eng p]} (start {:blocks (merge rock (into {} (for [c shell] [(apply h/cell-key c) "lectern"])))
+                                      :floor [-30 -30 30 30] :self {:pos {:x 5.5 :y 64 :z 5.5}}
+                                      :inventory [{:name "lectern" :count 16} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+                                     {"own" plan})
+              result (await (child-outcome eng job {:plan "own"} 600))]
+          (is (every? #(= "lectern" (block p %)) shell) (pr-str (remove #(= "lectern" (block p %)) shell)))
+          (is (not= "lectern" (block p [11 64 5])) "the post is not reached by digging a lectern wall"))))))

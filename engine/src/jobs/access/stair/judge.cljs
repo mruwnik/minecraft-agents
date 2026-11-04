@@ -20,7 +20,8 @@
   "The social half of the rules' input (jobs.lib.access/zone-input): zones, claims, footprints, the body's name and
   the clock, and the job's :ignore-zones? arg."
   [c]
-  (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? (false? (access/spare-own-builds)) :except (:through (:args c))}))
+  (assoc (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? (false? (access/spare-own-builds)) :except (:through (:args c))})
+         :spare-cells (set (map vec (:spare (:args c))))))
 
 (defn rules-in
   "The rules' input at feet: :block-at reads unsensed cells as hidden-guess; :column-at reads them as air (a column
