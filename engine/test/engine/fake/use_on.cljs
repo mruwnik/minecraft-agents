@@ -7,6 +7,7 @@
   (:require [engine.fake.doors :as doors]))
 
 (def reach 4.5)
+(def eye 1.62)
 (def max-age {"wheat" 7 "carrots" 7 "potatoes" 7 "beetroots" 3})
 (def tillable #{"dirt" "grass_block" "dirt_path"})
 (def pathable #{"dirt" "grass_block" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
@@ -24,6 +25,12 @@
 (def block-items #{"dirt" "cobblestone" "stone" "oak_planks" "oak_leaves" "pumpkin" "melon" "hay_block"})
 
 (defn distance [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
+
+(defn near-block?
+  "Eye to block centre within reach, the game's measure for any block interaction."
+  [w pos]
+  (let [[bx by bz] (get-in w [:self :pos])]
+    (<= (distance [bx (+ by eye) bz] (mapv + pos [0.5 0.5 0.5])) reach)))
 
 (defn perceived
   "Block properties as perception gives them: whole numbers as strings."
@@ -100,7 +107,7 @@
         before (snapshot w pos)
         done (fn [w' status & [consumed extra]] [w' (merge {:status status} extra {:before before :after (snapshot w' pos) :consumed (or consumed 0)})])
         self-pos (get-in w [:self :pos])
-        near? (<= (distance self-pos pos) reach)
+        near? (near-block? w pos)
         props (get-in w [:states pos])
         level (get props :level 0)
         age (get-in w [:ages pos])

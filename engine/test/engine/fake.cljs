@@ -55,10 +55,9 @@
            ((.-fixDigMaterials (node/require-here "./js/dig-materials.mjs")) registry)
            {:registry registry :block-class ((cjs "prismarine-block") registry)})))
 
-(def reach 4.5)
-(def eye 1.62)
+(def reach use-on/reach)
+(def eye use-on/eye)
 (def body-middle 0.9)
-(def craft-reach 4.5)
 (def entity-height 1.8)
 (def item-middle 0.125) ; a drop rests on its cell floor, 0.25 high (the real entity aims at height/2 above its feet)
 (def hit-range senses/hit-range)
@@ -283,11 +282,7 @@
 (defn dist [[ax ay az] [bx by bz]] (js/Math.hypot (- ax bx) (- ay by) (- az bz)))
 (defn block-name [w pos] (get-in w [:blocks pos] "air"))
 (defn body-pos [w] (get-in w [:self :pos]))
-(defn near?
-  "Eye to block centre within reach, the game's measure."
-  [w [x y z]]
-  (let [[bx by bz] (body-pos w)]
-    (<= (js/Math.hypot (- bx (+ x 0.5)) (- (+ by eye) (+ y 0.5)) (- bz (+ z 0.5))) reach)))
+(def near? use-on/near-block?)
 (defn entity-near? [w pos] (<= (dist (body-pos w) pos) reach))
 (defn find-entity [w id] (first (filter #(= id (:id %)) (:entities w))))
 (defn replaceable? [item] (.isReplaceable ^js @blocks-mod item))
@@ -562,7 +557,7 @@
 (defn craft [w {:keys [item count table] :or {count 1}}]
   (let [recipe (get (:recipes w) item)
         inv #(:inventory %)
-        crafting-table-near? (fn [pos] (and (= "crafting_table" (block-name w pos)) (<= (dist (body-pos w) pos) craft-reach)))
+        crafting-table-near? (fn [pos] (and (= "crafting_table" (block-name w pos)) (near? w pos)))
         short-of (fn [w] (into {} (keep (fn [[n c]] (let [m (- c (carried (inv w) n))] (when (pos? m) [n m])))) (:needs recipe)))
         shortage (fn [w] {:recipes [(:needs recipe)] :have (into {} (map (fn [i] [(:name i) (carried (inv w) (:name i))])) (inv w))})]
     (cond
