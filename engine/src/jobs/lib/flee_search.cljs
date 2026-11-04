@@ -437,12 +437,12 @@
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
   nothing on the chasers over standing still, pockets that gain less than their walk takes, those with every step
   cell refused, those never? holds of (at the step cell or the end, as for wet?), those passing near hazards; wet ones (wet?) while a dry one is left, all with
-  dry-only?; then the ends each of avoid (cell -> bool, most wanted first) holds of at the step cell or the end, while that leaves some: the route
+  dry-only?; then the ends whose entry avoid-route (end entry -> bool) holds of, while that leaves some; then the ends each of avoid (cell -> bool, most wanted first) holds of at the step cell or the end, while that leaves some: the route
   there is the planner's, its first steps often shared by every end. Of the rest, in this order: a :cover? end, a
   preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and only when none of those is left (a
   closed cave, a wall's foot) a pocket; the best :score of each. Open ways that every chaser cuts leave the pockets
   out: they are traps."
-  [ends {:keys [refused never? hazards wet? dry-only? avoid prefer?]}]
+  [ends {:keys [refused never? hazards wet? dry-only? avoid avoid-route prefer?]}]
   (let [either (fn [f] (fn [e] (or (f (:step e)) (f (:end e)))))
         ok (->> ends
                 (remove :caught?)
@@ -454,6 +454,7 @@
         dry (if wet? (remove (either wet?) ok) ok)
         ok (if (or dry-only? (seq dry)) dry ok)
         ok (reduce (fn [os bad?] (let [kept (remove (either bad?) os)] (if (seq kept) kept os))) ok avoid)
+        ok (if avoid-route (let [kept (remove avoid-route ok)] (if (seq kept) kept ok)) ok)
         best (fn [xs] (when (seq xs) (apply max-key :score (reverse xs))))
         ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
         traps? (and (seq ways) (every? :caught? ways))]

@@ -142,7 +142,8 @@
         block-at (block-at-fn p)
         bystanders (bystander-spots c threats)
         floor (flight/floor c)
-        known (ledger/ways-of c)]
+        known (ledger/ways-of c)
+        door? (fn [cell] (some-> (block-at cell) (str/ends-with? "_door")))]
     {:refused (:refused (ctx/mem c))
      :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
                             (not (and covered? (covered? end)))
@@ -151,7 +152,8 @@
      :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
      :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
      :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
-     :door? (fn [{:keys [x y z]}] (some-> (block-at [x y z]) (str/ends-with? "_door")))
+     :door? door?
+     :avoid-route (when (some combat/creeper? threats) (fn [e] (some door? (:cells e))))
      :prefer? (when home #(= home (:pos (:target %))))}))
 
 (defn usable

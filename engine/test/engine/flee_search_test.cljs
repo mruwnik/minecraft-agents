@@ -354,6 +354,13 @@
         near-5? #(< (js/Math.abs (- (:x %) 5)) 2)]
     (is (= {:x 0 :y 64 :z 5} (search/pick [past other] {:avoid [near-5?]})))))
 
+(deftest a-route-through-an-avoided-cell-loses-to-one-that-keeps-clear-while-one-is-left
+  (let [through (end-of 0 20 9 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 0 :y 64 :z 5 :t 3} {:x 0 :y 64 :z 20 :t 10}])
+        clear (end-of 12 0 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 12 :y 64 :z 0 :t 10}])
+        door? (fn [e] (some #(= 5 (:z %)) (:cells e)))]
+    (is (= {:x 12 :y 64 :z 0} (search/pick [through clear] {:avoid-route door?})))
+    (is (= {:x 0 :y 64 :z 5} (search/pick [through] {:avoid-route door?})) "none clear: the route is taken")))
+
 (deftest the-unseen-cells-the-routes-stopped-before-are-where-to-look-nearest-first-each-once
   (let [ends [(end-of 4 0 1 :found? false :s 0.8 :unseen [5 64 0])
               (end-of 2 0 1 :found? false :s 0.4 :unseen [2 64 -1])
