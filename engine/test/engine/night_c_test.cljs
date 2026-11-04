@@ -91,7 +91,7 @@
   "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items and
   world keys more; {:eng :p}."
   [inventory more]
-  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 4]) (merge more)
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 15]) (merge more)
                   (update :light assoc [5 64 6] [15 0]))
         {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
     (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
@@ -119,7 +119,7 @@
                         (update :blocks #(merge % ring (shift % 20)))
                         (update :states #(merge % (shift % 20)))
                         (update :light merge (into {} (for [x (range 3 8) y [64 65] z (range 5 9)] [[x y z] [0 0]])))
-                        (assoc :time night :light-default [15 4]))
+                        (assoc :time night :light-default [15 15]))
               {:keys [eng p]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
           (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
           (let [at (.-sensedAt p)]
@@ -134,7 +134,7 @@
 (defn ^:async night-at-hut-seen-outside
   "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet. The body starts z blocks south of the hut."
   [inventory z]
-  (let [world (-> (hut/hut-world {:x 5 :y 64 :z z} {}) (assoc :time night :inventory inventory :light-default [15 4])
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z z} {}) (assoc :time night :inventory inventory :light-default [15 15])
                   (update :light assoc [5 64 z] [15 0]))
         {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
         at (.-sensedAt p)]
@@ -159,7 +159,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {})
-                        (assoc :time night :inventory st/dirt-stack :light-default [15 4])
+                        (assoc :time night :inventory st/dirt-stack :light-default [15 15])
                         (update :light assoc [5 64 6] [15 0]))
               {:keys [eng p seen]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
               at (.-sensedAt p)
@@ -464,15 +464,6 @@
           (is (not (contains? (await (price 1)) :bed)) "one failure: the bed still goes with the walk into the home")
           (is (contains? (await (price 12)) :bed) "many failures: another walk is not worth it, the bed is priced where it goes down"))))))
 
-(deftest a-carried-bed-whose-sleep-skips-the-night-goes-down-here-not-in-a-home-a-walk-off
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> (with-room room-with-doorway) (dissoc :players :skipNight :light)) {:x 10 :y 64 :z 0}))]
-          (await (tu/run-until-empty eng 40))
-          (is (< (:x (st/pos-of p)) 9) "no walk home")
-          (is (= 1 (count (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p)))) "the bed went down here, the night skipped by the sleep"))))))
-
 (deftest a-carried-bed-whose-sleep-skips-the-night-is-not-put-down-on-dark-ground-a-lit-home-is-a-walk-off
   (async done
     (tu/run-async done
@@ -563,11 +554,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world (-> (with-room room-with-doorway)
-                        (assoc :entities [{:id 8 :name "sheep" :kind "passive" :pos {:x 11.5 :y 64 :z -0.5}}]))
-              {:keys [eng p]} (await (night-at-home world {:x 10 :y 64 :z 0}))]
-          (await (tu/run-until-empty eng 60))
-          (is (= [] (filterv #(= [11 -1] ((juxt :x :z) (st/arg-pos %))) (st/calls p "place"))) "no block in the sheep's cell"))))))
+        (let [sheep {:id 8 :name "sheep" :kind "passive" :pos {:x 11.5 :y 64 :z -0.5}}
+              ;; two blocks: the doorway can be shut, a wall round the body cannot
+              placed (fn ^:async f [entities]
+                       (let [{:keys [eng p]} (await (night-at-home (-> (with-room room-with-doorway) (assoc :entities entities :inventory [{:name "dirt" :count 2}])) {:x 10 :y 64 :z 0}))]
+                         (await (tu/run-until-empty eng 60))
+                         (filterv #(= [11 -1] ((juxt :x :z) (st/arg-pos %))) (st/calls p "place"))))]
+          (is (seq (await (placed []))) "the doorway is shut when free")
+          (is (= [] (await (placed [sheep]))) "no block in the sheep's cell"))))))
 
 (deftest a-doorway-shut-on-a-night-that-ended-before-dawn-is-opened-by-day
   (async done

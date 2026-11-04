@@ -41,7 +41,7 @@
   "The spawn chance per second at `cell`: a seen cell by its light (its own sky light; one that leaves dark is dark by
   the chance it is in a dark hall, hall-chance), an unseen one at the chance it is dark (look/unseen-lit-chance); under caves-free? an unseen one
   only at the chance full day would light it and now does not. subtract: the sky's darkening to judge it by (default:
-  now; 0: full day). stay?: a seen cell, lit or dark, by the chance of its sh-inside/stay-hall."
+  now; 0: full day). stay?: a seen cell, lit or dark, by the chance of its sh-inside/stay-hall: the dark floor the walkers come from, whatever light the cell itself has."
   ([p cell caves-free?] (chance-at p cell caves-free? nil))
   ([p cell caves-free? subtract] (chance-at p cell caves-free? subtract false))
   ([p cell caves-free? subtract stay?]
@@ -57,7 +57,7 @@
                    lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
                (cond
                  stay? (let [hall (cost/hall-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]
-                         (+ (* hall (at-sky (if lit? 0 block) 0)) (* (- 1 hall) (at-sky block 15))))
+                         (+ (* hall (at-sky 0 0)) (* (- 1 hall) (at-sky block 15))))
                  lit? (at-sky block 15)
                  :else (let [hall (hall-chance p cell darkening)]
                          (+ (* hall (at-sky block 0)) (* (- 1 hall) (at-sky block 15))))))

@@ -117,6 +117,10 @@
   "A closed stone room (inside x -1..7, y 64..65, z -1..1, roof at 66) around the body's start and a bed at 6,64,0."
   (assoc (apply dissoc (tu/box -2 64 -2 8 66 2 "stone") (keys (tu/box -1 64 -1 7 65 1 "stone"))) "6,64,0" "red_bed"))
 
+(def yard
+  "Stone walls two high round the cells x -10..10, z -8..8: ground seen whole inside them has no unseen edge and no dark floor beyond 24 blocks, so a lit one has no spawn chance at all."
+  (into {} (for [x (range -11 12) z (range -9 10) y [64 65] :when (or (= 11 (js/Math.abs x)) (= 9 (js/Math.abs z)))] [(str x "," y "," z) "stone"])))
+
 (def dirt-stack [{:name "dirt" :count 12}])
 (def wall-stack "Blocks enough to wall the body in on flat ground (18 cells)." [{:name "dirt" :count 20}])
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})

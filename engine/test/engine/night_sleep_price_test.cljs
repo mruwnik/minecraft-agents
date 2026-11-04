@@ -74,12 +74,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [bed-price (fn ^:async b [light]
-                          (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :light {} :light-default light})]
+                          (let [{:keys [eng p seen]} (st/setup {:time night :blocks (cond-> st/floor (= 15 (second light)) (merge st/yard)) :inventory bed-and-dirt :light {} :light-default light})]
                             (core/submit! eng '(jobs.survival.night) {})
                             (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
                             (:bed (:prices (first (st/emitted seen :night.answers))))))
               dark (await (bed-price [15 0]))
-              lit (await (bed-price [15 4]))]
+              lit (await (bed-price [15 15]))]
           (is (< lit dark) "alone the sleep skips the night, but placing the bed and falling asleep are seconds in the dark"))))))
 
 (deftest a-hostile-within-the-boxes-vanilla-keeps-from-sleeping-refuses-the-sleep
@@ -165,7 +165,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lit (await (asleep-until-answers dark-bed-world #(swap! (fake/state %) assoc :light-default [15 4])))
+        (let [lit (await (asleep-until-answers dark-bed-world #(swap! (fake/state %) assoc :light-default [15 15])))
               same (await (asleep-until-answers dark-bed-world (fn [_])))]
           (is (= 1 (count same)) "nothing changed: priced once")
           (is (= 2 (count lit)) "the bed's surroundings lit: what the stay risks is gone, priced again"))))))
@@ -177,7 +177,7 @@
         (let [hurt! #(fake/swap-self! % assoc :health 12)
               open-world (dissoc dark-bed-world :light :light-default)
               dark (await (asleep-until-answers open-world hurt!))
-              lit (await (asleep-until-answers (assoc dark-bed-world :light-default [15 4]) hurt!))]
+              lit (await (asleep-until-answers (-> dark-bed-world (assoc :light-default [15 15]) (update :blocks merge st/yard)) hurt!))]
           (is (= 2 (count dark)) "the dark bed risks hp: a lower health costs more per hp")
           (is (= 1 (count lit)) "no spawn chance and no mob near: the hp price is in no price"))))))
 
@@ -185,7 +185,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lit-world (assoc dark-bed-world :light-default [15 4])
+        (let [lit-world (-> dark-bed-world (assoc :light-default [15 15]) (update :blocks merge st/yard))
               hurt! #(fake/swap-self! % assoc :health 3 :food 2)
               open (await (asleep-until-answers lit-world hurt! 2))
               closed (await (asleep-until-answers lit-world hurt!))]
@@ -234,7 +234,7 @@
                         (let [ev (await (asleep-until-answers (cond-> world (seq light) (assoc :light light)) (fn [_])))]
                           (get-in (first ev) [:prices :shelter])))
               dark (await (shelter {}))
-              one-lit (await (shelter {[2 64 1] [15 4]}))
-              all-lit (await (shelter (into {} (for [x (range -1 6) z (range -2 3)] [[x 64 z] [15 4]]))))]
+              one-lit (await (shelter {[2 64 1] [15 15]}))
+              all-lit (await (shelter (into {} (for [x (range -1 6) z (range -2 3)] [[x 64 z] [15 15]]))))]
           (is (number? dark))
-          (is (< (- dark one-lit) (- one-lit all-lit)) "a lit cell to get up at barely moves the price while another may be the one"))))))
+          (is (= dark one-lit all-lit) "a lit patch in a dark open field keeps no walker off: the price is the dark floor round it, whichever cell the body gets up at"))))))

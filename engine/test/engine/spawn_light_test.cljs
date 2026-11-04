@@ -137,3 +137,11 @@
                                         {:x 0 :y 64 :z 0} false))]
     (is (< 0 chance open-night-chance) "neither free nor a hall for sure")
     (is (= (* (cost/hall-chance :roofed) open-night-chance) chance))))
+
+(deftest a-dim-stay-is-priced-like-a-lit-one-by-the-dark-floor-that-may-lie-round-it
+  (let [chance (fn [block] (with-redefs [sh-sense/block-light-at (constantly block) sh-sense/sky-light-at (constantly 15)]
+                             (spawn-light/night-chance (sky/with-sky (tu/fake {:floor [-30 -30 30 30] :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
+                                                       {:x 0 :y 64 :z 0})))]
+    (is (= open-night-chance (chance 0)) "dark floor seen round the cell")
+    (is (pos? (chance 4)) "a dim cell is no spawn cell, but the floor round it may be dark past what is seen")
+    (is (= (chance 14) (chance 4)))))
