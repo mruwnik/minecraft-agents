@@ -59,9 +59,11 @@
    ::bed-tries {:default 3 :doc "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row." :spec (a/int-in 1 nil)}})
 
 (defn bed-permit
-  "Whether the body may use a bed (sh-beds/bed-permit over the job's world)."
+  "Whether the body may use a bed (sh-beds/bed-permit over the job's world), and its walk was not refused on price at a
+  worth no less than this call's."
   [c]
-  (sh-beds/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c)))
+  (let [permit? (sh-beds/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c))]
+    (fn [pos] (and (permit? pos) (not (sh-beds/walk-unsafe? (:primitives c) (ctx/view c) pos (ctx/worth c)))))))
 
 (defn radius [c] (sh-beds/bed-radius (ctx/view c)))
 
@@ -365,7 +367,7 @@
       (if (= bed (some-> (:bed (:args c)) places/parse-pos :pos))
         (ctx/end c :nothing-possible :bed-unreachable {:slept false :pos bed :text "the asked-for bed cannot be reached; no other bed to pick"})
         (do (when (:priced (:data s))
-              (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state p (ctx/view c) bed)} sh-beds/walk-unsafe-policy))
+              (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state p (ctx/view c) bed) :worth (ctx/worth c)} sh-beds/walk-unsafe-policy))
             :continue))
       (= :bed-open (contract/cause-key s))
       (do (ctx/remember! c :bed-open {:pos bed} sh-beds/bed-open-policy)

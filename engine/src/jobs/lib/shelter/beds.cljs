@@ -225,11 +225,16 @@
    :in-ground (in-ground? p view)})
 
 (defn walk-unsafe?
-  "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state)."
-  [p view pos]
-  (let [since (sh-clock/tonight p view)
-        now (delay (walk-state p view pos))]
-    (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (= @now (:state (:data %)))) (mem/entries view :bed-walk-unsafe)))))
+  "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state).
+  With a worth, an entry that carries a :worth (a refusal on price) counts only while worth does not exceed it; without,
+  only entries with no :worth count (beds-to-use: a priced refusal is the caller's to judge by its worth)."
+  ([p view pos] (walk-unsafe? p view pos nil))
+  ([p view pos worth]
+   (let [since (sh-clock/tonight p view)
+         now (delay (walk-state p view pos))
+         holds? (fn [d] (if-let [w (:worth d)] (and (some? worth) (<= worth w)) true))]
+     (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (holds? (:data %)) (= @now (:state (:data %))))
+                    (mem/entries view :bed-walk-unsafe))))))
 
 (defn beds-to-use
   "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place within radius (a bed set with
@@ -303,7 +308,9 @@
 
 (def walk-unsafe-policy
   "Policy of the :bed-walk-unsafe entries {:pos :state} the night job writes for a bed whose walk it priced unsafe: kept
-  past the night (walk-unsafe? reads tonight's only, and whether the state it was priced on still holds)."
+  past the night (walk-unsafe? reads tonight's only, and whether the state it was priced on still holds). The entry mixes
+  two causes: a walk priced unsafe (no :worth, holds at any worth) and one go-to refused on the night's price (:worth of
+  the refused call; holds only for a call of no more worth)."
   {:cap 5 :ttl :forever})
 
 (def bed-place-failed-policy
