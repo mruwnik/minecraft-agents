@@ -65,6 +65,7 @@
  "night-handler-jobs/occupied-remembered-bed-is-refused"
  "night-handler-jobs/remembered-bed-out-of-sight-walked-to-and-slept"
  "night-handler-jobs/stale-far-bed-place-with-a-near-spawn-bed-sleeps-in-the-hut"
+ "night-listed-waits/enter-room-waits-while-a-hostile-is-near"
  "night-hut-home/carried-bed-outside-a-roofed-home-walks-in-and-is-put-down-inside"
  "night-hut-home/gone-spawn-bed-is-not-used"
  "night-hut-home/hut-with-a-hole-and-no-blocks-is-not-roofed"
