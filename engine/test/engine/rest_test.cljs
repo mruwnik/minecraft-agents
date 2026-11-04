@@ -108,12 +108,15 @@
           (is (some #(re-find #"food 12 of 18 .*night outside" (str (:reason %))) (filter #(= :holding (:kind %)) @seen))
               "the hold says it cannot heal on this food and waits for the night to pass"))))))
 
-(deftest a-hurt-body-in-a-closed-room-with-no-food-waits-out-the-night-in-it
+(deftest a-hurt-body-in-a-closed-room-it-has-not-looked-at-looks-round-and-waits-out-the-night-without-shutting-in
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
-              p (tu/seeing-all (tu/fake {:self {:health 3 :food 12} :blocks room :time 18000}))
+              p (tu/seeing-after-look (tu/fake {:self {:health 3 :food 12} :blocks room :time 18000}))
               eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)})
-              r (await (tu/child-outcome eng 'jobs.survival.rest {} 8))]
-          (is (= :job-time (:reason r)) "a closed room is shelter: no shut-in to fail, no walk out for food by night"))))))
+              r (await (tu/child-outcome eng 'jobs.survival.rest {} 8))
+              calls (fn [n] (filter #(= n (.-name %)) (.-calls (.-world p))))]
+          (is (= :job-time (:reason r)) "shut in to the end of its time: no walk out for food by night")
+          (is (seq (calls "look")) "it looked round at the walls it had not seen")
+          (is (empty? (concat (calls "place") (calls "dig"))) "a closed room is no reason to place or dig"))))))
