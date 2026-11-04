@@ -343,6 +343,17 @@
     (swap! (fake/state placed) #(-> % (assoc :yaw 180) (assoc-in [:blocks "0,64,7"] "torch") (assoc :light lit)))
     (is (= 1 (dark-at placed)) "a torch placed out of sight does not")))
 
+;; shelter.sense, plant-sapling, patch and see-lit-fn read light through known-light-at
+(deftest known-light-at-is-the-remembered-light-and-nil-where-unseen
+  (let [lit {[0 64 7] [15 14] [0 64 6] [15 13]}
+        p (seeing {:time midnight :blocks (merge wall {"0,64,7" "torch"}) :light lit})
+        block-at #(some-> (look/known-light-at p 0 64 %) (bit-and 15))]
+    (swap! (fake/state p) #(-> % (assoc :yaw 180) (update :blocks dissoc "0,64,7") (assoc :light {})))
+    (is (pos? (block-at 6)) "a torch broken out of sight still lights the cell it lit")
+    (is (nil? (look/known-light-at p 7 64 0)) "behind the wall, never seen: nothing known")
+    (swap! (fake/state p) assoc :light {[7 64 0] [15 15]})
+    (is (nil? (look/known-light-at p 7 64 0)) "the live light of an unseen cell is not read")))
+
 (deftest an-unseen-cell-the-walk-reads-as-water-is-water-a-drowned-may-spawn-in
   (let [p (seeing {:blocks (merge wall (tu/box 6 63 -1 8 63 1 "water"))})
         class (fn [wet?] ((look/water-fn p {:wet? wet?}) 7 63 0))]

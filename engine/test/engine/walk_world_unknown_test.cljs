@@ -103,12 +103,12 @@
     (is (some? before))
     (is (not= before (wworld/unknown-key pw)))))
 
-(deftest see-lit-reads-the-visible-table-on-live-light
+(deftest see-lit-reads-the-visible-table-on-the-light-the-cell-was-seen-in
   (let [{:keys [p w]} (sensed wall-world)
         lit? (look/see-lit-fn w)]
     (is (= 1 (lit? 1 64 0)) "daylight")
     (swap! (fake/state p) assoc :light-default [0 0])
-    (is (= 0 ((look/see-lit-fn w) 1 64 0)) "dark")))
+    (is (= 1 ((look/see-lit-fn w) 1 64 0)) "the live world going dark out of sight changes nothing")))
 
 (deftest table-now-equals-a-fresh-table-across-times-and-seeing-levels
   (let [{:keys [p w]} (sensed wall-world)

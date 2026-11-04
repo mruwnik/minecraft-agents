@@ -34,9 +34,7 @@
 (defn sky-light-at
   "Sky light (0-15, before the night's darkening) of the cell, or nil when no light data is loaded there. Read only for the body's cells and cells it has seen."
   [p {:keys [x y z]}]
-  (let [raw (look/raw-of p)]
-    (when (and raw (look/light-known? raw x y z))
-      (bit-shift-right (.lightAt ^js raw x y z) 4))))
+  (some-> (look/known-light-at p x y z) (bit-shift-right 4)))
 
 (def light-in-step-ticks "Resolution of light-in's scan of the day ahead." 100)
 
@@ -86,9 +84,7 @@
 (defn block-light-at
   "Block light (0-15) of the cell, or nil when no light data is loaded there."
   [p {:keys [x y z]}]
-  (let [raw (look/raw-of p)]
-    (when (and raw (look/light-known? raw x y z))
-      (bit-and (.lightAt ^js raw x y z) 15))))
+  (some-> (look/known-light-at p x y z) (bit-and 15)))
 
 (defn sealed-at?
   "Whether the cell is sealed from the sky: no sky light at it and the cell over it, so the night changes nothing there (a

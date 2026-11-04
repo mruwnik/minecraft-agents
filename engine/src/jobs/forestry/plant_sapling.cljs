@@ -70,13 +70,11 @@
 (def saplings (mapv sapling-of all-species))
 
 (defn light-at
-  "The better of the sky and block light at pos, from the raw world; nil when it is unknown."
+  "The better of the sky and block light at pos, as the body knows it (look/known-light-at); nil when it is unknown."
   [p pos]
-  (when-let [raw (look/raw-of p)]
-    (let [{:keys [x y z]} pos]
-      (when (look/light-known? raw x y z)
-        (let [v (.lightAt raw x y z)]
-          (max (bit-and v 15) (bit-shift-right v 4)))))))
+  (let [{:keys [x y z]} pos]
+    (when-let [v (look/known-light-at p x y z)]
+      (max (bit-and v 15) (bit-shift-right v 4)))))
 
 (defn unfit
   "Why a sapling of species cannot grow at pos, as a cause {:reason ..}, or nil (unseen ground, room or light is no refusal)."

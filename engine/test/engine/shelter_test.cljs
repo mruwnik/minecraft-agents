@@ -30,6 +30,7 @@
             [jobs.survival.night.sites :as sites]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.shelter-support :refer [walls-cheap day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack wall-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
@@ -66,14 +67,6 @@
   "A stone floor at y 63 and ceiling at y 70 over x, z -20..20 (1681 standable cells: more than a closed room holds), open at the sides."
   (into {} (for [x (range -20 21) z (range -20 21) y [63 70]] [(str x "," y "," z) "stone"])))
 
-(defn seen-dark
-  "A fake body with light data (as the night trigger reads it) that has seen every block."
-  [blocks & [light extra]]
-  (let [raw-p (tu/fake (merge {:time night :blocks blocks} extra))
-        _ (swap! (fake/state raw-p) merge {:light-default [0 0]} (when light {:light light}))
-        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
-    (tu/seeing-all (perception/wrap raw-p per))))
-
 (defn box
   "Stone walls, floor (y 63) and roof (y 66) round a w by d room of cells x 0..w-1, z 0..d-1 at y 64-65; open-sides? leaves the walls out."
   [w d open-sides?]
@@ -83,11 +76,46 @@
                  :when (cond inside? (#{63 66} y) open-sides? (= y 66) :else true)]
              [(str x "," y "," z) "stone"])))
 
+(defn torches
+  "Torches at head height that make a lit room lit in what the body remembers (it floods light from the sources it saw, not
+  the world's live light): one every 6 cells of the open cells between a floor (y 63) and a roof (y 66), and one in each cell light lists with block light."
+  [blocks light-default light]
+  (let [air? (fn [x z] (and (blocks (str x ",63," z)) (blocks (str x ",66," z)) (not (blocks (str x ",64," z)))))
+        keys-of (fn [pred] (for [k (keys blocks) :let [[x y z] (map js/parseInt (.split k ","))] :when (pred x y z)] [x z]))
+        grid (when (pos? (second light-default))
+               (keys-of (fn [x y z] (and (== y 66) (zero? (mod x 6)) (zero? (mod z 6)) (air? x z)))))
+        listed (for [[[x y z] [_ b]] light :when (pos? b)] [(str x "," y "," z) "torch"])]
+    (into (into {} listed) (for [[x z] grid] [(str x ",65," z) "torch"]))))
+
+(defn remember-all!
+  "The per body has seen every cell round blocks (x, z over their extent, y 62..70), with the light the world gives it."
+  [raw-p per blocks]
+  (let [^js raw (fake-raw/create raw-p)
+        ^js st (:st per)
+        sections (store/store-of st (.-dim st))
+        cells (map (fn [k] (mapv js/parseInt (.split k ","))) (keys blocks))
+        [x0 x1] (apply (juxt min max) (map first cells))
+        [z0 z1] (apply (juxt min max) (map #(nth % 2) cells))]
+    (doseq [x (range (dec x0) (+ x1 2)) y (range 62 71) z (range (dec z0) (+ z1 2))]
+      (store/record! st sections x y z (.stateAt raw x y z) 1000000)
+      (store/note-sky! st x y z (.lightAt raw x y z)))))
+
+(defn seen-dark
+  "A fake body with light data (as the night trigger reads it) that has seen every block."
+  [blocks & [light extra]]
+  (let [blocks (merge blocks (torches blocks [0 0] light))
+        raw-p (tu/fake (merge {:time night :blocks blocks} extra))
+        _ (swap! (fake/state raw-p) merge {:light-default [0 0]} (when light {:light light}))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+    (remember-all! raw-p per blocks)
+    (tu/seeing-all (perception/wrap raw-p per))))
+
 (defn seen-box [blocks light-default & [light]]
-  (let [raw-p (tu/fake {:time night :blocks blocks})
+  (let [blocks (merge blocks (torches blocks light-default light))
+        raw-p (tu/fake {:time night :blocks blocks})
         _ (swap! (fake/state raw-p) #(cond-> (assoc % :light-default light-default) light (assoc :light light)))
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
-    (perception/pass! per)
+    (remember-all! raw-p per blocks)
     (tu/seeing-all (perception/wrap raw-p per))))
 
 (deftest a-closed-room-is-shelter-unless-a-dark-spawnable-cell-lies-beyond-the-spawn-free-radius
@@ -194,7 +222,7 @@
 
 (deftest light-read-reports-the-darkest-spawnable-corner-not-a-median
   (let [p (seen-dark cave-blocks {[0 64 0] [0 14] [1 64 0] [0 14]})
-        cells [{:x 0 :y 64 :z 0} {:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0}]]
+        cells [{:x 0 :y 64 :z 0} {:x 1 :y 64 :z 0} {:x 20 :y 64 :z 0}]]
     (is (= {:dark-fraction (/ 1 3) :darkest 0 :unseen 0} (sh-sense/light-read p cells)))
     (is (nil? (sh-sense/light-in p cells)) "the dark corner has no sky light: waiting never lights it")
     (is (zero? (sh-sense/light-in p (take 2 cells))) "the lit ones: nothing to wait for")))
@@ -210,12 +238,12 @@
     (is (= {:seen? false :light nil :lit? nil} (select-keys (sh-sense/light-view (tu/with-light-data (tu/fake {:time night :blocks cave-blocks :unloaded ["40,64,0"]})) {:cell {:x 40 :y 64 :z 0}}) [:seen? :light :lit?])) "no light data: unknown, not a guess")
     (is (= {:cells 27 :radius 1 :darkest 0} (select-keys (sh-sense/light-view lit {:cell {:x 0 :y 64 :z 0} :radius 1}) [:cells :radius :darkest])))))
 
-(deftest light-view-lit-agrees-with-the-reported-light-of-a-cell-not-looked-at
+(deftest light-view-has-no-light-for-a-cell-not-looked-at
   (let [raw-p (tu/fake {:time noon :blocks cave-blocks})
         _ (swap! (fake/state raw-p) assoc :light-default [0 0])
         p (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)}))
         view (sh-sense/light-view p {:cell {:x 3 :y 64 :z 0}})]
-    (is (= {:block 0 :sky 0 :light 0 :lit? false} (select-keys view [:block :sky :light :lit?])))))
+    (is (= {:block nil :sky nil :light nil :lit? nil} (select-keys view [:block :sky :light :lit?])) "the live light of an unseen cell is not read")))
 
 (deftest night-without-light-data-falls-back-to-the-seen-roof
   (is (sh-sense/buried-by-column? (seen-fake {:time night :blocks (stone-above 2 1)})) "one seen block over the head, air above it")

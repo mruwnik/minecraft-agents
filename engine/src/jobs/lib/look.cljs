@@ -587,6 +587,15 @@
       f)
     (fn [x y z] (.lightAt raw x y z))))
 
+(defn known-light-at
+  "The packed light (sky << 4 | block) the body knows at a cell (remembered-light-fn: its memory's for a seen cell, the live
+  light only of the cell it stands in); nil for a cell it has not seen or the world has no light for. The one place a job
+  reads a cell's light."
+  [p x y z]
+  (when-let [raw (raw-of p)]
+    (let [l ((remembered-light-fn p raw) x y z)]
+      (when (and (<= 0 l) (<= 0 (.stateAt raw x y z))) l))))
+
 (defn- brightest
   "#js {:block :sky}: the most of each light (by light, remembered-light-fn) among the seen cells of the section at cx
   sy cz (its ids)."
@@ -958,15 +967,6 @@
                     dark? 2
                     :else (recur (dec y))))))))))))
 
-(defn see-lit-fn
-  "The planner's options.unknown.seeLit for the body of primitives p: (fn [x y z]) 1 when the cell's live light makes it
-  visible by perception's own table (seeing-min, the sky now), else 0; nil without a perception."
-  [p]
-  (when-let [per (aget p "perception")]
-    (when-let [^js raw (:raw per)]
-      (let [visible (light/table-now raw (:seeing-min (:opts per)))]
-        (fn [x y z] (aget visible (.lightAt raw x y z)))))))
-
 (defn near-of
   "How close a dark cell must be for the body of primitives p to see it (more with a torch in a hand); nil without a perception."
   [p]
@@ -979,6 +979,20 @@
   ([raw seeing-min ^js visible]
    (let [least (fn [packed] (or (first (filter #(== 1 (aget visible (packed %))) (range 16))) 16))]
      [(least #(bit-shift-left % 4)) (least identity)])))
+
+(defn see-lit-fn
+  "The planner's options.unknown.seeLit for the body of primitives p: (fn [x y z]) 1 when the cell is visible by
+  perception's own table (seeing-min, the sky now) in the light the body knows it (remembered-light-fn; an unseen cell
+  by its more-likely-than-not lit chance, as lit-or-near-fn), else 0; nil without a perception."
+  [p]
+  (when-let [per (aget p "perception")]
+    (when-let [^js raw (:raw per)]
+      (let [visible (light/table-now raw (:seeing-min (:opts per)))
+            light (remembered-light-fn p raw)
+            chance (lit-chance-fn p nil (seeing-needs raw (:seeing-min (:opts per)) visible))]
+        (fn [x y z]
+          (let [l (light x y z)]
+            (if (<= 0 l) (aget visible l) (if (> (chance x y z) 0.5) 1 0))))))))
 
 (defn lit-or-near-fn
   "(fn [[x y z]]) lit-or-near? for the body of primitives p, its light table, needs and light lookups built once; a

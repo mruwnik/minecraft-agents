@@ -143,15 +143,13 @@
             (recur (inc y)))))))
 
 (defn crop-lit-fn
-  "(fn [x y z]) whether the cell over the top y of a column gets crops/grow-light (block light, or sky light undarkened: the clock does not decide); true where the body has no light data there."
+  "(fn [x y z]) whether the cell over the top y of a column gets crops/grow-light (block light, or sky light undarkened: the clock does not decide); true without a world; an unseen cell is dark (unseen is the worse case)."
   [p]
   (let [raw (look/raw-of p)]
     (fn [x y z]
-      (let [y (inc y)]
-        (or (nil? raw)
-            (not (look/light-known? raw x y z))
-            (let [packed (.lightAt ^js raw x y z)]
-              (<= crops/grow-light (max (bit-and packed 15) (bit-shift-right packed 4)))))))))
+      (or (nil? raw)
+          (when-let [packed (look/known-light-at p x (inc y) z)]
+            (<= crops/grow-light (max (bit-and packed 15) (bit-shift-right packed 4))))))))
 
 (defn patch-ring
   "How many cells out from the centre of the patch with NW corner x z lies (the larger of its x and z offsets, rounded up)."

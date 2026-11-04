@@ -77,9 +77,12 @@
   (is (false? (holds? (tunnel-world buried-light))) "the night trigger does not hold"))
 
 (def open-dark-tunnel
-  "The tunnel with both plugs gone and no torch light: buried, but open at the ends and dark."
-  (-> (tunnel-world (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 0]])))
-      (update :blocks dissoc "-1,64,0" "-1,65,0" "21,64,0" "21,65,0" "40,64,0")))
+  "The tunnel with both plugs gone and no torch light: buried, but open at the ends (onto roofed, walled stubs, so no sky light comes in) and dark."
+  (-> (tunnel-world (into {} (for [x (range -1 22) y [64 65]] [[x y 0] [0 0]])))
+      (update :blocks #(-> (apply dissoc % ["-1,64,0" "-1,65,0" "21,64,0" "21,65,0" "40,64,0"])
+                           (into (for [x [-2 22] y [64 65]] [(str x "," y ",0") "stone"]))
+                           (into (for [x [-1 21]] [(str x ",66,0") "stone"]))
+                           (into (for [x [-1 21] y [64 65] z [-1 1]] [(str x "," y "," z) "stone"]))))))
 
 (deftest a-buried-miner-in-an-open-dark-tunnel-is-not-called-in-by-the-night
   (is (false? (holds? open-dark-tunnel)) "no sky light reaches it: waiting for day changes nothing"))
@@ -519,6 +522,11 @@
         use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
     (is (nil? (use-bed)) "as priced: unsafe")
-    (swap! (fake/state raw) update :light assoc [5 64 0] [0 0] [5 65 0] [0 0])
+    (swap! (fake/state raw) update :light into (for [y [64 65]] [[5 y 0] [0 0]]))
+    (swap! (fake/state raw) update :blocks into
+           (concat (for [x [4 6] z [-1 0 1] y [64 65]] [[x y z] "stone"])
+                   (for [z [-1 1] y [64 65]] [[5 y z] "stone"])
+                   (for [x [4 5 6] z [-1 0 1]] [[x 66 z] "stone"])))
+    (doseq [x [4 5 6] z [-1 0 1] y [64 65 66]] (rays/touch! (aget p "perception") [x y z]))
     (is (true? (:in-ground (sh-beds/walk-state p (view) far-bed))))
     (is (= far-bed (use-bed)) "sealed from the sky since: the walk there and back is now work time lost, which the price reads")))

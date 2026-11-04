@@ -1211,13 +1211,14 @@
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
 
 (def tunnel-into-cave
-  "A buried stone tunnel (floor y 63, feet and head y 64..65) lit (block light 3) from x -2 to 20 along z 0 and on to z 2
+  "A buried stone tunnel (floor y 63, feet and head y 64..65) lit (block light 3, torches at x -1 5 11 give what the body remembers) from x -2 to 20 along z 0 and on to z 2
   at x 20, where it opens north into a dark cave (x 14..26, y 64..68, z 3..34) the tunnel's rock hides until the turn; the
   light spills 2 blocks into it at x 20."
-  {:blocks (apply dissoc (box -3 63 -1 27 69 35 "stone")
-                  (concat (for [x (range -2 21) y [64 65]] (str x "," y ",0"))
-                          (for [z [1 2] y [64 65]] (str "20," y "," z))
-                          (for [x (range 14 27) y (range 64 69) z (range 3 35)] (str x "," y "," z))))
+  {:blocks (into (apply dissoc (box -3 63 -1 27 69 35 "stone")
+                        (concat (for [x (range -2 21) y [64 65]] (str x "," y ",0"))
+                                (for [z [1 2] y [64 65]] (str "20," y "," z))
+                                (for [x (range 14 27) y (range 64 69) z (range 3 35)] (str x "," y "," z))))
+                 (for [x [-1 5 11]] [(str x ",65,0") "torch"]))
    :light (into {} (concat (for [[x z] (concat (for [x (range -2 21)] [x 0]) [[20 1] [20 2]]) y [64 65]] [[x y z] [0 3]])
                            (for [y [64 65] [z l] [[3 2] [4 1]]] [[20 y z] [0 l]])
                            (for [[x y] [[19 64] [21 64] [19 65] [21 65] [20 66]]] [[x y 3] [0 1]])))})
