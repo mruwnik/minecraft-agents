@@ -1,0 +1,25 @@
+;; Card 4f9bfce0: a listed enter-room to a home that is a stone slab over 3x3 cells (roof on open sides, no walls) 15 east of the body.
+;; Slab x 18..20, z 15..17, y 2; home [19 0 16]; body at [4.5 0 16.5].
+;; Should-fail 1: the slab is in plain view: target-of refuses it before any walk (waiting :no-room, no go-to, body stays near its start).
+;; Should-fail 2: a rock wall hides the slab at the start: the body may walk to look (walk-to-look), then ends :open at the slab.
+{:defaults
+ {:tags [:night :survival]
+  :time :any
+  :mobs :keep
+  :plot {:height 14 :length 64 :width 32}
+  :blocks [[:fill [18 2 15] [20 2 17] "stone"]]
+  :body {:at [4.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :inventory [["cobblestone" 16]] :settle-s 4}
+  :limit-s 90}
+ :cases
+ [{:name "a-slab-home-in-plain-view-is-refused-without-a-walk"
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
+         [:job (jobs.survival.enter-room {})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-room}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :go-to}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-room}} :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 3]]}
+  {:name "a-slab-home-hidden-by-rock-is-walked-to-and-ends-open"
+   :blocks [[:fill [10 0 6] [11 12 31] "stone"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [19 0 16]}) [:now]]
+         [:job (jobs.survival.enter-room {})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :open}} :within-s 80 :of-job true}]
+   :after [[:body-far [4.5 0 16.5] 8]]}]}
