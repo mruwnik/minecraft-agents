@@ -1,0 +1,17 @@
+;; Card 5305bc20: a listed repeat of farm.maintain over a field with nothing to do (young wheat, no seed, no tools) rests (waiting :resting, :recheck-after-ms)
+;; instead of re-running its start check every tick (that check once held a body at 100% CPU). Field x 60..62, z 16..19: farmland y -1 (water row z 17), wheat age 0 y 0.
+;; Should-succeed: the repeat reports :resting and does not complete or give up while the wheat grows.
+;; Should-fail (control): none.
+{:defaults
+ {:tags [:farm :maintain :jobs]
+  :time :day :time-why :sunlit-ground
+  :plot {:floor "grass_block" :length 80 :width 32 :light :sky}
+  :blocks [[:fill [60 -1 16] [62 -1 19] "farmland[moisture=7]"] [:fill [60 -2 17] [62 -2 17] "stone"] [:fill [60 -1 17] [62 -1 17] "water"]
+           [:fill [60 0 16] [62 0 16] "wheat[age=0]"] [:fill [60 0 18] [62 0 19] "wheat[age=0]"]]
+  :body {:at [61.5 0 14.5] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "listed-repeat-of-maintain-with-nothing-to-do-rests"
+   :act [[:job (repeat (jobs.farm.maintain {:area {:min #xyz [60 -1 16] :max #xyz [62 0 19]}}))]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]}]}
