@@ -13,6 +13,7 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.survival.dig-pit :as dig-pit]
+            [jobs.survival.dig-pit-site :as site]
             [jobs.survival.dig-pocket :as pocket]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.plug-way :as way]
@@ -340,3 +341,16 @@
         c (fn [zones] (assoc-in (world {} [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}]) [:engine :world] (ew/of-data {} {} zones)))
         seconds #(get-in (dig-pit/quote-of (c %) {:plan nil}) [:uses :job-time 1])]
     (is (= (settings/get way/settings ::way/trespass-s) (- (seconds [zone]) (seconds []))) "no plan yet: the pit is priced as a straight one")))
+
+(deftest a-night-pit-site-in-another-zone-is-priced-with-the-trespass
+  (let [zone {:name "keep" :owner "Miles" :min [9 55 9] :max [11 70 11]}
+        cell {:x 10 :y 64 :z 10}
+        c (fn [zones] (-> (world {} [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}])
+                          (assoc-in [:engine :world] (ew/of-data {} {} zones))
+                          (assoc :args {:for :night})))
+        orig site/site
+        seconds (fn [zones]
+                  (set! site/site (fn [_] {:at :there :cell cell}))
+                  (try (get-in (dig-pit/quote-of (c zones) {:plan nil}) [:uses :job-time 1])
+                       (finally (set! site/site orig))))]
+    (is (= (settings/get way/settings ::way/trespass-s) (- (seconds [zone]) (seconds []))) "the walk-to site is priced like the pit under the feet")))

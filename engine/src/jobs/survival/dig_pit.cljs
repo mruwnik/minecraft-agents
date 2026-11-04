@@ -126,7 +126,7 @@
     (if (and (night/night? c) (not= :here (:at s)))
       (let [toll (if s (site/toll-s c (:cell s)) 0)]
         (way/quote-of c (if s
-                          (+ (/ (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (cost/walk-blocks-per-s)) (site/pit-s c (:cell s)) toll)
+                          (+ (/ (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (cost/walk-blocks-per-s)) (site/pit-s c (:cell s)) toll (way/zone-penalty c (cells-of (straight (:cell s)))))
                           ##Inf)
                       (settings/get settings ::job-time-s) {:risk-s toll :morning-s (if s (morning-s c (:cell s) (straight (:cell s))) 0)}))
     (way/quote-of c (if stop
