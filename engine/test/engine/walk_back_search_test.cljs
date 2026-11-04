@@ -25,9 +25,17 @@
 
 (deftest a-dig-route-search-ends-when-the-heap-is-full
   (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        search dig-route/search
+        seen (atom [])
         ask #(choose/route-answer p [0 64 0] [10 70 0] (constantly true) (constantly false) false false
-                                  {:slice (choose/route-slice (str (random-uuid))) :pillar-s (fn [_ _ _ _] 1.5) :place-s 1})]
+                                  (assoc (choose/search-opts {:slice (choose/route-slice (str (random-uuid)))}) :pillar-s (fn [_ _ _ _] 1.5) :place-s 1))]
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
-      #(do (is (= :searching (ask)) "a search that spends its nodes goes on")
-           (with-redefs [dig-route/heap-full? (constantly true)]
-             (is (not= :searching (ask)) "a full heap ends it as no route"))))))
+      #(with-redefs [dig-route/search (fn [b f g opts]
+                                        (swap! seen conj (:node-s opts))
+                                        (let [run (search b f g opts)]
+                                          (fn [n] (let [[a :as r] (run n)] (when a (swap! seen conj (:problem a))) r))))]
+         (is (= :searching (ask)) "a search that spends its nodes goes on")
+         (with-redefs [dig-route/heap-full? (constantly true)]
+           (is (nil? (ask)) "a full heap ends it as no route")
+           (is (= :too-big (peek @seen)) "with the reason too-big")
+           (is (pos? (first @seen)) "its nodes are priced"))))))
