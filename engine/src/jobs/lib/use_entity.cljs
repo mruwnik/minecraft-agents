@@ -90,4 +90,12 @@
   (let [fails (atom 0)]
     (await (pace/steps! c #(attempt-entity! c fails)))))
 
-(def ops {:safe? ready/safe-here-by-night :quote quote-of :bad-args bad-args :zones zones :round run-round})
+(defn place
+  "The cell of the entity the click is on, as sensed or last seen, when the body must walk to it; nil (judged where the body stands) within reach."
+  [c]
+  (let [at (some-> (or (some-> (entity-of (:primitives c) (:on (:args c))) .-pos u/pos-of) (:last-pos (ctx/mem c))) (update-vals js/Math.floor))]
+    (when (and at (> (u/dist (u/self-pos c) at) (reach))) at)))
+
+(def safe? (ready/safe-at-by-night place))
+
+(def ops {:safe? safe? :quote quote-of :bad-args bad-args :zones zones :round run-round})

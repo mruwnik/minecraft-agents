@@ -25,7 +25,7 @@
   In the air (:air true): look at the spot :on and use :item without a block (throw an egg, snowball, ender pearl); data {:used :pos :item :reason :raw};
   condition-failed :no-item, :cannot (not a throwable); nothing-possible :unchanged, :failed.
 
-  An entity: find it in sight, walk into reach (a go-to child, range 2, no escalation; again when the entity moved since the walk arrived), click
+  An entity: its start check judges the entity's place (as a block's does) when it is out of reach. Find it in sight, walk into reach (a go-to child, range 2, no escalation; again when the entity moved since the walk arrived), click
   with :item (nil or none: the empty hand). An entity that drops out of sight (the pit rim, a wall) between the sighting and the click is walked to at
   its last seen place and clicked there (the click finds it by id); it is :gone when the click does not. Ends with data {:used true|false :id :item
   :text, and after a click :raw the primitive's answer as a map}. The primitive's status :used is done. Condition-failed: :gone (no such entity in
