@@ -239,7 +239,7 @@ test('main end: a failing shard with a large output reaches a pipe reader throug
   try {
     const here = path.dirname(fileURLToPath(import.meta.url))
     fs.mkdirSync(path.join(root, 'tools'))
-    for (const f of ['test-shards.mjs', 'res-slot.mjs', 'test-run.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
+    for (const f of ['test-shards.mjs', 'test-shard-exec.mjs', 'res-slot.mjs', 'test-run.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
     fs.writeFileSync(path.join(root, 'tools/compile'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
     fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
     fs.mkdirSync(path.join(root, 'engine/node_modules'))
@@ -258,4 +258,12 @@ test('refusal: a hand run is refused; run_tests (nonce) passes', () => {
   assert.match(refusal({}), /run_tests/)
   assert.doesNotMatch(refusal({}), /MC_INTEGRATION|integration-worktree/)
   assert.equal(refusal({ LIVE_TESTS_NONCE: 'n0' }), null)
+})
+
+test('test-shard-exec: a full disk names its cause', async () => {
+  const { isolateOrExplain } = await import('./test-shard-exec.mjs')
+  const lines = []
+  const full = () => { throw Object.assign(new Error('no space'), { code: 'ENOSPC' }) }
+  assert.equal(isolateOrExplain('/e', 1, full, (m) => lines.push(m)), null)
+  assert.match(lines[0], /ENOSPC: disk full/)
 })

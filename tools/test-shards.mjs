@@ -8,13 +8,13 @@
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
 //  Refuses a hand run (needs run_tests' LIVE_TESTS_NONCE).
-//  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to ~/.cache/mc-test-run/mc-test-run-<pid>/out (disk, not tmpfs) (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
+//  Isolation: each shard (tools/test-shard-exec.mjs) copies out/test.cjs and out/test/cljs-runtime to ~/.cache/mc-test-run/mc-test-run-<its pid>/out (disk, not tmpfs) once it holds its slot, runs that copy and removes it, so waiting shards hold no disk (a full copy is 336 MB); per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile, heavyWaitBody } from './res-slot.mjs'
-import { WHOLE_RUN_CAP_S, lastFinished, isolate, RUN_ROOT, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
+import { WHOLE_RUN_CAP_S, lastFinished, RUN_ROOT, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const engine = path.join(repo, 'engine')
@@ -175,8 +175,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   const c = compile()
   if (c.status !== 0) process.exit(c.status ?? 1)
   sweepStale()
-  const { runDir, cleanup } = isolate(engine, process.pid)
-  cleanupOnExit(process, cleanup, (sig) => killTree(process.pid, sig, false))
+  cleanupOnExit(process, () => {}, (sig) => killTree(process.pid, sig, false))
   const t0 = Date.now()
   if (events) { console.log('@@test {"event":"phase","name":"testing"}'); events.start() }
   console.log(`test-shards: ${split.length} shards, at most ${slotsNow()} at once (now) machine-wide`)
@@ -186,7 +185,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
     const stallS = Number(process.env.MC_TEST_STALL_S) || stallLimitS(slowestPriorMs(nss, priorTests))
     let stalled = false, stop = () => {}
-    const r = await runInSlot(slotsNow, ['timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined, (p) => { const prev = stop, w = watchStall(file, stallS, () => { stalled = true; killStalled(p.pid) }); stop = () => { prev(); w() } })
+    const r = await runInSlot(slotsNow, ['node', path.join(repo, 'tools/test-shard-exec.mjs'), engine, 'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, '{bundle}', `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined, (p) => { const prev = stop, w = watchStall(file, stallS, () => { stalled = true; killStalled(p.pid) }); stop = () => { prev(); w() } })
     stop()
     events?.end(i)
     if (stalled) { r.code = 124; r.out += `\n${stallMessage('test-shards', stallS, fs.readFileSync(file, 'utf8').split('\n'), nss)} (shard ${i})\n` } else
@@ -205,7 +204,6 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     fs.writeFileSync(log, r.out)
     bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${failureDump(r.out)}`)
   }
-  cleanup()
   if (!part) fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
   const fresh = finishedNsMs(finished)
   if (Object.keys(fresh).length) writeAtomic(nsFile, JSON.stringify({ ...(part ? readPrior(nsFile) : {}), ...fresh }))
