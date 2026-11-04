@@ -1287,17 +1287,38 @@
 
 (defn set-weather! [opts weather why] (apply-weather! rcon! opts weather why))
 
+(def default-day-limit
+  "The world time at which a held day phase is reset: natural hostiles spawn from dusk (12000) and stay."
+  9000)
+
+(defn phase-time-fix
+  "The ticks to `time set` when the world time left the window of phase (:day, :night, :night-x), else nil. A held phase
+  drifts with the clock (a day is 24000 ticks, ~10 real min at the sweep tick rate): day ends at day-limit, night spans
+  13000-22000."
+  [phase ticks day-limit]
+  (case phase
+    :day (when (and ticks (<= day-limit ticks 22999)) 1000)
+    (:night :night-x) (when (and ticks (not (<= 13000 ticks 22000))) 14000)
+    nil))
+
+(defn start-time-fix
+  "The ticks to set before case c starts, or nil when the clock suits it. The clock a repeated run (or the case before)
+  left in the wrong day/night or past the phase window (a :time-set 9000 step) is reset: a reflex would fire before setup."
+  [c ticks]
+  (when-not (= :any (:time c))
+    (let [want-night (boolean (#{:night :night-exclusive} (:time c)))]
+      (when (or (not= want-night (boolean (night? ticks)))
+                (phase-time-fix (if want-night :night :day) ticks default-day-limit))
+        (if want-night 14000 1000)))))
+
 (defn time-ok!
   "Whether the server's time suits case c, setting it first when allowed."
   [opts c]
-  (if (= :any (:time c))
-    (js/Promise.resolve true)
-    (.then (rcon! ["time query day"])
-           (fn [[reply]]
-             (let [want-night (boolean (#{:night :night-exclusive} (:time c)))]
-               (if (= want-night (boolean (night? (daytime reply))))
-                 true
-                 (set-time! opts (if want-night 14000 1000) (str (:id c) " needs " (name (:time c))))))))))
+  (.then (rcon! ["time query day"])
+         (fn [[reply]]
+           (if-let [fix (start-time-fix c (daytime reply))]
+             (set-time! opts fix (str (:id c) " needs " (name (or (:time c) :day))))
+             true))))
 
 ;; ------------------------------------------------------------------ one run
 
@@ -1904,20 +1925,6 @@
                              (zero? retries) (str "plot not built: " bad " (tried 4 times)")
                              :else (.then (sleep 1000) #(attempt (dec retries)))))))))]
     (attempt 3)))
-
-(def default-day-limit
-  "The world time at which a held day phase is reset: natural hostiles spawn from dusk (12000) and stay."
-  9000)
-
-(defn phase-time-fix
-  "The ticks to `time set` when the world time left the window of phase (:day, :night, :night-x), else nil. A held phase
-  drifts with the clock (a day is 24000 ticks, ~10 real min at the sweep tick rate): day ends at day-limit, night spans
-  13000-22000."
-  [phase ticks day-limit]
-  (case phase
-    :day (when (and ticks (<= day-limit ticks 22999)) 1000)
-    (:night :night-x) (when (and ticks (not (<= 13000 ticks 22000))) 14000)
-    nil))
 
 (defn refresh-phase-time!
   "Keeps the phase's time of day for the whole phase: re-sets the time (env :set-ticks!, which logs) when it left the window.

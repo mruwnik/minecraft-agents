@@ -576,6 +576,13 @@
             (r/phase-time-fix :day 10999 11000) (r/phase-time-fix :day 11000 11000)]))
       "day resets from the limit (default 9000), well before dusk"))
 
+(deftest a-case-starts-on-a-clock-its-own-phase-window-holds
+  (is (= [nil 1000 1000 nil 14000 14000 nil]
+         [(r/start-time-fix {:time :day} 1000) (r/start-time-fix {:time :day} 9000) (r/start-time-fix {} 18000)
+          (r/start-time-fix {:time :night} 14000) (r/start-time-fix {:time :night} 9000)
+          (r/start-time-fix {:time :night-exclusive} 23500) (r/start-time-fix {:time :any} 9000)])
+      "a repeat after a :time-set 9000 step starts at 9000, still day by night?, past the window"))
+
 (deftest a-joiner-re-sets-a-drifted-phase-time-and-leaves-an-in-window-one
   (async done
     (let [sets (atom [])
