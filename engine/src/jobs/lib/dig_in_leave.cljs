@@ -218,6 +218,11 @@
                   {:heading h :cells cells :through through}))))
           order)))
 
+(defn way-out?
+  "Whether the shelter has any way out to dig: a door or a pit start of its entry, or a wall with a door through it."
+  [p entry]
+  (boolean (or (:door entry) (:start entry) (some #(door-of p %) (keys headings)))))
+
 (defn ^:async level-exit!
   "One step of walking out of a shelter that records neither a door nor a pit start, at the floor through the wall as a
   player would, not by a stair up: digs the exit's solid cells, then steps through. nil when no wall can be dug (the

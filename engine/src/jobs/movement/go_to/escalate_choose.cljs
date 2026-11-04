@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.access :as access]
             [jobs.lib.aim :as aim]
+            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -112,6 +113,7 @@
   (boolean (and (not (contains? (skips c) :leave-shelter))
                 (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                 (night-dug-in? c)
+                (dig-leave/way-out? (:primitives c) (sh-inside/sheltered-in c))
                 (not (night-leave-bought? c)))))
 
 (defn shelter-exit?

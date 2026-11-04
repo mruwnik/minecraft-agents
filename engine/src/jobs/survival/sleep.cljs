@@ -27,7 +27,7 @@
   the bed, a roofed room, else :bed-open. A body already asleep is done.
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
-  The walk only walks (go-to :ways #{:walk :clear-seal}): it never builds or pillars, and digs only out of the shelter it is shut in (:dig-out; at night go-to leaves it when the call's worth buys the walk's night risk), so a bed behind someone's wall is :bed-unreachable.
+  The walk only walks (go-to :ways #{:walk :clear-seal}): it never builds or pillars, and digs only out of the shelter it is shut in (:dig-out; at night go-to leaves it when the call's worth buys the walk's night risk), so a bed behind someone's wall is :bed-unreachable. A walk go-to refuses on the dug-in night's price (:night-risk) ends nothing-possible :bed-unreachable at once but remembers nothing: the next call prices it again.
   The time spent walking is bounded by the first quote's own upper bound (:job-time, go-to's :spend); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
@@ -174,11 +174,17 @@
     (when-not (.endsWith seen "_bed") (sh-spawn/lose-spawn! c bed :gone)))
   (ctx/end c :nothing-possible :bed-unreachable {:pos bed :text text}))
 
+(defn priced-refusal?
+  "Whether go-to's non-arrival (walk) is the dug-in night's price refused at this call's worth: the bed is reachable, so it ends at once and nothing is remembered."
+  [walk]
+  (= :night-risk (some-> (get-in walk [:data :escalation :why]) keyword)))
+
 (defn give-up-unreachable! [c bed walk]
   (let [why (some-> (get-in walk [:data :text]) (str/replace #"^gave up walking to \[[^\]]*\]: " ""))
         text (str "cannot reach the bed" (some->> why (str ": ")))
-        r (u/fail! c :bed_unreachable text)]
-    (when (= :done r)
+        priced? (priced-refusal? walk)
+        r (if priced? (do (ctx/emit! c :bed_unreachable :warn {:text text}) :done) (u/fail! c :bed_unreachable text))]
+    (when (and (= :done r) (not priced?))
       (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
       (when-let [seen (u/seen-name (:primitives c) bed)]
         (when-not (.endsWith seen "_bed") (sh-spawn/lose-spawn! c bed :gone))))
@@ -259,7 +265,7 @@
       (not= :done (:kind walk)) (let [_ (ctx/update-mem! c assoc :walk-failed true)
                                   after (:route (await (ctx/quote c 'jobs.movement.go-to quote-args)))]
                                   (if (and (or (no-way-quote? after) (= :budget (some-> (:reason after) keyword)))
-                                           (not= :night-risk (some-> (get-in walk [:data :escalation :why]) keyword)))
+                                           (not (priced-refusal? walk)))
                                     (give-up-unreachable-now! c bed (no-walk-text after))
                                     (give-up-unreachable! c bed walk)))
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})

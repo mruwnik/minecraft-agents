@@ -12,6 +12,7 @@
             [engine.fake :as fake]
             [engine.blocks-dig-test :as bd]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.survival.log-out :as lo]
             [jobs.lib.dig-look :as dig-look]
@@ -465,6 +466,22 @@
             (swap! clock + 600001)
             (await (tick-n eng 3))
             (is (< gave-up (count (emitted seen :bed_unreachable))) "asks about the bed again once the entry expired")))))))
+
+(deftest a-walk-refused-on-the-night-s-price-does-not-mark-the-bed-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks {"6,64,0" "red_bed"}})
+              priced (fn [& _] {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (with-redefs [child/call-walk* priced]
+            (core/submit! eng '(jobs.survival.sleep) {})
+            (await (run-until-empty eng 20)))
+          (is (= [] (entries eng :bed-unreachable)) "a priced refusal is not unreachable")
+          (is (empty? (calls p "sleep")))
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (await (run-until-empty eng 20))
+          (is (seq (tu/walked-to eng)) "the next call walks to the bed"))))))
 
 (deftest bed-down-puts-its-carried-bed-down-when-the-seen-bed-is-unreachable
   (async done
