@@ -1,7 +1,8 @@
 (ns jobs.lib.shelter.fill
   "What a shelter reads of the cells round the feet without placing anything: which stop a mob (sealed?), which a mob stands
   on, and the cells still to fill (fill-cells, open-cells). Placing them is jobs.survival.dig-in-cells."
-  (:require [jobs.lib.click :as click]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.click :as click]
             [jobs.lib.land :as land]
             [jobs.lib.util :as u]))
 
@@ -34,11 +35,13 @@
 
 (defn stand-on?
   "Whether a mob can stand on the top of the block at cell: a full cube or any other floor (slab, stair, farmland, path,
-  soul sand, chest, carpet; jobs.lib.land/floor?), not a fence, wall, pane or bars (too tall to stand on) or a cell not loaded."
+  soul sand, chest, carpet; jobs.lib.land/floor?), not a fence, wall, pane or bars (too tall to stand on), a block with no
+  collision (torch, sign, button: a mob falls through it) or a cell not loaded."
   [p cell]
   (let [b (u/seen-block p cell)]
     (boolean (and b
                   (not (re-find mob-proof-shapes (.-name b)))
+                  (or (re-find #"_carpet$" (.-name b)) (not (bs/passable? (.-name b))))
                   (or (.-fullCube b) (land/floor? (.-name b)))))))
 
 (defn fill-cells

@@ -546,3 +546,24 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))
           (is (re-find #"cannot sleep: failed \(bot is not sleeping\)" (str (:text (first (st/emitted seen :bed_unusable)))))))))))
+
+;; A 7x7 room (3 high) with one torch in a corner: the far side is lit only by its falloff, as in a world with a hut and one torch.
+(def big-room
+  {:time st/night :inventory st/dirt-stack :floor tu/walk-floor :self {:pos {:x 0 :y 64 :z 0}} :light-default [4 0]
+   :light (into {} (for [x (range -3 4) y [64 65 66] z (range -3 4)]
+                     [[x y z] [0 (max 0 (- 14 (+ (js/Math.abs (+ x 3)) (js/Math.abs (- y 65)) (js/Math.abs (+ z 3)))))]]))
+   :blocks (into {"-3,65,-3" "torch"}
+                 (remove (fn [[k _]] (let [[x y z] (map js/Number (.split k ","))] (and (<= -3 x 3) (<= 64 y 66) (<= -3 z 3)))))
+                 (box -4 63 -4 4 67 4 "stone"))})
+
+(deftest a-body-in-a-closed-room-with-a-corner-torch-ends-the-night-roofed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup big-room)]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 6))
+          (is (= [] (st/calls p "place")) "no dig-in")
+          (is (= [] (st/emitted seen :night.answers)) "no way through the night priced: shut in already")
+          (is (seq (st/emitted seen :completed)) (pr-str (mapv :kind @seen))))))))
+
