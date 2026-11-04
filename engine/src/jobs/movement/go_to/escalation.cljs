@@ -20,12 +20,13 @@
     livestock), unless the way through them is the only one or costs less with each own cell's put-back (and a stocked
     pen's escape risk) on top (own-way); those cells are put back at once (hole-tag :mend). Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text.
-  - An escalation child that waits on the same untimed reason (no :wait-ms, no :recheck-after-ms) with the body on the same cell for tuning/max-still-waits rounds has failed that way: the next way is tried, or the call gives up."
+  - An escalation child that waits on the same untimed reason (no :wait-ms, no :recheck-after-ms) twice in a row, with nothing newly seen, has failed that way: the next way is tried, or the call gives up."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
+            [jobs.lib.sense :as sense]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.dig-route :as dig-route]
@@ -569,13 +570,15 @@
   (ctx/update-mem! c update :dug-s (fnil + 0) s))
 
 (defn still-wait
-  "The wait the escalation child has been in for tuning/max-still-waits rounds on end, the body on the same cell and the wait unchanged and untimed (no :wait-ms, no :recheck-after-ms: nothing says it will lift), else nil. Books the streak in memory (:wait-streak)."
+  "The wait the escalation child comes back with a second time in a row (untimed: no :wait-ms, no :recheck-after-ms), the same reason on the same cell with nothing newly seen (looks asked for, what the body's memory holds): it has shown it makes no progress. Books the last in memory (:wait-seen)."
   [c r]
   (let [w (when (= :continue r) (some-> (:child-wait c) deref))
-        key (when (and w (not (:wait-ms w)) (not (:recheck-after-ms w))) [(:reason w) (:text w) (end/feet-cell c)])
-        n (if (and key (= key (:key (:wait-streak (ctx/mem c))))) (inc (:n (:wait-streak (ctx/mem c)))) 1)]
-    (ctx/update-mem! c assoc :wait-streak (when key {:key key :n n}))
-    (when (and key (>= n (tuning/max-still-waits))) w)))
+        p (:primitives c)
+        key (when (and w (not (:wait-ms w)) (not (:recheck-after-ms w)))
+              [(:reason w) (:text w) (end/feet-cell c) (sense/round-looked c) (sense/known-memory p)])]
+    (let [before (:wait-seen (ctx/mem c))]
+      (ctx/update-mem! c assoc :wait-seen key)
+      (when (and key (= key before)) w))))
 
 (defn ^:async escalation-child-round!
   "One call of the escalation child (ctx/call): the whole pillar, stair or door. After it, every planned cell now dug
@@ -597,7 +600,7 @@
     (when (and (= :clear-path step) (not= :continue r))
       (charge-dug! c (cost/dig-cells-s (map #(tools/clear-ms (:primitives c) (:block %)) (:dug (:data r))))))
     (if-let [w (still-wait c r)]
-      (do (ctx/update-mem! c #(-> % (update :children dissoc :escalation) (dissoc :wait-streak)))
+      (do (ctx/update-mem! c #(-> % (update :children dissoc :escalation) (dissoc :wait-seen)))
           (await (escalation-failed! c pos {:step step :reason (:reason w) :text (str "waited on, nothing changing: " (:text w))})))
       (cond
         (= :continue r) :continue
