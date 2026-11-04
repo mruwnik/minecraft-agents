@@ -2173,6 +2173,12 @@
     (is (= {pos :unreachable} (:given-up (nth runs 3))) "the third give-up stays")
     (is (= (:walk-given (nth runs 3)) {pos {:x 0 :y 64 :z 0}}))))
 
+(deftest a-covered-cell-is-given-up-for-a-walk-so-it-opens-again-once-the-body-moved
+  (let [at {:x 0 :y 64 :z 0}
+        m (fp-book/give-up-covered {} [{:pos [1 64 1]}] at)]
+    (is (= {[1 64 1] :unreachable} (:given-up m)))
+    (is (empty? (:given-up (fp-book/retry-walks m {:x 20 :y 64 :z 0} false))) "the body moved: open again")))
+
 (deftest walk-fail-notes-only-newly-given-up-cells
   (let [at1 {:x 0 :y 64 :z 0}
         m (fp-book/walk-fail {:given-up {[1 64 1] :unreachable}} [1 64 1] :unreachable 1 at1)]

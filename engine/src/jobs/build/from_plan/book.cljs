@@ -21,6 +21,14 @@
     (cond-> m2
       (and (contains? (:given-up m2) pos) (not (contains? (:given-up m) pos))) (assoc-in [:walk-given pos] at))))
 
+(defn give-up-covered
+  "m with the covered cells (no stand yet) given up :unreachable and noted with where the body stood, so retry-walks
+  opens them again once the body has moved on and the way to a stand may be cut."
+  [m covered at]
+  (reduce (fn [m {:keys [pos]}]
+            (cond-> m (not (contains? (:given-up m) pos)) (-> (assoc-in [:given-up pos] :unreachable) (assoc-in [:walk-given pos] at))))
+          m covered))
+
 (defn retry-walks
   "m with the cells given up for a walk opened again (given-up and :walk-given dropped, :retries counted): those the body
   stands retry-distance from where it gave up, all of them when finishing?; a cell opened max-retries times stays."

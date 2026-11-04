@@ -29,7 +29,7 @@
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-ok? body-cells count-fail plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? seal-exit shuts-out? off-low-floor support-looks retreat-dists fill-order]]
-            [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
+            [jobs.build.from-plan.book :refer [walk-fail give-up-covered retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.build.from-plan.walk :refer [give-up cell-s trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here? unpriced price-buried! look-verdict]]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
@@ -230,8 +230,8 @@
   [c cells]
   (let [_ (adopt-scaffold! c cells)
         _ (ctx/update-mem! c retry-walks (u/self-pos c) false)
-        _ (ctx/update-mem! c #(reduce (fn [m cell] (cond-> m (not (contains? (:given-up m) (:pos cell))) (assoc-in [:given-up (:pos cell)] :unreachable)))
-                                      % (covered (:primitives c) cells (js/Math.floor (:y (u/self-pos c))) (set (:bad-stands (ctx/mem c))))))
+        at (u/self-pos c)
+        _ (ctx/update-mem! c give-up-covered (covered (:primitives c) cells (js/Math.floor (:y at)) (set (:bad-stands (ctx/mem c)))) at)
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         wanted (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))
         digs (diggable c (digging cells) (closed))
