@@ -125,9 +125,9 @@
    ;; options.tolls.edges (nil: none): a Map of the from cell's cell-key to a flat array of [move, to cell-key or -1 (any
    ;; to cell), seconds] a move out of it costs more (see edgeToll)
    ^js edge-tolls
-   ;; options.tolls.landing (nil: none): a Map of cell-key to the factor of the cell's own seconds a move that lands on it
-   ;; (a jump, drop, gap jump or water exit: it tramples farmland) costs more (see landTollOf)
-   ^js land-tolls
+   ;; options.tolls.trample (nil: none): a Map of cell-key to the factor of the cell's own seconds a move that lands on it
+   ;; (a jump, drop, gap jump or water exit: it tramples farmland) costs more (see trampleTollOf)
+   ^js trample-tolls
    ;; the damage budget (options.damageBudget hp, nil-free: Infinity for none), the price of an hp of certain damage in seconds
    ;; (options.damageWeight), the factor of a fall's damage (options.fallFactor) and options.landing (Map of state id to the factor
    ;; of the fall damage onto that block, negative: a bounce, no damage but settle seconds; nil: 1 for every block), and

@@ -300,7 +300,7 @@
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
               ddark (+ (if (some? (.-dark-at s)) (* dsec (.darkOf s x y z)) 0)
                        (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
-                       (if (and (some? (.-land-tolls s)) (landing-move? move)) (* dsec (.landTollOf s x y z)) 0)
+                       (if (and (some? (.-trample-tolls s)) (landing-move? move)) (* dsec (.trampleTollOf s x y z)) 0)
                        (if (some? (.-edge-tolls s)) (.edgeToll s x y z move parent-node) 0)
                        (.-move-unk s)
                        (if (pos? (.-c-descent s)) (* (.-c-descent s) (js/Math.max 0 (- (aget (.-ys s) parent-node) y))) 0))]
@@ -376,9 +376,9 @@
     (let [f (.get ^js (.-tolls s) (cell-key x y z))]
       (if (some? f) f 0)))
 
-  ;; the factor of its own seconds the caller's landing toll (options.tolls.landing) adds to landing on x,y,z, 0 for none
-  (landTollOf [s x y z]
-    (let [f (.get ^js (.-land-tolls s) (cell-key x y z))]
+  ;; the factor of its own seconds the caller's trample toll (options.tolls.trample) adds to landing on x,y,z, 0 for none
+  (trampleTollOf [s x y z]
+    (let [f (.get ^js (.-trample-tolls s) (cell-key x y z))]
       (if (some? f) f 0)))
 
   ;; the seconds the caller's edge toll (options.tolls.edges) adds to entering x,y,z by `move` from parent-node's cell: its

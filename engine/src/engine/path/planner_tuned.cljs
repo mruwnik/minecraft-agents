@@ -49,7 +49,7 @@
      tolls.edges (optional): a Map of a cell's cell-key to a flat array of [move, to cell-key, seconds]: that move out of the
      cell into the to cell costs those seconds more, the same way; a to cell-key of -1 prices every move of that kind out of
      the cell that has no entry of its own (a step the walker failed at, jobs.lib.walk.edges).
-     tolls.landing (optional): the same kind of Map, but its factor applies only to a move that lands (jump, drop, gap jump, water exit), not a level step.
+     tolls.trample (optional): the same kind of Map, but its factor applies only to a move that lands (jump, drop, gap jump, water exit), not a level step.
    - options.damageBudget (Infinity): the most hp of certain damage a path may take (falls over 3 blocks, plants that hurt on
      touch); a move over it is refused, and a search that finds nothing for that reason says damageRefused true. options.maxDrop
      is still the length of the longest fall. options.damageWeight (riskWeight): seconds an hp of that damage costs.
@@ -398,8 +398,8 @@
      ;; dark-at dark-shares dark-keys dark-flags darks
      dark-at dark-shares
      (when (some? dark-at) (js/Float64Array. TABLE)) (when (some? dark-at) (js/Uint8Array. TABLE)) (js/Float64Array. cap)
-     ;; tolls edge-tolls land-tolls
-     (when (some? tolls) (.-cells tolls)) (when (some? tolls) (.-edges tolls)) (when (some? tolls) (.-landing tolls))
+     ;; tolls edge-tolls trample-tolls
+     (when (some? tolls) (.-cells tolls)) (when (some? tolls) (.-edges tolls)) (when (some? tolls) (.-trample tolls))
      ;; damage-budget damage-weight fall-factor land-factors land-seen
      (option options "damageBudget" js/Infinity) (option options "damageWeight" (option options "riskWeight" 2)) (option options "fallFactor" 1)
      (.-landing options) (.-landingSeen options)

@@ -359,24 +359,24 @@
 
 (defn merged-tolls
   "base and tolls ([{:x :y :z :factor}], base nil for none) as one list, a cell tolled twice once at the sum, in cell-key
-  order, with the planner's Maps of cell-key to factor: #js {:list :cells :landing}. A row with :landing true counts only
-  for a move that lands on its cell (planner options.tolls.landing); the list holds the rows of both kinds."
+  order, with the planner's Maps of cell-key to factor: #js {:list :cells :trample}. A row with :trample true counts only
+  for a move that lands on its cell (planner options.tolls.trample); the list holds the rows of both kinds."
   [base tolls]
   (let [rows (js/Map.)]
-    (doseq [{:keys [x y z factor landing landing-factor]} (concat base tolls)]
+    (doseq [{:keys [x y z factor trample trample-factor]} (concat base tolls)]
       (let [k (planner/cell-key x y z)
             ^js r (or (.get rows k) (let [r #js [x y z 0 0]] (.set rows k r) r))]
-        (aset r 3 (+ (aget r 3) (if landing 0 (or factor 0))))
-        (aset r 4 (+ (aget r 4) (if landing factor (or landing-factor 0))))))
+        (aset r 3 (+ (aget r 3) (if trample 0 (or factor 0))))
+        (aset r 4 (+ (aget r 4) (if trample factor (or trample-factor 0))))))
     (let [ks (.sort (js/Array.from (.keys rows)) (fn [a b] (- a b)))
           cells (js/Map.)
-          landing (js/Map.)]
+          trample (js/Map.)]
       (doseq [k ks]
         (let [^js r (.get rows k)]
           (when (pos? (aget r 3)) (.set cells k (aget r 3)))
-          (when (pos? (aget r 4)) (.set landing k (aget r 4)))))
-      #js {:list (mapv (fn [k] (let [r (.get rows k)] {:x (aget r 0) :y (aget r 1) :z (aget r 2) :factor (aget r 3) :landing-factor (aget r 4)})) ks)
-           :cells cells :landing landing})))
+          (when (pos? (aget r 4)) (.set trample k (aget r 4)))))
+      #js {:list (mapv (fn [k] (let [r (.get rows k)] {:x (aget r 0) :y (aget r 1) :z (aget r 2) :factor (aget r 3) :trample-factor (aget r 4)})) ks)
+           :cells cells :trample trample})))
 
 (defn with-tolls
   "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls, jobs.lib.threats threat-tolls) factor times their
@@ -392,7 +392,7 @@
                    (let [v (merged-tolls base tolls)] (.set toll-merges tolls {:base base :v v}) v))]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
            :tolls (if-let [^js t (.-tolls pw)]
-                    #js {:list (.-list merged) :cells (.-cells merged) :landing (.-landing merged) :edges (.-edges t) :edgeRows (.-edgeRows t)}
+                    #js {:list (.-list merged) :cells (.-cells merged) :trample (.-trample merged) :edges (.-edges t) :edgeRows (.-edgeRows t)}
                     merged)})))
 
 (defn with-edges
@@ -403,7 +403,7 @@
     pw
     (let [^js t (.-tolls pw)]
       #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
-           :tolls #js {:list (some-> t .-list) :cells (some-> t .-cells) :landing (some-> t .-landing) :edges edges :edgeRows rows}})))
+           :tolls #js {:list (some-> t .-list) :cells (some-> t .-cells) :trample (some-> t .-trample) :edges edges :edgeRows rows}})))
 
 (defn tolls-key
   "What a kept search's key holds of pw's tolls (with-tolls, with-edges): the cells with their factors and the edges with

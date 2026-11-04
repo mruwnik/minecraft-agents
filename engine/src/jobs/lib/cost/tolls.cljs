@@ -19,7 +19,7 @@
   "tolls for the planted cells of a farm, each counting only for a move that lands on it (a jump, drop or water exit tramples
   farmland; a level step does not)."
   [cells]
-  (mapv #(assoc % :landing true) (tolls cells farm-cell-factor)))
+  (mapv #(assoc % :trample true) (tolls cells farm-cell-factor)))
 
 (defn zone-tolls
   "tolls for the cells of zones the body has no business in."
