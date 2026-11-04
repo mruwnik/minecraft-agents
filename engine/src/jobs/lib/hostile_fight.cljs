@@ -350,7 +350,7 @@
         swim (swim-out c mobs)
         equipment (cost/equipment-of (.-equipment self))
         refuge (when (and (:refuge-s caught) (nil? (:swim swim)))
-                 (cost/refuge-answer {:equipment equipment :mobs mobs :later later} {:door-s (:refuge-s caught) :hide-s (:hide-s caught)}))
+                 (cost/refuge-answer {:equipment equipment :mobs mobs :later later :food (or (.-food self) 20)} {:door-s (:refuge-s caught) :hide-s (:hide-s caught)}))
         a (if refuge
             (cond-> refuge felt (update :damage max (* felt (/ (:refuge-s caught) 2))))
             (when-not (and (:cornered? caught) (nil? swim))

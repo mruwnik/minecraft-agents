@@ -91,7 +91,8 @@
         share (answer/home-work-share)]
     (is (< 0 share 1) "a hide at home is partly work")
     (is (= (:stays pillar) (:stays (refuge 2 30))) "a danger waits outside a shut door as under a pillar")
-    (is (= (:damage pillar) (:damage (refuge 2 30))) "its blows are those of the run to the door")
+    (is (<= (:damage (refuge 2 30)) (:damage (refuge 20 30))) "its blows are those of the run, only up to the door")
+    (is (< (:damage (cost/refuge-answer {:mobs [(mob "zombie" 7)]} {:door-s 4 :hide-s 30})) (:damage (cost/cover-answer {:mobs [(mob "zombie" 7)]} {:open-s 4 :seconds 34}))) "a run away from a mob 7 off is not a stand while it comes")
     (is (< (js/Math.abs (- (:seconds (refuge 2 30)) 2 (* 30 (- 1 share)))) 1e-9) "only the hide's lost share is paid")
     (is (< (:seconds (refuge 2 30)) (:seconds pillar)) "dearer on a pillar, where the hide is idle")
     (is (nil? (cost/refuge-answer {:mobs [(mob "creeper" 2)]} {:door-s 2 :hide-s 30})) "a blast takes the walls: no cover")))

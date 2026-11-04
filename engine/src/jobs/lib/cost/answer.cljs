@@ -592,9 +592,9 @@
   when the hide ends (hide-stays), the cheapest of then and the same cover again (:stays). A cover that fails is the
   blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). nil with a
   creeper (its blast takes the walls)."
-  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails]}]
+  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run]}]
   (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [a (build-answer {:equipment equipment :mobs mobs :seconds open-s})
+    (let [a (or run (build-answer {:equipment equipment :mobs mobs :seconds open-s}))
           fails (if (seq failed) (or fails 0) 0)]
       (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (hide-stays)) :then (vec then))
         (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
@@ -609,10 +609,19 @@
   "The answer of running into a known refuge (own house, door shut behind) from mobs [flee-mob's], the cover-answer of a
   cover that is open for door-s (the run to the door: the bed beyond it is no exposure) and then hid for hide-s, of which only the share
   of time no work fills is lost (home-work-share): a danger waits outside a shut door as under a pillar (hide-stays), but a
-  hide at home is not idle. later: the answer if the mobs stay (the fight); nil with a creeper."
-  [{:keys [equipment mobs later]} {:keys [door-s hide-s]}]
-  (cover-answer {:equipment equipment :mobs mobs :then (when later [later])}
-                {:open-s door-s :seconds (+ door-s (* hide-s (- 1 (home-work-share))))}))
+  hide at home is not idle. The run's blows are flee-mob's, a mob chased from where it stands, over the door-s of the run.
+  later: the answer if the mobs stay (the fight); food: the body's (default 20); nil with a creeper or a mob that keeps up."
+  [{:keys [equipment mobs later food]} {:keys [door-s hide-s]}]
+  (let [stats (armour/armour-stats equipment)
+        v (danger/flee-walk-speed (or food 20))
+        per (map #(flee-mob stats v {:gain (fn [m] (danger/closing-rate (or food 20) m))} %) mobs)]
+    (when (every? some? per)
+      (let [scaled (map (fn [f] (let [k (min 1 (/ door-s (max 1e-9 (:seconds f))))] (-> f (update :damage * k) (update :shape (fn [w] (some-> w (* k))))))) per)
+            run {:damage (reduce + (map :damage scaled)) :hit (reduce max 0 (map :hit scaled))}
+            shape (when-let [ss (seq (keep :shape scaled))] (apply max ss))]
+        (cover-answer {:equipment equipment :mobs mobs :then (when later [later])}
+                      {:open-s door-s :seconds (+ door-s (* hide-s (- 1 (home-work-share))))
+                       :run (cond-> run shape (assoc :shape shape))})))))
 
 (defn cover-answers
   "{way answer} of covers {way {:open-s :seconds :fails}} against mobs [flee-mob's] wearing equipment (cover-answer,
