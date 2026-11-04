@@ -11,6 +11,8 @@
             [engine.triggers :as triggers]
             [engine.fake :as fake]
             [engine.settings :as settings]
+            [jobs.lib.shelter]
+            [jobs.lib.shelter.sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.survival.leave-shelter :as leave-shelter]))
 
@@ -68,6 +70,22 @@
           (await (st/tick-n eng 12))
           (is (= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "still sealed in")
           (is (= before (count (st/emitted seen :completed))) "no \"out of the shelter, nothing left\" while shut in"))))))
+
+(deftest leave-shelter-looks-at-the-unseen-walls-before-it-judges-itself-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (dug-in-world {}))
+              looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))
+              base (looks)
+              looked? #(> (looks) base)
+              wall? (fn [pos] (not= (js/Math.floor (.-y pos)) 63))]
+          (tu/set-sensed! p (fn [pos] (if (and (wall? pos) (not (looked?))) #js {:unknown true} (.blockAt (tu/oracle p) pos))))
+          (is (false? (jobs.lib.shelter/looked-here? p (mem/view (:store eng)))) "no look pass from here yet")
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
+          (await (st/tick-n eng 12))
+          (is (pos? (- (looks) base)) "it looked round at the unseen walls first")
+          (is (not= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "and, seeing the walls shut it in, dug out by day"))))))
 
 (deftest a-trapped-body-is-tried-once-not-every-cooldown
   (async done

@@ -73,6 +73,24 @@
   [p view]
   (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p)) (not (looked-here? p view)) (unseen-roof-cell p))))
 
+(defn unseen-shell-cell
+  "[x y z] of a cell of the recorded shelter's shell the body has not seen (a side of its two cells, or the roof,
+  unseen-roof-cell), when it stands in the :shelter entry's cell; else nil. A level look shows neither."
+  [p view]
+  (let [{:keys [x y z] :as feet} (sh-sense/feet p)]
+    (when (= feet (:pos (:data (mem/latest view :shelter))))
+      (or (unseen-roof-cell p)
+          (first (for [dy [0 1] [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                       :let [cell {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                       :when (look/unseen? p [cell])]
+                   [(:x cell) (:y cell) (:z cell)]))))))
+
+(defn unlooked-for-shell?
+  "Awake in the recorded shelter's cell, not looked from here (looked-here?) and a cell of its shell never seen
+  (unseen-shell-cell): the room checks read an unseen cell as open ground, so look before judging it."
+  [p view]
+  (boolean (and (not (sh-sense/sleeping? p)) (not (looked-here? p view)) (unseen-shell-cell p view))))
+
 (defn breached-home?
   "Whether the roofed body's room has a hole: a :bed-open entry (a bed found open) within breach-near blocks and the body
   not shut in a closed room. A bare roof alone is no sign of a home."

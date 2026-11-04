@@ -13,6 +13,9 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.waits :as waits]
+            [jobs.lib.look :as look]
+            [jobs.lib.sense :as sense]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
@@ -30,7 +33,7 @@
 (def doc
   "The morning after a night: out of the shelter, the blocks it placed taken back, a bed put down picked up. The dawn
   trigger starts it; night itself ends when the body is sheltered or the night is over.
-  Waits :night by night. Done once nothing is left: no shelter the body is shut in (jobs.lib.dig-in-leave/leave!: walls
+  Waits :night by night. It first looks round when a cell of the shelter's shell was never seen (unseen reads as open). Done once nothing is left: no shelter the body is shut in (jobs.lib.dig-in-leave/leave!: walls
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
   put there) to dig again, no bed it put down outside its own zones (never the live respawn bed: it stays) to pick up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
@@ -161,6 +164,7 @@
   (let [p (:primitives c)
         m (ctx/mem c)]
     (boolean (or (:dig-out m)
+                 (sh/unlooked-for-shell? p (ctx/view c))
                  (sh-inside/shut-in-own? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped)))
                  (sh-beds/doorway-to-open p (ctx/view c))
                  (sh-beds/bed-to-collect p (ctx/view c))
@@ -189,6 +193,11 @@
         ds (when shelter (mapv #(dawn/describe p %) (or grace (fragile-hold c fragile))))]
     (when-not fragile (ctx/forget-where! c :fragile-hold (constantly true)))
     (cond
+      (sh/unlooked-for-shell? p (ctx/view c))
+      (do (when-let [cell (sh/unseen-shell-cell p (ctx/view c))] (await (sense/look-at! c cell)))
+          (await (look/look-around! c))
+          (ctx/remember! c :night-looked {:cell (sh-sense/feet p)} sh/night-looked-policy)
+          :again)
       (seq ds)
       (let [what (dawn/hostile-text ds)
             hp (.toFixed (.-health (.self p)) 1)]
