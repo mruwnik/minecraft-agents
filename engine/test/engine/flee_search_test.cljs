@@ -571,9 +571,10 @@
     (is (= {:chance 0 :refuge-s 3} (search/caught-chance [home] {:k 0 :n 0} opts nil)) "the run to the door")
     (is (= 9 (:refuge-s (search/caught-chance [home] {:k 0 :n 0} (dissoc opts :door?) nil))) "no door on the route: the whole of it")))
 
-(deftest a-drowned-reaches-a-wet-end-at-its-swim-speed
-  (let [end (fn [wet?] {:end {:x 6 :y 64 :z 0} :price 2
-                        :cells [{:x 0 :y 64 :z 0 :t 0 :wet? wet?} {:x 6 :y 64 :z 0 :t 2 :wet? wet?}]})
-        arrive (fn [wet?] (:arrive (first (search/scored [{:name "drowned" :mob "drowned" :pos {:x 0.5 :y 64 :z 0.5}}]
-                                                         {:x 0.5 :y 64 :z 0.5} [(end wet?)]))))]
-    (is (< (* 2 (arrive false)) (arrive true)) "a body swimming outpaces the drowned: its way takes far longer than on land")))
+(deftest a-drowned-is-timed-at-its-swim-speed-only-over-the-water-shown
+  (let [route {:end {:x 6 :y 64 :z 0} :price 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 6 :y 64 :z 0 :t 2}]}
+        arrive (fn [swim] (:arrive (first (search/scored [{:name "drowned" :mob "drowned" :pos {:x 0.5 :y 64 :z 0.5} :swim swim}]
+                                                         {:x 0.5 :y 64 :z 0.5} [route]))))
+        land (arrive nil)]
+    (is (= land (arrive (constantly 0))) "no water shown: land speed")
+    (is (< land (arrive (constantly 3)) (arrive (constantly 100))) "water shown slows it, over the whole way at most")))

@@ -8,6 +8,7 @@
 ;; drowned comes ashore), so respond decides no :flee in the first 8 s (a walled pond is a trap: the body is not kept alive past that).
 ;; Should-succeed (rising): an AI drowned 6 blocks off in the surface water swims to the body: the walk toward it is a short leg, so the fight swings once it is within reach and kills it;
 ;; a body sunk in the fight is brought up by breathe (registered, as in the default set) and does not drown.
+;; Should-succeed (chasing): an AI drowned beside the surface body (bare, 13 hp: the fist fight loses) swims at 0.69 b/s, so the body outswims it to the shore: respond decides :flee (the search times the chaser at its swim speed over the lake, not its land walk) and the body is not caught dead.
 ;; Control: the drowned just under the surface beside the body is in reach: the wet fight with an iron sword and the swim out
 ;; price close (591 against 584 s live), so it decides fight or flee, either passes; the body does not die.
 {:defaults
@@ -46,6 +47,14 @@
    :act [[:summon "drowned" [8.5 7 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision #{:fight :flee}}} :within-s 10}
             {:no-event {:source :body :kind :died} :for-s 30}]
+   :limit-s 60}
+  {:name "bare-body-afloat-outswims-a-drowned-beside-it"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
+         [:summon "drowned" [8.5 8 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 15]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :flee}} :within-s 10}
+            {:no-event {:source :body :kind :died} :for-s 20}]
+   :after [[:body-far [7.5 8 16.5] 3]]
    :limit-s 60}
   {:name "armed-body-kills-a-drowned-that-swims-to-it"
    :body {:inventory [["iron_sword" 1]]}

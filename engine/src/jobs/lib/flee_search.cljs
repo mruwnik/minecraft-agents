@@ -123,13 +123,6 @@
 
 (defn cell-of [{:keys [x y z]}] [x y z])
 
-(defn swum
-  "Cells (routed's) each with :wet?, whether the body swims there as the body knows it (its feet and the cell under in
-  breath/swimmable, as breath/swimming?): the race there is against a swimmer (cost/reach-s)."
-  [p cells]
-  (let [wet? #(contains? breath/swimmable (u/seen-name p %))]
-    (mapv #(assoc % :wet? (and (wet? %) (wet? (update % :y dec)))) cells)))
-
 (defn seen-split
   "Route r (routed) with :seen-n, how many of its cells from the start the body has seen (feet and head), and :unseen,
   the first cell past them it has not ([x y z], nil when it saw them all): a flee step walks only the seen part
@@ -264,7 +257,7 @@
                                          (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))
                                          landings))
                 spent (or (.-expanded res) 0)
-                r (some->> (routed res slow) (seen-split p) (#(update % :cells (partial swum p))))]
+                r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
@@ -284,11 +277,30 @@
   [{:keys [way]} {:keys [x y z]}]
   (when way (way (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))))
 
+(defn swim-at
+  "The blocks of chaser's straight line to pos ({:swim} from with-ways: a fn of a point) the body knows to be water, 0 with none."
+  [{:keys [swim]} pos]
+  (if swim (swim pos) 0))
+
 (defn arrive-at
   "Seconds the first of chasers ({:name :pos :way}) takes to reach pos (cost/arrival-s over its way, way-at), ##Inf
   with none."
   [chasers pos]
-  (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos (way-at % pos)) chasers)))
+  (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos (way-at % pos) (swim-at % pos)) chasers)))
+
+(defn swim-fn
+  "A fn of a point to the blocks of the straight line from `from` to it (sampled each half block) that the body knows to be
+  water (feet and the cell under in breath/swimmable, as breath/swimming?): a chaser is timed at its swim speed only
+  over water that is shown, else at its land speed."
+  [c from]
+  (let [p (:primitives c)
+        wet? #(let [cell (mapv js/Math.floor [(:x %) (:y %) (:z %)])
+                    at (fn [dy] (contains? breath/swimmable (u/seen-name p {:x (cell 0) :y (+ dy (cell 1)) :z (cell 2)})))]
+                (and (at 0) (at -1)))]
+    (fn [to]
+      (let [n (max 1 (js/Math.ceil (* 2 (u/dist from to))))
+            at (fn [i] (merge-with #(+ %1 (* (/ i n) (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z])))]
+        (* 0.5 (count (filter #(wet? (at %)) (range (inc n)))))))))
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
@@ -296,7 +308,8 @@
   straight line stands)."
   [c chasers]
   (mapv (fn [{:keys [mob pos] :as ch}]
-          (cond-> ch (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
+          (cond-> (assoc ch :swim (swim-fn c pos))
+            (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
             (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
         chasers))
 
@@ -311,8 +324,8 @@
   [chasers cells]
   (reduce max 0 (map (fn [ch]
                        (let [way #(way-at ch %)
-                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %))) cells)]
-                         (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way})))
+                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %))) cells)]
+                         (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %)})))
                      (remove :calm? chasers))))
 
 (defn trap-s
@@ -362,7 +375,7 @@
   ([chasers from priced pool]
    (let [here (arrive-at chasers from)
          raced (mapv (fn [{:keys [end cells] :as e}]
-                       (let [arrive (arrive-at chasers (assoc (cost/centred end) :wet? (:wet? (last cells))))
+                       (let [arrive (arrive-at chasers (cost/centred end))
                              c-s (caught-s chasers cells)]
                          (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :caught? (pos? c-s))))
                      priced)]
