@@ -381,7 +381,7 @@
   [c]
   (check-cache/cached c ::threatened
                       #(if (hostile-loss/hostile-near? (:primitives c) (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))
-                         (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first (an exclusive run pauses the hostile reflex)"))
+                         (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first"))
                          (heard-price c))))
 
 (defn unarmed-threatened
