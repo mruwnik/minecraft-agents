@@ -607,23 +607,21 @@
   (if (some #(false? (:burns %)) mobs) 1 (hide-stays)))
 
 (defn exits
-  "The answers besides the fight or flight that end a stay on a cover: waiting dawn-s seconds for the sun to burn mobs
-  that all burn by day (:burns true), and a log-out of log-out-s seconds; each only when given."
-  [mobs dawn-s log-out-s]
-  (cond-> []
-    (and dawn-s (seq mobs) (every? #(true? (:burns %)) mobs)) (conj {:damage 0 :hit 0 :seconds dawn-s})
-    log-out-s (conj {:damage 0 :hit 0 :seconds log-out-s})))
+  "The answer besides the fight or flight owed that ends a stay on a cover: waiting dawn-s seconds for the sun to burn
+  mobs that all burn by day (:burns true), when given."
+  [mobs dawn-s]
+  (if (and dawn-s (seq mobs) (every? #(true? (:burns %)) mobs)) [{:damage 0 :hit 0 :seconds dawn-s}] []))
 
 (defn cover-answer
-  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails :dawn-s :log-out-s}
+  "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails :dawn-s}
   (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
   it cannot be closed, default 0): the blows of build-answer over open-s (the exits besides :then: exits); then, by the chance the mobs are still about
   when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
   blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). nil with a
   creeper (its blast takes the walls)."
-  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s log-out-s]}]
+  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s]}]
   (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [then (concat then (exits mobs dawn-s log-out-s))
+    (let [then (concat then (exits mobs dawn-s))
           a (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
           fails (if (seq failed) (or fails 0) 0)]
       (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))

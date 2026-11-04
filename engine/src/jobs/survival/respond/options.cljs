@@ -13,7 +13,6 @@
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter.clock :as clock]
-            [jobs.survival.log-out :as log-out]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.memory-age :as memory-age]
@@ -242,10 +241,9 @@
     (select-keys (:v kept) ways)))
 
 (defn exits-of
-  "{:dawn-s :log-out-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left, and a
-  log-out's stint (nil when unsupported)."
+  "{:dawn-s} every cover's spec carries (cost/cover-answer's exits): the mean seconds of night left."
   [c]
-  {:dawn-s (second (get-in (clock/night-left-quote c) [:uses :job-time])) :log-out-s (log-out/stint-s c)})
+  {:dawn-s (second (get-in (clock/night-left-quote c) [:uses :job-time]))})
 
 (defn cornered-covers
   "{option cover} of the cornered options not yet tried that shut the body in or lift it: :plug the walls, :plug-dig

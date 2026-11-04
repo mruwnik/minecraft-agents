@@ -9,6 +9,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shot :as shot]
             [jobs.lib.util :as u]))
 
@@ -27,14 +28,15 @@
 (defn mean-call-s [] (let [s (call-s)] (/ (reduce + s) (count s))))
 
 (defn mob-near
-  "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}; a
+  "Hostile e as the answers take a mob: {:name :held :distance :burns (a melee mob of burns-in-sun: whether the sun burns it where it stands, nil when unknown) :speed (its chase speed) :follow (its follow range)}; a
   seen mob's distance from a body afloat at the surface is from the surface cell's floor (breath/start-y), not the bob."
   [p e]
   {:name (.-name e) :held (.-held e)
    :distance (danger-q/mob-distance p e (when (and (breath/swimming? p) (not (breath/head-under? p)) (danger-q/seen-only? e))
                                         (assoc (u/pos-of (.-pos (.self p))) :y (breath/start-y p))))
-   :burns (boolean (and (contains? threat/burns-in-sun (.-name e)) (death-spot/bare-headed? e)
-                        (death-spot/burns-by-day? p (.-name e) (danger-q/mob-pos p e))))
+   :burns (let [at (update-vals (danger-q/mob-pos p e) js/Math.floor)]
+            (when (and (contains? threat/burns-in-sun (.-name e)) (not (threat/ranged? {:name (.-name e)})) (sh-sense/sky-state p) (sh-sense/sky-light-at p at))
+              (boolean (and (death-spot/bare-headed? e) (death-spot/burns-by-day? p (.-name e) at)))))
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 
 (defn body-at

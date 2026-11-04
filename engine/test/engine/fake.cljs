@@ -156,6 +156,7 @@
     (merge {:health 20}
            (when (= "player" (:kind e)) {:sleeping false :username (:name e)})
            (when (= "creeper" (:name e)) {:creeper true})
+           (when (= "hostile" (:kind e)) {:equipment (vec (repeat 6 nil))})
            e)))
 
 (defn entity-js
