@@ -85,13 +85,13 @@
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 25}]
    :after [[:block [12 0 8] "oak_door[open=false]"]]
    :limit-s 40}
-  ;; ef5a94eb: an iron door cannot be shut by hand: then the body digs in on its spot, never ends roofed
+  ;; ef5a94eb: an iron door cannot be shut by hand: then the body steps off its corner and walls in (18 blocks in the open room), never ends roofed
   {:name "door-that-will-not-shut-digs-in"
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [12 0 8] "iron_door[facing=north,half=lower,hinge=left,open=true]"]
             [:set [12 1 8] "iron_door[facing=north,half=upper,hinge=left,open=true]"]]
-   :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
+   :body {:at [13.5 0 13.5] :inventory [["cobblestone" 24]]}
    :act [[:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 150}]
    :limit-s 160}

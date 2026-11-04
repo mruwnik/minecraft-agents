@@ -113,6 +113,17 @@
           (is (some #{[0 64 0]} (cells-of p "place")) "the cell between the body and the door is walled")
           (is (not-any? #{[-1 64 0] [-1 65 0]} (cells-of p "place")) "nothing is placed into the door cells"))))))
 
+(deftest walls-diagonal-to-an-open-iron-door-step-away-from-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (merge (tu/box -1 62 -1 3 67 3 "stone") (tu/box 0 64 0 2 65 2 "air")
+                          {"-1,64,1" "iron_door" "-1,65,1" "iron_door"})
+              states {"-1,64,1" {:open true :half "lower"} "-1,65,1" {:open true :half "upper"}}
+              {:keys [out p]} (await (plug! {:blocks room :states states :inventory cobble :self {:pos {:x 0.5 :y 64 :z 0.5}}} {:ways #{:walls}}))]
+          (is (= [:done :walls] [(:kind out) (:way (:data out))]) "enclosed, not stuck on the door cell a mob could stand in")
+          (is (not-any? #{[-1 64 1] [-1 65 1]} (cells-of p "place")) "nothing is placed into the door cells"))))))
+
 (deftest a-pit-digs-down-and-plugs-the-hole
   (async done
     (tu/run-async done
