@@ -34,9 +34,15 @@ export function createWalk (env) {
   // already without a tick having sent it yet.
   const lookNow = async aim => {
     await aim()
+    const stepMs = Math.max(1, 2 * physicsStepMs(env.bot) * timeScale)
+    // A starved event loop can delay the tick past the short fallback, and the click would then go out with the old
+    // rotation; while physics is on, keep waiting for the tick up to the server-wait bound.
+    const limit = Date.now() + (env.bot.physicsEnabled ? setting('prim/bucket-wait-s') * 1000 * timeScale : 0)
     await new Promise(resolve => {
+      let timer
       const done = () => { clearTimeout(timer); env.bot.off('physicsTick', done); resolve() }
-      const timer = setTimeout(done, Math.max(1, 2 * physicsStepMs(env.bot) * timeScale))
+      const arm = () => { timer = setTimeout(() => Date.now() < limit ? arm() : done(), stepMs) }
+      arm()
       env.bot.on('physicsTick', done)
     })
   }

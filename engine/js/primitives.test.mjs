@@ -2356,6 +2356,18 @@ test('look to a rotation already applied client-side but not yet sent still wait
   assert.deepEqual(events, ['resolved'])
 })
 
+test('look with physics on keeps waiting past the short fallback for a late physics tick', async () => {
+  const { bot, p } = slowRig(world)
+  bot.physicsEnabled = true
+  const events = []
+  const call = p.look('t1', { yaw: 1, pitch: 0 }).then(() => events.push('resolved'))
+  await sleep(300)
+  assert.deepEqual(events, [])
+  bot.emit('physicsTick')
+  await call
+  assert.deepEqual(events, ['resolved'])
+})
+
 test('look resolves after the fallback when no physics tick comes', async () => {
   const { p } = rig(world)
   assert.deepEqual(await p.look('t1', { pos: at(1, 64, 1) }), { status: 'ok' })
