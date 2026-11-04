@@ -647,7 +647,7 @@
       (let [scaled (map (fn [f] (let [k (min 1 (/ door-s (max 1e-9 (:seconds f))))] (-> f (update :damage * k) (update :shape (fn [w] (some-> w (* k))))))) per)
             run {:damage (reduce + (map :damage scaled)) :hit (reduce max 0 (map :hit scaled))}
             shape (when-let [ss (seq (keep :shape scaled))] (apply max ss))]
-        (cover-answer {:equipment equipment :mobs mobs :then (when later [later])}
+        (cover-answer {:equipment equipment :mobs (map #(dissoc % :burns) mobs) :then (when later [later])}
                       {:open-s door-s :seconds (+ door-s (* hide-s (- 1 (home-work-share))))
                        :run (cond-> run shape (assoc :shape shape))})))))
 

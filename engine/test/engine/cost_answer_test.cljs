@@ -622,3 +622,7 @@
     (is (< (price true {:dawn-s 100}) (price true {:dawn-s 900})) "a burner is waited out: dusk costs more than just before dawn")
     (is (= (price false {:dawn-s 100}) (price false {})) "the sun is no exit from a mob that does not burn")
     (is (< (price true {:dawn-s 100}) (price false {:dawn-s 100})) "so a burner's cover is cheaper than a helmeted mob's")))
+
+(deftest a-hide-in-a-refuge-keeps-the-measured-stay-chance-whatever-the-mob-burns
+  (let [price #(cost/answer-price (body 4) (cost/refuge-answer {:mobs [(assoc (mob "zombie" 7) :burns %)] :later (cost/fight-answer (assoc (fight nil (mob "zombie" 7)) :health 4))} {:door-s 4 :hide-s 30}) here)]
+    (is (= (price nil) (price false)) "the refuge hides counted (hide-stays) are of refuges, a house is lived in; only a cover (pillar, walls, pit) is a delay a non-burner outlasts")))
