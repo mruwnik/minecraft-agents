@@ -111,10 +111,14 @@ test('CLI emits compact EDN and handles unknown time without creating a body', t
   assert.ok(found.stdout.length < 300)
 })
 
-test('an online body whose pose is 30 s old is asked to dump, so the clock is not read stale', async t => {
+test('an online body whose pose is over 5 s old is asked to dump; a 2 s old pose is read as it is', async t => {
   const {pose, args, worldDir} = fixture(t)
-  pose('Observer', {t: Date.now() - 30000, timeOfDay: 18000})
   const watching = path.join(worldDir, 'agents', 'Observer', 'view', 'watching')
+  pose('Observer', {t: Date.now() - 2000, timeOfDay: 18000})
+  const fresh = await withFakeClock(t, execute(options([...args, 'clock', '--body', 'Observer'])), [])
+  assert.equal(fs.existsSync(watching), false)
+  assert.equal(fresh['time-of-day'], 18000)
+  pose('Observer', {t: Date.now() - 10000, timeOfDay: 18000})
   const result = await withFakeClock(t, execute(options([...args, 'clock', '--body', 'Observer'])), [{at: 50, run: () => pose('Observer', {timeOfDay: 19000})}])
   assert.equal(fs.existsSync(watching), true)
   assert.equal(result['time-of-day'], 19000)

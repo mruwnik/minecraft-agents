@@ -10,9 +10,11 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: the asking body's reading (a trial body never reads a Probe* world-test body); :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is (both commands wake an unwatched online body whose pose is over 30 s old), :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: the asking body's reading (a trial body never reads a Probe* world-test body); :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is (both commands wake an unwatched online body whose pose is over 5 s old), :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
-(def fresh-ms 30000)
+(def fresh-ms
+  "A reading older than this is noted as old, so a pose older than this is refreshed first: no answer goes out that its own note calls old."
+  5000)
 
 (defn options [argv]
   (let [{:keys [positionals values]} (map-tool/parse-options argv
@@ -37,7 +39,7 @@
   "Say plainly how old a reading is when it is not fresh, and why a bed may not skip the night."
   [{:keys [age-ms day? by] :as reading}]
   (let [notes (cond-> []
-                (> age-ms 5000) (conj (str "Reading is " (js/Math.round (/ age-ms 1000)) " s old (last seen by " by "); the real time of day is later."))
+                (> age-ms fresh-ms) (conj (str "Reading is " (js/Math.round (/ age-ms 1000)) " s old (last seen by " by "); the real time of day is later."))
                 (not day?) (conj night-note))]
     (cond-> reading (seq notes) (assoc :note (apply str (interpose " " notes))))))
 
