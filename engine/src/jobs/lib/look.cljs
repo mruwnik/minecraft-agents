@@ -526,11 +526,6 @@
                               (fn [x y z] (let [l (light-at x y z)] (and (<= 0 l) (== 1 (aget table l)))))
                               (light/darken-now raw))))))
 
-(defn frontier-distance
-  "frontier/distance: an unseen cell's distance to the nearest frontier, base-rates/unseen-d-max when none is nearer."
-  [p cell]
-  (some-> (frontier-value p cell) (bit-shift-right 1)))
-
 (defn- frontier-lit?
   "Whether the nearest frontier cell to the cell is lit (v: its frontier-value); the feet's light (feet-lit?) when none
   lies within base-rates/unseen-d-max."
@@ -550,7 +545,7 @@
         ([cell-y d lit? beside-solid?] (base-rates/unseen-solid y (- cell-y y) d lit? q beside-solid?))))))
 
 (defn unseen-solid-at-fn
-  "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-distance (1, the likeliest
+  "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-value's distance (1, the likeliest
   open, without a memory), at its own height as the feet's, in the dark, without a perception. Given beside-solid? (a
   second argument) the cell is asked as beside a seen solid cell or not, else pooled."
   [p]

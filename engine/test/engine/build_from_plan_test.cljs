@@ -14,7 +14,6 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.look :as look]
             [jobs.lib.reserve :as reserve]
             [engine.triggers :as triggers]
@@ -2614,8 +2613,8 @@
                                   (every? (fn [[a b c]] (let [n (sensed #js {:x a :y b :z c})] (and n (not= "air" (.-name n))))) (sides [x y z]))))]
           (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (sensed pos))))
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (let [b (sensed pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
-          ;; sealed in the room the body sees no frontier: each hidden cell gets the measured prior of the far bucket
-          (let [run (fn ^:async r [] (with-redefs [look/frontier-distance (fn [_ _] base-rates/unseen-d-max)] (await (child-outcome eng job {:plan "own"} 600))))
+          ;; sealed in the room the body sees no frontier: the hidden shell cells are left unchecked
+          (let [run (fn ^:async r [] (await (child-outcome eng job {:plan "own"} 600)))
                 result (await (run))]
             (is (every? #(= "dirt" (block p %)) shell) (pr-str (remove #(= "dirt" (block p %)) shell)))
             (is (= [] @targets) "no tunnel through the room to look at its edges")
@@ -2644,8 +2643,8 @@
                                   (every? (fn [[a b c]] (let [n (sensed #js {:x a :y b :z c})] (and n (not= "air" (.-name n))))) (sides [x y z]))))]
           (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (sensed pos))))
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (let [b (sensed pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
-          ;; however likely open (frontier 1), a cell shut in by rock is never tunnelled to
-          (let [result (with-redefs [look/frontier-distance (fn [_ _] 1)] (await (child-outcome eng job {:plan "own"} 600)))]
+          ;; a cell shut in by rock is never tunnelled to
+          (let [result (await (child-outcome eng job {:plan "own"} 600))]
             (is (= [] @targets) "no tunnel to look at a cell shut in by rock")
             (is (= #{post} (set (:unchecked result))) (pr-str (select-keys result [:missing :given-up :unchecked :text])))
             (is (nil? (:status result)) "the build ends done")))))))
