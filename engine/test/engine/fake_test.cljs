@@ -107,7 +107,7 @@
 
 (def not-acting
   #{"world" "setOwner" "isOwner" "isOffline" "isSettling" "self" "worldAge" "serverRules" "entities" "blocks"
-    "digTime" "clearTime" "harvestTools" "blockAt" "pathWorld" "onBodyEvent" "close"})
+    "digTime" "clearTime" "harvestTools" "blockAt" "worldEpoch" "pathWorld" "onBodyEvent" "close"})
 
 (deftest the-primitive-table-has-every-acting-primitive-of-the-fake
   (is (= (set (remove not-acting (js-keys (fake/create {}))))

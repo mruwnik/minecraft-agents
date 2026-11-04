@@ -144,13 +144,31 @@
       (is (= field/max-fields (.-size (.-fields ^js (.get field/memories (:primitives c))))) "20 places walked, max-fields kept")
       (is (identical? home (field/field-of c (zombie -30))) "the place asked all along is still kept"))))
 
-(deftest a-shared-value-past-the-ttl-is-dropped-at-the-next-miss
-  (let [now (atom 0)
-        c {:primitives #js {} :view (fn [] {:now @now :data {}})}]
+(deftest a-shared-value-of-an-older-world-is-dropped-at-the-next-miss
+  (let [epoch (atom 0)
+        p #js {:worldEpoch (fn [] @epoch)}
+        c {:primitives p :view (fn [] {:now 0 :data {}})}]
     (field/shared c [:a] (constantly 1))
-    (reset! now (inc (check-cache/ttl-ms)))
+    (reset! epoch 1)
     (field/shared c [:b] (constantly 2))
-    (is (= ["[:b]"] (vec (es6-iterator-seq (.keys ^js (.get field/bodies (:primitives c)))))) "a value no check can hit is not held")))
+    (is (= ["[:b]"] (vec (es6-iterator-seq (.keys ^js (.get field/bodies p))))) "a value no check can hit is not held")))
+
+(deftest a-body-without-a-world-epoch-keeps-no-shared-value
+  (let [c {:primitives #js {} :view (fn [] {:now 0 :data {}})}
+        n (atom 0)]
+    (field/shared c [:a] #(swap! n inc))
+    (field/shared c [:a] #(swap! n inc))
+    (is (= 2 @n))))
+
+(deftest a-shared-field-is-kept-until-the-fakes-world-changes
+  (let [p (tu/fake-on-floor {:floor [-40 -20 40 20] :self {:pos {:x 12.5 :y 64 :z 0.5}}})
+        c {:primitives p :view (fn [] {:now 0 :data {}})}
+        zombie {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}}
+        before (field/field-of c zombie)]
+    (is (identical? before (field/field-of c zombie)) "the world did not change: the same field, however long after")
+    (swap! (fake/state p) #(-> % (fake/put-block [6 64 0] "stone") (fake/put-block [6 65 0] "stone")))
+    (is (some? ((field/reach-fn before) 6 64 0)))
+    (is (nil? ((field/reach-fn (field/field-of c zombie)) 6 64 0)) "a pillar put on its way: the field is read again")))
 
 (deftest the-time-a-route-spends-in-a-zombies-field-prices-with-how-close-it-comes
   (let [body {:health 20}

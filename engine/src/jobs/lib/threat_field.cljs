@@ -284,20 +284,26 @@
 
 (defonce bodies (js/WeakMap.))
 
+(defn world-epoch
+  "The change counter of the world p reads without a perception (the \"worldEpoch\" fn of the primitives), nil without one."
+  [p]
+  (some-> (aget p "worldEpoch") (.call p)))
+
 (defn shared
-  "The value of (thunk) for key k, kept per body (the primitives of c) for every job of it while younger than the
-  check-cache ttl (never under check-cache/fresh): what the world shows a field does not depend on the job asking."
+  "The value of (thunk) for key k, kept per body (the primitives of c) for every job of it while the world has not changed
+  (world-epoch; a body without one keeps nothing), never under check-cache/fresh: what the world shows a field does not
+  depend on the job asking."
   [c k thunk]
   (let [p (:primitives c)
         kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
-        now (ctx/now c)
+        epoch (world-epoch p)
         hit (.get kept (pr-str k))]
-    (if (and hit (not (::check-cache/fresh c)) (<= 0 (- now (:t hit)) (check-cache/ttl-ms)))
+    (if (and hit (some? epoch) (= epoch (:epoch hit)) (not (::check-cache/fresh c)))
       (:v hit)
       (let [v (thunk)]
-        ;; an entry past the ttl is never hit again; each holds a whole toll vector (MBs of cells)
-        (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (<= 0 (- now (:t e)) (check-cache/ttl-ms)) (.delete kept key)))
-        (.set kept (pr-str k) {:t now :v v})
+        ;; an entry of another epoch is never hit again; each holds a whole toll vector (MBs of cells)
+        (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (= epoch (:epoch e)) (.delete kept key)))
+        (.set kept (pr-str k) {:epoch epoch :v v})
         v))))
 
 ;; ---------------------------------------------------------------- reads kept across checks
@@ -458,7 +464,7 @@
 (defn kept
   "(thunk lookups) for field-key k of the body of c, kept while no cell of memory its reads kept (section-reads) changed,
   under check-cache/fresh too: then it reads the same. lookups {:kind-at :arrow-at}. Without a perception or offline:
-  shared, per check-cache window. grow! (optional): a fn of the value that reads on over the same lookups (true when it
+  shared, per world epoch. grow! (optional): a fn of the value that reads on over the same lookups (true when it
   read more), called on every ask."
   ([c k thunk] (kept c k thunk (constantly false)))
   ([c k thunk grow!]
