@@ -31,7 +31,7 @@
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 100}]
-   :after [[:body-near [10.5 0 8.5] 10.5]]}
+   :after [[:body-near [18.5 0 8.5] 14]]}
   {:name "a-far-bed-down-a-lit-tunnel-is-walked-to-at-dusk"
    :plot {:light :sky :length 100 :width 16 :height 6}
    :blocks [[:fill [0 0 7] [92 3 9] "stone"] [:fill [1 0 8] [91 1 8] "air"]
