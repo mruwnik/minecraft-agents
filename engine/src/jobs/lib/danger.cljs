@@ -319,12 +319,13 @@
 
 (defn nearest-danger
   "The nearest of known-hostiles (same opts) that is a real danger, or nil. danger-opts as danger?, plus :skip, a set of
-  mob ids to leave out. Stops at the first danger."
+  mob ids to leave out and :kind-at, a lookup for the mob's way in place of reach/mob-lookup (a hidden body reads the rock it
+  has not seen as rock: reach/seen-lookup). Stops at the first danger."
   [p radius opts {:keys [skip] :as danger-opts}]
   (let [skip (set skip)
-        kind-at (reach/mob-lookup p)
+        kind-at (or (:kind-at danger-opts) (reach/mob-lookup p))
         pr (delay (query-proofs p))
-        danger-opts (assoc (dissoc danger-opts :skip) :arrow-at (reach/arrow-lookup p))]
+        danger-opts (assoc (dissoc danger-opts :skip :kind-at) :arrow-at (reach/arrow-lookup p))]
     (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
           (known-hostiles p radius opts))))
 

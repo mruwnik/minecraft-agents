@@ -24,7 +24,7 @@
   Done {:hold :quiet} once the ::quiet-s setting (30 s) has passed since the last such danger; {:hold :spent}
   once ::hide-s (60 s) have passed in the refuge with no real danger on the body as it stands (danger/danger-near?, the
   hostile-near trigger's test), though a hostile stays; a melee hostile within ::foot-reach waiting at the foot holds it to
-  ::hide-max-s. Sealed in a plug or pit with such a hostile at the foot past ::hide-s it (not a climber, which follows up the stair) first digs a stair up and away from
+  ::hide-max-s. Sealed in a plug, pit or dug pocket with such a hostile at the foot past ::hide-s it (not a climber, which follows up the stair) first digs a stair up and away from
   it (jobs.access.stair, ::dig-out-steps steps; the next heading when one stops), then ends done {:hold :spent :dug-out true}.
   Nothing-possible :hurt {:ids [mobs within ::reach-radius]} when the body loses health in the refuge (a mob reaching it
   round a corner of the seal), :breached {:id :name} when a creeper (its blast breaks any refuge; a plug or pit is kept when leaving
@@ -92,11 +92,16 @@
                    known))))
 
 (defn waiting-melee
-  "The known melee hostiles within foot-reach of the body."
+  "The known melee hostiles within foot-reach of the body or of a cell of the refuge's seal."
   [c]
   (let [p (:primitives c)
-        r (foot-reach)]
-    (remove combat/ranged? (flight/near-known p (dead c) r r))))
+        r (foot-reach)
+        seal (map (fn [[x y z]] {:x (+ x 0.5) :y y :z (+ z 0.5)}) (:cells (:args c)))
+        near-seal? (fn [e] (let [m (danger-q/mob-pos p e)]
+                             (some #(<= (Math/hypot (- (:x m) (:x %)) (- (:z m) (:z %))) r) seal)))]
+    (->> (flight/near-known p (dead c) threats/max-follow-range threats/max-follow-range)
+         (remove combat/ranged?)
+         (filter #(or (<= (danger-q/mob-distance p %) r) (near-seal? %))))))
 
 (defn ^:async dig-out!
   "Dig a stair up (jobs.access.stair, ::dig-out-steps) on the heading away from the mob waiting at the foot, the next heading
@@ -164,11 +169,11 @@
         _ (ctx/update-mem! c assoc :quiet-from quiet-from :hidden-since hidden-since :hold-at now)
         radius (danger-q/hostile-radius)
         ranged-radius (danger-q/ranged-radius)
-        danger-on-body? (fn [] (danger-q/danger-near? p radius ranged-radius))
+        danger-on-body? (fn [] (danger-q/danger-near? p radius ranged-radius {:kind-at (reach/seen-lookup p reach/kind-of :solid)}))
         held-ms (- now hidden-since)
         breaker (breaker c)
         dig-out? (or (:dig-out (ctx/mem c))
-                     (and (#{:plug :pit} (:kind (:args c)))
+                     (and (#{:plug :pit :plug-dig} (:kind (:args c)))
                           (>= held-ms (* 1000 (hide-s)))
                           (let [waiting (waiting-melee c)] (and (seq waiting) (not-any? combat/climber? waiting)))
                           (not (danger-on-body?))))]
