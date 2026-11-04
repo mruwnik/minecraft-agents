@@ -70,6 +70,11 @@
     (and (boolean (seq (dig-cells/open-cells p feet)))
          (or (= 1 (count cells)) (and (every? (fn [[x y z]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x x :y y :z z})) cells) (rim-open? p cells))))))
 
+(defn safe-from-night?
+  "sh-inside/safe-from-night? and not pocket-open?: the pit's fill cell is still open to a mob on the rim, or a spider."
+  [p]
+  (and (sh-inside/safe-from-night? p) (not (pocket-open? p))))
+
 (defn enclosed?
   "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?) and, in a pit, no open fill cell (pocket-open?); else a roof within ::roof-height over no open cell round the feet, or, with the call's
   :room way, a roof over a room that is not breached, with no open door."
@@ -77,7 +82,7 @@
   (let [p (:primitives c)
         roof (sh-sense/roof-height)]
     (boolean (if (= :night (:for (:args c)))
-               (and (sh-inside/safe-from-night? p) (not (pocket-open? p)))
+               (safe-from-night? p)
                (and (not (sh-sense/head-in-block? p))
                     (or (dig-cells/sealed-in? p :walls roof)
                         (and (ctx/way? c :room) (sh-sense/roofed? p roof) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)) (nil? (room-lib/gap c)))))))))

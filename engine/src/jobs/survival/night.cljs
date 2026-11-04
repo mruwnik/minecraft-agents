@@ -37,6 +37,7 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.room-plug :as room-plug]
             [jobs.survival.dig-pit-site :as pit-site]
+            [jobs.survival.plug-way :as plug-way]
             [jobs.survival.shut-in-night :as sin]
             [jobs.survival.enter-room :as enter-room]
             [jobs.survival.night.ending :as ending]
@@ -104,7 +105,7 @@
   [c]
   (let [p (:primitives c)]
     (when-not (sh/night-holds? p (ctx/view c) (trigger-args c) (bed-down/bed-permit c))
-      {:shelter (sh-inside/night-sheltered p (:data (ctx/latest c :shelter)))})))
+      {:shelter (when-not (plug-way/pocket-open? p) (sh-inside/night-sheltered p (:data (ctx/latest c :shelter))))})))
 
 (defn can-start?
   ":later :not-night (with :spawn when the respawn bed is known or lost) while the trigger's condition fails and the
@@ -672,7 +673,7 @@
           (= :log-out pick) (await (log-out-step c))
           (not (sh-sense/dark-outside? p)) (ctx/end c :done nil (assoc (ending/done-data c sheltered) :text "no bed to take and the sky is not dark yet"))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
-          (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
+          (and (plug-way/safe-from-night? p) (empty? (sh/open-room-doors p)))
           (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
           (and (ctx/way? c :shelter) (await (light/wanted? c))) (await (light/light! c))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))

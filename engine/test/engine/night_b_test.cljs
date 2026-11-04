@@ -24,6 +24,7 @@
             [jobs.lib.cost.health :as health]
             [jobs.lib.price :as price]
             [jobs.lib.rooms :as rooms]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
@@ -456,6 +457,19 @@
           (await (core/tick! eng))
           (set! ctx/call call)
           (is (= [] (st/entries eng :night-site)) "no entry outlives the night that wrote it"))))))
+
+(deftest a-pit-seen-safe-with-its-fill-cell-still-open-does-not-end-the-night-roofed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor})]
+          (doseq [cell [[0 67 0] [1 64 0] [-1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 65 1] [0 65 -1] [1 66 0] [-1 66 0] [0 66 1] [0 66 -1]]]
+            (swap! (.-state (.-world p)) assoc-in [:blocks cell] "stone"))
+          (is (true? (sh-inside/safe-from-night? p)) "the pit reads safe")
+          (is (true? (way/pocket-open? p)) "though a mob on the rim reaches the open fill cell")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (empty? (st/emitted seen :completed)) "the night is not done while the fill cell is open"))))))
 
 (deftest a-dig-in-that-yields-is-not-a-failed-site
   (async done
