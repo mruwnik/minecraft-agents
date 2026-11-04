@@ -80,13 +80,15 @@
 (defn next-leg
   "{:side :to}: the next walk to look of the walk-look run that began at `from` ({:x :y :z}), or nil: look-edge/far-side over the
   region round `from`, minus the sides a walk-look looked at in vain and `tried` (the cells [x y z] this run's legs went to),
-  from where the body stands, one leg bought from the call's worth."
-  ([c from] (next-leg c from #{}))
-  ([c from tried]
+  from where the body stands, one leg bought from the call's worth; sides within sight of a cell in `stands` (walked to) are left out."
+  ([c from] (next-leg c from #{} #{}))
+  ([c from tried] (next-leg c from tried #{}))
+  ([c from tried stands]
   (let [p (:primitives c)
         walked (into (set tried) (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))]
     (look-edge/far-side p (sh-sense/feet p) from walked
-                        (fn [to] (some->> (walk-risk/look-way c to 1) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % (ctx/worth c)))))))))
+                        (fn [to] (some->> (walk-risk/look-way c to 1) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % (ctx/worth c)))))
+                        stands))))
 
 (defn walk-look
   "The exposure s with :look, the one leg of the jobs.movement.walk-look child to the cell look-edge/far-side shows the far
@@ -95,7 +97,7 @@
   walk shows nothing); priced runs it as the check's :look-first child, and the check after it offers the next leg."
   [s c at]
   (if-let [{:keys [side to]} (next-leg c at)]
-    (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {:side side :to to}]))
+    (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {:side side :to to :at at}]))
     s))
 
 (defn own-way

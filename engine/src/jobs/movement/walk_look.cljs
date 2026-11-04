@@ -7,12 +7,13 @@
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def doc
   "Walk to look, as a player judging a dark tunnel does, one leg: the unseen `:side` cell is looked at, walked to at `:to`
-  (go-to, on foot) and looked at again (look-edge/look!), then, while an unseen side of the region is left that another walk from there is bought for, the next one; then the body walks back to where the call began. A side still
+  (go-to, on foot) and looked at again (look-edge/look!), then, while the last side showed, the hall at :at is still judged by an unseen edge and an unseen side is left that another walk is bought for, the next one; then the body walks back to where the call began. A side still
   unseen after the walk is written to body memory (:walk-looked {:cells}, walked-policy): from close by it stayed unseen, so no later
   walk-look is offered for it (jobs.lib.ready/walk-look). Readiness runs it as a check's :look-first child, the leg priced
   (walk-risk/look-way there and back); the check after it offers the next leg the walk opened. Needs nothing; ends :done
@@ -21,7 +22,8 @@
 
 (a/defargs args
   {:side {:doc "the unseen side cell to look at" :spec ::a/pos :default nil}
-   :to {:doc "the cell to walk to and look from" :spec ::a/pos :default nil}})
+   :to {:doc "the cell to walk to and look from" :spec ::a/pos :default nil}
+   :at {:doc "the cell whose hall the caller judges: legs go on only while an unseen edge still decides it (nil: not asked)" :spec ::a/pos :default nil}})
 
 (def target [:side])
 
@@ -60,6 +62,13 @@
                                          :text (if unseen? "walked to look: the side stayed unseen" "walked to look: the side shows")}))
   (ctx/end c kind cause))
 
+(defn judged?
+  "Whether the region round the caller's :at is still judged by an unseen edge (sh-inside/dark-hall), the question its check
+  asks; with no :at, always."
+  [c]
+  (let [at (:at (:args c))]
+    (or (nil? at) (boolean (#{:roofed :sky} (sh-inside/dark-hall (:primitives c) at nil))))))
+
 (defn ^:async step [c]
   (let [{:keys [side to]} (or (:leg (ctx/mem c)) (:args c))
         from (:from (ctx/mem c))
@@ -68,7 +77,9 @@
       (await (look-edge/look! c [cell] to))
       (let [_ (finish-leg! c side)
             _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
-            next-leg (ready/next-leg c from (:tried (ctx/mem c)))]
+            _ (when (:edge-walked (ctx/mem c)) (ctx/update-mem! c update :stands (fnil conj #{}) (if (vector? to) (let [[x y z] to] {:x x :y y :z z}) (select-keys to [:x :y :z]))))
+            next-leg (when (and (judged? c) (not (look/unseen? (:primitives c) [side]))) (ready/next-leg c from (:tried (ctx/mem c))
+                                    (:stands (ctx/mem c))))]
         (if next-leg
           (do (ctx/update-mem! c assoc :leg (update next-leg :side (fn [[x y z]] {:x x :y y :z z})) :edge-walked false) :again)
           (let [w (if (u/within? (sh-sense/feet (:primitives c)) from 0)

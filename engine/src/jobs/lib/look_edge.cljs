@@ -105,15 +105,17 @@
   "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the closed region round `region` whose walkable-near
   cell `to` (not beside `from`: a look from there shows as much) shows the most unseen sides within look/near-of (the
   farthest from `from` among equals), among those `to` that (affordable? to) accepts (default all: a nearer walk is
-  the one bought when the best is dear), nil when none: a walk to `to` and a look there shows `side` or the region past
+  the one bought when the best is dear), and not within look/near-of of a `stands` cell ({:x :y :z}: a look from there showed what it could), nil when none: a walk to `to` and a look there shows `side` or the region past
   it, however far `to` lies from `side` (a tunnel seen without its floor has no stand cell nearer). The end of a dark
   tunnel a look from here cannot make out; a big dark yard is crossed in few legs, each showing the walls it nears."
   ([p from region looked] (far-side p from region looked (constantly true)))
-  ([p from region looked affordable?]
+  ([p from region looked affordable?] (far-side p from region looked affordable? #{}))
+  ([p from region looked affordable? stands]
    (let [near-fn (delay (walkable-near-fn p region))
          near (or (look/near-of p) 4)
          edge (:edge (sh-inside/spawn-region p region (sh-sense/sky-subtract-now p)))
-         sides (remove looked (distinct (concat (some-> edge vector) (reach-room/unseen-sides p region))))
+         seen-from-stand? (fn [[sx sy sz]] (some #(<= (u/dist % {:x sx :y sy :z sz}) near) stands))
+         sides (remove #(or (looked %) (seen-from-stand? %)) (distinct (concat (some-> edge vector) (reach-room/unseen-sides p region))))
          shown (fn [{:keys [x y z]}] (count (filter (fn [[sx sy sz]] (<= (u/dist {:x x :y y :z z} {:x sx :y sy :z sz}) near)) sides)))]
      (some->> (seq sides)
               (keep (fn [side] (when-let [to (@near-fn side)] (when-not (u/within? from to 1) {:side side :to to}))))
