@@ -47,7 +47,7 @@
    :limit-s 100}
   ;; 724f7976: the same hole and nothing to close it with: the night does not end roofed
   {:name "hut-with-a-hole-and-no-blocks-is-not-roofed"
-   :blocks [[:fill [16 0 12] [16 1 12] "air"] [:set [9 1 9] "torch"]]
+   :blocks [[:fill [16 0 12] [16 1 12] "air"]]
    :memory [{:kind :bed-open :data {:pos #xyz [12 0 12]} :policy {:cap 5 :ttl 600000}}]
    :act [[:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shelter.room_open} :within-s 60 :of-job true}

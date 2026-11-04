@@ -1740,6 +1740,23 @@
     (perception/pass! per)
     (is (<= (:x (look-edge/walkable-near p [11 64 0])) 7) "the nearest ground is inside the walls, not the dark ground past the hole")))
 
+(deftest a-hut-with-a-hole-looks-at-no-dark-yard-cells-past-the-hole
+  (let [hut? (fn [x y z] (and (<= 0 x 8) (<= -2 z 2) (<= 64 y 66)))
+        inside? (fn [x y z] (and (< 0 x 8) (< -2 z 2) (< y 66)))
+        hole? (fn [x y z] (and (= 8 x) (= 0 z) (#{64 65} y)))
+        blocks (into {} (concat (for [x (range -2 30) z (range -14 15)] [(str x ",63," z) "stone"])
+                                (for [x (range 0 9) y (range 64 67) z (range -2 3)
+                                      :when (and (hut? x y z) (not (inside? x y z)) (not (hole? x y z)))]
+                                  [(str x "," y "," z) "stone"])))
+        raw-p (tu/fake {:time night :yaw -90 :self {:pos [4 64 0]} :blocks blocks})
+        _ (swap! (fake/state raw-p) assoc :light-default [0 0]
+                 :light (into (into {} (for [x (range 9 20) y (range 64 72) z (range -6 7)] [[x y z] [15 0]]))
+                             (for [x (range 1 8) y [64 65] z (range -1 2)] [[x y z] [0 14]])))
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
+        p (perception/wrap raw-p per)]
+    (perception/pass! per)
+    (is (empty? (filter (fn [[x _ _]] (> x 9)) (look-edge/pending {:primitives p} #{}))) "the dark yard past the hole is not looked at: the hut is open")))
+
 (deftest walkable-near-stays-inside-the-closed-region-and-does-not-open-its-door
   (let [{:keys [blocks light]} (lit-tunnel-box false)
         raw-p (tu/fake {:time night :yaw -90 :blocks (assoc blocks "10,64,0" "oak_door" "10,65,0" "oak_door")})

@@ -70,7 +70,7 @@
                             :cells
                             (map vec))
              h (sh-sense/room-roof-height)
-             sky-open? (some (fn [[x y z]] (sh-sense/open-air-above? p {:x x :y y :z z} (+ y h))) flood)
+             sky-open? (some (fn [[x y z]] (let [cell {:x x :y y :z z}] (or (sh-sense/open-air-above? p cell (+ y h)) (sh-sense/sky-reaches-from-above? p cell)))) flood)
              under-roof? (fn [[x y z]] (let [cell {:x x :y y :z z}] (or (sh-sense/roofed? p h cell) (sh-sense/leaf-roofed? p h cell))))]
          (->> flood
               (filter (fn [[x y z]] (nil? (u/seen-block p {:x x :y y :z z}))))
