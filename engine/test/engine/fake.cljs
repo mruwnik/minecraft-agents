@@ -283,7 +283,12 @@
 (defn dist [[ax ay az] [bx by bz]] (js/Math.hypot (- ax bx) (- ay by) (- az bz)))
 (defn block-name [w pos] (get-in w [:blocks pos] "air"))
 (defn body-pos [w] (get-in w [:self :pos]))
-(defn near? [w pos] (<= (dist (body-pos w) pos) reach))
+(defn near?
+  "Eye to block centre within reach, the game's measure."
+  [w [x y z]]
+  (let [[bx by bz] (body-pos w)]
+    (<= (js/Math.hypot (- bx (+ x 0.5)) (- (+ by eye) (+ y 0.5)) (- bz (+ z 0.5))) reach)))
+(defn entity-near? [w pos] (<= (dist (body-pos w) pos) reach))
 (defn find-entity [w id] (first (filter #(= id (:id %)) (:entities w))))
 (defn replaceable? [item] (.isReplaceable ^js @blocks-mod item))
 
@@ -656,7 +661,7 @@
   (let [e (find-entity w id)]
     (cond
       (nil? e) [w {:status "gone"}]
-      (not (near? w (:pos e))) [w {:status "out-of-reach"}]
+      (not (entity-near? w (:pos e))) [w {:status "out-of-reach"}]
       (:invulnerable e) [w {:status "hit" :health (:health e) :hurt false}]
       (pos? (- (:health e) 5))
       [(animals/update-entity w id #(update % :health - 5)) {:status "hit" :health (- (:health e) 5) :hurt true}]

@@ -1135,3 +1135,8 @@
       {:x 0 :y 63})
     (is (true? (.-unknown (.seenBlockAt p (clj->js {:x [0 0] :y nil :z nil})))))
     (is (= "stone" (.-name (.sensedAt p (clj->js {:x 0 :y 63 :z 0})))))))
+
+(deftest near-measures-eye-to-block-centre
+  (let [w {:self {:pos [6 64 -1]}}]
+    (is (fake/near? w [2 66 0]) "eye-dist 3.9: in reach, though feet-to-corner is 4.58")
+    (is (not (fake/near? w [1 64 -1])) "eye-dist 5.6")))
