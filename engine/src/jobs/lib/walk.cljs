@@ -2,7 +2,9 @@
   "The walk driver: plan from the body's cell to a goal within the executor's abilities, follow the plan with steer, plan
   again when the body ends off it. Jobs that walk (the stair, tunnel and cleanup jobs) call this
   namespace; jobs.lib.walk.drive holds the loop (walk-to!, follow!); this one holds its pieces (plan-walk!, walk!); more live in jobs.lib.walk.plan (planning), .search (the budgeted search a round), .watch (the look-ahead) and .world (the pathWorld and its decorations) and .light (a torch for an unseen floor)."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
+            [engine.constants :as constants]
             [engine.settings :as settings]
             [jobs.lib.clock :as clock]
             [engine.ctx :as ctx]
@@ -439,17 +441,38 @@
                       (and (click/kind-of (.-name b))
                            (not (contains? #{true "true"} (some-> (.-properties b) (aget "open")))))))))
 
+(def ^:private panel-spans
+  "Where the closed panel of a door or gate lies across its cell, by block kind and facing: [axis from to] in 1/16 block."
+  {:gate {"east" [:x 6 10] "west" [:x 6 10] "north" [:z 6 10] "south" [:z 6 10]}
+   :door {"north" [:z 13 16] "south" [:z 0 3] "east" [:x 0 3] "west" [:x 13 16]}})
+
+(defn- panel-in-way?
+  "Whether the body, going from the crossing point (cx cz) to its stand point (px pz) and on to the next step's crossing,
+  touches the panel of the shut door or gate b in cell x,z. Any other shut block (a trapdoor) fills its cell: in the way."
+  [^js b {:keys [x z cx cz px pz]} next-step]
+  (let [facing (some-> (.-properties b) (aget "facing"))
+        [axis from to] (cond (str/ends-with? (.-name b) "_fence_gate") (get-in panel-spans [:gate facing])
+                             (str/ends-with? (.-name b) "_door") (get-in panel-spans [:door facing]))]
+    (or (nil? axis)
+        (let [[cell & along] (if (= axis :x) [x cx px (:cx next-step)] [z cz pz (:cz next-step)])
+              along (remove nil? along)
+              w constants/body-half-width]
+          (and (< (- (apply min along) w) (+ cell (/ to 16))) (> (+ (apply max along) w) (+ cell (/ from 16))))))))
+
 (defn solid-ahead
   "The first feet or head cell of the next look-ahead-steps steps that the body now knows blocks the way (blocks-way?), or
   nil. A cell the plan took for air because it was unseen is seen from nearer by the time a later leg starts: the next plan
-  opens a shut door it now knows. A step with a cell centre (:cx) stands beside a thin panel, not in it: a shut door, gate
-  or trapdoor there is no block in its way."
+  opens a shut door it now knows. A step with a cell centre (:cx) is planned beside thin panels: a shut door or gate there
+  blocks it only where the body's box on its way (crossing point, stand point, the next step's crossing) meets the panel."
   [p steps]
   (let [opens (wwatch/opens-cells steps)]
-    (first (for [{:keys [x y z cx]} (take look-ahead-steps (rest steps)) y' [y (inc y)]
+    (first (for [[{:keys [x y z cx] :as step} next-step] (map vector (take look-ahead-steps (rest steps)) (concat (drop 2 steps) [nil]))
+                 y' [y (inc y)]
                  :let [b (u/sensed p {:x x :y y' :z z})]
                  :when (and (not (opens [x y' z]))
-                            (if (nil? cx) (blocks-way? b) (true? (some-> b .-fullCube))))]
+                            (if (nil? cx)
+                              (blocks-way? b)
+                              (or (true? (some-> b .-fullCube)) (and (blocks-way? b) (panel-in-way? b step next-step)))))]
              [x y' z]))))
 
 (defn ^:async look-ahead!

@@ -77,8 +77,7 @@
                                                    #js {:name "air" :fullCube false}))})]
     (is (= [2 64 0] (walk/solid-ahead (door false) steps)) "a shut door is in the way of a plan made over unseen cells")
     (is (nil? (walk/solid-ahead (door true) steps)) "an open one is not")
-    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans")
-    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :cx] 2))) "a step beside a shut gate's panel (a cell centre) is not in it")))
+    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans")))
 
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
@@ -798,3 +797,24 @@
         row (fn [t [z y]] (drive/learned-progress t [0 y z] to))
         t (reduce row {} [[10 -28] [11 -29] [12 -30] [13 -31]])]
     (is (= 1 (:stale t)))))
+
+(defn- gate-sensed
+  "Primitives that see a shut east-facing gate at [5 64 0] and air elsewhere."
+  []
+  #js {:sensedAt (fn [pos] (if (and (= 5 (.-x pos)) (= 64 (.-y pos)) (= 0 (.-z pos)))
+                             #js {:name "oak_fence_gate" :fullCube false :properties #js {:open false :facing "east"}}
+                             #js {:name "air" :fullCube false}))})
+
+(defn- planned-steps [blocks goal]
+  (let [w (pf/world {:blocks blocks})]
+    (get-in (pf/plan w {:from {:x 2 :y 64 :z 0} :goal goal} {}) [:path :steps])))
+
+(deftest a-planner-step-that-ends-beside-a-shut-gates-panel-is-not-in-its-way
+  (let [steps (planned-steps [[5 64 0 "oak_fence_gate" {:facing "east" :open false}] [5 64 -1 "oak_fence"] [5 64 1 "oak_fence"]] (pf/near 5 64 0 0))]
+    (is (some :cx (drop 1 steps)) "the plan stands in the gate cell's free part")
+    (is (nil? (walk/solid-ahead (gate-sensed) steps)))))
+
+(deftest a-planner-step-through-a-gate-the-plan-took-for-air-is-in-its-way
+  (let [steps (planned-steps [[5 64 -1 "oak_fence"] [5 64 1 "oak_fence"]] (pf/near 8 64 0 0))]
+    (is (some #(and (= 5 (:x %)) (:cx %)) steps) "a tight step into the cell between the posts")
+    (is (= [5 64 0] (walk/solid-ahead (gate-sensed) steps)))))
