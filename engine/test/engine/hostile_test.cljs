@@ -2153,7 +2153,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (setup-seeing {:time 14000 :light (into {} (for [x (range -6 7) y [64 65] z (range -6 7)] [[x y z] [0 14]])) :blocks lit-room :self {:health 20} :entities [(assoc (zombie 7 0) :visible false)]} nil 1000)]
+        (let [{:keys [p]} (setup-seeing {:time 14000 :blocks (assoc lit-room "-3,64,0" "torch" "3,64,0" "torch") :self {:health 20} :entities [(assoc (zombie 7 0) :visible false)]} nil 1000)]
           (looked-round! p)
           (is (empty? (danger-q/hostile-dangers p {:data mem/empty-data :now 0} {:radius 16}))
               "the heard zombie behind the wall: its rough spot in the seen room is no place for it"))))))
