@@ -174,7 +174,9 @@
          chance (spawn-light/chance-at p at false)
          where (place-text to)
          hall (delay (sh-inside/dark-hall p at nil))
-         look (delay (when (u/within? (sh-sense/feet p) at 1) (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)))]
+         look (delay (when (u/within? (sh-sense/feet p) at 1)
+                       (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)
+                           (air-look c (str "dark at " where ", the air round the body not seen sealed") chance))))]
      (cond
        (<= chance (settings/get settings ::risk-limit))
        (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body"))

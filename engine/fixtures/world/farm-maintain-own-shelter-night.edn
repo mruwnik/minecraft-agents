@@ -1,14 +1,15 @@
 ;; Card de90587f: farm.maintain with the body sealed in its own night shelter waits :dark for day; it does not walk at its own
 ;; walls (every walk blocked, :fruitless) because its field is lit. Stone room x 14..18, z 14..18, roof y 2, no window, :shelter
-;; memory at the body's cell, a pickaxe for the way out. Field x 36..38, z 16 east on grass, torch-lit: farmland with water beside, ripe wheat.
+;; memory at the body's cell, a pickaxe for the way out. Field x 36..40, z 16..19 east on grass, torch-lit: farmland with water in row z 17, ripe wheat.
+;; The field is big enough that its harvest is worth the 20 block walk (3 cells were not worth it,: the body rightly declined :not-worth).
 ;; Should-succeed: at night the job waits :dark and makes no :fruitless; after [:time-set 1000] the body leaves and cuts the wheat.
 ;; By day (second case) the shelter is no wait: the body leaves and cuts the wheat. Should-fail: a :fruitless event, or no :dark wait.
 {:defaults
  {:tags [:farm :maintain :shelter :night]
   :time :night :time-why :dawn-decision
   :plot {:height 8 :floor "grass_block" :light :sky :length 48}
-  :blocks [[:fill [36 -1 16] [38 -1 16] "farmland[moisture=7]"] [:fill [36 -2 17] [38 -2 17] "stone"] [:fill [36 -1 17] [38 -1 17] "water"]
-           [:fill [36 0 16] [38 0 16] "wheat[age=7]"] [:set [35 0 15] "torch"] [:set [39 0 15] "torch"] [:set [37 0 15] "torch"]
+  :blocks [[:fill [36 -1 16] [40 -1 19] "farmland[moisture=7]"] [:fill [36 -2 17] [40 -2 17] "stone"] [:fill [36 -1 17] [40 -1 17] "water"]
+           [:fill [36 0 16] [40 0 16] "wheat[age=7]"] [:fill [36 0 18] [40 0 19] "wheat[age=7]"] [:set [35 0 15] "torch"] [:set [41 0 15] "torch"] [:set [37 0 15] "torch"] [:set [39 0 15] "torch"]
            [:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"]]
   :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :roof #xyz [16 2 16] :state :built}
             :policy {:cap 10 :ttl 1200000}}]
@@ -17,7 +18,7 @@
   :limit-s 200}
  :cases
  [{:name "sealed-in-at-night-waits-dark-then-cuts-the-wheat-at-dawn"
-   :act [[:job (jobs.farm.maintain {:area {:min #xyz [36 -1 16] :max #xyz [38 0 16]}})]
+   :act [[:job (jobs.farm.maintain {:area {:min #xyz [36 -1 16] :max #xyz [40 0 19]}})]
          [:wait-s 40]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
@@ -26,7 +27,7 @@
    :after [[:not-block [36 0 16] "wheat[age=7]"]]}
   {:name "own-shelter-by-day-is-left-and-the-wheat-cut"
    :time :day
-   :act [[:job (jobs.farm.maintain {:area {:min #xyz [36 -1 16] :max #xyz [38 0 16]}})]]
+   :act [[:job (jobs.farm.maintain {:area {:min #xyz [36 -1 16] :max #xyz [40 0 19]}})]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 20}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 150 :of-job true}]
    :after [[:not-block [36 0 16] "wheat[age=7]"]]}]}

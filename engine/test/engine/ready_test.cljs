@@ -727,6 +727,18 @@
   (is (= [:never :exposed nil] (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]] [[8 64 0] [8 65 0]]))
       "a stretch a walk-look looked at from close by and could not make out: another walk shows nothing, the stay is priced"))
 
+(deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
+  (let [c (ctx-of (assoc tunnel :time st/noon))
+        status (fn [unseen]
+                 (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] nil))
+                               lib-look/room-air-unseen (constantly unseen)
+                               lib-look/look-shows? (constantly true)
+                               sh-inside/dark-hall (constantly :roofed)]
+                   (lit 0 0 #(ready/dark-status c {:x 0 :y 64 :z 0}))))]
+    (is (= [:look :exposed [[1 66 0]]] (let [s (status [[1 66 0]])] [(first s) (:reason (nth s 2)) (:look-at (nth s 2))]))
+        "an unseen cell over the room's air is looked at, as unseen-status does, not priced as a walk to look at the goal")
+    (is (= :never (first (status []))) "none unseen: the room is a hall by its edge")))
+
 (deftest the-walk-to-look-is-one-leg-to-the-far-side-of-the-hall-judged-past-sight-of-it-and-never-beside-the-feet
   (let [p (:primitives (ctx-of (assoc tunnel :time st/noon)))
         far (fn [region sides]
