@@ -9,6 +9,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -52,13 +53,13 @@
   "The chasers a flight's search runs from, {:name (cost/mob-kind) :mob (its name) :pos :calm? (an enderman the client does
   not flag angry: it walks about, a flight from it is no race; an angry one is the cornered options')}: the hostiles the body senses or remembers
   within the longest follow range (this flight's dead skipped), the last known places of the mobs fled within
-  threats/fled-memory-ms that it does not know now, and where shots came from (flight/fire-spots)."
+  threats/fled-memory-ms that it does not know now, and where shots came from (flight/fire-spots). :burns: hostile-loss/mob-near's, as the cornered covers price a mob."
   [c]
   (let [p (:primitives c)
         dead (set (flight/dead-ids c))
         known (remove #(dead (.-id %)) (flight/known-chasers p))
         ids (set (map #(.-id %) known))]
-    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :pos (danger-q/mob-pos p e)}
+    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :pos (danger-q/mob-pos p e) :burns (:burns (hostile-loss/mob-near p e))}
                          (and (combat/enderman? e) (not (true? (.-angry e)))) (assoc :calm? true))) known)
         (into (comp (map :data) (remove #(ids (:id %)))
                     (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (:mob %) :mob (:mob %) :pos pos})))

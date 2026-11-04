@@ -130,8 +130,11 @@
               chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
               trapped (fn ^:async trapped [opts] (->> (await (search/search! (ctx-of p) chasers [] opts)) (keep :trapped) (reduce max 0)))
               fist (await (trapped {}))
-              walled (await (trapped {:covers (constantly {:walls {:open-s 0 :seconds 40}}) :covers-key :walls}))]
+              walled (await (trapped {:covers (constantly {:walls {:open-s 0 :seconds 40}}) :covers-key :walls}))
+              stays (->> (await (search/search! (ctx-of p) (mapv #(assoc % :burns false) chasers) [] {:covers (constantly {:walls {:open-s 0 :seconds 40}}) :covers-key :walls-stay}))
+                         (keep :trapped) (reduce max 0))]
           (is (pos? walled))
+          (is (> stays walled) "a mob the sun does not burn outlasts the walls: the fight is still owed, as respond prices the cover")
           (is (< walled (/ fist 2)) "unarmed, walls built unhurt cost far less than the fist fight with the zombie"))))))
 
 (deftest the-covers-are-built-only-at-a-dead-end

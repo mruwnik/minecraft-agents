@@ -203,7 +203,7 @@
   (-> in
       (update :others #(mapv cell-key-of %))
       (update :caught-by #(mapv cell-key-of %))
-      (update :chasers #(mapv (juxt :name :mob :calm? :pos) %))
+      (update :chasers #(mapv (juxt :name :mob :calm? :pos :burns) %))
       (update :policy #(into {} (remove (comp fn? val)) %))
       (dissoc :covers)))
 
@@ -239,7 +239,7 @@
   [c {:keys [targets chasers pos body covers others caught-by policy]} other? landings]
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
-        cornered (delay (when-let [mobs (seq (keep #(some->> (:mob %) (hash-map :distance 0 :name)) chasers))]
+        cornered (delay (when-let [mobs (seq (keep #(when (:mob %) {:distance 0 :name (:mob %) :burns (:burns %)}) chasers))]
                           (let [fight (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :health (:health body) :mobs mobs})]
                             (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers (when covers (covers))}) pos)))))))
         trapped-at (fn [cell] (or @cornered (cost/route-death-cost body {:cells [cell] :threats caught-by} cell)))
