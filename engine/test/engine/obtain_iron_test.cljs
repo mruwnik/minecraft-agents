@@ -233,13 +233,13 @@
     (perception/pass! (aget (:p s) "perception"))))
 
 (def lit-tree
-  "Torch light round the tree, up to the leaves over its logs (the cell the exposure of a walk to a log column judges), and the way to it: no mob spawns there."
-  (into {} (for [x (range -2 3) y (range 64 69) z (range 1 7)] [[x y z] [15 14]])))
+  "Torches either side of the tree: their light, up to the leaves over its logs (the cell the exposure of a walk to a log column judges) and the way to it, leaves no mob spawning there."
+  {"2,64,3" "torch" "-2,64,3" "torch"})
 
 (defn sheltered-night-start
-  "A body that saw the tree (and blocks, a stone by it) before it sealed itself in its night pit; light {cell [sky block]} over the sky's."
-  [blocks health light]
-  (let [s (f/start (assoc (ore-world (merge f/tree-blocks blocks) []) :time st/night :light light) [f/own-zone])]
+  "A body that saw the tree (and blocks, a stone by it, torches) before it sealed itself in its night pit."
+  [blocks health]
+  (let [s (f/start (assoc (ore-world (merge f/tree-blocks blocks) []) :time st/night) [f/own-zone])]
     (swap! (fake/state (:p s)) assoc-in [:self :health] health)
     (look-round! s)
     (doseq [[k b] st-pit] (fake/set-block! (:p s) (mapv js/parseInt (.split k ",")) b))
@@ -252,7 +252,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (sheltered-night-start {} 20 lit-tree)]
+        (let [s (sheltered-night-start lit-tree 20)]
           ;; 16 logs, about 120 s by the measured gathers; 2 (15 s) are refused the walk out of the pit
           (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 16 :ways #{:gather} :explore false} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is known, no search stands in")
@@ -262,7 +262,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (sheltered-night-start {"1,64,4" "stone"} 20 lit-tree)]
+        (let [s (sheltered-night-start (assoc lit-tree "1,64,4" "stone") 20)]
           ;; 3 cobblestone alone are worth less than a night walk: the agent says they are worth it
           (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft} :explore false :worth 600} 8))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are known")
@@ -272,7 +272,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (sheltered-night-start {} 7 {})]
+        (let [s (sheltered-night-start {} 7)]
           (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} #(obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore false} 8)))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (empty? (tu/walk-calls (:p s))) "no walk out")
@@ -360,40 +360,39 @@
           (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
 
 (defn coal-below-world
-  "A coal ore 2 below the body, 9 south, at the bottom of a cut in the floor so the body's sight reaches it."
-  [inv]
-  (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore"}
-                    (into {} (for [x (range 0 3) z (range 5 10)] [(str x ",63," z) "air"])))
-             inv))
+  "A coal ore 2 below the body, 9 south, at the bottom of a cut in the floor so the body's sight reaches it, at night; lit? hangs a torch in the cut."
+  [inv lit?]
+  (assoc (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore"}
+                           (into {} (for [x (range 0 3) z (range 5 10)] [(str x ",63," z) "air"]))
+                           (when lit? {"1,63,7" "torch"}))
+                    inv)
+         :time st/night))
 
 (defn coal-seen? [s] (boolean (seq (look/seen-blocks (:p s) {:match #(= "coal_ore" %) :radius 32 :max 4}))))
 
 (defn ^:async torches-with-coal-below!
   "Obtain 4 torches with a coal ore below, after one sight pass so it is seen when the plan is made. With stop? the run
   ends shortly after (stop? s) holds (obtain-until!)."
-  [light inv & [stop?]]
-  (let [s (f/start (coal-below-world inv) [f/own-zone])]
-    (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range 0 3) y (range 60 67) z (range 6 11)] [[x y z] light])))
+  [lit? inv & [stop?]]
+  (let [s (f/start (coal-below-world inv lit?) [f/own-zone])]
     (await (f/run-ticks s 2))
     (let [seen (coal-seen? s)] (is seen "the coal below is seen before the plan is made"))
     (await (obtain-until! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60 (or stop? (constantly false))))
     s))
 
-(deftest a-torch-with-dark-coal-seen-below-and-no-torch-is-made-from-charcoal-of-seen-logs
+(deftest a-torch-with-dark-coal-seen-below-is-not-mined-down-the-dark-way
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (settings/with-settings {:jobs.lib.cost.value/per-dark 1}
-                         #(torches-with-coal-below! [0 0] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]
-                                                      (fn [s] (seq (f/events-of s :smelt.loaded))))))]
-          (is (empty? (mine-events s)) "the dark way down to the coal is not taken")
-          (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
+                         #(torches-with-coal-below! false [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}])))]
+          (is (empty? (mine-events s)) "the dark way down to the coal is not taken (the lit twin below hangs a torch in the cut and mines it)"))))))
 
 (deftest a-torch-with-lit-coal-seen-below-is-mined-not-made-from-charcoal
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (torches-with-coal-below! [0 15] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]
+        (let [s (await (torches-with-coal-below! true [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]
                                                    #(or (seq (mine-events %)) (seq (f/events-of % :smelt.loaded)))))]
           (is (seq (mine-events s)) "a coal seen in the light is mined")
           (is (empty? (f/events-of s :smelt.loaded)) "no logs were smelted"))))))
