@@ -132,7 +132,8 @@
 
 (deftest a-stateful-want-judged-by-its-state
   (is (nil? (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "north"}})))
-  (is (= :wrong (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "south"}})))
+  (is (nil? (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "south"}})))
+  (is (= :wrong (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "east"}})))
   (is (nil? (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate"}))))
 
 (defn expanded [plan] (:cells (shape/expand plan {})))
