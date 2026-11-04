@@ -5,6 +5,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.food-animals :as animals]
             [jobs.lib.foods :as foods]
             [jobs.lib.meal :as meal]
             [jobs.lib.fuel :as fuel]
@@ -91,6 +92,12 @@
   "The get-food ways a sheltered hold allows: they need no walk out of the shelter."
   #{:bake :cook})
 
+(defn food-args
+  "get-food's args for a hold: the :worth is what food is worth the hungry body (get-food's own worth-of), not the night's open-gain, which can be 0."
+  [c]
+  (cond-> {:carry 0 :worth (animals/search-benefit (assoc-in c [:args :carry] 0))}
+    (inside/safe-from-night? (:primitives c)) (assoc :ways in-shelter-ways)))
+
 (defn ^:async hold!
   "Hold the body still on purpose (reason) for hold-ms, eating first when hungry; a starving body with no food looks
   for some first (food-wanted?, a get-food child, limited to in-shelter-ways while the body is safe from the night): :again."
@@ -99,7 +106,7 @@
   (await (eat-if-hungry! c))
   (when (food-wanted? c)
     (ctx/hold-still! c nil)
-    (await (ctx/call c :food 'jobs.survival.get-food (if (inside/safe-from-night? (:primitives c)) {:ways in-shelter-ways :carry 0} {:carry 0})))
+    (await (ctx/call c :food 'jobs.survival.get-food (food-args c)))
     (ctx/hold-still! c reason))
   (await (child/pause! c (/ (sites/hold-ms) 1000) reason))
   :again)

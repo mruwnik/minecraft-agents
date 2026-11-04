@@ -186,3 +186,9 @@
     (fs/unlinkSync f)
     (is (some? (mem/save! s true)) "forced: written although unchanged")
     (is (fs/existsSync f))))
+
+(deftest an-infinite-worth-in-memory-survives-save-and-load
+  (let [[s _ dir] (store)]
+    (mem/write! s :job {:niche-worth ##Inf :n 1})
+    (mem/save! s true)
+    (is (= ##Inf (get-in (on-disk dir) [:entries :job 0 :data :niche-worth])))))

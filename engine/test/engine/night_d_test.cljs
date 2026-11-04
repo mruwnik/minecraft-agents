@@ -29,6 +29,7 @@
             
             [jobs.lib.targets :as targets]
             [jobs.survival.bed-down :as bed-down]
+            [jobs.lib.food-animals :as animals]
             [jobs.survival.night :as night]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
@@ -286,6 +287,14 @@
           (is (empty? (st/calls p "sleep")) "no sleep with a hostile near")
           (is (>= 1 (count (filterv #(and (= :child_started (:kind %)) (= :bed-down (:slot %))) @seen))) "one bed-down, then the round ends")
           (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :stopped))))))))))
+
+(deftest the-food-search-of-a-starving-hold-carries-the-hunger-worth
+  (let [{:keys [p]} (held-starving [])
+        c {:primitives p :args {}}
+        args (hold/food-args c)]
+    (is (= (animals/search-benefit {:primitives p :args {:carry 0}}) (:worth args))
+        "get-food walks are judged against what food is worth the hungry body, not the night's open-gain")
+    (is (pos? (:worth args)))))
 
 (deftest an-occupied-bed-not-yet-looked-at-is-refused-before-the-sleep
   (async done

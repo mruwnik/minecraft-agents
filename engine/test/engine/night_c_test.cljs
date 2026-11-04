@@ -35,6 +35,17 @@
                 (fn [{:keys [p seen]}]
                   (is (seq (st/calls p "place")) "the body walled itself in under the roof instead of calling a hole in the wall roofed"))))
 
+(deftest the-wall-in-of-a-breached-room-carries-its-own-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (st/setup {:time night :inventory st/wall-stack :blocks breached-room})
+              _ (mem/write! (:store eng) :bed-open {:pos {:x 6 :y 64 :z 0}} sh-beds/bed-open-policy)
+              _ (core/submit! eng '(jobs.survival.night) {})
+              log (await (with-child-log #(tu/run-until-empty eng 40)))
+              args (nth (first (filter #(= :enclose (first %)) log)) 2)]
+          (is (= ##Inf (:worth args)) "no answer's price chose the wall-in, so nothing is to be saved by turning it back: not the night's open-gain"))))))
+
 (defn nothing-placed-at-the-start?
   "No block was placed near the start (x below 5): a bare roof is no shelter, so the body may wall itself in at the home it walked to."
   [p]

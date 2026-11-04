@@ -44,14 +44,19 @@
 
 (defn ^:async wanted?
   "Once a night: the body stands in a sealed room whose only fault is a dark spawnable cell beyond the spawn-free radius, holds
-  torches or coal, and lighting quotes no more than the cheapest wall, pit or pocket."
+  torches or coal, and lighting quotes no more than the cheapest wall, pit or pocket; then :light-worth, what the wall, pit or
+  pocket costs more, is the worth of the light call."
   [c]
   (let [p (:primitives c)]
     (and (not (:light-tried (ctx/mem c)))
          (or (pos? (torch/torches-held p)) (pos? (torch/fuel-held p)))
          (sh-inside/dark-room-at? p (sh-sense/feet p))
          (let [light (await (light-cost c (:cells (reach-room/room p (sh-sense/feet p)))))]
-           (and (< light ##Inf) (<= light (await (way-cost c))))))))
+           (when (< light ##Inf)
+             (let [ways (await (way-cost c))]
+               (when (<= light ways)
+                 (ctx/update-mem! c assoc :light-worth (- ways light))
+                 true)))))))
 
 (defn ^:async light!
   "jobs.build.light-area over the room's cells, called again while it goes on; once it ends, :light-tried, whatever came of it
@@ -60,7 +65,7 @@
   (hold/busy! c)
   (let [p (:primitives c)
         cells (:cells (reach-room/room p (sh-sense/feet p)))
-        d (await (ctx/call c :light 'jobs.build.light-area {:cells cells}))]
+        d (await (ctx/call c :light 'jobs.build.light-area (cond-> {:cells cells} (some? (:light-worth (ctx/mem c))) (assoc :worth (:light-worth (ctx/mem c))))))]
     (when-not (= :continue d)
       (ctx/update-mem! c assoc :light-tried true))
     :again))
