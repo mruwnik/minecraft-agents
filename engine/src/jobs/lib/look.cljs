@@ -444,17 +444,20 @@
                 near (:near (:opts per))
                 r (js/Math.ceil (+ near 2))
                 ey (+ y 1.62)
-                [solid seen] (loop [cells (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [(+ x dx) (+ y dy) (+ z dz)])
-                                    solid 0 seen 0]
-                               (if-let [[cx cy cz] (first cells)]
-                                 (let [ddx (- cx x) ddy (- (+ cy 0.5) ey) ddz (- cz z)
-                                       v (when (<= (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)) (* near near))
-                                           (some-> (.get sections (store/section-key (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4)))
-                                                   .-ids (aget (store/cell-index cx cy cz))))]
-                                   (cond (not (pos? v)) (recur (rest cells) solid seen)
-                                         (== 1 (aget open (dec v))) (recur (rest cells) solid (inc seen))
-                                         :else (recur (rest cells) (inc solid) (inc seen))))
-                                 [solid seen]))
+                solid (volatile! 0)
+                seen (volatile! 0)
+                _ (dotimes [i (inc (* 2 r))]
+                    (dotimes [j (inc (* 2 r))]
+                      (dotimes [m (inc (* 2 r))]
+                        (let [cx (+ x (- i r)) cy (+ y (- j r)) cz (+ z (- m r))
+                              ddx (- cx x) ddy (- (+ cy 0.5) ey) ddz (- cz z)]
+                          (when (<= (+ (* ddx ddx) (* ddy ddy) (* ddz ddz)) (* near near))
+                            (let [v (some-> (.get sections (store/section-key (bit-shift-right cx 4) (bit-shift-right cy 4) (bit-shift-right cz 4)))
+                                            .-ids (aget (store/cell-index cx cy cz)))]
+                              (when (pos? v)
+                                (vswap! seen inc)
+                                (when-not (== 1 (aget open (dec v))) (vswap! solid inc)))))))))
+                solid @solid seen @seen
                 v (when (pos? seen) (/ solid seen))]
             (.set shares st {:k k :v v})
             v))))))
@@ -738,12 +741,17 @@
                                         mine)]
                             (.set counted k n-sky)
                             n-sky))))
+           windows (js/Map.)
            window (fn [cx sy cz]
-                    (reduce (fn [[n sky] [dx dy dz]]
-                              (let [[n' sky'] (counts (+ cx dx) (+ sy dy) (+ cz dz))]
-                                [(+ n n') (+ sky sky')]))
-                            [0 0]
-                            (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz])))
+                    (let [wk (store/section-key cx sy cz)]
+                      (or (.get windows wk)
+                          (let [w (loop [i 0 n 0 sky 0]
+                                    (if (== i 27)
+                                      [n sky]
+                                      (let [[n' sky'] (counts (+ cx (dec (mod i 3))) (+ sy (dec (mod (quot i 3) 3))) (+ cz (dec (quot i 9))))]
+                                        (recur (inc i) (+ n n') (+ sky sky')))))]
+                            (.set windows wk w)
+                            w))))
            ;; the nearest seen evidence: the cell's own window, else the feet's columns at the cell's height
            sky-chance (fn [x y z]
                         (let [[n sky] (let [own-w (window (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]

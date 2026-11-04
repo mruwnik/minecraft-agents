@@ -33,7 +33,7 @@
         ^js t-filter (.-filter table)
         wall (opaque-id table)]
     (.fill block 0)
-    (doseq [a [0 1 2] b [0 1 2] c [0 1 2]]
+    (dotimes [a 3] (dotimes [b 3] (dotimes [c 3]
       (let [^js sec (.get store (store/section-key (+ cx a -1) (+ sy b -1) (+ cz c -1)))
             ^js ids (some-> sec .-ids)
             ^js bits (some-> sec .-sky)]
@@ -42,7 +42,7 @@
                 v (if ids (aget ids i) 0)
                 id (if (pos? v) (dec v) wall)]
             (aset states k id)
-            (aset sky k (if (and bits (pos? v) (< (aget t-filter id) 15) (pos? (bit-and (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7))))) 15 0))))))
+            (aset sky k (if (and bits (pos? v) (< (aget t-filter id) 15) (pos? (bit-and (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7))))) 15 0))))))))
     (let [^js out (.relight table #js {:table table :states states :sky sky :block block :size #js [n n n] :interiorSky true})
           ^js lsky (.-sky out) ^js lblock (.-block out)
           res (js/Uint8Array. 4096)]
