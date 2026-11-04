@@ -76,6 +76,21 @@
           (is (< (:planned cut) 12) (str "the ring stops once 300 nodes are spent " (pr-str cut whole)))
           (is (<= 300 (:nodes cut) 310) (pr-str cut)))))))
 
+(deftest a-chaser-at-the-body-ends-the-search-after-the-first-route
+  ;; a search that costs more seconds than the nearest chaser takes to arrive is no help to the decision waiting on it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [work (fn ^:async search-work [zombie-x]
+                     (let [events (atom [])
+                           c (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}) events)]
+                       (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x zombie-x :y 64 :z 0.5}}] [] {}))
+                       (some (fn [[kind fields]] (when (= :retreat.search-work kind) fields)) @events)))
+              far (await (work -4.5))
+              pressed (await (work 0.9))]
+          (is (= 12 (:planned far)) (pr-str far))
+          (is (= 1 (:planned pressed)) (pr-str pressed)))))))
+
 (defn ^:async open-field-prices
   "{ring end: price} of the flee search on open ground at time (a zombie 5 blocks west of the body), with spawns-over
   forced to 0 when unspawned?."
@@ -378,7 +393,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [beside (await (ends-of field {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -0.5 :y 64 :z 0.5}}] [] nil))
+        (let [beside (await (ends-of field {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -1.5 :y 64 :z 0.5}}] [] nil))
               {:keys [chance]} (search/caught-chance beside {:k 0 :n 0} {} nil)
               p (tu/fake-on-floor {:floor [-50 -45 50 45] :blocks lake :self {:pos {:x 3.5 :y 63 :z 0.5}}})
               afloat (await (search/search! (ctx-of p) [{:name "drowned" :mob "drowned" :pos {:x 1.5 :y 63 :z 0.5}}] [] {}))]
