@@ -868,3 +868,14 @@
 (deftest a-drop-walk-offers-the-stair-only-with-dig
   (is (= #{:walk :pillar :clear-seal} (job-ns/drop-walk-ways {:args {}})))
   (is (= #{:walk :pillar :clear-seal :stair} (job-ns/drop-walk-ways {:args {:dig true}}))))
+
+(deftest a-drop-lying-on-farmland-is-walked-to-and-picked-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [field (into {} (for [x (range 2 7) z (range -3 4)] [(str x ",63," z) "farmland"]))
+              {:keys [eng p seen]} (bd/setup {:self body :blocks field})]
+          (swap! (fake/state p) fake/spawn [4.5 63.9375 0.5] "porkchop" 1)
+          (let [result (await (tu/child-outcome eng job {:radius 8 :items ["porkchop"]} 60))]
+            (is (= 1 (:collected result)) (pr-str result))
+            (is (not-any? #(= :goal-not-standable (:why %)) @seen))))))))

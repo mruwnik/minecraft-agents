@@ -54,6 +54,16 @@
 
 (defn name-at [w x y z] (get-in w [:blocks [x y z]] "air"))
 
+;; a body on farmland or a path stands 1/16 below the cell above it, so the game's floored position is the block's own cell
+(def short-floor #{"farmland" "dirt_path"})
+
+(defn on-short-floor? [w x y z] (and (= y (floor y)) (contains? short-floor (name-at w (floor x) (dec y) (floor z)))))
+
+(defn reported-cell
+  "The cell [x y z] the world holds for a body at (x, y, z): y is the cell under a short floor's top."
+  [w x y z]
+  [(floor x) (floor (if (on-short-floor? w x y z) (dec y) y)) (floor z)])
+
 (defn wet?
   "Is the cell water or a bubble column (swum like water)?"
   [w x y z]
@@ -250,7 +260,8 @@
     (when (and sub (= [(floor x) y (floor z)] (get-in w [:self :pos]))) sub)))
 
 (defn start-body [w]
-  (let [[x y z] (get-in w [:self :pos])
+  (let [[x y0 z] (get-in w [:self :pos])
+        y (if (contains? short-floor (name-at w (floor x) y0 (floor z))) (inc y0) y0)
         [sx _ sz] (sub-pos w)
         mid (if (:body-hitbox w) identity #(+ (floor %) 0.5))]    ; hitbox mode: the position is the true one; else the cell's centre
     {:x (or sx (mid x)) :y y :z (or sz (mid z)) :vx 0 :vy 0 :vz 0 :collided false}))
@@ -500,9 +511,8 @@
                                 (swap! state assoc :yaw (mod (- 180 (* deg (:yaw out))) 360) :pitch (- (* deg (or (:pitch out) 0)))))
                               (reset! body (step-body @state @body controls @yaw))
                               (swap! state assoc-in [:self :pos]
-                                     (if (:body-hitbox @state)
-                                       [(:x @body) (floor (:y @body)) (:z @body)]
-                                       [(floor (:x @body)) (floor (:y @body)) (floor (:z @body))]))
+                                     (let [[cx cy cz] (reported-cell @state (:x @body) (:y @body) (:z @body))]
+                                       (if (:body-hitbox @state) [(:x @body) cy (:z @body)] [cx cy cz])))
                               (when-not (:body-hitbox @state)
                                 (swap! state assoc :sub-pos (sub-of @state @body)))
                               (when (seq (:wires @state))
