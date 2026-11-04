@@ -404,6 +404,15 @@
           (is (= [foot] (mapv st/arg-pos (st/calls p "sleep"))))
           (is (true? (:slept r)) (pr-str r)))))))
 
+(deftest bed-down-with-a-named-bed-no-walk-reaches-ends-instead-of-asking-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (st/setup {:time night :blocks {"6,90,0" "red_bed"}})
+              r (await (tu/child-outcome eng 'jobs.survival.bed-down {:bed {:x 6 :y 90 :z 0}} 20))]
+          (is (false? (:slept r)) (pr-str r))
+          (is (= {:x 6 :y 90 :z 0} (:pos r)) (pr-str r)))))))
+
 (deftest a-sleeper-on-the-server-logs-the-body-out-till-morning
   (async done
     (tu/run-async done
