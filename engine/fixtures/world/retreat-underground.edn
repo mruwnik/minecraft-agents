@@ -102,8 +102,12 @@
             [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]
    :body {:at [11.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:summon "zombie" [4.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 30}
-            {:event {:source :job :kind :hostile.stopped :data {:mob "zombie"}} :within-s 60}
+   ;; measured prices (pit 109, pocket 156, flee 1911, fight 8567): the pit is the cheapest cover, so it is tried first; it fails on bedrock, and the
+   ;; flight then goes on (retreat.choice: nothing to run to, runs straight away) instead of ending cleared (old code
+   ;; had no choice to make). The end after that varies (walls in, or the zombie dies), so it is not pinned.
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee :cover :pit}} :within-s 30}
+            {:event {:source :action :kind :started :data {:name "dig"}} :within-s 30}
+            {:event {:source :job :kind :retreat.choice} :within-s 40}
             {:no-event {:source :body :kind :died} :for-s 30}]}
   {:name "goal-on-the-surface-past-the-mob-gets-no-leg-the-stair-does"
    :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
