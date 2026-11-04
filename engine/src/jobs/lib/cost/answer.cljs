@@ -503,7 +503,7 @@
         left (fn [{:keys [name distance speed] :as m}]
                (if (threat/ranged? m)
                  seconds
-                 (max 0 (- seconds (/ (max 0 (- (or distance 0) (danger/melee-reach))) (or speed (danger/chase-speed name)))))))]
+                 (max 0 (- (+ seconds (:start m 0)) (/ (max 0 (- (or distance 0) (danger/melee-reach))) (or speed (danger/chase-speed name)))))))]
     {:damage (reduce + 0 (map #(* (:weight % 1) (threat/mob-hurt stats (threat/kind %) (left %) identity (threat/lone-hit-rate (threat/kind %)))) hitting))
      :hit (reduce max 0 (map #(blow stats %) hitting))}))
 
@@ -512,6 +512,21 @@
   creeper or an enderman."
   [{:keys [equipment mobs seconds]}]
   (assoc (blows-over (armour/armour-stats equipment) (remove #(#{"creeper" "enderman"} (:name %)) mobs) seconds) :seconds seconds))
+
+(defn start-build-answer
+  "build-answer of a body that acts under threat: a melee mob's blows run over the seconds plus one of danger/flight-starts
+  (its kind's: the body stands that long before its build begins), averaged over them, as a flight's walk is over its
+  starts (flee-mob); a shooter's is build-answer's, a creeper's and an enderman's none."
+  [{:keys [equipment mobs seconds]}]
+  (let [stats (armour/armour-stats equipment)
+        mobs (remove #(#{"creeper" "enderman"} (:name %)) mobs)
+        {shooters true melee false} (group-by #(boolean (threat/ranged? %)) mobs)
+        base (blows-over stats shooters seconds)
+        runs (if (seq melee)
+               (for [i (range (count (danger/flight-starts "pooled")))]
+                 (blows-over stats (map #(assoc % :start (nth (danger/flight-starts (:name %)) i)) melee) seconds))
+               [{:damage 0 :hit 0}])]
+    (assoc base :damage (+ (:damage base) (mean (map :damage runs))) :hit (reduce max (:hit base) (map :hit runs)) :seconds seconds)))
 
 (defn stand-answer
   "The answer of doing nothing about mobs [flee-mob's] for seconds wearing equipment: blows-over of all but a creeper, and
@@ -594,7 +609,7 @@
   creeper (its blast takes the walls)."
   [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run]}]
   (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [a (or run (build-answer {:equipment equipment :mobs mobs :seconds open-s}))
+    (let [a (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
           fails (if (seq failed) (or fails 0) 0)]
       (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (hide-stays)) :then (vec then))
         (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]

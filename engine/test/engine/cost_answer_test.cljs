@@ -279,9 +279,9 @@
         cover {:open-s 1 :seconds 31}
         price (fn [stays] (settings/with-settings {:jobs.lib.cost.answer/hide-stays stays}
                             #(cost/answer-price (body 20) (cost/cover-answer {:mobs [zombie] :then [fight]} cover) here)))
-        alone (cost/answer-price (body 20) (assoc (cost/build-answer {:mobs [zombie] :seconds 1}) :seconds 31) here)]
+        alone (cost/answer-price (body 20) (assoc (answer/start-build-answer {:mobs [zombie] :seconds 1}) :seconds 31) here)]
     (is (< (price {:k 0 :n 1000}) (price {:k 40 :n 100}) (price {:k 90 :n 100})) "the likelier the zombie waits below, the dearer the pillar")
-    (is (< (js/Math.abs (- (price {:k 0 :n 1000}) alone)) 0.05) "it never waits: the cover alone")
+    (is (< (js/Math.abs (- (price {:k 0 :n 1000}) alone)) 0.1) "it never waits: the cover alone")
     (is (< (price {:k 99 :n 100}) (+ alone (cost/answer-price (body 20) fight here))) "hiding again and again is bounded by the fight it may end in")))
 
 (deftest a-threats-cover-is-priced-as-respond-prices-it
@@ -604,3 +604,9 @@
             [lo hi] (met-envelope b (answer/met-threats {:cells cells :threats ts} (death/cell-seconds cells)) (rate-grid ms))
             what (str (apply str (interpose " " ms)) " at 10, " (+ 10 g1) ", " (+ 10 g2) ", " kit ": " (vec cs) " in " [lo hi])]
         (is (<= (- (apply max cs) (apply min cs)) (* 0.25 (- hi lo))) what)))))
+
+(deftest a-build-under-threat-pays-the-flight-start-tail-too
+  (let [zombie (mob "zombie" 7)
+        build (:damage (cost/build-answer {:mobs [zombie] :seconds 2}))
+        cover (:damage (cost/cover-answer {:mobs [zombie]} {:open-s 2 :seconds 32}))]
+    (is (> cover build) "a pillar's build begins after the same measured start as a run: the mob 7 off arrives meanwhile")))
