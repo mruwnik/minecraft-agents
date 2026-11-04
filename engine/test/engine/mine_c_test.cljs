@@ -677,13 +677,13 @@
   (let [told (atom nil)
         way [[1 64 0] [1 64 1] [1 64 2]]
         hard {[1 64 1] "obsidian" [1 64 2] "obsidian"}
-        run (fn ^:async run* [after-first-dig init]
+        run (fn ^:async run* [after-first-dig init & [during-search]]
               (let [seen (atom init)
                     plans (atom 0)
                     dug (atom [])
                     m (atom {})
                     c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0}) :emit (fn [kind _ _] (reset! told kind))}
-                    steps {:drop-cut (fn [_ _ _] (swap! plans inc) (vec (remove (set (map first @dug)) way)))
+                    steps {:drop-cut (fn [_ _ _] (when (and during-search (zero? @plans)) (during-search seen)) (swap! plans inc) (vec (remove (set (map first @dug)) way)))
                            :dig-cell! (fn [_ cell] (let [at [(:x cell) (:y cell) (:z cell)]]
                                                      (swap! dug conj [at @plans])
                                                      (swap! seen assoc at "air")
@@ -710,6 +710,8 @@
           (is (= [1 2 2] (await (run #(swap! % assoc [2 64 1] "water") {}))) "a liquid beside a planned cell is planned again")
           (is (= [1 2 2] (await (run #(swap! % assoc [3 64 3] "air") hard))) "an opening off the way that costs less to walk through than the way's digs is planned again")
           (is (= [1 2 2] (await (run #(swap! % assoc [5 64 0] "air") hard))) "so is one five cells off, as far as a look down a tunnel shows")
+          (is (= [1 2 2] (await (run (fn [_]) hard #(swap! % assoc [3 64 3] "air")))) "an opening seen while the search ran, before the plan came, is planned again")
+          (is (= [1 1 1] (await (run (fn [_]) {} #(swap! % assoc [-4 64 -4] "air")))) "a far one seen meanwhile is not")
           (is (= [1 1 1] (await (run #(swap! % assoc [-4 64 -4] "air") {}))) "one a detour too long to beat the way's digs is not")
           (is (= [1 1 1] (await (run #(swap! % assoc [3 64 3] "stone") hard))) "a cell off the way read as the rock it was taken for changes nothing"))))))
 

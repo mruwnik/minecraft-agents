@@ -2,6 +2,7 @@
   "The drops of jobs.gather.dig-for: digging one cell, then collecting what it dropped (a look down the column, a
   collect-drops child, a walk or a short cut beside the dug cell) and telling what was left or lost."
   (:require [jobs.gather.mine.way-set :as ways]
+            [jobs.lib.per-body :as per-body]
             [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [engine.args :as a]
@@ -133,6 +134,10 @@
   [c cell]
   (await (near/go-near! c (zipmap [:x :y :z] cell) 0 drop-walk-opts)))
 
+(defonce ^{:doc "{[job-id dug] {:mark :lo :hi}}: what the body remembered when a drop-cut search that spent its nodes began, for the plan it ends with."} search-marks (js/Map.))
+
+(per-body/store! ::search-marks #(.clear search-marks))
+
 (defn ^:async cut-via
   "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem :frontier :walk-to!} (the fns of
   those names' arguments). Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced
@@ -158,13 +163,26 @@
         ;; me and on to dug is under the plan's price (each axis's two legs at most the walk's) cannot cost less
         region (fn [me cells] (let [l (/ (plan-s cells) step-s)]
                                 [(mapv #(js/Math.floor (/ (- (+ %1 %2) l) 2)) me dug) (mapv #(js/Math.ceil (/ (+ %1 %2 l) 2)) me dug)]))
-        snapshot (fn [cells]
+        ;; a search over several rounds planned on what the body saw when it began: that mark stands for the plan if its box
+        ;; holds the plan's region, so a cave seen meanwhile counts as opened
+        snapshot (fn [cells pre]
                    (let [near (around (cons dug cells))
                          me (u/cell-vec (u/self-pos c))
-                         [lo hi] (region me cells)]
+                         [lo hi] (region me cells)
+                         held? (and pre (every? true? (map <= (:lo pre) lo)) (every? true? (map >= (:hi pre) hi)))]
                      {:cells (vec cells) :near near :me me :lo lo :hi hi
                       :seen (into {} (map (juxt identity name-at)) near)
-                      :mark (seen-sections/mark p lo hi)}))
+                      :mark (if held? (:mark pre) (seen-sections/mark p lo hi))}))
+        search-key (pr-str [(:id c) dug])
+        pre-mark! (fn [left-s]
+                    (or (.get search-marks search-key)
+                        (let [me (u/cell-vec (u/self-pos c))
+                              l (/ left-s step-s)
+                              lo (mapv #(js/Math.floor (/ (- (+ %1 %2) l) 2)) me dug)
+                              hi (mapv #(js/Math.ceil (/ (+ %1 %2 l) 2)) me dug)
+                              pre {:mark (seen-sections/mark p lo hi) :lo lo :hi hi}]
+                          (.set search-marks search-key pre)
+                          pre)))
         ;; the way's cells left, as planned while the cell dug stayed open and a look showed none of them changed nor
         ;; opened a cell that a way through could cost less than the plan: steps to it and on, against the plan's steps and digs
         planned (fn [{:keys [cells seen near me lo hi mark]} dug-cell]
@@ -181,7 +199,9 @@
       (let [kept (planned plan last-dug)
             _ (when (and plan (not kept) (seq (:cells plan)))
                 (ctx/emit! c :mine.cut-replanned :info {:pos dug :text (str "mine plans its cut toward " (str/join "," dug) " again: a look changed a cell in or round the way")}))
-            cells (or kept (drop-cut c dug (- max-s spent)))]
+            pre (when-not kept (pre-mark! (- max-s spent)))
+            cells (or kept (drop-cut c dug (- max-s spent)))
+            _ (when-not (= :searching cells) (.delete search-marks search-key))]
         (cond
           (nil? cells) nil
           (= :searching cells) :partial
@@ -201,7 +221,7 @@
           (empty? cells) :cut
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
-                      plan (update (snapshot (rest cells)) :seen dissoc cell)
+                      plan (update (snapshot (rest cells) pre) :seen dissoc cell)
                       start (cost/leg-start c)
                       o (await (dig-cell! c (zipmap [:x :y :z] cell)))
                       spent (if (= :continue o) spent (+ spent (cost/dig-leg-price c start [(price cell)])))]
