@@ -1,0 +1,17 @@
+;; Card 3ce2e8b9: a walking zombie presses on an unarmed body in a one-wide doorway; its box overlaps the body's cell, so the server
+;; refuses the pillar's block. A refused pillar ends at its first refusal (card a0508dbb), is counted, and respond decides again:
+;; a fight blow knocks the zombie off the cell and the next pillar goes up (hit, then place), else the body fights on. Should-succeed:
+;; the pillar is tried and the body lives (a death puts the body off its plot, which fails the run).
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :plot {:height 16}
+  :blocks [[:fill [9 0 15] [9 1 20] "stone"] [:fill [11 0 15] [11 1 20] "stone"] [:fill [10 0 15] [10 1 15] "stone"] [:fill [10 0 20] [10 1 20] "stone"]]
+  :register [{:trigger :hostile-near}]
+  :body {:at [10.5 0 16.5] :inventory [["dirt" 24]]}
+  :limit-s 90}
+ :cases
+ [{:name "pressing-zombie-after-a-refused-pillar-is-hit-back-and-the-body-lives"
+   :act [[:summon "zombie" [10.5 0 18.5] "{}"]]
+   :expect [{:no-event {:source :job :message [:contains "every escape failed"]} :for-s 40}
+            {:event {:source :job :kind :retreat.pillar} :within-s 30}]}]}
