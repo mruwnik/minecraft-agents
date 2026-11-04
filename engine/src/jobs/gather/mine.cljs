@@ -88,7 +88,7 @@
 
 (declare quote-of)
 
-(def fit? (ready/trip-fed (ready/fit-for :long) work-place/dig-spot #(expect/trip-quote % (quote-of %))))
+(def fit? (ready/trip-fed (ready/fit-for :long work-s) work-place/dig-spot #(expect/trip-quote % (quote-of %))))
 
 ;; ------------------------------------------------------------------ the contract
 

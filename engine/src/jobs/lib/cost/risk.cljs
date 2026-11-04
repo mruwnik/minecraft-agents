@@ -76,10 +76,13 @@
 
 (defn work-hp
   "hp a job's work of category costs a body at health: its hurt (hit-rate x hit-mean over work-s) and its death
-  (work-death-chance) in hp at `death` seconds (cost/lethal-hp; cost/death-s), as price/stay-hp."
-  [category health death]
-  (+ (* (hit-rate category) (hit-mean) (stay-of category health))
-     (answer/lethal-hp {:chance (work-death-chance category health) :death death})))
+  (work-death-chance) in hp at `death` seconds (cost/lethal-hp; cost/death-s), as price/stay-hp. `seconds`: the job's own
+  quoted stay, else the category's."
+  ([category health death] (work-hp category health death nil))
+  ([category health death seconds]
+   (let [s (or seconds (stay-of category health))]
+     (+ (* (hit-rate category) (hit-mean) s)
+        (answer/lethal-hp {:chance (work-death-chance category health s) :death death})))))
 
 (defn share-hp
   "hp of expected damage a body at health and food may risk while waiting would heal it: ::risk-share of the health, cut
@@ -90,6 +93,8 @@
 
 (defn too-hurt?
   "Whether a job's work of category (work-hp; :long, a mine's or a build's, for the body's fitness as such) is more than a
-  body at health and food may risk (share-hp), and healed it may; `death` seconds a death costs (cost/death-s)."
-  [health food category death]
-  (and (> (work-hp category health death) (share-hp health food)) (<= (work-hp category 20 death) (share-hp 20 food))))
+  body at health and food may risk (share-hp), and healed it may; `death` seconds a death costs (cost/death-s); `seconds`
+  the job's own quoted stay, else the category's."
+  ([health food category death] (too-hurt? health food category death nil))
+  ([health food category death seconds]
+   (and (> (work-hp category health death seconds) (share-hp health food)) (<= (work-hp category 20 death seconds) (share-hp 20 food)))))

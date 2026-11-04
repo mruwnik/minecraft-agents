@@ -649,35 +649,44 @@
   ([f] (safe-at-or-roaming f false))
   ([f dug?] (safe-at-or f safe-roaming dug?)))
 
+(defn quoted-s
+  "Seconds `seconds-of` (a fn of c, a job's work-s) answers when positive, else nil: the stay a fit? prices before the category's."
+  [seconds-of c]
+  (let [s (when seconds-of (seconds-of c))]
+    (when (and (number? s) (pos? s)) s)))
+
 (defn fit-for
   "The fit? of a job whose work is of category (:click, :work or :long, cost.risk/work-s): later :game-mode off survival,
   :low-health while that work costs more than the body may risk now (price/fit: none while waiting cannot heal it),
-  :poisoned while poisoned."
-  [category]
-  (fn [c]
-    (let [p (:primitives c)]
-      (if-let [hurt (or (body/off-mode p) (price/fit c category) (body/poison-wait p))]
-        (checks/cause-status :later hurt)
-        (contract/ok :healthy "health enough")))))
+  :poisoned while poisoned. seconds-of (a fn of c, optional): the job's own quoted seconds, used while positive instead of the category's."
+  ([category] (fit-for category nil))
+  ([category seconds-of]
+   (fn [c]
+     (let [p (:primitives c)]
+       (if-let [hurt (or (body/off-mode p) (price/fit c category (quoted-s seconds-of c)) (body/poison-wait p))]
+         (checks/cause-status :later hurt)
+         (contract/ok :healthy "health enough"))))))
 
 (def fit? "fit-for a job that works a place for a while (:work)." (fit-for :work))
 
 (def cannot-heal? price/cannot-heal?)
 
 (defn hurt-cannot-heal?
-  "Too hurt for a job's work of category (cost.risk/too-hurt?) with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
-  [c category]
-  (let [self (.self (:primitives c))]
-    (and (risk/too-hurt? (.-health self) (.-food self) category (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))
+  "Too hurt for a job's work of category (cost.risk/too-hurt?, at `seconds` when given) with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
+  ([c category] (hurt-cannot-heal? c category nil))
+  ([c category seconds]
+   (let [self (.self (:primitives c))]
+     (and (risk/too-hurt? (.-health self) (.-food self) category (cost/death-s (:primitives c) (ctx/view c)) seconds) (cannot-heal? c)))))
 
 (defn fed-fit-for
   "fit-for category, and later :low-health while hurt-cannot-heal? for that category: a hurt body that only food heals gets food before the work."
-  [category]
-  (let [fit (fit-for category)]
-    (fn [c]
-      (if (hurt-cannot-heal? c category)
-        (contract/later :low-health "hurt, and only food heals the body: food first")
-        (fit c)))))
+  ([category] (fed-fit-for category nil))
+  ([category seconds-of]
+   (let [fit (fit-for category seconds-of)]
+     (fn [c]
+       (if (hurt-cannot-heal? c category (quoted-s seconds-of c))
+         (contract/later :low-health "hurt, and only food heals the body: food first")
+         (fit c))))))
 
 (def fed-fit? "fed-fit-for a job that works a place for a while (:work)." (fed-fit-for :work))
 

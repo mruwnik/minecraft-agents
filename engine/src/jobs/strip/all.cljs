@@ -169,7 +169,7 @@
 
 (declare quote-of)
 
-(def fit? (ready/trip-fed (ready/fed-fit-for :long) #(a/cell (or (:at (:args %)) (:at (site/site %)))) #(quote-of %)))
+(def fit? (ready/trip-fed (ready/fed-fit-for :long work-s) #(a/cell (or (:at (:args %)) (:at (site/site %)))) #(quote-of %)))
 
 (defn can-start?
   "Never :bad-args: no :site or :base, and a new site without :at."

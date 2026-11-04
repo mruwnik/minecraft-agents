@@ -127,7 +127,7 @@
 
 (declare quote-of)
 
-(def fit? (ready/trip-fed (ready/fed-fit-for :long) nil #(quote-of %)))
+(def fit? (ready/trip-fed (ready/fed-fit-for :long work-s) nil #(quote-of %)))
 
 (def ways need/fetch-ways)
 

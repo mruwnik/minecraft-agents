@@ -579,6 +579,13 @@
     :long 2.1 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
     :long 1.5 8 [] :ok))     ; waiting cannot heal it: no wait (the job's own cannot-heal check stops it)
 
+(deftest fit-prices-the-jobs-own-quoted-seconds-before-the-category-stay
+  (are [seconds-of expected]
+       (= expected (kind (ready/fit-for :long seconds-of) {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 20} :inventory []}))
+    nil :later
+    (constantly 0) :later ; no quote: the category's
+    (constantly 1) :ok))
+
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
 
