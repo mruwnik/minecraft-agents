@@ -134,7 +134,7 @@
                (refusals reason) (get-in contract/too-expensive [:uses :job-time])
                (or partial searching? budget? escalating?) [s (+ s left-s) ##Inf]
                :else (get-in contract/too-expensive [:uses :job-time]))]
-    (cond-> {:uses {:job-time time} :route (dissoc r :goal :risk)}
+    (cond-> {:uses {:job-time time} :route (assoc (dissoc r :goal :risk) :escalating (boolean escalating?))}
       (:risk r) (assoc :risk (:risk r))
       (and found damage) (assoc-in [:uses :health] [0 damage damage])
       searching? (assoc :estimate true)

@@ -434,7 +434,7 @@
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
                  (if slice
-                   (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (opts refused)))
+                   (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (assoc (opts refused) :full? dig-route/heap-full?)))
                    (dig-route/route seen-floor from goal (opts refused))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
