@@ -1,4 +1,4 @@
-;; jobs.gather.mine cut-via (card 93d35cb2): iron ore seen through a 12-deep glass wall that is another player's (no dig route crosses it), the way round is unseen rock reached by a seen tunnel; go-to walks it (cut-via had its own frontier walk, found dead and deleted).
+;; jobs.gather.mine cut-via (card 93d35cb2): iron ore seen through a 12-deep glass wall that is another player's (no dig route crosses it), the way round is unseen rock reached by a seen tunnel; go-to walks it before the cut is reached (the case does not reach cut-via's own frontier walk, which stays for a walk that ends without a verdict).
 ;; Tunnel x 5, z 16..23 (the body at its north end); way round z 23, x 6..17 east to the chamber x 18..22, z 16..23 holding the ore at [20 0 18]; a stone wall z 22 hides the way round from the tunnel's north end.
 {:defaults
  {:tags [:mine :jobs] :time :any

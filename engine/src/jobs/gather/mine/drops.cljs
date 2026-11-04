@@ -120,23 +120,36 @@
         route (dig-route/route-resumed [(:id c) :drop-cut from dug max-s] at from goal prices)]
     (or (:dig route) (#{:searching :too-big :dearer} (:problem route)))))
 
+(defn frontier
+  "The remembered frontier cell to walk to and look from toward the dug cell when every cut from here costs more than
+  max-s (seen-sections/toward, the unseen priced at cut-prices' unseen step), nil when none."
+  [c dug max-s]
+  (let [{:keys [max-fall step-s unseen-step-s]} (cut-prices c)]
+    (seen-sections/toward (:primitives c) (u/cell-vec (u/self-pos c)) dug max-fall step-s unseen-step-s max-s)))
+
 (def drop-walk-opts "No dive: a drop sunk into deep water is not swum after (the card-9d1e1c07 rule of the walk to dig)." {:ways #{:walk :clear-seal} :dive false})
+
+(defn ^:async walk-to!
+  "Walk onto cell (near/go-near!, no dive): :there, :partial or :blocked."
+  [c cell]
+  (await (near/go-near! c (zipmap [:x :y :z] cell) 0 drop-walk-opts)))
 
 (defonce ^{:doc "{[job-id dug] {:mark :lo :hi}}: what the body remembered when a drop-cut search that spent its nodes began, for the plan it ends with."} search-marks (js/Map.))
 
 (per-body/store! ::search-marks #(.clear search-marks))
 
 (defn ^:async cut-via
-  "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem} (the fns of
+  "cut-to-drop! with its steps given: a map over {:drop-cut :dig-cell! :look-at! :mem :frontier :walk-to!} (the fns of
   those names' arguments). Open a way beside the cell dug (drop-cut), one dig child per cell, all the digs priced
   (cut-prices) at most max-s seconds (what is beside the cell: its drop, or a seen ore and its vein): after each dig and a
   look at what it laid open the way goes on as planned while the cell stayed open and the cells in and round the way read
   as they did and no cell seen opened since (seen-sections/opened) lets a way through cost less, else is planned again out
   of what is left (kept in :cut-spent over rounds, each dig booked at its own price once dug or failed; a cell that fills
-  again is paid for again). :cut (open: walk again), :partial (a dig or walk waits on the world),
+  again is paid for again). When every way costs more, a walk to the frontier toward the dug cell (frontier), at its steps'
+  price, and a look at the cell, then planned again. :cut (open: walk again), :partial (a dig or walk waits on the world),
   :too-big (the route search outgrew the heap) or nil (no way left, a dig or walk failed, or a dug cell planned again at
   once: it did not stay open)."
-  [c {:keys [drop-cut dig-cell! look-at! mem]} dug max-s]
+  [c {:keys [drop-cut dig-cell! look-at! mem frontier walk-to!]} dug max-s]
   (let [p (:primitives c)
         {:keys [dig-s step-s]} (cut-prices c)
         name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
@@ -193,7 +206,18 @@
           (nil? cells) nil
           (= :searching cells) :partial
           (= :too-big cells) :too-big
-          (= :dearer cells) nil
+          (= :dearer cells)
+          (when-let [f (frontier c dug (- max-s spent))]
+            (let [me (u/cell-vec (u/self-pos c))
+                  start (cost/leg-start c)
+                  w (await (walk-to! c f))]
+              (case w
+                :partial :partial
+                :there (let [spent (+ spent (cost/leg-price c start (walk me f) step-s))]
+                         (book! spent)
+                         (await (look-at! c dug))
+                         (recur nil spent nil))
+                nil)))
           (empty? cells) :cut
           (= last-dug (first cells)) nil
           :else (let [cell (first cells)
@@ -212,7 +236,8 @@
 (defn ^:async cut-to-drop!
   "Open a way beside the cell dug (cut-via with the real steps). counted: the cells whose worth max-s already holds."
   [c dug max-s counted]
-  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem} dug max-s))
+  (cut-via (assoc c ::counted counted) {:drop-cut drop-cut :dig-cell! dig-cell! :look-at! dig-look/look-at! :mem ctx/mem
+                                        :frontier frontier :walk-to! walk-to!} dug max-s))
 
 (defn lip-point
   "Where the body leans out over the cell it stands beside: its own cell's edge toward dug (a cell [x y z] at its level),
