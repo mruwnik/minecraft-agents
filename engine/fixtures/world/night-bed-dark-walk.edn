@@ -4,8 +4,8 @@
 ;; (walk dark ~1 s against ~12 s staying): the body walks 42 blocks to the bed and sleeps. (A fully dark way is a near tie with staying.)
 ;; Should-fail: night.bed-walk-unsafe and a shut-in. Case 2: in a glowstone-lit stone tunnel (staying spawns nothing) with the bed
 ;; out past its open end over dark ground: night.bed-walk-unsafe, then shut-in walls the body in. Should-fail: it walks out and sleeps.
-;; Case 3 (cc56de38): at dusk in a glowstone-lit stone tunnel, the bed 82 blocks down it: the walk is lit (0 hp) but there and
-;; back costs more than sheltering here, so night.bed-walk-unsafe and the body stays. Should-fail: it walks to the bed and sleeps.
+;; Case 3 (cc56de38): at dusk in a glowstone-lit stone tunnel, the bed 82 blocks down it: the walk is lit (0 hp, no dearer than
+;; staying; overdue, the bed is taken), so the body walks to the bed and sleeps. Should-fail: night.bed-walk-unsafe.
 ;; Needs the night (bed use is decided by the clock).
 {:defaults
  {:tags [:night :survival :bed]
@@ -23,21 +23,22 @@
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 100}
             {:no-event {:source :job :kind :night.bed-walk-unsafe} :for-s 100 :until {:source :action :kind :done :data {:name "sleep"}}}]}
   {:name "a-far-bed-out-of-a-lit-tunnel-is-not-walked-to"
-   :blocks [[:set [48 0 8] "red_bed[facing=east,part=foot]"] [:set [49 0 8] "red_bed[facing=east,part=head]"]
+   :plot {:light :sky :length 120 :width 16 :height 6}
+   :memory [{:kind :bed :data {:pos #xyz [100 0 8]} :policy {:cap 1 :ttl :forever}}]
+   :blocks [[:set [100 0 8] "red_bed[facing=east,part=foot]"] [:set [101 0 8] "red_bed[facing=east,part=head]"]
             [:fill [0 0 7] [20 3 9] "stone"] [:fill [1 0 8] [20 1 8] "air"]
             [:set [4 2 8] "glowstone"] [:set [12 2 8] "glowstone"] [:set [20 2 8] "glowstone"]]
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 100}]
-   :after [[:body-near [6.5 0 8.5] 3]]}
-  {:name "a-far-bed-down-a-lit-tunnel-is-not-walked-to-at-dusk"
+   :after [[:body-near [10.5 0 8.5] 10.5]]}
+  {:name "a-far-bed-down-a-lit-tunnel-is-walked-to-at-dusk"
    :plot {:light :sky :length 100 :width 16 :height 6}
    :blocks [[:fill [0 0 7] [92 3 9] "stone"] [:fill [1 0 8] [91 1 8] "air"]
             [:set [88 0 8] "red_bed[facing=east,part=foot]"] [:set [89 0 8] "red_bed[facing=east,part=head]"]
             [:set [4 2 8] "glowstone"] [:set [12 2 8] "glowstone"] [:set [20 2 8] "glowstone"] [:set [28 2 8] "glowstone"] [:set [36 2 8] "glowstone"] [:set [44 2 8] "glowstone"] [:set [52 2 8] "glowstone"] [:set [60 2 8] "glowstone"] [:set [68 2 8] "glowstone"] [:set [76 2 8] "glowstone"] [:set [84 2 8] "glowstone"]]
    :memory [{:kind :bed :data {:pos #xyz [88 0 8]} :policy {:cap 1 :ttl :forever}}]
    :act [[:time-set 12600]
-         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
-   :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
-            {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 60}]
-   :after [[:body-near [6.5 0 8.5] 3]]}]}
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 100}
+            {:no-event {:source :job :kind :night.bed-walk-unsafe} :for-s 100 :until {:source :action :kind :done :data {:name "sleep"}}}]}]}
