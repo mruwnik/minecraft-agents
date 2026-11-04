@@ -235,25 +235,25 @@
     (boolean (some #(contains? rules/unbreakable (:name (look/seen-block p (zipmap [:x :y :z] %)))) cuts))))
 
 (defn lit-steps-s
-  "Seconds n steps of a stair dir (:down, :level) take, lit as they go (cost/lit-way-s over stair-time's steps)."
-  [dir n]
-  (cost/lit-way-s (stair-time/steps-s dir n) n))
+  "Seconds n steps of a stair dir (:down, :level) take, lit as they go with torches of item (nil: the plain torch; cost/lit-way-s over stair-time's steps)."
+  [dir n item]
+  (cost/lit-way-s (stair-time/steps-s dir n) n item))
 
-(defn strip-s "Seconds n blocks of strip tunnel take (lit-steps-s :level)." [n] (lit-steps-s :level n))
+(defn strip-s "Seconds n blocks of strip tunnel take (lit-steps-s :level) hanging torches of item." [n item] (lit-steps-s :level n item))
 
 (defn cut-s
   "Seconds a mine's cut {:down :level :back} took (jobs.gather.mine's :cut): its stair cells down and its level cells
   (tunnel, branches, side cuts) at lit-steps-s of the steps they make (stair-time/step-cells), and the blocks it walked
   back (from branch and side-cut ends) at cost/walk-cost."
-  [{:keys [down level back]}]
-  (+ (lit-steps-s :down (/ (or down 0) (stair-time/step-cells :down)))
-     (lit-steps-s :level (/ (or level 0) (stair-time/step-cells :level)))
+  [{:keys [down level back]} item]
+  (+ (lit-steps-s :down (/ (or down 0) (stair-time/step-cells :down)) item)
+     (lit-steps-s :level (/ (or level 0) (stair-time/step-cells :level)) item)
      (:cost (cost/walk-cost {:distance (or back 0)}))))
 
 (defn tunnel-way
   "{:way :tunnel :cost :y} of a tunnelled ore need as jobs.gather.mine gets it unseen: the torches it stocks first
-  (stock-s), a stair from the feet to the tunnel height y, then a strip tunnel there, legs of the cost/torch-gap one
-  torch lights finding by cost/tunnel-chance within the call's search-worth (cost/search-s). y is the cheaper of the
+  (stock-s), a stair from the feet to the tunnel height y, then a strip tunnel there, legs of the blocks one torch of the kind carried
+  lights (cost/torch-gap-of) finding by cost/tunnel-chance within the call's search-worth (cost/search-s). y is the cheaper of the
   feet (a stair down to cost/ore-level when that is lower) and, with the ore's level above the feet, that level by a
   stair up (obtain.gather climbs it: not once climbed, nor through a climb-sealed? rock). The stair down and the legs
   are lit as they go (cost/lit-way-s), the stair up is dug dark (cost/dark-way-s of the kit), each over stair-time's
@@ -268,14 +268,15 @@
             p (:primitives c)
             feet (js/Math.floor (:y self))
             kit (threats/body-of p)
-            n cost/torch-gap
+            item (torch/carried-torch p)
+            n (cost/torch-gap-of item)
             stock (stock-s c)
             at-y (fn [y]
                    (let [dy (- feet y)
                          stair (if (neg? dy)
                                  (cost/dark-way-s (stair-time/steps-s :up (- dy)) (- dy) kit)
-                                 (lit-steps-s :down dy))
-                         leg (strip-s n)]
+                                 (lit-steps-s :down dy item))
+                         leg (strip-s n item)]
                      {:way :tunnel :y y
                       :cost (+ stock stair (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))
             here (at-y (min feet (or level feet)))

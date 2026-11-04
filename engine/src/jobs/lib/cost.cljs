@@ -522,9 +522,9 @@
     (+ (* torches (+ torch place)) (if (< carried torches) (trip) 0)))))
 
 (defn lit-way-s
-  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and its torches (torch-way-s, all carried)."
-  [s n]
-  (+ s (torch-way-s n ##Inf)))
+  "Seconds a way of s seconds over n blocks costs lit as it goes (the mine's stair and tunnel): s and its torches of item (torch-way-s, all carried)."
+  [s n item]
+  (+ s (torch-way-s n ##Inf item)))
 
 (defn dark-or-lit
   "{:way :lit or :dark, :dark-s :lit-s}: the cheaper of staying in the dark at a risk of `hurt` hp (each at hp-price of

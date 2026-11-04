@@ -482,13 +482,14 @@
         armed {:weapon "iron_sword" :equipment iron-set}
         n cost/torch-gap
         dark (fn [s kit] (settings/with-settings {:jobs.lib.cost.value/per-dark 0.3} #(cost/dark-way-s s n kit)))]
-    (is (= 100 (- (cost/lit-way-s 100 n) (cost/lit-way-s 0 n))) "the seconds a lit way takes to dig bear no dark price")
-    (is (= (* 2 (:cost (cost/light-cost {:carried 1}))) (cost/lit-way-s 0 (inc n))) "a torch every torch-gap blocks")
+    (is (= 100 (- (cost/lit-way-s 100 n nil) (cost/lit-way-s 0 n nil))) "the seconds a lit way takes to dig bear no dark price")
+    (is (= (* 2 (:cost (cost/light-cost {:carried 1}))) (cost/lit-way-s 0 (inc n) nil)) "a torch every torch-gap blocks")
     (is (> (- (dark 70 bare) 70) (- (dark 8 bare) 8)) "a dark way dug in 70 s meets more spawns than one walked in 8")
     (is (< (dark 70 armed) (dark 70 bare)) "an armed, armoured body fears the dark less")))
 
 (deftest a-way-lit-with-soul-torches-takes-more-of-them
   (is (< (cost/torch-way-s 60 ##Inf nil) (cost/torch-way-s 60 ##Inf "soul_torch")) "a soul torch lights fewer blocks")
+  (is (< (cost/lit-way-s 0 60 nil) (cost/lit-way-s 0 60 "soul_torch")) "a lit stair or tunnel is priced with the torch kind carried")
   (is (< (cost/torch-gap-of "soul_torch") cost/torch-gap)))
 
 (deftest a-dark-stay-is-lit-when-its-torches-cost-less-than-its-hurt

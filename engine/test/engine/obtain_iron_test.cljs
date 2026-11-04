@@ -481,7 +481,7 @@
 (defn one-more-run-worth
   "A search worth at y that pays the strip legs of one more run cutting 32 blocks (16 steps) after the first, not of two."
   [y]
-  (+ (/ (plan/strip-s cost/torch-gap) (cost/ore-chance (cost/tunnel-ore "iron" {:y y} cost/torch-gap))) (* 1.5 (plan/strip-s 16))))
+  (+ (/ (plan/strip-s cost/torch-gap nil) (cost/ore-chance (cost/tunnel-ore "iron" {:y y} cost/torch-gap))) (* 1.5 (plan/strip-s 16 nil))))
 
 (deftest an-unseen-ore-is-mined-on-while-each-run-cuts-new-ground
   (async done
@@ -490,10 +490,10 @@
         (loop [[[y dug worth runs why] & more] [[64 {:cut {:level 32} :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
                                                 [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
                                                 [64 {} 5000 3 "a run that cut nothing is fruitless: three end the gather"]
-                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (- (one-more-run-worth 16) (plan/strip-s 16)) 3 "a run after which no strip leg pays is fruitless: three end the gather"]
+                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (- (one-more-run-worth 16) (plan/strip-s 16 nil)) 3 "a run after which no strip leg pays is fruitless: three end the gather"]
                                                 [64 {:cut {:level 32} :tunnel {:steps 32}} 1 0 "a call worth less than a search's trip does not start"]
                                                 [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]
-                                                [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16)))) 3 "the walk back from its branches is spent too: no second run pays"]]]
+                                                [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16 nil)))) 3 "the walk back from its branches is spent too: no second run pays"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-12 -12 16 16]) (assoc-in [:self :pos :y] y)) [f/own-zone])
                 calls (atom 0)
                 eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
@@ -596,6 +596,7 @@
   (let [held (atom 0)
         p (js-obj)]
     (with-redefs [torch/torches-held (fn [_] @held)
+                  torch/carried-torch (fn [_] nil)
                   need/torch-due (fn [_ _] [0 64 0])]
       (is (= [(cost/torch-way-s 1 0) (cost/torch-way-s 1 1)]
              (for [n [0 1]] (do (reset! held n) (gather/torch-way {:primitives p} [:never "dark hall" hall-cause])))))

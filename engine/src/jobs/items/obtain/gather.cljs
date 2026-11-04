@@ -305,7 +305,7 @@
   those held; nil for any other refusal (ready/own-way)."
   [c s]
   (when (torch-due c (contract/status-cause s))
-    (cost/torch-way-s 1 (torch/torches-held (:primitives c)))))
+    (cost/torch-way-s 1 (torch/torches-held (:primitives c)) (torch/carried-torch (:primitives c)))))
 
 (defn start-cause
   "The cause of the need's child's start check now, with the gather's torch among the ways the check prices against the walk to look."
@@ -338,7 +338,7 @@
         n (u/cut-cells cut)
         total (+ n (or blocks 0))
         stops (+ (or stops 0) (if stopped? 1 0))
-        _ (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent (+ (cut-s cut) (or spent 0)) :stops stops}) (update :gather dissoc :climb-heading)))
+        _ (ctx/update-mem! c #(-> % (assoc-in [:gather :dug (:key need)] {:blocks total :spent (+ (cut-s cut (torch/carried-torch (:primitives c))) (or spent 0)) :stops stops}) (update :gather dissoc :climb-heading)))
         way (way-left c need)
         y (js/Math.floor (:y (u/self-pos c)))
         saw (str "mine cut " n " blocks at y " y " and saw no " (:key need))]
