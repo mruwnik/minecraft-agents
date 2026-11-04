@@ -78,7 +78,7 @@
                                                    #js {:name "air" :fullCube false}))})]
     (is (= [2 64 0] (walk/solid-ahead (door false) steps)) "a shut door is in the way of a plan made over unseen cells")
     (is (nil? (walk/solid-ahead (door true) steps)) "an open one is not")
-    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans"))
+    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans")
     (is (nil? (walk/solid-ahead (lever) steps)) "a lever or button is no wall; only blocks a hand opens are")))
 
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
