@@ -12,6 +12,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]
@@ -25,7 +26,7 @@
   the bed, a roofed room, else :bed-open. A body already asleep is done.
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
-  The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
+  The walk only walks (go-to :ways #{:walk :clear-seal}): it never builds or pillars, and digs only out of the shelter it is shut in (:dig-out; go-to leaves it for a bed at night too), so a bed behind someone's wall is :bed-unreachable.
   The time spent walking is bounded by the first quote's own upper bound (:job-time, go-to's :spend); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
@@ -134,6 +135,8 @@
 
 (def walk-ways #{:walk :clear-seal})
 
+(def seal-ways "The walk of a body shut in its shelter also digs out of it." (conj walk-ways :dig-out))
+
 (def no-way-reasons
   "Reasons of a go-to quote that found no route because the land the body can walk is closed, the bed walled in or cut off, or the only
   way leads to the edge of what is loaded (:partial); other reasons (the search goes on, a body mid-jump, an unloaded goal, a refused call) say nothing of the bed."
@@ -222,7 +225,9 @@
         bed (bed-of c)
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
-        quote-args {:pos bed :range 2 :ways walk-ways}
+        _ (when (sh-inside/sheltered-in c) (ctx/update-mem! c assoc :was-sealed true))
+        sealed? (boolean (or (sh-inside/sheltered-in c) (:was-sealed (ctx/mem c))))
+        quote-args {:pos bed :range 2 :bed? true :ways (if sealed? seal-ways walk-ways)}
         t0 (ctx/now c)
         q (when-not (taken?) (await (ctx/quote c 'jobs.movement.go-to quote-args)))
         route (:route q)
@@ -232,7 +237,7 @@
         walk-hi (:walk-hi (ctx/mem c))
         walk-args (cond-> quote-args walk-hi (assoc :spend {:job-time walk-hi}))
         late? (late-walk? route walk-hi (:walk-spent (ctx/mem c) 0))
-        no-way? (no-way-quote? route)
+        no-way? (and (no-way-quote? route) (not sealed?))
         searching? (= :searching (some-> (:reason route) keyword))
         walk (when-not (or (taken?) no-way? late? searching?) (await (child/call-walk* c :go walk-args)))
         _ (when q (ctx/update-mem! c update :walk-spent (fnil + 0) (- (ctx/now c) t0)))]

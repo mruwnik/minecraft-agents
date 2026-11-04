@@ -90,13 +90,14 @@
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
   changed and the body is shut in its shelter. Not while it is :dug-in at night (sh-inside/night-sheltered, the verdict
-  the readiness checks wait for light on): the night job would shut the hole again."
+  the readiness checks wait for light on): the night job would shut the hole again; unless the goal is a bed, where it sleeps."
   [c result]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        bed? (:bed? (:args c))]
     (boolean (and (not (contains? (skips c) :leave-shelter))
                   (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                   (sh-inside/sheltered-in c)
-                  (not= :dug-in (sh-inside/night-sheltered p (:data (ctx/latest c :shelter))))))))
+                  (or bed? (not= :dug-in (sh-inside/night-sheltered p (:data (ctx/latest c :shelter)))))))))
 
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
