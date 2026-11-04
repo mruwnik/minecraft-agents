@@ -160,3 +160,12 @@
           radius (+ (margin) (js/Math.ceil (u/dist from pos)))
           tolls (into (cost/farm-tolls (farm-cells (:primitives c) radius)) (zone-walk-tolls c pos))]
       (not-empty tolls))))
+
+(defn with-farm-tolls
+  "tolls plus the farm cells seen near a walk from the body to pos ({:x :y :z}) that tolls does not name yet: a walk that is no
+  farm job's (collect-drops, a fetch) must not climb out of the field's water onto farmland, trampling it."
+  [tolls c pos]
+  (let [named (into #{} (map (juxt :x :y :z)) tolls)
+        from (u/self-pos c)
+        radius (+ (margin) (js/Math.ceil (u/dist from pos)))]
+    (into (vec tolls) (cost/farm-tolls (remove named (farm-cells (:primitives c) radius))))))

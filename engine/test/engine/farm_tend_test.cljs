@@ -819,3 +819,12 @@
   (is (walk-due-with {(k 2 64 2) "oak_slab"} false) "a slab is no cap")
   (is (walk-due-with {(k 2 64 2) "glass"} false) "glass is looked through")
   (is (walk-due-with {(k 2 64 2) "water"} false) "water is no cap"))
+
+(deftest a-hoe-is-not-hunted-for-one-untilled-cell-beyond-what-its-sowing-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {} (world (ground "dirt" [[2 2]]) {:inventory [(item "wheat_seeds" 4)]}) 60))]
+          (is (empty? (events-of s :obtain.exploring)))
+          (is (= "dirt" (block-at s 2 63 2)))
+          (is (true? (finished? s))))))))

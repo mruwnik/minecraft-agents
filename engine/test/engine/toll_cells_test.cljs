@@ -247,3 +247,19 @@
           (is (< (:factor hurt) (:factor whole)) "a hurt body has less to lose to the drowning")
           (is (< (:reach winded) (:reach whole)) "a body low on breath surfaces from fewer blocks")
           (is (<= 1 (:reach winded)) (pr-str winded)))))))
+
+(deftest a-go-to-walk-of-any-job-bends-round-a-planted-strip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as w} (setup (strip-blocks -6 6) [])
+              trail (atom [])]
+          (.override (.-world p) "steer"
+                     (fn [token args impl]
+                       (let [decide (.-decide args)
+                             logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
+                         (impl token (walk/steer-args (.-timeoutS args) logged)))))
+          (core/submit! eng '(jobs.movement.go-to {:pos [40 64 0] :range 1}) {})
+          (await (tu/tick-until-idle! eng 200))
+          (is (seq @trail))
+          (is (not (on-strip? @trail -5 5))))))))

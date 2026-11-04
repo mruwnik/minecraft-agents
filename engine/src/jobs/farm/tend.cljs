@@ -553,6 +553,17 @@
           (dissoc :call-args)
           (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r)))))))
 
+(defn till-worth
+  "Seconds the till call is worth: the sowing of the cells it tills (the untilled cells, up to the seeds carried), cost/sown-worth
+  each, so fetching a hoe for one trampled cell is priced against that cell. nil without a crop to sow."
+  [c f]
+  (when-let [crop (sow-crop c)]
+    (let [args (decide-args c)
+          ws (cw/waters c (ground-cells c))
+          wet? (or (:irrigate args) (every? (fn [{:keys [x y z]}] (lib-farm/hydrated? ws x y z)) (ground-cells c)))
+          n (min (count (:untilled f)) (get (lib-farm/sowable c) (crops/seed-of crop) 0))]
+      (* n (cost/sown-worth crop (crops/stages-per-s wet? nil))))))
+
 (defn with-zone-opt-out
   "The args of a child, with :ignore-zones? true when the tend job has it."
   [c child-args]
@@ -570,6 +581,8 @@
     (if-not call
       (finish-part! c (:report p))
       (let [step (:slot call)
+            w (when (and (= :till step) (not (:worth (:args call)))) (till-worth c (check-facts c)))
+            call (cond-> call w (assoc-in [:args :worth] w))
             _ (ctx/update-mem! c assoc :call-args (:args call))
             e (await (ctx/call c step (:job call) (with-zone-opt-out c (:args call))))]
         (if (= :continue e)
