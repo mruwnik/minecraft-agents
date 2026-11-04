@@ -48,12 +48,14 @@
   (if (<= dist (* 16 (or (game/simulation-distance) default-simulation-distance))) secs 0))
 
 (defn at-least-chance
-  "The chance at least m growth stages grew in secs at rate stages a second (Poisson)."
+  "The chance at least m growth stages grew in secs at rate stages a second (Poisson). 1 less the summed pmf can round just
+  below 0 when it is near certain not to have happened, so it is held to [0, 1]."
   [m secs rate]
   (let [mu (* rate (max 0 secs))]
     (if (<= m 0)
       1
-      (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range m)))))))
+      (-> (- 1 (reduce + (map (fn [k] (* (js/Math.exp (- mu)) (/ (js/Math.pow mu k) (reduce * 1 (range 1 (inc k)))))) (range m))))
+          (max 0) (min 1)))))
 
 (defn ripe-chance
   "The chance a field cell seen holding crop at stage `age` `secs` seconds ago is ripe now: at least the stages left to

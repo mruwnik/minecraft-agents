@@ -15,6 +15,7 @@
             [jobs.farm.tend-box :as tend-box]
             [jobs.farm.tend-decide :as decide]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.farm :as cost-farm]
             [jobs.lib.crops :as crops]
             [jobs.lib.field-area :as fa]
             [jobs.lib.look :as look]
@@ -686,6 +687,10 @@
     (is (> (cost/ripe-chance "wheat" 6 600 wet) (cost/ripe-chance "wheat" 0 600 wet)) "fewer stages left ripen sooner")
     (is (> (cost/ripe-chance "wheat" 4 600 wet) (cost/ripe-chance "wheat" 4 600 dry-rate)) "dry farmland grows slower")
     (is (= 0 (cost/ripe-chance "wheat" 4 6000 (crops/stages-per-s true 8))) "under light 9 nothing grows")))
+
+(deftest a-chance-is-never-below-zero
+  (is (<= 0 (cost-farm/at-least-chance 12 1 0.19)) "1 less the summed pmf rounds to -2.2e-16 here")
+  (is (<= 0 (cost-farm/at-least-chance 13 1 0.34))))
 
 (deftest a-field-beyond-the-simulation-distance-does-not-grow
   (let [wet (crops/stages-per-s true nil)]

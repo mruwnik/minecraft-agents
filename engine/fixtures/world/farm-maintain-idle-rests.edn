@@ -1,6 +1,7 @@
 ;; Card 5305bc20: a listed farm.maintain over a field with nothing to do (young wheat, no seed, no tools) rests (waiting :resting, :recheck-after-ms)
 ;; instead of re-running its start check every tick (that check once held a body at 100% CPU). Field x 60..62, z 16..19: farmland y -1 (water row z 17), wheat age 0 y 0.
 ;; Should-succeed: the job's waiting event carries the farm recheck (:recheck-after-ms 25000, jobs.farm.tend/::recheck-s), which the scheduler rests on; before, the wait had none and was re-checked every tick.
+;; The repeat form must rest too and never be parked: a worth-of that rounded to -1e-13 once failed it (card 66feb2a1).
 ;; Should-fail (control): none.
 {:defaults
  {:tags [:farm :maintain :jobs]
@@ -13,4 +14,9 @@
  :cases
  [{:name "listed-maintain-with-nothing-to-do-rests-between-checks"
    :act [[:job (jobs.farm.maintain {:area {:min #xyz [60 -1 16] :max #xyz [62 0 19]}})]]
-   :expect [{:event {:source :job :kind :waiting :data {:recheck-after-ms 25000}} :within-s 60 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :waiting :data {:recheck-after-ms 25000}} :within-s 60 :of-job true}]}
+  {:name "listed-repeat-of-maintain-rests-and-is-never-parked"
+   :act [[:job (repeat (jobs.farm.maintain {:area {:min #xyz [60 -1 16] :max #xyz [62 0 19]}}))]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :resting :recheck-after-ms 25000}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :failed} :for-s 20 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}]}
