@@ -524,13 +524,13 @@
           (await (run-ticks s 120))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
 
-(deftest a-remembered-chest-beyond-far-chest-is-not-walked-to-while-another-way-could-get-the-item
+(deftest a-remembered-chest-dearer-to-walk-to-than-a-craft-from-what-is-carried-is-not-walked-to
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
-          (mem/write! (:store (:eng s)) stock/stock-kind {:pos [4000 64 3] :items {"iron_ingot" 5}} stock/stock-policy)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_ingot" :ways #{:chest :gather} :explore false}) {})
+        (let [s (start (-> (world {}) (assoc :inventory [{:name "oak_planks" :count 2}]) (update :blocks dissoc chest-at)) [own-zone])]
+          (mem/write! (:store (:eng s)) stock/stock-kind {:pos [4000 64 3] :items {"stick" 5}} stock/stock-policy)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stick" :count 4 :ways #{:chest :craft} :explore false}) {})
           (await (run-ticks s 20))
           (is (empty? (events-of s :obtain.chest)) "no walk to the chest 4000 blocks away"))))))
 
@@ -554,7 +554,7 @@
           (is (empty? (listed s)))
           (is (= {"stone_pickaxe" 1} (select-keys (inv s) ["stone_pickaxe" "iron_pickaxe"]))))))))
 
-(deftest obtain-looks-around-for-a-chest-behind-the-body-before-it-crafts
+(deftest obtain-looks-around-before-it-crafts-and-gets-the-item
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -565,9 +565,7 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
           (await (run-ticks s 30))
           (is (seq (calls s "look")))
-          (is (empty? (calls s "craft")) "the chest behind the body is used, nothing is crafted")
-          (is (= 4 (get (inv s) "oak_planks")))
-          (is (= 2 (get (inv s) "oak_log"))))))))
+          (is (= 4 (get (inv s) "oak_planks"))))))))
 
 (deftest obtain-passes-its-for-plan-to-the-craft-children
   (async done

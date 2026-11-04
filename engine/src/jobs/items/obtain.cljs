@@ -8,15 +8,15 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s gather-need-s gathers? holds makes? max-inspections names-of near-chest own-worth shortfall tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of bill-item-s gather-need-s gathers? holds makes? max-inspections names-of own-worth shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.loose :as loose-way]
             [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
-            [jobs.items.obtain.plan :refer [craft-plan gather-plan smelt-s]]
-            [jobs.items.obtain.price :refer [price-of]]
+            [jobs.items.obtain.plan :refer [craft-plan craft-s gather-plan smelt-s walk-s]]
+            [jobs.items.obtain.price :refer [gather-s price-of]]
             [jobs.items.obtain.why :refer [gather-fix no-source-why tried-text]]
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]
@@ -214,13 +214,15 @@
        (empty? (candidates c names))))
 
 (defn chests-to-try
-  "The candidates, minus the ones further than near-chest when a chain from what is carried makes the need: crafting now
-  is cheaper than a long walk, to a chest that may not hold it or to one that does."
+  "The candidates whose walk there and back (with its risk) costs no more than the cheapest other way that would start
+  (a craft from what is carried, a gather of seen needs; a way already tried is out): a long walk to a chest, one that
+  may not hold the item or one that does, is dearer than making it now. With no other way, all of them."
   [c m names n]
-  (let [cs (candidates c names)]
-    (if (and (makes? c) (not (get-in m [:tried :craft])) (craft-plan c names n))
-      (filter #(u/within? (u/self-pos c) (:pos %) (near-chest)) cs)
-      cs)))
+  (let [cs (candidates c names)
+        other (when (seq cs)
+                (apply min ##Inf (keep identity [(when-not (get-in m [:tried :craft]) (craft-s c names n))
+                                                 (when-not (get-in m [:tried :gather]) (gather-s c names n))])))]
+    (if (infinite? other) cs (filter #(<= (walk-s c (:pos %)) other) cs))))
 
 (defn ^:async step! [c]
   (let [a (:args c)

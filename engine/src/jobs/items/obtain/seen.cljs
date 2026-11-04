@@ -48,9 +48,14 @@
 
 (defn shears-source
   "How the body gets shears for wool: :carried, :craft (2 iron ingots carried), :chest (shears or 2 iron ingots in a
-  booked chest the chest source would walk to: allowed, not given up, not beyond far-chest), else nil."
+  booked chest the chest source would walk to: allowed, not given up, and no dearer to walk to there and back than the
+  walk to the nearest sheep, which the hunt that needs no shears costs too), else nil."
   [c]
-  (let [in-chest (fn [item n] (some #(>= (get (:stock %) item 0) n) (chest/candidates c [item])))]
+  (let [near-sheep (first (sheep-in-range c))
+        me (u/self-pos c)
+        bound (if near-sheep (approach-bound c near-sheep) ##Inf)
+        reachable? #(<= (* 2 (pick/walk-s me {:pos (:pos %) :range 0})) bound)
+        in-chest (fn [item n] (some #(and (>= (get (:stock %) item 0) n) (reachable? %)) (chest/candidates c [item])))]
     (or (spare/shears-at-hand (u/inventory (:primitives c)))
         (when (or (in-chest "shears" 1) (in-chest "iron_ingot" 2)) :chest))))
 

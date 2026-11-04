@@ -223,7 +223,6 @@
  :jobs.items.craft/table-radius
  :jobs.items.enchant/table-radius
  :jobs.items.give/wait-s
- :jobs.items.obtain.base/far-chest
  :jobs.lib.animal-spare/off-limits
  :jobs.lib.child/max-fruitless
  :jobs.lib.combat/attack-gap-ms

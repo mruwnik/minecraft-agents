@@ -2,7 +2,7 @@
   "The chest source: the seen chests worth a look or a withdraw, and the steps that do either."
   (:require [engine.ctx :as ctx]
             [clojure.string]
-            [jobs.items.obtain.base :refer [far-chest gathers? holds makes? names-of]]
+            [jobs.items.obtain.base :refer [holds names-of]]
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
@@ -28,26 +28,22 @@
       (get-in (ctx/frozen-call c) [:spend :job-time] ##Inf)))
 
 (defn candidates
-  "Usable chests not yet withdrawn from or given up, the seen ones and the remembered ones holding a name, nearest
-  first (a remembered one beyond far-chest only when no craft or gather way could get the item instead): [{:pos :stock items-or-nil}]."
+  "Usable chests not yet withdrawn from or given up, the seen ones and the remembered ones holding a name, within the
+  call's job time to walk to: [{:pos :stock items-or-nil}]. Which is worth the walk is priced by the caller (obtain/chests-to-try)."
   [c names]
   (let [stock (stock/stock-of (ctx/view c))
         done (:done-chests (ctx/mem c) #{})
-        me (u/self-pos c)
         seen (stock/usable-chests c)
         seen-cells (set (map stock/cell-of seen))
-        alternatives? (or (gathers? c) (makes? c))
         far (->> (remembered-chests c stock names)
                  (remove #(seen-cells (stock/cell-of %)))
-                 (filter #(walkable-in-budget? c %))
-                 (remove #(and alternatives? (not (u/within? me % (far-chest))))))]
+                 (filter #(walkable-in-budget? c %)))]
     (->> (concat seen far)
          (keep (fn [pos]
                  (let [cell (stock/cell-of pos)
                        items (get stock cell)]
                    (when-not (or (done cell) (and items (not (holds items names))))
-                     {:pos pos :stock items}))))
-         (sort-by #(u/dist me (:pos %))))))
+                     {:pos pos :stock items})))))))
 
 (defn ^:async cheapest!
   "The candidate of cs whose walk costs least (jobs.lib.walk-pick/pick!: go-to's quote with its walk risk, best-first by the
