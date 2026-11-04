@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
@@ -14,13 +15,16 @@
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
    ::max-walks {:default 2 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::click-s {:default 0.5 :doc "Seconds one click takes (the quote)." :spec (a/num-in 0 nil)}
-   ::walk-s {:default 10 :doc "Seconds one walk into reach takes (the quote)." :spec (a/num-in 0 nil)}})
+   ::scan-radius {:default 64 :doc "Blocks around the body in which the entity is looked for; the quote walks that far when it is not in sight." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn max-walks [] (settings/get settings ::max-walks))
 
-(defn quote-of [_c]
+(declare entity-of)
+
+(defn quote-of [c]
   (let [click (settings/get settings ::click-s)
-        walk (settings/get settings ::walk-s)]
+        e (entity-of (:primitives c) (:on (:args c)))
+        walk (/ (if e (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (settings/get settings ::scan-radius)) (cost/walk-blocks-per-s))]
     {:uses {:job-time [click (+ click walk) (+ click (* walk (max-walks)))]}}))
 
 (defn bad-args [c]
@@ -31,7 +35,7 @@
 (defn entity-of
   "The sensed entity with this id, or nil."
   [p id]
-  (first (filter #(= id (.-id %)) (array-seq (.entities p #js {:radius 64 :max 64})))))
+  (first (filter #(= id (.-id %)) (array-seq (.entities p #js {:radius (settings/get settings ::scan-radius) :max 64})))))
 
 (def condition-statuses "Entity click statuses that are a fact about the call, not a failed try." #{:no-item :full :cannot})
 

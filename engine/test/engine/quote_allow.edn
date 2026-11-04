@@ -45,10 +45,7 @@
  jobs.gather.mine
  jobs.gather.shaft-descent
  jobs.gather.strip-tunnel
- jobs.items.collect-drops
  jobs.items.craft
- jobs.items.enchant
- jobs.items.give
  jobs.items.kitchen
  jobs.memory.forget-place
  jobs.memory.remember

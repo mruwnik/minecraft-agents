@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
@@ -43,7 +44,6 @@
 (a/defargs settings
   {::walk-radius {:default 6 :doc "Blocks, to either side and 3 up or down, within which the body walks to a standing cell with a wall to pocket when none fits where it stands (0: never walks; at most 32, the body sees no farther and the scan reads every cell of the square)." :spec (a/num-in 0 32)}
    ::job-time-s {:default 60 :doc "Seconds a pocket attempt may take." :spec (a/num-in 0 nil)}
-   ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a pocket's standing cell is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::fetch-s {:default 60 :doc "Seconds fetching a tool is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::sink-depth {:default 8 :doc "Blocks down a night shaft in sand or gravel goes looking for rock to pocket into." :spec (a/int-in 1 nil)}
    ::sink-s {:default 40 :doc "Seconds a night shaft in sand is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
@@ -139,7 +139,7 @@
         {:keys [stand fetch? sink? cells]} (site c)]
     {:feet feet :stand stand :cells cells :sink? sink?
      :open-s (when cells
-               (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block))
+               (+ (/ (u/dist feet stand) (cost/walk-blocks-per-s))
                   (/ (reduce + (map #(tools/clear-ms p (pit-site/priced-name p %)) cells)) 1000)
                   (if fetch? (settings/get settings ::fetch-s) 0)))}))
 

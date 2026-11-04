@@ -94,7 +94,6 @@
 
 (a/defargs settings
   {::max-settle-waits {:default 10 :doc "Checks of a hole drop that still moves before it counts as settled." :spec (a/int-in 0 nil)}
-   ::walk-s-per-block {:default 0.4 :doc "Seconds a quote counts to walk one block to a drop." :spec (a/num-in 0 nil)}
    ::replans {:default 4 :doc "How often a dig route is planned again after a dig of it failed, the cells before it dug." :spec (a/int-in 0 nil)}
    ::pile-reach {:default 10 :doc "How far from the place of an open death a :near spot still counts as its pile, in blocks." :spec (a/num-in 0 nil)}
    ::radius {:default 16 :doc "How far from the work area a drop is looked for when the call gives no :radius, in blocks." :spec (a/num-in 0 nil)}
@@ -575,8 +574,8 @@
   (let [{:keys [near search dig]} (:args c)
         items (candidates c (or near (u/self-pos c)))
         n (count items)
-        mean (* (settings/get settings ::walk-s-per-block)
-                (reduce + 0 (map #(u/dist (u/self-pos c) (u/pos-of (.-pos %))) (filter #(.-pos %) items))))
+        mean (/ (reduce + 0 (map #(u/dist (u/self-pos c) (u/pos-of (.-pos %))) (filter #(.-pos %) items)))
+                (cost/walk-blocks-per-s))
         names (frequencies (keep #(some-> (.-item %) .-name) items))]
     {:uses {:job-time [0 mean (if (or (pos? search) dig) ##Inf (* 3 mean))]}
      :yields {:items (update-vals names (fn [k] [0 k k]))}

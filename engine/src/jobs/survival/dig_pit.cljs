@@ -3,6 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.pen-gate :as pen-gate]
@@ -37,8 +38,7 @@
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
-  {::job-time-s {:default 90 :doc "Seconds a pit attempt may take." :spec (a/num-in 0 nil)}
-   ::walk-s-per-block {:default 0.3 :doc "Seconds a block of walk to a night pit's site is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 90 :doc "Seconds a pit attempt may take." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -121,7 +121,7 @@
     (if (and (night/night? c) (not= :here (:at s)))
       (let [toll (if s (site/toll-s c (:cell s)) 0)]
         (way/quote-of c (if s
-                          (+ (* (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (settings/get settings ::walk-s-per-block)) (site/pit-s c (:cell s)) toll)
+                          (+ (/ (u/dist (sh-sense/feet (:primitives c)) (:cell s)) (cost/walk-blocks-per-s)) (site/pit-s c (:cell s)) toll)
                           ##Inf)
                       (settings/get settings ::job-time-s) {:risk-s toll :morning-s (if s (morning-s c (:cell s) (straight (:cell s))) 0)}))
     (way/quote-of c (if stop

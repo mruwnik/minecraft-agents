@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cond :as cond]
             [jobs.lib.give-villager :as gv]
             [jobs.lib.need :as need]
@@ -59,7 +60,6 @@
    ::walk-leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-blocked {:default 3 :doc "Blocked attempts before the job gives up." :spec (a/int-in 0 nil)}
    ::head-height {:default 1.6 :doc "Height of a player's head above its position, in blocks." :spec (a/num-in 0 nil)}
-   ::walk-s {:default 10 :doc "Seconds the walk to the player takes (the quote)." :spec (a/num-in 0 nil)}
    ::toss-s {:default 2 :doc "Seconds the toss and the confirmation take (the quote)." :spec (a/num-in 0 nil)}})
 (defn radius [] (settings/get settings ::radius))
 (defn reach [] (settings/get settings ::reach))
@@ -153,7 +153,8 @@
   (if (villager-to? c)
     (gv/quote-of c)
   (let [n (or (:count (:args c)) 1)
-        walk (settings/get settings ::walk-s)
+        there (find-player (:primitives c) (:to (:args c)) (radius))
+        walk (/ (if there (u/dist (u/self-pos c) there) (radius)) (cost/walk-blocks-per-s))
         toss (settings/get settings ::toss-s)]
     {:uses {:job-time [toss (+ toss walk) (+ toss (* 2 walk) (wait-s))]}
      :done [0 n n]})))

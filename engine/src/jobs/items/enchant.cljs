@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
@@ -48,7 +49,6 @@
   {::table-radius {:default 16 :doc "How far to look for a table, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
-   ::walk-s {:default 10 :doc "Seconds the walk to the table takes (the quote)." :spec (a/num-in 0 nil)}
    ::visit-s {:default 5 :doc "Seconds the offers and the enchant take at the table (the quote)." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn table-radius [] (settings/get settings ::table-radius))
@@ -120,8 +120,9 @@
     (contract/ok :enchanted "enchanted" :units :items :done 1 :left 0 :result {:enchanted true})
     (contract/later :enchanting "enchant: the round ends the call" :units :items :done 0 :left 1 :result {:enchanted false})))
 
-(defn quote-of [_c]
-  (let [walk (settings/get settings ::walk-s)
+(defn quote-of [c]
+  (let [table (or (:table (:args c)) (find-table (:primitives c) (table-radius)))
+        walk (/ (if table (u/dist (u/self-pos c) table) (table-radius)) (cost/walk-blocks-per-s))
         visit (settings/get settings ::visit-s)]
     {:uses {:job-time [visit (+ walk visit) (+ walk (* 3 visit))]
             :items {"lapis_lazuli" [1 2 3]}}}))
