@@ -43,6 +43,7 @@
   (into {} (for [dx (range w) dz (range h)] [(str (+ x dx) "," y "," (+ z dz)) name])))
 
 (def small {:w 3 :h 3 :range 6})
+(def carried-bucket [{:name "bucket" :count 1}])
 
 (defn ice-path
   "Ice at y 63 from x0 to x1, z -1 to 2: ground to walk on that is no spot (an ice top is not a floor to farm)."
@@ -217,13 +218,26 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:blocks wet-world})
+        (let [{:keys [eng seen]} (setup {:blocks wet-world :inventory carried-bucket})
               r (await (child-outcome eng job small 4))
               dry (first (filter #(= {:x -4 :y 63 :z 0} (:pos %)) (:spots r)))]
           (is (= {:x 2 :y 63 :z 0} (:spot r)))
           (is (= #{{:x 2 :y 63 :z 0} {:x -4 :y 63 :z 0} {:x 2 :y 63 :z -6}} (set (map :pos (:spots r)))))
           (is (= 0 (:water-share dry)))
           (is (pos? (:water (:costs dry))) "nine dry cells pay for water brought to them"))))))
+
+(deftest water-is-not-brought-to-a-dry-patch-when-no-bucket-is-carried-or-to-be-had
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dry-of (fn [inv]
+                       (let [{:keys [eng]} (setup {:blocks wet-world :inventory inv})]
+                         (child-outcome eng job small 4)))
+              water-of (fn [r] (:water (:costs (first (filter #(= {:x -4 :y 63 :z 0} (:pos %)) (:spots r))))))
+              with (water-of (await (dry-of carried-bucket)))
+              without (water-of (await (dry-of [])))]
+          (is (pos? with))
+          (is (not (pos? (or without 0))) "no bucket carried or to be had: no water is brought"))))))
 
 (deftest never-picks-water-or-lava
   (async done
@@ -395,7 +409,7 @@
               a {:w 3 :h 3 :range 10}
               from {:x 0 :y 64 :z 0}
               expected (scan-at world {:x 0 :y 64 :z 0} a from)
-              {:keys [eng p]} (setup {:blocks world})
+              {:keys [eng p]} (setup {:blocks world :inventory carried-bucket})
               reads (atom 0)
               orig (.-blockAt p)
               _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
@@ -438,7 +452,7 @@
         (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -4 4 3 3 63 "dirt") {"6,63,1" "water"})
               a {:w 3 :h 3 :range 10}
               expected (scan-at world {:x 0 :y 64 :z 0} a {:x 0 :y 64 :z 0})
-              {:keys [eng p]} (setup {:blocks world})
+              {:keys [eng p]} (setup {:blocks world :inventory carried-bucket})
               out (atom :not-done)
               parent (tu/recording-parent job a out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]

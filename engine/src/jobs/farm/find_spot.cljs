@@ -2,10 +2,12 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.torch :as torch]
+            [jobs.lib.util :as u]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
             [jobs.lib.world :as known]
             [jobs.lib.pace :as pace]
@@ -90,6 +92,13 @@
        :h (inc (- (apply max zs) (apply min zs)))
        :farmland? (boolean (some #(re-find #"farmland|crop " (shape/want-text (:want %))) cells))})))
 
+(defn bucket-s
+  "Seconds the bucket that brings water costs: 0 with one carried, else the obtain's price for it (##Inf when it has no way)."
+  [c]
+  (if (some #(contains? #{"bucket" "water_bucket"} (:name %)) (u/inventory (:primitives c)))
+    0
+    (need/item-price c "bucket" 1 (need/fetch-opts c) nil)))
+
 (defn patch-of
   "The :patch arg of the search for c's args a, or nil when the plan is missing, unreadable or empty."
   [c a]
@@ -98,7 +107,7 @@
                (when-not (known/unreadable? pl) (footprint (:cells pl))))
              (select-keys a [:w :h]))]
     (when fp
-      (merge fp (select-keys a [:plan :range :max-step :worth]) {:torches (torch/torches-held (:primitives c))}
+      (merge fp (select-keys a [:plan :range :max-step :worth]) {:torches (torch/torches-held (:primitives c)) :bucket-s (bucket-s c)}
              {:depth (settings/get settings ::depth) :limit (settings/get settings ::limit)}))))
 
 (defn ^:async step

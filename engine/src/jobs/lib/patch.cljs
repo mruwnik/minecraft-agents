@@ -43,20 +43,22 @@
 
 (defn water-s
   "Seconds bringing water to n dry cells costs: for each bucket of water their sources need (one wets the farm
-  water-reach square round it) a trip and fetch-s, the walk to the water and back, and the irrigate step's measured work."
-  [n fetch-s]
+  water-reach square round it) a trip and fetch-s, the walk to the water and back, the irrigate step's measured work, and
+  once bucket-s, the price of the bucket when none is carried."
+  [n fetch-s bucket-s]
   (let [r (farm/water-reach)
         sources (js/Math.ceil (/ n (dec (* (inc (* 2 r)) (inc (* 2 r))))))]
-    (+ (* sources (+ (cost/trip) fetch-s)) (cost/field-step-s :irrigate sources))))
+    (+ bucket-s (* sources (+ (cost/trip) fetch-s)) (cost/field-step-s :irrigate sources))))
 
 (defn field-price
   "The dearest-paying way to grow field-crop on cells [{:lit? :wet? :farmable?}]: {:worth :costs {:light :water :replace}
   :net :lit? :watered?}. Dark cells grow only when torched (torch-cells a torch, cost/light-cost with torches carried), dry
-  ones grow slower unless water is brought (water-s, fetch-s the walk to water and back; nil: none is known, so none is brought), a cell a hoe cannot till only when its top is dug out and filled with
+  ones grow slower unless water is brought (water-s, fetch-s the walk to water and back, bucket-s a bucket's price; nil fetch-s: none is known, so none is brought), a cell a hoe cannot till only when its top is dug out and filled with
   dirt (two blocks of cost/earthwork-s); each is done when it pays. w-wet is a wet cell's worth, a dry one that share of
   it cell-worth gives."
-  ([cells torches w-wet] (field-price cells torches w-wet 0))
-  ([cells torches w-wet fetch-s]
+  ([cells torches w-wet] (field-price cells torches w-wet 0 0))
+  ([cells torches w-wet fetch-s] (field-price cells torches w-wet fetch-s 0))
+  ([cells torches w-wet fetch-s bucket-s]
   (let [counts (frequencies (map (juxt :lit? :wet? :farmable?) cells))
         n (fn [pred] (reduce + 0 (keep (fn [[k v]] (when (apply pred k) v)) counts)))
         w-dry (* w-wet (/ (cell-worth false) (cell-worth true)))
@@ -67,7 +69,7 @@
                        dark (n (fn [l _ f] (and (grows? l f) (not l))))
                        bare (n (fn [l _ f] (and (grows? l f) (not f))))
                        costs {:light (* (js/Math.ceil (/ dark (torch-cells))) (:cost (cost/light-cost {:carried torches})))
-                              :water (if (and water? (pos? dry)) (water-s dry fetch-s) 0)
+                              :water (if (and water? (pos? dry)) (water-s dry fetch-s bucket-s) 0)
                               :replace (cost/earthwork-s (* 2 bare))}
                        worth (if water? (* w-wet (+ wet dry)) (+ (* w-wet wet) (* w-dry dry)))]
                    {:worth worth :costs costs :net (- worth (reduce + (vals costs))) :lit? (pos? dark) :watered? (and water? (pos? dry))}))]
@@ -80,19 +82,19 @@
   (:cost (cost/walk-cost {:distance away})))
 
 (defn score-patch
-  "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s}, nil when any top is
+  "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s :bucket-s s}, nil when any top is
   nil: :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole) less the earthwork of levelling it
   (cost/earthwork-s) and the walk to it, in seconds. A patch for no crops and no :worth is an order with no cap: :worth nil, scored by its costs alone, refused only
   when they are ##Inf. Any other patch scoring 0 or less has :why: :far (its worth pays for the levelling,
   not the walk too), :steep (it pays for no levelling) or :barren (it pays for nothing: dark or untillable). Open sky is
   reported, not priced: crops need light, which the cells say."
-  [{:keys [tops cells sky away torches fetch-s] whole :worth}]
+  [{:keys [tops cells sky away torches fetch-s bucket-s] whole :worth}]
   (when-not (some nil? tops)
     (let [y (commonest tops)
           work (reduce + (map #(js/Math.abs (- % y)) tops))
           level (js/Math.round (/ (* 100 (count (filter #(= y %) tops))) (count tops)))
           away (or away 0)
-          field (when (seq cells) (field-price cells (or torches 0) (if whole (/ whole (count cells)) (cell-worth true)) fetch-s))
+          field (when (seq cells) (field-price cells (or torches 0) (if whole (/ whole (count cells)) (cell-worth true)) fetch-s (or bucket-s 0)))
           costs (merge (:costs field) {:earthwork (cost/earthwork-s work) :walk (walk-s away)})
           worth (if field (:worth field) whole)
           net (if field (:net field) worth)
@@ -206,7 +208,7 @@
   :found :miss :done :reads :cache}; found is the best :limit spots so far, miss the patch with
   the fewest cells short of one (no seen ground, another's, off height, too dark or untillable; a :far one none), nil when none. The column
   caches (:cache) are passed back in the state, so a later slice reads no column twice."
-  [p {:keys [w h range depth limit blocked? farmland? torches worth] limit-step :max-step :or {farmland? true} :as a} from {:keys [next-ring found miss cache]} budget]
+  [p {:keys [w h range depth limit blocked? farmland? torches worth bucket-s] limit-step :max-step :or {farmland? true} :as a} from {:keys [next-ring found miss cache]} budget]
   (let [reads (volatile! 0)
         name-fn (fn [pos] (vswap! reads inc) (u/seen-name p pos))
         waters (->> (look/seen-blocks p {:names ["water"] :radius (+ range w h 4) :max 4096 :live? true})
@@ -247,7 +249,7 @@
                                                           :farmable? (farmable-at? cx cz t)})
                                          cols tops))
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
-                           s (score-patch {:tops tops :cells cells :sky sky :torches torches :worth worth :away (away-of x z) :fetch-s (when farmland? (fetch-s x z))})
+                           s (score-patch {:tops tops :cells cells :sky sky :torches torches :worth worth :bucket-s bucket-s :away (away-of x z) :fetch-s (when farmland? (fetch-s x z))})
                            step (max-step tops h)]
                        (when (or (nil? limit-step) (<= step limit-step))
                          (case (:why s)
