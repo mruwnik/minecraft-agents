@@ -300,6 +300,12 @@
                        (seq (leg-ends feet goal))
                        (<= (- (goal 1) (feet 1)) (js/Math.hypot (- (goal 0) (feet 0)) (- (goal 2) (feet 2))))
                        (wworld/rock-guess? (:primitives c) (:unknown c)))
+        ;; a stair or door over guesses priced as a dig route is: past the call's worth it is none
+        past? (fn [from w] (and (#{:stair :clear-path} (:step w))
+                                (past-worth? (+ (escape-way/price (:primitives c) from w (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) w from (:own-s opts)))))
+                                             (way-guesses (:primitives c) w from) (:guess-risk opts) worth)))
+        ;; the way a body could make from the cell it would approach, when it is one that is past the worth
+        past-from? (fn [from] (past? from (escape-way/choose (:primitives c) from goal spare (update opts :skip (fnil conj #{}) :approach))))
         choose-by (cond into? #(goal-way c feet goal %1 %2)
                      ;; a goal too far for one dig route, no stair, pillar or door out (a plateau top): a dig off the land's edge
                      dig-in? #(or (dig-way (:primitives c) feet goal %1 %2)
@@ -310,7 +316,7 @@
                      rock-dig? #(let [l (dig-leg c feet goal %1 %2)]
                                   (if (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
-                                      (if (or (= :approach (:step e)) (and (= :none (:step e)) (not (:why e)))) l e))
+                                      (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (and (= :none (:step e)) (not (:why e)))) l e))
                                     (or l (escape-way/choose (:primitives c) feet goal %1 %2))))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
                      #(or (dig-way (:primitives c) feet goal %1 %2) (escape-way/choose (:primitives c) feet goal %1 %2))
@@ -318,13 +324,8 @@
                      :else #(escape-way/choose (:primitives c) feet goal %1 %2))
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level
         choose (memoize (fn [may-dig? o] (if gap? (or (gap-dig c result may-dig? o) (choose-by may-dig? o)) (choose-by may-dig? o))))
-        ;; a stair or door over guesses priced as a dig route is: past the call's worth it is none
         guesses #(way-guesses (:primitives c) % feet)
-        worth-it #(if (and (#{:stair :clear-path} (:step %))
-                           (past-worth? (+ (escape-way/price (:primitives c) feet % (:own-s opts)) (reduce + 0 (map (:own-s opts) (own-cells (:primitives c) % feet (:own-s opts)))))
-                                        (guesses %) (:guess-risk opts) worth))
-                    {:step :none :why :past-worth}
-                    %)
+        worth-it #(if (past? feet %) {:step :none :why :past-worth} %)
         e (worth-it (or (when (shelter-exit? c result) {:step :leave-shelter})
                         (cheaper-fill (:primitives c) feet
                                       (or (own-stair c feet goal) (choose spare opts))
@@ -337,7 +338,9 @@
                              (not= :none (:step (escape-way/choose (:primitives c) (vec at) goal spare opts))))
                     (vec at)))
         chosen e
-        spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape-way/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))))
+        spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice))
+                                              (let [s (escape-way/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))]
+                                                (when-not (and s (= :past-worth (:why e)) (past-from? s)) s))))
         ;; a way through the body's own builds, priced against the one that spares them (own-way)
         priced-own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))
                             (some-> (own-way (:primitives c) feet e (choose (may-dig-fn c true) (assoc opts :own? (own-fn c (:own? opts)) :own-cut true)) opts)

@@ -448,10 +448,10 @@
                     (empty? bad) a
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
     (cond
-      (= :dearer a) :dearer
-      (and dearer? a (:dig a) (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (not (cost/affords? (:seconds a) (or worth-s ##Inf)))) :dearer
-      (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (cost/affords? (:seconds a) (or worth-s ##Inf))))
-      a)))
+      (or (nil? a) (#{:searching :dearer} a)) a
+      (> (route-s p (:dig a) own? fetch?) (max-route-s)) nil
+      (cost/affords? (:seconds a) (or worth-s ##Inf)) a
+      dearer? :dearer)))
 
 (defn route-cells
   "[{:cell :block :guess :class}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as

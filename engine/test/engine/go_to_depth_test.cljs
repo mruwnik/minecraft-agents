@@ -560,6 +560,22 @@
           (is (empty? (filter #(= :dig-route (:step %)) (gt/events-of s2 :go-to.escalated))) "the dig is held to what the goal is worth: no leg is begun")
           (is (> 4 (first (gt/at p))) "it stays by its start, no tunnel dug toward the goal"))))))
 
+;; A buried body in a wide chamber (x -4..4, z -4..4, feet 60), the goal 20 east in unseen rock: the dig toward it costs more than a
+;; worth of 5 s, but a cut through the wall (clear-path) from the wall's spot does not, so the approach to that spot is kept.
+(def wide-chamber
+  (apply dissoc (box -8 56 -8 24 70 8 "stone") (for [x (range -4 5) z (range -4 5) y [60 61]] (str x "," y "," z))))
+
+(deftest a-buried-body-keeps-the-approach-to-a-wall-whose-cut-is-within-the-worth-though-the-dig-is-past-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! {:blocks wide-chamber :self {:pos {:x 0.5 :y 60 :z 0.5}} :light [0 15] :seen [[-5 59 -5 5 62 5]]
+                                                  :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                 {:pos [20 63 0] :worth 5}))
+              steps (map :step (gt/events-of s :go-to.escalated))]
+          (is (= [:clear-path :approach :clear-path] steps) (pr-str steps))
+          (is (not= :past-worth (:why (:escalation @out))) (pr-str (:escalation @out))))))))
+
 ;; A long dark hall (x 0..34, feet 60..62, z -3..3) in rock, seen only round the body (x 0..6): the goal at its far end is
 ;; reached by walking along it as it shows, nothing dug.
 (def hall (apply dissoc (box -2 58 -5 36 64 5 "stone") (for [x (range 35) y [60 61 62] z (range -3 4)] (str x "," y "," z))))
