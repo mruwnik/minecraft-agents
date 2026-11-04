@@ -68,6 +68,11 @@
       (contract/ok :carried (str "carrying " have " " item) :units :items :done have :left 0 :result {:got have :item item})
       (contract/later :growing (str item ": " have " of " count " carried") :units :items :done have :left (- count have)))))
 
+(defn worth-of
+  "Seconds a root grow is worth: the 3-day food reserve (cost/food-search-worth)."
+  [_c]
+  (cost/food-search-worth cost/food-reserve-points))
+
 (defn quote-of [c]
   (let [n (:count (:args c))]
     {:uses {:job-time [0 (settings/get settings ::wait-s) (settings/get settings ::job-time-s)]}

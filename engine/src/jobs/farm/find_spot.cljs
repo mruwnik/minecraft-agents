@@ -79,6 +79,11 @@
       (apply contract/ok :found (str "find-spot: " (count spots) " spots found") data)
       (apply contract/later :searching (str "find-spot: " (count spots) " spots found") data))))
 
+(defn worth-of
+  "Seconds a root find-spot is worth: the 3-day food reserve it searches for (cost/food-search-worth)."
+  [_c]
+  (cost/food-search-worth cost/food-reserve-points))
+
 (defn quote-of [_c]
   {:uses {:job-time [0.1 1 20]}})
 

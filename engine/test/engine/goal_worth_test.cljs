@@ -52,6 +52,15 @@
     (is (= (worth 'jobs.combat.hunt (tu/fake {}) {:item "beef" :count 1})
            (worth 'jobs.combat.hunt (tu/fake {:inventory [(item "beef" 1)]}) {:item "beef" :count 2})) "a hunt: the items still to carry")))
 
+(deftest food-jobs-are-worth-the-hunger-or-the-reserve-not-inf
+  (let [food (fn [job food args] (worth job (tu/fake {:self {:food food}}) args))]
+    (is (= (cost/food-worth 4 20) (food 'jobs.survival.eat 4 {})) "eat: what reaching food is worth a hungry body")
+    (is (= (cost/food-worth 4 20) (food 'jobs.survival.get-food 4 {:carry 0})) "get-food: hunger, no reserve wanted")
+    (is (priced? (food 'jobs.survival.get-food 20 {:carry 40})) "a fed body's reserve walk is priced by the points the pack lacks")
+    (is (zero? (food 'jobs.survival.eat 20 {})) "fed: eating is worth nothing")
+    (is (= (cost/food-search-worth cost/food-reserve-points) (food 'jobs.farm.grow 20 {})))
+    (is (= (food 'jobs.farm.grow 20 {}) (food 'jobs.farm.find-spot 20 {})))))
+
 (def oak-world {:blocks (merge {"3,63,0" "dirt"} (lt/tree 3 0 "oak" 4))})
 
 (deftest harvest-wood-is-worth-the-logs-it-still-wants-or-the-tree-it-fells

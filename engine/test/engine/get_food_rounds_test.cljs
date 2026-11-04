@@ -678,7 +678,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [note [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}]
-              {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes note)
+              {:keys [eng p]} (setup {:time 6000 :self {:food 0 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes note)
               sensed (.-sensedAt p)]
           (tu/set-sensed! p (fn [pos] (let [b (sensed pos)] (when b (aset b "visible" true)) b)))
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
@@ -701,7 +701,7 @@
       (fn ^:async t []
         (let [notes [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}
                      {:kind :seen :what "cow" :id "u3" :pos [22 64 3] :by "Other" :t 999900 :until 9e15}]
-              {:keys [eng p seen]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes notes)]
+              {:keys [eng p seen]} (setup {:time 6000 :self {:food 0 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes notes)]
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (seq (calls p "attack")) "the hunt counts the noted pair as get-food does: the cow in sight is the surplus")
           (is (= [{:name "cow" :adults 3 :keep 2}] (mapv #(select-keys % [:name :adults :keep]) (filterv #(= :food.killed (:kind %)) @seen)))))))))
@@ -1013,7 +1013,7 @@
                                    (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
           (set! child/pause! (fn [c seconds why] (swap! pauses inc) (pause c seconds why)))
           (try
-            (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
+            (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :worth 1e9}) {})
             (await (run-until-idle! eng p 6))
             (is (pos? @pauses) "the refused stay is waited out")
             (is (= 1 (count (entries eng :smelt/cooking))) "the cooking is not forgotten")

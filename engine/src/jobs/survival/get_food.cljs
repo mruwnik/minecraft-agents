@@ -270,6 +270,11 @@
   [c]
   (checks/goal (fed? c) [:fed "fed"] [:hungry "not fed"] {:units :food :left (max 0 (- foods/top-up-food (food-level c)))}))
 
+(defn worth-of
+  "Seconds a root get-food is worth: reaching food for the body's hunger, or the :carry reserve it lacks (animals/search-benefit)."
+  [c]
+  (animals/search-benefit c))
+
 (defn quote-of [_c]
   {:uses {:job-time [0 90 ##Inf]}})
 

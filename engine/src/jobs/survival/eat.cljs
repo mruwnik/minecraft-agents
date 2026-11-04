@@ -7,6 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
@@ -38,6 +39,12 @@
    :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}
    :get-food? {:doc "with no edible food carried and the body hungry, get some with jobs.survival.get-food first; false: end :no-food at once (reflexes that only eat what is carried)" :spec boolean? :default true}})
+
+(defn worth-of
+  "Seconds a root eat is worth: what reaching food is worth the body now (cost/food-worth)."
+  [c]
+  (let [self (.self (:primitives c))]
+    (cost/food-worth (.-food self) (.-health self))))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
