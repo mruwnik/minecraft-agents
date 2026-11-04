@@ -12,7 +12,7 @@
 
 (def doc
   "Walk to look, as a player judging a dark tunnel does, one leg: the unseen `:side` cell is looked at, walked to at `:to`
-  (go-to, on foot) and looked at again (look-edge/look!), then the body walks back to where the call began. A side still
+  (go-to, on foot) and looked at again (look-edge/look!), then, while an unseen side of the region is left that another walk from there is bought for, the next one; then the body walks back to where the call began. A side still
   unseen after the walk is written to body memory (:walk-looked {:cells}, walked-policy): from close by it stayed unseen, so no later
   walk-look is offered for it (jobs.lib.ready/walk-look). Readiness runs it as a check's :look-first child, the leg priced
   (walk-risk/look-way there and back); the check after it offers the next leg the walk opened. Needs nothing; ends :done
@@ -45,29 +45,39 @@
 
 (defn cell-of [{:keys [x y z]}] [x y z])
 
+(defn finish-leg!
+  "Writes the leg's side to :walk-looked when it is still unseen after the walk."
+  [c side]
+  (when (and (look/unseen? (:primitives c) [side]) (:edge-walked (ctx/mem c)))
+    (ctx/remember! c :walk-looked {:cells [(cell-of side)]} walked-policy)))
+
 (defn ended
-  "The ending of kind with cause, once the side, when still unseen, is written (:walk-looked)."
+  "The ending of kind with cause, with the info walk-look.ended of the first side."
   [c kind cause]
   (let [side (:side (:args c))
         unseen? (look/unseen? (:primitives c) [side])]
-    (when (and unseen? (:edge-walked (ctx/mem c))) (ctx/remember! c :walk-looked {:cells [(cell-of side)]} walked-policy))
     (ctx/emit! c :walk-look.ended :info {:side side :unseen unseen?
                                          :text (if unseen? "walked to look: the side stayed unseen" "walked to look: the side shows")}))
   (ctx/end c kind cause))
 
 (defn ^:async step [c]
-  (let [{:keys [side to]} (:args c)
+  (let [{:keys [side to]} (or (:leg (ctx/mem c)) (:args c))
         from (:from (ctx/mem c))
         cell (cell-of side)]
     (if (and (look/unseen? (:primitives c) [side]) (not (contains? (:edge-looked (ctx/mem c)) cell)))
       (await (look-edge/look! c [cell] to))
-      (let [w (if (u/within? (sh-sense/feet (:primitives c)) from 0)
-                {:kind :done}
-                (await (ctx/call c :back 'jobs.movement.go-to {:pos from :range 0 :ways #{:walk} :floor cost-health/spend-down})))]
-        (cond
-          (= :continue w) :again
-          (= :done (:kind w)) (ended c :done nil)
-          :else (ended c :condition-failed {:reason :no-way-back :from from}))))))
+      (let [_ (finish-leg! c side)
+            _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
+            next-leg (ready/next-leg c from (:tried (ctx/mem c)))]
+        (if next-leg
+          (do (ctx/update-mem! c assoc :leg (update next-leg :side (fn [[x y z]] {:x x :y y :z z})) :edge-walked false) :again)
+          (let [w (if (u/within? (sh-sense/feet (:primitives c)) from 0)
+                    {:kind :done}
+                    (await (ctx/call c :back 'jobs.movement.go-to {:pos from :range 0 :ways #{:walk} :floor cost-health/spend-down})))]
+            (cond
+              (= :continue w) :again
+              (= :done (:kind w)) (ended c :done nil)
+              :else (ended c :condition-failed {:reason :no-way-back :from from}))))))))
 
 (defn ^:async round [c]
   (when-not (:from (ctx/mem c))

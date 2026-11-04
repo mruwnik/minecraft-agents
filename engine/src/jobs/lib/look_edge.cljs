@@ -12,6 +12,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shore :as shore]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk-risk :as walk-risk]))
@@ -84,7 +85,7 @@
   "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once."
   [p region]
   (let [flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x region) (:y region) (:z region)))))
-        roofed (set (filter (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz})) flood))
+        roofed (set (filter (fn [[cx cy cz]] (let [cell {:x cx :y cy :z cz}] (or (sh-sense/roofed? p (sh-sense/room-roof-height) cell) (unseen-roof? p cell)))) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
                                     (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (and (flood n) (not (roofed n))))) [[1 0] [-1 0] [0 1] [0 -1]])))
         stands (remove exit? (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) roofed))]
@@ -94,7 +95,7 @@
 
 (defn walkable-near
   "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
-  Only dry stand cells with a seen roof, and not a doorway beside a cell without one: a player judging a room does not walk out through
+  Only dry stand cells with a seen roof (or one too dark to be seen yet), and not a doorway beside a cell without one: a player judging a room does not walk out through
   its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
   night could not fill it."
   [p cell]
@@ -102,15 +103,23 @@
 
 (defn far-side
   "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the closed region round `region` whose walkable-near
-  cell `to` (not beside `from`: a look from there shows as much) lies farthest from `from`,
-  nil when none: a walk to `to` and a look there shows `side` or the region past it, however far `to` lies from `side`
-  (a tunnel seen without its floor has no stand cell nearer). The end of a dark tunnel a look from here cannot make out."
-  [p from region looked]
-  (let [near-fn (delay (walkable-near-fn p region))]
-    (some->> (seq (remove looked (reach-room/unseen-sides p region)))
-             (keep (fn [side] (when-let [to (@near-fn side)] (when-not (u/within? from to 1) {:side side :to to}))))
-             seq
-             (apply max-key #(u/dist from (:to %))))))
+  cell `to` (not beside `from`: a look from there shows as much) shows the most unseen sides within look/near-of (the
+  farthest from `from` among equals), among those `to` that (affordable? to) accepts (default all: a nearer walk is
+  the one bought when the best is dear), nil when none: a walk to `to` and a look there shows `side` or the region past
+  it, however far `to` lies from `side` (a tunnel seen without its floor has no stand cell nearer). The end of a dark
+  tunnel a look from here cannot make out; a big dark yard is crossed in few legs, each showing the walls it nears."
+  ([p from region looked] (far-side p from region looked (constantly true)))
+  ([p from region looked affordable?]
+   (let [near-fn (delay (walkable-near-fn p region))
+         near (or (look/near-of p) 4)
+         edge (:edge (sh-inside/spawn-region p region (sh-sense/sky-subtract-now p)))
+         sides (remove looked (distinct (concat (some-> edge vector) (reach-room/unseen-sides p region))))
+         shown (fn [{:keys [x y z]}] (count (filter (fn [[sx sy sz]] (<= (u/dist {:x x :y y :z z} {:x sx :y sy :z sz}) near)) sides)))]
+     (some->> (seq sides)
+              (keep (fn [side] (when-let [to (@near-fn side)] (when-not (u/within? from to 1) {:side side :to to}))))
+              (sort-by (juxt #(if (= edge (:side %)) 0 1) #(- (shown (:to %))) #(- (u/dist from (:to %)))))
+              (filter #(affordable? (:to %)))
+              first))))
 
 (defn affords-walk?
   "Whether a walk of s seconds is bought from `worth` after the seconds the job's edge walks before it spent (:edge-spent)."

@@ -738,6 +738,30 @@
         "the unseen sides of the hall judged; a side 6 past its nearest stand cell, beyond look/near-of, is still walked to")
     (is (nil? (far {:x 3 :y 64 :z 0} [[-1 64 0]])) "a side whose stand cell is beside the feet: a look from here shows as much")))
 
+(deftest the-walk-to-look-is-the-farthest-one-the-job-can-afford
+  (let [p (:primitives (ctx-of (assoc tunnel :time st/noon)))
+        far (fn [affordable?]
+              (with-redefs [lib-look/near-of (constantly 4)
+                            shore/standable? (fn [_ {:keys [x]}] (<= x 6))
+                            reach-room/unseen-sides (constantly [[12 64 0] [3 64 0]])]
+                (:to (look-edge/far-side p {:x 0 :y 64 :z 0} {:x 3 :y 64 :z 0} #{} affordable?))))
+        farthest (far (constantly true))
+        nearer (far #(< (:x %) (:x farthest)))]
+    (is (some? nearer) "the farthest walk is dear: a nearer one is taken, not none")
+    (is (< (:x nearer) (:x farthest)))
+    (is (nil? (far (constantly false))))))
+
+(deftest the-walk-to-look-goes-first-to-the-unseen-cell-the-spawn-flood-ends-at
+  (let [p (:primitives (ctx-of (assoc tunnel :time st/noon)))
+        far (fn [edge]
+              (with-redefs [lib-look/near-of (constantly 4)
+                            shore/standable? (constantly true)
+                            sh-inside/spawn-region (constantly {:open? true :edge edge})
+                            reach-room/unseen-sides (constantly [[12 64 0] [3 64 0]])]
+                (:side (look-edge/far-side p {:x 0 :y 64 :z 0} {:x 3 :y 64 :z 0} #{}))))]
+    (is (= [3 66 0] (far [3 66 0])) "the leak the flood ends at, though other sides are farther")
+    (is (not= [3 66 0] (far nil)))))
+
 (defn unseen-site-redefs
   "Runs f with the tunnel's east end {:x 6 :y 64 :z 0} a dark hall past an unseen edge, the body standing at x, that end seen
   or not, and looked at by a look round or not."

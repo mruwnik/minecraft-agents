@@ -125,11 +125,20 @@
             (> (+ (js/Math.pow (- (aget dark i) x) 2) (js/Math.pow (- (aget dark (+ i 1)) y) 2) (js/Math.pow (- (aget dark (+ i 2)) z) 2)) r2) true
             :else (recur (+ i 3))))))
 
+(defn unseen-beside
+  "The first unseen cell [x y z] at the feet, head or one over the head of a side of cell #js [x y z] (what made an unseen-edge? of it), or nil."
+  [unseen? c]
+  (let [x (aget c 0) y (aget c 1) z (aget c 2)]
+    (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [0 1 2]
+                 :let [nx (+ x dx) ny (+ y dy) nz (+ z dz)]
+                 :when (unseen? nx ny nz)]
+             [nx ny nz]))))
+
 (defn region-flood
   "spawn-region's flood from [x y z], depth first and farthest from the start first (a far dark cell in the open is met in
   some 30 cells, not after the whole 24-block disc): ends at an unseen edge (:open?) or at the first dark cell farther
   than spawn-free-radius (:partial?: its :dark are those met so far), and puts the region for every cell x y z walks to
-  within it."
+  within it. :edge, when open: an unseen cell [x y z] beside the cell it ended at."
   [p [x y z] subtract kind-at put!]
   (let [unseen? (reach-room/memo-kind-at (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z}))))
         ;; a flooded cell is standable: spawnable where its feet and head were seen and it is not under water; seen, so
@@ -161,7 +170,8 @@
                             (.forEach ns (fn [n] (let [k (key (aget n 0) (aget n 1) (aget n 2))]
                                                    (when-not (.has seen k) (.add seen k) (.push stack n)))))
                             (recur))))))
-        region {:open? (= :open end) :dark dark :partial? (= :far end)}]
+        region {:open? (= :open end) :dark dark :partial? (= :far end)
+                :edge (when (= :open end) (unseen-beside unseen? (aget cells (dec (.-length cells)))))}]
     (.forEach (reach-room/walker-sources kind-at cells [x y z] reach/forward)
               (fn [c] (put! (str "spawn|" subtract "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region)))
     region))
