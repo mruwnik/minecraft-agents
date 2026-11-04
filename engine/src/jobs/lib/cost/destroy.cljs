@@ -67,7 +67,7 @@
 
 (defn placed-roof?
   "True when the soil block at cell looks like a roof someone laid: it sits in a soil run at most 2 thick with known open
-  air under and over the run, and a soil neighbour beside it is such a run too, so a thin flat span (the ceiling of a
+  air under it and open air over it (unseen counts when right over it), and a soil neighbour beside it is such a run too, so a thin flat span (the ceiling of a
   tunnel dug through soil has soil over it, and is not one). Natural thin arches are rarer than laid roofs, and a wrong
   guess only prices a put-back. (sensed cell) is a sensed block or nil."
   [sensed [x y z]]
@@ -76,8 +76,9 @@
         soil? (fn [c] (boolean (some->> (name-at c) (re-find soil))))
         thin? (fn [cx cy cz]
                 (and (soil? [cx cy cz])
-                     (let [run (fn [dy] (loop [k 1] (cond (open? [cx (+ cy (* dy k)) cz]) k
-                                                          (and (< k 3) (soil? [cx (+ cy (* dy k)) cz])) (recur (inc k)))))
+                     (let [run (fn [dy] (loop [k 1] (let [c [cx (+ cy (* dy k)) cz]]
+                                                     (cond (or (open? c) (and (pos? dy) (= k 1) (nil? (name-at c)))) k
+                                                           (and (< k 3) (soil? c)) (recur (inc k))))))
                            down (run -1) up (run 1)]
                        (boolean (and down up (<= (+ down up -1) 2))))))]
     (and (thin? x y z)
