@@ -210,6 +210,8 @@
   [c]
   (when-let [way (when-not (= :door (:cover-way (ctx/mem c))) (:cover-way (ctx/mem c)))]
     (ctx/update-mem! c dissoc :cover-way)
+    ;; the hostiles the cover is for become chasers first: a cover that fails must not leave a flight that has none
+    (flight/look! c)
     (if (= :pillar way)
       (when-not (flight/tried? c :pillar) (await (refuge/pillar! c false)))
       (await (refuge/plug-option! c (if (= :walls way) :plug :plug-dig) #{way})))))

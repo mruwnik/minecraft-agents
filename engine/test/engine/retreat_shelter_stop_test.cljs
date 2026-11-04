@@ -365,6 +365,14 @@
     (is (zero? (pit/shell-fails (sensing-stub rock) cells #{})) "rock seen all round: it cannot fail")
     (is (< 0 (pit/shell-fails (sensing-stub {}) cells #{}) 1) "unseen round it: each cell open at the share of open rock")))
 
+(deftest an-unsensed-dig-cell-in-the-bedrock-layer-may-be-undiggable
+  (let [rock (into {} (for [x (range -2 3) y (range -64 -40) z (range -2 3)] [[x y z] "stone"]))
+        p (sensing-stub (dissoc rock [0 -64 0] [0 -63 0] [0 -50 0]))]
+    (is (<= 0.99 (pit/floor-bad-chance p [(cell 0 -64 0)]) 1) "the lowest layer: bedrock almost surely")
+    (is (< 0.7 (pit/floor-bad-chance p [(cell 0 -63 0)]) 0.9) "a level up: less sure")
+    (is (< (pit/floor-bad-chance p [(cell 0 -50 0)]) 0.001) "above the layer an unsensed cell is rock the pick digs")
+    (is (zero? (pit/floor-bad-chance (sensing-stub rock) [(cell 0 -63 0)])) "a cell the body sensed is not guessed")))
+
 (deftest an-unsensed-shell-cell-is-solid-at-the-measured-share-for-its-distance-from-the-frontier
   (let [cells [(cell 1 64 0)]
         p (sensing-stub {})

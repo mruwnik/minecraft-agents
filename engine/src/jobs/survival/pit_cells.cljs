@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
             [jobs.lib.look :as sight]
@@ -279,13 +280,25 @@
 
 (defn unsensed-shell "How many unsensed-cells there are." [p cells keep] (count (unsensed-cells p cells keep)))
 
+(defn floor-bad-chance
+  "The chance the dig of cells meets rock that cannot be dug: for each cell the body never sensed in the bedrock layer, the
+  chance of its y (cost/guess-bad-chance of its escape/guess-class); 0 above the layer."
+  [p cells]
+  (- 1 (reduce (fn [c {:keys [y] :as cell}]
+                 (if (and (< y escape/layer-top) (some-> (u/sensed p cell) .-unknown))
+                   (* c (- 1 (cost/guess-bad-chance (escape/guess-class y nil) nil)))
+                   c))
+               1 cells)))
+
 (defn shell-fails
   "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
-  sensed (unsensed-cells): each is solid at look/unseen-solid-at-fn, as beside a dug cell (rock is clumped)."
+  sensed (unsensed-cells): each is solid at look/unseen-solid-at-fn, as beside a dug cell (rock is clumped); or meets bedrock
+  in an unsensed cell of the dig (floor-bad-chance)."
   [p cells keep]
-  (let [solid-at (sight/unseen-solid-at-fn p)]
-    (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at [x y z] true)))
-                 1 (unsensed-cells p cells keep)))))
+  (let [solid-at (sight/unseen-solid-at-fn p)
+        open (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at [x y z] true)))
+                          1 (unsensed-cells p cells keep)))]
+    (- 1 (* (- 1 open) (- 1 (floor-bad-chance p cells))))))
 
 (defn ^:async lays-open?
   "After a dig of the last of cells (those dug so far): why what the digs laid open rules the refuge out, :fluid-adjacent

@@ -884,6 +884,17 @@
           (is (= [[0 63 0] [0 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))) "two cells down: quicker than a pocket's four")
           (is (some #{[0 64 0]} (placed-cells p)) "the roof goes in above the head, shut against the zombie"))))))
 
+(deftest a-cover-that-fails-leaves-the-hostile-a-chaser-the-flight-weighs-until-it-is-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}] :entities [(zombie 1.0 64 0)]})]
+          (.override (.-world p) "dig"
+                     (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "cannot"})))
+          (core/submit! eng '(test.flight {:cover-way :pit}) {})
+          (await (core/tick! eng))
+          (is (some #(= :hostile.stopped (:kind %)) @seen) "the zombie the pit was for was a chaser that then left sight, not a flight that never had one: the flight is not cleared at once"))))))
+
 (def room
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."
   (wall-cells (concat (for [x (range -2 10)] [x -2]) (for [x (range -2 10)] [x 2]) (for [z (range -1 2)] [-2 z]))))
