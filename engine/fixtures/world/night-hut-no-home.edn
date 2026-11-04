@@ -15,7 +15,7 @@
             [:fill [15 0 18] [15 1 18] "air"]
             [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
             [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :within-s 120 :of-job true}
+   :expect [{:event {:source :reflex :kind :ended :data {:night :roofed}} :within-s 120}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 60}]
    :after [[:body-near [15 0 15] 4]]}
   {:name "closed-room-with-no-door-seen-is-dug-in-beside"
