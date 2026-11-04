@@ -10,7 +10,8 @@
  [{:name "hurt-body-tunnel-waits-low-health"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["hunger" 120 255]]}
-   :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
@@ -61,7 +62,7 @@
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [22.5 4 16.5] 2]]}
   {:name "hurt-body-stair-down-bridges-flat-over-a-void"
-   ;; 3 hp, food under 18 and none carried: only food heals; the stair passes its own fit and its flat bridge over the void
+   ;; 1.5 hp, food under 18 and none carried: only food heals; the stair passes its own fit and its flat bridge over the void
    ;; (x 11..13 at y 9, void under) runs under it, not under the bridge's own :long food wait
    :plot {:height 24}
    :blocks [[:fill [2 0 8] [30 9 24] "stone"] [:fill [7 0 8] [13 8 24] "air"] [:fill [11 9 8] [13 9 24] "air"]]
