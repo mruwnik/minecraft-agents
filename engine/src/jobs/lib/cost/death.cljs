@@ -246,12 +246,14 @@
 
 (def rate-nodes
   "[[r w]] of the Gamma notice prior {:shape :rate}: a trapezoid rule in log r, where the chances of the rate are smooth,
-  64 nodes from 14/shape + 3 below the log mean to 3 above it, the weights summing to 1. Memoized: a few priors."
+  64 nodes from 14/shape + w below the log mean to w above it, w = 3 or 14 sds of log r (1/sqrt shape) when fewer, so a
+  well-counted prior is resolved too; the weights sum to 1. Memoized: a few priors."
   (memoize
     (fn [{:keys [shape rate]}]
       (let [mid (js/Math.log (/ shape rate))
-            lo (- mid 3 (/ 14 shape))
-            h (/ (- (+ mid 3) lo) 63)
+            half (min 3 (/ 14 (js/Math.sqrt shape)))
+            lo (- mid half (/ 14 shape))
+            h (/ (- (+ mid half) lo) 63)
             us (map #(+ lo (* h %)) (range 64))
             logs (map #(- (* shape %) (* rate (js/Math.exp %))) us)
             top (apply max logs)

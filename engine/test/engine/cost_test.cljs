@@ -1047,3 +1047,11 @@
   (let [body {:health 20 :absorption 0}]
     (is (< (cost/drop-limit nil body {:max-damage 2}) (cost/drop-limit nil body nil)) "a walk capped to 2 hp takes a shorter drop")
     (is (< (cost/drop-limit nil (assoc body :health 5) nil) (cost/drop-limit nil body nil)))))
+
+(deftest rate-nodes-resolve-a-well-counted-prior
+  (doseq [shape [1 8.5 300 849.5]
+          x [0.01 1 10 100]
+          :let [rate (/ shape 0.5)
+                got (reduce + (map (fn [[r w]] (* w (js/Math.exp (- (* r x))))) (death/rate-nodes {:shape shape :rate rate})))
+                exact (js/Math.pow (+ 1 (/ x rate)) (- shape))]]
+    (is (< (js/Math.abs (- got exact)) (* 1e-5 exact)) (str "shape " shape " x " x))))
