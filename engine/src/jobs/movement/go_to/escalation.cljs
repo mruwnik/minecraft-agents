@@ -49,7 +49,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
-            [jobs.movement.go-to.escalate-choose :refer [dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
+            [jobs.movement.go-to.escalate-choose :refer [call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
@@ -193,7 +193,7 @@
   [c feet fetch? slice]
   {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
-   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c))) :bound-s (ctx/worth c)
+   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c))) :bound-s (call-budget-s c)
    :risk-s (fn [cells goal work-s] (risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn own-cut?
@@ -693,7 +693,7 @@
             plan (fn [floors-unseen-ok?]
                    (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (fetch-tool? c)
                                 (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
-                                                     :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m)) :bound-s (ctx/worth c)}
+                                                     :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m)) :bound-s (call-budget-s c)}
                                                     (range-opts c pos)))))
             cells (when in-range? (plan false))
             loosened (when (and in-range? (nil? cells)) (plan true))

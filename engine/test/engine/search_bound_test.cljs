@@ -35,6 +35,15 @@
     (is (= 40 (sb/fallback-s (assoc (ctx-at 0) :worth (constantly 40)) [0 64 0] [20 64 0] (constantly true) {})))
     (is (= ##Inf (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})) "arrive: the search goes on")))
 
+(deftest at-arrive-worth-the-time-the-chain-has-left-bounds-the-fallback-and-the-dig-budget
+  (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]
+    (let [c (assoc (ctx-at 0) :left (fn [] {:spend {:job-time 25}}))]
+      (is (= 25 (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})) "no worth: the job time left")
+      (is (= 25 (choose/dig-left-s c)))
+      (is (= 10 (choose/call-budget-s (assoc c :worth (constantly 10)))) "the lesser of the worth and the time")
+      (is (esc/replans-spent? (ctx-at 25000) {:replan-budget {:since 0 :fallback-s (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})}})
+          "so replans end by the time, not never"))))
+
 (deftest dig-route-replans-are-spent-once-they-have-taken-as-long-as-the-way-without-one-costs
   (let [m {:replan-budget {:since 1000 :fallback-s 10}}]
     (is (not (esc/replans-spent? (ctx-at 10999) m)))

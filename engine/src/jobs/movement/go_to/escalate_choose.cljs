@@ -547,10 +547,18 @@
                                    (mapv #(js/Math.floor (+ %1 0.5 (* (/ i d) (- %2 %1)))) feet goal)))
       (pos? d) [goal])))
 
-(defn call-budget-s
-  "Seconds the go-to call c may spend on a way: what the goal is worth (ctx/worth)."
+(defn time-left-s
+  "Seconds the call chain of c has left (ctx/left: job time, wall time, deadline), ##Inf when nothing bounds it."
   [c]
-  (ctx/worth c))
+  (let [{:keys [spend deadline]} (when (:left c) (ctx/left c))]
+    (apply min ##Inf (cond-> (keep (or spend {}) [:job-time :wall-time])
+                       deadline (conj (/ (- deadline (ctx/now c)) 1000))))))
+
+(defn call-budget-s
+  "Seconds the go-to call c may spend on a way: what the goal is worth (ctx/worth) within the time its chain has left. At
+  ##Inf worth the chain's time is the only price that binds."
+  [c]
+  (min (ctx/worth c) (time-left-s c)))
 
 (defn dig-left-s
   "Seconds of digging the go-to call c has left for its next door or dig leg: call-budget-s less what its doors and

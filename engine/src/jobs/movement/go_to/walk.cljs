@@ -391,12 +391,7 @@
           (ctx/update-mem! c assoc :seal-kept (into #{} (keep #(when (#{:hostile-near :danger} (:reason %)) (:cell %))) (get-in r [:data :open])))
           :again)))))
 
-(defn budget-s
-  "Seconds the call chain has left (ctx/left: job time, wall time, deadline), ##Inf when nothing bounds it."
-  [c]
-  (let [{:keys [spend deadline]} (ctx/left c)]
-    (apply min ##Inf (cond-> (keep spend [:job-time :wall-time])
-                       deadline (conj (/ (- deadline (ctx/now c)) 1000))))))
+(def budget-s choose/time-left-s)
 
 (def wall-walk-slack "Blocks farther from the goal than the nearest cell that a wall walk still takes, for a shorter walk." 1.5)
 
