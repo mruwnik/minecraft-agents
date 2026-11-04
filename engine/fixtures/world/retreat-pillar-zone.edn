@@ -1,29 +1,36 @@
 ;; Card 67b04bdb (owner Q350): the retreat pillar goes through another's area only after every way that keeps off has failed.
-;; An unarmed body in a one-wide stone doorway (x 9 and 11, z 15..19, closed at z 15) with a zombie in the cell in front of it: no wall
-;; can be placed there, so the pillar is the way. A foreign plan footprint on the pillar's top cell stands in for the zone (as in
-;; go-to-zone-pit). Should-succeed: with the footprint the pillar still goes up as the last resort and says so
-;; (retreat.trespass-last-resort). Walls case: the wall cell in front is another's footprint and the zombie is two cells off, so the walls would trespass: the pillar keeps off it and no shut-in trespass is said. Control: without the footprint it pillars and says nothing.
+;; An unarmed body in a one-wide stone doorway (x 9 and 11, z 15..20, closed at z 15 and behind the zombie) with a zombie in the cell in
+;; front of it: no wall can be placed there and the body cannot back off, so the pillar is the way. The zombie has no AI: a walking one
+;; presses on the body, its box overlaps the body's cell and the server refuses the pillar's block (a physical limit, not what the case
+;; decides). A foreign plan footprint on the pillar's top cell stands in for the zone (as in go-to-zone-pit). Should-succeed: with the
+;; footprint the pillar still goes up as the last resort and says so (retreat.trespass-last-resort). Walls case: the wall cell in front
+;; is another's footprint and the zombie is a cell farther, so the walls would trespass: the pillar keeps off it and no shut-in
+;; trespass is said. Control: without the footprint it pillars and says nothing.
 {:defaults
  {:tags [:hostile :survival :cornered :zones]
   :time :any
   :plot {:height 16}
-  :blocks [[:fill [9 0 15] [9 1 19] "stone"] [:fill [11 0 15] [11 1 19] "stone"] [:fill [10 0 15] [10 1 15] "stone"]]
+  :blocks [[:fill [9 0 15] [9 1 20] "stone"] [:fill [11 0 15] [11 1 20] "stone"] [:fill [10 0 15] [10 1 15] "stone"]]
   :register [{:trigger :hostile-near}]
   :body {:at [10.5 0 16.5] :inventory [["dirt" 24]]}
-  :act [[:summon "zombie" [10.5 0 17.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
   :limit-s 90}
  :cases
  [{:name "foreign-footprint-on-the-pillar-top-still-pillars-as-the-last-resort-and-warns"
+   :blocks [[:fill [10 0 18] [10 1 18] "stone"]]
+   :act [[:summon "zombie" [10.5 0 17.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 2 16] #at [10 2 16]] :want "stone"}]}]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
             {:event {:source :job :kind :retreat.trespass-last-resort} :within-s 40}]
    :after [[:body-near [10.5 3 16.5] 3]]}
   {:name "no-footprint-pillars-without-a-warning"
+   :blocks [[:fill [10 0 18] [10 1 18] "stone"]]
+   :act [[:summon "zombie" [10.5 0 17.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
             {:no-event {:source :job :kind :retreat.trespass-last-resort} :for-s 30}]
    :after [[:body-near [10.5 3 16.5] 3]]},
   {:name "walls-would-cross-a-footprint-so-the-pillar-keeps-off-it"
-   :act [[:summon "zombie" [10.5 0 19.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :blocks [[:fill [10 0 20] [10 1 20] "stone"]]
+   :act [[:summon "zombie" [10.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 0 17] #at [10 1 17]] :want "stone"}]}]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 40}
             {:no-event {:source :job :kind :shut-in.trespass-last-resort} :for-s 30}]

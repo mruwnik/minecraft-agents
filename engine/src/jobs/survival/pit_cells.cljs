@@ -197,15 +197,16 @@
 
 (defn ^:async plan!
   "plan-of!'s pit as the refuge (:kind :pit, :anchor the feet cell, :cells every cell it digs or fills), checked against the zone
-  rules (a last resort when a cell is another's); a stop when none fits."
+  rules (a last resort when a cell is another's, said unless the call has :trespass? false); a stop when none fits."
   [c]
   (let [plan (await (plan-of! c))]
     (if (:stop plan)
       plan
       (let [in (access/rules-input c)
             digs (concat (:prep plan) (mapcat :dig (:steps plan)))]
-        (access/trespass! c "shut-in" (or (some #(access/trespass-refusal in :dig %) digs)
-                                          (some #(access/trespass-refusal (assoc in :feet nil) :place %) (conj (:plugs plan) (:roof plan)))))
+        (when-not (false? (:trespass? (:args c)))
+          (access/trespass! c "shut-in" (or (some #(access/trespass-refusal in :dig %) digs)
+                                            (some #(access/trespass-refusal (assoc in :feet nil) :place %) (conj (:plugs plan) (:roof plan))))))
         (ctx/update-mem! c dissoc :pit-drops)
         (assoc plan :kind :pit :anchor (sh-sense/feet (:primitives c)) :cells (plan-cells plan))))))
 

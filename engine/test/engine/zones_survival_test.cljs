@@ -131,10 +131,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup pit-world [(zone "Miles" [0 60 0] [0 63 0])])]
+        (let [{:keys [eng p seen]} (setup pit-world [(zone "Miles" [0 60 0] [0 63 0])])]
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:pit} :trespass? false}) {})
           (await (run-until-empty eng 10))
-          (is (= [] (calls p "dig"))))))))
+          (is (= [] (calls p "dig")))
+          (is (= [] (trespass seen :shut-in.trespass-last-resort)) "refusing the zone is no trespass"))))))
 
 (deftest dig-in-trespasses-only-when-every-way-is-foreign
   (async done
