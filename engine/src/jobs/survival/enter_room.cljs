@@ -97,28 +97,25 @@
 
 (defn nearest-seen
   "{:pos} of the closed room to enter among the candidates: the room picked by pick-seen (in the call's memory, or :room-pick
-  of c for a quote) while it is a candidate, else the one whose door the body walks to in fewest steps over the blocks it
-  has seen (a door it finds no walk to last), nil when none. Read-only (a quote runs this), so nothing is cached."
+  of c for a quote) while it is a candidate, else the first candidate (the nearest door by straight line, only until
+  pick-seen has priced them), nil when none. Read-only (a quote runs this), so nothing is cached."
   [c]
-  (let [p (:primitives c)
-        cands (candidates c)
-        picked (or (:room-pick c) (:picked (ctx/mem c)))
-        feet (sh-sense/feet p)
-        door-steps (memoize (fn [door] (or (reach-room/walk-steps p feet door) ##Inf)))]
-    (some->> (or (some #(when (= picked (:pos %)) %) cands)
-                 (first (sort-by #(door-steps (:door %)) cands)))
+  (let [cands (candidates c)
+        picked (or (:room-pick c) (:picked (ctx/mem c)))]
+    (some->> (or (some #(when (= picked (:pos %)) %) cands) (first cands))
              :pos
              (hash-map :pos))))
 
 (defn ^:async pick-seen
-  "The {:pos} of the candidate room whose door go-to quotes the cheapest walk to (walking only: a door behind glass or a
-  wall has no walk, and unseen ground is priced as go-to prices it), nil when no candidate has a walk."
+  "The {:pos} of the candidate room whose door go-to quotes the cheapest route to, with the ways the entering walk has
+  (digging through glass or a wall included, so a door two blocks off behind glass can beat one far round), nil when no
+  candidate has a route."
   [c]
   (let [cands (candidates c)
         doors (distinct (map :door cands))
         costs (loop [ds doors out []]
                 (if-let [d (first ds)]
-                  (recur (rest ds) (conj out [d (await (room-lib/route-cost c {:pos (room-lib/mid d) :range 0.7 :ways #{:walk}}))]))
+                  (recur (rest ds) (conj out [d (await (room-lib/route-cost c {:pos (room-lib/mid d) :range 0.7}))]))
                   out))
         [door] (first (sort-by second (filter second costs)))]
     (some->> cands (filter #(= door (:door %))) first :pos (hash-map :pos))))
@@ -149,7 +146,7 @@
 
 (defn picks-seen?
   "Whether the target is the nearest room seen (no :at, no :place, no usable home), of several doors, and no pick of it stands
-  (a pick is not tried again until the doors seen change)."
+  (a pick is made again only when the doors seen changed and the picked room is no longer a candidate)."
   [c]
   (let [t (target-of c)
         cands (candidates c)
