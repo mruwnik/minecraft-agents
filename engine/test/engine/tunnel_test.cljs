@@ -380,23 +380,35 @@
           (is (= :too-dear (:reason @out)) (pr-str @out))
           (is (empty? (digs p))))))))
 
-(deftest an-entry-no-route-reaches-is-priced-out-and-the-next-line-taken
+(defn quoting-by-entry
+  "A go-to whose quote answers by the walk's :pos: (f pos) is the quote map; asked collects the positions."
+  [asked f]
+  (assoc (get registry/jobs 'jobs.movement.go-to) :quote-of
+         (fn ^:async q [c] (let [pos (vec (:pos (:args c)))] (swap! asked conj pos) (f pos)))))
+
+(deftest a-line-is-priced-by-the-upper-bound-of-its-entry-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [real (get registry/jobs 'jobs.movement.go-to)
-              asked (atom [])
-              go-to (assoc real :quote-of
-                           (fn ^:async q [c]
-                             (swap! asked conj (vec (:pos (:args c))))
-                             (if (= 1 (count @asked))
-                               {:uses {:job-time [5 9 ##Inf]} :route {:found false :reason :searching}}
-                               (await ((:quote-of real) c)))))
+        (let [asked (atom [])
+              go-to (quoting-by-entry asked (fn [pos] (if (= pos (first @asked))
+                                                         {:uses {:job-time [5 5 ##Inf]} :route {:found false :reason :budget}}
+                                                         {:uses {:job-time [5 5 40]} :route {:found true}})))
               s (setup {:blocks ground} {:target [6 57 0]} (fn [_]) :jobs {'jobs.movement.go-to go-to})
               {:keys [out]} (await (tick-out! s))]
           (is (= :reached (:reason @out)) (pr-str @out))
-          (is (<= 2 (count @asked)))
-          (is (not= (first @asked) (second @asked)) "an entry with only an estimate (no route found) is not quoted again"))))))
+          (is (<= 2 (count @asked)) "the unbounded line is not taken while a bounded one exists")
+          (is (not= (first @asked) (second @asked))))))))
+
+(deftest a-lone-line-with-no-upper-bound-is-still-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              go-to (quoting-by-entry asked (fn [_] {:uses {:job-time [5 5 ##Inf]} :route {:found false :reason :budget}}))
+              s (setup {:blocks ground} {:target [6 57 0]} (fn [_]) :jobs {'jobs.movement.go-to go-to})
+              {:keys [out]} (await (tick-out! s))]
+          (is (= :reached (:reason @out)) (pr-str @out)))))))
 
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
 

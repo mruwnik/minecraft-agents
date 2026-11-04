@@ -348,17 +348,24 @@
            :cell-s (fn [n cell] (+ (or (when n (cost/dig-cost n)) 0) (destroyed n cell false))))))
 
 (defn ^:async approach-walkable!
-  "The line to cut (ln/approach), its entry one go-to quotes a walk to: an entry the planner finds no route to (a search still going on counts: the top of a roof just
-  placed, one block up) is set aside and the next line chosen. The walk is quoted for the chosen line only."
+  "[line searching?]: the line to cut (ln/approach) with the cheapest price: its dig plus the upper bound of go-to's quote
+  of the walk to its entry (an unfound route is ##Inf: the worst case, a roof just placed). Lines come cheapest dig
+  first, so the search ends when the best total is no more than the next line's dig. searching?: the best entry's
+  quote is still an estimate, to be asked again."
   [c in target feet max-length accept]
-  (loop [in in]
+  (loop [in in best nil]
     (let [a (await (sense/decide! c ::approach #(ln/approach in target feet max-length (set accept) (:heading (:args c)))
                                   {:retry? #(not (:entry %)) :price (sense/fails-to c #(sense/walk-between-s % target))}))
-          entry (:entry a)]
-      (if (and entry (not= entry feet) (not (ln/far-entry? a feet))
-               (not (:found (:route (await (walk-pick/quote! c (child/walk-into-args :in entry)))))))
-        (recur (update in :avoid-entries (fnil conj #{}) entry))
-        a))))
+          entry (:entry a)
+          dig (when entry (ln/line-price in a))]
+      (if (or (nil? entry) (<= (:total best ##Inf) dig))
+        [(or (:line best) a) (:searching? best)]
+        (let [walked? (and (not= entry feet) (not (ln/far-entry? a feet)))
+              q (when walked? (await (walk-pick/quote! c (child/walk-into-args :in entry))))
+              total (+ dig (if walked? (nth (get-in q [:uses :job-time]) 2 ##Inf) 0))
+              cand {:line a :total total :searching? (boolean (:estimate q))}]
+          (recur (update in :avoid-entries (fnil conj #{}) entry)
+                 (if (< total (:total best ##Inf)) cand (or best cand))))))))
 
 (defn ^:async choose!
   "Judge the lines and keep the best, or finish with why there is none. A refusal that read cells the body has not
@@ -370,12 +377,13 @@
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
       (let [in (price-input c (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :filler? (some? (choose/filler c :build))))
-            a (await (approach-walkable! c in target feet max-length accept))]
+            [a searching?] (await (approach-walkable! c in target feet max-length accept))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :read-bound :no-approach} (:reason a)))
                        (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
           (cond
+            (and (:entry a) searching?) :continue
             (and (:entry a) (> (ln/line-price in a) (ctx/worth c)))
             (finish! c :too-dear {:why "the cheapest line costs more than the call's worth" :price-s (ln/line-price in a)})
             (:entry a)
