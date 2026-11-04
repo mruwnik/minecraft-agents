@@ -11,6 +11,7 @@
             [engine.path.executor :as executor]
             [jobs.lib.breath :as breath]
             [engine.perception.mobs :as mobs]
+            [jobs.lib.click :as click]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -431,13 +432,22 @@
         {:end {:status :replan :why :changed :learned true :cells [[x y z] [x (inc y) z]] :at [sx sy sz] :step 1}})
       {:looked cells})))
 
+(defn blocks-way?
+  "Whether a sensed block b stops a body that took its cell for air: a full block, or a door, gate or trapdoor not open."
+  [^js b]
+  (boolean (and b (or (true? (.-fullCube b))
+                      (and (click/kind-of (.-name b))
+                           (not (contains? #{true "true"} (some-> (.-properties b) (aget "open")))))))))
+
 (defn solid-ahead
-  "The first feet or head cell of the next look-ahead-steps steps that the body now knows is a full block, or nil. A cell the
-  plan took for air because it was unseen is seen from nearer by the time a later leg starts."
+  "The first feet or head cell of the next look-ahead-steps steps that the body now knows blocks the way (blocks-way?), or
+  nil. A cell the plan took for air because it was unseen is seen from nearer by the time a later leg starts: the next plan
+  opens a shut door it now knows."
   [p steps]
-  (first (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]
-               :when (true? (some-> (u/sensed p {:x x :y y' :z z}) .-fullCube))]
-           [x y' z])))
+  (let [opens (wwatch/opens-cells steps)]
+    (first (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]
+                 :when (and (not (opens [x y' z])) (blocks-way? (u/sensed p {:x x :y y' :z z})))]
+             [x y' z]))))
 
 (defn ^:async look-ahead!
   "Over a mask (go-to :unknown) a step may enter cells the body never saw, which the plan reads as air: look round and at the
@@ -452,9 +462,11 @@
     (await (look/survey! c :near (look/glance-effort) (when-not (seq (remove #(occluded? c %) unseen)) {:cells cells})))
     (await (sense/look-at-unknown! c (u/nearest-first (u/self-pos c) identity (remove #(occluded? c %) unseen)) look-ahead-steps))
     (let [hidden (filter #(and (sense/unknown? p %) (occluded? c %)) cells)
-          solid (filter #(true? (some-> (u/sensed p (zipmap [:x :y :z] %)) .-fullCube)) cells)]
+          solid (filter #(true? (some-> (u/sensed p (zipmap [:x :y :z] %)) .-fullCube)) cells)
+          opens (wwatch/opens-cells steps)
+          shut (filter #(and (not (opens %)) (blocks-way? (u/sensed p (zipmap [:x :y :z] %)))) cells)]
       (doseq [[x y z] (concat hidden solid)] (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))
-      (if-let [cell (first (concat solid hidden))]
+      (if-let [cell (first (concat solid hidden shut))]
         (let [{:keys [x y z]} (u/self-pos c)]
           {:end {:status :replan :why :changed :learned true :cells [cell] :at [x y z] :step 1}})
         {:looked unseen}))))

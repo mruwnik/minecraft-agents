@@ -70,6 +70,15 @@
     (is (nil? (walk/solid-ahead (known #{[5 65 0]}) steps)) "only the next look-ahead-steps steps")
     (is (nil? (walk/solid-ahead (known #{}) steps)))))
 
+(deftest a-shut-door-the-plan-took-for-air-is-found-ahead-unless-the-plan-opens-it
+  (let [steps [(step 0 64 0 :walk) (step 1 64 0 :walk) (step 2 64 0 :walk) (step 3 64 0 :walk)]
+        door (fn [open] #js {:sensedAt (fn [pos] (if (and (= 2 (.-x pos)) (= 64 (.-y pos)))
+                                                   #js {:name "oak_door" :fullCube false :properties #js {:open open}}
+                                                   #js {:name "air" :fullCube false}))})]
+    (is (= [2 64 0] (walk/solid-ahead (door false) steps)) "a shut door is in the way of a plan made over unseen cells")
+    (is (nil? (walk/solid-ahead (door true) steps)) "an open one is not")
+    (is (nil? (walk/solid-ahead (door false) (assoc-in steps [2 :opens] [{:x 2 :y 64 :z 0}]))) "the plan opens it: no endless replans")))
+
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
          (set (map (fn [[x _ z]] [x z]) (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 1 :diagonal)))))))
