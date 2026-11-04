@@ -3469,7 +3469,7 @@ test('the hurt event carries the amount and the attacker of the damage packet', 
 
 test('the hurt event names what the attacker holds', () => {
   const { bot, seen } = hurtRig()
-  bot.entities[8].heldItem = { name: 'trident' }
+  bot.entities = { ...bot.entities, 8: { ...bot.entities[8], heldItem: { name: 'trident' } } }
   bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: 9, sourceDirectId: 9 })
   bot.health = 17
   bot.emit('health')
