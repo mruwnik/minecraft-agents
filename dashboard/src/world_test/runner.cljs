@@ -1152,13 +1152,20 @@
                       :sleep sleep :log log!}
                      phase what)))
 
+(defn presence-phase
+  "The presence-lock phase of case rc: :alone-x for an :alone case and for a :sleep-skip one (the vanilla night skip needs every
+  online player asleep, and a body running another case is awake), else :present."
+  [rc]
+  (if (or (:alone rc) (:sleep-skip rc)) :alone-x :present))
+
 (defn acquire-presence-lock!
-  "Resolves once this process may run case rc: every case holds :present together, a case flagged :alone holds :alone-x,
+  "Resolves once this process may run case rc: every case holds :present together, an alone one holds :alone-x,
   which waits for all of them and keeps every later one out (another runner's body near its plot would be sensed)."
   [rc on-wait]
   (acquire-shared! {:ops (lock-dir-ops presence-lock-dir) :on-wait on-wait :sleep sleep :log log!}
-                   (if (:alone rc) :alone-x :present)
-                   (str (:id rc) (when (:alone rc) (str " runs alone: " (:alone-why rc))))))
+                   (presence-phase rc)
+                   (str (:id rc) (cond (:alone rc) (str " runs alone: " (:alone-why rc))
+                                       (:sleep-skip rc) " sleeps the night away: no other case runs"))))
 
 (defn with-time-lock!
   "Runs thunk (a promise-returning fn) holding the time lock for phase; always releases it."

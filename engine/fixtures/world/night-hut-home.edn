@@ -73,6 +73,7 @@
    :limit-s 60}
   ;; 9570fa13: a stale :bed place far off, the hut bed live as the respawn bed (spawn point set at its head)
   {:name "stale-far-bed-place-the-hut-spawn-bed-is-slept-in"
+   :sleep-skip true
    :time :night-exclusive
    :blocks [[:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :spawn-bed :data {:pos #xyz [10 0 12]} :policy {:cap 1 :ttl :forever}}]

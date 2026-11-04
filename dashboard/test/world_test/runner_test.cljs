@@ -16,6 +16,12 @@
     (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--warm" "--fresh"]
            (vec (drop (inc script) argv))))))
 
+(deftest a-case-that-needs-the-night-skip-holds-the-presence-lock-alone
+  (are [rc phase] (= phase (r/presence-phase rc))
+    {:sleep-skip true} :alone-x
+    {:alone true :alone-why "x"} :alone-x
+    {:time :night-exclusive} :present))
+
 (deftest a-cold-launch-leaves-out-warm
   (is (not-any? #{"--warm"} (r/body-argv {:body "B" :world "w" :cold-bodies true} "/tmp/s.edn"))))
 

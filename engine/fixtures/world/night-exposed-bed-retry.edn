@@ -38,6 +38,7 @@
   ;; Lit by a glowstone floor: no mob spawns at the bed, so lying there costs no more than any other way, whatever the count,
   ;; and sets the respawn point: slept in, and at day the bed stays as the respawn bed.
   {:name "carried-bed-on-lit-open-ground-is-slept-in-and-kept-at-day"
+   :sleep-skip true
    :time :night-exclusive
    :time-why :sleep
    :blocks [[:fill [12 -1 12] [20 -1 20] "glowstone"]]
@@ -103,6 +104,7 @@
    :after [[:block [18 0 16] "oak_door[half=lower,open=false]"] [:body-near [20.5 0 16.5] 2.5]]
    :limit-s 170}
   {:name "monster-near-ends-the-round-then-sleeps-once-the-zombie-is-killed"
+   :sleep-skip true
    :time-why :sleep
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]]
    :register [{:trigger :night}]
