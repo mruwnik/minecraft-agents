@@ -87,11 +87,12 @@
    :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
             {:no-event {:source :job :kind :hostile.decided :data {:prices {:flee [:any]}}} :for-s 10}
             {:no-event {:source :body :kind :died} :for-s 40}]}
+  ;; the chamber sits 4 above the cell floor: a pit dug at y 0 meets the cell's bedrock shell, which cannot be dug.
   {:name "buried-body-with-a-pickaxe-and-no-stair-digs-a-pocket-first"
-   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 13] [14 2 19] "air"]
-            [:set [3 0 13] "torch"] [:set [14 0 19] "torch"] [:set [3 0 19] "torch"] [:set [14 0 13] "torch"]]
-   :body {:at [11.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:summon "zombie" [4.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 4 13] [14 6 19] "air"]
+            [:set [3 4 13] "torch"] [:set [14 4 19] "torch"] [:set [3 4 19] "torch"] [:set [14 4 13] "torch"]]
+   :body {:at [11.5 4 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:summon "zombie" [4.5 4 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 30}
             {:no-event {:source :job :kind :retreat.target} :for-s 30 :until {:source :action :kind :started :data {:name "dig"}}}
             {:event {:source :job :kind :retreat_sealed} :within-s 50}]}
