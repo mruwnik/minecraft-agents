@@ -131,13 +131,13 @@ restart_if_stale() {
   return 0
 }
 
-# Pool: a worktree compile runs in one of MC_COMPILE_POOL_SIZE (default 4; 0 = off) warm checkout-shaped copies under MC_COMPILE_POOL_DIR
+# Pool: a worktree compile runs in one of MC_COMPILE_POOL_SIZE (default 3; 0 = off) warm checkout-shaped copies under MC_COMPILE_POOL_DIR
 # (default ~/.cache/mc-compile-pool/<i>), each with its own server run by this same script as if it were a main checkout. Under the slot's
 # .pool.lock (held for the whole compile, so two compiles never share a slot) the worktree's sources are rsynced in (--delete, by content, changed
 # files get a fresh mtime so shadow and the macro-restart check see them), the compile runs there, and the builds' output dirs are rsynced back.
 # No free slot within MC_COMPILE_POOL_WAIT_S (180), a slot whose server is down with memory below MIN_START_MB, or a failed sync or a slot server that does not start (exit 76 inside the slot) fall back to the one-shot JVM below.
 pool_dir=${MC_COMPILE_POOL_DIR:-$HOME/.cache/mc-compile-pool}
-pool_size=${MC_COMPILE_POOL_SIZE:-4}
+pool_size=${MC_COMPILE_POOL_SIZE:-3}
 
 # build output paths (relative to dashboard/) of the given builds, from dashboard/shadow-cljs.edn
 pool_outputs() {
