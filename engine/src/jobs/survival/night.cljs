@@ -188,15 +188,19 @@
       (= :done (:kind l)) (do (when-not (:sheltered (ctx/mem c)) (hold/sheltered! c :logged-out)) :again)
       :else (do (ctx/update-mem! c assoc :log-out-failed true) :again))))
 
+(declare shut-worth)
+
 (defn ^:async bed-down-step
   "Sleep in bed, or put the carried bed down (bed nil) and sleep, answer :sealed its row shut in first: jobs.survival.bed-down. Asleep it is :sheltered :slept;
   the next pass chooses again. While the child goes on (:continue) job memory :bed-down holds {:bed bed :answer answer}, so the next
-  pass calls it again rather than choosing anew. In a closed home (jobs.lib.rooms/closed-home?) the bed goes down under the roof only (:roofed-only)."
+  pass calls it again rather than choosing anew. The call's :worth is shut-worth over the night's prices with the walk free: what reaching the bed saves against the next way, which the walk is judged against; overdue, the bed is taken whatever it costs: worth ##Inf, arrive. In a closed home (jobs.lib.rooms/closed-home?) the bed goes down under the roof only (:roofed-only)."
   [c bed answer]
   (hold/busy! c)
-  (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
+  (let [worth (when bed (if (bed-down/overdue? c) ##Inf (shut-worth (await (bed-down/answers c {:bed bed :walk-s 0 :log-out? (log-out-wanted? c)})) (or answer :bed))))
+        d (await (ctx/call c :bed-down 'jobs.survival.bed-down
                                  (cond-> {}
                                    bed (assoc :bed bed)
+                                   worth (assoc :worth worth)
                                    (and (nil? bed) answer) (assoc :answer answer)
                                    (room-lib/closed-home? (:primitives c)) (assoc :roofed-only true))))]
     (if (= :continue d)
@@ -532,13 +536,13 @@
 (defn budget-priced
   "The quoted route of q. A partial one over floors the body never saw (:unseen-floors, a search that spent go-to's node budget or
   reached the loaded edge: no whole way known yet, not none) counts as a found walk priced by the quote's mean time, its unseen
-  ground dark as far as the planner did not say (its :dark-seconds), as the quote prices it."
+  ground dark (at least what the planner said of the part it priced), as the quote prices it."
   [c q]
   (let [r (:route q)
         secs (second (get-in q [:uses :job-time]))]
     (if (and (= :partial (some-> (:reason r) keyword)) (:unseen-floors r))
       (assoc r :found true :seconds secs
-             :dark-seconds (or (get-in r [:partial :dark-seconds]) (* secs (cost/dark-factor (wworld/kit-of c)))))
+             :dark-seconds (max (or (get-in r [:partial :dark-seconds]) 0) (* secs (cost/dark-factor (wworld/kit-of c)))))
       r)))
 
 (defn ^:async bed-walk-safe?
