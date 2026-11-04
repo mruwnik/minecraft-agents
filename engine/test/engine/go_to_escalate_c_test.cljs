@@ -603,9 +603,10 @@
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
-          (let [steps (distinct (map :step (events-of seen :go-to.escalated)))]
+          (let [steps (map :step (events-of seen :go-to.escalated))]
             (is (some #{:stair} steps) "a climb of stairs, not the loop")
-            (is (every? #{:approach :stair} steps))))))))
+            (is (every? #{:approach :stair} steps))
+            (is (<= (count (filter #{:approach} steps)) 1) "the approach walk is not repeated")))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
   (async done

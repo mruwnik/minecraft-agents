@@ -347,7 +347,7 @@
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
-  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s (what the goal is worth) and the straight dig (max-route-s of digging plus a walked step a block across and up), the back search's bound in the heuristic; dig-way, frontier-way and replans (search-opts) also price their CPU (:node-s), a climb's search does not. With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s (what the goal is worth) and twice the straight dig (each cell's dig seconds, a walked step and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -357,7 +357,7 @@
         guess-risk (:guess-risk route-opts)
         worth-s (:worth-s route-opts)
         route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s)
-        [fx _ fz] from
+        [fx fy fz] from
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
         known (js/Map.)
         sensed (fn [x y z] (let [k (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512)]
@@ -376,11 +376,32 @@
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
-        ;; the straight dig is a way to the same goal: its dig seconds (at most max-route-s) and a walked step a block of
-        ;; the way across and up; a route dearer is no cheaper than it, so the search may stop at that
-        straight-s (+ (max-route-s) (* (transduce (map #(js/Math.abs %)) + 0 (map - goal from)) (:step-s prices)))
+        ;; the straight dig is a way to the same goal: x, then z, then y, each cell a walked step (and the unseen step's toll)
+        ;; plus its dig. A search that costs its CPU saves at most the straight price (ski rental, as dig-route's node-s), so it may
+        ;; stop at twice that. A leg through a cell never dug (bedrock) or a step onto no seen floor is no way: no bound but the worth
+        straight-s (let [[gx gy gz] goal
+                         leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
+                         up (if (< fy gy) (max (:step-s prices) (:stair-s prices)) (+ (:step-s prices) ((:fall-s prices) 1)))
+                         cells (concat (map (fn [x] [x fy fz]) (leg fx gx))
+                                       (map (fn [z] [gx fy z]) (leg fz gz))
+                                       (map (fn [y] [gx y gz]) (leg fy gy)))
+                         floored? (fn [[x y z]] (let [f (seen-floor [x (dec y) z])]
+                                                  (and f (not= f access/hidden-guess) (not (dig-route/open? f)))))
+                         cell-s (fn [[x y z :as cell]]
+                                  (let [b (sensed x y z)
+                                        unseen? (true? (some-> b .-unknown))
+                                        nm (block-at cell)
+                                        climb? (and (= x gx) (= z gz) (not= y fy))
+                                        dig (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm cell))]
+                                    (when (and dig (or climb? (floored? cell)))
+                                      (+ dig (if climb? up (:step-s prices)) (if unseen? (:unseen-step-s prices) 0)))))
+                         head-s (fn [[x y z :as cell]] (let [h [x (inc y) z]
+                                                              nm (block-at h)]
+                                                          (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm h))))
+                         costs (concat (map cell-s cells) (map head-s cells))]
+                     (if (every? some? costs) (reduce + 0 costs) ##Inf))
         opts (fn [refused] (merge prices
-                                  {:max-s (min (or (:bound-s route-opts) ##Inf) straight-s) :back-h? true}
+                                  {:max-s (min (or (:bound-s route-opts) ##Inf) (* 2 straight-s)) :back-h? true}
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))
                                    :max-dig-s (max-route-s)}

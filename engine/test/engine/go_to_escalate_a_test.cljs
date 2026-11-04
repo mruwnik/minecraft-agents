@@ -631,8 +631,9 @@
         (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft}
                                                     'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
-          ;; stair runs of 8 straight on from each other; the last stair's top is walked on from (no fourth stair dug)
-          (is (= [:stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
+          (is (some #{:stair} (map :step (events-of seen :go-to.escalated))) "the climb is stairs")
+          (is (every? #{:stair :dig-route :approach} (map :step (events-of seen :go-to.escalated))) "no pillar, no drop")
+          (is (= 20 (.-health (.self p))) "no drop hurt")
           (is (seq (events-of seen :go-to.restore-skipped)) "the put-back ran once the walk got on")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
