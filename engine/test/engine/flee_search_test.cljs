@@ -97,6 +97,16 @@
           (is (= 12 (:planned far)) (pr-str far))
           (is (= 1 (:planned pressed)) (pr-str pressed)))))))
 
+(deftest a-pressed-body-plans-a-ring-route-whatever-named-targets-come-first
+  ;; named targets are planned before the ring: a pressed body must not keep only a route toward the zombie
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [events (atom [])
+              c (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}) events)
+              ends (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x -0.5 :y 64 :z 0.5}}] [{:pos {:x -5 :y 64 :z 0} :kind :goal}] {}))]
+          (is (some #(nil? (:pos (:target %))) ends) (str "a ring route is planned after the named one " (pr-str (map :target ends)))))))))
+
 (defn ^:async open-field-prices
   "{ring end: price} of the flee search on open ground at time (a zombie 5 blocks west of the body), with spawns-over
   forced to 0 when unspawned?."

@@ -248,12 +248,13 @@
         share (spawn-light/share-of p false nil)
         slow (pace)
         t0 (clock/now)
-        contact-s (arrive-at (remove :calm? chasers) pos)]
+        contact-s (arrive-at (remove :calm? chasers) pos)
+        named-n (count (filter :pos targets))]
     (if (nil? ring-world)
       []
       (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {}]
         (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0))
-                (and (pos? planned) (<= contact-s (/ (- (clock/now) t0) 1000))))
+                (and (> planned named-n) (<= contact-s (/ (- (clock/now) t0) 1000))))
           (with-meta out {:nodes nodes :planned planned :unrouted unrouted})
           (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
                 ^js res (await (plan-to! c pw policy (query c t)
@@ -297,14 +298,23 @@
   over water that is shown, else at its land speed. Memoised per point: a search scores the same cells many times."
   [c from]
   (let [p (:primitives c)
-        wet? #(let [cell (mapv js/Math.floor [(:x %) (:y %) (:z %)])
-                    at (fn [dy] (contains? breath/swimmable (u/seen-name p {:x (cell 0) :y (+ dy (cell 1)) :z (cell 2)})))]
-                (and (at 0) (at -1)))]
+        wet (js/Map.)
+        wet-cell? (fn [x y z]
+                    (let [k (str x "," y "," z)]
+                      (if (.has wet k)
+                        (.get wet k)
+                        (let [at (fn [dy] (contains? breath/swimmable (u/seen-name p {:x x :y (+ dy y) :z z})))
+                              w (boolean (and (at 0) (at -1)))]
+                          (.set wet k w)
+                          w))))
+        {fx :x fy :y fz :z} from]
     (memoize
      (fn [to]
        (let [n (max 1 (js/Math.ceil (* 2 (u/dist from to))))
-             at (fn [i] (merge-with #(+ %1 (* (/ i n) (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z])))]
-         (* 0.5 (count (filter #(wet? (at %)) (range (inc n))))))))))
+             {tx :x ty :y tz :z} to
+             wet-at? (fn [i] (let [f (/ i n)]
+                               (wet-cell? (js/Math.floor (+ fx (* f (- tx fx)))) (js/Math.floor (+ fy (* f (- ty fy)))) (js/Math.floor (+ fz (* f (- tz fz)))))))]
+         (* 0.5 (count (filter wet-at? (range (inc n))))))))))
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
