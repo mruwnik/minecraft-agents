@@ -2,7 +2,7 @@
 ;; in. The rest waits out the night in its sealed room instead of walking out for food. By day a fragile body's
 ;; leave-shelter (card e32f6036) holds while a hostile could get in, until the hold has cost as much as the cheapest way
 ;; out, and leaves by that way: through the far wall when the hostile is behind its seal, at once.
-;; Food 8 (hunger 5 s amp 255, no regeneration), hp 3 (fragile). Clock cases: the rest's wait is for the night outside,
+;; Food 5-9 (drained by hunger, no regeneration), hp 3 (fragile). Clock cases: the rest's wait is for the night outside,
 ;; and leave-shelter starts only by day.
 {:defaults
  {:tags [:survival :shelter :hostile]
@@ -13,8 +13,8 @@
  [{:name "hurt-hungry-body-waits-out-the-night-shut-in"
    :time :night :time-why :dawn-decision
    :register [{:trigger :low-health}]
-   :blocks [[:fill [14 0 14] [18 4 18] "stone" :hollow]]
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+   :blocks [[:fill [14 0 14] [18 4 18] "stone" :hollow] [:set [16 4 16] "glowstone"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 60 60 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [5-9]$" 60] [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 30}
             {:event {:source :job :kind :holding :context {:reflex-id :low-health}} :within-s 40}

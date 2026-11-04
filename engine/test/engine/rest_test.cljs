@@ -26,6 +26,9 @@
 
 (def pocket "A body shut in rock at [0 64 0]: shut-in is done at once." (ct/rock [-3 3] [62 67] #{[0 64 0] [0 65 0]}))
 
+(def room "A body shut in a closed 3x3x2 rock room at [0 64 0]: the walls way has open cells to fill, the room is shelter all the same."
+  (apply dissoc (tu/box -3 62 -3 3 67 3 "stone") (for [x [-1 0 1] z [-1 0 1] y [64 65]] (str x "," y "," z))))
+
 (defn ^:async run!
   "A 3-hp body in the pocket with the low-health reflex registered and a listed job that records the health it starts at;
   each wait heals heal hp. {:worked-at :p :eng}."
@@ -104,3 +107,13 @@
           (is (= :job-time (:reason r)) "no walk out for food by night, from a cave too: shut in to the end of its time")
           (is (some #(re-find #"food 12 of 18 .*night outside" (str (:reason %))) (filter #(= :holding (:kind %)) @seen))
               "the hold says it cannot heal on this food and waits for the night to pass"))))))
+
+(deftest a-hurt-body-in-a-closed-room-with-no-food-waits-out-the-night-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/seeing-all (tu/fake {:self {:health 3 :food 12} :blocks room :time 18000}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)})
+              r (await (tu/child-outcome eng 'jobs.survival.rest {} 8))]
+          (is (= :job-time (:reason r)) "a closed room is shelter: no shut-in to fail, no walk out for food by night"))))))

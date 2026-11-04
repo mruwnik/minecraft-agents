@@ -14,6 +14,8 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.blocks :as lb]
             [jobs.lib.foods :as foods]
+            [jobs.lib.look :as look]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.eat :as eat]
@@ -90,9 +92,12 @@
       (= :done (:kind (await (child/run!* c :blocks 'jobs.items.obtain {:any-of names :count (+ have need) :explore false})))))))
 
 (defn ^:async shelter!
-  "Shut in once per stay (again after more-blocks!). A failure is told and the rest goes on in place."
+  "Shut in once per stay (again after more-blocks!); a body already in a closed room (after a look round to see its walls) is shut in. A failure is told and the rest goes on in place."
   [c]
-  (let [e (await (ctx/call c :shut-in 'jobs.survival.shut-in {:ways #{:room :walls :pit :pocket}}))]
+  (let [safe? #(sh-inside/safe-from-night? (:primitives c))
+        e (if (or (safe?) (await (look/look-around-until! c safe?)))
+            {:kind :done}
+            (await (ctx/call c :shut-in 'jobs.survival.shut-in {:ways #{:room :walls :pit :pocket}})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c assoc :sheltered true) :again)

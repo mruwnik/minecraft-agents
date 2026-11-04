@@ -1,7 +1,7 @@
 ;; Cards 094af74a, 69be7630: a buried body is not walked out by hunger, and a badly hurt one does not mine on.
 ;; buried: sealed in a stone room lit by glowstone (no sky light; the body is far from its spawn, so a death is dear and the hurt body is the low-health trigger's: get-food is submitted directly), food 8 (hunger 5 s amp 255), hp 6 (fragile: a starving non-fragile body would explore), nothing carried: get-food stops (no-food "not searched underground", or too-dangerous while food is still above 0) and takes no walk.
-;; low-health: food 8 (no regeneration) and hp 1.5: gather.mine waits :low-health and digs
-;; nothing; instant health lets it mine.
+;; low-health: food 8 (no regeneration) and hp 1.5, nothing to eat: gather.mine stops :cannot-heal (get-kit feeds then)
+;; and digs nothing; once instant health heals it, the mine runs.
 {:defaults
  {:tags [:survival :hungry]
   :plot {:height 8}
@@ -16,16 +16,16 @@
    :expect [{:event {:source :job :kind :stopped} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:body-near [16.5 1 16.5] 3]]}
-  {:name "hurt-body-waits-low-health-then-mines-when-healed"
+  {:name "hurt-body-with-no-food-stops-cannot-heal-then-mines-when-healed"
    :time :any
    :blocks [[:fill [2 0 8] [30 6 30] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [16 0 17] "iron_ore"]]
    :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+   :act [[:rcon "effect give $BODY minecraft:hunger 60 60 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [5-9]$" 60] [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
-         [:await {:source :job :kind :waiting :data {:reason :low-health}} 30]
-         [:rcon "effect give $BODY minecraft:instant_health 1 2 true"]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30 :until {:source :job :kind :waiting :data {:reason :low-health}}}
-            {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 90 :of-job true}]
+         [:await {:source :job :kind :stopped :data {:reason :cannot-heal}} 30]
+         [:rcon "effect give $BODY minecraft:instant_health 1 2 true"]
+         [:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :cannot-heal}} :within-s 30}
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 90}]
    :after [[:item "raw_iron" 1]]}]}
