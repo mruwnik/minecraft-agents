@@ -63,6 +63,12 @@
   (is (false? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :door}}))))
   (is (false? (boolean (choose/refused-drop? {:reason :exhausted :one-way {:kind :drop}})))))
 
+(deftest an-exhausted-search-from-high-above-the-goal-is-dug-down
+  (let [ex {:reason :exhausted}]
+    (is (true? (boolean (choose/drop-stranded? [0 13 0] {:x 6 :y 0 :z 0} ex))))
+    (is (false? (boolean (choose/drop-stranded? [0 3 0] {:x 6 :y 0 :z 0} ex))) "a drop the walk takes needs no stair")
+    (is (false? (boolean (choose/drop-stranded? [0 13 0] {:x 6 :y 0 :z 0} {:reason :budget}))))))
+
 (deftest escape-enclosed-counts-doors-as-walls-under-doors-never
   (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
         p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))]

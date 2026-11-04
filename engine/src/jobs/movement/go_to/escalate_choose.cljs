@@ -20,6 +20,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
@@ -189,6 +190,14 @@
   [result]
   (and (= :one-way (some-> (:reason result) keyword))
        (= :drop (some-> (:one-way result) :kind keyword))))
+
+(defn drop-stranded?
+  "Whether a give-up with result is a search that ran out of land (:exhausted) for a body standing above the goal pos
+  by more than a drop it takes (one-way/too-deep?): the land it stands on ends in falls the walk refuses, so as a
+  player on a platform with a pickaxe does, it digs a stair down to the goal."
+  [feet pos result]
+  (and (= :exhausted (some-> (:reason result) keyword))
+       (one-way/too-deep? (second feet) (js/Math.floor (:y pos)) (+ 2 (js/Math.floor (:y pos))))))
 
 (defn goal-walled?
   "Whether a give-up with result is a free body's (not escape/walk-enclosed?) whose goal the planner proved walled in, or whose
