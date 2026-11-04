@@ -27,6 +27,8 @@
             [engine.fake.enchant :as enchant]
             [engine.fake.furnace :as furnace]
             [engine.fake.rail :as rail]
+            [engine.fake.raw-world :as raw-world]
+            [engine.path.fixture :as fx]
             [engine.fake.placing :as placing]
             [engine.fake.steer :as steer]
             [engine.fake.trade :as trade]
@@ -64,11 +66,13 @@
 (def fake-body-id -1)
 (def ms-per-tick 50)
 (def no-shape #{"air" "cave_air" "water" "lava" "fire" "short_grass" "tall_grass" "snow"})
-(def see-through #{"air" "water" "lava" "fire" "short_grass" "tall_grass" "snow" "glass" "glass_pane" "torch" "wall_torch" "soul_torch" "oak_leaves" "ice" "slime_block"})
-;; plants and small fittings have no collision box in the real game, so they do not stop the eye either
+;; plants and small fittings have no collision box in the real game: a fall passes through them
 (def no-box-see-through
   #"^(wheat|carrots|potatoes|beetroots|fern|large_fern|dead_bush|sugar_cane|kelp|seagrass|tall_seagrass|cobweb|lever|vine|ladder|rail|dandelion|poppy|sunflower|lilac|rose_bush|peony)$|_(sapling|sign|flower|button|pressure_plate|rail|stem)$")
-(defn sight-passes? [block] (or (contains? see-through block) (boolean (some->> block (re-find no-box-see-through)))))
+(defn sight-passes?
+  "Whether the eye sees through block: the real sight table (raw-world.mjs) over the block's default state; an unknown name blocks."
+  [block]
+  (boolean (some->> block (aget (.-blocksByName ^js fx/registry)) .-defaultState (aget @raw-world/sight) zero?)))
 ;; blocks whose collision shape does not fill the cell (or that have none); every other block is a full cube
 (def not-full-cube
   #"^(air|cave_air|void_air|water|lava|bubble_column|fire|soul_fire|short_grass|tall_grass|fern|large_fern|snow|wheat|carrots|potatoes|beetroots|farmland|dirt_path|soul_sand|torch|wall_torch|vine|cobweb|ladder|sugar_cane|dead_bush|kelp|seagrass|tall_seagrass|rail|lever|dandelion|poppy|wither_rose|sunflower|lilac|rose_bush|peony)$|_(slab|stairs|carpet|sapling|sign|flower|button|pressure_plate|fence|fence_gate|door|trapdoor|pane|torch|rail|bed)$")
