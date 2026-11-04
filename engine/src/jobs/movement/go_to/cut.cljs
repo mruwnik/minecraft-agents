@@ -67,7 +67,7 @@
   8)
 
 (def falling-vy
-  "Vertical velocity (blocks per tick) below which a long drop between two samples is a fall, not a teleport: a lagged sample of a fall can span more than jump-blocks."
+  "Vertical velocity (blocks per tick) below which a long drop between two samples is a fall, not a teleport: a lagged sample of a fall can span more than jump-blocks. A sample on the ground has vy 0 (the landing zeroes it), so a drop that ends on the ground counts as a fall too."
   -0.5)
 
 (defn cell-of [p] (mapv #(js/Math.floor (% p)) [:x :y :z]))
@@ -83,7 +83,7 @@
         nearer? (< d (dec anchor))
         step (if (and prev (> d (:last-dist m d))) (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) 0)
         dy (- (:y pose 0) (:y prev 0))
-        falling? (and (neg? dy) (< (:vy pose 0) falling-vy)
+        falling? (and (neg? dy) (or (< (:vy pose 0) falling-vy) (:on-ground pose))
                       (< (js/Math.hypot (- (:x pose) (:x prev)) (- (:z pose) (:z prev))) jump-blocks))
         jumped? (and prev (not falling?) (>= (js/Math.hypot (- (:x pose) (:x prev)) dy (- (:z pose) (:z prev))) jump-blocks))]
     (assoc m :trail (cond-> trail (not= cell (peek trail)) (conj cell)) :last-dist d :closest (min d (:closest m d)) :prev (select-keys pose [:x :y :z])
