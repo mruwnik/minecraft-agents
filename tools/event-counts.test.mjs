@@ -39,3 +39,26 @@ test('a bundle older than its sources is refused, not run', () => {
 test('a bundle newer than its sources is run', () => {
   assert.doesNotMatch(run(tree(10, 100)).stderr, /older than its sources/)
 })
+
+const realBundle = path.join(import.meta.dirname, '..', 'dashboard', 'out', 'event-counts.cjs')
+
+function walkLines (job, ...ends) {
+  return ends.map(([t, arrived]) => `{:generation-id "g" :time-ms ${t} :source :job :kind :result :context {:job-id "${job}"} :data {:arrived ${arrived}}}`).join('\n') + '\n'
+}
+
+test('retry-wins leaves probe bodies out and keeps the rows in the counts file', { skip: !fs.existsSync(realBundle) }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'event-counts-rw-'))
+  const agents = path.join(dir, 'agents')
+  for (const [body, job] of [['Linden', 'j1/go-to'], ['ClaudeProbeX', 'j2/go-to'], ['Probe00', 'j3/go-to']]) {
+    fs.mkdirSync(path.join(agents, body, 'engine'), { recursive: true })
+    fs.writeFileSync(path.join(agents, body, 'engine', 'events.edn'), walkLines(job, [0, false], [4000, true]))
+  }
+  const counts = path.join(dir, 'counts.edn')
+  const r = spawnSync('node', [tool, 'retry-wins', '--agents', agents, '--counts', counts], { encoding: 'utf8' })
+  const saved = fs.existsSync(counts) ? fs.readFileSync(counts, 'utf8') : ''
+  fs.rmSync(dir, { recursive: true })
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(r.stdout, /:walk \{[^}]*:retries 1,/)
+  assert.match(saved, /:retry-rows #\{\["Linden"/)
+  assert.doesNotMatch(saved, /Probe/)
+})

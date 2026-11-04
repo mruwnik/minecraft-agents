@@ -117,3 +117,12 @@
         rows (keep r/scan-line [mark (child-end "j1/walk" 1000 {:arrived false}) (child-end "j1/walk" 5000 {:arrived true})])]
     (is (= {:won 1 :retries 1 :calls 1} (select-keys (:walk (r/report rows)) [:won :retries :calls])) "a call that never re-planned is kept")
     (is (nil? (:go-to-mark (r/report rows))))))
+
+(deftest folded-rows-keep-a-rotated-logs-tries-and-count-a-reread-row-once
+  (let [rows (fn [job] (keep r/scan-line [(walk job 0 false) (walk job 4000 true)]))
+        tag (fn [b rs] (map vector (repeat b) rs))
+        once (r/fold {:retry-rows #{}} (tag "A" (rows "j1/go-to")))
+        again (r/fold once (concat (tag "A" (rows "j1/go-to")) (tag "B" (rows "j2/go-to"))))]
+    (is (= 2 (count (:retry-rows once))) "a re-read of the same log adds nothing")
+    (is (= 4 (count (:retry-rows again))) "a second body's rows join the first's")
+    (is (= 2 (:retries (:walk (r/report (map second (:retry-rows again)))))) "the rows of a log read earlier still count when it is gone")))

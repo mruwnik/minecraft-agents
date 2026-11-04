@@ -1,6 +1,6 @@
 (ns world-test.retry-wins
   "tools/event-counts.mjs retry-wins: counts the measured priors behind jobs.lib.cost.value ::retry-counts from the bodies'
-  logs alone (no fold): per retry kind, the tries that followed a failed try of the same kind in the same job (a generation's
+  logs, folded into the counts file's :retry-rows (a rotated log's rows stay; probe bodies are left out by the caller): per retry kind, the tries that followed a failed try of the same kind in the same job (a generation's
   job id), won or failed again, fitted as a Beta prior over the calls' shares (field-passes/beta-fit; the uniform [1 1]
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
@@ -83,6 +83,11 @@
   (let [last-result (reduce max ##-Inf (keep #(when (:result? %) (:t %)) rows))
         first-child (reduce min ##Inf (keep #(when (:child? %) (:t %)) rows))]
     (remove #(and (#{:walk :walk-round} (:kind %)) (< last-result (:t %) first-child)) rows)))
+
+(defn fold
+  "counts with the [body row] pairs added to :retry-rows, a set: a row read again from a log that was not rotated yet is the same row."
+  [counts rows]
+  (update counts :retry-rows into rows))
 
 (defn- go-to-ends
   "The :walk rows of the scanned rows once: an end from the root go-to or a child_ended duplicates a :result within a second

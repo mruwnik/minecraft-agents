@@ -32,7 +32,7 @@
   walk-pace: the steers of go-to's walks (a job id ending /walk) outside a flight: blocks over the steers' own seconds (cost/walk-speed).
   guess-looks [--agents DIR] (world-test.guess-looks; all bodies) counts from the logs alone: k of n looks of a dig route's guessed rock cells that showed it not diggable, per class (go-to escape/guess-class).
   look-seconds [--agents DIR] (world-test.look-seconds; all bodies) counts from the logs alone the :wall-ms per look of the :sense.looked events: n, median, mean (cost.look/look-tick-s).
-  retry-wins (world-test.retry-wins; trial bodies only) counts from the logs alone the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
+  retry-wins (world-test.retry-wins; trial bodies only; rows kept in the counts file, so rotated logs still count) counts the tries after a failed one per retry kind, won or not, and their seconds (value/::retry-counts).
   craft-steps (world-test.craft-steps; trial bodies only) counts from the logs alone the seconds of each craft action: n, mean (cost.table/::craft-step).
   tree-logs (world-test.tree-logs; trial bodies only) counts from the logs alone the logs of each fell-tree :done: n, mean, median (trees/::logs-per-tree is the mean).
   pillar-knocks (world-test.pillar-knocks; all bodies) counts from the logs alone the pillar knock-offs per block a pillar placed (cost.ways/::pillar-knock-chance).
@@ -467,7 +467,7 @@
                     shrunk)}))
 
 ;; The durable counts: the rows of each prior by run id, so the counts only grow while the raw logs rotate away.
-(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :gap-jumps {} :resight {} :walls {} :wall-places {} :pen-escapes {} :item-costs {}})
+(def empty-counts {:exchange {} :starts {} :notices {} :drowned-exposure {} :drowned-meets {} :flight-steps {} :walk-steers {} :gap-jumps {} :resight {} :walls {} :wall-places {} :pen-escapes {} :item-costs {} :retry-rows #{}})
 
 (defn better-exchange "Of two rows of one fight, the one that saw more swings (a rotation may have cut the older read short), then the older." [a b]
   (if (> (:swings b) (:swings a)) b a))
@@ -834,11 +834,15 @@
                       (save-counts! file folded)
                       (println (pr-str {:gather-counts (item-costs/report (:item-costs folded)) :prior-items (item-costs/prior-items (:item-costs folded))}))
                       0)
-       "retry-wins" (do (println (pr-str (retry-wins/report (for [b (array-seq (fs/readdirSync agents))
-                                                                  :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
-                                                                  row (retry-wins/covered (keep retry-wins/scan-line (event-lines (path/join agents b "engine"))))]
-                                                              row))))
-                        0)
+       "retry-wins" (let [file (or counts (path/join repo "worlds" "test" "priors-counts.edn"))
+                          rows (for [b (array-seq (fs/readdirSync agents))
+                                     :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
+                                     row (retry-wins/covered (keep retry-wins/scan-line (event-lines (path/join agents b "engine"))))]
+                                 [b row])
+                          folded (retry-wins/fold (load-counts file) rows)]
+                      (save-counts! file folded)
+                      (println (pr-str (retry-wins/report (map second (:retry-rows folded)))))
+                      0)
        "craft-steps" (do (println (pr-str (craft-steps/report (for [b (array-seq (fs/readdirSync agents))
                                                                     :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))
                                                                     line (event-lines (path/join agents b "engine"))
