@@ -555,9 +555,9 @@
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
               {:keys [out eng p]} (await (go! world {:pos [10 64 8] :range 0 :spend {:health 7}}))]
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
-          (is (>= (first (at p)) 46) "walked to the frontier")
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
-              "the walk to the frontier is progress"))))))
+          (is (= 18 (first (at p))) "after the frontier walk, back at the edge nearest the goal, where the stair down starts")
+          (is (= ["partial" "blocked" "blocked" "blocked" "arrived"] (mapv :status (moved eng)))
+              "the walk to the frontier is progress, then the walk back to where the stair down starts"))))))
 
 ;; the same walkway, the goal in land never loaded: the far side was never seen, so that is the reason, not :exhausted
 (deftest go-to-gives-up-goal-unloaded-when-the-loaded-land-is-exhausted
@@ -591,9 +591,9 @@
           (await (tu/with-expansion-budget 16 #(tick-out! eng 600)))
           (set! wsearch/round-budget budget)
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
-          (is (>= (first (at p)) 46) "walked to the frontier and stayed there")
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
-              "one walk to the frontier, then three rounds that find no new one")
+          (is (= 18 (first (at p))) "after the frontier walk, back at the edge nearest the goal, where the stair down starts")
+          (is (= ["partial" "blocked" "blocked" "blocked" "arrived"] (mapv :status (moved eng)))
+              "one walk to the frontier, three rounds that find no new one, then the walk to where the stair down starts")
           (is (= [] (filter #(= :refresh (:why %)) (remove :kept (events-of s :replan))))
               "no refresh swapped the walk to the frontier for an unfinished search's nearest node"))))))
 
@@ -690,7 +690,7 @@
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
               {:keys [out returns eng]} (await (go-returns! world {:pos [10 64 8] :range 0 :spend {:health 7}}))]
           (is (= :exhausted (:why @out)))
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng))))
+          (is (= ["partial" "blocked" "blocked" "blocked" "arrived"] (mapv :status (moved eng))))
           (is (= [:done] @returns)))))))
 
 (def joined-world
