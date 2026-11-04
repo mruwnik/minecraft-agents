@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -252,4 +252,11 @@ test('main end: a failing shard with a large output reaches a pipe reader throug
     assert.match(r.stdout, /shard 0 FAILED/)
     assert.match(r.stdout, /END\n/)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
+test('refusal: a hand run is refused; run_tests (nonce) and integration (MC_INTEGRATION=1) pass', () => {
+  assert.match(refusal({}), /run_tests/)
+  assert.match(refusal({ MC_INTEGRATION: '0' }), /refusing/)
+  assert.equal(refusal({ LIVE_TESTS_NONCE: 'n0' }), null)
+  assert.equal(refusal({ MC_INTEGRATION: '1' }), null)
 })

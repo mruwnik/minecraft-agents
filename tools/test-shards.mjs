@@ -7,6 +7,7 @@
 //  Each shard is killed when no test has finished for stallLimitS (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test and the namespaces not reached.
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
+//  Refuses a hand run (needs run_tests' LIVE_TESTS_NONCE or MC_INTEGRATION=1).
 //  Isolation: after the compile, out/test.cjs and out/test/cljs-runtime are copied to ~/.cache/mc-test-run/mc-test-run-<pid>/out (disk, not tmpfs) (engine/test and node_modules symlinked beside it) and the shards run that copy (a concurrent compile cannot swap it); per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -149,7 +150,13 @@ export const writeAtomic = (file, text) => {
 
 const weightsFile = path.join(engine, 'test-weights.json')
 
+// A hand run (Bash) would take a full suite's RAM beside the other agents' work; run_tests exports LIVE_TESTS_NONCE, integration MC_INTEGRATION=1.
+export const refusal = (env) => env.LIVE_TESTS_NONCE || env.MC_INTEGRATION === '1' ? null
+  : 'test-shards: a full engine run goes through mcp__live-tests__run_tests (suite engine-full or engine-full-N), or MC_INTEGRATION=1 from tools/integration-worktree.sh; refusing a hand run'
+
 const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
+  const refused = refusal(process.env)
+  if (refused) { console.error(refused); process.exit(2) }
   const argv = process.argv.slice(2)
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
   if (argv.includes('--write-weights')) return writeAtomic(weightsFile, JSON.stringify(mergeWeights(readPrior(weightsFile), readPrior(path.join(engine, 'out/test-ns-ms.json')), testNamespaces())) + '\n')
