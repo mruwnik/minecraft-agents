@@ -96,11 +96,19 @@
   [c action pos]
   (access/trespass-refusal (access/rules-input c {:ignore-zones? false}) action pos))
 
+(defn regrowing-stalk?
+  "Whether the block at pos is sugar cane or bamboo standing on the same stalk: cut, its base grows it again, so nothing is put back."
+  [p pos]
+  (let [was (u/seen-name p pos)]
+    (and (contains? #{"sugar_cane" "bamboo"} was)
+         (= was (u/seen-name p (update (zipmap [:x :y :z] (access/cell pos)) :y dec))))))
+
 (defn pending
   "What to remember about acting (:dig or :place) on pos: {:cell :action :was :zone :claim :plan} when the cell is
-  another's, else nil. Reads the block, so call it before the act."
+  another's, else nil. A dug stalk above its base is nobody's loss (regrowing-stalk?). Reads the block, so call it before the act."
   [c action pos]
-  (when-let [v (refusal c action pos)]
+  (when-let [v (and (not (and (= :dig action) (regrowing-stalk? (:primitives c) pos)))
+                    (refusal c action pos))]
     (let [was (u/seen-name (:primitives c) pos)]
       (merge {:cell (access/cell pos) :action action :was was}
              (when (and (= :dig action) (crops/seed-of was)) {:any-of [(crops/seed-of was)]}) ; a crop is put back as its seed

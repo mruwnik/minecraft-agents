@@ -122,6 +122,18 @@
           (is (= [{:x 0 :y 65 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "the potato is sown in the harvested cell")
           (is (= [] (tidy-entries eng))))))))
 
+(deftest cane-cut-above-its-base-in-another-zone-is-not-noted-but-the-base-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (zs/setup (merge aside {:blocks {"0,65,0" "sugar_cane" "0,66,0" "sugar_cane" "0,64,0" "sand"} :inventory []}) [(zs/whole-zone "Miles")])]
+          (core/submit! eng '(jobs.blocks.dig {:pos {:x 0 :y 66 :z 0} :ignore-zones? true}) {})
+          (await (zs/run-until-empty eng 6))
+          (is (= [] (tidy-entries eng)) "a stalk above its base regrows")
+          (core/submit! eng '(jobs.blocks.dig {:pos {:x 0 :y 65 :z 0} :ignore-zones? true}) {})
+          (await (zs/run-until-empty eng 6))
+          (is (= [[0 65 0]] (mapv :cell (tidy-entries eng))) "the base is noted")))))) 
+
 (deftest restore-digs-a-placed-block-again
   (async done
     (tu/run-async done
