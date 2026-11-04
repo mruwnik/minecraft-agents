@@ -93,4 +93,4 @@
      :tier-fits (into (sorted-map) (for [[t rs] (group-by #(first (caught/matchup (:weapon %) nil)) (filter #(and (= :zombie (:group %)) (armed? %)) fights))]
                                      [t (let [c (:zombie (counts-of rs))] {:n (count rs) :deaths (count (filter :died? rs)) :hp20 (r3 (caught/chance c 20)) :hp10 (r3 (caught/chance c 10)) :hp15 (r3 (caught/chance c 15)) :c c})]))
      :by-chasers (into (sorted-map) (for [[c rs] (group-by :chasers (filter #(and (= :zombie (:group %)) (:chasers %)) rows))]
-                                      [c {:k (count (filter :died? rs)) :n (count rs)}]))}))
+                                      [c {:k (count (filter caught? rs)) :n (count rs)}]))}))
