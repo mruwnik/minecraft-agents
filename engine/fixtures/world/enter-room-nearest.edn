@@ -1,7 +1,7 @@
 ;; jobs.survival.enter-room with no :place and no remembered home (cards 06559aeb, 7a442197): it walks to the nearest closed room behind a door it has seen
 ;; and shuts the door. Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, open oak door at [15 0..1 18]; body 2 south of it looking north.
 ;; Should-succeed: the open door is walked to, the body ends inside and the door is shut.
-;; Should-succeed 2: a nearer hut inside a glass ring (seen, no way in) is passed over for a farther hut with a walk to it (the walk's steps, not the door's straight distance, pick): door shut on B at [25 0 14], body in B.
+;; Should-succeed 2: a nearer hut inside a glass ring (seen, no way in) is passed over for a farther hut with a walk to it (the walk's steps, not the door's straight distance, pick): door shut on B at [25 0 14], body in B, A's door still open (go-to quotes price the walk to each door; A has none).
 ;; Should-fail: the same hut with a cell of another's plan inside it (a bed spot beside the door) is not walked into (a fill there would trespass): no-room, the body stays outside.
 {:defaults
  {:tags [:night :survival]
@@ -35,7 +35,11 @@
             [:fill [15 0 18] [15 1 18] "air"]
             [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=true]"]
             [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=true]"]
-            [:fill [10 0 10] [20 3 21] "glass" :hollow]
+            [:fill [10 0 10] [20 3 10] "glass"]
+            [:fill [10 0 21] [20 3 21] "glass"]
+            [:fill [10 0 10] [10 3 21] "glass"]
+            [:fill [20 0 10] [20 3 21] "glass"]
+            [:fill [10 4 10] [20 4 21] "glass"]
             [:fill [22 0 8] [28 3 14] "oak_planks" :hollow]
             [:fill [23 0 9] [27 2 13] "air"]
             [:fill [25 0 14] [25 1 14] "air"]
@@ -43,4 +47,4 @@
             [:set [25 1 14] "oak_door[facing=south,half=upper,hinge=left,open=true]"]]
    :act [[:job (jobs.survival.enter-room)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.enter-room"}} :within-s 70 :of-job true}]
-   :after [[:block [25 0 14] "oak_door[half=lower,open=false]"] [:body-near [25.5 0 11.5] 2.5]]}]}
+   :after [[:block [25 0 14] "oak_door[half=lower,open=false]"] [:body-near [25.5 0 11.5] 2.5] [:block [15 0 18] "oak_door[half=lower,open=true]"]]}]}
