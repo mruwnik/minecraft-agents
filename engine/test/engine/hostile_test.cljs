@@ -1941,6 +1941,23 @@
             (swap! (fake/state raw) assoc-in [:entities 0 :pos] [2.5 64 0])
             (is (hostile-loss/hostile-near? p (mem/view (:store eng)) {}) "it fires again once the mob comes nearer")))))))
 
+(deftest a-mob-that-stands-where-an-earlier-flight-left-it-is-watched-not-fled-from-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [flee-entry {:mob "zombie" :decision :flee :run 1 :pos {:x 4.5 :y 64 :z 0.5}}
+              round (fn ^:async r [entry]
+                      (let [{:keys [eng p] :as s} (setup-flight {:entities [(zombie 4.5 0.5)]})]
+                        (when entry (mem/write! (:store eng) :hostile entry))
+                        (core/submit! eng respond {})
+                        (await (core/tick! eng))
+                        {:walked (walked? s) :watched (keys (body/watched (mem/view (:store eng))))}))]
+          (is (:walked (await (round nil))) "no flight before: it flees")
+          (is (:walked (await (round (assoc flee-entry :pos {:x 12.5 :y 64 :z 0.5})))) "it stands elsewhere than the flight left it")
+          (let [r (await (round flee-entry))]
+            (is (not (:walked r)) "it did not follow the body away: no second flight")
+            (is (= [7] (:watched r)) "it is watched")))))))
+
 (deftest only-seen-melee-mobs-may-be-watched
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(zombie 5 0) (skeleton 9 -4 0)
                                                            {:id 10 :name "creeper" :kind "hostile" :pos {:x 4 :y 64 :z 0}}]})

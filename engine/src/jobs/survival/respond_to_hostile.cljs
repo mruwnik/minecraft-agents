@@ -43,7 +43,7 @@
   Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (::ranged-radius for ranged mobs);
   none near is done at once. The call's :use :tools are the weapons, handed to both children.
   Returns: :done when no danger is near and the body holds no refuge, or when every danger is only heard and the fight declined
-  (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body (it is watched: muted while it comes no nearer than danger/answered-within and the body is unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
+  (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body, or a seen mob stands where an earlier flight from it left it (it is watched: muted while it comes no nearer than danger/answered-within and the body is unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
   flight ends so; :nothing-possible :no-response once another call after calls in a row that change nothing is not worth
   its seconds (try-again?); :limit-reached on its
   time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
@@ -235,6 +235,15 @@
        (watchable? hs)
        (empty? (:hits (ctx/mem c)))
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
+
+(defn still-since-flight?
+  "Whether the dangers hs may be watched (watchable?) and each stands where an earlier flight left it (hostile/stood-still?),
+  the body unhurt within hit-window-ms: a mob that did not follow the body away is not chasing it."
+  [c hs]
+  (and (watchable? hs)
+       (empty? (:hits (ctx/mem c)))
+       (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))
+       (every? #(hostile/stood-still? c %) hs)))
 
 (defn leave-watched!
   "Mutes the mobs hs as watched (jobs.lib.body/watched) and returns {:left-watched ending-data}, so the job the reflex cut goes on."
@@ -501,6 +510,7 @@
                     (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
                     (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
                     (look-unheard? c hs) (await (look/look-around! c))
+                    (still-since-flight? c hs) (leave-watched! c hs)
                     :else (await (respond c hs)))
           after (near c)
           s (/ (+ (- (ctx/now c) t0) pace/pace-ms) 1000)]

@@ -318,6 +318,19 @@
          distinct
          count)))
 
+(defn stood-still?
+  "Whether seen hostile e is in the cell where an earlier run of this body (not the c's own) fled a mob of its name within
+  ::return-s: it did not follow the body away, so it will not chase it now."
+  [c e]
+  (let [since (- (ctx/now c) (* 1000 (settings/get settings ::return-s)))
+        own (:run-at (ctx/mem c))
+        cell #(mapv (fn [k] (js/Math.floor (k %))) [:x :y :z])
+        here (cell (danger-q/mob-pos (:primitives c) e))]
+    (boolean (some (fn [{:keys [t data]}]
+                     (and (> t since) (= :flee (:decision data)) (= (.-name e) (:mob data)) (not= own (:run data))
+                          (:pos data) (= here (cell (:pos data)))))
+                   (ctx/entries c :hostile)))))
+
 (defn met-again
   "mobs (mob-near's, one per entity of near) with :again, the distance each is passed at, in 3D, on the way back to the
   goal of the walk the hostiles cut, when there is one: go-to's route of that walk (jobs.lib.goal/interrupted-walk) when it
