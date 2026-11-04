@@ -12,17 +12,29 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]))
 
+(def hole-cells
+  "Cells the walk from a cut-open roof's hole reaches before the body counts as out of it: the shelter room is far smaller."
+  64)
+
 (defn shut-in?
   "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out) or an entry
   that ended :sealed false. With a
   pit :start, when below that height and walled in (a pit left by a stair is open). With a :door, when a door cell is solid. With neither, when under a solid
-  block within roof-height."
+  block within roof-height, or in a hole whose walk reaches fewer than hole-cells cells (a roof cut open is no way out until the body can walk out)."
   [p {:keys [start door room sealed]}]
   (cond
     (or room (false? sealed)) false
     start (and (< (:y (sh-sense/feet p)) (:y start)) (reach-room/enclosed? p :ground))
     door (boolean (some #(sh-sense/solid-at? p %) door))
-    :else (sh-sense/roofed? p (sh-sense/roof-height))))
+    :else (or (sh-sense/roofed? p (sh-sense/roof-height)) (reach-room/enclosed? p :ground #{} hole-cells))))
+
+(defn near-shut-in?
+  "Whether the body stands off the entry's :pos, within 3 blocks sideways and 4 up or down, and is shut in by it (shut-in?):
+  in the hole it cut out of its shelter, which in-own-shelter (the exact cell) does not see."
+  [p {:keys [pos] :as entry}]
+  (let [f (sh-sense/feet p)]
+    (boolean (and pos (not= pos f) (<= (abs (- (:x f) (:x pos))) 3) (<= (abs (- (:z f) (:z pos))) 3) (<= (abs (- (:y f) (:y pos))) 4)
+                  (shut-in? p entry)))))
 
 (defn in-own-shelter
   "The shelter entry data when the body stands in its :pos and is shut in it, else nil."

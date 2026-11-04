@@ -608,7 +608,7 @@
   [c site]
   (let [args (walk-args c site)
         worth (pass-worth c)
-        q (await (ctx/quote c 'jobs.movement.go-to args))
+        q (when-not (:walking (ctx/mem c)) (await (ctx/quote c 'jobs.movement.go-to args)))
         price (pick/quoted-s c q)]
     (cond
       (:estimate q) :continue
@@ -620,8 +620,8 @@
       :else
       (let [e (await (ctx/call c :walk 'jobs.movement.go-to (assoc args :worth worth)))]
         (cond
-          (= :continue e) :continue
-          (= :done (:kind e)) (do (ctx/update-mem! c assoc :site-walked true) :again)
+          (= :continue e) (do (ctx/update-mem! c assoc :walking true) :continue)
+          (= :done (:kind e)) (do (ctx/update-mem! c assoc :site-walked true :walking false) :again)
           :else (ctx/end c (:kind e) (contract/cause-key e)
                          {:steps {} :text (str "farm tend: could not walk to the field, go there first: " (contract/cause-key e))}))))))
 

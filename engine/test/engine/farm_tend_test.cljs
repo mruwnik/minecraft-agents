@@ -623,6 +623,22 @@
           (is (empty? (tu/walk-calls (:p s))))
           (is (some #(and (= :not-worth (:reason %)) (:quoted %)) (events-of s :waiting))))))))
 
+(deftest a-walk-that-has-started-is-not-quoted-again-each-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (assoc (world (farm "wheat" 7 hidden-cells hidden-cells) wheat-drops) :floor [-5 -5 60 15]))
+              asked (atom 0)
+              quoted pick/quoted-s]
+          (tu/seeing-within (:p s) 10)
+          (set! pick/quoted-s (fn [_c _q] (swap! asked inc) 1))
+          (try
+            (core/submit! (:eng s) (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false}) {})
+            (await (tu/run-ticks (:eng s) (:clock s) 60 700))
+            (finally (set! pick/quoted-s quoted)))
+          (is (seq (tu/walk-calls (:p s))) "the walk is made")
+          (is (= 1 @asked) "the walk is quoted before it starts, not again while it goes on (a body leaving its shelter on the way is priced by the walk)"))))))
+
 (defn pass-ctx
   "A check ctx of tend over the box from x0 to x1 (z 2) in setup s."
   [s x0 x1]

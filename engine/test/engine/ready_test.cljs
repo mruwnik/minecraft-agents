@@ -591,6 +591,15 @@
     0 15 open-night :later))
 
 
+(deftest by-day-a-body-in-the-hole-cut-out-of-its-shelter-is-not-held-for-the-walk-it-leaves-by
+  (are [near? expected] (= expected (with-redefs [sh-sense/block-light-at (constantly 0)
+                                                  sh-sense/sky-light-at (constantly 0)
+                                                  sh-inside/dark-hall (constantly :far)
+                                                  sh-inside/near-shut-in? (constantly near?)]
+                                      (first (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))))
+    true :ok
+    false :never))
+
 (deftest a-roofed-dark-cell-is-exposed-in-a-dark-hall-and-free-in-a-small-dark-place
   (are [hall expected] (= expected (with-redefs [sh-sense/block-light-at (constantly 0)
                                                   sh-sense/sky-light-at (constantly 0)

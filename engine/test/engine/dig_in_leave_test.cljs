@@ -317,6 +317,16 @@
           (is (= 64 (second (feet p))) "out at ground level")
           (is (empty? (calls p "place")) "no stair step was laid"))))))
 
+(deftest a-shelter-with-no-roof-left-is-left-only-once-the-body-can-walk-out-of-the-hole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out] :as s} (setup {:blocks (shaft) :self {:pos {:x 0.5 :y 60 :z 0.5}} :inventory dirt-kit})]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 60 :z 0} :state :built} {:cap 10 :ttl 1200000})
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (< 60 (second (feet p))) "climbed from the hole's bottom, not done there"))))))
+
 (defn have [p item]
   (->> (array-seq (.-inventory (.self p))) (filter #(= item (.-name %))) (map #(.-count %)) (reduce + 0)))
 

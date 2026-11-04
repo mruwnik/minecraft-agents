@@ -286,7 +286,7 @@
     (with :order, through the first heading of it with a level exit instead);
     still shut in by a pit :start with the door open, it climbs.
   - A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the start height.
-    A shaft goes one step at a time until nothing solid is within 4 above (at most 32 steps, else :too-deep).
+    A shaft goes one step at a time until nothing solid is within 4 above and the walk from the cell reaches out of the hole (at most 32 steps, else :too-deep).
     The headings go in :order (e.g. cheapest first), else the one nearest :toward first. The stair refuses lava, water, falling blocks and a missing floor,
     and then the next heading is tried. With no pickaxe it digs by hand (the drop is lost), as a player would.
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones :refused),
