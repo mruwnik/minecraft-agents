@@ -44,6 +44,8 @@
                                :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}
    ::hide-stays {:default {:k 33 :n 52} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                  :doc "Of n flights of the trial bodies that ended hidden in a refuge, k handed back with a danger still about (hide-out :hold :spent), 2026-10-28. Recount: node tools/event-counts.mjs hide-ends."}
+   ::home-work-counts {:default {:k 0 :n 0} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                       :doc "Of n seconds a body hid in its own house from a danger, k that it spent on work the house offers (sleep, craft, cook, store). Not yet counted: the uniform prior, half the hide lost (refuge-answer)."}
    ::flee-meets {:default {:k 56 :n 124} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                  :doc "Of n flights of the trial bodies that got away (hostile.fled), k from a mob named again by its id in another run within 600 s (hostile-fight ::return-s), 2026-10-30: decisions logged before then name no id (hostile.decided :mobs), so a meet answered by a fight goes uncounted (at most 9 more, 65/124, by kind within 40 blocks). Recount: node tools/event-counts.mjs flee-meets."}
    ::respawn-meets {:default {:k 3 :n 17} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
@@ -416,7 +418,7 @@
   on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
   met again by flee-meets) unless the way back passes one nearer than it stands. :caught: each flight is caught by its way (caught: the flee
   search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over
-  caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health (none with :refuge-s, the seconds of a route to a known refuge reached uncaught: it is all known, a mob hits only over those seconds, the shut door ends the meet again (no later, no return), and the hide-s of the hide in it are paid, with no walk back: the refuge is where the body stays)
+  caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
   flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's over
   the swim's share of the flight's seconds (flee-mob's :swim-s) no more than caught-s at reach-rate (blows do not outlast
@@ -426,21 +428,16 @@
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
   The flight gains on each mob at its danger/closing-rate.
   nil when a mob keeps up or none is given."
-  [{:keys [health food equipment mobs returns later caught caught-s swim land refuge-s hide-s] :as args}]
-  (let [later (when-not refuge-s later)
-        stats (armour/armour-stats equipment)
-        priors (map #(cond-> (caught-prior/prior (:name %) health) refuge-s (assoc :chance 0)) mobs)
+  [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
+  (let [stats (armour/armour-stats equipment)
+        priors (map #(caught-prior/prior (:name %) health) mobs)
         prior (when (seq priors) (apply max-key :chance priors))
         way (or caught 0)
         caught (- 1 (* (- 1 (:chance prior 0)) (- 1 way)))
         v (danger/flee-walk-speed (or food 20))
         wet {:swim swim :land land :sv (* (planner/swim-speed equipment) (/ v (danger/body-speed (or food 20))))
              :gain #(danger/closing-rate (or food 20) %)}
-        per-of (fn [mobs] (map #(let [f (flee-mob stats v wet %)]
-                                  (if (and f refuge-s (> (:seconds f) refuge-s))
-                                    (-> f (assoc :seconds refuge-s) (update :damage * (/ refuge-s (:seconds f))))
-                                    f))
-                               mobs))
+        per-of (fn [mobs] (map #(flee-mob stats v wet %) mobs))
         per (per-of mobs)
         times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))
@@ -449,9 +446,7 @@
                             walk {:damage (* times (reduce + (map :damage per)))
                                   :hit hit
                                   :spread (when-let [s (seq (keep :spread per))] (mapv #(* times %) (apply map + s)))
-                                  :seconds (if refuge-s
-                                        (+ (reduce max 0 (map :seconds per)) (or hide-s 0))
-                                        (* 2 times (reduce max 0 (map :seconds per))))
+                                  :seconds (* 2 times (reduce max 0 (map :seconds per)))
                                   :near (reduce max 0 (map :seconds per))
                                   :caught {:chance (- 1 (js/Math.pow (- 1 caught) times))
                                            :hit hit
@@ -488,8 +483,8 @@
                           shape (assoc :shape shape)
                           d-shape (assoc-in [:caught :shape] d-shape))))
             walk (walk-of per times)
-            again (when-not refuge-s (let [per (per-of (map #(assoc % :distance (min (:distance %) (:again % ##Inf))) mobs))]
-                    (when (every? some? per) (walk-of per (inc times)))))]
+            again (let [per (per-of (map #(assoc % :distance (min (:distance %) (:again % ##Inf))) mobs))]
+                    (when (every? some? per) (walk-of per (inc times))))]
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
               spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
               left (remove spent mobs)]
@@ -604,6 +599,20 @@
       (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (hide-stays)) :then (vec then))
         (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
                                                        [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]])))))
+
+(defn home-work-share
+  "The share of a hide in the body's own house that work fills: counted-chance of ::home-work-counts."
+  []
+  (counted-chance (settings/get settings ::home-work-counts)))
+
+(defn refuge-answer
+  "The answer of running into a known refuge (own house, door shut behind) from mobs [flee-mob's], the cover-answer of a
+  cover that is open for door-s (the run to the door: the bed beyond it is no exposure) and then hid for hide-s, of which only the share
+  of time no work fills is lost (home-work-share): a danger waits outside a shut door as under a pillar (hide-stays), but a
+  hide at home is not idle. later: the answer if the mobs stay (the fight); nil with a creeper."
+  [{:keys [equipment mobs later]} {:keys [door-s hide-s]}]
+  (cover-answer {:equipment equipment :mobs mobs :then (when later [later])}
+                {:open-s door-s :seconds (+ door-s (* hide-s (- 1 (home-work-share))))}))
 
 (defn cover-answers
   "{way answer} of covers {way {:open-s :seconds :fails}} against mobs [flee-mob's] wearing equipment (cover-answer,

@@ -348,15 +348,20 @@
         self (.self p)
         mobs (met-again c near (or mobs (mapv #(mob-near p %) near)))
         swim (swim-out c mobs)
-        a (when-not (and (:cornered? caught) (nil? swim))
-            (cost/flee-answer {:health (.-health self) :food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))
+        equipment (cost/equipment-of (.-equipment self))
+        refuge (when (and (:refuge-s caught) (nil? (:swim swim)))
+                 (cost/refuge-answer {:equipment equipment :mobs mobs :later later} {:door-s (:refuge-s caught) :hide-s (:hide-s caught)}))
+        a (if refuge
+            (cond-> refuge felt (update :damage max (* felt (/ (:refuge-s caught) 2))))
+            (when-not (and (:cornered? caught) (nil? swim))
+            (cost/flee-answer {:health (.-health self) :food (or (.-food self) 20) :equipment equipment
                                  :mobs mobs
                                  :swim (:swim swim) :land (:land swim) :open (:chance swim)
                                  :ashore (when (and (:chance swim) (:stand? swim)) (cost/fight-answer (fight-of c near (constantly nil))))
                                  :returns (returns c (map #(.-name %) near))
-                                 :later later :caught (:chance caught) :caught-s (:seconds caught) :refuge-s (:refuge-s caught) :hide-s (:hide-s caught)}))]
+                                 :later later :caught (:chance caught) :caught-s (:seconds caught)})))]
     (cond-> a
-      (and a felt) (update :damage max (* felt (/ (:seconds a) 2)))))))
+      (and a felt (not refuge)) (update :damage max (* felt (/ (:seconds a) 2)))))))
 
 (defn weigh
   "cost/decide over answers ({key answer-or-nil}) to hostiles hs for the body of c where it stands, a death meeting

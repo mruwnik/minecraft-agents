@@ -85,13 +85,16 @@
     (is (= pooled (chance "diamond_sword" 1)) "a kit tier never counted is the pooled rate")
     (is (= pooled (chance "iron_sword" 2)) "so is a foe count never counted")))
 
-(deftest a-flight-to-a-known-refuge-reached-uncaught-carries-no-whole-flight-prior
-  (let [walk #(cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0 :refuge-s % :hide-s 30 :later {:damage 5 :hit 3 :seconds 5}})]
-    (is (pos? (-> (walk nil) :caught :chance)) "an open flight is caught at the prior")
-    (is (zero? (-> (walk 2) :caught :chance)) "a run into a refuge the search found uncaught is all known")
-    (is (and (:stays (walk nil)) (:then (walk nil))) "an open flight may meet the mob again")
-    (is (not-any? #(contains? (walk 2) %) [:stays :then]) "a shut door ends the meet again")
-    (is (< (js/Math.abs (- (:seconds (walk 2)) 30 (:seconds (cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0 :refuge-s 2})))) 1e-9) "it pays the hide on top of the route")))
+(deftest a-run-into-a-known-refuge-is-a-cover-open-to-its-door-and-hid-at-the-lower-price-of-time-with-work
+  (let [refuge (fn [door-s hide-s] (cost/refuge-answer {:mobs [(mob "zombie" 2)] :later {:damage 5 :hit 3 :seconds 5}} {:door-s door-s :hide-s hide-s}))
+        pillar (cost/cover-answer {:mobs [(mob "zombie" 2)] :then [{:damage 5 :hit 3 :seconds 5}]} {:open-s 2 :seconds 32})
+        share (answer/home-work-share)]
+    (is (< 0 share 1) "a hide at home is partly work")
+    (is (= (:stays pillar) (:stays (refuge 2 30))) "a danger waits outside a shut door as under a pillar")
+    (is (= (:damage pillar) (:damage (refuge 2 30))) "its blows are those of the run to the door")
+    (is (< (js/Math.abs (- (:seconds (refuge 2 30)) 2 (* 30 (- 1 share)))) 1e-9) "only the hide's lost share is paid")
+    (is (< (:seconds (refuge 2 30)) (:seconds pillar)) "dearer on a pillar, where the hide is idle")
+    (is (nil? (cost/refuge-answer {:mobs [(mob "creeper" 2)]} {:door-s 2 :hide-s 30})) "a blast takes the walls: no cover")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))

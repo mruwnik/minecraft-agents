@@ -476,6 +476,11 @@
   [ends glanced]
   (->> ends (sort-by :s) (keep :unseen) distinct (remove (set glanced)) seq))
 
+(defn door-s
+  "The seconds of end e's route up to its first cell door? (cell -> bool) holds of, else the whole route: a shut door ends the exposure."
+  [e door?]
+  (or (when door? (:t (first (filter door? (:cells e))))) (:s e)))
+
 (defn caught-chance
   "{:chance :seconds} of a flight from where search ends (search!) ran: the chance it is caught
   (cost/flight-caught-chance) and the seconds its chasers are within their blow when it is (:caught-s; nil: the whole
@@ -489,7 +494,7 @@
   the cells the flight looked at: the flight would be the cornered step, no walk away); with one, the flight looks first,
   and a way may be there at way-on-chance: the chance is that of an unseen way (flight-caught-chance). Nothing routed:
   the prior with the unseen worse case. A flight that takes the preferred end (a safe home) uncaught
-  is a known route to a refuge: {:chance 0 :refuge-s seconds of the route}, no prior to add and exposure only over the route (cost/flee-answer :refuge-s)."
+  is a known route to a refuge: {:chance 0 :refuge-s seconds of the route up to its door}, priced as a cover (cost/refuge-answer)."
   [ends counts opts glanced]
   (let [picked (choose ends opts)
         refuge? (and picked (not (:caught? picked)) (boolean (some-> (:prefer? opts) (#(% picked)))))
@@ -499,7 +504,7 @@
         best (when (seq left) (apply max-key :score left))
         caught (filter :caught? ring)]
     (cond
-      refuge? {:chance 0 :refuge-s (:s picked)}
+      refuge? {:chance 0 :refuge-s (door-s picked (:door? opts))}
       best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught))))
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}

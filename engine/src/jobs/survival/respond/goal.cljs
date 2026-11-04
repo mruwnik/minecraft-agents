@@ -1,7 +1,8 @@
 (ns jobs.survival.respond.goal
   "The :goal of a flight (jobs.survival.respond-flight): the destination of the walk it interrupted, when the flight walks to
   it and when it gives it up."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -149,6 +150,7 @@
      :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
      :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
      :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
+     :door? (fn [{:keys [x y z]}] (some-> (block-at [x y z]) (str/ends-with? "_door")))
      :prefer? (when home #(= home (:pos (:target %))))}))
 
 (defn usable

@@ -563,3 +563,10 @@
           east (search/beaten-to? (chasers (+ x 3.5)) {:x 0.5 :y 64 :z 0.5} food {:x x :y 64 :z 0})
           west (search/beaten-to? (chasers (- (+ x 3.5))) {:x -0.5 :y 64 :z 0.5} food {:x (dec (- x)) :y 64 :z 0})]
       (is (= east west) (str "x " x " food " food)))))
+
+(deftest a-flight-to-a-safe-home-is-exposed-only-up-to-its-door-not-to-the-bed
+  (let [home (end-of 4 0 5 :caught? false :caught-s 0 :arrive 50 :s 9 :target {:pos {:x 4 :y 64 :z 0}}
+                     :cells [{:x 0 :y 64 :z 0 :t 0} {:x 2 :y 64 :z 0 :t 3} {:x 4 :y 64 :z 0 :t 9}])
+        opts {:prefer? #(= {:x 4 :y 64 :z 0} (:pos (:target %))) :door? #(= 2 (:x %))}]
+    (is (= {:chance 0 :refuge-s 3} (search/caught-chance [home] {:k 0 :n 0} opts nil)) "the run to the door")
+    (is (= 9 (:refuge-s (search/caught-chance [home] {:k 0 :n 0} (dissoc opts :door?) nil))) "no door on the route: the whole of it")))
