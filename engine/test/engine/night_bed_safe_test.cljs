@@ -22,6 +22,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.walk-pick :as pick]
             [jobs.survival.night :as night]))
 
 (def far-bed {:x 40 :y 64 :z 0})
@@ -185,6 +186,26 @@
           (is (empty? (st/calls raw "sleep")))
           (is (empty? (filter #(< 21 (:x (st/arg-pos %))) (st/calls raw "moveTo"))) "no walk out of the tunnel")
           (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "nor does the night trigger hold for the bed meanwhile"))))))
+
+(deftest a-set-bed-whose-quote-still-searches-is-not-called-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup overdue-in-open-lit-tunnel)
+              quote! pick/quote!
+              searches (atom 0)
+              unsafe-when-answered (atom nil)]
+          (mem/write! (:store eng) :bed {:pos far-bed} mem/place-policy)
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (set! pick/quote! (fn ^:async q [c args]
+                              (if (< (swap! searches inc) 4)
+                                {:estimate true}
+                                (do (when-not @unsafe-when-answered (reset! unsafe-when-answered [(count (st/entries eng :bed-walk-unsafe))]))
+                                    (await (quote! c args))))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (try (await (core/tick! eng))
+               (finally (set! pick/quote! quote!)))
+          (is (= [0] @unsafe-when-answered) "no route yet is not no route: the bed is not written off while the search goes on"))))))
 
 (def on-open-ground
   "The body on the open floor at night, the far bed 35 blocks off over the same dark ground, no hostile known (overdue: a bed in

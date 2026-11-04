@@ -535,13 +535,16 @@
   overdue (overdue, bed-down/cheapest takes the bed whatever it costs), lying in that bed, its walk priced in, is the cheapest of
   bed-down/answers: a body on
   dark open ground walks (its price with the work it costs, :walk, kept in job memory :bed-walk {:bed :walk-s} for night-answer, which weighs it). Else :bed-walk-unsafe {:pos bed :state} is remembered (sh-beds/bed-to-use skips the bed while the body's cell and the hostiles near the way are as priced) with a
-  night.bed-walk-unsafe info, and false."
+  night.bed-walk-unsafe info, and false. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
-      (let [r (:route (await (pick/quote-once! c {:pos bed :range 2})))
+      (let [q (await (pick/quote-once! c {:pos bed :range 2}))
+            r (:route q)
             [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
             dig-s (when (:found r) (await (bed-down/dig-in-time-s c)))
             {:keys [walk walk-hp stay]} (when (:found r) (bed-walk-price c bed r (min left dig-s)))]
+        (if (:estimate q)
+          :searching
         (or (and (:found r)
                  (or (<= walk-hp stay)
                      (and (not (bed-down/overdue? c))
@@ -555,7 +558,7 @@
                                          (str "the walk is priced " (price/round1 walk) " s, staying here " (price/round1 stay) " s")
                                          "no whole way to it is known")
                                        "; sheltering here tonight")})
-                false)))))
+                false))))))
 
 (defn ^:async walkable-bed
   "The bed the night walks to now: of the beds sh-beds/beds-to-use names, the :bed place when it leads them (no bed is seen) and its walk is safe, else the one whose walk go-to quotes cheapest (cheapest-walk!; the first
