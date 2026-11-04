@@ -615,3 +615,9 @@
   (let [stays #(:stays (cost/cover-answer {:mobs [(assoc (mob "zombie" 3) :burns %)]} {:open-s 2 :seconds 32}))]
     (is (= 1 (stays false)) "no open sky over it: the mob is still there when the hide ends")
     (is (< (stays true) 1) "burning under open sky it may pass")))
+
+(deftest a-cover-a-mob-may-pass-waits-out-the-seconds-till-the-sun-burns-it
+  (let [secs #(:seconds (cost/cover-answer {:mobs [(assoc (mob "zombie" 3) :burns %1)] :dawn-s %2} {:open-s 2 :seconds 32}))]
+    (is (= 32 (secs true 0)) "by day the hide is its own seconds")
+    (is (= 300 (secs true 300)) "at dusk it lasts till dawn")
+    (is (= 32 (secs false 300)) "a mob the sun does not burn is not waited out: the fight is owed instead")))

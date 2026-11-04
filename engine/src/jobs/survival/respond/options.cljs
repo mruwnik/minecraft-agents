@@ -13,6 +13,7 @@
             [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.shelter.clock :as clock]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.memory-age :as memory-age]
@@ -255,7 +256,8 @@
                    hostiles)
         body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)
-        answer #(cost/cover-answer {:equipment equipment :mobs mobs} %)
+        dawn-s (second (get-in (clock/night-left-quote c) [:uses :job-time]))
+        answer #(cost/cover-answer {:equipment equipment :mobs mobs :dawn-s dawn-s} %)
         death (cost/meet-death body at)
         price #(cost/answer-price* body (answer %) at death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))

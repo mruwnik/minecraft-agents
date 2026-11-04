@@ -609,13 +609,14 @@
 (defn cover-answer
   "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails}
   (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
-  it cannot be closed, default 0): the blows of build-answer over open-s; then, by the chance the mobs are still about
+  it cannot be closed, default 0): the blows of build-answer over open-s (a cover mobs may pass lasts at least :dawn-s, the seconds till the sun burns them); then, by the chance the mobs are still about
   when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
   blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). nil with a
   creeper (its blast takes the walls)."
-  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run]}]
+  [{:keys [equipment mobs then failed dawn-s]} {:keys [open-s seconds fails run]}]
   (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [a (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
+    (let [seconds (max seconds (if (< (stays-chance mobs) 1) (or dawn-s 0) 0))
+          a (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
           fails (if (seq failed) (or fails 0) 0)]
       (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))
         (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
