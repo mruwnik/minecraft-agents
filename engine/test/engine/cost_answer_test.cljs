@@ -78,9 +78,10 @@
           "a fight left to a walk: caught if either goes bad"))))
 
 (deftest a-fights-matchup-moves-its-prior-towards-its-own-counts-and-an-uncounted-one-keeps-the-pooled
-  (let [chance (fn [weapon n] (-> (cost/fight-answer (assoc (apply fight weapon (repeat n (mob "zombie" 0))) :health 20)) :caught :chance))
+  (let [chance (fn [weapon n] (settings/with-settings {:jobs.lib.cost.caught/matchups {:zombie {"iron/1" {:k 0 :n 60} "stone/1" {:k 30 :n 60}}}}
+                                #(-> (cost/fight-answer (assoc (apply fight weapon (repeat n (mob "zombie" 0))) :health 20)) :caught :chance)))
         pooled (:chance (caught/prior ::caught/fights "zombie" 20))]
-    (is (< (chance "iron_sword" 1) (chance "stone_sword" 1) pooled) "iron's 1 death in 29 fights is under stone's 2 in 23, both under the pooled rate")
+    (is (< (chance "iron_sword" 1) pooled (chance "stone_sword" 1)) "a matchup that never died is under the pooled rate, one that died half the time over it")
     (is (= pooled (chance "diamond_sword" 1)) "a kit tier never counted is the pooled rate")
     (is (= pooled (chance "iron_sword" 2)) "so is a foe count never counted")))
 

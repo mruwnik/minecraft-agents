@@ -1127,7 +1127,7 @@
                                             :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 4 1)]}))
         c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
         {:keys [blasts caught]} (hostile-fight/fight-answer c (danger-q/dangers p 16 {:ranged-radius 16} {}) (constantly nil))
-        prior #(:chance (caught-prior/fight-prior "zombie" % "iron_sword" 1))]
+        prior #(:chance (:caught (cost/fight-answer {:weapon "iron_sword" :health % :mobs [{:name "zombie" :distance 0}]})))]
     (is (pos? (first blasts)) "the creeper blows beside the fight")
     (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
     (is (< (prior 20) (:chance caught)))))
