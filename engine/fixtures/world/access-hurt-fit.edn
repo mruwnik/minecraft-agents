@@ -1,5 +1,5 @@
 ;; Card ee960f0a (owner Q328): the access jobs bind fit? to ready/fit?, so a hurt body (1.5 hp, under the risky 6; hunger stops
-;; regeneration) waits :low-health before a queued tunnel or pillar (fed at 2.1 hp too: the death a hit risks; at 5 hp it cuts; line 2.2 hp when fed), while go-to's escalation children carry :checks {:fit? (always)}
+;; regeneration) waits :low-health before a queued tunnel or pillar (fed at 1.2 hp too: the death a hit risks; at 5 hp it cuts; line 2.2 hp when fed), while go-to's escalation children carry :checks {:fit? (always)}
 ;; and still pillar a hurt body out of a pit.
 {:defaults
  {:tags [:access :readiness]
@@ -16,16 +16,27 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:block [16 9 17] "stone"]]}
-  {:name "fed-body-at-2.1-hp-tunnel-waits-low-health"
+  {:name "fed-body-at-1.2-hp-tunnel-waits-low-health"
    ;; a bar under 18 and over 6 (not hungry) and bread carried (it can heal): a long job waits when its hurt with
-   ;; the death a hit of 2.1 hp or more risks is over half of 2.1 (the fed :long line is 2.2 hp)
+   ;; the death a hit of 1.2 hp or more risks is over half of 1.2 (the fed :long line is 2.2 hp: a margin of 1 hp)
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8] ["bread" 1]] :effects [["hunger" 4 255]]}
    :act [[:wait-s 6]
-         [:rcon "damage $BODY 17.9 minecraft:generic"]
+         [:rcon "damage $BODY 18.8 minecraft:generic"]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
    :after [[:block [16 9 17] "stone"]]}
+  {:name "fed-body-at-3.2-hp-tunnel-cuts"
+   ;; fed (bread carried), hurt, short tunnel: 1 hp over the fed :long line (2.2 hp) it goes ahead on its own quote
+   :memory [{:kind :spawn-bed :data {:pos #xyz [12 10 16]} :policy {:cap 1 :ttl :forever}}]
+   :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:set [12 10 16] "red_bed[facing=east,part=foot]"] [:set [13 10 16] "red_bed[facing=east,part=head]"]]
+   :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8] ["bread" 1]] :effects [["hunger" 4 255]]}
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 16.8 minecraft:generic"]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :of-job true :for-s 80 :until {:source :job :kind :completed}}]
+   :after [[:block [15 6 20] "air"]]}
   {:name "fed-body-at-5-hp-tunnel-cuts"
    ;; as above at 5 hp: 1.7 hp with the death, within 2.5 (a bed spawn at the body: a death far from the spawn would cost more)
    :memory [{:kind :spawn-bed :data {:pos #xyz [12 10 16]} :policy {:cap 1 :ttl :forever}}]
