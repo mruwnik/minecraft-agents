@@ -1,4 +1,4 @@
-;; A hurt body (3 hp, under the risky 6) that cannot heal (hunger drains food under 18, nothing edible carried) still fells a tree:
+;; A hurt body (1.5 hp, under the risky 6) that cannot heal (hunger drains food under 18, nothing edible carried) still fells a tree:
 ;; wood is how it gets a rod or hoe, and waiting never heals it. One that carries bread waits :low-health (it eats instead).
 ;; Should-succeed: the tree 5 blocks off is felled at 3 hp with no food. Should-fail: the same with bread carried waits :low-health.
 {:defaults
@@ -12,7 +12,7 @@
  [{:name "hurt-starving-body-fells-a-tree"
    :body {:inventory [["iron_axe" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.forestry.harvest-wood {:radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 20 :until {:source :job :kind :completed}}]
@@ -20,7 +20,7 @@
   {:name "hurt-body-with-bread-waits-low-health"
    :body {:inventory [["iron_axe" 1] ["bread" 4]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.forestry.harvest-wood {:radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
    :after [[:item "oak_log" 0]]}]}

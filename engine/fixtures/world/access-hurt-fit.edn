@@ -1,5 +1,5 @@
-;; Card ee960f0a (owner Q328): the access jobs bind fit? to ready/fit?, so a hurt body (3 hp, under the risky 6; hunger stops
-;; regeneration) waits :low-health before a queued tunnel or pillar (fed at 3.9 hp too: the death a hit risks; at 5 hp it cuts), while go-to's escalation children carry :checks {:fit? (always)}
+;; Card ee960f0a (owner Q328): the access jobs bind fit? to ready/fit?, so a hurt body (1.5 hp, under the risky 6; hunger stops
+;; regeneration) waits :low-health before a queued tunnel or pillar (fed at 2.1 hp too: the death a hit risks; at 5 hp it cuts; line 2.2 hp when fed), while go-to's escalation children carry :checks {:fit? (always)}
 ;; and still pillar a hurt body out of a pit.
 {:defaults
  {:tags [:access :readiness]
@@ -10,18 +10,18 @@
  [{:name "hurt-body-tunnel-waits-low-health"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["hunger" 120 255]]}
-   :act [[:rcon "damage $BODY 17 minecraft:generic"]
+   :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:block [16 9 17] "stone"]]}
-  {:name "fed-body-at-3.9-hp-tunnel-waits-low-health"
-   ;; a bar under 18 and over 6 (not hungry) and bread carried (it can heal): a 600 s tunnel's mean hurt is 0.3 hp, but with
-   ;; the death a hit of 3.9 hp or more risks it is 2.7, over half of 3.9 (the fed :long line is 4.4 hp)
+  {:name "fed-body-at-2.1-hp-tunnel-waits-low-health"
+   ;; a bar under 18 and over 6 (not hungry) and bread carried (it can heal): a long job waits when its hurt with
+   ;; the death a hit of 2.1 hp or more risks is over half of 2.1 (the fed :long line is 2.2 hp)
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8] ["bread" 1]] :effects [["hunger" 4 255]]}
    :act [[:wait-s 6]
-         [:rcon "damage $BODY 16.1 minecraft:generic"]
+         [:rcon "damage $BODY 17.9 minecraft:generic"]
          [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
    :after [[:block [16 9 17] "stone"]]}
@@ -45,7 +45,7 @@
   {:name "hurt-body-pillar-job-waits-low-health"
    :blocks [[:fill [12 0 12] [20 0 20] "stone"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]] :effects [["hunger" 120 255]]}
-   :act [[:rcon "damage $BODY 17 minecraft:generic"]
+   :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.access.pillar {:height 2 :here true})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
@@ -54,7 +54,7 @@
    :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"] [:set [20 4 20] "glowstone"]]
    :zones [{:name "pen" :min [13 0 13] :max [19 4 19] :owner "Other" :allow #{:place}}]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]] :effects [["hunger" 120 255]]}
-   :act [[:rcon "damage $BODY 17 minecraft:generic"]
+   :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :until {:source :job :kind :go-to.escalated}}
@@ -67,7 +67,7 @@
    :blocks [[:fill [2 0 8] [30 9 24] "stone"] [:fill [7 0 8] [13 8 24] "air"] [:fill [11 9 8] [13 9 24] "air"]]
    :body {:at [10.5 10 16.5] :yaw 270 :inventory [["iron_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["hunger" 4 255]]}
    :act [[:wait-s 6]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 150 :until {:source :job :kind :completed}}]

@@ -67,7 +67,7 @@
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
   Holds at :urgent when eat-now? does (low health), food is at most ::urgent-food (2), or the body is hungry? with food carried (one bite, no search), else at its :comfort level.
   Args: :food, :health, :rest-s.
-  Not while too hurt for the riskiest work even fed (jobs.lib.cost.risk/too-hurt? of a :long stay, no hungry cut): a hurt body is the :low-health trigger's.
+  Not while too hurt for the riskiest work even fed (jobs.lib.cost.risk/too-hurt? of the heal wait (:heal), no hungry cut): a hurt body is the :low-health trigger's.
   In the dark it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
   A fragile body (foods/fragile?) with no food carried holds in the dark too (only food heals it); go-to's start check prices its walk to known food.
   Nor with a real danger near and no food carried: the body hides first, whatever its health.
@@ -80,7 +80,7 @@
                     (<= (.-food self) (settings/get settings ::urgent-food))
                     (and (foods/hungry? (.-food self) (.-health self) args) (meal/carries-food? self reserved)))]
     (and (not (body/recovery-pending? memory :hungry))
-         (not (risk/too-hurt? (.-health self) nil :long (cost/death-s world memory)))
+         (not (risk/too-hurt? (.-health self) nil :heal (cost/death-s world memory)))
          (meal/wants-meal? self reserved args)
          (not (resting? self memory args))
          (or (meal/carries-food? self reserved)

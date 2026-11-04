@@ -6,7 +6,8 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
-            [jobs.lib.cost.death :as death]))
+            [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.health :as health]))
 
 (a/defargs settings
   {::risk-share {:default 0.5 :spec (a/num-in 0 nil)
@@ -17,10 +18,10 @@
                    :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
    ::place-stay-s {:default 10 :spec (a/num-in 0 nil)
                    :doc "Seconds a click act (a door, a lever, one block, a trade) is taken to stay at its place. Not measured: no fit? binds :click."}
-   ::work-stay-s {:default 120 :spec (a/num-in 0 nil)
-                  :doc "Seconds a job that works a place for a while (a field, a pen, a tree, an apiary) is taken to stay at its place. Not measured yet: tools/event-counts.mjs work-hurt's :stay-s, the run of the outermost binding job, is 75 s (median 13, 669 runs)."}
-   ::long-stay-s {:default 600 :spec (a/num-in 0 nil)
-                  :doc "Seconds a mine, a strip or a build is taken to stay at its place. Not measured yet: work-hurt's :stay-s is 108 s (median 35, 377 runs)."}
+   ::work-stay-s {:default 75 :spec (a/num-in 0 nil)
+                  :doc "Seconds a job that works a place for a while (a field, a pen, a tree, an apiary) is taken to stay at its place. The mean run of the outermost binding job (tools/event-counts.mjs work-hurt :stay-s: 75 s, median 13, 669 runs); a job that quotes its own seconds uses them."}
+   ::long-stay-s {:default 108 :spec (a/num-in 0 nil)
+                  :doc "Seconds a mine, a strip or a build is taken to stay at its place. The mean run of the outermost binding job (work-hurt :stay-s: 108 s, median 35, 377 runs); a job that quotes its own seconds uses them."}
    ::work-hurt {:default {:long {:s 17990 :hp 7 :hits 4 :lethal 0} :work {:s 20765 :hp 30 :hits 15 :lethal 0}}
                 :spec (a/map-of #{:long :work} (a/map-with {:s (a/num-in 0 nil) :hp (a/num-in 0 nil) :hits (a/int-in 0 nil) :lethal (a/int-in 0 nil)}))
                 :doc "The hurt of a job's own work by its fit? category (:click takes :work's): :hp and :hits (:lethal of them left health 0) over :s seconds of the innermost job binding the category, a hit taken before a reflex ran (a fall, gravel, lava, a mob at the face) counted, walks, flights, fights, reflexes and holds not (go-to and the fight price those); the bodies were gated at 6 hp, so few worked hurt. All the bodies' event logs to 2026-10-28. Recount: tools/event-counts.mjs work-hurt."}})
@@ -29,6 +30,11 @@
 
 (defn work-s "Seconds a job's work of category (:click, :work, :long) stays at its place." [category]
   (settings/get settings (stay-settings category)))
+
+(defn heal-s
+  "Seconds healing by waiting takes from health to full: the stay of a caller with no job (a trigger), as in walk-risk's heal wait."
+  [health]
+  (* (health/heal-s-per-hp) (max 0 (- 20 health))))
 
 (defn- hurt-of [category] (get (settings/get settings ::work-hurt) (if (= :click category) :work category)))
 
@@ -46,13 +52,20 @@
   [category]
   (let [rows (vals (settings/get settings ::work-hurt))
         pooled (/ (reduce + (map :hits rows)) (max 1 (reduce + (map :s rows))))
-        {:keys [s hits]} (hurt-of category)]
-    (if (pos? pooled) (/ (+ 1 hits) (+ (/ 1 pooled) s)) 0)))
+        rate (fn [{:keys [s hits]}] (/ (+ 1 hits) (+ (/ 1 pooled) s)))]
+    (cond (not (pos? pooled)) 0
+          (= :heal category) (apply max (map rate rows))
+          :else (rate (hurt-of category)))))
+
+(defn stay-of
+  "Seconds of category's stay at health: work-s, and for :heal (a caller with no job) the heal-s wait, at the riskiest measured rate."
+  [category health]
+  (if (= :heal category) (heal-s health) (work-s category)))
 
 (defn work-death-chance
   "The chance a job's work of category kills a body at health: a hit of at least health (exp(-health / hit-mean)) among
-  its hits (hit-rate) over s seconds (default work-s)."
-  ([category health] (work-death-chance category health (work-s category)))
+  its hits (hit-rate) over s seconds (default stay-of)."
+  ([category health] (work-death-chance category health (stay-of category health)))
   ([category health s]
    (- 1 (js/Math.exp (- (* s (hit-rate category) (js/Math.exp (- (/ health (hit-mean))))))))))
 
@@ -65,7 +78,7 @@
   "hp a job's work of category costs a body at health: its hurt (hit-rate x hit-mean over work-s) and its death
   (work-death-chance) in hp at `death` seconds (cost/lethal-hp; cost/death-s), as price/stay-hp."
   [category health death]
-  (+ (work-hurt category)
+  (+ (* (hit-rate category) (hit-mean) (stay-of category health))
      (answer/lethal-hp {:chance (work-death-chance category health) :death death})))
 
 (defn share-hp

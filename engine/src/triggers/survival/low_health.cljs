@@ -28,7 +28,7 @@
                                 (when-let [learned (:t (mem/latest view :food-source))] (> learned t)))))))))
 
 (defn low-health
-  "Holds while the body is alive and too hurt for the riskiest work even fed (jobs.lib.cost.risk/too-hurt? of a :long stay without the hungry cut:
+  "Holds while the body is alive and too hurt for the riskiest work even fed (jobs.lib.cost.risk/too-hurt? of the heal wait (:heal) without the hungry cut:
   a body hurt only by that cut gets food first, the hungry trigger's), not burning or poisoned (their reflexes
   come first), not asleep (a bed already rests it), and not waiting? on a rest that gave up."
   [world memory _args]
@@ -36,7 +36,7 @@
         health (.-health self)]
     (and (not (body/recovery-pending? memory :low-health))
          (pos? health)
-         (risk/too-hurt? health nil :long (cost/death-s world memory))
+         (risk/too-hurt? health nil :heal (cost/death-s world memory))
          (not (body/burning? world))
          (not (body/poisoned? world))
          (not (sh-sense/sleeping? world))

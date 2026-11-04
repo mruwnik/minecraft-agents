@@ -38,5 +38,5 @@
          [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
          [:wait-s 3]
          [:rcon "effect clear $BODY minecraft:resistance"]
-         [:rcon "damage $BODY 17 minecraft:generic"]]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :cannot-heal}} :within-s 90 :of-job true}]}]}

@@ -427,27 +427,27 @@
 
 (deftest a-long-dig-or-build-waits-for-food-when-hurt-and-only-food-heals-and-keeps-its-long-line-when-fed
   (are [fit? world expected] (= expected (first (fit? (ctx-of (merge at-origin world)))))
-    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
     tunnel-job/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok
-    shaft-descent/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    shaft-descent/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    strip-haul/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    strip-haul/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    strip-corridor/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    strip-corridor/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    strip-base/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    strip-base/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    strip-all/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    strip-all/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    strip-smelt/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    strip-smelt/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    rail-line/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    rail-line/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    path/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    path/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
-    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}} :later
-    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 3.9 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    shaft-descent/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    shaft-descent/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-haul/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    strip-haul/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-corridor/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    strip-corridor/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-base/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    strip-base/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-all/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    strip-all/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    strip-smelt/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    strip-smelt/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    rail-line/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    rail-line/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    path/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    path/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
+    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}} :later
+    pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 2.1 :food 11} :inventory [{:name "bread" :count 1}]} :later
     pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok))
 
 (deftest a-roaming-or-working-job-waits-for-food-when-hurt-and-only-food-heals
@@ -455,19 +455,20 @@
               jobs.gather.get-seeds jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.village.roll jobs.forestry.maintain
               jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.forestry.prepare jobs.survival.restore-broken]
           :let [fit (:fit? (get registry/jobs j))]]
-    (is (= :later (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 3 :food 11}})) (str j))
+    (is (= :later (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 1.5 :food 11}})) (str j))
     (is (= :ok (kind fit {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}})) (str j))))
 
-(deftest a-hurt-body-only-food-heals-may-work-a-place-but-not-roam-or-dig-long
-  ;; food 11, none carried; h: the least health (0.05 steps) a :work job passes at, under the :long cut point
+(deftest a-hurt-body-only-food-heals-waits-at-its-categorys-own-line
+  ;; food 11, none carried; a category's line: the least health (0.05 steps) its jobs pass at, the same for every job of it
   (let [at (fn [j h] (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health h :food 11}}))
-        h (first (filter #(= :ok (at 'jobs.village.roll %)) (range 1 20 0.05)))]
-    (doseq [[js expected] [['[jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.forestry.maintain jobs.forestry.prepare
-                              jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.survival.restore-broken jobs.access.pillar] :ok]
-                           ['[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge
-                              jobs.animals.herd jobs.gather.get-seeds jobs.access.tunnel] :later]]
+        line (fn [j] (first (filter #(= :ok (at j %)) (range 0.5 20 0.05))))]
+    (doseq [js ['[jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.forestry.maintain jobs.forestry.prepare
+                  jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.survival.restore-broken jobs.access.pillar]
+               '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge
+                 jobs.animals.herd jobs.gather.get-seeds jobs.access.tunnel]]
+            :let [h (line (first js))]
             j js]
-      (is (= expected (at j h)) (str j " at " h)))))
+      (is (= [:ok :later] [(at j h) (at j (- h 0.1))]) (str j " at " h)))))
 
 (deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
   (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))
@@ -570,15 +571,13 @@
 (deftest fit-waits-while-the-jobs-own-work-costs-more-than-the-body-may-risk
   (are [category hp food inventory expected]
        (= expected (kind (ready/fit-for category) {:self {:pos {:x 0 :y 64 :z 0} :health hp :food food} :inventory inventory}))
-    :long 3.9 20 [] :later ; a 600 s dig hurts 0.3 hp on the mean, but a hit of 3.9 hp in it kills: 2.7 hp with the death, over half of 3.9
-    :long 6 20 [] :ok      ; such a hit is rarer: 1.1
+    :long 1.5 20 [] :later
+    :long 5 20 [] :ok
     :long 20 20 [] :ok
-    :work 3 20 [] :later   ; a field's 120 s: 2.3
-    :work 6 20 [] :ok      ; 0.6
-    :long 5 20 [] :ok      ; 1.7 within 2.5
-    :long 5 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
-    :long 4 20 [] :later   ; 2.6 over 2
-    :long 3 8 [] :ok))     ; waiting cannot heal it: no wait (the job's own cannot-heal check stops it)
+    :work 2 20 [] :later
+    :work 5 20 [] :ok
+    :long 2.1 5 [{:name "bread" :count 1}] :later ; hungry: half the share, and the bread heals it
+    :long 1.5 8 [] :ok))     ; waiting cannot heal it: no wait (the job's own cannot-heal check stops it)
 
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
@@ -943,9 +942,9 @@
          (= expected (lit 0 15 #(let [world (assoc open-night :self {:pos {:x 0 :y 64 :z 0} :food food :health health} :inventory inventory
                                                    :blocks {"2,63,0" "farmland" "2,64,0" "wheat"} :ages {"2,64,0" 7})]
                                   (first (safe? (under (assoc-in (ctx-of world) [:engine :world] (world-files/of-data {} {} [])) 'jobs.farm.harvest {:radius 12 :replant true}))))))
-      6 3.8 [] :ok
-      6 3.8 [{:name "bread" :count 1}] :later
-      20 3.8 [] :later
+      6 1.5 [] :ok
+      6 1.5 [{:name "bread" :count 1}] :later
+      20 1.5 [] :later
       6 15 [] :later
       0 15 [] :ok)))
 

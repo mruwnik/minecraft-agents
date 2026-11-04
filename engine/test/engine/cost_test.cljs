@@ -12,6 +12,7 @@
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.ways :as ways]
             [jobs.lib.foods :as foods]
@@ -1055,3 +1056,10 @@
                 got (reduce + (map (fn [[r w]] (* w (js/Math.exp (- (* r x))))) (death/rate-nodes {:shape shape :rate rate})))
                 exact (js/Math.pow (+ 1 (/ x rate)) (- shape))]]
     (is (< (js/Math.abs (- got exact)) (* 1e-5 exact)) (str "shape " shape " x " x))))
+
+(deftest a-jobless-caller-stays-the-seconds-healing-by-waiting-takes
+  (is (= [75 108] [(risk/work-s :work) (risk/work-s :long)]) "the category stays are the measured mean runs")
+  (is (= 0 (risk/work-hp :heal 20 100)) "a full body waits for nothing")
+  (is (= 64 (risk/stay-of :heal 4)) "16 hp at 4 s an hp")
+  (is (= (risk/hit-rate :heal) (max (risk/hit-rate :work) (risk/hit-rate :long))) "the riskiest measured rate")
+  (is (< (risk/work-hp :heal 10 100) (risk/work-hp :heal 4 100)) "the hurter the body, the longer the wait"))

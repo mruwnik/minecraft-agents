@@ -1,4 +1,4 @@
-;; Card 18a8870c: a hurt body (3 hp, under the risky 6) that cannot heal (hunger drains food under 18, nothing edible carried)
+;; Card 18a8870c: a hurt body (1.5 hp, under the risky 6) that cannot heal (hunger drains food under 18, nothing edible carried)
 ;; may search for food animals, else it waits :low-health for ever. Searches for anything else still wait.
 ;; Should-succeed: the cow 10 blocks off is found. Should-fail: a search for diamond_block waits :low-health.
 {:defaults
@@ -11,13 +11,13 @@
  [{:name "hurt-starving-body-searches-for-a-cow"
    :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.explore.search {:target ["cow"] :count 1 :settings {:jobs.explore.search/max-legs 3}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 20 :until {:source :job :kind :completed}}]}
   {:name "hurt-starving-body-search-for-ore-waits-low-health"
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.explore.search {:target ["diamond_block"] :count 1 :settings {:jobs.explore.search/max-legs 3}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]}]}

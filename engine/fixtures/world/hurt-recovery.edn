@@ -15,7 +15,7 @@
    :register [{:trigger :low-health}]
    :blocks [[:fill [14 0 14] [18 4 18] "stone" :hollow]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 30}
             {:event {:source :job :kind :holding :context {:reflex-id :low-health}} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 60 :until {:source :reflex :kind :fired :context {:reflex-id :low-health}}}]
@@ -33,7 +33,7 @@
                                               {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
    :body {:inventory [["iron_sword" 1] ["stone_pickaxe" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
          [:wait-s 3]
          [:job (jobs.survival.leave-shelter)]]
@@ -58,7 +58,7 @@
                                               {:cell #at [16 3 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
    :body {:inventory [["iron_sword" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
          [:wait-s 3]
          [:job (jobs.survival.leave-shelter)]]
@@ -74,7 +74,7 @@
                                               {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
    :body {:inventory [["iron_sword" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:not-block [17 1 16] "glass"] [:not-block [17 2 16] "glass"]]}]}

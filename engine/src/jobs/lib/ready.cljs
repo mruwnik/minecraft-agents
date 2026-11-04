@@ -714,10 +714,10 @@
 
 (defn starving?
   "Whether the body must get food whatever the dark: food 0, or too hurt for the riskiest work even fed (cost.risk/too-hurt?
-  of a :long stay without the hungry cut, which the walks' own price applies) with only food able to heal it (cannot-heal?)."
+  of the heal wait (:heal) without the hungry cut, which the walks' own price applies) with only food able to heal it (cannot-heal?)."
   [c]
   (let [self (.self (:primitives c))]
-    (boolean (or (zero? (.-food self)) (and (risk/too-hurt? (.-health self) nil :long (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))))
+    (boolean (or (zero? (.-food self)) (and (risk/too-hurt? (.-health self) nil :heal (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))))
 
 (defn or-starving
   "The status of `safe` for c, or while starving? the status of threatened when `safe` is not ok (a starving body walks by night)."
