@@ -128,19 +128,31 @@
         (let [e (await (call! (spawn-world {:blocks {"6,90,0" "red_bed"}}) 'jobs.survival.sleep {:bed {:x 6 :y 90 :z 0}} (constantly nil)))]
           (is (= [:nothing-possible :bed-unreachable] (ending-of e))))))))
 
+(defn ^:async dug-in-call!
+  "Run job with args from a body dug in at night in its own cobble shell, a bed 6 blocks east; its ending."
+  [job args]
+  (let [shell (for [x (range -1 2) z (range -1 2) y [64 65 66] :when (or (= 66 y) (= 1 (abs x)) (= 1 (abs z)))] [x y z])
+        blocks (into {"6,64,0" "red_bed"} (map (fn [[x y z]] [(str x "," y "," z) "cobblestone"])) shell)
+        own (mapv (fn [cell] {:cell cell :item "cobblestone" :before "air" :job "j0" :purpose :shelter :state :placed}) shell)
+        prep (fn [eng]
+               (ledger/write! (:store eng) own)
+               (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} {:cap 10 :ttl 86400000}))]
+    (await (call! (tu/seeing-all (spawn-world {:blocks blocks :drops {"cobblestone" "cobblestone"} :inventory [{:name "stone_pickaxe" :count 1}]}))
+                  job args prep))))
+
 (deftest a-body-dug-in-for-the-night-leaves-its-shelter-for-a-bed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [shell (for [x (range -1 2) z (range -1 2) y [64 65 66] :when (or (= 66 y) (= 1 (abs x)) (= 1 (abs z)))] [x y z])
-              blocks (into {"6,64,0" "red_bed"} (map (fn [[x y z]] [(str x "," y "," z) "cobblestone"])) shell)
-              own (mapv (fn [cell] {:cell cell :item "cobblestone" :before "air" :job "j0" :purpose :shelter :state :placed}) shell)
-              prep (fn [eng]
-                     (ledger/write! (:store eng) own)
-                     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} {:cap 10 :ttl 86400000}))
-              e (await (call! (tu/seeing-all (spawn-world {:blocks blocks :drops {"cobblestone" "cobblestone"} :inventory [{:name "stone_pickaxe" :count 1}]}))
-                              'jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}} prep))]
+        (let [e (await (dug-in-call! 'jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}}))]
           (is (= :done (:kind e)) (pr-str (ending-of e))))))))
+
+(deftest a-body-dug-in-for-the-night-stays-in-for-a-goal-worth-less-than-the-walk-risks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (dug-in-call! 'jobs.movement.go-to {:pos {:x 6 :y 64 :z 0} :range 2 :ways #{:walk :clear-seal :dig-out} :worth 0}))]
+          (is (= [:nothing-possible :unreachable] (ending-of e))))))))
 
 (deftest a-failed-go-home-walk-carries-go-tos-cause
   (async done

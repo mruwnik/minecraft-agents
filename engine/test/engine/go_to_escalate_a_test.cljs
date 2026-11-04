@@ -565,14 +565,22 @@
           (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :clear-seal}")
           (is (empty? (calls p "jumpPlace"))))))))
 
-(deftest go-to-sealed-in-its-own-shelter-by-night-does-not-dig-out-even-for-a-goal-outside
+(deftest go-to-sealed-in-its-own-shelter-by-night-does-not-dig-out-for-a-goal-worth-less-than-the-dark-outside
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p seen]} (await (run-in-shelter! 14000))]
+        (let [{:keys [out p seen]} (await (run-in-shelter! 14000 [8 64 0] 1 {:args {:worth 0}}))]
           (is (empty? (events-of seen :go-to.escalated)) "the dark outside is waited out, the first dig never happens")
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (empty? (calls p "dig"))))))))
+
+(deftest go-to-sealed-in-its-own-shelter-by-night-digs-out-for-a-goal-that-must-be-reached
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-in-shelter! 14000))]
+          (is (seq (events-of seen :go-to.escalated)))
+          (is (true? (:arrived @out))))))))
 
 (def stay-danger-night 14000)
 

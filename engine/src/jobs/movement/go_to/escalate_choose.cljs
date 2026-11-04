@@ -25,6 +25,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
             [jobs.lib.own-builds :refer [may-dig-fn own-placed-fn]]
@@ -87,17 +88,27 @@
   [c result]
   (boolean (and (:dive-stair c) (ways/way? c :stair) (= :way-dives (some-> (:reason result) keyword)))))
 
+(defn night-leave-bought?
+  "Whether the call's worth buys the hp the walk to its goal risks from here, leaving the shelter at a dark sky included
+  (walk-risk/estimate prices the way out by its light; ##Inf worth: arrive, no hp refuses)."
+  [c]
+  (let [target (goal-aim/target c)
+        self (.self (:primitives c))]
+    (boolean (and (not (:reason target))
+                  (<= (:hp (walk-risk/estimate c (:pos target)))
+                      (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c)))))))
+
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
-  changed and the body is shut in its shelter. Not while it is :dug-in at night (sh-inside/night-sheltered, the verdict
-  the readiness checks wait for light on): the night job would shut the hole again; unless the goal is a bed, where it sleeps."
+  changed and the body is shut in its shelter. While it is :dug-in at night (sh-inside/night-sheltered, the verdict the
+  readiness checks wait for light on) only when the call's worth buys the walk's night risk (night-leave-bought?)."
   [c result]
-  (let [p (:primitives c)
-        bed? (:bed? (:args c))]
+  (let [p (:primitives c)]
     (boolean (and (not (contains? (skips c) :leave-shelter))
                   (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                   (sh-inside/sheltered-in c)
-                  (or bed? (not= :dug-in (sh-inside/night-sheltered p (:data (ctx/latest c :shelter)))))))))
+                  (or (not= :dug-in (sh-inside/night-sheltered p (:data (ctx/latest c :shelter))))
+                      (night-leave-bought? c))))))
 
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
