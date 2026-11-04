@@ -553,8 +553,10 @@
           (is (<= 45 (lowest-walk s)) "never more than 3 below the goal: the cave is not walked")
           (is (< 1 (count (filter #(= :dig-route (:step %)) (gt/events-of s :go-to.escalated)))) "the dig goes leg by leg")
           (is (<= 25 (first (gt/at p)))))
-        (let [{:keys [out]} (await (climb! in-phantom {:pos [26 48 0] :worth 1}))]
-          (is (= [false :dig-budget] [(:arrived @out) (:why (:escalation @out))]) "the dig is held to what the goal is worth"))))))
+        (let [{:keys [out p] :as s2} (await (climb! in-phantom {:pos [26 48 0] :worth 1}))]
+          (is (= [false :unreachable] [(:arrived @out) (:reason @out)]) (pr-str @out))
+          (is (empty? (filter #(= :dig-route (:step %)) (gt/events-of s2 :go-to.escalated))) "the dig is held to what the goal is worth: no leg is begun")
+          (is (> 4 (first (gt/at p))) "it stays by its start, no tunnel dug toward the goal"))))))
 
 ;; A long dark hall (x 0..34, feet 60..62, z -3..3) in rock, seen only round the body (x 0..6): the goal at its far end is
 ;; reached by walking along it as it shows, nothing dug.
