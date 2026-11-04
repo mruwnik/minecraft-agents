@@ -100,6 +100,12 @@
     (is (not= base (settings/with-settings {:jobs.lib.cost.health/hp-seconds 2} worth))
         "a cheaper hp makes the same apple worth less, not the memoised table")))
 
+(deftest the-item-table-is-not-rebuilt-for-a-setting-it-does-not-read
+  (let [version @game/version
+        base (tbl/table-for version {} {})]
+    (is (identical? base (settings/with-settings {:jobs.lib.cost.armour/max-fall 30} #(tbl/table-for version {} {})))
+        "the longest drop allowed is the planner's, no price in the table")))
+
 (deftest a-fed-body-decides-a-precious-food-as-the-table-prices-it
   (let [self (fn [food health] #js {:health health :food food :absorption 0 :inventory #js [#js {:name "enchanted_golden_apple" :count 1}]})]
     (is (= (meal/precious-worth? (self 20 8) "enchanted_golden_apple") (meal/precious-worth? (self 5 8) "enchanted_golden_apple")))

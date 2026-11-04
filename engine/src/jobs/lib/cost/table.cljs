@@ -307,20 +307,30 @@
                                                 (number? (.-maxDurability i)) (gear/use-worth gear-basis n (.-maxDurability i))
                                                 :else (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i)))))])))
                          items)
-        step (fn [natural table]
-               (let [smelt-s (+ (:smelt-step basis) (fuel-each table))]
-               (into {} (map (fn [n]
-                               (let [via-recipe (some->> (by-result n)
-                                                         (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
-                                                         (apply min))
-                                     via-smelt (some->> (smelts n) (map #(+ smelt-s (get table % js/Infinity))) (apply min))
-                                     w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
-                                 [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))])))
-                     names)))
+        entry (fn [natural table smelt-s n]
+                (let [via-recipe (some->> (by-result n)
+                                          (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
+                                          (apply min))
+                      via-smelt (some->> (smelts n) (map #(+ smelt-s (get table % js/Infinity))) (apply min))
+                      w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
+                  [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))]))
+        ;; the names whose recipe or smelt reads an ingredient
+        dependents (reduce (fn [m [n ins]] (reduce #(update %1 %2 (fnil conj #{}) n) m ins))
+                           {} (concat (for [[n rs] by-result [_ _ ins] rs] [n ins]) smelts))
+        smelting (set (keys smelts))
+        smelt-of (fn [table] (+ (:smelt-step basis) (fuel-each table)))
+        ;; each round prices only the names an input of changed last round, which a full round would leave as they are
         fixpoint (fn [natural]
-                   (loop [t (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names) i 0]
-                     (let [t' (step natural t)]
-                       (if (or (= t t') (>= i 60)) t' (recur t' (inc i))))))
+                   (let [t0 (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names)]
+                     (loop [t t0 smelt-s (smelt-of t0) dirty names i 0]
+                       (let [t' (into t (map #(entry natural t smelt-s %)) dirty)
+                             changed (filter #(not= (get t %) (get t' %)) dirty)]
+                         (if (or (empty? changed) (>= i 60))
+                           t'
+                           (let [smelt-s' (smelt-of t')]
+                             (recur t' smelt-s'
+                                    (into (if (= smelt-s smelt-s') #{} smelting) (mapcat dependents) changed)
+                                    (inc i))))))))
         unsourced (into {} (keep (fn [[n w]] (when-not (or (js/isFinite w) (by-result n) (smelts n)) [n (max (no-source n) (food-floor n))])))
                         (fixpoint natural))
         ;; again with the items nothing yields at their floor, so a recipe of one (a golden apple of an apple) is priced by its ingredients
@@ -353,10 +363,10 @@
          2)))
 
 (def table-for
-  "build-table, memoized on what it reads: its arguments and the settings the hp and fall prices come from."
+  "build-table, memoized on what it reads: its arguments and the settings the hp prices come from."
   (let [built (memoize build-table)]
     (fn [version overrides basis]
-      (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (armour/max-fall) (craft-step) (smelt-step)))))
+      (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
 
 (defn groups-of
   "The override groups item name belongs to."
