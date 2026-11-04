@@ -28,6 +28,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
+            [jobs.lib.walk-risk :as risk]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.survival.plug-way :as way]
@@ -182,6 +183,15 @@
             (is (> (count roofs) 1) "a second pit was roofed")
             (is (pos? (:x (last roofs))) "on the side away from the zombie, though the near side is as close")))))))
 
+(defn later-while
+  "A stand-in for go-to's walk price (walk-risk/status): :later :risky while hold is true, else acceptable. A zombie by the way is priced
+  there, not gated, so a fake zombie does not make the walk wait by itself."
+  [hold]
+  (let [r #(if @hold (contract/later :risky "test: the walk costs more than waiting" :recheck-after-ms 1000) (contract/ok :acceptable "test"))]
+    (fn ([_ _] (r)) ([_ _ _] (r)))))
+
+(def hold (atom true))
+
 (def west-ground
   "wide-ground west of x 2: the only sites (9+ from a failed one at 0) lie past a zombie at -4.5, so the walk meets it."
   (into {} (filter (fn [[k _]] (<= (js/parseInt k) 2))) wide-ground))
@@ -193,9 +203,10 @@
         (let [{:keys [eng seen]} (st/setup {:time night :blocks west-ground :inventory st/dirt-stack
                                             :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
-          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
-          (await (tu/run-until-empty eng 5))
-          (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+          (with-redefs [risk/status (later-while (atom true))]
+            (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+            (await (tu/run-until-empty eng 5)))
+          (is (= [:risky] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end walk-failed"))))))
 
 (def hill-ground
@@ -224,9 +235,12 @@
                                               :floor [-30 -10 110 10]
                                               :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5}) (assoc zombie :id 9 :pos {:x 4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
-          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
-          (await (st/tick-n eng 2))
-          (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits on the zombie")
+          (reset! hold true)
+          (with-redefs [risk/status (later-while hold)]
+            (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+            (await (st/tick-n eng 2))
+            (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits while go-to says later")
+            (reset! hold false))
           (swap! (fake/state p) assoc :entities [])
           (st/teleport! p 100.5 64 0.5)
           (await (tu/run-until-empty eng 5))
@@ -272,9 +286,12 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks west-ground :inventory st/dirt-stack
                                               :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
-          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
-          (await (st/tick-n eng 2))
-          (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits on the zombie")
+          (reset! hold true)
+          (with-redefs [risk/status (later-while hold)]
+            (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+            (await (st/tick-n eng 2))
+            (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits while go-to says later")
+            (reset! hold false))
           (swap! (fake/state p) assoc :entities [])
           (st/teleport! p -12.5 64 0.5)
           (await (tu/run-until-empty eng 5))
