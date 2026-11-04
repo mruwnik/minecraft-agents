@@ -73,11 +73,16 @@
     {:stop :spared
      :text (str "the pit would cut into the body's own " (cond zone (str "zone " zone) door (str "plan " plan "'s doorstep (door " (pr-str door) ")") :else (str "plan " plan)) " at " (pr-str cell) "; not digging")}))
 
+(defn cells-of
+  "The cells a pit plan digs and plugs, as way/refused? and way/zone-penalty read them."
+  [{:keys [prep steps plugs roof]}]
+  {:dig (concat prep (mapcat :dig steps)) :plug (conj plugs roof)})
+
 (defn trespass-stop
   "With :trespass? false, the stop of a pit plan that digs or plugs a cell of another's zone, claim or plan."
   [c plan]
   (when (and (false? (:trespass? (:args c)))
-             (way/refused? c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}))
+             (way/refused? c (cells-of plan)))
     {:stop :trespass :text "the pit needs a cell of another's area"}))
 
 (defn assess
@@ -129,7 +134,7 @@
                       (+ (if plan
                            (site/plan-s c plan)
                            (site/pit-s c (sh-sense/feet (:primitives c))))
-                         (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
+                         (way/zone-penalty c (cells-of (or plan (straight (sh-sense/feet (:primitives c))))))))
                   (settings/get settings ::job-time-s)
                   {:morning-s (if stop 0 (let [f (sh-sense/feet (:primitives c))] (morning-s c f (or plan (straight f)))))})))))
 

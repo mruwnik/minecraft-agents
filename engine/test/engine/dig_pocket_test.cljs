@@ -334,3 +334,9 @@
     (is (= (* open (settings/get way/settings ::way/night-place-s)) (get-in (q "oak_planks") [:uses :job-time 1])) "placing only, however dear the block")
     (is (= (get-in (q "dirt") [:uses :job-time 1]) (get-in (q "oak_planks") [:uses :job-time 1])))
     (is (< (:morning-s (q "dirt")) (:morning-s (q "oak_planks"))) "the dig back is morning-s's")))
+
+(deftest a-straight-pit-in-another-zone-is-priced-with-the-trespass
+  (let [zone {:name "keep" :owner "Miles" :min [-1 55 -1] :max [1 70 1]}
+        c (fn [zones] (assoc-in (world {} [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}]) [:engine :world] (ew/of-data {} {} zones)))
+        seconds #(get-in (dig-pit/quote-of (c %) {:plan nil}) [:uses :job-time 1])]
+    (is (= (settings/get way/settings ::way/trespass-s) (- (seconds [zone]) (seconds []))) "no plan yet: the pit is priced as a straight one")))
