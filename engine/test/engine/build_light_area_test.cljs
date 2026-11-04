@@ -12,14 +12,15 @@
 (defn key-of [[x y z]] (str x "," y "," z))
 
 (defn world
-  "Stone with the open cells (feet and head levels y 64 and 65, floor y 63) carved in; their light is 14 where lit says, else 0."
+  "Stone with the open cells (feet and head levels y 64 and 65, floor y 63) carved in; where lit says, a glowstone ceiling (y 66) lights them, as the body's memory floods it; the light table is what the body sees by: no sky, block light 14 under the glowstone."
   [open lit inventory]
   (let [cells (for [[x z] open y [64 65]] [x y z])
+        glow (into {} (for [[x z] open :when (lit [x 64 z])] [(key-of [x 66 z]) "glowstone"]))
         env (bd/setup-seeing
              {:self {:pos {:x (+ 0.5 (ffirst open)) :y 64 :z (+ 0.5 (second (first open)))}}
-              :blocks (apply dissoc (tu/box -3 62 -3 40 67 40 "stone") (map key-of cells))
+              :blocks (merge (apply dissoc (tu/box -3 62 -3 70 67 40 "stone") (map key-of cells)) glow)
               :inventory inventory :drops {"torch" "torch"}})]
-    (swap! (.. (:p env) -world -state) merge {:light (into {} (for [c cells] [c (if (lit c) [14 0] [0 0])]))})
+    (swap! (.. (:p env) -world -state) merge {:light (into {} (for [c cells] [c (if (lit c) [0 14] [0 0])]))})
     env))
 
 (def room (for [x (range 0 9) z (range 0 9)] [x z]))
@@ -40,7 +41,8 @@
         (let [[{:keys [p]} r] (await (run room (constantly false) {:boxes [[[0 64 0] [8 64 8]]]}))]
           (is (= :done (:status r)) (pr-str r))
           (is (= 1 (count (torch-cells p room))))
-          (is (every? (fn [[x _ z]] (and (<= 1 x 7) (<= 1 z 7))) (torch-cells p room)) "a corner torch would leave the far corner unlit"))))))
+          (is (every? (fn [[tx _ tz]] (every? (fn [[x z]] (< (+ (abs (- x tx)) (abs (- z tz))) 14)) room)) (torch-cells p room))
+              "the torch's light (14 less a step a cell) reaches every cell of the room; a corner torch would leave the far corner unlit"))))))
 
 (deftest a-body-with-only-soul-torches-hangs-them
   (async done
@@ -87,8 +89,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [corridor (for [x (range 0 41)] [x 0])
-              [{:keys [p]} r] (await (run corridor (fn [[x _ _]] (<= x 30)) {:boxes [[[0 64 0] [40 64 0]]]}))]
+        (let [corridor (for [x (range 0 61)] [x 0])
+              [{:keys [p]} r] (await (run corridor (fn [[x _ _]] (<= x 20)) {:boxes [[[0 64 0] [60 64 0]]]}))]
           (is (= :done (:status r)) (pr-str r))
           (is (seq (torch-cells p corridor)) "the dark far end got a torch, not an instant done")
           (is (every? (fn [[x _ _]] (> x 30)) (torch-cells p corridor))))))))
