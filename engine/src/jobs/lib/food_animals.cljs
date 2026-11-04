@@ -206,15 +206,18 @@
 
 (defn ^:async look-for-animals!
   "The nearest food animal after one look around from this cell for animals: another job's look (collect's) is no such look, since entities
-  count only while in the view cone and its last heading points away. A lone adult stops the look only at its end: the others of its kind may stand in a heading not yet looked at (each look notes what it saw)."
+  count only while in the view cone and its last heading points away. A lone adult stops the look only at its end (the body then faces away, so the lone one seen on the way is the answer): the others of its kind may stand in a heading not yet looked at (each look notes what it saw)."
   [c opts]
   (let [cell (cell-of (u/self-pos c))]
     (when (not= cell (:animals-looked (ctx/mem c)))
       (look/forget-survey! c))
-    (let [found (await (look/survey-until! c :cell (fn [] (note-seen! c opts) (note-spared! c opts) (let [t (nearest c opts)] (when-not (lone? t) t)))
+    (let [lone (atom nil)
+          found (await (look/survey-until! c :cell (fn [] (note-seen! c opts) (note-spared! c opts)
+                                                     (let [t (nearest c opts)]
+                                                       (if (lone? t) (do (reset! lone t) nil) t)))
                                            (look/glance-effort) look/hazards-only))]
       (ctx/update-mem! c assoc :animals-looked cell)
-      (or found (do (note-seen! c opts) (nearest c opts))))))
+      (or found (do (note-seen! c opts) (nearest c opts)) @lone))))
 
 (defn ^:async nearest-or-look
   "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again, remembering what it spared on the way."

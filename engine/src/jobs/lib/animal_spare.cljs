@@ -43,10 +43,11 @@
           (true? (some-> (u/sensed (:primitives c) pos) .-visible))))))
 
 (defn noted-adults
-  "The uuids of adult animals of `kind` that live :seen notes (any body's) place anywhere and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair wherever the body stands. A note whose cell is in view with no such animal there (gone?) is dropped; the rest age out with their ttl."
+  "The uuids of adult animals of `kind` that live :seen notes (any body's) place within `radius` of the body (a cow far off is no mate) and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair. A note whose cell is in view with no such animal there (gone?) is dropped; the rest age out with their ttl."
   [c kind seen-uuids radius]
   (into #{}
         (comp (filter #(and (= :seen (:kind %)) (= kind (:what %)) (:id %) (not (:baby %)) (not (seen-uuids (:id %)))
+                            (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos %))) radius)
                             (not (gone? c % radius))))
               (map :id))
         (notes/notes c)))
