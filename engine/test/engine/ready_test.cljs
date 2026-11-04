@@ -1062,6 +1062,7 @@
     night-hut nil :later
     mine-room nil :ok
     mine-room dug-in-entry :ok
+    (hollow 0 40 64 0 0) dug-in-entry :ok
     ravine-niche {:pos {:x 0 :y 30 :z 0}} :later
     lit-hut-with-window nil :later
     (assoc night-hut :time st/noon) nil :ok))
