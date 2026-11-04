@@ -1,20 +1,19 @@
 (ns jobs.lib.lava-risk
-  "The risk of seen lava near a cell, in hp: full beside it, a quarter at ::radius, 0 beyond. go-to's route check and
+  "The risk of seen lava near a cell, in hp: full beside it, a quarter at the radius, 0 beyond. go-to's route check and
   access.cleanup's scaffold walks use it."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::radius {:default 3 :spec (a/int-in 0 nil)
-             :doc "Blocks around a cell of the walk within which seen lava is a risk."}
-   ::hp {:default 6 :spec (a/num-in 0 nil)
-         :doc "hp of risk for a step right beside seen lava (less the farther it is, down to a quarter at ::radius): a slip there is lethal, so a small chance of it costs this much."}})
+  {::hp {:default 6 :spec (a/num-in 0 nil)
+         :doc "hp of risk for a step right beside seen lava (less the farther it is, down to a quarter at the radius): a slip there is lethal, so a small chance of it costs this much."}})
 
-(defn radius [] (settings/get settings ::radius))
+(defn radius "Blocks around a cell within which seen lava is a risk: the radius of a death by terrain." [] (cost/terrain-radius))
 
 (defn hp-from
-  "::hp scaled by the closeness of the nearest of `lavas` ([x y z] vectors) to the cell [x y z]: full beside it, a quarter at ::radius, 0 beyond."
+  "::hp scaled by the closeness of the nearest of `lavas` ([x y z] vectors) to the cell [x y z]: full beside it, a quarter at the radius, 0 beyond."
   [lavas [x y z]]
   (let [r (radius)
         near (for [[lx ly lz] lavas

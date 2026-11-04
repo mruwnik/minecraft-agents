@@ -86,7 +86,7 @@
 
   A shelter's block (purpose :shelter or :retreat-plug) also stays (held :danger) while the field of a known threat holds its cell or one beside it: taking it back would open a wall onto that mob, however far the body has gone. It stays while a known hostile could reach the body or shoot it were the shelter's blocks open (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
 
-  A block whose walk go-to prices over ::worth-hp for seen lava near it (jobs.lib.lava-risk/hp) is left open (:lava-near: no walk, no dig) unless :accept names :lava-adjacent: a tidy-up is no reason to go near lava.
+  A block whose walk go-to prices over its worth (worth-s) for seen lava near it (jobs.lib.lava-risk/hp) is left open (:lava-near: no walk, no dig) unless :accept names :lava-adjacent: a tidy-up is no reason to go near lava.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -119,11 +119,13 @@
    ::give-up {:default 2 :doc "Walks ending out of reach, or failed digs, after which a cell is held." :spec (a/int-in 1 nil)}
    ::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
-   ::worth-hp {:default 1 :doc "Hit points of risk a walk to one scaffold block may cost, at full health: the block is worth little (the walk's go-to :worth)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(defn worth-hp [] (settings/get settings ::worth-hp))
+(defn worth-s
+  "Seconds a scaffold block of `item` is worth (cost/item-value): what a walk to it, and its risk, may cost."
+  [item]
+  (:value (cost/item-value [{:name item :count 1}])))
 
 (defn walk-range [] (settings/get settings ::walk-range))
 
@@ -193,7 +195,8 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (floor-at c l) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :lava-near? (memoize #(> (lava-risk/hp (:primitives c) %) (worth-hp)))
+            :lava-near? (let [items (into {} (map (juxt :cell :item)) entries)]
+                          (memoize #(> (* (lava-risk/hp (:primitives c) %) (cost/walk-hp-seconds)) (worth-s (items %)))))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
             :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :threat-at? (threat-at-fn c) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
@@ -338,7 +341,7 @@
   "Walk one leg toward within 3 of cell, or hold it :danger (no walk is made: the reflex acts). A permanent verdict
   holds it :unreachable, an end out of reach or a go-to that gave up for a passing reason counts a failure; a leg that
   got nearer does not. A walk that did not end counts a failure, as the round goes on."
-  [c {:keys [cell]}]
+  [c {:keys [cell item]}]
   (cond
     (danger-ahead? c cell)
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :danger}) :again)
@@ -346,7 +349,7 @@
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
     :else
     (let [e (await (child/call-chase* c :walk {:pos cell :range (walk-range) :leg-s (leg-s)
-                                               :walk {:ways #{:walk} :worth (* (worth-hp) (cost/walk-hp-seconds)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
+                                               :walk {:ways #{:walk} :worth (worth-s item) :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
         (:nearer (:data e)) nil
