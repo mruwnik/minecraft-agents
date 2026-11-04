@@ -224,6 +224,14 @@
           (is (= ["dirt" "dirt"] [(block p [3 64 0]) (block p [3 65 0])]))
           (is (= (set dug) (set (map :cell (events-of seen :go-to.dug-own-build)))) "each own cell dug is named"))))))
 
+(deftest the-stand-past-a-dug-wall-is-two-cells-on-in-the-way-of-the-route
+  ;; a hole in the body's own build is put back as soon as the body stands clear of it, not after the whole walk
+  (are [feet cells stand] (= stand (esc/past-hole-stand feet (map (fn [c] {:cell c}) cells)))
+    [5 64 0] [[4 64 0]] [2 64 0]
+    [5 64 0] [[4 64 0] [3 64 0] [3 65 0]] [1 64 0]
+    [0 64 5] [[0 64 4] [0 65 4]] [0 64 2]
+    [0 64 0] [[0 65 0]] nil))
+
 (deftest go-to-cuts-its-own-wall-when-that-costs-less-than-the-natural-way-round
   (async done
     (tu/run-async done

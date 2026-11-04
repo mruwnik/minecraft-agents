@@ -439,7 +439,7 @@
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
   it (restore-next!); a cut of the body's own builds (:own-cut) at once, done or stopped in a dead end (what
-  restore/skip-why spares then, the cells the body stands in or needs, waits for that walk), but a dug route only after the walk through it. An approach to a cell more than a block nearer the goal than it set out from does not count toward
+  restore/skip-why spares then, the cells the body stands in or needs, waits for that walk), but a dug route only after the walk through it (an own-cut one after a short walk to the stand two cells past the hole when that is seen open: past-hole-stand). An approach to a cell more than a block nearer the goal than it set out from does not count toward
   max-escalations (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
   walked to twice (memory :approached)."
   [c pos {:keys [step]} done?]
@@ -447,7 +447,7 @@
         e (:escalation (ctx/mem c))
         nxt (when done? (route-ways/next-way e feet))
         ;; a climb's last way ends where its walk to the goal begins
-        again? (and (not nxt) (not (and done? (contains? e :then))) (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos)))))
+        again? (and (not nxt) (not (and done? (contains? e :then))) (not (:past-hole e)) (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos)))))
         target (some-> e :pos vec)
         to-goal #(u/dist (zipmap [:x :y :z] %) pos)
         nearer? (and (= :approach step) target (some-> (:escalation-from (ctx/mem c)) to-goal dec (> (to-goal target))))]
@@ -692,6 +692,26 @@
                 (empty? cells) (walk-on!)
                 :else (do (ctx/update-mem! c assoc-in [:escalation :cells] cells) :again))))))))
 
+(defn standable-seen?
+  "Whether stand [x y z] is open to stand in as the body has seen it: feet and head cells passable, the floor under solid."
+  [c [x y z]]
+  (let [seen (access/seen-at (:primitives c))
+        floor (seen [x (dec y) z])]
+    (boolean (and (bs/passable? (seen [x y z])) (bs/passable? (seen [x (inc y) z]))
+                  floor (not (bs/passable-or-water? floor))))))
+
+(defn past-hole-stand
+  "The cell two past the last of a dug route's cells (each {:cell [x y z]}), along the way from the one before it or from
+  feet: where the body stands clear of a hole in its own build so the put-back can fill it at once; nil for a vertical route."
+  [feet cells]
+  (let [cols (->> (cons feet (map :cell cells)) (map (fn [[x y z]] [x z])) dedupe vec)
+        [[px pz] [lx lz]] (take-last 2 cols)
+        dx (when lx (compare lx px))
+        dz (when lz (compare lz pz))
+        [_ y _] (->> cells (map :cell) (filter (fn [[x _ z]] (= [x z] [lx lz]))) (sort-by second) first)]
+    (when (and y (not (and (zero? dx) (zero? dz))))
+      [(+ lx (* 2 dx)) y (+ lz (* 2 dz))])))
+
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,
   so a resumed round goes on where it stopped; a guessed cell seen otherwise plans the route again (replan-route!).
@@ -711,7 +731,10 @@
             (#{:dug :missing :open} o) (recur (rest todo))
             :else (await (escalation-failed! c pos (cond-> {:step :dig-route :reason o :cell cell}
                                                      (= :not-diggable o) (assoc :block ((escape/block-at-of (:primitives c)) cell)))))))
-        (escalated! c pos e true)))))
+        (do (when-let [stand (and (own-cut? c) (past-hole-stand (end/feet-cell c) cells))]
+              (when (standable-seen? c stand)
+                (ctx/update-mem! c assoc-in [:escalation :then] [{:step :approach :pos stand :past-hole true}])))
+            (escalated! c pos e true))))))
 
 (defn ^:async escalation-round!
   "One round of the escalation: leaving the shelter, digging a route, or the child's call (escalation-child-round!)."
