@@ -571,9 +571,9 @@
 (defn leg-args
   "The go-to args of the walk toward the leg [x y z]: every way when it is a dig-out leg (dig?, default the :dig-out? the
   round booked), else the plain ones until two walks failed."
-  ([c leg] (leg-args c leg (:dig-out? (ctx/mem c))))
-  ([c [x y z] dig?]
-   (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
+  ([c leg] (leg-args c leg (:dig-out? (ctx/mem c)) (some? (:leg-column (ctx/mem c)))))
+  ([c [x y z] dig? step?]
+   (cond-> {:pos {:x x :y y :z z} :range (if step? 1 2) :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
      (forage? c) (->> (ready/forage-walk c))
      (and (not dig?) (< (u/failures c) 2)) (assoc :ways #{:walk :clear-seal}))))
 
@@ -584,11 +584,11 @@
   next call), else the :price ending: the price is more than what is left of the worth times the chance a look round
   there finds one (cost/look-leg-chance: over every live searched note, :use-notes false too, or for ore the rock seen
   round the body; 1 for logs and other blocks, and for a walk to a noted target, sure?)."
-  [c leg sure?]
+  [c leg sure? step?]
   (when-let [worth (:worth (:args c))]
     (let [p (:primitives c)
           [x y z] leg
-          q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
+          q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg (:dig-out? (ctx/mem c)) step?)))
           price (pick/quoted-s c q)
           chance (if sure? 1 (cost/chance-of (or (cost/look-leg-chance p (notes/notes c) (targets c) [x z] (:scan-radius (:args c)) (ledger/own-cells c)) 1) 0))]
       (cond
@@ -771,14 +771,14 @@
             :out :again
             (finish! c :not-found :no-way-up)))
       stale
-      (or (await (price-leg! c (:pos stale) true))
+      (or (await (price-leg! c (:pos stale) true false))
           (do (ctx/update-mem! c (fn [m] (-> m (update :revisited (fnil conj #{}) (:id stale)) (assoc :leg (:pos stale) :leg-column nil))))
               (await (walk! c))))
       (and (nil? (:worth (:args c))) (>= (:legs m 0) (settings/get settings ::max-legs)))
       (finish! c :not-found :legs)
       :else
       (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)
-            priced (when leg (await (price-leg! c leg false)))]
+            priced (when leg (await (price-leg! c leg false (boolean step))))]
         (if (= :continue priced)
           :continue
           (do
@@ -802,13 +802,13 @@
                   (= :continue dig) :continue
                   dig (let [{:keys [leg column]} dig]
                         (ctx/update-mem! c assoc :dig-out? true)
-                        (or (await (price-leg! c leg false))
+                        (or (await (price-leg! c leg false false))
                             (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column) (cond-> column (update :tried (fnil conj []) column)) (update :legs (fnil inc 0)))))
                                 (note-leg-start! c leg)
                                 (await (walk! c)))))
                   :else (finish! c :not-found (if (zero? (:legs m 0)) :no-way-out :distance))))
               (empty? unloaded) (finish! c :not-found :distance)
-              (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false))
+              (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false false))
                                             (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
                                                 (await (walk! c))))
               :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))

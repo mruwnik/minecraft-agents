@@ -651,6 +651,22 @@
           (is (not-any? #(= {:x 16 :z 0} (select-keys % [:x :z])) (walks s)) "the leg by the zombie is never walked to")
           (is (= 3 (count (walks s)))))))))
 
+(deftest a-step-toward-an-unseen-column-is-walked-with-a-range-short-of-its-length
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far? (fn [pos] (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)))
+              blind-far (fn [{:keys [p]}]
+                          (let [at (.-sensedAt p)]
+                            (aset p "sensedAt" (fn [pos] (if (far? pos) #js {:unknown true} (at pos))))))
+              ranges (atom [])
+              call-walk child/call-walk*
+              s (with-redefs [child/call-walk* (fn [c k args] (swap! ranges conj [(some? (:leg-column (ctx/mem c))) (:range args)]) (call-walk c k args))]
+                  (await (search! {:target "diamond_block" :max-distance 20 :worth 60} {} 80 blind-far)))]
+          (is (finished? s))
+          (is (some first @ranges) "the search stepped")
+          (is (every? #(= 1 (second %)) (filter first @ranges)) "a step 3 blocks out is walked to within 1, so it moves the body 2 on, not 1"))))))
+
 ;; a step toward an unseen column whose step point lies by a dangerous mob is not walked to
 (deftest a-dangerous-step-toward-an-unseen-column-is-not-walked
   (async done
@@ -731,7 +747,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 23}
+        (let [s (await (search! {:target "diamond_block" :max-distance 23 :scan-radius 8}
                                 {:unreachable three-sides-blocked :blocks {"-20,64,0" "diamond_block"} :cone? 8}))]
           (is (= [[-20 64 0]] (map :pos (:found (found-of s)))) "no count of failed legs ends it while a walk is still worth its price"))))))
 
