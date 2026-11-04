@@ -1206,9 +1206,9 @@
 (defn ^:async target-after
   "The end cover/flight-target! picks (its :retreat.search event's :picked, {:x :y :z}) for a zombie to the east, with
   the :died spots and settings given."
-  [{:keys [light light-default time]} died settings-map]
+  [{:keys [light light-default time blocks]} died settings-map]
   (let [out (atom nil)
-        s (assoc-in (setup-sensed (cond-> {:entities [(zombie 7 5 {})]} time (assoc :time time))) [:eng :jobs 'targeter] (looking-targeter out))]
+        s (assoc-in (setup-sensed (cond-> {:entities [(zombie 7 5 {})]} time (assoc :time time) blocks (assoc :blocks blocks))) [:eng :jobs 'targeter] (looking-targeter out))]
     (when light-default (swap! (fake/state (:raw s)) assoc :light light :light-default light-default))
     (doseq [pos died] (mem/write! (:store (:eng s)) :died {:pos pos} {:cap 4 :ttl :forever}))
     (let [{:keys [seen]} (await (settings/with-settings settings-map #(run-job! s 'targeter {:step 6})))]
@@ -1232,8 +1232,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [lit (into {} (for [x (range -30 4) z (range 2 13) y [63 64 65]] [[x y z] [0 8]]))
-              world {:time 18000 :light-default [15 0] :light lit}
+        (let [;; the table is what the body sees by; its memory of light comes from the torch blocks
+        lit (into {} (for [x (range -30 4) z (range 2 13) y [63 64 65]] [[x y z] [0 8]]))
+              torches (into {} (for [x (range -30 4 6)] [(str x ",64,14") "torch"]))
+              world {:time 18000 :light-default [15 0] :light lit :blocks torches}
               out (await (target-after world [] {}))
               day-dark (await (target-after (assoc world :time 1000 :light-default [0 0]) [] {}))]
           (is (> (:z out) 1) (str "west and south-west are dark, north-west is lit: " (pr-str out)))
