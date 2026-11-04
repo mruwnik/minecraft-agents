@@ -2487,6 +2487,19 @@
      (lit-check no-light false true not-worth {} worths)
      (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; no night left to wait out, any price"))))
 
+(deftest a-dark-build-whose-torches-were-not-got-is-judged-again-not-built-through
+  (let [cell {:pos [1 64 1] :item "oak_planks"}
+        refused? (fn [torches? dark? status]
+                   (with-redefs [torch/torches-held (constantly (if torches? 4 0)) ctx/mem (constantly {}) fp-light/dark-site? (constantly dark?)
+                                 plan/owed identity]
+                     (fp-light/dark-refused? {:primitives nil} [cell] (constantly status))))]
+    (are [torches? dark? status expected] (= expected (refused? torches? dark? status))
+      false true (dark-wait 3000) true
+      false true no-light true
+      false true (contract/ok :priced "affordable") false
+      true true no-light false
+      false false no-light false)))
+
 (deftest a-never-lit-cell-at-night-fetches-torches-only-for-what-waiting-for-dawn-would-cost
   (let [worths (atom [])
         check (fn [night-s obtain] (with-redefs [sense/sky-in (constantly night-s) need/item-price (constantly 100)] (lit-check no-light false true obtain {} worths)))]

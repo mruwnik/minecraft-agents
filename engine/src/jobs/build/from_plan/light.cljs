@@ -97,6 +97,13 @@
                cell)]
     (boolean (some #(not (sense/lit-here? p %)) (cons (sense/feet p) open)))))
 
+(defn dark-refused?
+  "Whether the owed cells are dark, no torch was hung or is carried to light them, and the start check (safe, a ctx fn) no longer says ok: the torches the check counted on
+  were not got, so the stay is judged again (a wait for dawn or an end) in the next round instead of built through."
+  [c cells safe]
+  (let [owed (plan/owed cells)]
+    (boolean (and (seq owed) (not (:light-tried (ctx/mem c))) (not (pos? (torch/torches-held (:primitives c)))) (dark-site? c owed) (not= :ok (first (safe c)))))))
+
 (defn ^:async fetch-torches!
   "Get n torches (jobs.lib.need) for a dark site short of them: :continue while the child waits on the world, :again once it ended
   (:torches-tried whatever came of it, so a failed fetch is asked once and the wait for light names its reason)."

@@ -1224,6 +1224,15 @@
            (lit 0 15 #(mapv kind-of [(ready/safe-at-build far (constantly 600)) (ready/safe-at-build far (constantly 1))])))
         "a one-second job at a dark far place goes ahead; a 600 s one waits")))
 
+(deftest a-dark-hall-near-the-body-refused-on-the-stay-s-price-is-not-lifted-to-ok
+  (let [near {:x 3 :y 64 :z 0}
+        hall [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :chance 0.004}]
+        priced [:never "priced over the worth" {:reason :exposed :chance 0.004}]
+        kind-of (fn [s] (with-redefs [ready/at-status (fn [_ _] s) ready/hall-status (fn [_ _] s)]
+                          (first ((ready/dark-near-ok nil (constantly near) (ready/safe-at-by-night (constantly near)) true) (ctx-of tunnel)))))]
+    (is (= [:never :never] (lit 0 15 #(mapv kind-of [hall priced]))) "a spawn chance too dear for the stay stays refused near the body")
+    (is (= :ok (lit 0 15 #(kind-of [:never "no light" {:reason :exposed :lowered-by #{:torch}}]))) "a never-lit place with no priced chance is still lifted")))
+
 (deftest the-dark-near-the-body-is-lifted-for-a-job-whose-torches-cost-less-than-the-dark
   (are [torch-way expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly torch-way) (constantly {:x 15 :y 64 :z 0}) (ready/safe-at-by-night (constantly {:x 15 :y 64 :z 0}))) open-night)))
     {:blocks 20 :carried 4} :ok
