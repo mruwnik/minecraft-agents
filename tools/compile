@@ -102,7 +102,7 @@ start_server() {
   # The server is shared by every agent: double fork so it is no descendant of the caller's shell, and drop the agent label
   # (LIVE_TESTS_AGENT_ID), so agent-usage attributes it to no agent (agent_reap of the starter must not kill it). The idle watcher stops it.
   rm -f "$dir/.shadow-cljs/launch.pid"
-  ( (exec 7>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
+  ( (exec 7>&- 9>&-; echo "$BASHPID" > "$dir/.shadow-cljs/launch.pid"; cd "$dir" && exec setsid nohup env -u LIVE_TESTS_AGENT_ID COMPILE_SHARED=1 MALLOC_ARENA_MAX=2 npx shadow-cljs server >"$dir/.shadow-cljs/server.log" 2>&1 </dev/null) & )
   for ((i=0; i < 300; i++)); do
     p=$(server_pid) && [ -s "$dir/.shadow-cljs/nrepl.port" ] && [ -s "$dir/.shadow-cljs/http.port" ] && break
     bg=$(cat "$dir/.shadow-cljs/launch.pid" 2>/dev/null)
