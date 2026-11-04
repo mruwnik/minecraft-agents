@@ -21,7 +21,8 @@
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :refer [quote-most-factor]]))
+            [jobs.movement.go-to.tuning :refer [quote-most-factor]]
+            [jobs.movement.go-to.turn-back :as turn-back]))
 
 (defn waypoints
   "The cells [x y z] of steps where the heading or the move kind changes, and of the last step."
@@ -69,10 +70,12 @@
   (near/with-sight), a dark drop as go-to's :unseen-floor-dark."
   [c plan to policy unknown]
   (let [{:keys [r steps status]} plan
+        back (when unknown (turn-back/exceeded c steps))
         path (or (some-> r .-path) (some-> r .-oneWay .-path))
         no (wplan/no-walk plan 0 policy)
         here (u-dist c to)
         result (cond
+                 back {:found false :reason :unseen-floors :near here :turn-back-s (:cost back) :worth-s (:worth back) :p-absent (:p back) :cells (:cells back)}
                  (and (nil? no) (= "found" status)) (let [dark (dark-cells (:primitives c) steps unknown)]
                                                       (cond-> (assoc (route steps path) :found true) dark (assoc :dark dark)))
                  (nil? no) {:found false :reason :partial :near here :partial (route steps path)}

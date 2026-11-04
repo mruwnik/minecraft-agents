@@ -4,6 +4,7 @@
             [engine.go-to-test :as gt :refer [go! at events-of refusal]]
             [engine.go-to-support :refer [hiding]]
             [engine.core :as core]
+            [engine.event-api :as event-api]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box floor]]
@@ -511,6 +512,21 @@
           (is (> (:turn-back-s @out) (:worth-s @out)))
           (is (= 64 (js/Math.floor (second (at p)))) "it never set off down the ramp"))))))
 
+
+(deftest a-quote-refuses-the-ramp-onto-unseen-floors-at-a-worth-below-turning-back-as-the-walk-does
+  ;; the walk's turn-back ends the ramp at a worth below it (test above); the quote at that worth must not say found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng stop]} (gt/setup ravine)
+              quote-at (fn ^:async q [worth]
+                         (:route (:quote (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str {:pos {:x 44 :z 0} :range 2 :worth worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))))))
+              dear (await (quote-at 500))
+              cheap (await (quote-at 1))]
+          (stop)
+          (is (:found dear) (pr-str dear))
+          (is (= [false :unseen-floors] [(:found cheap) (:reason cheap)]) (pr-str cheap))
+          (is (> (:turn-back-s cheap) (:worth-s cheap))))))))
 
 (def raised-pen
   {:floor [-5 -5 30 30] :light [15 0]
