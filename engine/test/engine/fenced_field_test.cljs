@@ -51,3 +51,8 @@
   (let [mob (zombie 8)]
     (is (= [1] (dangers (world shut-field mob))))))
 
+
+(deftest a-zombie-heard-only-in-line-with-the-gate-is-no-danger
+  (doseq [x [16 20]
+          :let [mob (assoc (zombie x) :visible false :seen false :heard true)]]
+    (is (= [] (dangers (world gated-field mob))) (str "heard at x " x))))

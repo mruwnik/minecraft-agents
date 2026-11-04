@@ -18,6 +18,15 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :hostile.decided} :for-s 20}
             {:no-event {:source :body :kind :died} :for-s 20}]}
+  {:name "a-zombie-in-line-with-the-shut-gate-is-no-danger"
+   :blocks [[:set [24 0 36] "oak_fence_gate[facing=south,open=false]"]]
+   :act [[:rcon "rotate $BODY 90 0"] [:wait-s 3] [:rcon "rotate $BODY 180 0"] [:wait-s 3]
+         [:rcon "rotate $BODY 270 0"] [:wait-s 3] [:rcon "rotate $BODY 0 0"] [:wait-s 3]
+         [:summon "zombie" [24.5 0 39.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [24 0 26] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :hostile.decided} :for-s 20}
+            {:no-event {:source :body :kind :died} :for-s 20}]}
   {:name "the-same-zombie-with-the-gate-open-is-a-danger"
    :blocks [[:set [24 0 36] "oak_fence_gate[facing=south,open=true]"]]
    :act [[:wait-s 8] [:summon "zombie" [26.5 0 38.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
