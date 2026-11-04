@@ -135,13 +135,22 @@
    :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.survival.night.sites/flee-radius 0}})]]
    :expect [{:event {:source :job :kind :shelter.exposed :message [:not [:contains "no site tried"]]} :within-s 90}]
    :limit-s 100}
-  ;; 1fbd292f: a wide dark natural cave is no shelter: the night job asked for by hand walls the body in where it stands (the middle of the cave is far from any rock to dig into)
+  ;; 1fbd292f: a wide dark natural cave is no shelter; with no pickaxe the quotes price dig-pit :no-tool, so the night job walls the body in where it stands
   {:name "open-cave-walls-in-where-it-stands"
    :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
    :plot {:height 12}
    :body {:at [16.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :walls}} :within-s 90}]
+   :limit-s 100}
+  ;; 1fbd292f: the same cave with a pickaxe and a deep stone floor: a player digs a pit into the floor, so the body does not wall in (a 1-thick floor over void gave a 1-deep pit ringed with walls)
+  {:name "open-cave-with-a-pickaxe-digs-in-where-it-stands"
+   :time :any
+   :blocks [[:fill [2 -6 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
+   :plot {:height 12 :light :dark}
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 20]]}
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :pit}} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f, b0e3b890, 49c6d276: in a dark 1-wide tunnel it cut itself the body keeps working; the night reflex does not fire (it saw each wall close up as it cut, a tunnel it never walked is not known shut)
   {:name "own-tunnel-keeps-working-at-night"
