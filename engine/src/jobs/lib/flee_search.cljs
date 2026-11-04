@@ -362,7 +362,7 @@
   ([chasers from priced pool]
    (let [here (arrive-at chasers from)
          raced (mapv (fn [{:keys [end cells] :as e}]
-                       (let [arrive (arrive-at chasers (cost/centred end))
+                       (let [arrive (arrive-at chasers (assoc (cost/centred end) :wet? (:wet? (last cells))))
                              c-s (caught-s chasers cells)]
                          (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :caught? (pos? c-s))))
                      priced)]

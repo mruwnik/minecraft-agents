@@ -268,11 +268,11 @@
 (defn arrival-s
   "Seconds a chaser (mob-kind name) at pos takes to come within ::melee-reach of `at` ({:x :y :z}) at its chase-speed
   (the game's; ::chase-speed for a mob it does not list), or way blocks, its way to within its blow of `at` (default:
-  the straight line less ::melee-reach): the race is against a flight at its measured pace (flee-walk-speed, flee-stop-s), so no margin
+  the straight line less ::melee-reach), at its swim-chase-speed when `at` is :wet? (the body swims there): the race is against a flight at its measured pace (flee-walk-speed, flee-stop-s), so no margin
   over the game's speed."
   ([chaser pos at] (arrival-s chaser pos at nil))
   ([chaser pos at way]
-   (/ (way-blocks pos at way) (chase-speed chaser))))
+   (/ (way-blocks pos at way) (if (:wet? at) (swim-chase-speed chaser) (chase-speed chaser)))))
 
 (defn swim-arrivals
   "Seconds a melee chaser (mob-kind name) at pos takes to within its blow of each point of route ([{:x :y :z :wet?}],
