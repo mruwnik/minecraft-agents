@@ -88,10 +88,11 @@
 
 (defn start-shaded
   "start for a world of blocks with the roof over the near sand, the light table set before the first sight pass."
-  [blocks]
-  (let [p (tu/fake-on-floor {:blocks (merge ground-under-the-roof floor roof-over-the-near-sand blocks) :floor-block floor-block :inventory [{:name "torch" :count 10}]})]
-    (swap! (fake/state p) assoc :light dark-under-the-roof)
-    (start {:p p})))
+  ([blocks] (start-shaded blocks [{:name "torch" :count 10}]))
+  ([blocks inventory]
+   (let [p (tu/fake-on-floor {:blocks (merge ground-under-the-roof floor roof-over-the-near-sand blocks) :floor-block floor-block :inventory inventory})]
+     (swap! (fake/state p) assoc :light dark-under-the-roof)
+     (start {:p p}))))
 
 ;; the sand east is half as far, but a creeper killed the body beside it a minute ago in the dark: the walk there is priced with it
 (deftest a-target-by-a-recent-death-is-dug-last
@@ -660,11 +661,11 @@
 (defn near-sand-by-a-death
   "The sand east within reach, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
   sand: the setup map with :go-tos, the go-to args of each walk round. Roofed: under the roof, the sand's neighbourhood
-  is dark to the body's memory."
+  is dark to the body's memory (the body carries no torch, so it cannot light the stay)."
   ([age-ms n] (near-sand-by-a-death age-ms n false))
   ([age-ms n roofed?]
   (let [blocks {"3,64,0" "sand" "-12,64,0" "sand"}
-        [s go-tos] (spy-go-to (if roofed? (start-shaded blocks) (start {:world {:blocks (merge floor blocks)}})))
+        [s go-tos] (spy-go-to (if roofed? (start-shaded blocks []) (start {:world {:blocks (merge floor blocks)}})))
         _ (swap! (fake/state (:p s)) assoc :worldSpawn [0 64 0])
         now @(:clock s)]
     (when age-ms
@@ -707,9 +708,10 @@
       (fn ^:async t []
         (doseq [age-ms [nil 7200000]]
           (let [s (near-sand-by-a-death age-ms 1 true)]
+            (is (contains? #{nil 0} (lk/known-light-at (:p s) 3 65 0)) "the premise: nothing lit over the sand before the first look")
             (await (run-ticks s 30))
             (is (= [3 64 0] (first (dug-cells s))) (pr-str age-ms))
-            (is (zero? (bit-shift-right (lk/known-light-at (:p s) 3 65 0) 4)) "the premise: no sky light over the sand in memory (torch light of the body's own aside)")
+            (is (zero? (lk/known-light-at (:p s) 3 65 0)) "still no light of any kind over the sand")
             (is (empty? (events-of s :near.risky-stay)) (pr-str age-ms))))))))
 
 ;; a risky skip is priced again on every scan: once the death has faded (cost.death memory-ms) the body walks back to
