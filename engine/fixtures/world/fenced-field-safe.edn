@@ -1,6 +1,6 @@
 ;; A field fenced all round is safe ground: a zombie beyond the fence is no danger (no decision, the walk goes on), and
 ;; the same field with its gate open lets it in (the trigger fires and respond decides). Fence 24x24 at x 12..36, z 12..36,
-;; gate at (24 0 36); the body looks round first (a body that has seen nothing prices unseen ground as open); the zombie stands still 3 blocks outside the south fence, the body 3 inside it.
+;; gate at (24 0 36); the last case zones the field to another owner (Leo's farm is zoned so): the escape pit must dig nothing there; the body looks round first (a body that has seen nothing prices unseen ground as open); the zombie stands still 3 blocks outside the south fence, the body 3 inside it.
 {:defaults
  {:tags [:hostile :survival :reflex :pen]
   :time :any
@@ -31,4 +31,11 @@
    :blocks [[:set [24 0 36] "oak_fence_gate[facing=south,open=true]"]]
    :act [[:wait-s 8] [:summon "zombie" [26.5 0 38.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
-            {:no-event {:source :body :kind :died} :for-s 20}]}]}
+            {:no-event {:source :body :kind :died} :for-s 20}]}
+  {:name "the-same-zombie-with-the-gate-open-digs-nothing-in-a-field-zoned-to-another"
+   :zones [{:name "field" :min [11 -3 11] :max [37 4 37] :owner "common"}]
+   :blocks [[:set [24 0 36] "oak_fence_gate[facing=south,open=true]"]]
+   :act [[:wait-s 8] [:summon "zombie" [26.5 0 38.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 30}
+            {:no-event {:source :body :kind :died} :for-s 30}]}]}
