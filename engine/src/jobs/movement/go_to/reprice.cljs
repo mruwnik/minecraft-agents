@@ -8,6 +8,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.danger :as danger]
+            [jobs.lib.goal :as goal]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.spawn-light :as spawn-light]
@@ -72,6 +73,7 @@
         prefixed (atom false)
         own? (nil? (get-in (ctx/frozen-call c) [:checks :safe?]))]
     (fn [plan first?]
+      (goal/note-route! c (risk/way (u/self-pos c) pos plan))
       (or (when check (check plan first?))
           (when own?
             (let [now (ids)

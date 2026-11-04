@@ -1589,10 +1589,12 @@
         near (danger-q/dangers p 16 {:ranged-radius 16} {})
         again (fn [entries] (:again (first (hostile-fight/met-again {:primitives p :root "j1" :slots [] :view (fn [] {:now 1000 :data {:entries entries}})}
                                                                      near (mapv #(hostile-fight/mob-near p %) near)))))
-        cut (fn [goal] {:walk-goal [{:t 900 :data {:job "j9" :slots [] :goal goal}}]})]
+        cut (fn [goal] {:walk-goal [{:t 900 :data (merge {:job "j9" :slots [] :goal (cond-> goal (map? goal) (dissoc :route))} (when (map? goal) (select-keys goal [:route])))}]})]
     (is (< 2.5 (again (cut {:x 30 :y 64 :z 0})) 3.5) "the way to a goal past it passes 3 blocks from it")
     (is (< 11.5 (again (cut [-30 64 0])) 12.5) "a goal behind the body: no nearer than it stands")
     (is (nil? (again {})) "no cut walk: met again where it stands")
+    (is (< 30 (again (cut {:x 30 :y 64 :z 0 :route [[-30 64 -30] [30 64 -30]]})) 40) "go-to's route round it: met at the distance the route passes, not the straight way's 3")
+    (is (< 9.5 (again (cut {:x 30 :y 64 :z 0 :route [[12 54 0] [30 54 0]]})) 11) "a way 10 below the mob (a ravine) is 10 from it, not 3")
     (is (< 11.5 (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x -30 :y 64 :z 0}}}])) 12.5) "the respond job's own goal first")
     (is (nil? (again (assoc (cut {:x 30 :y 64 :z 0}) :job/j1 [{:t 950 :data {:goal {:x 30 :y 64 :z 0} :goal-reached true}}]))) "a goal reached is behind it")))
 

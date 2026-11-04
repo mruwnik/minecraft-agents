@@ -53,3 +53,12 @@
     (goal/clear! c)
     (goal/clear! c)
     (is (= 1 @writes) "only the clear that dropped a goal is a write")))
+
+(deftest the-route-of-an-open-walk-is-kept-by-its-corners
+  (let [s (store) c (ctx-of s "j1")
+        cell (fn [x z] {:x x :y 64 :z z})]
+    (goal/note! c goal-a)
+    (goal/note-route! c [(cell 0 0) (cell 1 0) (cell 2 0) (cell 2 1) (cell 2 2)])
+    (is (= [[0 64 0] [2 64 0] [2 64 2]] (:route (goal/interrupted-walk (mem/view s) "j9"))))
+    (is (= 1 (count (mem/entries (mem/view s) :walk-goal))) "one entry per call")
+    (is (= goal-a (goal/interrupted-goal (mem/view s) "j9")) "the goal stays")))

@@ -21,7 +21,6 @@
             [engine.game :as game]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
-            [jobs.lib.toll-cells :as toll-cells]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -320,20 +319,27 @@
          count)))
 
 (defn met-again
-  "mobs (mob-near's, one per entity of near) with :again, the distance each is passed at on the straight way from the body
-  to the goal of the walk the hostiles cut, when there is one (the :goal the job keeps in its memory, respond-to-hostile's,
-  unless :goal-reached; else jobs.lib.goal/interrupted-goal): a mob between the body and its goal is met nearer on the way back."
+  "mobs (mob-near's, one per entity of near) with :again, the distance each is passed at, in 3D, on the way back to the
+  goal of the walk the hostiles cut, when there is one: go-to's route of that walk (jobs.lib.goal/interrupted-walk) when it
+  noted one, else the straight way from the body (the job's own :goal in its memory, respond-to-hostile's, unless
+  :goal-reached, first): a mob beside the way is met nearer on the way back."
   [c near mobs]
-  (if-let [g (let [m (ctx/mem c)]
-               (if (contains? m :goal) (when-not (:goal-reached m) (:goal m)) (goal/interrupted-goal (ctx/view c) (:root c))))]
-    (let [g (if (vector? g) (zipmap [:x :y :z] g) g)
-          me (u/self-pos c)
-          p (:primitives c)]
-      (vec (map-indexed (fn [i m] (if-let [{:keys [x z]} (some->> (get (vec near) i) (danger-q/mob-pos p))]
-                                    (assoc m :again (toll-cells/segment-distance me g x z))
-                                    m))
-                        mobs)))
-    mobs))
+  (let [m (ctx/mem c)
+        own? (contains? m :goal)
+        walk (when-not own? (goal/interrupted-walk (ctx/view c) (:root c)))
+        g (if own? (when-not (:goal-reached m) (:goal m)) (:goal walk))]
+    (if-not g
+      mobs
+      (let [me (u/self-pos c)
+            g (if (vector? g) g ((juxt :x :y :z) g))
+            g (update g 1 #(or % (:y me)))
+            centre (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)])
+            route (if-let [r (not-empty (:route walk))] (mapv centre r) [((juxt :x :y :z) me) (centre g)])
+            p (:primitives c)]
+        (vec (map-indexed (fn [i m] (if-let [pos (some->> (get (vec near) i) (danger-q/mob-pos p))]
+                                      (assoc m :again (goal/route-distance route pos))
+                                      m))
+                          mobs))))))
 
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
