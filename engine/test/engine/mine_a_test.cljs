@@ -605,11 +605,12 @@
 (deftest an-open-platform-over-unseen-floor-tries-the-unseen-sides-and-ends-on-them-with-or-without-a-cap
   ;; a look is the way to learn a floor, so the sides are tried whether the budget or a cap refuses the 13 drop; once
   ;; the floors felt for keep turning out not there it ends on them (:unseen-floors; capped, each absent floor learned
-  ;; counts as progress, so the walk goes on until the land is exhausted: :exhausted), never :needs-health at full health
+  ;; counts as progress, so the walk goes on, cuts a stair into the platform, and ends where the only way on is the 13
+  ;; drop the cap refuses: :one-way), never :needs-health at full health
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[settings why] [[{} :unseen-floors] [{:jobs.lib.walk.world/max-damage 0} :exhausted]]]
+        (doseq [[settings why] [[{} :unseen-floors] [{:jobs.lib.walk.world/max-damage 0} :one-way]]]
           (let [s (await (drop-to-ore 77 false settings))
                 e (done-event s)
                 learned (mapcat :learned (events-of s :replan))]
