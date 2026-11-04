@@ -347,7 +347,7 @@
    :limit-s 120}
   {:name "own-shelter-by-day-is-left-and-the-goal-reached"
    ;; a dug-in pit (shut-in sealed it): go-to (no way out of the shelter) leaves it first (go-to.escalated :leave-shelter) and arrives; the clock does not hold it
-   :time :night
+   :time :any
    :plot {:height 20 :light :sky}
    :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
    :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}

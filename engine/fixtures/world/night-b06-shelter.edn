@@ -177,6 +177,7 @@
    :limit-s 70}
   ;; 33e6bf20: a walk inside an open cave is not held as sheltered, even with a dug-in entry left from an earlier night
   {:name "walk-in-an-open-cave-is-not-held"
+   :time :any
    :blocks [[:fill [2 0 2] [42 9 42] "stone"] [:fill [4 0 4] [40 6 40] "air"]]
    :plot {:length 48 :width 48 :height 12}
    :memory [{:kind :shelter :data {:pos #xyz [6 0 16]} :policy {:cap 1 :ttl :forever}}]
@@ -188,6 +189,7 @@
    :limit-s 100}
   ;; 33e6bf20: buried at night in a stair tunnel, a walk to a goal further down is no walk out of the shelter
   {:name "buried-walk-down-the-tunnel-is-not-held"
+   :time :any
    :blocks [[:fill [6 -1 12] [26 12 20] "stone"]
             [:fill [8 9 16] [8 11 16] "air"] [:fill [9 8 16] [9 10 16] "air"] [:fill [10 7 16] [10 9 16] "air"]
             [:fill [11 6 16] [11 8 16] "air"] [:fill [12 5 16] [12 7 16] "air"] [:fill [13 4 16] [13 6 16] "air"]

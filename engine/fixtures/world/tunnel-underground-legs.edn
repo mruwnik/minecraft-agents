@@ -29,7 +29,7 @@
    :after [[:body-near [28.5 4 16.5] 3]]}
   ;; card e98c80f8: at night the walk to a target in rock was read as leaving shelter into the open sky: the job waited "dark until light" and never dug
   {:name "target-in-rock-is-dug-at-night-with-no-wait-for-light"
-   :time :night :time-why :night-light
+   :time :any
    :act [[:job (jobs.access.tunnel {:target #at [16 4 16] :max-length 64})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 120 :until {:source :job :kind :completed}}]

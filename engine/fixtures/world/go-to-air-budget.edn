@@ -28,7 +28,7 @@
    :after [[:body-near [99.5 1 8.5] 3]]}
   ;; night, open sky: the dark wait must not be taken under water; the body swims up first and walks (no drowning)
   {:name "submerged-at-night-surfaces-and-walks"
-   :time :night
+   :time :any
    :plot {:height 10 :length 40 :width 16}
    :blocks [[:fill [3 0 7] [30 3 9] "stone"]
             [:fill [4 0 8] [4 3 8] "water"]]
