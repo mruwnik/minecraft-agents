@@ -514,7 +514,7 @@
 
 (declare remembered-light-fn)
 
-(defn- frontier-value
+(defn frontier-value
   "frontier/field-value for p: 2 * the cell's distance to the nearest frontier plus 1 when that frontier cell is lit by
   perception's seeing rule (its remembered light, remembered-light-fn); nil without a perception's memory."
   [p cell]

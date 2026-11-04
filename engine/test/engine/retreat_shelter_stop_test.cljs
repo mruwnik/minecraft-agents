@@ -370,7 +370,7 @@
         p (sensing-stub {})
         keep (set (rest (for [[dx dy dz] rules/neighbour-deltas] (cell (+ 1 dx) (+ 64 dy) dz))))
         n (pit/unsensed-shell p cells keep)
-        fails (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (pit/shell-fails p cells keep)))]
+        fails (fn [d] (with-redefs [sight/frontier-value (constantly (some-> d (* 2)))] (pit/shell-fails p cells keep)))]
     (is (pos? n))
     (is (> 1e-12 (Math/abs (- (- 1 (Math/pow (base-rates/unseen-solid 64 0 1 false nil true) n)) (fails nil)))) "no memory: as near a frontier as can be")
     (is (> (fails 1) (fails 6)) "far from where sight was cut: more likely rock")))

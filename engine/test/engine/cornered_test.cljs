@@ -672,9 +672,9 @@
 (defn ^:async far-from-frontiers
   "(f)'s result with every unseen cell 3 from the nearest frontier: the prior reads it solid."
   [f]
-  (let [d sight/frontier-distance]
-    (set! sight/frontier-distance (constantly 3))
-    (try (await (f)) (finally (set! sight/frontier-distance d)))))
+  (let [d sight/frontier-value]
+    (set! sight/frontier-value (constantly (+ 1 (* 2 3))))
+    (try (await (f)) (finally (set! sight/frontier-value d)))))
 
 (deftest a-pillar-looks-at-the-ground-round-it-before-taking-unseen-cells-for-a-ledge
   (async done
@@ -1041,7 +1041,7 @@
         behind? (fn [pos] (and (= 64 (aget pos "y")) (= 2 (js/Math.abs (aget pos "x")))))]
     (tu/set-sensed! p (fn [pos] (if (behind? pos) #js {:unknown true :pos pos} (sensed pos))))
     (is (true? (respond.pillar/pillar-fits? p [0 64 0])) "the ground the walls hide, near where sight was cut, reads open")
-    (is (< 0 (with-redefs [sight/frontier-distance (constantly 3)] (respond.pillar/pillar-climb p [0 64 0])) 1)
+    (is (< 0 (with-redefs [sight/frontier-value (constantly (+ 1 (* 2 3)))] (respond.pillar/pillar-climb p [0 64 0])) 1)
         "read more likely solid, it is a step from the open ground outside onto the wall beside the top: a chance the pillar fails, priced, not a certainty")))
 
 (deftest a-ledge-a-mob-reaches-by-walking-round-far-outside-the-slot-is-a-climb
@@ -1077,7 +1077,7 @@
         sensed (tu/sensed-by p)
         off (fn [x y z] (max (- (js/Math.abs x) 1) (- (js/Math.abs z) 1) (- 63 y) (- y 66)))]
     (tu/set-sensed! p (fn [pos] (if (pos? (off (aget pos "x") (aget pos "y") (aget pos "z"))) #js {:unknown true :pos pos} (sensed pos))))
-    (is (> 0.05 (with-redefs [sight/frontier-distance (fn [_ [x y z]] (off x y z))
+    (is (> 0.05 (with-redefs [sight/frontier-value (fn [_ [x y z]] (+ 1 (* 2 (off x y z))))
                               sight/unseen-solid-fn (fn [_] (fn [cell-y d & _] (base-rates/unseen-solid 64 (- cell-y 64) d false nil)))]
                   (respond.pillar/pillar-climb p [0 64 0])))
         "only the cells beside the body seen, the dark beyond is a measured guess: no likely ledge beside the top")))
@@ -1085,7 +1085,7 @@
 (deftest an-unseen-step-up-to-a-wall-beside-the-pillars-top-is-a-ledge-by-the-chance-it-is-rock
   (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (wall-cells [[1 0]])})
         sensed (tu/sensed-by p)
-        climb (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (respond.pillar/pillar-climb p [0 64 0])))]
+        climb (fn [d] (with-redefs [sight/frontier-value (constantly (+ 1 (* 2 d)))] (respond.pillar/pillar-climb p [0 64 0])))]
     (tu/set-sensed! p (fn [pos] (if (= [2 64 0] [(aget pos "x") (aget pos "y") (aget pos "z")]) #js {:unknown true :pos pos} (sensed pos))))
     (is (< 0 (climb 1) (climb 3) 1)
         "a mob walks round to the step and up onto the wall by the chance it is rock, likelier far from where sight was cut")))
