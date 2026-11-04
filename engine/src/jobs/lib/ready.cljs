@@ -515,10 +515,9 @@
   "safe, but a wait for light (jobs.lib.spawn-light/exposure lowered by :light, or light too far off) is lifted to the threat check alone while the place (f c) lies
   within the radius no mob spawns in round the body (cost/near-body?): a build or light job works there in the dark, which only a large dark area or a hidden pit makes a danger.
   With torch-way (c -> {:blocks :carried}, nil: the job hangs no torches) the lift is the job's own torches instead, while they cost less than the stay's exposure (cost/dark-or-lit).
-  Either is an own-way: a walk to look that costs more is not taken. With keep-priced? and no torch-way a priced :never (a spawn chance whose stay costs more than the worth) is kept, for a job that lights itself or waits (from-plan)."
+  Either is an own-way: a walk to look that costs more is not taken. Without torch-way a priced :never (a spawn chance whose stay costs more than the worth) is kept, not lifted: the stay is too dear whatever the radius."
   ([f safe] (dark-near-ok nil f safe))
-  ([torch-way f safe] (dark-near-ok torch-way f safe false))
-  ([torch-way f safe keep-priced?]
+  ([torch-way f safe]
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
                                            (or (= :never kind) (some #{:light :torch} (:lowered-by data)))))
         near? (fn [c] (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at))))
@@ -527,14 +526,14 @@
               (when torch-way
                 (cost/dark-or-lit (if (number? chance) (price/stay-hp c chance (price/stay-s c)) ##Inf)
                                   (.-health (.self (:primitives c))) (torch-way c))))
-        own-s (fn [c s] (when (and (dark-wait? s) (near? c) (not (and keep-priced? (nil? torch-way))))
+        own-s (fn [c s] (when (and (dark-wait? s) (near? c) (not (and (nil? torch-way) (priced-never? s))))
                           (let [w (way c s)] (cond (nil? w) 0 (= :lit (:way w)) (:lit-s w)))))
         lift (fn [g lifted]
                (fn [c] (let [s (g (own-way c own-s))]
                          (if-not (and (dark-wait? s) (near? c))
                            s
                            (let [w (way c s)]
-                             (cond (and (nil? w) keep-priced? (priced-never? s)) s
+                             (cond (and (nil? w) (priced-never? s)) s
                                    (nil? w) (lifted c (contract/ok :dark-near "dark, but within the radius no mob spawns in"))
                                    (= :lit (:way w)) (lifted c (contract/ok :lit-way (str "dark, but within the radius no mob spawns in, and its torches cost "
                                                                                           (price/round1 (:lit-s w)) " s, under the dark's " (price/round1 (:dark-s w)))))
@@ -543,10 +542,9 @@
       (update (meta safe) ::exposure #(some-> % (lift (fn [_ ok] ok))))))))
 
 (defn safe-at-build
-  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok, the stay (work-s c) seconds of the job's own work (keep-priced?: see dark-near-ok)."
-  ([f work-s] (safe-at-build f work-s false))
-  ([f work-s keep-priced?]
-   (price/with-stay (dark-near-ok nil f (safe-at-by-night f) keep-priced?) work-s true)))
+  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok, the stay (work-s c) seconds of the job's own work."
+  [f work-s]
+  (price/with-stay (dark-near-ok f (safe-at-by-night f)) work-s true))
 
 (defn chest-place "The cell of the chest of c's job (the :chest arg or the known :chest place), nil: none." [c] (storage/chest-of (ctx/view c) (:args c)))
 

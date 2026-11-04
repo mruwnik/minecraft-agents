@@ -1229,7 +1229,7 @@
         hall [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :chance 0.004}]
         priced [:never "priced over the worth" {:reason :exposed :chance 0.004}]
         kind-of (fn [s] (with-redefs [ready/at-status (fn [_ _] s) ready/hall-status (fn [_ _] s)]
-                          (first ((ready/dark-near-ok nil (constantly near) (ready/safe-at-by-night (constantly near)) true) (ctx-of tunnel)))))]
+                          (first ((ready/dark-near-ok (constantly near) (ready/safe-at-by-night (constantly near))) (ctx-of tunnel)))))]
     (is (= [:never :never] (lit 0 15 #(mapv kind-of [hall priced]))) "a spawn chance too dear for the stay stays refused near the body")
     (is (= :ok (lit 0 15 #(kind-of [:never "no light" {:reason :exposed :lowered-by #{:torch}}]))) "a never-lit place with no priced chance is still lifted")))
 

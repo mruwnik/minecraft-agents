@@ -125,7 +125,7 @@
   (let [{:keys [cells trouble]} (judged-plan c)]
     (* (if trouble 0 (count (owed cells))) (cell-s))))
 
-(def safe? (light/lights-itself (ready/safe-at-build work-place/spot work-s true) #(:cells (judged-plan %))))
+(def safe? (light/lights-itself (ready/safe-at-build work-place/spot work-s) #(:cells (judged-plan %))))
 (declare quote-of)
 
 (def fit? (ready/trip-fed (ready/fed-fit-for :long) work-place/spot #(quote-of %)))
