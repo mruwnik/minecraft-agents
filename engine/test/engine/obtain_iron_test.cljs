@@ -359,14 +359,25 @@
           (is (seq (f/calls s "dig")) "a log was felled for the charcoal")
           (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
 
+(def sealed-hall
+  "A stone box round the tree and the cut (walls at x -6 and 8, z -5 and 13, a roof at y 70), rock below the cut: no sky reaches in, so no outside light floods into memory."
+  (into {} (for [x (range -6 9) z (range -5 14) y (range 58 71)
+                 :let [edge? (or (#{-6 8} x) (#{-5 13} z))]
+                 :when (or (= y 70) (and edge? (>= y 64)) (<= y 63))]
+             [(str x "," y "," z) (if (<= y 63) "stone" "andesite")])))
+
+(def dark-in-the-hall
+  "The fake's light table for the hall's cells: dim, not black: a cell with no light at all is not seen."
+  (into {} (for [x (range -5 8) z (range -4 13) y (range 55 70)] [[x y z] [3 0]])))
+
 (defn coal-below-world
-  "A coal ore 2 below the body, 9 south, at the bottom of a cut in the floor so the body's sight reaches it, at night; lit? hangs a torch in the cut."
+  "A coal ore 2 below the body, 9 south, at the bottom of a cut in the floor so the body's sight reaches it, by day inside a sealed hall, the tree lit by a torch whose light dies out before the coal; lit? hangs a torch in the cut."
   [inv lit?]
-  (assoc (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore"}
-                           (into {} (for [x (range 0 3) z (range 5 10)] [(str x ",63," z) "air"]))
-                           (when lit? {"1,63,7" "torch"}))
-                    inv)
-         :time st/night))
+  (-> (ore-world (merge sealed-hall f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore" "0,64,-3" "torch"}
+                    (into {} (for [x (range 0 3) z (range 5 10)] [(str x ",63," z) "air"]))
+                    (when lit? {"1,63,7" "torch"}))
+             inv)
+      (assoc :light dark-in-the-hall)))
 
 (defn coal-seen? [s] (boolean (seq (look/seen-blocks (:p s) {:match #(= "coal_ore" %) :radius 32 :max 4}))))
 
@@ -380,13 +391,15 @@
     (await (obtain-until! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60 (or stop? (constantly false))))
     s))
 
-(deftest a-torch-with-dark-coal-seen-below-is-not-mined-down-the-dark-way
+(deftest a-torch-with-dark-coal-seen-below-and-no-torch-is-made-from-charcoal-of-seen-logs
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (settings/with-settings {:jobs.lib.cost.value/per-dark 1}
-                         #(torches-with-coal-below! false [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}])))]
-          (is (empty? (mine-events s)) "the dark way down to the coal is not taken (the lit twin below hangs a torch in the cut and mines it)"))))))
+                         #(torches-with-coal-below! false [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]
+                                                    (fn [s] (seq (f/events-of s :smelt.loaded))))))]
+          (is (empty? (mine-events s)) "the dark way down to the coal is not taken")
+          (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
 
 (deftest a-torch-with-lit-coal-seen-below-is-mined-not-made-from-charcoal
   (async done
@@ -639,4 +652,3 @@
           (is (pos? @asked) "the mine child's can-start? was read")
           (is (seq (f/events-of s :obtain.gathering)) "the mine child was called")
           (is (not-any? #(#{:none-seen :no-source} (:reason %)) (f/events-of s :waiting))))))))
-

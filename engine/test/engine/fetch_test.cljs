@@ -42,6 +42,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (ew/of-data plans {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (some->> (not-empty (:light world)) (swap! (fake/state raw) assoc :light))
     (perception/pass! (aget p "perception"))
     {:eng eng :p p :seen seen :clock clock})))
 
