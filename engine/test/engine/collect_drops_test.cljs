@@ -778,6 +778,17 @@
               (is (not= guess (reduce + (map #((:dig-s @priced) "stone" %) cells))) "the guess is pinned apart from stone")
               (is (< (js/Math.abs (- guess (- w1 w2))) 1e-6) "all three cells (two dug, one failed), unseen, at the guess the plan used, come out of the worth"))))))))
 
+(deftest a-drop-whose-only-dig-costs-more-than-it-is-worth-is-left-past-worth-not-no-route
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :view (fn [] {:now 0})}
+              item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}]
+          (with-redefs [job-ns/look-pit! (fn [_ _ _] nil)
+                        job-ns/item-worth (fn [_ _] 7)
+                        job-ns/drop-route (fn [& _] {:problem :dearer})]
+            (is (= {:reason :past-worth :worth-s 7} (await (job-ns/dig-to! c item))))))))))
+
 (deftest an-unseen-first-cell-books-the-failed-attempt-so-a-retry-is-not-free
   (async done
     (tu/run-async done
