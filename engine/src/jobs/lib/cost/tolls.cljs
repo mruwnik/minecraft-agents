@@ -3,7 +3,7 @@
   cells, the cells of a zone that is not the body's. The planner knows no zones or crops: the job that does names the cells.")
 
 (def farm-cell-factor
-  "Times its own seconds a planted cell costs more to cross: crossed only when the way round is over this many times longer."
+  "Times its own seconds a landing on a planted cell costs more: landed on only when the way round is over this many times longer."
   20)
 
 (def zone-factor
@@ -16,9 +16,10 @@
   (mapv (fn [[x y z]] {:x x :y y :z z :factor factor}) cells))
 
 (defn farm-tolls
-  "tolls for the planted cells of a farm."
+  "tolls for the planted cells of a farm, each counting only for a move that lands on it (a jump, drop or water exit tramples
+  farmland; a level step does not)."
   [cells]
-  (tolls cells farm-cell-factor))
+  (mapv #(assoc % :landing true) (tolls cells farm-cell-factor)))
 
 (defn zone-tolls
   "tolls for the cells of zones the body has no business in."

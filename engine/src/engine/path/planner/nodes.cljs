@@ -1,9 +1,14 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
-  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP drowned-hp AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-GAP MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+  (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP drowned-hp AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
+
+(defn- landing-move?
+  "Whether a move of this kind comes down on its cell, not walks onto it (what tramples farmland)."
+  [move]
+  (or (== move MOVE-JUMP) (== move MOVE-DROP) (== move MOVE-GAP) (== move MOVE-JUMP-CLIMB) (== move MOVE-EXIT)))
 
 (extend-type Search
   Object
@@ -295,6 +300,7 @@
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)
               ddark (+ (if (some? (.-dark-at s)) (* dsec (.darkOf s x y z)) 0)
                        (if (some? (.-tolls s)) (* dsec (.tollOf s x y z)) 0)
+                       (if (and (some? (.-land-tolls s)) (landing-move? move)) (* dsec (.landTollOf s x y z)) 0)
                        (if (some? (.-edge-tolls s)) (.edgeToll s x y z move parent-node) 0)
                        (.-move-unk s)
                        (if (pos? (.-c-descent s)) (* (.-c-descent s) (js/Math.max 0 (- (aget (.-ys s) parent-node) y))) 0))]
@@ -368,6 +374,11 @@
   ;; the factor of its own seconds the caller's toll (options.tolls) adds to entering x,y,z, 0 for none
   (tollOf [s x y z]
     (let [f (.get ^js (.-tolls s) (cell-key x y z))]
+      (if (some? f) f 0)))
+
+  ;; the factor of its own seconds the caller's landing toll (options.tolls.landing) adds to landing on x,y,z, 0 for none
+  (landTollOf [s x y z]
+    (let [f (.get ^js (.-land-tolls s) (cell-key x y z))]
       (if (some? f) f 0)))
 
   ;; the seconds the caller's edge toll (options.tolls.edges) adds to entering x,y,z by `move` from parent-node's cell: its

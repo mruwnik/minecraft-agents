@@ -44,11 +44,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plain (await (plan-with nil))
-              bent (await (plan-with (cost/farm-tolls wall)))]
+              bent (await (plan-with (cost/zone-tolls wall)))
+              farm (await (plan-with (cost/farm-tolls wall)))]
           (is (seq plain))
           (is (on-wall? plain) "no tolls: straight over the cells")
           (is (seq bent))
-          (is (not (on-wall? bent)) "tolls: round them"))))))
+          (is (not (on-wall? bent)) "tolls: round them")
+          (is (on-wall? farm) "farm tolls price a landing, not a level walk: straight over"))))))
 
 (deftest a-toll-of-infinity-is-a-cell-no-plan-enters
   (async done

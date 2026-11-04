@@ -42,3 +42,19 @@
 (deftest an-infinite-toll-is-never-entered-even-as-the-goal
   (let [r (pf/run world (pf/near 38 64 20) (tolls ##Inf [[38 64 20]]) from)]
     (is (not-any? #{[38 64 20]} (pf/cells r)))))
+
+(defn landing-tolls [factor cells]
+  {:tolls {:cells (js/Map.)
+           :landing (js/Map. (clj->js (mapv (fn [[x y z]] [(planner/cell-key x y z) factor]) cells)))}})
+
+(deftest a-landing-toll-is-paid-by-a-jump-onto-the-cell-not-by-a-level-walk
+  (let [level (pf/run world goal (landing-tolls 20 wall) from)
+        ridge (pf/world {:fill [[18 64 14 22 64 26 "stone"]]})
+        ridge-wall (for [x (range 18 23) z (range 14 27)] [x 65 z])
+        plain (pf/run ridge goal {} from)
+        bent (pf/run ridge goal (landing-tolls 20 ridge-wall) from)
+        on-ridge? (fn [r] (boolean (some (set ridge-wall) (pf/cells r))))]
+    (is (touches-wall? level) "level cells: walked over at no toll")
+    (is (on-ridge? plain) "no tolls: the way jumps up onto the ridge")
+    (is (= "found" (:status bent)))
+    (is (not (on-ridge? bent)) "a jump up onto tolled cells goes round the ridge")))

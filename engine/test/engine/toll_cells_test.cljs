@@ -18,6 +18,12 @@
   (into {} (mapcat (fn [[x z]] [[(str x ",63," z) "farmland"] [(str x ",64," z) "wheat"]]))
         (for [x (range 19 22) z (range z0 (inc z1))] [x z])))
 
+(defn raised-strip-blocks
+  "strip-blocks one block up: the farmland stands a step over the floor, so a walk onto it jumps (a landing)."
+  [z0 z1]
+  (into {} (mapcat (fn [[x z]] [[(str x ",64," z) "farmland"] [(str x ",65," z) "wheat"]]))
+        (for [x (range 19 22) z (range z0 (inc z1))] [x z])))
+
 (defn zone [owner] {:name "z" :min [19 60 -6] :max [21 70 6] :owner owner :allow #{}})
 
 (defn setup [blocks zones & [extra]]
@@ -78,13 +84,21 @@
   [trail z0 z1]
   (boolean (some (fn [[x z]] (and (<= 19 x 21) (<= z0 z z1))) trail)))
 
-(deftest a-farm-walk-bends-round-a-planted-strip
+(deftest a-farm-walk-bends-round-a-planted-strip-it-would-jump-onto
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [trail (await (walk-trail (raised-strip-blocks -6 6)))]
+          (is (seq trail))
+          (is (not (on-strip? trail -5 5))))))))
+
+(deftest a-farm-walk-crosses-a-planted-strip-on-the-level
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [trail (await (walk-trail (strip-blocks -6 6)))]
           (is (seq trail))
-          (is (not (on-strip? trail -5 5))))))))
+          (is (on-strip? trail -5 5) "walking on farmland does not trample it: no toll"))))))
 
 (deftest a-farm-walk-crosses-the-strip-when-it-is-the-only-way
   (async done
@@ -92,7 +106,7 @@
       (fn ^:async t []
         (let [wall (into {} (mapcat (fn [z] [[(str "20,64," z) "stone"] [(str "20,65," z) "stone"] [(str "20,66," z) "stone"]]))
                          (concat (range -20 -6) (range 7 21)))
-              trail (await (walk-trail (merge wall (strip-blocks -6 6))))]
+              trail (await (walk-trail (merge wall (raised-strip-blocks -6 6))))]
           (is (seq trail))
           (is (on-strip? trail -6 6)))))))
 
@@ -248,11 +262,11 @@
           (is (< (:reach winded) (:reach whole)) "a body low on breath surfaces from fewer blocks")
           (is (<= 1 (:reach winded)) (pr-str winded)))))))
 
-(deftest a-go-to-walk-of-any-job-bends-round-a-planted-strip
+(deftest a-go-to-walk-of-any-job-bends-round-a-strip-it-would-jump-onto
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng] :as w} (setup (strip-blocks -6 6) [])
+        (let [{:keys [p eng] :as w} (setup (raised-strip-blocks -6 6) [])
               trail (atom [])]
           (.override (.-world p) "steer"
                      (fn [token args impl]
