@@ -42,7 +42,7 @@
 
 (def walked-policy
   "A side looked at from close by and still unseen stays so: a remembered solid cell does not change (jobs.lib.memory-age).
-  The cap bounds the memory only."
+  The cap bounds the entries only: each carries every cell before it (finish-leg!), so a dropped one loses none."
   {:cap 20 :ttl :forever})
 
 (defn cell-of [{:keys [x y z]}] [x y z])
@@ -51,7 +51,8 @@
   "Writes the leg's side to :walk-looked when it is still unseen after the walk, or after a look from where a walk shows no more."
   [c side]
   (when (and (look/unseen? (:primitives c) [side]) (or (:edge-walked (ctx/mem c)) (:edge-close (ctx/mem c))))
-    (ctx/remember! c :walk-looked {:cells [(cell-of side)]} walked-policy)))
+    (let [before (into [] (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))]
+      (ctx/remember! c :walk-looked {:cells (vec (distinct (conj before (cell-of side))))} walked-policy))))
 
 (defn ended
   "The ending of kind with cause, with the info walk-look.ended of the first side."

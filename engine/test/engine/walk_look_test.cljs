@@ -48,3 +48,20 @@
             "a side still unseen from close by is remembered, so no walk is offered for it again")
         (is (= [0 [0 64 0] nil [:completed]] (await (walk-look nil 0)))
             "a walk the worth does not buy is not walked, and the side is not remembered as looked at from close by")))))
+
+(deftest sides-looked-at-past-the-memory-cap-are-still-remembered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/seeing-all (tu/fake-on-floor tunnel))
+              eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs registry/jobs
+                                :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now #(deref clock)})})
+              sides (mapv (fn [z] [8 64 z]) (range 21))]
+          (with-redefs [ctx/worth (constantly ##Inf)
+                        look/unseen? (constantly true)]
+            (doseq [side sides]
+              (core/submit! eng (list 'jobs.movement.walk-look {:side side :to [6 64 0]}) {})
+              (await (tu/tick-until-idle! eng 40))))
+          (is (= (set sides) (set (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked)))))
+              "21 legs, one more than the memory cap: the latest entry still holds the first side"))))))
