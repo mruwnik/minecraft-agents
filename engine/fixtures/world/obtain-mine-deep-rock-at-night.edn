@@ -1,0 +1,16 @@
+;; Owner Q334: night matters for sleep and wait-it-out only; a body in its own rock hollow under a sky plot, at night, mines on: every way out of its room is seen rock or never seen, none is dark till dawn.
+;; Needs night: run with --allow-time. Should-succeed: obtain starts digging (no :waiting :dark hold) and finds the iron.
+;; Should-fail: none.
+{:defaults
+ {:tags [:obtain :mine :night :jobs] :time :night :time-why :dawn-decision
+  :plot {:light :sky :height 31 :length 40 :width 16 :floor "stone"}
+  :blocks [[:fill [0 0 0] [39 29 15] "stone"] [:fill [15 10 6] [25 12 8] "air"] [:set [16 11 6] "light"] [:set [24 11 8] "light"]
+           [:set [26 10 7] "iron_ore"]]
+  :body {:at [20.5 10 7.5] :yaw 270 :settle-s 3 :inventory [["stone_pickaxe" 2] ["torch" 16] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "a-body-in-its-rock-hollow-mines-on-at-night"
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 1000 :ways #{:gather}})]]
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:item "raw_iron" [:>= 1]]]}]}
