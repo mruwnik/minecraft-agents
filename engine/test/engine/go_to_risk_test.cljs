@@ -418,13 +418,12 @@
 
 (def pool-world {:time st/noon :blocks (tu/box -2 64 -2 2 66 2 "water")})
 
-(deftest a-hostile-at-the-heels-holds-the-walk-with-the-head-under-water
-  ;; old code answered ok :submerged before looking at the hostiles: a drowned's blows under water never asked the check
-  (let [at (fn [x] (ready-test/ctx-of (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true}
-                                             :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x x :y 64 :z 0.5}}])))]
-    (is (true? (breath/head-under? (:primitives (at 1.5)))) "water over the eye cell")
-    (is (= :later (first (reprice/status (at 1.5) {:x -30 :y 64 :z 0} nil))) "the walk leads toward the hostile")
-    (is (= :ok (first (reprice/status (at -9.5) {:x 30 :y 64 :z 0} nil))) "away from it, air first")))
+(deftest a-root-walk-with-the-head-under-water-and-no-plan-goes-on-to-plan
+  ;; old code held it by the hostile gate: the hold stopped the planning that would price the walk, so a swimmer could never swim up
+  (let [c (ready-test/ctx-of (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true}
+                                    :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5}}]))]
+    (is (true? (breath/head-under? (:primitives c))))
+    (is (= :ok (first (reprice/status c {:x -30 :y 64 :z 0} nil))))))
 
 (deftest the-head-under-water-prices-a-plan-through-the-walk-s-price
   (let [c (finite-worth (ready-test/ctx-of (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true :health 20 :food 20}

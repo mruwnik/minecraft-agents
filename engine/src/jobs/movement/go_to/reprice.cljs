@@ -10,7 +10,6 @@
             [jobs.lib.danger :as danger]
             [jobs.lib.goal :as goal]
             [jobs.lib.price :as price]
-            [jobs.lib.ready :as ready]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as wwalk]
@@ -19,13 +18,12 @@
 (defn status
   "go-to's own safe? for the walk to pos on plan (risk/status; none: the plan its round held on, to its goal): the walk's
   price (risk/status: hostiles that catch it included, against the stay) decides, no hostile gate. With the head under water
-  the price stands (ok :submerged, air first); with no plan to price there, a hostile near that the walk does not lead away
-  from holds (a swimmer cannot fight or outrun it, and starting the walk toward it prices nothing)."
+  the price stands (ok :submerged, air first); with no plan yet it is ok, so the round plans and the walk is priced then."
   ([c pos] (let [kept (risk/planned c)] (status c (or (:goal kept) pos) kept)))
   ([c pos plan]
    (if-not (breath/head-under? (:primitives c))
      (risk/status c pos plan)
-     (let [t (if plan (risk/status c pos plan) (ready/threatened-walking c pos nil))]
+     (let [t (risk/status c pos plan)]
        (if (= :ok (first t)) (contract/ok :submerged "head under water: air first") t)))))
 
 (defn unfinished?
