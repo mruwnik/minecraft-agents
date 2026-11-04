@@ -30,7 +30,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.lib.own-builds :refer [may-dig-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :refer [budget-near max-blocked max-route-s]]
+            [jobs.movement.go-to.tuning :refer [budget-near max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn skips
@@ -379,7 +379,7 @@
   (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, own-builds/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig?; :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
-  body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted) with what it carries, or with
+  body longer than the least of route-opts :worth-s and :bound-s with what it carries, or with
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
@@ -415,7 +415,7 @@
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
-        ;; plus its dig (at most max-route-s). A route dearer is no cheaper than it, so the
+        ;; plus its dig. A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
         straight-s (fn [refused] (let [[gx gy gz] goal
                          leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
@@ -445,16 +445,14 @@
                          heads (map head-s (cons from cells))]
                      (cond
                        (some refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells))) ##Inf
-                     ;; a route digging more than max-route-s is none (route-answer), so the straight dig's dig seconds count to that
                        (and (every? some? steps) (every? some? heads))
-                       (+ (min (max-route-s) (reduce + (reduce + 0 heads) (map first steps))) (reduce + 0 (map second steps))
+                       (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
                           (* (:node-s route-opts 0) 2 (count cells)))
                        :else ##Inf)))
         opts (fn [refused] (merge prices
                                   {:max-s (min (or (:bound-s route-opts) ##Inf) (* (straight-s refused) (+ 1 1e-9))) :back-h? true}
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
-                                                            ((:dig-s prices) name cell)))
-                                   :max-dig-s (max-route-s)}
+                                                            ((:dig-s prices) name cell)))}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
@@ -475,7 +473,7 @@
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
     (cond
       (or (nil? a) (#{:searching :dearer} a)) a
-      (> (route-s p (:dig a) own? fetch?) (max-route-s)) nil
+      (not (cost/affords? (route-s p (:dig a) own? fetch?) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil
       (cost/affords? (:seconds a) (or worth-s ##Inf)) a
       dearer? :dearer)))
 

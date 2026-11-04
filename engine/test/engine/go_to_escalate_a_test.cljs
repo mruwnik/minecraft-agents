@@ -623,12 +623,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft}
-                                                    'jobs.movement.go-to (merge {:pos [30 64 0] :range 1} trespass) foreign))
+                                                    'jobs.movement.go-to (merge {:pos [30 64 0] :range 1 :worth 30} trespass) foreign))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
-          ;; a climb route of the 18 digs longer than max-route-s by hand: an escape stair of 8 first, then the climb of the rest
-          (is (= [:stair :stair] (map :step escalated)))
-          (is (= [1 1] (map :n escalated)) "each began nearer than any before")
+          ;; a worth of 30 s makes the 18 digs of a climb route too dear: stairs, each reaching nearer than any before
+          (is (= [:stair :stair :stair] (map :step escalated)))
+          (is (= [1 1 1] (map :n escalated)) "each began nearer than any before")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
 

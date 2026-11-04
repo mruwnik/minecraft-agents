@@ -917,20 +917,20 @@
     (is (seq round) "the refused tunnel is dug round")
     (is (not-any? (comp straight :cell) round))))
 
-(deftest a-dig-route-that-takes-longer-than-the-body-would-dig-is-not-planned
+(deftest a-dig-route-dearer-than-its-worth-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
-        route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false)))]
+        route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false false {:worth-s 30}))]
     (is (nil? (route [])) "8 stones by hand take minutes")
     (is (seq (route [{:name "stone_pickaxe" :count 1}])) "the same take seconds with a pickaxe")))
-(deftest a-dig-route-through-the-bodys-own-scaffold-is-not-held-to-the-time-cap
+(deftest a-dig-route-through-the-bodys-own-scaffold-is-not-held-to-the-worth
   (let [world (assoc (box 0 60 -1 9 70 1 "cobblestone") "0,64,0" "air" "0,65,0" "air")
-        route (fn [own?] (choose/route-cells (tu/fake {:blocks world :inventory []}) [0 64 0] [8 64 0] (constantly true) own?))]
+        route (fn [own?] (choose/route-cells (tu/fake {:blocks world :inventory []}) [0 64 0] [8 64 0] (constantly true) own? false false {:worth-s 30}))]
     (is (nil? (route (constantly false))) "8 foreign blocks by hand take minutes")
     (is (seq (route (constantly true))) "its own pillar left behind is dug out however long it takes")))
 
 (deftest a-dig-route-is-priced-with-the-pickaxe-the-body-would-fetch
   (let [world (assoc (box 0 60 -1 40 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
-        route (fn [inventory fetch?] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false fetch?))]
+        route (fn [inventory fetch?] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false fetch? {:worth-s 30}))]
     (is (nil? (route [] false)) "shut in: bare hands cannot tunnel 12 stones")
     (is (seq (route [] true)) "a free body crafts a pickaxe and tunnels")
     (is (seq (route [{:name "wooden_pickaxe" :count 1}] false)) "a wooden pickaxe tunnels 12 blocks")
