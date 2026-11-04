@@ -595,7 +595,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+        (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} :rand (constantly 0.5)})
               stands (atom [])
               ;; the cheapest cut from each side of the wall the body may stand on: the one cell between, else a column of two
               cheapest {:west [[1 64 0]] :east [[3 65 0] [3 64 0]] :north [[2 65 -1] [2 64 -1]] :south [[2 65 1] [2 64 1]]}
