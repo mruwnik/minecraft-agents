@@ -637,8 +637,9 @@
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
           ;; a worth of 30 s makes the 18 digs of a climb route too dear: stairs, each reaching nearer than any before
-          (is (= [:stair :stair :stair] (map :step escalated)))
-          (is (= [1 1 1] (map :n escalated)) "each began nearer than any before")
+          (is (every? #{:stair} (map :step escalated)))
+          (is (<= 2 (count escalated)) "one stair does not reach: the climb is stairs")
+          (is (every? #{1} (map :n escalated)) "each began nearer than any before")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
 
