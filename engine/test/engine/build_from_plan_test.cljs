@@ -481,6 +481,18 @@
                     {:pos [6 66 6] :want "stone" :item "stone" :answer :match})]
     (is (empty? (plan/covered p cells 64 #{})) "the clear room cells are stands")))
 
+(deftest a-cell-given-up-unseen-that-only-the-plans-own-cells-open-onto-is-left-unchecked
+  (let [pocket [6 64 6]
+        rock (into {} (for [x (range 2 11) y (range 62 68) z (range 2 11) :when (not= pocket [x y z])] [(str x "," y "," z) "stone"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks (assoc rock "6,64,6" "air" "6,63,6" "stone")}))
+        cells [{:pos pocket :want :clear :answer :match} {:pos [6 63 6] :want "stone" :item "stone" :found nil :answer :missing}]
+        given {[6 63 6] :unseen}
+        sealed (fp-cells/sealed-unseen p cells given)
+        m (fp-book/settle-sealed {:given-up given :walk-given {[6 63 6] {}}} sealed)]
+    (is (= [[6 63 6]] (mapv :pos sealed)) "the pocket above is a plan cell: nothing else opens onto the floor")
+    (is (empty? (fp-cells/sealed-unseen p [(second cells)] given)) "an open cell outside the plan is a way to look")
+    (is (= {:given-up {} :walk-given {} :unchecked #{[6 63 6]}} m))))
+
 (deftest a-stand-in-a-pocket-the-body-is-not-in-is-no-stand
   (let [open (set (for [x (range 4 9) y [64 65] z [5 7]] [x y z]))
         rock (into {} (for [x (range -3 16) y (range 63 67) z (range -3 12) :when (not (open [x y z]))] [(str x "," y "," z) "stone"]))
@@ -2173,11 +2185,11 @@
     (is (= {pos :unreachable} (:given-up (nth runs 3))) "the third give-up stays")
     (is (= (:walk-given (nth runs 3)) {pos {:x 0 :y 64 :z 0}}))))
 
-(deftest a-covered-cell-is-given-up-for-a-walk-so-it-opens-again-once-the-body-moved
-  (let [at {:x 0 :y 64 :z 0}
-        m (fp-book/give-up-covered {} [{:pos [1 64 1]}] at)]
+(deftest a-covered-cell-is-given-up-while-it-has-no-stand-and-open-again-when-it-has-one
+  (let [m (fp-book/give-up-covered {} [{:pos [1 64 1]}])]
     (is (= {[1 64 1] :unreachable} (:given-up m)))
-    (is (empty? (:given-up (fp-book/retry-walks m {:x 20 :y 64 :z 0} false))) "the body moved: open again")))
+    (is (= m (fp-book/give-up-covered m [{:pos [1 64 1]}])) "still covered: unchanged")
+    (is (empty? (:given-up (fp-book/give-up-covered m []))) "a stand now: open again")))
 
 (deftest walk-fail-notes-only-newly-given-up-cells
   (let [at1 {:x 0 :y 64 :z 0}

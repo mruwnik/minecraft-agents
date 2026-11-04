@@ -337,6 +337,13 @@
     {:block "dirt" :exact true} {:name "dirt"} :match
     "grass_block" {:name "dirt"} :wrong))
 
+(deftest a-fence-gate-faces-either-side-of-its-line-alike-a-door-does-not
+  (are [want block answer] (= answer (shape/judge want block))
+    {:block "oak_fence_gate" :facing "south"} {:name "oak_fence_gate" :state {:facing "north"}} :match
+    {:block "oak_fence_gate" :facing "south"} {:name "oak_fence_gate" :state {:facing "south"}} :match
+    {:block "oak_fence_gate" :facing "south"} {:name "oak_fence_gate" :state {:facing "east"}} :wrong
+    {:block "oak_door" :facing "south"} {:name "oak_door" :state {:facing "north"}} :wrong))
+
 (deftest a-crop-matches-at-any-stage-and-the-ground-below-is-not-judged
   (are [want block answer] (= answer (shape/judge want block))
     {:crop "wheat"} {:name "wheat" :state {:age 0}} :match

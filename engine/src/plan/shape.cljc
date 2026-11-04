@@ -482,6 +482,17 @@
   "Blocks a player takes for the wanted one: dirt in daylight beside grass turns to grass by itself."
   {"dirt" #{"grass_block"}})
 
+(def opposite-side {"north" "south" "south" "north" "east" "west" "west" "east"})
+
+(defn state-holds?
+  "Whether the world's value of k holds the wanted v. A fence gate swings to face the way its user walks, and faces
+  either side of its line alike, so the opposite facing holds."
+  [name state k v]
+  (let [have (some-> (state-of state k) state-text)
+        want (state-text v)]
+    (or (= want have)
+        (and (= :facing k) (str/ends-with? (str name) "_fence_gate") (= (opposite-side want) have)))))
+
 (defn judge-block
   "A block want (name or block with state) against a non-air block: :match, :wrong, or :unknown when the name
   matches, the want names state and the world gave names only. The want `bed` is a bed of any colour; a block of
@@ -495,7 +506,7 @@
                (and (not exact) (contains? (counts-as wanted) name)))) :wrong
       (empty? wanted-state) :match
       (nil? state) :unknown
-      (every? (fn [[k v]] (= (state-text v) (some-> (state-of state k) state-text))) wanted-state) :match
+      (every? (fn [[k v]] (state-holds? name state k v)) wanted-state) :match
       :else :wrong)))
 
 (defn judge

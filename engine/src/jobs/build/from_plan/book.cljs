@@ -22,12 +22,22 @@
       (and (contains? (:given-up m2) pos) (not (contains? (:given-up m) pos))) (assoc-in [:walk-given pos] at))))
 
 (defn give-up-covered
-  "m with the covered cells (no stand yet) given up :unreachable and noted with where the body stood, so retry-walks
-  opens them again once the body has moved on and the way to a stand may be cut."
-  [m covered at]
-  (reduce (fn [m {:keys [pos]}]
-            (cond-> m (not (contains? (:given-up m) pos)) (-> (assoc-in [:given-up pos] :unreachable) (assoc-in [:walk-given pos] at))))
-          m covered))
+  "m with the covered cells (no stand yet) given up :unreachable and kept in :covered; a cell given up so that is no
+  longer covered (its pocket was cut since) is open again."
+  [m covered]
+  (let [now (set (map :pos covered))
+        freed (remove now (:covered m))
+        m (reduce (fn [m pos] (-> (cond-> m (= :unreachable (get-in m [:given-up pos])) (update :given-up dissoc pos))
+                                  (update :covered disj pos)))
+                  m freed)]
+    (reduce (fn [m pos] (cond-> m (not (contains? (:given-up m) pos))
+                                (-> (assoc-in [:given-up pos] :unreachable) (update :covered (fnil conj #{}) pos))))
+            m now)))
+
+(defn settle-sealed
+  "m with the sealed cells (cells/sealed-unseen) no longer given up: left :unchecked, as a buried cell is."
+  [m sealed]
+  (reduce (fn [m {:keys [pos]}] (-> (update m :given-up dissoc pos) (update :walk-given dissoc pos) (update :unchecked (fnil conj #{}) pos))) m sealed))
 
 (defn retry-walks
   "m with the cells given up for a walk opened again (given-up and :walk-given dropped, :retries counted): those the body

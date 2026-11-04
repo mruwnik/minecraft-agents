@@ -139,16 +139,26 @@
 (defn rock-bound?
   "Whether rock holds cell in on every side: no air beside it to stand in or see it from (a face not loaded yet counts as
   open: it will load; a neighbour dug open is air). A face never seen counts as rock only once the cell is within
-  :reach of the body (it has walked up and looked): a cell farther off is walked to first, not tunnelled to."
-  [p cell]
+  :reach of the body (it has walked up and looked): a cell farther off is walked to first, not tunnelled to. With planned
+  (a set of positions), a face on one of them counts as rock too: nothing outside the plan opens onto the cell."
+  ([p cell] (rock-bound? p cell nil))
+  ([p cell planned]
   (let [[x y z] (:pos cell)
         near? (<= (u/eye-dist (u/pos-of (.-pos (.self p))) (:pos cell)) (plan/reach))
         solid? (fn [n] (let [b (u/sensed p (pos-map n))]
+                         (or (contains? planned n)
                          (and (some? b)
                               (if (true? (.-unknown b))
                                 near?
-                                (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b))))))))]
-    (every? solid? [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))
+                                (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b)))))))))]
+    (every? solid? [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]]))))
+
+(defn sealed-unseen
+  "The cells given up :unseen that only the plan's own cells open onto (rock-bound? counting them as rock): a floor under
+  a pocket the build cut, behind the plan's own lectern. No stand sees them, so they are taken as solid."
+  [p cells given-up]
+  (let [planned (into #{} (map :pos) cells)]
+    (filterv #(rock-bound? p % planned) (filter #(= :unseen (get given-up (:pos %))) cells))))
 
 (defn retreat-dists
   "{cell steps}: the open cells (as sensed) around the plan and mouth, by steps from mouth through open cells; a block
