@@ -26,6 +26,14 @@
     ;; a floored cell that stands is kept
     {:x 2 :y 64 :z 5 :px 2.5 :py 64 :pz 5.5} [2 64 5]))
 
+(def stair-down "a 1-wide stair of full blocks down along +z from the floor at z 4: tops y 63 (z 5), 62, 61, 60 (z 8), air round it"
+  [[2 56 5 2 63 8 "air"] [2 62 5 2 62 5 "stone"] [2 61 6 2 61 6 "stone"] [2 60 7 2 60 7 "stone"] [2 59 8 2 59 8 "stone"]])
+
+(deftest start-over-the-step-down-of-a-1-wide-stair-plans-from-the-block-that-holds-the-body
+  ;; the body's centre is 0.02 past the edge of the block it stands on (z 4), over the lower step's air; the box still rests on z 4
+  (is (= ["found" nil [2 64 4]]
+         (status+first (run (world {:fill stair-down}) (near 2 60 8) {} {:x 2 :y 64 :z 5 :px 2.5 :py 64 :pz 5.02})))))
+
 (deftest start-with-nothing-under-the-hitbox-is-not-standable
   (are [fill from] (= ["none" "start-not-standable"]
                       ((juxt :status :reason) (run (world {:fill fill}) (near 8 64 8) {} from)))
