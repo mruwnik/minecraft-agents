@@ -25,7 +25,6 @@
 
 (a/defargs settings
   {::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
-   ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
    ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, only a whole way back quoted no longer than cutting a stair down to it again is walked, else it starts a new stair where it stands." :spec (a/int-in 0 nil)}
    ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}
@@ -163,12 +162,12 @@
         (= :done (:status res)) (shaft-used! c res)
         :else (shaft-none! c (:reason res) (:shaft res) (:steps res))))))
 
-(defn own-stair-bottom
-  "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top within ::own-stair-reach of the
-  body and level with it (4 up or down), its bottom 3 or more below the feet and not below the tunnel level. {:cell [x y z] :heading name}, or nil."
+(defn ^:async own-stair-bottom
+  "The lowest stand of a stair this body cut earlier (memory :stair-way) worth walking down: its top level with the body (4 up or
+  down), its bottom 3 or more below the feet and not below the tunnel level, and go-to's whole way to the bottom no longer than cutting a
+  stair down to it (price/walk-back-worth?). {:cell [x y z] :heading name}, or nil."
   [c]
-  (let [p (u/self-pos c)
-        feet (cell-of p)
+  (let [feet (cell-of (u/self-pos c))
         dim (.-dimension (.self (:primitives c)))
         level (tunnel-level (:args c))
         stand (fn [[x y z]] [x (inc y) z])
@@ -176,12 +175,16 @@
                    :when (= dim (:dim (:data e)))
                    :let [floors (sort-by second (map stand (:floors (:data e))))
                          [bx by bz :as bottom] (first floors)
-                         [tx ty tz] (last floors)]
-                   :when (and bottom (<= (u/dist p {:x (+ tx 0.5) :y ty :z (+ tz 0.5)}) (settings/get settings ::own-stair-reach))
+                         [_ ty _] (last floors)]
+                   :when (and bottom
                               (<= (js/Math.abs (- ty (:y feet))) 4) (<= by (- (:y feet) 3)) (or (nil? level) (>= by level)))]
                {:cell bottom :heading (let [[nx _ nz] (second floors)]
                                         (some-> (get escape/heading-names [(- bx nx) (- bz nz)]) name))})]
-    (first (sort-by (comp second :cell) ways))))
+    (loop [[w & more] (sort-by (comp second :cell) ways)]
+      (when w
+        (if (await (price/walk-back-worth? c (:cell w) (stair-time/steps-s :down (- (:y feet) (second (:cell w))))))
+          w
+          (recur more))))))
 
 (defn ^:async reuse-stair!
   "Before the first cut of the stair down: a go-to child (slot :stair-own) down the stair this body cut earlier (own-stair-bottom),
@@ -191,7 +194,7 @@
         {:keys [state cell heading]} (:own-stair d)]
     (cond
       (or (:top d) (contains? #{:none :done :failed} state)) nil
-      (nil? state) (let [way (own-stair-bottom c)]
+      (nil? state) (let [way (await (own-stair-bottom c))]
                      (ctx/emit! c :mine.stair-plan :info (if way
                                                           {:own-stair (:cell way) :text (str "mine walks down its stair at " (str/join "," (:cell way)) " and goes on from its foot")}
                                                           {:text "mine cuts a new stair down"}))
