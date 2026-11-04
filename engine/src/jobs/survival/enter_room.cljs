@@ -81,14 +81,17 @@
     (->> starts (remove #(refused-door? (:door %))) (map :pos))))
 
 (defn nearest-seen
-  "{:pos} of the first closed room behind a door the body has seen, nil when none; a room whose inside is not seen yet counts
-  (the walk shows it), but only when no door side is a known closed room (the open ground outside a door reads unseen too).
-  Door order, not price: the night picks by go-to's quotes (night/walkable-home). Read-only (a quote runs this), so nothing is cached."
+  "{:pos} of the closed room behind a door the body has seen that it walks to in fewest steps over the blocks it has seen
+  (a room it finds no walk to last), nil when none; a room whose inside is not seen yet counts (the walk shows it), but
+  only when no door side is a known closed room (the open ground outside a door reads unseen too). Read-only (a quote
+  runs this), so nothing is cached."
   [c]
   (let [p (:primitives c)
-        poses (seen-poses c)]
-    (some->> (or (first (filter #(room-lib/refuge-room? p %) poses))
-                 (first (filter #(reach-room/unseen-room? p %) poses)))
+        poses (seen-poses c)
+        feet (sh-sense/feet p)
+        by-steps (fn [ps] (first (sort-by #(or (reach-room/walk-steps p feet %) ##Inf) ps)))]
+    (some->> (or (by-steps (filter #(room-lib/refuge-room? p %) poses))
+                 (by-steps (filter #(reach-room/unseen-room? p %) poses)))
              (hash-map :pos))))
 
 (defn unclosable?

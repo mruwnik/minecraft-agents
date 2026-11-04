@@ -112,13 +112,13 @@
 
 
 (defn home-door
-  "The door of the home room (jobs.lib.reach.room/room) that stands open and has not been clicked this flight, or nil."
+  "The door of the home room (jobs.lib.reach.room/room) that stands open and has not been clicked this flight that the body walks to inside it in fewest steps, or nil."
   [c room]
   (let [clicked (:doors-clicked (ctx/mem c) #{})]
     (->> (:doors room)
          (filter #(fill/open-openable (:primitives c) (:cell %)))
          (remove #(clicked (door-key (:cell %))))
-         (sort-by #(u/dist (u/self-pos c) (room-lib/mid (:cell %))))
+         (sort-by #(or (reach-room/walk-steps (:primitives c) (sh-sense/feet (:primitives c)) (:inside %)) ##Inf))
          first)))
 
 (defn step-out-cell

@@ -198,3 +198,18 @@
         (let [{:keys [p]} (await (enter! (assoc (hut-world {:x 5 :y 64 :z 6} {}) :states open-door-states) {:at {:x 5 :y 64 :z 1} :flee? true}))]
           (is (< (:z (st/pos-of p)) 2) "inside the hut, no home remembered")
           (is (false? (door-open? p)) "the door is shut"))))))
+
+(defn shifted [m dx dz]
+  (into {} (for [[k v] m :let [[x y z] (map js/Number (.split k ","))]] [(str (+ x dx) "," y "," (+ z dz)) v])))
+
+(deftest with-no-home-the-closed-room-seen-that-is-walked-to-in-fewest-steps-is-entered-not-the-nearer-door-behind-a-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (hut-world {:x 5 :y 64 :z 8} {})
+              world (-> (hut-world {:x 5 :y 64 :z 8} {})
+                        (update :blocks merge (shifted (:blocks far) 12 12) (tu/box -30 64 5 30 66 5 "stone"))
+                        (assoc :floor [-30 -10 40 30])
+                        (update :states merge open-door-states (shifted open-door-states 12 12)))
+              {:keys [p]} (await (enter! world {}))]
+          (is (> (:z (st/pos-of p)) 9) "in the far hut, not walked round the wall to the near one"))))))
