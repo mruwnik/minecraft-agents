@@ -109,8 +109,8 @@
   [self]
   (and (foods/fragile? self) (< (.-food self) foods/top-up-food)))
 
-(defn back-death-cost
-  "Seconds the death coming back online to the spot the body leaves risks: route-death-cost of the spot held ::return-s
+(defn back-death
+  "{:chance :death} of the death coming back online to the spot the body leaves: route-death of the spot held ::return-s
   with the mobs met spawning there by its light (spawn-light/spawns-at, as the stay price counts them) and the known threats (threats/threats-of: sensed, heard counting as seen, fled from or met at a death): one
   whose field holds the spot counts in full, it has the whole stint to walk there, and costs the answer the body would
   take to it there (walling in for the night when it carries blocks: shut-in/covers)."
@@ -119,8 +119,14 @@
         at (u/pos-of (.-pos (.self p)))
         body (assoc (threats/death-body c) :covers (shut-in/covers (assoc c :args {:for :night}) [:walls]))
         secs (settings/get settings ::return-s)]
-    (cost/route-death-cost body {:cells [(assoc at :s secs)] :spawns (spawn-light/spawns-at p at secs)
-                                 :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))} at)))
+    (cost/route-death body {:cells [(assoc at :s secs)] :spawns (spawn-light/spawns-at p at secs)
+                            :threats (mapv (fn [{:keys [reach] :as t}] (assoc t :reach #(when (reach %1 %2 %3) 1))) (threats/threats-of c))
+                            :at at})))
+
+(defn back-death-cost
+  "Seconds the death of back-death costs: its chance x death."
+  [c]
+  (let [{:keys [chance death]} (back-death c)] (if (pos? chance) (* chance death) 0)))
 
 (defn away-ms
   "How long the stint lasts: till morning, so the sleepers' night is not cut by a short check-back."
@@ -131,7 +137,7 @@
   (let [s (if (staying? c)
             (/ (max 0 (- (stay-deadline c) (ctx/now c))) 1000)
             (/ (+ (away-ms c) (:news-ms (:args c))) 1000))]
-    {:uses {:job-time [0 s s]}}))
+    {:uses {:job-time [0 s s]} :death (back-death c)}))
 
 (defn ^:async log-out! [c]
   (let [assumed (not (sh-sleepers/asleep-known? (:primitives c) (ctx/view c)))
