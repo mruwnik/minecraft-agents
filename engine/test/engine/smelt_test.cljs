@@ -1109,7 +1109,7 @@
       (fn ^:async t []
         (let [[r p] (await (fetched-run {:blocks {"20,64,0" "furnace" "-2,64,3" "crafting_table"} :unreachable ["20,64,0"]
                                          :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}
-                                         :inventory (conj iron-and-coal {:name "cobblestone" :count 8})}
+                                         :inventory (conj iron-and-coal {:name "cobblestone" :count 9})}
                                         {:item "raw_iron" :count 3}))]
           (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
           (is (= 1 (count (remove #(= (fake/parse-cell "20,64,0") (key %)) (furnaces-at p))))))))))
@@ -1156,6 +1156,18 @@
                                              #(mem/write! (:store %) :furnace {:pos {:x 6 :y 64 :z 0}} mem/place-policy)))]
           (is (= {:x 6 :y 64 :z 0} (:furnace (first (of-kind seen :smelt.furnace))))
               "the walk (1.8 s) is within the put-down allowance, which a carried furnace's make-cost of 0 alone would not cover"))))))
+
+(deftest a-seen-furnace-nine-blocks-off-is-walked-to-though-cobblestone-for-one-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"-9,64,0" "furnace"}
+                                         :inventory (conj iron-and-coal {:name "cobblestone" :count 16} {:name "crafting_table" :count 1})}
+                                        {:item "raw_iron" :count 3}))
+              carried (into {} (map (juxt :name :count)) (:inventory @(fake/state p)))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
+          (is (= 1 (count (furnaces-at p))) "no second furnace was made")
+          (is (= 16 (carried "cobblestone"))))))))
 
 (deftest no-furnace-to-be-had-says-why-the-fetch-failed
   (async done

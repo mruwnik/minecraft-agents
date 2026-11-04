@@ -85,18 +85,17 @@
     (or (pos? (storage/carried inv "furnace")) (>= (storage/carried inv "cobblestone") 8))))
 
 (defn make-cost
-  "What a furnace of its own costs, counting only what is missing: 0 with one carried, else the cobblestone short of 8 and,
+  "What a furnace of its own costs: 0 with one carried, else the 8 cobblestone it eats (carried or not, it is worth what it is) and,
   with no table carried or seen within 64, the table with the logs it is made of, a trip up to `surface-dy` blocks off when none are carried."
   [c surface-dy]
   (let [inv (carried c)
         have (fn [pred] (transduce (comp (filter #(pred (:name %))) (map :count)) + 0 inv))
-        stone-short (max 0 (- 8 (have #{"cobblestone" "cobbled_deepslate"})))
         table? (or (pos? (storage/carried inv "crafting_table")) (crafting-table/nearest (:primitives c) 64))
         wood-short? (< (+ (have #(str/ends-with? % "_planks")) (* 4 (have #(str/ends-with? % "_log")))) 4)
         value (fn [name n] (if (pos? n) (:value (cost/item-value [{:name name :count n}])) 0))]
     (if (pos? (storage/carried inv "furnace"))
       0
-      (+ (value "cobblestone" stone-short)
+      (+ (value "cobblestone" 8)
          (if (or table? (not wood-short?)) 0 (+ (value "crafting_table" 1) (:cost (cost/walk-cost {:distance surface-dy}))))))))
 
 (defn walk-beats-own?
