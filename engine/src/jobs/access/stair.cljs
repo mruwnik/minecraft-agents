@@ -297,8 +297,6 @@
             (some #(when-let [b (block-at %)] (not (bs/air b))) cut))) :again
       :else {:reason :step-failed :cell next-feet})))
 
-(def return-ways "A cliff between the body and its stair is dug through, as a player with a pickaxe would; no stair or pillar inside a stair." #{:walk :clear-seal :clear-path})
-
 (defn ^:async return!
   "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of
   step at-step, at most max-returns times per call, when within return-reach or go-to quotes a whole way back no longer
@@ -309,16 +307,19 @@
         {:keys [origin at-step returns]} (ctx/mem c)
         cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))
         redo-s (stair-time/steps-s dir (or at-step 0))]
-    (when (and (< (or returns 0) (max-returns))
-               (or (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach))
-                   (await (price/walk-back-worth? c cell redo-s return-ways))))
-      (let [r (await (child/call-walk* c :return (ready/forage-walk c (assoc (child/walk-into-args :return cell) :ways return-ways))))]
+    (when (< (or returns 0) (max-returns))
+     (let [worth (or (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach))
+                     (await (price/walk-back-worth? c (child/walk-back-args :return cell) redo-s)))]
+      (cond
+       (= :searching worth) :continue
+       worth
+      (let [r (await (child/call-walk* c :return (ready/forage-walk c (child/walk-back-args :return cell))))]
         (when-not (= :continue r)
           (ctx/update-mem! c update :returns (fnil inc 0))
           (let [arrived (= cell (reach/standing-vec (:primitives c)))]
             (ctx/emit! c :stair.return :info {:to cell :arrived arrived
                                               :text (str "stair " (if arrived "walked back onto" "could not walk back onto") " its line at " (pr-str cell))})))
-        (if (= :continue r) :continue :again)))))
+        (if (= :continue r) :continue :again)))))))
 
 (def landing-hp "hp a falling block that lands on the body costs: suffocation, 1 hp a half second, for the second a dig out takes." 2)
 

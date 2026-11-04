@@ -122,7 +122,12 @@
 
 (defn ^:async walk-back-worth?
   "Whether walking back to cell ([x y z]) to go on with a job there costs less than redo-s seconds of its work done again
-  where the body stands: go-to quotes a whole route there taking no longer, by `ways` (the walk's own, default all)."
-  [c cell redo-s ways]
-  (let [r (:route (await (ctx/quote c 'jobs.movement.go-to (cond-> {:pos (zipmap [:x :y :z] cell) :range 0} ways (assoc :ways ways)))))]
-    (boolean (and (:found r) (number? (:seconds r)) (<= (:seconds r) redo-s)))))
+  where the body stands: go-to quotes a route there (its mean job-time, a dig priced in) taking no longer, by the ways of the walk's own args
+  (jobs.lib.child/walk-back-args). true / false, or :searching while go-to's quote search goes on (ask again next round)."
+  [c walk-args redo-s]
+  (let [q (await (ctx/quote c 'jobs.movement.go-to (-> (select-keys walk-args [:range :ways])
+                                                      (assoc :pos (zipmap [:x :y :z] (:pos walk-args))))))
+        mean (second (:job-time (:uses q)))]
+    (cond
+      (= :searching (:reason (:route q))) :searching
+      :else (boolean (and (number? mean) (<= mean redo-s))))))

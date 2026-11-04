@@ -344,6 +344,18 @@
           (is (seq (events-of s :mine.left-zone)))
           (is (= [[4 60 0]] (map :own-stair (events-of s :mine.stair-plan)))))))))
 
+(deftest the-descent-digs-through-a-cliff-to-the-stair-it-cut-earlier
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge (stair-down-east 4) (cells "stone" (range -3 -2) (range 64 71) (range -3 4)))
+                                :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
+                                :self {:pos [-4.5 64 0.5]}}})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false}) {})
+          (await (run-ticks s 120))
+          (is (= [4 60 0] (:own-stair (first (events-of s :mine.stair-plan)))) "the walk down the old stair is priced as a route through the cliff"))))))
+
 (deftest a-plain-dig-is-not-moved-from-a-building
   (async done
     (tu/run-async done

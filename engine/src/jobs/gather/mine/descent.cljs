@@ -182,9 +182,11 @@
                                         (some-> (get escape/heading-names [(- bx nx) (- bz nz)]) name))})]
     (loop [[w & more] (sort-by (comp second :cell) ways)]
       (when w
-        (if (await (price/walk-back-worth? c (:cell w) (stair-time/steps-s :down (- (:y feet) (second (:cell w)))) nil))
-          w
-          (recur more))))))
+        (let [worth (await (price/walk-back-worth? c (child/walk-back-args :stair-own (:cell w)) (stair-time/steps-s :down (- (:y feet) (second (:cell w))))))]
+          (cond
+            (= :searching worth) :searching
+            worth w
+            :else (recur more)))))))
 
 (defn ^:async reuse-stair!
   "Before the first cut of the stair down: a go-to child (slot :stair-own) down the stair this body cut earlier (own-stair-bottom),
@@ -195,12 +197,14 @@
     (cond
       (or (:top d) (contains? #{:none :done :failed} state)) nil
       (nil? state) (let [way (await (own-stair-bottom c))]
-                     (ctx/emit! c :mine.stair-plan :info (if way
+                     (if (= :searching way)
+                       :continue
+                       (do (ctx/emit! c :mine.stair-plan :info (if way
                                                           {:own-stair (:cell way) :text (str "mine walks down its stair at " (str/join "," (:cell way)) " and goes on from its foot")}
                                                           {:text "mine cuts a new stair down"}))
                      (ctx/update-mem! c assoc-in [:descent :own-stair] (if way (assoc way :state :walking) {:state :none}))
-                     :again)
-      :else (let [r (await (child/walk-into!* c :stair-own cell))]
+                     :again)))
+      :else (let [r (await (child/call-walk* c :stair-own (child/walk-back-args :stair-own cell)))]
               (cond
                 (= :continue r) :continue
                 (not= cell (access/cell (cell-of (u/self-pos c)))) (do (ctx/update-mem! c assoc-in [:descent :own-stair :state] :failed) :again)
@@ -217,16 +221,20 @@
   (let [{:keys [at top]} (:descent (ctx/mem c))
         cell (or at top)]
     (when (and cell (nil? (get-in (ctx/mem c) [:children :stair])) (not= cell (access/cell (cell-of (u/self-pos c)))))
-      (if (and (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
-               (not (await (price/walk-back-worth? c cell (stair-time/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1)))) nil))))
+      (let [far? (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
+            worth (when far? (await (price/walk-back-worth? c (child/walk-back-args :stair-back cell) (stair-time/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1)))))))]
+       (cond
+        (= :searching worth) :continue
+        (and far? (not worth))
         (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair at " (str/join "," cell) " is dearer to walk back to than a new stair; it starts a new stair here")})
             (ctx/update-mem! c update :descent dissoc :top :at)
             nil)
-        (let [r (await (child/walk-into!* c :stair-back cell))]
+        :else
+        (let [r (await (child/call-walk* c :stair-back (child/walk-back-args :stair-back cell)))]
           (cond
             (= :continue r) :continue
             (= cell (access/cell (cell-of (u/self-pos c)))) nil
-            :else cell))))))
+            :else cell)))))))
 
 (defn move-goal
   "The next spot for a blocked stair start: a cell move-reach (+4 per earlier move) from the body along a heading, dry as far as seen,
