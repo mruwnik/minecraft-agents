@@ -390,13 +390,13 @@
                            (fn ^:async q [c]
                              (swap! asked conj (vec (:pos (:args c))))
                              (if (= 1 (count @asked))
-                               {:kind :nothing-possible :cause :stuck}
+                               {:uses {:job-time [5 9 ##Inf]} :route {:found false :reason :searching}}
                                (await ((:quote-of real) c)))))
               s (setup {:blocks ground} {:target [6 57 0]} (fn [_]) :jobs {'jobs.movement.go-to go-to})
               {:keys [out]} (await (tick-out! s))]
           (is (= :reached (:reason @out)) (pr-str @out))
           (is (<= 2 (count @asked)))
-          (is (not= (first @asked) (second @asked)) "the entry no route reaches is not quoted again"))))))
+          (is (not= (first @asked) (second @asked)) "an entry with only an estimate (no route found) is not quoted again"))))))
 
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
 

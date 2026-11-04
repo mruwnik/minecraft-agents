@@ -348,7 +348,7 @@
            :cell-s (fn [n cell] (+ (or (when n (cost/dig-cost n)) 0) (destroyed n cell false))))))
 
 (defn ^:async approach-walkable!
-  "The line to cut (ln/approach), its entry one go-to quotes a walk to: an entry no route reaches (the top of a roof just
+  "The line to cut (ln/approach), its entry one go-to quotes a walk to: an entry the planner finds no route to (a search still going on counts: the top of a roof just
   placed, one block up) is set aside and the next line chosen. The walk is quoted for the chosen line only."
   [c in target feet max-length accept]
   (loop [in in]
@@ -356,7 +356,7 @@
                                   {:retry? #(not (:entry %)) :price (sense/fails-to c #(sense/walk-between-s % target))}))
           entry (:entry a)]
       (if (and entry (not= entry feet) (not (ln/far-entry? a feet))
-               (= ##Inf (walk-pick/quoted-s c (await (walk-pick/quote! c (child/walk-into-args :in entry))))))
+               (not (:found (:route (await (walk-pick/quote! c (child/walk-into-args :in entry)))))))
         (recur (update in :avoid-entries (fnil conj #{}) entry))
         a))))
 
