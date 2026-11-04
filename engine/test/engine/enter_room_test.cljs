@@ -2,6 +2,7 @@
   "jobs.survival.enter-room: walk into the home (or stay in the roofed room the body is in), shut its open door, fill its
   doorway; end for what it cannot do."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.contract :as contract]
             [engine.core :as core]
             [engine.events :as events]
             [jobs.lib.world-files :as ew]
@@ -11,6 +12,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
+            [jobs.lib.walk-risk :as risk]
             [jobs.survival.enter-room :as enter-room]
             [engine.test-util :as tu]))
 
@@ -64,6 +66,7 @@
           (is (< (:z (st/pos-of p)) 2) "inside the hut")
           (is (false? (door-open? p)) "the door is shut"))))))
 
+;; go-to's walk price (risk/status) says :later when the walk costs more than waiting; a zombie by the way is priced, not gated.
 (deftest a-listed-enter-room-waits-while-go-to-says-later
   (async done
     (tu/run-async done
@@ -71,9 +74,11 @@
         (let [{:keys [eng seen]} (st/setup (assoc (hut-world {:x 5 :y 64 :z 6} {}) :time st/night
                                                   :entities [{:id 8 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 3} :health 20}]))]
           (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
-          (core/submit! eng '(jobs.survival.enter-room {}) {})
-          (await (tu/run-until-empty eng 5))
-          (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+          (with-redefs [risk/status (let [r #(contract/later :risky "test: the walk costs more than waiting" :recheck-after-ms 1000)]
+                                      (fn ([_ _] (r)) ([_ _ _] (r))))]
+            (core/submit! eng '(jobs.survival.enter-room {}) {})
+            (await (tu/run-until-empty eng 5)))
+          (is (= [:risky] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end no-walk"))))))
 
 (def stones st/dirt-stack)
