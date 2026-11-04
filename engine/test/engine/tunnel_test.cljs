@@ -39,6 +39,13 @@
         [x y z] stand]
     [(+ x dx) y (+ z dz)]))
 
+(deftest an-avoided-entry-starts-no-line
+  (let [in {:heading-reads reads-per-heading :block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}}
+        first-line (ln/approach in [0 60 0] [0 65 0] 24 #{})
+        again (ln/approach (assoc in :avoid-entries #{(:entry first-line)}) [0 60 0] [0 65 0] 24 #{})]
+    (is (some? (:entry again)))
+    (is (not= (:entry first-line) (:entry again)))))
+
 (deftest a-long-approach-reads-the-world-for-the-near-entries-only
   (let [reads (atom 0)
         block-at (fn [cell] (swap! reads inc) ((world-fn {}) cell))

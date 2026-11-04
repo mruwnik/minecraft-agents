@@ -153,7 +153,8 @@
   "The plans along heading with an entry n before the target, n in ns, in order. Lazy, so ns unchunked: a caller that
   stops at the first clear line reads no column past it."
   [in target heading ns max-length feet]
-  (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) ns))
+  (remove #(contains? (:avoid-entries in) (:entry %))
+          (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) ns)))
 
 (defn walk-in-ns
   "The entry distances n whose entry column lies within walk-in-max of feet: the only lines far-entry? lets win by being near."
