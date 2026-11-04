@@ -137,7 +137,8 @@
       (let [w (await (near/go-near! c pos 3))]
         (case w
           :partial :continue
-          :blocked (or (await (near/risky-wait! c w)) (do (furnace/forget-cooking! c pos) nil))
+          :blocked (or (await (near/risky-wait! c w))
+                      (do (when-not (near/risky-stay? c) (furnace/forget-cooking! c pos)) nil))
           (let [r (js->clj (await (ctx/act c :furnace (clj->js {:pos pos :op "take"}))) :keywordize-keys true)
                 got (reduce + 0 (map :count (:taken r)))]
             (cond

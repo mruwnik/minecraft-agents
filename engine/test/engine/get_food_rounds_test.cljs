@@ -684,6 +684,14 @@
           (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
           (is (seq (calls p "attack")) "the note's cell is seen empty: the one in sight is alone and is hunted"))))))
 
+(deftest a-hungry-hurt-body-hunts-a-lone-cow-in-sight-at-noon
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :perceive? true)]
+          (await (one-round! eng {:settings {:jobs.lib.combat/attack-gap-ms 0}}))
+          (is (seq (calls p "attack")) "a cow in plain daylight is hunted at food 8"))))))
+
 (deftest a-noted-cow-whose-cell-is-in-view-with-no-cow-there-is-not-walked-toward
   (async done
     (tu/run-async done
@@ -1013,7 +1021,7 @@
                                    (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
           (set! child/pause! (fn [c seconds why] (swap! pauses inc) (pause c seconds why)))
           (try
-            (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :worth 1e9}) {})
+            (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
             (await (run-until-idle! eng p 6))
             (is (pos? @pauses) "the refused stay is waited out")
             (is (= 1 (count (entries eng :smelt/cooking))) "the cooking is not forgotten")
