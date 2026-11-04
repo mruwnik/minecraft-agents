@@ -5,7 +5,7 @@
   (:require [clojure.string :as str]
             [jobs.lib.memory-age :as memory-age]
             [engine.perception.rays :as rays]
-            [jobs.lib.reach :refer [openable? open-prop? kind-of keyer passable? seen-standable? standing-cell
+            [jobs.lib.reach :refer [openable? open-prop? tall-block kind-of keyer passable? seen-standable? standing-cell
                                     forward backward search-steps world-kinds]]
             [jobs.lib.util :as u]))
 
@@ -228,13 +228,17 @@
      (when (and cells (not unseen?))
        (room-of p cells)))))
 
+(defn shut-kind
+  "kind-of block b with a door, gate or trapdoor shut: :solid, a gate :tall (a walker cannot step onto it)."
+  [b]
+  (cond (not (and b (openable? (.-name b)))) (kind-of b)
+        (re-find tall-block (.-name b)) :tall
+        :else :solid))
+
 (defn shut-kind-at
-  "kind-of over the blocks the body has seen, every door, gate and trapdoor shut."
+  "kind-of over the blocks the body has seen, every door, gate and trapdoor shut (shut-kind)."
   [p]
-  (memo-kind-at
-   (fn [x y z]
-     (let [b (u/seen-block p {:x x :y y :z z})]
-       (if (and b (openable? (.-name b))) :solid (kind-of b))))))
+  (memo-kind-at (fn [x y z] (shut-kind (u/seen-block p {:x x :y y :z z})))))
 
 (defn door-kind-at
   "kind-of over the blocks the body has seen, each door, gate and trapdoor as it stands."
@@ -346,11 +350,7 @@
   ([p pos] (unroofed-cell p pos nil))
   ([p {:keys [x y z]} shut]
    (let [kind-at (fn [cx cy cz]
-                   (let [b (u/seen-block p {:x cx :y cy :z cz})]
-                     (cond
-                       (contains? shut [cx cy cz]) :solid
-                       (and b (openable? (.-name b))) :solid
-                       :else (kind-of b))))
+                   (if (contains? shut [cx cy cz]) :solid (shut-kind (u/seen-block p {:x cx :y cy :z cz}))))
          roofed? (fn [cx cy cz] (some #(let [b (u/seen-block p {:x cx :y (+ cy %) :z cz})] (and b (not= :open (kind-of b))))
                                       (range 2 7)))
          {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)
