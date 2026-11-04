@@ -205,3 +205,8 @@
 (deftest a-partial-quote-over-unseen-floors-is-no-sign-the-bed-is-cut-off
   (is (true? (sleep/no-way-quote? {:found false :reason :partial})) "the way ends at the loaded edge")
   (is (not (sleep/no-way-quote? {:found false :reason :partial :unseen-floors true})) "the search only spent its nodes over land never seen"))
+
+(deftest a-walk-past-its-first-quotes-bound-without-a-whole-way-is-late
+  (is (true? (sleep/late-walk? {:found false :reason :partial :unseen-floors true} 1000 1001)) "past the first quote's bound with no whole way known")
+  (is (false? (sleep/late-walk? {:found false :reason :partial :unseen-floors true} 1000 999)) "within the bound")
+  (is (false? (sleep/late-walk? {:found true} 1000 1001)) "a whole way is known"))
