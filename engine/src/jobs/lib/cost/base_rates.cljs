@@ -169,21 +169,25 @@
   "The chance a cell a body whose feet are at height y has not seen is solid, dy blocks over the feet, d blocks
   (Chebyshev) from the nearest frontier cell (seen open beside unseen: where sight was cut by light or reach, not by a
   wall), that frontier lit (lit?, by perception's seeing rule) or dark, q the solid share of the cells the body has seen
-  within perception's :near of its eye (nil: none, pooled over q): the posterior mean of a Beta measured by casting the
-  body's sight over the recorded chunks (unseen_solid.json, node tools/event-counts.mjs unseen-solid), by bucket of q and
-  of dy (under the floor, the band the body walks in, above), linear in y between section centres."
-  [y dy d lit? q]
-  (let [{:keys [q-edges dy-edges]} unseen-data
-        qb (if (nil? q) (count q-edges) (count (filter #(>= q %) q-edges)))
-        dyb (count (filter #(>= dy %) dy-edges))
-        di (dec (-> d (max 1) (min unseen-d-max)))
-        key (str y "," dyb "," di "," lit? "," qb)]
-    (or (.get unseen-kept key)
-        (let [at [(if lit? :lit :dark) di qb dyb]
-              {:keys [a b]} (prior-at unseen-sections y #(first (get-in % at)) #(second (get-in % at)))
-              v (if (pos? (+ a b)) (/ a (+ a b)) 0.5)]
-          (.set unseen-kept key v)
-          v))))
+  within perception's :near of its eye (nil: none, pooled over q), beside-solid? whether a face neighbour of the cell is
+  seen solid (rock is clumped: likelier solid; nil pools both, as when the cell's neighbours are not asked): the posterior
+  mean of a Beta measured by casting the body's sight over the recorded chunks (unseen_solid.json, node tools/event-counts.mjs
+  unseen-solid), by bucket of q and of dy (under the floor, the band the body walks in, above), linear in y between
+  section centres."
+  ([y dy d lit? q] (unseen-solid y dy d lit? q nil))
+  ([y dy d lit? q beside-solid?]
+   (let [{:keys [q-edges dy-edges]} unseen-data
+         qb (if (nil? q) (count q-edges) (count (filter #(>= q %) q-edges)))
+         dyb (count (filter #(>= dy %) dy-edges))
+         di (dec (-> d (max 1) (min unseen-d-max)))
+         adj (cond (nil? beside-solid?) 2 beside-solid? 1 :else 0)
+         key (str y "," dyb "," di "," lit? "," qb "," adj)]
+     (or (.get unseen-kept key)
+         (let [at [(if lit? :lit :dark) di qb dyb adj]
+               {:keys [a b]} (prior-at unseen-sections y #(first (get-in % at)) #(second (get-in % at)))
+               v (if (pos? (+ a b)) (/ a (+ a b)) 0.5)]
+           (.set unseen-kept key v)
+           v)))))
 
 (defn open-run-chance
   "The chance n unseen cells in a row out from a frontier cell are all open, the i-th at 1 - unseen-solid at distance i

@@ -502,16 +502,21 @@
     (let [feet-lit (feet-lit? p) q (near-share p)]
       (fn
         ([cell-y d] (base-rates/unseen-solid y (- cell-y y) d feet-lit q))
-        ([cell-y d lit?] (base-rates/unseen-solid y (- cell-y y) d lit? q))))))
+        ([cell-y d lit?] (base-rates/unseen-solid y (- cell-y y) d lit? q))
+        ([cell-y d lit? beside-solid?] (base-rates/unseen-solid y (- cell-y y) d lit? q beside-solid?))))))
 
 (defn unseen-solid-at-fn
   "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-distance (1, the likeliest
-  open, without a memory), at its own height as the feet's, in the dark, without a perception."
+  open, without a memory), at its own height as the feet's, in the dark, without a perception. Given beside-solid? (a
+  second argument) the cell is asked as beside a seen solid cell or not, else pooled."
   [p]
-  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit?] (base-rates/unseen-solid y 0 d lit? nil)))]
-    (fn [[_ y _ :as cell]]
-      (let [d (or (frontier-distance p cell) 1)]
-        (solid-at y d (frontier-lit? p cell d))))))
+  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit? & [adj]] (base-rates/unseen-solid y 0 d lit? nil adj)))]
+    (fn
+      ([cell] (let [[_ y _] cell d (or (frontier-distance p cell) 1)]
+                (solid-at y d (frontier-lit? p cell d))))
+      ([[_ y _ :as cell] beside-solid?]
+       (let [d (or (frontier-distance p cell) 1)]
+         (solid-at y d (frontier-lit? p cell d) beside-solid?))))))
 
 (defn unseen-solid?-fn
   "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5); kept by

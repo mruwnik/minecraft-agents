@@ -276,10 +276,10 @@
 
 (defn shell-fails
   "The chance a dig of cells lays itself open through a cell beside, over or under them, outside keep, the body never
-  sensed (unsensed-cells): each is solid at look/unseen-solid-at-fn."
+  sensed (unsensed-cells): each is solid at look/unseen-solid-at-fn, as beside a dug cell (rock is clumped)."
   [p cells keep]
   (let [solid-at (sight/unseen-solid-at-fn p)]
-    (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at [x y z])))
+    (- 1 (reduce (fn [c {:keys [x y z]}] (* c (solid-at [x y z] true)))
                  1 (unsensed-cells p cells keep)))))
 
 (defn ^:async lays-open?

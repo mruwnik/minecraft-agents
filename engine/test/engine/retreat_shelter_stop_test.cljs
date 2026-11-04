@@ -66,22 +66,8 @@
                    (swap! clock + 300000))
                  (impl token a)))))
 
-(defn ^:async in-solid-rock
-  "(f)'s result with a dig's unsensed shell priced as solid rock (pit/shell-fails 0): the prior prices it near certain to
-  lay open, so the fight would always beat the pit or pocket these tests are about (card b288e74b)."
-  [f]
-  (let [fails pit/shell-fails]
-    (set! pit/shell-fails (constantly 0))
-    (try (await (f)) (finally (set! pit/shell-fails fails)))))
-
-(declare round* pit-round*)
-
 (defn ^:async round
-  "Submit the retreat over the world and run its first rounds (in-solid-rock); the primitives p."
-  [world args]
-  (await (in-solid-rock #(round* world args))))
-
-(defn ^:async round*
+  "Submit the retreat over the world and run its first rounds; the primitives p."
   [world args]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
@@ -177,12 +163,8 @@
   p)
 
 (defn ^:async pit-round
-  "The retreat over a plain with a skeleton beside, the body having seen only the surface (in-solid-rock); {:p primitives
+  "The retreat over a plain with a skeleton beside, the body having seen only the surface; {:p primitives
   :kinds event kinds :stood the block names of every cell the body's feet were in :feet-y where it ends}."
-  [world args]
-  (await (in-solid-rock #(pit-round* world args))))
-
-(defn ^:async pit-round*
   [world args]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
@@ -390,5 +372,5 @@
         n (pit/unsensed-shell p cells keep)
         fails (fn [d] (with-redefs [sight/frontier-distance (constantly d)] (pit/shell-fails p cells keep)))]
     (is (pos? n))
-    (is (> 1e-12 (Math/abs (- (- 1 (Math/pow (base-rates/unseen-solid 64 0 1 false nil) n)) (fails nil)))) "no memory: as near a frontier as can be")
+    (is (> 1e-12 (Math/abs (- (- 1 (Math/pow (base-rates/unseen-solid 64 0 1 false nil true) n)) (fails nil)))) "no memory: as near a frontier as can be")
     (is (> (fails 1) (fails 6)) "far from where sight was cut: more likely rock")))

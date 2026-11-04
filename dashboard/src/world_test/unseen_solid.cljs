@@ -2,7 +2,7 @@
   "tools/event-counts.mjs unseen-solid: counts the measured prior jobs.lib.cost.base-rates/unseen-solid from the recorded
   chunk columns (worlds/<world>/chunks): P(solid) of a cell a body standing there has not seen, by the section of the body's feet, the cell's
   Chebyshev distance d (1..d-max, farther as d-max) to the nearest frontier cell (seen open with an unseen face neighbour:
-  a sight ray cut by light or :near, not by a wall), whether that frontier is lit, the stand's q-bucket and the cell's height over the feet (dy-bucket). Sight as the body's (engine.perception):
+  a sight ray cut by light or :near, not by a wall), whether that frontier is lit, the stand's q-bucket, the cell's height over the feet (dy-bucket) and whether a face neighbour of the cell is seen solid (adj: a shell cell beside a dug one; rock is clumped, so such a cell is likelier solid; pooled-adj pools both). Sight as the body's (engine.perception):
   rays out to r blocks every way from the eye of each stand (open feet and head over a solid floor) of the sampled columns;
   a cell is made out when its light passes the visible table by day or it lies within near; a sight-blocking cell is lit by
   the brighter of itself and the cell before it and ends the ray. Solid is the engine's (jobs.lib.walk.rock/open-ids).
@@ -155,27 +155,41 @@
 (defn dy-bucket "The dy-edges bucket (0..2) of height dy over the feet." [dy] (count (filter #(>= dy %) dy-edges)))
 
 (def pooled-q "The q bucket index that pools every q." (inc (count q-edges)))
+(def pooled-adj "The adj index that pools both." 2)
+
+(defn- beside-seen-solid?
+  "Whether a face neighbour of cell i (x y z) is a seen solid cell."
+  [^js solid ^js seen x y z]
+  (loop [f 0]
+    (and (< f 6)
+         (or (let [^js o (aget faces f) nx (+ x (aget o 0)) ny (+ y (aget o 1)) nz (+ z (aget o 2))]
+               (and (< -1 nx side) (< -1 ny side) (< -1 nz side)
+                    (let [j (idx nx ny nz)] (and (== 1 (aget seen j)) (== 1 (aget solid j))))))
+             (recur (inc f))))))
 
 (defn tally
   "{[section-y d lit? q-bucket dy-bucket] {:solid n :open n}} of the unseen loaded cells of the box round feet y (world
   height) that have a frontier, section-y and q-bucket the stand's (its feet's section, near-share: the body asks about
-  cells round it), each also under q-bucket pooled-q."
+  cells round it), each also under q-bucket pooled-q and adj pooled-adj."
   [^js b ^js seen ^js dist y]
   (let [^js solid (.-solid b) ^js loaded (.-loaded b) ^js d (.-d dist) ^js lit (.-lit dist)
         qb (q-bucket (near-share b seen))
         ;; [d 1..d-max][dy bucket][lit][solid]
-        counts (js/Int32Array. (* d-max 3 4))]
+        counts (js/Int32Array. (* d-max 3 8))]
     (dotimes [i n3]
       (when (and (== 1 (aget loaded i)) (zero? (aget seen i)) (pos? (aget d i)))
-        (let [at (+ (* 12 (dec (min d-max (aget d i)))) (* 4 (dy-bucket (- (quot i (* side side)) r))) (* 2 (aget lit i)) (aget solid i))]
+        (let [x (mod i side) z (mod (quot i side) side) y (quot i (* side side))
+              adj (if (beside-seen-solid? solid seen x y z) 1 0)
+              at (+ (* 24 (dec (min d-max (aget d i)))) (* 8 (dy-bucket (- y r))) (* 4 (aget lit i)) (* 2 adj) (aget solid i))]
           (aset counts at (inc (aget counts at))))))
     (into {}
-          (for [dd (range 1 (inc d-max)) dyb (range 3) l [0 1]
-                :let [at (+ (* 12 (dec dd)) (* 4 dyb) (* 2 l))
-                      open (aget counts at) solid (aget counts (inc at))]
+          (for [dd (range 1 (inc d-max)) dyb (range 3) l [0 1] adj [0 1 pooled-adj]
+                :let [at (fn [a] (+ (* 24 (dec dd)) (* 8 dyb) (* 4 l) (* 2 a)))
+                      open (if (= adj pooled-adj) (+ (aget counts (at 0)) (aget counts (at 1))) (aget counts (at adj)))
+                      solid (if (= adj pooled-adj) (+ (aget counts (inc (at 0))) (aget counts (inc (at 1)))) (aget counts (inc (at adj))))]
                 :when (pos? (+ open solid))
                 q [qb pooled-q]]
-            [[(* 16 (js/Math.floor (/ y 16))) dd (== 1 l) q dyb] {:solid solid :open open}]))))
+            [[(* 16 (js/Math.floor (/ y 16))) dd (== 1 l) q dyb adj] {:solid solid :open open}]))))
 
 (def visible-by-day (light/visible-table 1 0.2))
 
@@ -209,23 +223,23 @@
 
 (defn report
   "Of chunk tallies: {:q-edges :dy-edges :sections [{:y :lit :dark :n-lit :n-dark}]}, :lit and :dark per d 1..d-max per
-  q-bucket (the last pooled-q) per dy-bucket the Beta pseudo-counts [solid open] fitted by moments over the chunks with
+  q-bucket (the last pooled-q) per dy-bucket per adj (0, 1, pooled-adj) the Beta pseudo-counts [solid open] fitted by moments over the chunks with
   at least min-n cells of the bucket (fit-of); a bucket fitted over fewer than min-chunks chunks takes its pooled-q fit."
   [tallies min-n]
   (let [ys (sort (distinct (map first (mapcat keys tallies))))
         fit (fn [k] (fit-of (map #(get % k {:solid 0 :open 0}) tallies) min-n))
-        one (fn [y d lit qb dyb]
-              (let [f (fit [y d lit qb dyb])]
-                (if (or (= qb pooled-q) (>= (:chunks f) min-chunks)) f (fit [y d lit pooled-q dyb]))))]
+        one (fn [y d lit qb dyb adj]
+              (let [f (fit [y d lit qb dyb adj])]
+                (if (or (= qb pooled-q) (>= (:chunks f) min-chunks)) f (fit [y d lit pooled-q dyb adj]))))]
     {:q-edges q-edges
      :dy-edges dy-edges
      :sections (vec (for [y ys]
                       (into {:y y}
                             (for [[lit k] [[true :lit] [false :dark]]
                                   :let [fits (vec (for [d (range 1 (inc d-max))]
-                                                    (vec (for [qb (range (inc pooled-q))] (vec (for [dyb (range 3)] (one y d lit qb dyb)))))))]
-                                  [k' f] [[k (mapv (fn [by-q] (mapv #(mapv :prior %) by-q)) fits)]
-                                          [(keyword (str "n-" (name k))) (mapv (fn [by-q] (mapv #(mapv :n %) by-q)) fits)]]]
+                                                    (vec (for [qb (range (inc pooled-q))] (vec (for [dyb (range 3)] (vec (for [adj (range 3)] (one y d lit qb dyb adj)))))))))]
+                                  [k' f] [[k (mapv (fn [by-q] (mapv #(mapv (fn [by-dy] (mapv :prior by-dy)) %) by-q)) fits)]
+                                          [(keyword (str "n-" (name k))) (mapv (fn [by-q] (mapv #(mapv (fn [by-dy] (mapv :n by-dy)) %) by-q)) fits)]]]
                               [k' f]))))}))
 
 (defn count-in
