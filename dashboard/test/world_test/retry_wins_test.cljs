@@ -118,11 +118,14 @@
     (is (= {:won 1 :retries 1 :calls 1} (select-keys (:walk (r/report rows)) [:won :retries :calls])) "a call that never re-planned is kept")
     (is (nil? (:go-to-mark (r/report rows))))))
 
-(deftest folded-rows-keep-a-rotated-logs-tries-and-count-a-reread-row-once
+(deftest folded-summaries-keep-a-rotated-logs-calls-and-count-a-reread-call-once
   (let [rows (fn [job] (keep r/scan-line [(walk job 0 false) (walk job 4000 true)]))
-        tag (fn [b rs] (map vector (repeat b) rs))
-        once (r/fold {:retry-rows #{}} (tag "A" (rows "j1/go-to")))
-        again (r/fold once (concat (tag "A" (rows "j1/go-to")) (tag "B" (rows "j2/go-to"))))]
-    (is (= 2 (count (:retry-rows once))) "a re-read of the same log adds nothing")
-    (is (= 4 (count (:retry-rows again))) "a second body's rows join the first's")
-    (is (= 2 (:retries (:walk (r/report (map second (:retry-rows again)))))) "the rows of a log read earlier still count when it is gone")))
+        sm (fn [b job] {b (r/summarize (rows job))})
+        walk-of #(select-keys (:walk (r/report (:retry-wins %))) [:won :retries :calls :try-s])
+        once (r/fold {:retry-wins {}} (sm "A" "j1/go-to"))
+        again (r/fold once (merge (sm "A" "j1/go-to") (sm "B" "j2/go-to")))
+        rotated (r/fold again (sm "B" "j2/go-to"))]
+    (is (= (:walk (r/report (rows "j1/go-to"))) (:walk (r/report (:retry-wins once)))) "a fold reports what the rows report")
+    (is (= {:won 1 :retries 1 :calls 1 :try-s 4} (walk-of once)))
+    (is (= {:won 2 :retries 2 :calls 2 :try-s 4} (walk-of again)) "a re-read call adds nothing, a second body joins")
+    (is (= (walk-of again) (walk-of rotated)) "A's log is gone, its calls stay")))

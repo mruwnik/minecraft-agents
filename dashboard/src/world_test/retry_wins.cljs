@@ -1,6 +1,6 @@
 (ns world-test.retry-wins
   "tools/event-counts.mjs retry-wins: counts the measured priors behind jobs.lib.cost.value ::retry-counts from the bodies'
-  logs, folded into the counts file's :retry-rows (a rotated log's rows stay; probe bodies are left out by the caller): per retry kind, the tries that followed a failed try of the same kind in the same job (a generation's
+  logs, folded into the counts file's :retry-wins (per body, kind and call: tries, won, seconds; a rotated log's calls stay; probe bodies are left out by the caller): per retry kind, the tries that followed a failed try of the same kind in the same job (a generation's
   job id), won or failed again, fitted as a Beta prior over the calls' shares (field-passes/beta-fit; the uniform [1 1]
   with none), and :try-s, the mean seconds from a failed try's end to the next try's end (with no retry, the mean seconds of
   one try, start to end). Kinds (`kinds`): :craft the craft action (a timeout fails), :furnace the furnace action (a busy
@@ -84,11 +84,6 @@
         first-child (reduce min ##Inf (keep #(when (:child? %) (:t %)) rows))]
     (remove #(and (#{:walk :walk-round} (:kind %)) (< last-result (:t %) first-child)) rows)))
 
-(defn fold
-  "counts with the [body row] pairs added to :retry-rows, a set: a row read again from a log that was not rotated yet is the same row."
-  [counts rows]
-  (update counts :retry-rows into rows))
-
 (defn- go-to-ends
   "The :walk rows of the scanned rows once: an end from the root go-to or a child_ended duplicates a :result within a second
   of it (logs of 2026-10-14 to 19 hold both); a child_ended counts only for a job id that has any go-to.* event (other jobs'
@@ -119,44 +114,72 @@
                           (sort-by :t rs))))
           (group-by :key (filter #(and (#{:walk :walk-round} (:kind %)) (= :end (:edge %))) rows))))
 
-(defn- try-s
-  "The mean seconds of one try: start to end of each action's pair."
+;; a try-s part is [seconds tries]
+(defn- timed
+  "[seconds n] of the tries start to end of each action's pair."
   [rows]
   (let [starts (into {} (keep #(when (= :start (:edge %)) [(:action %) (:t %)])) rows)
         ss (keep #(when-let [s (and (= :end (:edge %)) (starts (:action %)))] (/ (- (:t %) s) 1000)) rows)]
-    (when (seq ss) (/ (reduce + ss) (count ss)))))
+    [(reduce + 0 ss) (count ss)]))
+
+(defn summarize
+  "One body's scanned rows -> {kind {:calls {key {:tries :won :s}} :timed [s n]}}: what report needs of them, small enough to keep
+  in the counts file (the key is [generation job-id ...], a call). The walk-round calls are kept apart from the pooled fit by kind."
+  [rows]
+  (let [rows (go-to-ends rows)
+        rows (concat (remove #(= :walk-round (:kind %)) rows) (rounds rows))]
+    (into {} (for [[kind rs] (group-by :kind rows)]
+               [kind {:calls (into {} (for [[key ts] (group-by :key (retries rs))]
+                                        [key {:tries (count ts) :won (count (filter :won? ts)) :s (reduce + (map :s ts))}]))
+                      :timed (timed rs)}]))))
+
+(defn fold
+  "counts with each body's summary (body -> summarize) merged into :retry-wins; of a call or timed part read twice the longer
+  stays (a rotated log may have lost the start of a call)."
+  [counts summaries]
+  (let [longer (fn [x y] (if (> (:tries y 0) (:tries x 0)) y x))
+        kind-merge (fn [a b] {:calls (merge-with longer (:calls a) (:calls b))
+                              :timed (if (> (second (:timed b)) (second (:timed a))) (:timed b) (:timed a))})]
+    (update counts :retry-wins #(merge-with (fn [a b] (merge-with kind-merge a b)) % summaries))))
 
 (defn- r3 [x] (/ (js/Math.round (* 1000 x)) 1000))
 
-(defn- fit
-  "{:kind {:tries :won :shares :s :spread}} of the scanned rows, :spread the moments' pseudo-count total or nil."
-  [rows]
-  (for [[kind rs] (group-by :kind rows)
-        :let [tries (retries rs)
-              shares (for [[_ ts] (group-by :key tries)] (/ (count (filter :won? ts)) (count ts)))]]
-    {:kind kind :rs rs :tries tries :won (count (filter :won? tries)) :shares shares
-     :spread (when (seq tries) (passes/beta-spread shares))}))
+(defn- merge-summaries
+  "One summary of the bodies' summaries (body -> summary): calls keyed by body too."
+  [by-body]
+  (apply merge-with (fn [a b] {:calls (merge (:calls a) (:calls b)) :timed (mapv + (:timed a) (:timed b))})
+         (for [[body sm] by-body
+               [kind {:keys [calls timed]}] sm]
+           {kind {:calls (update-keys calls #(into [body] %)) :timed timed}})))
+
+(defn- fit-calls
+  "{:win :fail :s-total :tries :won :calls :spread} of calls ({key {:tries :won :s}}), the fit of their shares."
+  [calls]
+  (let [cs (vals calls)
+        shares (map #(/ (:won %) (:tries %)) cs)]
+    {:tries (reduce + (map :tries cs)) :won (reduce + (map :won cs)) :s (reduce + (map :s cs)) :shares shares
+     :spread (when (seq cs) (passes/beta-spread shares))}))
 
 (defn report
-  "{kind {:win :fail :try-s :won :retries :calls}} of the scanned rows (a kind with no retry and no timed try is left out). A
-  kind with retries but no fitted spread (too few calls) keeps its pooled mean at the mean pseudo-count total of the kinds
-  that did fit; with none fitted, its pooled counts. :pooled fits all kinds' tries together."
-  [rows]
-  (let [rows (go-to-ends rows)
-        rows (concat (remove #(= :walk-round (:kind %)) rows) (rounds rows))
-        fits (fit rows)
-        all (mapcat (fn [{:keys [kind tries]}] (map #(update % :key conj kind) tries)) (remove #(= :walk-round (:kind %)) fits))
-        all-shares (for [[_ ts] (group-by :key all)] (/ (count (filter :won? ts)) (count ts)))
+  "{kind {:win :fail :try-s :won :retries :calls}} of rows (one body's, scanned) or of a summary map (body -> summary, as kept in the counts file).
+  A kind with no retry and no timed try is left out. A kind with retries but no fitted spread (too few calls) keeps its pooled mean at the mean
+  pseudo-count total of the kinds that did fit; with none fitted, its pooled counts. :pooled fits all kinds' tries together, :walk-round apart."
+  [x]
+  (let [summary (merge-summaries (if (map? x) x {"" (summarize x)}))
+        fits (for [[kind {:keys [calls timed]}] summary] (assoc (fit-calls calls) :kind kind :timed timed))
+        pooled-calls (into {} (for [[kind {:keys [calls]}] summary :when (not= :walk-round kind)
+                                    [k c] calls]
+                                [(conj k kind) c]))
         spreads (keep :spread fits)
         pooled (when (seq spreads) (/ (reduce + spreads) (count spreads)))]
     (into (sorted-map)
-          (for [{:keys [kind rs tries won shares spread]} (cond-> fits
-                                                            (seq all) (concat [{:kind :pooled :rs rows :tries all :won (count (filter :won? all))
-                                                                                :shares all-shares :spread (passes/beta-spread all-shares)}]))
-                :let [[win fail] (cond (empty? tries) [1 1]
-                                       spread (passes/beta-fit shares won (count tries))
-                                       pooled (let [m (/ won (count tries))] [(r3 (* m pooled)) (r3 (* (- 1 m) pooled))])
-                                       :else (passes/beta-fit shares won (count tries)))
-                      s (if (seq tries) (/ (reduce + (map :s tries)) (count tries)) (try-s rs))]
-                :when s]
-            [kind {:win win :fail fail :try-s (r3 s) :won won :retries (count tries) :calls (count shares)}]))))
+          (for [{:keys [kind tries won shares spread s timed]} (cond-> (vec fits)
+                                                                 (seq pooled-calls) (conj (assoc (fit-calls pooled-calls) :kind :pooled
+                                                                                                 :timed (reduce #(mapv + %1 %2) [0 0] (map :timed fits)))))
+                :let [[win fail] (cond (zero? tries) [1 1]
+                                       spread (passes/beta-fit shares won tries)
+                                       pooled (let [m (/ won tries)] [(r3 (* m pooled)) (r3 (* (- 1 m) pooled))])
+                                       :else (passes/beta-fit shares won tries))
+                      mean-s (cond (pos? tries) (/ s tries) (pos? (second timed)) (/ (first timed) (second timed)))]
+                :when mean-s]
+            [kind {:win win :fail fail :try-s (r3 mean-s) :won won :retries tries :calls (count shares)}]))))

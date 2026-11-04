@@ -59,6 +59,6 @@ test('retry-wins leaves probe bodies out and keeps the rows in the counts file',
   fs.rmSync(dir, { recursive: true })
   assert.equal(r.status, 0, r.stderr)
   assert.match(r.stdout, /:walk \{[^}]*:retries 1,/)
-  assert.match(saved, /:retry-rows #\{\["Linden"/)
+  assert.match(saved, /:retry-wins \{"Linden"/)
   assert.doesNotMatch(saved, /Probe/)
 })
