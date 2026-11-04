@@ -1215,6 +1215,15 @@
     (is (and (zero? (:x stance)) (neg? (:z stance))) "over the column on the side away from the wall, where the line runs down the shaft")
     (is (nil? (lava/peek-stance p {:x 0.5 :y 62 :z -0.5} (constantly true) [0 59 0] [[0 0 1]])) "none better than where the body already sees")))
 
+(deftest a-peek-stance-on-top-of-rock-the-body-cannot-climb-is-no-stance
+  (let [mass (into {} (for [x (range -3 4) y (range 55 62) z (range -3 4)
+                            :when (not (and (zero? x) (zero? z) (>= y 59)))]
+                        [(str x "," y "," z) "stone"]))
+        ground (into {} (for [x (range -10 11) z (range -10 11)] [(str x ",54," z) "stone"]))
+        p (tu/fake {:self {:pos {:x 5.5 :y 55 :z 1.5}} :blocks (merge ground mass)})]
+    (is (nil? (lava/peek-stance p {:x 5.5 :y 55 :z 1.5} (constantly true) [0 59 0] [[0 0 1]]))
+        "the roof is seen but seven blocks up with no way on: the walk there would roam the land")))
+
 (deftest a-peek-stance-is-never-a-cell-the-body-has-not-seen
   (let [mass (into {} (for [x (range -3 4) y (range 55 62) z (range -3 4)
                             :when (not (and (zero? x) (zero? z) (>= y 59)))]

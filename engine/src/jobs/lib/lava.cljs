@@ -52,6 +52,28 @@
 
 (def peek-height "Blocks above a cell's column a peek stance may stand." 3)
 
+(def peek-steps "Steps over seen standable cells a peek stance may be from the body." 12)
+
+(defn connected-by-seen?
+  "Whether the body can walk from feet to goal (cells {:x :y :z}) over seen standable cells (one up, down to three
+  down) in at most peek-steps steps. A peek is a glance: a stance past unseen or unclimbable ground is no stance, since
+  the walk there would roam the land to find a way."
+  [p feet goal]
+  (let [cell (fn [{:keys [x y z]}] {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)})
+        start (cell feet)
+        end (cell goal)
+        next-cells (fn [{:keys [x y z]}]
+                     (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [1 0 -1 -2 -3]
+                           :let [n {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                           :when (reach/seen-standable? p n)]
+                       n))]
+    (loop [frontier [start] seen #{start} steps 0]
+      (cond
+        (contains? seen end) true
+        (or (empty? frontier) (>= steps peek-steps)) false
+        :else (let [nxt (into [] (comp (mapcat next-cells) (remove seen) (distinct)) frontier)]
+                (recur nxt (into seen nxt) (inc steps)))))))
+
 (defn peek-stance
   "The cell to stand on to see the neighbours of the dug cell still unseen, or nil when the body sees as many from where
   it stands: of the cells within step-off reach of the column over the dug cell, the first with the most clear lines
@@ -65,7 +87,8 @@
                     (mapcat #(step-off/candidates p {:x (first cell) :y (+ (second cell) %) :z (nth cell 2)}
                                                   {:avoid #{cell} :ok? ok?}))
                     distinct
-                    (filter #(reach/seen-standable? p %)))
+                    (filter #(reach/seen-standable? p %))
+                    (filter #(connected-by-seen? p feet %)))
         scored (map (fn [{:keys [x y z] :as st}] [(clear-count [(+ x 0.5) (+ y 1.62) (+ z 0.5)]) st]) stands)
         best (when (seq scored) (apply max (map first scored)))]
     (when (and best (> best here))
