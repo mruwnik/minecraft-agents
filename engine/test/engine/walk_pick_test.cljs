@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.library-test :as lib]
             [engine.test-util :as tu]
+            [jobs.lib.rooms :as rooms]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
             [jobs.movement.go-to.preview :as pv]))
@@ -111,8 +112,8 @@
     (is (= :not-worth (:reason (pick/not-worth c far (fn [] 1)))))
     (is (nil? (pick/not-worth c far (fn [] ##Inf))) "an endless worth affords any finite walk")))
 
-(deftest a-ranking-quote-carries-an-endless-worth-unless-the-walk-names-one
-  ;; the calling job's worth (the night's, 0 at times) must not refuse a route the walk then takes at its own worth
+(deftest a-quote-carries-the-walks-args-as-they-are
+  ;; a quote that adds a worth the walk lacks could find a route the walk then refuses at the job's worth
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -120,4 +121,14 @@
           (with-redefs [ctx/quote (fn ([_ _ args] (swap! seen conj args) (js/Promise.resolve {})) ([_ _ args _] (swap! seen conj args) (js/Promise.resolve {})))]
             (await (pick/quote! nil {:pos {:x 1 :y 64 :z 1}}))
             (await (pick/quote! nil {:pos {:x 1 :y 64 :z 1} :worth 7})))
-          (is (= [##Inf 7] (mapv :worth @seen))))))))
+          (is (= [nil 7] (mapv :worth @seen))))))))
+
+(deftest a-route-cost-quote-is-asked-at-the-walks-own-args
+  ;; enter-room quotes with route-cost and walks with the same args: a worth only on the quote would let it say found for a walk that refuses
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom [])]
+          (with-redefs [ctx/quote (fn ([_ _ args] (swap! seen conj args) (js/Promise.resolve {})) ([_ _ args _] (swap! seen conj args) (js/Promise.resolve {})))]
+            (await (rooms/route-cost nil {:pos {:x 1 :y 64 :z 1}})))
+          (is (= [{:pos {:x 1 :y 64 :z 1}}] @seen)))))))

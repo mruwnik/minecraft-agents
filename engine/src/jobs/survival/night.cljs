@@ -580,7 +580,7 @@
   night.bed-walk-unsafe info, and false. :searching (nothing remembered) while go-to's quote still searches: no route is known yet, not none."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
-      (let [q (await (pick/quote-once! c {:pos bed :range 2}))
+      (let [q (await (pick/quote-once! c {:pos bed :range 2 :worth ##Inf}))
             r (budget-priced c q)
             [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
             dig-s (when (:found r) (await (bed-down/dig-in-time-s c)))

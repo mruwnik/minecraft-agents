@@ -382,5 +382,5 @@
 (defn ^:async route-cost
   "Seconds go-to's quote plans for the walk go-to-args, dark cells priced in (the planner's own cost), or nil with no route."
   [c go-to-args]
-  (let [r (:route (await (ctx/quote c 'jobs.movement.go-to (merge {:worth ##Inf} go-to-args))))]
+  (let [r (:route (await (ctx/quote c 'jobs.movement.go-to go-to-args)))]
     (when (:found r) (+ (:seconds r) (or (:dark-seconds r) 0)))))

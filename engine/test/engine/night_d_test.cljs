@@ -108,7 +108,8 @@
         (let [[log seen calls] (await (flee-with (fn [_] {:uses {:job-time [0 7 0]}})))]
           (is (seq (filter #(= :flee (first %)) log)))
           (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the quote's price is reported")
-          (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it"))))))
+          (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it")
+          (is (every? #(= ##Inf (:worth %)) calls) "the flight's worth is derived from the quote, so the quote is not refused on the night's worth"))))))
 
 (deftest a-flee-prices-the-fight-at-its-target-once
   (async done

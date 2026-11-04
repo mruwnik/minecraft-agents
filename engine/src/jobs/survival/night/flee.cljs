@@ -130,7 +130,7 @@
                     :ground (ground-ok? c x)
                     :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
                     true))
-            walk #(assoc (flee-args %) :floor cost-health/spend-down)
+            walk #(assoc (flee-args %) :floor cost-health/spend-down :worth ##Inf)
             best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
                                                  :walk walk :ok? ok? :quote pick/quote-once!}))]
         (cond
