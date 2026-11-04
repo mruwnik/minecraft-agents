@@ -97,7 +97,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
               now @(:clock s)]
-          (mem/write! (:store (:eng s)) :deaths {:pos {:x 6 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
+          (mem/write! (:store (:eng s)) :deaths {:pos {:x 5 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
           (await (run-ticks s 30))
           (is (= [6 64 0] (first (dug-cells s))))
