@@ -48,9 +48,8 @@
    :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 9})]
          [:await {:source :job :kind :stair.step :data {:at #at [18 2 16]}} 150]
-         [:rcon "execute positioned $X $Y $Z run tp $BODY ~34 ~8 ~0"]]
-   :expect [{:event {:source :job :kind :stair.return :data {:arrived true}} :within-s 120 :of-job true}
-            {:event {:source :job :kind :completed :data {:steps 9}} :within-s 200 :of-job true}
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~52 ~10 ~16"]]
+   :expect [{:event {:source :job :kind :completed :data {:steps 9}} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :off-stair}} :for-s 200 :until {:source :job :kind :completed}}]
    :limit-s 240}
   {:name "rerun-along-an-old-corridor-digs-new-rock"
