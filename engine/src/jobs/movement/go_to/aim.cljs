@@ -74,18 +74,16 @@
                                          (column/stands? kind-at (+ x dx) (+ y dy) (+ z dz))))
                    (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dy dz])))))
 
-(def opening-flood-cells "Unseen cells opening-known? walks before it takes the unseen space for a closed mass." 300)
-
 (defn opening-known?
   "Whether the unseen cell [x y z] joins a seen opening (a seen free cell or a seen door or gate) through unseen cells and
   the opening itself: a room seen only from outside, entered by its door. A closed unseen mass (or one too large to
-  walk: opening-flood-cells) has none."
+  walk: more cells than the planner's own unknown search holds, wworld/unknown-max-nodes) has none."
   [p ka cell]
   (let [open? (fn [[x y z]] (or (kinds/free? (ka x y z))
                                 (some-> (u/seen-block p {:x x :y y :z z}) .-name reach/openable?)))]
     (loop [todo [cell] seen #{cell}]
       (let [[x y z :as c] (peek todo)]
-        (if (or (nil? c) (> (count seen) opening-flood-cells))
+        (if (or (nil? c) (> (count seen) (wworld/unknown-max-nodes)))
           false
           (let [next (->> [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]
                           (map (fn [[dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)]))
