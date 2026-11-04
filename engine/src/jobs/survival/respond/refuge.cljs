@@ -86,7 +86,7 @@
       (= :continue e) (do (ctx/update-mem! c assoc :plugging {:at feet :option option :ways ways}) :again)
       (= :done (:kind e)) (do (ctx/update-mem! c dissoc :plugging)
                               (spent/absorb! c (:data e))
-                              (hide-now! c {:kind (case option :plug-zone :plug :plug-dig-zone :plug-dig option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
+                              (hide-now! c {:kind (case option :plug-zone :plug (:plug-dig-zone :pocket) :plug-dig option) :anchor feet :cells (plug-cells c)} (hide-texts :plug)))
       :else (do (ctx/update-mem! c dissoc :plugging)
                 (when (= :trespass (get-in e [:data :stops :walls :reason])) (ctx/update-mem! c assoc :zone-walls true))
                 (when (some (comp #{:trespass :no-site} :reason) (vals (select-keys (get-in e [:data :stops]) [:pit :pocket])))

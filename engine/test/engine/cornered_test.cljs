@@ -2080,6 +2080,22 @@
           (is (nil? out))
           (is (zero? @plugs) "no pit or pocket is dug in a sealed cell, the hide-hold loop"))))))
 
+(deftest a-shut-in-pocket-hides-as-a-plug-dig-refuge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [m (atom {})
+              p (tu/fake-on-floor {})
+              kinds (atom [])]
+          (with-redefs [ctx/call (fn ^:async f [& _] {:kind :done :data {}})
+                        ctx/use (constantly nil)
+                        ctx/mem (fn [c] @(:mem c))
+                        ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))
+                        refuge/plug-cells (constantly [])
+                        refuge/hide-now! (fn ^:async f [_ refuge _] (swap! kinds conj (:kind refuge)) :again)]
+            (await (refuge/plug-in! (assoc (stub-ctx p m) :args {}) :pocket #{:pocket})))
+          (is (= [:plug-dig] @kinds) "hide-out takes no :pocket kind"))))))
+
 (deftest a-plug-is-not-begun-with-a-creeper-coming-from-beyond-its-swell-range
   (async done
     (tu/run-async done
