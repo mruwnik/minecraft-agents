@@ -200,3 +200,7 @@
         (let [e (await (call! (spawn-world {:inventory [{:name "red_bed" :count 1}]}) 'jobs.survival.bed-down {} (constantly nil)))]
           (is (= :done (:kind e)))
           (is (true? (:slept (:data e)))))))))
+
+(deftest a-partial-quote-over-unseen-floors-is-no-sign-the-bed-is-cut-off
+  (is (true? (sleep/no-way-quote? {:found false :reason :partial})) "the way ends at the loaded edge")
+  (is (not (sleep/no-way-quote? {:found false :reason :partial :unseen-floors true})) "the search only spent its nodes over land never seen"))

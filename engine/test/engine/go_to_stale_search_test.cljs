@@ -259,3 +259,33 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= 2 (await (searches-for-second-plan! 0 (box 5 64 0 5 65 0 "stone")))))))))
+
+(defn ^:async searches-for-two-plans-to-a-walled-goal!
+  "How many planner searches two plans (the second quoted when quoted-again?, else a walk's) to a goal walled in made."
+  [quoted-again?]
+  (let [p (tu/fake {:blocks (merge (box -2 63 -2 12 63 2 "stone") (box 9 64 -1 11 66 1 "stone")) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        c {:primitives p}
+        searches (atom 0)
+        create-plan planner/create-plan
+        plan! (fn [opts] (walk/plan-walk! c (.pathWorld p) [10 65 0] 0 (walk/default-weight) (merge {:budget 300} opts)))]
+    (reset! wsearch/searches {})
+    (set! planner/create-plan (fn [& args] (swap! searches inc) (apply create-plan args)))
+    (try
+      (await (plan! {:quoted true}))
+      (await (plan! (when quoted-again? {:quoted true})))
+      (finally
+        (set! planner/create-plan create-plan)
+        (reset! wsearch/searches {})))
+    @searches))
+
+(deftest a-quote-without-a-whole-way-is-kept-for-the-next-quote-of-its-key
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 1 (await (searches-for-two-plans-to-a-walled-goal! true))) "night and sleep quote the same walk in turn")))))
+
+(deftest a-kept-quote-without-a-whole-way-is-not-taken-by-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 2 (await (searches-for-two-plans-to-a-walled-goal! false))))))))

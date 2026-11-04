@@ -709,3 +709,8 @@
           (try (await (core/tick! eng))
                (finally (set! pick/quote! quote!)))
           (is (= [0] @placed-when-answered) "shelter! answered :again while the search went on: nothing dug in beside a place it has no price for"))))))
+
+(deftest a-partial-quote-over-unseen-floors-is-a-walk-priced-by-the-quotes-mean
+  (let [q {:uses {:job-time [30 120 ##Inf]} :route {:found false :reason :partial :unseen-floors true :near 96}}]
+    (is (= {:found true :seconds 120} (select-keys (night/budget-priced {:primitives (tu/fake {})} q) [:found :seconds])))
+    (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route dissoc :unseen-floors)))))))

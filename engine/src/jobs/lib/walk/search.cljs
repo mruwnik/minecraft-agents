@@ -288,7 +288,7 @@
         k (search-key c to range weight policy walls pw)
         kept (get-in @searches [who k])
         known (when frontier (known-cells! c to range))
-        on? (go-on? c kept k pw to policy)
+        on? (and (go-on? c kept k pw to policy) (or quoted (not (:quote-only kept))))
         done (when (and on? (:within kept) (not (route-changed? kept pw walls))) (:within kept))
         fresh? (not (and on? (or done (not (:within kept)))))
         search (if-not fresh?
@@ -297,7 +297,8 @@
         [search within] (if done [search done] (await (run-search! c search budget policy to range weight)))
         ms (- (clock/now) t)]
     (if within
-      (do (keep-search! who k (when (and quoted (not done) (= "found" (.-status ^js (:r within)))) (assoc search :within within)))
+      (do (keep-search! who k (when (and quoted (not done))
+                              (assoc search :within within :quote-only (not= "found" (.-status ^js (:r within))))))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
       (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true)) :fresh fresh?)

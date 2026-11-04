@@ -529,6 +529,18 @@
      :walk-hp hp
      :stay (* hp-s (+ (price/stay-hp c here (if (pos? shelter-s) (min secs shelter-s) secs)) (price/way-fight-hp c (u/self-pos c))))}))
 
+(defn budget-priced
+  "The quoted route of q. A partial one over floors the body never saw (:unseen-floors, a search that spent go-to's node budget or
+  reached the loaded edge: no whole way known yet, not none) counts as a found walk priced by the quote's mean time, its unseen
+  ground dark as far as the planner did not say (its :dark-seconds), as the quote prices it."
+  [c q]
+  (let [r (:route q)
+        secs (second (get-in q [:uses :job-time]))]
+    (if (and (= :partial (some-> (:reason r) keyword)) (:unseen-floors r))
+      (assoc r :found true :seconds secs
+             :dark-seconds (or (get-in r [:partial :dark-seconds]) (* secs (cost/dark-factor (wworld/kit-of c)))))
+      r)))
+
 (defn ^:async bed-walk-safe?
   "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose hp (bed-walk-price
   :walk-hp) is no more than staying put costs, sheltering here taking the rest of the night at most (bed-down/dig-in-time-s), or, not
@@ -539,7 +551,7 @@
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
       (let [q (await (pick/quote-once! c {:pos bed :range 2}))
-            r (:route q)
+            r (budget-priced c q)
             [_ left] (get-in (sh-clock/night-left-quote c) [:uses :job-time])
             dig-s (when (:found r) (await (bed-down/dig-in-time-s c)))
             {:keys [walk walk-hp stay]} (when (:found r) (bed-walk-price c bed r (min left dig-s)))]
