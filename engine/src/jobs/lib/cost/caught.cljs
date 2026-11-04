@@ -43,8 +43,8 @@
    ::matchups {:default {:zombie {"iron/1" {:k 1 :n 29} "stone/1" {:k 2 :n 23} "wooden/1" {:k 2 :n 25}}}
                :spec (a/map-of keyword? (a/map-of string? (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})))
                :doc "Per group, per matchup (matchup), the trial fights with it, n, and k of them that died, as counted for ::fights; a fight with a matchup not counted is priced by the pooled ::fights alone. Recount: node tools/event-counts.mjs caught-flights :fight-matchups, 2026-11-04."}
-   ::matchup-weight {:default 10 :spec (a/num-in 0 nil)
-                     :doc "The pseudo-fights the pooled chance of a fight gone bad counts for against a matchup's own (shrinkage towards the pooled rate)."}
+   ::matchup-weight {:default 77 :spec (a/num-in 0 nil)
+                     :doc "The pseudo-fights the pooled chance of a fight gone bad counts for against a matchup's own (shrinkage towards the pooled rate). Measured from ::matchups: the deaths of the three kit tiers differ by less than their binomial spread (method of moments: no between-matchup variance), so the pooled rate counts as the 77 fights that make it. Recount with ::matchups."}
    ::counted-difficulty {:default 1 :spec (a/int-in 1 3) :doc "The server difficulty ::flights and ::fights were counted at."}})
 
 (def groups

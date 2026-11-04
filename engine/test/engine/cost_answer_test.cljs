@@ -85,10 +85,12 @@
     (is (= pooled (chance "iron_sword" 2)) "so is a foe count never counted")))
 
 (deftest a-flight-to-a-known-refuge-reached-uncaught-carries-no-whole-flight-prior
-  (let [walk #(cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0 :refuge-s %})]
+  (let [walk #(cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0 :refuge-s % :hide-s 30 :later {:damage 5 :hit 3 :seconds 5}})]
     (is (pos? (-> (walk nil) :caught :chance)) "an open flight is caught at the prior")
     (is (zero? (-> (walk 2) :caught :chance)) "a run into a refuge the search found uncaught is all known")
-    (is (< (:seconds (walk 2)) (:seconds (walk nil))) "and lasts the route's seconds, not the flight's")))
+    (is (and (:stays (walk nil)) (:then (walk nil))) "an open flight may meet the mob again")
+    (is (not-any? #(contains? (walk 2) %) [:stays :then]) "a shut door ends the meet again")
+    (is (< (js/Math.abs (- (:seconds (walk 2)) 30 (:seconds (cost/flee-answer {:food 20 :mobs [(mob "zombie" 2)] :caught 0 :refuge-s 2})))) 1e-9) "it pays the hide on top of the route")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))

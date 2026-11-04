@@ -354,7 +354,7 @@
                                  :swim (:swim swim) :land (:land swim) :open (:chance swim)
                                  :ashore (when (and (:chance swim) (:stand? swim)) (cost/fight-answer (fight-of c near (constantly nil))))
                                  :returns (returns c (map #(.-name %) near))
-                                 :later later :caught (:chance caught) :caught-s (:seconds caught) :refuge-s (:refuge-s caught)}))]
+                                 :later later :caught (:chance caught) :caught-s (:seconds caught) :refuge-s (:refuge-s caught) :hide-s (:hide-s caught)}))]
     (cond-> a
       (and a felt) (update :damage max (* felt (/ (:seconds a) 2)))))))
 

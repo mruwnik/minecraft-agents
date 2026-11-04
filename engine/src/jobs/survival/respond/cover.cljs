@@ -12,6 +12,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.survival.hide-out :as hide-out]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.rooms :as room-lib]
@@ -182,7 +183,7 @@
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
                            judged (await (respond.goal/judge! c (homes c (:rooms (survey c threats false)) (seq (blast p threats))) covered? (dead-end-covers c specs)))]
                        (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (:home judged)) glanced)))
-            chance (cond-> chance (and chance scan) (assoc :way-scan scan))]
+            chance (cond-> chance (and chance scan) (assoc :way-scan scan) (:refuge-s chance) (assoc :hide-s (hide-out/quiet-s)))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance)))))
 
