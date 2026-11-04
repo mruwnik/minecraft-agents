@@ -66,7 +66,7 @@
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
   - in a sealed room only dark cells beyond the spawn-free radius spoil, with torches or coal held, once a night, when its quote (torches x place time, crafting short torches from coal) is no more than the cheapest wall, pit or pocket: jobs.build.light-area over the room's cells (night.light), then the pass chooses again.
-  - else the cheapest of shelter-prices (bed-down/answers): jobs.survival.shut-in {:for :night} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; priced again while another site may be left, at most max-sites), a niche (pocket way, once; with no site left, out of the failed pit and a look round first), a flee, or exposed, the night left in the open here (a shut-in that quotes no way here is called first all the same: its ending marks the sites failed, so a flee is not priced to ground beside them): one shelter.exposed warn, a log-out stint, and the round ends nothing-possible :exposed; the trigger fires again after its cooldown and the night looks again (a bed or sleeper that turned up is taken then). A shut-in, niche or flee in flight is called again until it ends.
+  - else the cheapest of shelter-prices (bed-down/answers): jobs.survival.shut-in {:for :night, its :worth the next way's price less the shelter's, shut-worth} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; priced again while another site may be left, at most max-sites), a niche (pocket way, once; with no site left, out of the failed pit and a look round first), a flee, or exposed, the night left in the open here (a shut-in that quotes no way here is called first all the same: its ending marks the sites failed, so a flee is not priced to ground beside them): one shelter.exposed warn, a log-out stint, and the round ends nothing-possible :exposed; the trigger fires again after its cooldown and the night looks again (a bed or sleeper that turned up is taken then). A shut-in, niche or flee in flight is called again until it ends.
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise. The walk's :worth is flee-worth (the next way's price less the shelter on arrival), so go-to's unseen-floor turn-back does not end it.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
@@ -445,9 +445,10 @@
         d (await (ctx/call c :shut-in 'jobs.survival.shut-in
                            (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (room-plug/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
                                     :for :night :settings {:jobs.lib.shelter.sense/roof-height (dig-in-roof-height c)}}
-                             place (assoc :place place))))]
+                             place (assoc :place place)
+                             (some? (:shelter-worth (ctx/mem c))) (assoc :worth (:shelter-worth (ctx/mem c))))))]
     (when-not (= :continue d)
-      (ctx/update-mem! c #(cond-> (-> % (dissoc :digging :place-other-s) (update :shut-ins (fnil inc 0))) place (assoc :roof-walk-failed true)))
+      (ctx/update-mem! c #(cond-> (-> % (dissoc :digging :place-other-s :shelter-worth) (update :shut-ins (fnil inc 0))) place (assoc :roof-walk-failed true)))
       (cond
         (not (and (= :done (:kind d)) (sh-sense/roofed? p (dig-in-roof-height c)))) (do (ctx/update-mem! c assoc :no-way-text (:text (:data d)))
                                                                                         (when-not (more-sites? c) (ctx/update-mem! c assoc :no-site true)))
@@ -659,7 +660,8 @@
             pick (bed-down/cheapest c prices)]
         (emit-answers! c pick prices)
         (case pick
-          :shelter (await (shelter! c))
+          :shelter (do (ctx/update-mem! c assoc :shelter-worth (shut-worth prices :shelter))
+                       (await (shelter! c)))
           :niche (await (niche! c (pit-site/pit-start c)))
           :flee (await (flee/flee! c (assoc t :worth (flee-worth prices t))))
           (if (next prices) (stay! c prices) (await (exposed! c))))))))

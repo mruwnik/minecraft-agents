@@ -169,6 +169,17 @@
           (is (= [] (st/entries eng :shut-in-failed)) "failed sites are forgotten at morning: the next night digs there again")
           (is (empty? (st/emitted seen :shelter.exposed))))))))
 
+(deftest the-dig-in-call-carries-the-worth-of-the-shelter-answer
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks wide-ground})]
+          (st/dawn-after! p 3)
+          (core/submit! eng '(jobs.survival.night) {})
+          (let [log (await (with-child-log #(core/tick! eng)))
+                args (nth (first (filter #(= :shut-in (first %)) log)) 2)]
+            (is (number? (:worth args)) "the walks inside (a pit site, a room) are judged against what the next way costs more, not the night's open-gain (0 where the stand cell is as dark by day)")))))))
+
 (deftest a-relocation-site-is-not-by-a-known-zombie
   (async done
     (tu/run-async done
