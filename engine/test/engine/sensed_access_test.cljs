@@ -50,4 +50,4 @@
         entry {:cell [6 65 0] :item "cobblestone" :state :placed}]
     (is (true? (look/unknown? p [6 67 0])) "the cells over the entry are out of the eye's sight")
     (with-redefs [access/guessed-at (fn [_] (fn [[x]] (if (>= x 5) "stone" "air")))]
-      (is (false? (scaffold-left/walk-blocked? p {} [entry] entry)) "unseen cells over it are no roof, whatever the prior says of them"))))
+      (is (false? (scaffold-left/walk-blocked? p (constantly false) [entry] entry)) "unseen cells over it are no roof, whatever the prior says of them"))))

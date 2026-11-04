@@ -84,10 +84,10 @@
     (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))
 
 (defn died-near-of
-  "A fn of a cell: whether a remembered death of c, not seen clear since, counts for it (death-spot/covers?: its killer's field, or the terrain radius)."
+  "A fn of a cell: whether a remembered death of c, not seen clear since, counts for it (death-spot/covers?: its killer's field, or the terrain radius). The deaths are read on the first call: the trigger builds it every tick."
   [c]
-  (let [spots (death-spot/uncleared c)]
-    (fn [[x y z]] (boolean (some #(death-spot/covers? c % {:x x :y y :z z}) spots)))))
+  (let [spots (delay (death-spot/uncleared c))]
+    (fn [[x y z]] (boolean (some #(death-spot/covers? c % {:x x :y y :z z}) @spots)))))
 
 (def seal-clear-radius "Blocks round a goal or the feet within which go-to and leave-shelter take back the body's own seals." 3)
 

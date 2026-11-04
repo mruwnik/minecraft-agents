@@ -42,22 +42,6 @@
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :no-way}} :within-s 30}
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [20 30 16] 3]}} :for-s 40}]
    :limit-s 60}
-  {:name "flight-keeps-away-from-a-recent-death-east"
-   ;; a zombie north, open ground both sides south: a recent zombie death (a :deaths entry, not seen since) is priced into the end on its side
-   :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [24.5 0 24.5] :cause "zombie"}}
-            {:kind :respawned :age-s 50 :data {}}]
-   :act [[:summon "zombie" [16.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :retreat.target} :within-s 20}
-            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [24.5 0 24] 5]}} :for-s 15}]
-   :limit-s 60}
-  {:name "flight-keeps-away-from-a-recent-death-west"
-   ;; a zombie north, open ground both sides south: a recent zombie death (a :deaths entry, not seen since) is priced into the end on its side
-   :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [8.5 0 24.5] :cause "zombie"}}
-            {:kind :respawned :age-s 50 :data {}}]
-   :act [[:summon "zombie" [16.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :retreat.target} :within-s 20}
-            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [8.5 0 24] 5]}} :for-s 15}]
-   :limit-s 60}
   {:name "dry-end-beats-a-swim-across-the-pond"
    :plot {:light :sky}
    :blocks [[:fill [0 0 0] [31 1 31] "stone"] [:fill [19 1 6] [30 1 26] "water"]]

@@ -43,10 +43,10 @@
 
 (defn walk-blocked?
   "Whether the entry e, out of the body's dig reach, is not worth a walk: far below, near a death, roofed (ledger/walk-blocker). A roof is one the body has seen: the cells over a far block are seldom looked at, and the prior would read them as rock."
-  [p memory entries e]
+  [p died-near? entries e]
   (boolean (and (> (ledger/distance (ledger/eye-of {:primitives p}) (ledger/centre (:cell e))) (ledger/dig-reach))
                 (ledger/walk-blocker {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
-                               :died-near? (ledger/died-near-of {:primitives p :view (constantly memory)}) :block-at (access/sensed-at p "air")
+                               :died-near? died-near? :block-at (access/sensed-at p "air")
                                :ledger (ledger/cells entries)}
                               e))))
 
@@ -56,12 +56,13 @@
         opens-dark? (stay/opens-dark? p)
         plug-kept? #(and (stay/at-night?) (opens-dark? (:cell %)))
         entries (ledger/open-entries memory)
-        feet (reach/standing-vec p)]
+        feet (reach/standing-vec p)
+        died-near? (ledger/died-near-of {:primitives p :view (constantly memory)})]
     (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                   (some? (world/zones kn))
                   (or (settings/get settings ::with-hostile)
                       (and (not (dawn/hostile-known? p)) (not (threats/fled-recently? p memory))))
-                  (some #(and (not (walk-blocked? p memory entries %))
+                  (some #(and (not (walk-blocked? p died-near? entries %))
                               (or dark-ok? (perched-on? feet %) (and (= :retreat-plug (:purpose %)) (not (plug-kept? %)))))
                         (ledger/offered memory (block-at-of p) nil
                                         (ledger/near-of-args {:primitives p} args)))))))
