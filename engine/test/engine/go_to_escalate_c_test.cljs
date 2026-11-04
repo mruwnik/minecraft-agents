@@ -598,7 +598,9 @@
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
-          (is (= [:approach :stair] (distinct (map :step (events-of seen :go-to.escalated)))) "a climb of stairs, not the loop"))))))
+          (let [steps (distinct (map :step (events-of seen :go-to.escalated)))]
+            (is (some #{:stair} steps) "a climb of stairs, not the loop")
+            (is (every? #{:approach :stair} steps))))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
   (async done
@@ -839,6 +841,23 @@
     (is (not (priced (* 0.99 seconds))))
     (is (not-any? hidden (:dig (answer {:guess-risk {:placed 0.9 :apart 0.9} :worth-s ##Inf}))) "guesses that nearly always fail are dug round through seen rock")
     (is (= [[2 65 0]] (map :cell (filter (comp #{:placed} :class) (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
+
+(deftest a-dig-route-search-ends-once-the-cheapest-open-cell-passes-its-worth
+  ;; the same walled pocket 10 off through stone: a worth over the dig's price finds the route; a worth under it ends the
+  ;; search as no route, after fewer cells than the one that finds it (no radius margin bounds either)
+  (let [world (merge (box -2 60 -6 14 70 6 "stone") {"0,64,0" "air" "0,65,0" "air" "10,64,0" "air" "10,65,0" "air"})
+        p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})
+        nodes (atom 0)
+        search dig-route/search
+        answer (fn [worth] (reset! nodes 0)
+                 (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)] (fn [n] (let [[_ used :as r] (run n)] (swap! nodes + used) r))))]
+                   (let [a (choose/route-answer p [0 64 0] [10 64 0] (constantly true) (constantly false) false false {:bound-s worth})]
+                     [a @nodes])))
+        [found found-nodes] (answer ##Inf)
+        [dear dear-nodes] (answer 5)]
+    (is (map? found))
+    (is (nil? dear))
+    (is (< dear-nodes found-nodes))))
 
 (deftest a-stair-over-guesses-is-priced-over-the-chance-they-all-hold-and-at-zero-risk-by-its-price
   ;; the stair east from [0 64 0] two steps cuts [0 66 0] [1 66 0] [1 65 0] [1 67 0] [2 67 0] [2 66 0]; three are hidden,

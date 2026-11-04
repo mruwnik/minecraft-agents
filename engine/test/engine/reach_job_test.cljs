@@ -138,17 +138,15 @@
               {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 50 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
               out (atom :not-done)
               nodes (atom 0) search dig-route/search
-              m choose/dig-margin
               eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [0 70 0] :range 0}))]
           (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)]
-                                                        (fn [n] (let [[_ used :as r] (run n)] (when (= [0 50 0] (feet p)) (swap! nodes + used)) r))))]
+                                                        (fn [n] (let [[_ used :as r] (run n)] (swap! nodes + used) r))))]
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng 3000)))
           (is (not= :not-done @out) "the call ended")
           (is (empty? (events-of seen :go-to.search-spent)) "the search ended by itself")
           (is (some #(and (= [0 50 0] (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from the start cell")
-          (is (<= @nodes (* choose/route-searches (inc (* 2 m)) (inc (* 2 m)) (+ 21 (* 2 m))))
-              "each search from the start expands no more than the cells within the margin of its ends"))))))
+          (is (zero? @nodes) "the climb is not a dig-route search"))))))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
   (is (< (cost/pillar-cost 3) (cost/stair-cost 3)))

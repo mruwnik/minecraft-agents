@@ -192,7 +192,7 @@
   [c feet fetch? slice]
   {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
-   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c)))
+   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c))) :bound-s (ctx/worth c)
    :risk-s (fn [cells goal work-s] (risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn own-cut?
@@ -685,7 +685,7 @@
             plan (fn [floors-unseen-ok?]
                    (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (fetch-tool? c)
                                 (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
-                                                     :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m))}
+                                                     :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m)) :bound-s (ctx/worth c)}
                                                     (range-opts c pos)))))
             cells (when in-range? (plan false))
             loosened (when (and in-range? (nil? cells)) (plan true))

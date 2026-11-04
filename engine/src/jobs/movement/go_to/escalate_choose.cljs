@@ -339,7 +339,8 @@
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
-  :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
+  A :bound-s (seconds: what the goal is worth) bounds the search by price: it ends once the cheapest open cell's bound plus the CPU spent passes it. With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -369,6 +370,7 @@
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
         opts (fn [refused] (merge prices
+                                  (when-let [w (:bound-s route-opts)] {:max-s w})
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))
                                    :max-dig-s (max-route-s)}
@@ -430,18 +432,12 @@
   [price-s guesses guess-risk worth-s]
   (not (cost/affords? (/ price-s (reduce * 1 (map #(- 1 (get guess-risk (:class %) 0)) guesses))) worth-s)))
 
-(def dig-margin
-  "Blocks round its two ends a dig route (dig-way, frontier-way, a climb's) may stray. Not a price of guessed cells (unseen-step-s
-  prices those): it bounds the flood, which with no route spreads over about 270k cells of rock within max-route-s.
-  search-bound's stand-still bound alone (the whole way without a route, ~100 s on a far goal) is too loose for that."
-  3)
-
 (defn search-opts
-  "route-answer's route-opts for a choice's opts: its :slice, dig-margin, its :spent searches, its :own-s and :own-cut
+  "route-answer's route-opts for a choice's opts: its :slice, its :spent searches, its :own-s and :own-cut
   (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s]}]
-  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :margin dig-margin}
+  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s]}]
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s}
     slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
     guess-risk (assoc :guess-risk guess-risk :worth-s worth-s)))
