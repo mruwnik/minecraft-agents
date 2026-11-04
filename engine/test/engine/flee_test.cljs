@@ -1225,8 +1225,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plain (await (target-after {} [] {}))
-              out (await (target-after {} [plain] {}))]
-          (is (> (u/dist out plain) 12) (str "a death where the flight would end turns it away: " (pr-str plain) " " (pr-str out))))))))
+              out (await (target-after {} [plain] {}))
+              off (await (target-after {} [plain] {:jobs.survival.respond.state/died-radius 0}))]
+          (is (> (u/dist out plain) 12) (str "a death where the flight would end turns it away: " (pr-str plain) " " (pr-str out)))
+          (is (= plain off) "radius 0 turns it off"))))))
 
 (deftest a-flight-prefers-lit-ground-to-dark
   (async done
