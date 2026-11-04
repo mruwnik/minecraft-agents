@@ -618,3 +618,20 @@
             (is (= :dug-in (:night r)) (pr-str r))
             (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))
             (is (re-find #"^used .+ \(night shelter at" (:text r)) (pr-str r))))))))
+
+(def deep-west-ground
+  "Ground deep and wide enough that a pit anywhere on it keeps solid walls (wide-ground is 4 thick with void beside it, so a pit there can lay open)."
+  (into {} (for [x (range -14 3) z (range -8 9) y (range 50 64)] [(str x "," y "," z) "dirt"])))
+
+(deftest a-dig-pit-walking-past-a-zombie-on-deep-ground-ends-roofed-not-laid-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks deep-west-ground :inventory st/dirt-stack
+                                              :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (tu/run-until-empty eng 8))
+          (is (= [:pit] (distinct (map :way (filter #(= :completed (:kind %)) @seen)))))
+          (is (empty? (filter #(= :stopped (:kind %)) @seen)))
+          (is (some #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place"))) "the pit is roofed"))))))
