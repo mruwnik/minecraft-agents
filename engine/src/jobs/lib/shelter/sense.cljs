@@ -103,21 +103,11 @@
       (seq lights) (every? zero? lights)
       :else (buried-by-column? p cell))))
 
-(defn open-overhead?
-  "Whether the body has seen the column over the cell open past roof-height: no seen solid block within roof-height and a
-  seen open cell above that, up to room-roof-height. An unseen roof may be there."
-  [p {:keys [x y z]}]
-  (let [seen (map #(look/seen-block p {:x x :y (+ y %) :z z}) (range 1 (inc (room-roof-height))))
-        seen-as? (fn [solid?] (fn [b] (and b (not (:unknown b)) (= solid? (solid/solid? (:name b))))))]
-    (boolean (and (not-any? (seen-as? true) (take (roof-height) seen)) (some (seen-as? false) (drop (roof-height) seen))))))
-
 (defn buried-at?
-  "Whether the cell is under ground as the body perceives it: sealed from the sky (sealed-at?), unless lit (look/lit-light?
-  by block light) with its column seen open over it (open-overhead?): a block-lit hall reads as lit open land, a lit
-  tunnel, a dark cave and a roof not yet seen stay under ground."
+  "Whether the cell is under ground as the body perceives it: sealed from the sky (sealed-at?). Not read from where the
+  body looks: a lit hall under a roof it has not looked up at reads the same as one it has (the worse case, a cave)."
   [p cell]
-  (and (sealed-at? p cell)
-       (not (and (some-> (block-light-at p cell) (look/lit-light? 0 0)) (open-overhead? p cell)))))
+  (sealed-at? p cell))
 
 (defn sealed?
   "The body's feet are sealed from the sky (sealed-at?): the night changes nothing there."
