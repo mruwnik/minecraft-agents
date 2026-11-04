@@ -38,7 +38,8 @@
 
 (defn dark-world
   "A seeing world whose floor level in the corridor is dark (light 0) after the first sight pass; the rest stays lit so the corridor is seen."
-  ([inventory] (dark-world inventory corridor (range -5 16)))
+  ([inventory] (dark-world inventory corridor))
+  ([inventory blocks] (dark-world inventory blocks (range -5 16)))
   ([inventory blocks xs]
    (let [env (bd/setup-seeing {:self {:pos {:x -3 :y 64 :z 0}} :blocks blocks :drops drops :inventory inventory})]
      (swap! (.. (:p env) -world -state) merge {:light (into {} (for [x xs y [64 65] z [-1 0 1]] [[x y z] [0 0]]))})
@@ -218,20 +219,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
+        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor)
               r (await (run! env (assoc args :spawner :break)))
               torches (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (filter #(= "torch" (.-item (.-args %))) (bd/calls p "place")))]
           (is (= {:status :done :taken {:spawner 1 :torch (count torches)}} (select-keys r [:status :taken])) "the torches hung are taken back")
           (is (gone? p [spawner-cell]))
           (is (seq torches))
-          (is (some (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x 10)) 4) (<= (js/Math.abs (- y 65)) 1) (<= (js/Math.abs (- z 2)) 4))) torches)
-              "a torch within the spawner's spawn box"))))))
+          (is (every? (fn [[cx cy cz]] (some (fn [{:keys [x y z]}] (<= (+ (js/Math.abs (- x cx)) (js/Math.abs (- y cy)) (js/Math.abs (- z cz))) 13)) torches))
+                      (for [cx (range 6 15) cy [64 65] cz [-1 0 1]] [cx cy cz]))
+              "a torch's light (13 steps) reaches every air cell of the spawner's spawn box"))))))
 
 (deftest spawner-break-in-the-dark-without-torches-stops-no-torches-leaving-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as env} (dark-world kit spawner-corridor (range 6 13))
+        (let [{:keys [p] :as env} (dark-world kit spawner-corridor)
               r (await (run! env (assoc args :spawner :break)))]
           (is (= {:status :stopped :reason :no-torches} (select-keys r [:status :reason])))
           (is (= "spawner" (bd/block-at p spawner-cell))))))))
@@ -253,7 +255,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
+        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor)
               r (await (run! env args))
               torches (torch-poses p)]
           (is (= {:status :done :taken {}} (select-keys r [:status :taken])) "the torches stay")
@@ -267,7 +269,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor (range 6 13))
+        (let [{:keys [p] :as env} (dark-world pick-torches spawner-corridor)
               _ (await (run! env args))]
           (is (some #(<= (js/Math.abs (- (:x %) 6)) 3) (torch-poses p)) "x 6 is 4 along, 2 across and 1 below the spawner: a torch stands within torch-gap of it"))))))
 
@@ -275,7 +277,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p] :as env} (dark-world kit spawner-corridor (range 6 13))
+        (let [{:keys [p] :as env} (dark-world kit spawner-corridor)
               r (await (run! env args))]
           (is (= {:status :stopped :reason :no-torches} (select-keys r [:status :reason])))
           (is (= "spawner" (bd/block-at p spawner-cell))))))))

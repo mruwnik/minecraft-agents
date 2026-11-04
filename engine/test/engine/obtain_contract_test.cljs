@@ -392,7 +392,8 @@
   [{:keys [eng]} worth & [seen?]]
   (let [out (atom nil)
         parent {:round (fn ^:async status-round [c]
-                         (reset! out (with-redefs [sense/seen-cell? (constantly (boolean seen?))]
+                         (reset! out (with-redefs [sense/seen-cell? (constantly (boolean seen?))
+                                      look/known-light-at (fn [p x y z] (let [l (.lightAt (look/raw-of p) x y z)] (when (<= 0 l) l)))]
                                        (need/item-status c "torch" 4 {:how #{:chest :craft :gather}} worth)))
                          (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'status-parent] parent)]
