@@ -226,6 +226,23 @@
                (is (< (:x (st/pos-of p)) 0) "out through the west wall, the side farthest from the zombie (east)")
                (is (empty? (st/entries eng :fragile-hold)) "the hold forgotten once out")))))))))
 
+(deftest a-fragile-hold-start-from-an-earlier-dawn-does-not-end-this-dawns-hold-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (await (dug-in-world {:entities [far-zombie] :self {:health 3}}))
+              sealed {:x 0.5 :y 64 :z 0.5}
+              held (atom nil)]
+          (mem/write! (:store eng) :fragile-hold {:since (- @clock (* 2 leave-shelter/day-ms)) :health 3 :dawn-ticks 20000}
+                      leave-shelter/hold-policy)
+          (st/on-wait! p (fn [n]
+                          (swap! clock + 5000)
+                          (when (= n 2) (reset! held (= sealed (st/pos-of p))))))
+          (.setTime (.-world p) grace-passed)
+          (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
+          (await (st/tick-n eng 6))
+          (is (true? @held) "the old start is dropped: a new hold begins and the body is still shut in"))))))
+
 (def shell
   "Stone walls two high round the cell 0 64 0 and a roof over it: a dug-in shelter."
   (into {"0,66,0" "stone"} (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not= [x z] [0 0])] [(str x "," y "," z) "stone"])))

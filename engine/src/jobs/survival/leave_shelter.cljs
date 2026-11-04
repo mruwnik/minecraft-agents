@@ -37,7 +37,7 @@
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
   put there) to dig again, no bed it put down outside its own zones (never the live respawn bed: it stays) to pick up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
-  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried), and a fragile one (jobs.lib.foods/fragile?) after it too while a hostile could reach or shoot it were the shelter open, until the hold has cost as much as the cheapest way out (fragile-hold); it then leaves by that way.
+  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried), and a fragile one (jobs.lib.foods/fragile?) after it too while a hostile could reach or shoot it were the shelter open, until the hold has cost as much as the cheapest way out (fragile-hold; a start from an earlier dawn is dropped); it then leaves by that way.
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
   The doorway blocks and the bed are scaffold-ledger entries (purposes :doorway, :bed); one jobs.access.cleanup call takes them back.
   Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned, :fragile-hold.")
@@ -144,6 +144,8 @@
   budget ends it, the hold does not), and step! forgets it once nothing holds the body."
   {:cap 1 :ttl :forever})
 
+(def day-ms (* 24000 50))
+
 (defn fragile-hold
   "The fragile-dangers a fragile body stays shut in for after the dawn grace, while the hold since its :fragile-hold
   start (cost/hold-price: seconds held, hp lost) costs less than the cheapest of exits: waiting longer than leaving
@@ -151,10 +153,13 @@
   [c ds]
   (when ds
     (let [health (.-health (.self (:primitives c)))
-          {:keys [since] :as start} (or (:data (ctx/latest c :fragile-hold)) {:since (ctx/now c) :health health})]
+          dawn-ticks (dawn/ticks-since-dawn (.-timeOfDay (.self (:primitives c))))
+          kept (:data (ctx/latest c :fragile-hold))
+          same-dawn? (and kept (>= dawn-ticks (:dawn-ticks kept)) (< (- (ctx/now c) (:since kept)) day-ms))
+          {:keys [since] :as start} (if same-dawn? kept {:since (ctx/now c) :health health :dawn-ticks dawn-ticks})]
       (when (< (cost/hold-price {:held-s (/ (- (ctx/now c) since) 1000) :hp-lost (- (:health start) health) :health health})
                (:price (first (exits c))))
-        (when-not (ctx/latest c :fragile-hold) (ctx/remember! c :fragile-hold start hold-policy))
+        (when-not same-dawn? (ctx/forget-where! c :fragile-hold (constantly true)) (ctx/remember! c :fragile-hold start hold-policy))
         ds))))
 
 (defn pending?
