@@ -1,0 +1,25 @@
+;; A field fenced all round is safe ground: a zombie beyond the fence is no danger (no decision, the walk goes on), and
+;; the same field with its gate open lets it in (the trigger fires and respond decides). Fence 24x24 at x 12..36, z 12..36,
+;; gate at (24 0 36); the body looks round first (a body that has seen nothing prices unseen ground as open); the zombie stands still 3 blocks outside the south fence, the body 3 inside it.
+{:defaults
+ {:tags [:hostile :survival :reflex :pen]
+  :time :any
+  :plot {:length 48 :width 48 :height 8 :floor "grass_block"}
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [12 0 12] [36 0 12] "oak_fence"] [:fill [12 0 36] [36 0 36] "oak_fence"]
+           [:fill [12 0 12] [12 0 36] "oak_fence"] [:fill [36 0 12] [36 0 36] "oak_fence"]]
+  :body {:at [24.5 0 33.5] :effects [["resistance" 600 3]]}
+  :limit-s 60}
+ :cases
+ [{:name "a-zombie-beyond-the-fence-of-a-shut-field-is-no-danger-and-the-walk-goes-on"
+   :blocks [[:set [24 0 36] "oak_fence_gate[facing=south,open=false]"]]
+   :act [[:wait-s 8] [:summon "zombie" [30.5 0 39.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.movement.go-to {:pos #at [24 0 26] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :hostile.decided} :for-s 20}
+            {:no-event {:source :body :kind :died} :for-s 20}]}
+  {:name "the-same-zombie-with-the-gate-open-is-a-danger"
+   :blocks [[:set [24 0 36] "oak_fence_gate[facing=south,open=true]"]]
+   :act [[:wait-s 8] [:summon "zombie" [26.5 0 38.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 20}]}]}
