@@ -1,0 +1,14 @@
+;; The night's candidates include a bed the body has seen beyond 16 blocks (it was capped at 16); the walk's price decides.
+;; Bed 30 blocks off, not remembered. Should-succeed: it walks there and sleeps. Needs the night.
+{:defaults
+ {:tags [:night :survival :bed]
+  :time :night :time-why :sleep
+  :plot {:light :sky :length 64 :width 16 :height 6}
+  :body {:at [6.5 0 6.5] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 130}
+ :cases
+ [{:name "a-bed-seen-30-blocks-off-is-walked-to-and-slept-in"
+   :blocks [[:set [36 0 6] "red_bed[facing=east,part=foot]"] [:set [37 0 6] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 100}]
+   :after [[:body-near [36.5 0 6.5] 4]]}]}

@@ -135,6 +135,11 @@
 (deftest a-body-takes-the-nearest-bed-it-has-seen-though-another-is-remembered
   (is (= {:x 8 :y 64 :z 0} (bed-after-looking open-bed-world false))))
 
+(deftest a-bed-seen-farther-than-sixteen-blocks-is-a-candidate-beside-the-remembered-one
+  (let [{:keys [eng p]} (setup (assoc open-bed-world :blocks {"30,64,0" "red_bed" "40,64,0" "red_bed"}))
+        _ (st/looked-round! eng p)]
+    (is (= [{:x 40 :y 64 :z 0} {:x 30 :y 64 :z 0}] (sh-beds/beds-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+
 (deftest a-body-woken-in-the-open-goes-back-to-a-bed-but-a-sheltered-one-stays
   (is (= {:x 8 :y 64 :z 0} (bed-after-looking open-bed-world true)) "slept tonight, still outside")
   (is (nil? (bed-after-looking (tunnel-world buried-light) true)) "slept tonight, safe in the tunnel"))
@@ -233,9 +238,9 @@
     (tu/run-async done
       (fn ^:async t []
         ;; the spawn bed counts at any distance: Bramble #34/#35 walked toward one 18000 blocks off every night
-        (doseq [[bed remember!] [[{:x 120 :y 64 :z 0} st/know-bed!]
-                                 [{:x -18000 :y 64 :z 0} remember-spawn-bed!]]]
-          (let [{:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"120,64,0" "red_bed"}))]
+        (doseq [[bed remember! blocks] [[{:x 120 :y 64 :z 0} st/know-bed! {"120,64,0" "red_bed"}]
+                                 [{:x -18000 :y 64 :z 0} remember-spawn-bed! {}]]]
+          (let [{:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks blocks))]
             (remember! eng bed)
             (swap! clock + (* 4 sh-clock/ms-per-day))
             (core/submit! eng '(jobs.survival.night) {})

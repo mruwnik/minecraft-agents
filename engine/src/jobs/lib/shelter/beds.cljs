@@ -254,7 +254,7 @@
                         (let [standing (sh-spawn/standing-beds p view radius)
                               placed (mem/place view :bed)]
                           (when (and placed (some #{placed} standing) (ok? placed)) [placed]))
-                        (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p (min 16 radius)) (some-> (sh-spawn/spawn-bed-pos p view) vector))
+                        (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
                              distinct
                              (sort-by #(u/dist (u/self-pos {:primitives p}) %))
                              (filter ok?)))))))
