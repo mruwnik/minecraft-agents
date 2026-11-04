@@ -69,9 +69,11 @@
             :else (recur (inc dy))))))))
 
 (defn unlooked-for-roof?
-  "Night, awake, not looked from here (looked-here?) and a cell over the feet never seen (unseen-roof-cell): look up."
+  "Night, awake, not looked from here (looked-here?) and a cell over the feet never seen (unseen-roof-cell), or the room
+  closing over what is seen has a cell never seen (reach-room/unseen-room?: its doors read as none): look."
   [p view]
-  (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p)) (not (looked-here? p view)) (unseen-roof-cell p))))
+  (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p)) (not (looked-here? p view))
+                (or (unseen-roof-cell p) (reach-room/unseen-room? p (sh-sense/feet p))))))
 
 (defn unseen-shell-cell
   "[x y z] of a cell of the recorded shelter's shell the body has not seen (a side of its two cells, or the roof,

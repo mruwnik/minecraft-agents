@@ -10,6 +10,7 @@
             [engine.perception :as perception]
             [engine.registry :as registry]
             [jobs.lib.world-files :as ew]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
             [engine.shelter-support :as st]
@@ -230,3 +231,12 @@
           (await (tu/run-until-empty eng 12))
           (is (< (:z (st/pos-of p)) 2) "the body stands inside the room, not in the door cell")
           (is (false? (door-open? p)) "the door is shut"))))))
+
+(deftest night-looks-first-when-the-closed-room-has-a-wall-cell-never-seen
+  (let [{:keys [eng p]} (st/setup (open-door-hut {:x 5 :y 64 :z 0} {}))
+        look? #(sh/unlooked-for-roof? p (mem/view (:store eng)))]
+    (with-redefs [reach-room/unseen-room? (fn [& _] true)]
+      (is (true? (look?)) "roof seen, a room cell unseen: the door reads as none until looked")
+      (st/looked-round! eng p)
+      (is (false? (look?)) "looked from here"))
+    (is (false? (look?)) "a fully seen room needs no look")))
