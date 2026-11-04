@@ -77,18 +77,30 @@
   (cond-> s
     (not (sh-sense/seen-cell? (:primitives c) goal)) (assoc-in [2 :look] (walk-risk/look-way c goal dark))))
 
+(defn segment-dist
+  "Distance from cell q to the segment a-b ({:x :y :z} each)."
+  [a b q]
+  (let [d (fn [k] (- (k b) (k a)))
+        len2 (+ (* (d :x) (d :x)) (* (d :y) (d :y)) (* (d :z) (d :z)))
+        t (if (zero? len2) 0 (-> (/ (+ (* (- (:x q) (:x a)) (d :x)) (* (- (:y q) (:y a)) (d :y)) (* (- (:z q) (:z a)) (d :z))) len2) (max 0) (min 1)))]
+    (u/dist q {:x (+ (:x a) (* t (d :x))) :y (+ (:y a) (* t (d :y))) :z (+ (:z a) (* t (d :z)))})))
+
 (defn next-leg
   "{:side :to}: the next walk to look of the walk-look run that began at `from` ({:x :y :z}), or nil: look-edge/far-side over the
   region round `from`, minus the sides a walk-look looked at in vain and `tried` (the cells [x y z] this run's legs went to),
-  from where the body stands, one leg bought from the call's worth; sides within sight of a cell in `stands` (walked to) are left out."
-  ([c from] (next-leg c from #{} #{}))
-  ([c from tried] (next-leg c from tried #{}))
-  ([c from tried stands]
+  from where the body stands, one leg bought from the call's worth; sides within sight of a cell in `:stands` (walked to), and with `:route-to` those farther than a look from the segment `:route-from` to it (when it is more than a block off: a hall judged where the body stands has no way to look along), are left out."
+  ([c from] (next-leg c from #{} {}))
+  ([c from tried] (next-leg c from tried {}))
+  ([c from tried {:keys [stands route-from route-to]}]
   (let [p (:primitives c)
-        walked (into (set tried) (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))]
-    (look-edge/far-side p (sh-sense/feet p) from walked
+        walked (into (set tried) (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))
+        near (or (look/near-of p) 4)
+        route-to (when route-to (if (vector? route-to) (zipmap [:x :y :z] route-to) route-to))
+        walks? (and route-to (not (u/within? route-from route-to 1)))
+        off-route? (fn [[x y z]] (and walks? (> (segment-dist route-from route-to {:x x :y y :z z}) near)))]
+    (look-edge/far-side p (sh-sense/feet p) from (fn [side] (or (walked side) (off-route? side)))
                         (fn [to] (some->> (walk-risk/look-way c to 1) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % (ctx/worth c)))))
-                        stands))))
+                        (or stands #{})))))
 
 (defn walk-look
   "The exposure s with :look, the one leg of the jobs.movement.walk-look child to the cell look-edge/far-side shows the far
@@ -96,7 +108,7 @@
   such a side is left that no walk-look has looked at yet (:walk-looked entries: from close by it stayed unseen, so another
   walk shows nothing); priced runs it as the check's :look-first child, and the check after it offers the next leg."
   [s c at]
-  (if-let [{:keys [side to]} (next-leg c at)]
+  (if-let [{:keys [side to]} (next-leg c at #{} {:route-from (sh-sense/feet (:primitives c)) :route-to at})]
     (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {:side side :to to :at at}]))
     s))
 

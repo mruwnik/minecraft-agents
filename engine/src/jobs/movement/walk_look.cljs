@@ -23,7 +23,7 @@
 (a/defargs args
   {:side {:doc "the unseen side cell to look at" :spec ::a/pos :default nil}
    :to {:doc "the cell to walk to and look from" :spec ::a/pos :default nil}
-   :at {:doc "the cell whose hall the caller judges: legs go on only while an unseen edge still decides it (nil: not asked)" :spec ::a/pos :default nil}})
+   :at {:doc "the cell whose hall the caller judges: legs go on only while an unseen edge still decides it, and then only to sides a look from the way from where the call began to it can show (nil: not asked)" :spec ::a/pos :default nil}})
 
 (def target [:side])
 
@@ -79,7 +79,7 @@
             _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
             _ (when (:edge-walked (ctx/mem c)) (ctx/update-mem! c update :stands (fnil conj #{}) (if (vector? to) (let [[x y z] to] {:x x :y y :z z}) (select-keys to [:x :y :z]))))
             next-leg (when (and (judged? c) (not (look/unseen? (:primitives c) [side]))) (ready/next-leg c from (:tried (ctx/mem c))
-                                    (:stands (ctx/mem c))))]
+                                    {:stands (:stands (ctx/mem c)) :route-from from :route-to (:at (:args c))}))]
         (if next-leg
           (do (ctx/update-mem! c assoc :leg (update next-leg :side (fn [[x y z]] {:x x :y y :z z})) :edge-walked false) :again)
           (let [w (if (u/within? (sh-sense/feet (:primitives c)) from 0)
