@@ -2,6 +2,7 @@
 ;; "out of the shelter, nothing left to take up" (the old pending? was false at night), which left the next walk "shut in".
 ;; Dirt pad y -6..-1, the shaft at x 16 z 16 (y -2 and -1 dug out) roofed by a dirt block at y 0, door cells beside it at x 17 still solid.
 ;; Should-succeed: no leave-shelter :completed while the body stays in the pit. Should-fail: leave-shelter completes at once.
+;; The body looks round first: unseen cells read as open ground, so a body that never looked at its walls is not shut in and leave-shelter was done at once.
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :night :time-why :dawn-decision
@@ -13,6 +14,6 @@
   :limit-s 60}
  :cases
  [{:name "leave-shelter-by-night-stays-sealed-and-is-not-done"
-   :act [[:job (jobs.survival.leave-shelter)]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.leave-shelter)]]
    :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :for-s 30 :at-most 0}]
    :after [[:body-near [16.5 -2 16.5] 1]]}]}

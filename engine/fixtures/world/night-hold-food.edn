@@ -1,0 +1,33 @@
+;; Card 81a64f6d: the hold jobs.survival.leave-shelter makes at first light (hold/hold!, a husk seen over the shaft) shares the hungry trigger's hunger test (foods/wants-meal?) and,
+;; in the pit, keeps get-food to the in-shelter ways (:bake :cook): it never digs out or walks out to hunt. (jobs.survival.night ends at once in a closed hut and a sleeping body does not eat, so this is the hold a body can eat in.)
+;; Dirt pad y -6..-1, the open shaft at x 16 z 16 (y -2 and -1 dug out), a NoAI husk beside its rim.
+;; Should-succeed: a hungry body with bread eats it in the pit (shelter.ate). Should-fail: a body at food 0 with nothing to eat attacks, digs out or leaves the pit, or leave-shelter completes.
+{:defaults
+ {:tags [:night :survival :food]
+  :time :day :time-why :dawn-decision
+  :register []
+  :mobs :keep
+  :settings {:jobs.lib.dawn/unarmed-grace-ticks 24000}
+  :plot {:height 8}
+  :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"] [:fill [16 -2 16] [16 -1 16] "air"]]
+  :memory [{:kind :shelter :data {:pos #xyz [16 -2 16] :state :built :start #xyz [16 0 16]} :policy {:cap 10 :ttl 1200000}}]
+  :body {:at [16.5 -2 16.5] :inventory [["dirt" 12] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "hungry-in-a-pit-eats-carried-bread-while-held"
+   :body {:inventory [["dirt" 12] ["stone_pickaxe" 1] ["bread" 3]]}
+   :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
+         [:rcon "effect give $BODY minecraft:hunger 20 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-5]$" 20]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.survival.leave-shelter)]]
+   :expect [{:event {:source :job :kind :shelter.ate} :within-s 40}]
+   :after [[:body-near [16.5 -2 16.5] 1.5]]}
+  {:name "starving-in-a-pit-does-not-dig-out-to-hunt"
+   :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
+         [:rcon "effect give $BODY minecraft:hunger 30 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 0$" 30]
+         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.survival.leave-shelter)]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 35}
+            {:count-event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :for-s 35 :at-most 0}]
+   :after [[:body-near [16.5 -2 16.5] 1.5]]
+   :limit-s 100}]}
