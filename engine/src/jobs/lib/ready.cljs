@@ -111,7 +111,7 @@
   gap 0."
   [c chance]
   (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))
-        open (contract/never :exposed "an open side leaves the stay dark" :lowered-by #{:torch} :chance chance)
+        open (contract/never :exposed "an open side leaves the stay dark" :lowered-by #{:torch} :chance chance :probe true)
         own (keep #(% (dissoc c ::own-ways) open) (::own-ways c))]
     {:gap 0
      :delta (apply min (ctx/worth c) (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death})) own)}))
@@ -523,7 +523,7 @@
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
                                            (or (= :never kind) (some #{:light :torch} (:lowered-by data)))))
         near? (fn [c] (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at))))
-        priced-never? (fn [[kind _ {:keys [chance]}]] (and (= :never kind) (number? chance)))
+        priced-never? (fn [[kind _ {:keys [chance probe]}]] (and (= :never kind) (number? chance) (not probe)))
         way (fn [c [_ _ {:keys [chance]}]]
               (when torch-way
                 (cost/dark-or-lit (if (number? chance) (price/stay-hp c chance (price/stay-s c)) ##Inf)
