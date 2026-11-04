@@ -391,12 +391,20 @@
   (is (gaim/in-seen-ground? (plateau-from 22.5) {:x 30 :y 65 :z 0}) "the roof y 66..68 seen")
   (is (not (gaim/in-seen-ground? (plateau-from 10.5) {:x 30 :y 65 :z 0})) "too far from the column to take it for ground"))
 
-(deftest an-unseen-goal-cell-in-a-room-behind-a-seen-door-is-no-ground
+(defn hut-from
+  "A stub ctx of a body at x 22.5 before a stone block x 28..40 (y 64..68) with a seen door at x door-x (nil: none) and the
+  inside x 29..39, y 65..66 unseen; the goal cell is (30 65 0)."
+  [door-x]
   (let [p (tu/fake {:self {:pos [22.5 64 0.5]}
-                    :blocks (merge flat (box 28 64 -3 32 68 3 "stone") {"28,64,0" "oak_door" "28,65,0" "oak_door"})})]
-    (aset p "sensedAt" (fn [pos] (if (= [30 65 0] [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
-    (is (not (gaim/in-seen-ground? (stub-ctx p (atom {}) {:pos [30 65 0] :range 0 :unknown true}) {:x 30 :y 65 :z 0}))
-        "the walk opens the door: the roof is not the way to the cell")))
+                    :blocks (merge flat (box 28 64 -3 40 68 3 "stone") (when door-x {(str door-x ",64,0") "oak_door" (str door-x ",65,0") "oak_door"}))})
+        inside? (fn [x y z] (and (<= 29 x 39) (<= 65 y 66) (<= -2 z 2)))]
+    (aset p "sensedAt" (fn [pos] (if (inside? (.-x pos) (.-y pos) (.-z pos)) #js {:unknown true} (.blockAt p pos))))
+    (stub-ctx p (atom {}) {:pos [30 65 0] :range 0 :unknown true})))
+
+(deftest an-unseen-goal-cell-in-a-room-with-a-seen-door-is-no-ground-however-far-the-door
+  (is (not (gaim/in-seen-ground? (hut-from 28) {:x 30 :y 65 :z 0})) "2 blocks from the door")
+  (is (not (gaim/in-seen-ground? (hut-from 40) {:x 30 :y 65 :z 0})) "10 blocks from the door: the walk opens it")
+  (is (gaim/in-seen-ground? (hut-from nil) {:x 30 :y 65 :z 0}) "no door seen: a closed mass"))
 
 (deftest an-unseen-goal-behind-a-seen-solid-is-hidden-in-the-ground-one-behind-unseen-cells-is-not
   (is (gaim/hidden-in-ground? (mound-from-22 29 {}) {:x 30 :y 64 :z 0}) "the mound's face x 28 seen")
