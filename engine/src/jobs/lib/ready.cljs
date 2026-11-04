@@ -100,19 +100,19 @@
 
 (defn own-way
   "c with (f c s) among the ways its job answers a refusal s on exposure itself (its torches, a wait for dawn): seconds,
-  nil none. priced takes the walk to look only while it is cheaper than each of them."
-  [c f]
-  (update c ::own-ways (fnil conj []) f))
+  nil none. priced takes the walk to look only while it is cheaper than each of them. stay-f (c chance), when given, is the
+  same answer to a dark stay at chance, for the price of a look before any refusal exists (stay-look-price)."
+  ([c f] (update c ::own-ways (fnil conj []) f))
+  ([c f stay-f] (update (own-way c f) ::own-stays (fnil conj []) stay-f)))
 
 (defn stay-look-price
   "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on, paid at P(closed): unlooked, an unseen
   wall is an open side, so the job takes the cheapest of the stay's exposure (price/stay-parts acted on now, cost/risk-s),
-  its own answers to the dark a torch lowers (own-way) and giving the goal up (ctx/worth); a room seen closed spares that,
+  its own answers to a stay at that chance (own-way's stay-f) and giving the goal up (ctx/worth); a room seen closed spares that,
   gap 0."
   [c chance]
   (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))
-        open (contract/never :exposed "an open side leaves the stay dark" :lowered-by #{:torch} :chance chance :probe true)
-        own (keep #(% (dissoc c ::own-ways) open) (::own-ways c))]
+        own (keep #(% (dissoc c ::own-ways ::own-stays) chance) (::own-stays c))]
     {:gap 0
      :delta (apply min (ctx/worth c) (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death})) own)}))
 
@@ -267,7 +267,7 @@
             hp (+ hurt lethal)
             {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
             look-s (some->> look-way (walk-risk/look-cost c) (#(when (look-edge/affords-walk? c % (ctx/worth c)) %)))
-            own-s (keep #(% (dissoc c ::own-ways) s) (::own-ways c))
+            own-s (keep #(% (dissoc c ::own-ways ::own-stays) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))
             look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
             look? (fn [than] (and look (or (nil? than) (< (:s look) than))))
@@ -523,18 +523,20 @@
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
                                            (or (= :never kind) (some #{:light :torch} (:lowered-by data)))))
         near? (fn [c] (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at))))
-        priced-never? (fn [[kind _ {:keys [chance probe]}]] (and (= :never kind) (number? chance) (not probe)))
-        way (fn [c [_ _ {:keys [chance]}]]
+        priced-never? (fn [[kind _ {:keys [chance]}]] (and (= :never kind) (number? chance)))
+        chance-of (fn [[_ _ data]] (:chance data))
+        way (fn [c chance]
               (when torch-way
                 (cost/dark-or-lit (if (number? chance) (price/stay-hp c chance (price/stay-s c)) ##Inf)
                                   (.-health (.self (:primitives c))) (torch-way c))))
-        own-s (fn [c s] (when (and (dark-wait? s) (near? c) (not (and (nil? torch-way) (priced-never? s))))
-                          (let [w (way c s)] (cond (nil? w) 0 (= :lit (:way w)) (:lit-s w)))))
+        own-stay (fn [c chance] (when (near? c) (let [w (way c chance)] (cond (nil? w) 0 (= :lit (:way w)) (:lit-s w)))))
+        own-s (fn [c s] (when (and (dark-wait? s) (not (and (nil? torch-way) (priced-never? s))))
+                          (own-stay c (chance-of s))))
         lift (fn [g lifted]
-               (fn [c] (let [s (g (own-way c own-s))]
+               (fn [c] (let [s (g (own-way c own-s own-stay))]
                          (if-not (and (dark-wait? s) (near? c))
                            s
-                           (let [w (way c s)]
+                           (let [w (way c (chance-of s))]
                              (cond (and (nil? w) (priced-never? s)) s
                                    (nil? w) (lifted c (contract/ok :dark-near "dark, but within the radius no mob spawns in"))
                                    (= :lit (:way w)) (lifted c (contract/ok :lit-way (str "dark, but within the radius no mob spawns in, and its torches cost "

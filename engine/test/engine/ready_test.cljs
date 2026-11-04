@@ -214,18 +214,18 @@
 (deftest a-room-seen-closed-spares-the-cheapest-of-the-stays-exposure-the-jobs-own-ways-and-the-worth
   (let [c (ctx-of night-hut)
         price #(ready/stay-look-price % 0.5)
-        torch (fn [s] (fn [_ [_ _ {:keys [lowered-by]}]] (when (lowered-by :torch) s)))
+        way (fn [c s] (ready/own-way c (fn [_ _] nil) (fn [_ _] s)))
         exposure (:delta (price c))
         walls [[1 64 0] [2 64 0]]
         break-even (/ (cost/look-s 2) (cost/closed-chance 0 2))
-        looks-at #(some-> (ready/room-look (ready/own-way c (torch %)) "dark" nil 0.5) (nth 2) :look-at)]
+        looks-at #(some-> (ready/room-look (way c %) "dark" nil 0.5) (nth 2) :look-at)]
     (is (< (* 2 break-even) exposure) "the stay's exposure passes the round's break-even")
     (is (= {:gap 0 :delta exposure} (price c)) "no own way: a closed room spares the exposure")
-    (is (= {:gap 0 :delta exposure} (price (ready/own-way c (fn [_ _] nil)))) "an own way that does not answer the dark")
-    (is (= {:gap 0 :delta 5} (price (-> c (ready/own-way (fn [_ _] 9)) (ready/own-way (torch 5)))))
+    (is (= {:gap 0 :delta exposure} (price (way c nil))) "an own way that does not answer the dark")
+    (is (= {:gap 0 :delta 5} (price (-> c (way 9) (way 5))))
         "a torch at 5 s: a closed room spares only the torch")
-    (is (= {:gap 0 :delta exposure} (price (ready/own-way c (torch (* 2 exposure))))) "an own way dearer than the stay")
-    (is (= {:gap 0 :delta 3} (price (assoc (ready/own-way c (torch 5)) :worth (constantly 3)))) "giving the goal up is cheaper still")
+    (is (= {:gap 0 :delta exposure} (price (way c (* 2 exposure)))) "an own way dearer than the stay")
+    (is (= {:gap 0 :delta 3} (price (assoc (way c 5) :worth (constantly 3)))) "giving the goal up is cheaper still")
     (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] walls))
                   reach-room/unseen-sides (constantly walls)
                   sense/unknown? (constantly true)]

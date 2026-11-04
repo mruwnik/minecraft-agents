@@ -70,13 +70,16 @@
         wait-s (fn [[_ _ data]] (some-> (:wait-ms data) (/ 1000)))
         dawn-s (fn [c] (let [s (sense/sky-in (:primitives c))] (when (pos? (or s 0)) s)))
         fetch? (fn [c s] (fetch-due? c (if (wait-for-light? s) (wait-worth (wait-s s)) (night-worth c (dawn-s c))) (plan/owed (cells-of c))))
+        torch-s (fn [c fetch? dawn?]
+                  (if (can-light? c)
+                    0
+                    (some->> [(when fetch? (need/item-price c "torch" (torches-short c (plan/owed (cells-of c))) (need/fetch-opts c) nil))
+                              (when dawn? (dawn-s c))]
+                             (remove nil?) seq (apply min))))
         own-s (fn [c s] (when (or (wait-for-light? s) (no-light? s))
-                          (if (can-light? c)
-                            0
-                            (some->> [(when (fetch? c s) (need/item-price c "torch" (torches-short c (plan/owed (cells-of c))) (need/fetch-opts c) nil))
-                                      (when (no-light? s) (dawn-s c))]
-                                     (remove nil?) seq (apply min)))))
-        lit (fn [f] (fn [c] (let [s (f (ready/own-way c own-s))]
+                          (torch-s c (fetch? c s) (no-light? s))))
+        own-stay (fn [c _] (torch-s c (fetch-due? c (night-worth c (dawn-s c)) (plan/owed (cells-of c))) true))
+        lit (fn [f] (fn [c] (let [s (f (ready/own-way c own-s own-stay))]
                               (if (and (or (wait-for-light? s) (no-light? s)) (or (can-light? c) (fetch? c s)))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
                                 (cond
