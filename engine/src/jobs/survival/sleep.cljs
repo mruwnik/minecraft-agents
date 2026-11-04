@@ -151,7 +151,7 @@
   (and (false? (:found route)) (not (:unseen-floors route)) (contains? no-way-reasons (some-> (:reason route) keyword))))
 
 (defn late-walk?
-  "Whether the time spent walking (spent-ms) passed the first quote's upper bound (hi, s; nil: none) while the latest quote's route (nil: no quote) still has no whole way."
+  "Whether the time spent quoting and walking (spent-ms) passed the first quote's upper bound (hi, s; nil: none) while the latest quote's route (nil: no quote) still has no whole way."
   [route hi spent-ms]
   (boolean (and route hi (not (true? (:found route))) (< (* 1000 hi) spent-ms))))
 
@@ -223,6 +223,7 @@
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
         quote-args {:pos bed :range 2 :ways walk-ways}
+        t0 (ctx/now c)
         q (when-not (taken?) (await (ctx/quote c 'jobs.movement.go-to quote-args)))
         route (:route q)
         hi (some-> q (get-in [:uses :job-time]) last)
@@ -233,9 +234,8 @@
         late? (late-walk? route walk-hi (:walk-spent (ctx/mem c) 0))
         no-way? (no-way-quote? route)
         searching? (= :searching (some-> (:reason route) keyword))
-        t0 (ctx/now c)
         walk (when-not (or (taken?) no-way? late? searching?) (await (child/call-walk* c :go walk-args)))
-        _ (when walk (ctx/update-mem! c update :walk-spent (fnil + 0) (- (ctx/now c) t0)))]
+        _ (when q (ctx/update-mem! c update :walk-spent (fnil + 0) (- (ctx/now c) t0)))]
     (cond
       (and (taken?) (:reflex c)) (do (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
                                      (ctx/end c :nothing-possible :bed-occupied {:pos bed :text "the bed is occupied; skipped for ten minutes"}))
