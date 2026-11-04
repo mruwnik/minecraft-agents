@@ -67,7 +67,7 @@
   - roofed, buried or shut in a closed room: done {:night :roofed}.
   - in a sealed room only dark cells beyond the spawn-free radius spoil, with torches or coal held, once a night, when its quote (torches x place time, crafting short torches from coal) is no more than the cheapest wall, pit or pocket: jobs.build.light-area over the room's cells (night.light), then the pass chooses again.
   - else the cheapest of shelter-prices (bed-down/answers): jobs.survival.shut-in {:for :night} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; priced again while another site may be left, at most max-sites), a niche (pocket way, once; with no site left, out of the failed pit and a look round first), a flee, or exposed, the night left in the open here (a shut-in that quotes no way here is called first all the same: its ending marks the sites failed, so a flee is not priced to ground beside them): one shelter.exposed warn, a log-out stint, and the round ends nothing-possible :exposed; the trigger fires again after its cooldown and the night looks again (a bed or sleeper that turned up is taken then). A shut-in, niche or flee in flight is called again until it ends.
-  Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
+  Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise. The walk's :worth is flee-worth (the next way's price less the shelter on arrival), so go-to's unseen-floor turn-back does not end it.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
   Memory: body memory :night-exposed (where the night ended with no shelter: later firings there go straight to the exposed log-out); job memory :edge-looked, :edge-phase, :edge-spent, :edge-walked, :edge-t0, :enclose, :enclose-failed (feet cells where walling in failed), :sheltered, :log-out-failed, :no-site, :shut-ins, :digging, :place-other-s, :bed-down, :pit-trapped, :roof-walk-failed, :left; body memory :doorway-tried and shut-in's :shut-in-failed (forgotten when the night ends, at most ten minutes).
@@ -189,7 +189,7 @@
       (= :done (:kind l)) (do (when-not (:sheltered (ctx/mem c)) (hold/sheltered! c :logged-out)) :again)
       :else (do (ctx/update-mem! c assoc :log-out-failed true) :again))))
 
-(declare shut-worth)
+(declare shut-worth flee-worth)
 
 (defn walk-worth
   "The worth of a walk to answer (shut-worth over prices, the walk free), at least taken-at, the answer's price when it is taken
@@ -661,7 +661,7 @@
         (case pick
           :shelter (await (shelter! c))
           :niche (await (niche! c (pit-site/pit-start c)))
-          :flee (await (flee/flee! c t))
+          :flee (await (flee/flee! c (assoc t :worth (flee-worth prices t))))
           (if (next prices) (stay! c prices) (await (exposed! c))))))))
 
 (defn ^:async answer-pass
@@ -703,11 +703,21 @@
       (emit-answers! c pick prices)
       [pick prices])))
 
+(defn away-worth
+  [prices k walk-cost]
+  (max 0 (- (apply min ##Inf (vals (dissoc prices k))) (- (get prices k) walk-cost))))
+
 (defn home-worth
   "Seconds the walk into home (walkable-home's, :cost its walk's price) is worth (Q54): what the next way (the cheapest of
   prices but :home) costs more than the home once there, ##Inf with none."
   [prices home]
-  (max 0 (- (apply min ##Inf (vals (dissoc prices :home))) (- (:home prices) (:cost home)))))
+  (away-worth prices :home (:cost home)))
+
+(defn flee-worth
+  "Seconds the flee to target t (flee-target's, :cost its walk's price) is worth, as home-worth: what the next way costs more
+  than the shelter once there."
+  [prices t]
+  (away-worth prices :flee (:cost t)))
 
 (defn shut-worth
   "room-worth over the night's prices."

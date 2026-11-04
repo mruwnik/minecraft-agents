@@ -148,7 +148,7 @@
   [c t]
   (hold/busy! c)
   (ctx/update-mem! c assoc :fleeing t)
-  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (assoc (flee-args t) :floor cost-health/spend-down)))]
+  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (cond-> (assoc (flee-args t) :floor cost-health/spend-down) (:worth t) (assoc :worth (:worth t)))))]
     (if (= :continue w)
       :again
       (let [arrived (:arrived (:data w))]
