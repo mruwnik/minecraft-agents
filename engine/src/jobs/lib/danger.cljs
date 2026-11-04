@@ -16,6 +16,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.proofs :as proofs]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -173,17 +174,31 @@
 
 (def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
 
+(def dark-sight "Blocks within which a mob is seen even in the dark (README sensing)." 4)
+
 (defn sight-lookup
-  "A kind-at for the body's sight: what it has seen, a cell it has not seen blocking (arrow-kind-of: glass and leaves count as blocking too)."
+  "A kind-at for the body's sight: what it has seen, a cell it has not seen blocking (arrow-kind-of: glass and leaves count as blocking too).
+  A cell farther than dark-sight that the body knows to be unlit also blocks: a mob standing in it is hardly seen, so a heard one may be there."
   [p]
-  (reach/seen-lookup p reach/arrow-kind-of :solid))
+  (let [kind-at (reach/seen-lookup p reach/arrow-kind-of :solid)
+        {:keys [x y z]} (u/pos-of (.-pos (.self p)))
+        lit (js/Map.)
+        lit? (fn [cx cy cz]
+               (let [k (str cx "," cy "," cz)]
+                 (when-not (.has lit k) (.set lit k (not (and (sh-sense/cell-light p {:x cx :y cy :z cz}) (not (sh-sense/lit-here? p {:x cx :y cy :z cz}))))))
+                 (.get lit k)))]
+    (fn [cx cy cz]
+      (if (or (< (js/Math.hypot (- cx x) (- cz z)) dark-sight) (lit? cx cy cz))
+        (kind-at cx cy cz)
+        :solid))))
 
 (defn in-sight?
   "Whether the body's eye (feet body-pos) has a clear line over sight-at to the middle or the top of cell [x y z]: a
   hostile standing there would be seen (engine.senses/can-see?), so a heard one is not there."
   [sight-at body-pos [x y z]]
   (let [eye [(:x body-pos) (+ (:y body-pos) game/eye-height) (:z body-pos)]]
-    (boolean (some #(reach/ray-clear? sight-at eye [(+ x 0.5) (+ y %) (+ z 0.5)]) [0.5 1.5]))))
+    (boolean (and (not (keyword-identical? :solid (sight-at x y z)))
+                  (some #(reach/ray-clear? sight-at eye [(+ x 0.5) (+ y %) (+ z 0.5)]) [0.5 1.5])))))
 
 (defn open-cell-from
   "The cell [x y z] a heard mob may stand in: from its rough spot (mob-pos) outward from the body along the same line,
@@ -332,12 +347,13 @@
 (defn hostile-dangers
   "The dangers (dangers) the hostile-near trigger weighs (args :radius, :ranged-radius, :visible-only, :ignore-heard?), nearest first:
   heard mobs are left out when args say so and muted while jobs.lib.body/heard-muted?, a ranged mob counts only within its fire range (:shooting?):
-  doing nothing about one past it loses nothing, and the trigger re-arms as it closes. None for a dead body. opts go on
-  to danger-in? (a job's check passes :sight-at)."
+  doing nothing about one past it loses nothing, and the trigger re-arms as it closes. None for a dead body. A heard mob is
+  never placed in the body's clear sight (a player would see it there); opts go on to danger-in?."
   ([world memory args] (hostile-dangers world memory args {}))
   ([world memory args opts]
    (if (body/dead? memory)
      []
      (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args (ranged-radius))}
-              (merge {:sight? (:visible-only args true) :ignore-heard? (or (:ignore-heard? args) (body/heard-muted? memory)) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true}
+              (merge {:sight? (:visible-only args true) :ignore-heard? (or (:ignore-heard? args) (body/heard-muted? memory)) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true
+                      :sight-at (when (:visible-only args true) (sight-lookup world))}
                      opts)))))

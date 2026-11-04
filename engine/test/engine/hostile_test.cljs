@@ -1872,7 +1872,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup-seeing {:blocks heard-wall :entities [(zombie 6.5 -3.5)]} nil 1000)]
+        (let [{:keys [eng p]} (setup-seeing {:time 14000 :blocks heard-wall :entities [(zombie 6.5 -3.5)]
+                                         :light (into {} (for [x (range -9 10) y [64 65] z (range -9 10)] [[x y z] [0 0]]))} nil 1000)]
           (stuck-walks! p)
           (core/submit! eng respond {})
           (await (core/tick! eng))
@@ -1901,7 +1902,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [skeletons [(heard-skeleton 5 6 0) (heard-skeleton 6 -3 3)]
-              kit {:inventory sword :equipment iron-armour :entities skeletons}]
+              kit {:inventory sword :equipment iron-armour :entities skeletons :time 14000
+                   :light (into {} (for [x (range -9 10) y [64 65] z (range -9 10)] [[x y z] [0 0]]))}]
           (let [{:keys [eng seen]} (await (flight-round respond kit))]
             (is (= [:fight] (mapv :decision (decided seen))))
             (is (= [] (tu/walked-to eng)) "no flight from a sound")
@@ -2115,3 +2117,19 @@
           (is (= :flee (:decision e)) (str "the walk away is the cheaper: " (:prices e)))
           (is (= {:fight 319 :flee 307} (select-keys (:prices e) [:fight :flee])) "the prices, whole seconds"))))))
 
+
+(def lit-room
+  "A room with interior x,z -5..5 (feet y 64), walls at 6, roof at y 67: a heard mob outside has its rough spot inside it."
+  (into {} (for [x (range -6 7) z (range -6 7) y (range 63 68)
+                 :let [wall? (or (= 6 (Math/abs x)) (= 6 (Math/abs z)))]
+                 :when (or wall? (= y 63) (= y 67))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest hostile-dangers-never-places-a-heard-mob-inside-the-bodys-clear-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (setup-seeing {:time 14000 :light (into {} (for [x (range -6 7) y [64 65] z (range -6 7)] [[x y z] [0 14]])) :blocks lit-room :self {:health 20} :entities [(assoc (zombie 7 0) :visible false)]} nil 1000)]
+          (looked-round! p)
+          (is (empty? (danger-q/hostile-dangers p {:data mem/empty-data :now 0} {:radius 16}))
+              "the heard zombie behind the wall: its rough spot in the seen room is no place for it"))))))

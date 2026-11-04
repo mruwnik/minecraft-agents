@@ -272,7 +272,7 @@
 ;; ---- cards 99f833e8, 271c2a45: heard melee mobs count; a fusing creeper hisses
 
 (deftest a-zombie-heard-in-the-dark-with-a-way-is-a-danger
-  (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 8)]})]
+  (let [{:keys [p]} (rig {:time 14000 :entities [(mob 1 "zombie" 0 8)]})]
     (dark-around! p 0 8)
     (is (= [1] (danger-ids p)))
     (is (true? (hostile-near? p)))))
