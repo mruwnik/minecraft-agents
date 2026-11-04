@@ -18,7 +18,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
-            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (def job 'jobs.items.collect-drops)
@@ -758,27 +757,6 @@
   ;; the floor under the seen lane was never seen: where the prior says rock it is stood on, not dug under
   (let [seen (fn [[x y z]] (when (and (<= 16 x 22) (<= 0 y 1) (= z 16)) "air"))]
     (is (= [] (:dig (job-ns/drop-route {} nil nil seen (constantly true) [16 0 16] [22 0 16]))))))
-
-(deftest a-drop-route-dearer-than-the-drop-walks-to-the-frontier-toward-it-and-plans-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [now (atom 0)
-              c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :view (fn [] {:now @now})}
-              item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}
-              run (fn ^:async run* [frontier walk]
-                    (let [routes (atom 0) walks (atom []) worths (atom [])]
-                      (with-redefs [job-ns/look-pit! (fn [_ _ _] nil)
-                                    job-ns/drop-route (fn [_ worth _ _ _ _ _] (swap! worths conj worth) (if (= 1 (swap! routes inc)) {:problem :dearer} {:dig []}))
-                                    seen-sections/toward (fn [_ _ goal _ _ _ _] (when frontier (is (= [8 64 0] goal)) frontier))
-                                    job-ns/walk-onto! (fn [_ cell _] (swap! walks conj cell) (swap! now + 60000) walk)]
-                        {:out (await (job-ns/dig-to! c item)) :walks @walks :routes @routes :worths @worths})))
-              walked (await (run [4 64 0] :arrived))]
-          (is (= {:out :dug :walks [[4 64 0]] :routes 2} (dissoc walked :worths)) "walked to the frontier, then planned again from there")
-          (let [[w1 w2] (:worths walked)] (is (<= w2 (- w1 60)) "the walk's clock seconds, not its straight-line steps, come out of the worth the next plan gets"))
-          (is (= :no-route (:out (await (run nil :arrived)))) "no frontier toward the drop: left")
-          (is (= :no-route (:out (await (run [4 64 0] nil)))) "nor when the walk there fails")
-          (is (= :continue (:out (await (run [4 64 0] :continue)))) "a walk that waits on the world waits"))))))
 
 (deftest a-partial-dig-books-the-failing-cell-and-prices-unseen-cells-as-the-plan-did
   (async done

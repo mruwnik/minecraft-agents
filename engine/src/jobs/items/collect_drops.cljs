@@ -20,7 +20,6 @@
             [jobs.lib.loose :as loose]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
-            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.sense :as sense]
             [jobs.lib.torch :as torch]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -364,18 +363,10 @@
       (when-not (= :continue o) (ctx/update-mem! c assoc :lit true))
       (if (= :continue o) :continue :lit))))
 
-(defn ^:async walk-onto!
-  "Walk onto cell, a frontier to look from (one go-to call, slot :frontier): :arrived, :continue (go-to waits on the world) or nil."
-  [c cell worth]
-  (let [r (await (child/run!* c :frontier 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range 0 :ways (drop-walk-ways c) :worth worth}))]
-    (cond
-      (= :continue r) :continue
-      (and (= :done (:kind r)) (:arrived (:data r))) :arrived)))
-
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
   never seen) is planned again from where the body now stands, at most ::replans times; when every route costs more than the
-  drop is worth, a walk onto the remembered frontier toward it (seen-sections/toward) and a plan from there, the walk's steps booked out of the worth the next plan gets. :dug when every cell is open now,
+  drop is worth, it is left (:no-route). :dug when every cell is open now,
   :continue while a dig waits on the world, else why not: :no-route, :too-big (the route search outgrew the heap) or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
   [c item]
   (let [p (:primitives c)]
@@ -391,13 +382,7 @@
         (case (:problem r)
           :searching :continue
           :no-route :no-route
-          :dearer (if-let [f (seen-sections/toward p from (item-cell item) (:max-fall prices) (:step-s prices) (:unseen-step-s prices) worth)]
-                    (let [start (cost/leg-start c)]
-                      (case (await (walk-onto! c f worth))
-                        :continue :continue
-                        :arrived (recur pass (+ spent (cost/leg-price c start (seen-sections/walk-steps from f) (:step-s prices))))
-                        :no-route))
-                    :no-route)
+          :dearer :no-route
           :too-big :too-big
           nil
           (let [priced (mapv (fn [cell] ((:dig-s prices) (or (seen-name cell) blocks/hidden-guess) cell)) (:dig r))

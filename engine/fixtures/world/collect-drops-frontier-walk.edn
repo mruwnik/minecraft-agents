@@ -1,5 +1,5 @@
 ;; jobs.items.collect-drops dig-to! (card 65546ccc, db43539ed): a drop seen through a long glass wall costs more to dig to than it is worth, and the way round is rock the
-;; body has never seen; it walks the seen tunnel to the corner, from where the way round is in sight, and goes that way (go-to's own walk or dig-to!'s frontier walk: either leaves the glass whole).
+;; body has never seen; it walks the seen tunnel to the corner, from where the way round is in sight, and goes that way (go-to's own walk; collect-drops walks before it digs).
 ;; Tunnel x 5, z 16..23 (the body at its north end, the corner at the south); way round z 23, x 6..17 east to the chamber x 18..22, z 16..23 holding the drop at [20.5 0 18.5],
 ;; seen through glass x 6..17, z 16..21; a stone wall z 22 hides the way round from the tunnel's north end.
 {:defaults
@@ -16,6 +16,13 @@
   :limit-s 200}
  :cases
  [{:name "way-round-seen-from-the-corner-is-walked-to-for-a-drop-dearer-through-the-glass"
+   :act [[:summon "item" [20.5 0 18.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
+         [:job (jobs.items.collect-drops {:near #at [20 0 18] :radius 20 :dig true})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}]
+   :after [[:item "oak_log" 1] [:block [10 0 18] "glass"] [:block [14 0 17] "glass"] [:block [8 1 20] "glass"]]}
+  ;; the glass is another player's (a protected build seen through): no dig route crosses it, only the way round
+  {:name "glass-in-a-zone-the-way-round-is-walked"
+   :zones [{:name "glass-$tag" :min [6 0 16] :max [17 1 21] :owner "Other"}]
    :act [[:summon "item" [20.5 0 18.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
          [:job (jobs.items.collect-drops {:near #at [20 0 18] :radius 20 :dig true})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}]
