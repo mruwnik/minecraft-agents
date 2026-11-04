@@ -1505,3 +1505,17 @@
               _ (swap! xs conj (:x (body-pos p)))]
           (is (<= (apply max @xs) 0.6) (str "never east, towards the creeper: " (pr-str @xs)))
           (is (<= (:x (body-pos p)) 0.6) "stays at the end"))))))
+
+(deftest a-melee-mob-waits-at-a-seal-only-within-reach-in-three-dimensions
+  (let [c {:args {:cells [[10 64 0]]}}
+        waiting (fn [y] (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 1 10.5 {:pos {:x 10.5 :y y :z 0.5}})]})]
+                          (count (hide-out/waiting-melee (assoc c :primitives p)))))]
+    (is (= 1 (waiting 64)) "beside the seal cell")
+    (is (= 0 (waiting 69)) "same x and z but 5 above it: out of foot reach")))
+
+(deftest a-cell-never-seen-reads-rock-only-where-rock-is-likelier
+  (let [p (tu/seeing-within (tu/fake-on-floor {:floor big-floor :blocks (tu/box 3 64 -2 3 66 2 "stone")}) 4)
+        kind-at (with-redefs [look/unseen-solid?-fn (fn [_] (fn [[x]] (= 20 x)))] (hide-out/sealed-lookup p))]
+    (is (= :solid (kind-at 3 64 0)) "a seen wall is rock")
+    (is (= :solid (kind-at 20 64 0)) "an unseen cell the prior holds rock")
+    (is (= :ground (kind-at 21 64 0)) "an unseen cell the prior holds open is ground a mob may cross: no blanket rock")))

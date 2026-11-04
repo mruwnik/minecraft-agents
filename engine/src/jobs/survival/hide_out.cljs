@@ -98,10 +98,17 @@
         r (foot-reach)
         seal (map (fn [[x y z]] {:x (+ x 0.5) :y y :z (+ z 0.5)}) (:cells (:args c)))
         near-seal? (fn [e] (let [m (danger-q/mob-pos p e)]
-                             (some #(<= (Math/hypot (- (:x m) (:x %)) (- (:z m) (:z %))) r) seal)))]
+                             (some #(<= (Math/hypot (- (:x m) (:x %)) (- (:y m) (:y %)) (- (:z m) (:z %))) r) seal)))]
     (->> (flight/near-known p (dead c) threats/max-follow-range threats/max-follow-range)
          (remove combat/ranged?)
          (filter #(or (<= (danger-q/mob-distance p %) r) (near-seal? %))))))
+
+(defn sealed-lookup
+  "A kind-at over what the body has seen: a cell it has not seen is rock where that is likelier than open (look/unseen-solid?-fn,
+  as the pillar's climb check reads it), else open ground a mob may come through."
+  [p]
+  (let [solid? (look/unseen-solid?-fn p)]
+    (reach/seen-lookup p reach/kind-of (fn [x y z] (if (solid? [x y z]) :solid :ground)))))
 
 (defn ^:async dig-out!
   "Dig a stair up (jobs.access.stair, ::dig-out-steps) on the heading away from the mob waiting at the foot, the next heading
@@ -169,7 +176,7 @@
         _ (ctx/update-mem! c assoc :quiet-from quiet-from :hidden-since hidden-since :hold-at now)
         radius (danger-q/hostile-radius)
         ranged-radius (danger-q/ranged-radius)
-        danger-on-body? (fn [] (danger-q/danger-near? p radius ranged-radius {:kind-at (reach/seen-lookup p reach/kind-of :solid)}))
+        danger-on-body? (fn [] (danger-q/danger-near? p radius ranged-radius {:kind-at (sealed-lookup p)}))
         held-ms (- now hidden-since)
         breaker (breaker c)
         dig-out? (or (:dig-out (ctx/mem c))
