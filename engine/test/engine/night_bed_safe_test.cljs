@@ -38,6 +38,11 @@
   {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001 :sees-all true
    :blocks (merge hut/tunnel {"-1,64,0" "stone" "-1,65,0" "stone" "21,64,0" "stone" "21,65,0" "stone" "40,64,0" "red_bed"}) :light light})
 
+(defn lit-tunnel
+  "tunnel-world with buried-light, whose light is held by torches too: the table gives the raw world's light, memory floods it from the torches."
+  []
+  (update (tunnel-world buried-light) :blocks into (for [x [2 8 14 20]] [(str x ",65,0") "torch"])))
+
 (defn lit-fake
   "{:raw :p}: a fake body and its perception wrap, so the raw world's sky light is read (sh-sense/buried?). :sees-all in the
   world: the fake's own sight (every block seen) with the perception only for its light, its memory holding the floor's
@@ -73,8 +78,8 @@
     (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
 (deftest a-buried-body-does-not-use-a-bed-out-in-the-open
-  (is (nil? (bed-to-use (tunnel-world buried-light))))
-  (is (false? (holds? (tunnel-world buried-light))) "the night trigger does not hold"))
+  (is (nil? (bed-to-use (lit-tunnel))))
+  (is (false? (holds? (lit-tunnel))) "the night trigger does not hold"))
 
 (def open-dark-tunnel
   "The tunnel with both plugs gone and no torch light: buried, but open at the ends (onto roofed, walled stubs, so no sky light comes in) and dark."
@@ -88,14 +93,14 @@
   (is (false? (holds? open-dark-tunnel)) "no sky light reaches it: waiting for day changes nothing"))
 
 (deftest a-buried-body-neither-places-a-carried-bed-nor-logs-out-for-a-sleeper
-  (let [carrying (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}])
+  (let [carrying (assoc (lit-tunnel) :inventory [{:name "red_bed" :count 1}])
         {:keys [eng p]} (setup carrying)]
     (st/looked-round! eng p)
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
     (is (false? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "mining goes on")))
 
 (deftest a-buried-body-in-its-own-night-shelter-logs-out-for-a-sleeper
-  (let [{:keys [eng p]} (setup (assoc (tunnel-world buried-light) :sees-all true))]
+  (let [{:keys [eng p]} (setup (assoc (lit-tunnel) :sees-all true))]
     (st/looked-round! eng p)
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
     (mem/write! (:store eng) :shelter {:pos {:x 5 :y 64 :z 0} :state :built} sh/shelter-policy)
@@ -115,10 +120,10 @@
     (sh-beds/bed-to-use p view 128 (constantly true))))
 
 (deftest a-buried-body-overdue-for-sleep-walks-to-its-bed
-  (is (= far-bed (bed-to-use-after-days (tunnel-world buried-light) 3))))
+  (is (= far-bed (bed-to-use-after-days (lit-tunnel) 3))))
 
 (deftest a-buried-body-not-yet-overdue-stays-in-the-tunnel
-  (is (nil? (bed-to-use-after-days (tunnel-world buried-light) 2))))
+  (is (nil? (bed-to-use-after-days (lit-tunnel) 2))))
 
 (deftest a-body-out-in-the-open-still-walks-to-its-bed
   (let [world {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :blocks {"40,64,0" "red_bed"}}]
@@ -145,7 +150,7 @@
 
 (deftest a-body-woken-in-the-open-goes-back-to-a-bed-but-a-sheltered-one-stays
   (is (= {:x 8 :y 64 :z 0} (bed-after-looking open-bed-world true)) "slept tonight, still outside")
-  (is (nil? (bed-after-looking (tunnel-world buried-light) true)) "slept tonight, safe in the tunnel"))
+  (is (nil? (bed-after-looking (lit-tunnel) true)) "slept tonight, safe in the tunnel"))
 
 (deftest a-body-shut-in-a-hut-does-not-walk-out-to-a-far-bed
   (let [world (merge (hut/hut-world {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:time st/night})]
@@ -165,7 +170,7 @@
           (try
             (doseq [seed [0 1 5 7]]
               (set! js/Math.random (lcg seed))
-              (let [{:keys [eng p raw]} (setup (tunnel-world buried-light))]
+              (let [{:keys [eng p raw]} (setup (lit-tunnel))]
                 (core/submit! eng '(jobs.survival.night) {})
                 (await (st/tick-n eng 12))
                 (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) (str "the body stays in the tunnel, seed " seed))
@@ -176,7 +181,7 @@
 (def overdue-in-open-lit-tunnel
   "The tunnel torch-lit and shut by a door at its east end, so no dark floor's mob walks to the body; the far bed stands
   out on the dark open ground."
-  (-> (tunnel-world buried-light)
+  (-> (lit-tunnel)
       (update :blocks assoc "21,64,0" "oak_door" "21,65,0" "oak_door")
       (assoc :states {"21,64,0" {:open false :half "lower" :facing "east"} "21,65,0" {:open false :half "upper" :facing "east"}}
              :inventory [{:name "cobblestone" :count 32}])))
@@ -294,7 +299,8 @@
   (into {} (for [x (range 4 7) y [64 65] z (range -1 2)] [[x y z] [0 14]])))
 
 (defn hut-night-world [blocks extra]
-  (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light :sees-all true} extra))
+  (-> (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light :sees-all true} extra)
+      (update :blocks assoc "6,65,1" "torch")))
 
 (defn blind-above
   "p that has not seen the roof: the roof (above the walls) is unknown (a body cannot look up from inside)."
@@ -350,7 +356,8 @@
 (defn unseen-hut-world
   "The closed hut, the body in it with nothing seen yet (no sight pass), not the fake's all-seeing sight."
   [blocks extra]
-  (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light} extra))
+  (-> (merge (hut/hut-world {:x 4 :y 64 :z -1} blocks) {:time st/night :light hut-light} extra)
+      (update :blocks assoc "6,65,1" "torch")))
 
 (deftest a-body-in-a-hut-it-has-not-looked-at-looks-then-places-its-carried-bed
   (async done
@@ -367,7 +374,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p raw]} (setup (assoc (dissoc (tunnel-world buried-light) :sees-all) :inventory [{:name "red_bed" :count 1}]))
+        (let [{:keys [eng p raw]} (setup (assoc (dissoc (lit-tunnel) :sees-all) :inventory [{:name "red_bed" :count 1}]))
               holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))
@@ -442,7 +449,7 @@
   (is (true? (room-lib/closed-home? (home-p (assoc roofed-room "11,64,-1" "stone" "11,65,-1" "stone")))) "a shut room"))
 
 (deftest a-bed-too-far-to-walk-to-does-not-call-a-buried-miner-out-to-look
-  (let [{:keys [eng p]} (setup (dissoc (tunnel-world buried-light) :sees-all))
+  (let [{:keys [eng p]} (setup (dissoc (lit-tunnel) :sees-all))
         look? #(sh/unlooked-for-bed? p (mem/view (:store eng)))]
     (is (true? (look?)) "a bed in reach with unseen cells beside the feet: look first")
     (st/know-bed! eng {:x 300 :y 64 :z 0})

@@ -74,8 +74,6 @@
           (is (not-any? #(= {:x 5 :y 68 :z 0} (:target %)) (moved s)) "no walk toward the pillar")
           (is (finished? s)))))))
 
-(def dark-by-the-near-sand (into {} (for [x [3 4 5 6 7] y [64 65] z [-1 0 1]] [[x y z] [0 0]])))
-
 (def roof-over-the-near-sand
   "A roof wide enough that the sky's light, spread sideways under it a cell less each, is dark where the near sand is."
   (into {} (for [x (range -8 15) z (range -10 11)] [(str x ",66," z) "andesite"])))
@@ -660,11 +658,11 @@
 
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds there are priced
 (defn near-sand-by-a-death
-  "The sand east within reach in the dark, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
+  "The sand east within reach, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
   sand: the setup map with :go-tos, the go-to args of each walk round."
   [age-ms n]
   (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge floor {"3,64,0" "sand" "-12,64,0" "sand"})}}))
-        _ (swap! (fake/state (:p s)) assoc :light dark-by-the-near-sand :worldSpawn [0 64 0])
+        _ (swap! (fake/state (:p s)) assoc :worldSpawn [0 64 0])
         now @(:clock s)]
     (when age-ms
       (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now age-ms)} core/deaths-policy))
@@ -699,8 +697,8 @@
           (is (some? one))
           (is (= (* 3 one) three)))))))
 
-;; with no death remembered, or one faded (cost.death memory-ms), the stay in the dark is no threat's: dug first
-(deftest a-target-in-reach-in-the-dark-is-dug-first-while-its-stay-is-within-its-worth
+;; with no death remembered, or one faded (cost.death memory-ms), the stay is no threat's: dug first
+(deftest a-target-in-reach-with-no-fresh-death-is-dug-first-while-its-stay-is-within-its-worth
   (async done
     (tu/run-async done
       (fn ^:async t []

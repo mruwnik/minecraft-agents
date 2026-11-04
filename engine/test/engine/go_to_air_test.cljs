@@ -30,7 +30,7 @@
 (defn ^:async go-east!
   ([yaw jitter] (go-east! yaw jitter {}))
   ([yaw jitter args]
-   (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks (:blocks args tunnel) :light [15 15]
+   (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks (:blocks args tunnel) :light [15 0]
                                        :seen tunnel-seen :jitter jitter}
                                       (merge {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}} (dissoc args :blocks))))]
      @out)))
@@ -54,7 +54,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks bent-tunnel :light [15 15]
+        (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks bent-tunnel :light [15 0]
                                             :jitter 0}
                                            {:pos bent-goal :range 1 :ways #{:walk :clear-seal}}))
               out @out]
@@ -79,7 +79,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [goal [[8 70 8] [18 70 8]] oxygen [6 5]]
-          (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [15 15]}
+          (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [15 0]}
                                                {:pos goal :range 1 :ways #{:walk :clear-seal}}))]
             (is (true? (:arrived @out)) (str "to " goal " at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
 
@@ -93,7 +93,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 15]}
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 0]}
                                              {:pos [70 70 8] :range 1 :unknown false :ways #{:walk :clear-seal}}))]
           (is (= :air (:why @out)) (str "result " @out))
           (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))
@@ -119,7 +119,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 10 :pitch 0} :blocks surface-stretch :light [15 15]}
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 10 :pitch 0} :blocks surface-stretch :light [15 0]}
                                              {:pos [59 65 8] :range 1 :unknown false :ways #{:walk :clear-seal}}))]
           (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
 
@@ -155,7 +155,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw (/ js/Math.PI -2)} :blocks tunnel :light [15 15]
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw (/ js/Math.PI -2)} :blocks tunnel :light [15 0]
                                               :seen tunnel-seen :jitter 0}
                                              {:pos [12 68 8] :range 0 :unknown false :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)) (pr-str @out))

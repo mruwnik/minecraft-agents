@@ -711,7 +711,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [room (shape/with-author {:id "room" :parts [{:id "shell" :box [[8 61 8] [12 65 12]] :want "dirt"}]} "Fake")
-              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks glow-room :light [15 15] :sight true
+              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks glow-room :light [15 0] :sight true
                      :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
@@ -735,7 +735,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [room (shape/with-author {:id "room" :parts [{:id "shell" :box [[8 61 8] [12 65 12]] :want "cobblestone"}]} "Fake")
-              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks glow-cobble-room :light [15 15] :sight true
+              world {:self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks glow-cobble-room :light [15 0] :sight true
                      :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)

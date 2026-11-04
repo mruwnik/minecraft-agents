@@ -102,8 +102,7 @@
   "The night with no home set, the body outside the hut of hut-shelter-test (door at z 2) at dusk with extra items and
   world keys more; {:eng :p}."
   [inventory more]
-  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory :light-default [15 15]) (merge more)
-                  (update :light assoc [5 64 6] [15 0]))
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {}) (assoc :time night :inventory inventory) (merge more))
         {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
     (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
     (await (tu/run-until-empty eng 80))
@@ -130,7 +129,7 @@
                         (update :blocks #(merge % ring (shift % 20)))
                         (update :states #(merge % (shift % 20)))
                         (update :light merge (into {} (for [x (range 3 8) y [64 65] z (range 5 9)] [[x y z] [0 0]])))
-                        (assoc :time night :light-default [15 15]))
+                        (assoc :time night))
               {:keys [eng p]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))]
           (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
           (let [at (.-sensedAt p)]
@@ -145,8 +144,7 @@
 (defn ^:async night-at-hut-seen-outside
   "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet. The body starts z blocks south of the hut."
   [inventory z]
-  (let [world (-> (hut/hut-world {:x 5 :y 64 :z z} {}) (assoc :time night :inventory inventory :light-default [15 15])
-                  (update :light assoc [5 64 z] [15 0]))
+  (let [world (-> (hut/hut-world {:x 5 :y 64 :z z} {}) (assoc :time night :inventory inventory))
         {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
         at (.-sensedAt p)]
     (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
@@ -170,8 +168,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (-> (hut/hut-world {:x 5 :y 64 :z 6} {})
-                        (assoc :time night :inventory st/dirt-stack :light-default [15 15])
-                        (update :light assoc [5 64 6] [15 0]))
+                        (assoc :time night :inventory st/dirt-stack))
               {:keys [eng p seen]} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
               at (.-sensedAt p)
               head-unseen? (fn [pos] (= [5 65 0] [(.-x pos) (.-y pos) (.-z pos)]))]
