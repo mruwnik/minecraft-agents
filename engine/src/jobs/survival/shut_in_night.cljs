@@ -92,7 +92,7 @@
                                ", but the world still shows " (open-text open) (when (empty? open) " (no roof)"))})))
     (when (and (seq placed) sealed?)
       (ctx/emit! c :shut-in.sealed (if resealed :warn :info)
-                 {:pos feet :placed (mapv :cell placed) :resealed resealed :spent spent
+                 {:pos feet :way way :placed (mapv :cell placed) :resealed resealed :spent spent
                   :text (str (cond (= :room way) "mended the roof of a closed room over the body: "
                                    resealed "sealed the shelter again: "
                                    :else "sealed in for the night: ")
