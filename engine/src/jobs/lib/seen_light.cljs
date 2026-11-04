@@ -2,9 +2,11 @@
   "The light of remembered cells as the body's memory gives it, not the world's live light: block light flooded from the
   light sources among the remembered blocks, sky light from the cells last seen at full sky
   (engine.perception.store/note-sky!) spread sideways and down, both by vanilla's rules (engine/js/light.mjs's table)
-  over remembered blocks only (a cell never seen stops light: Q16, unseen is its worse case). A torch broken out of
-  sight still lights what it lit, as a player would think. Flooded per section over the 27 sections round it, kept
-  until a cell in them changes."
+  over remembered blocks only, by light.mjs's own relight (one formula). A cell never seen is air to the flood: light
+  that may pass it lights the cells beyond, so a lit tunnel with unseen stretches does not read darker than it is.
+  Nothing ages: a remembered torch or roof lights its cells until the cell is seen again, as a player would think;
+  memory-age prices only fire, doors and fluids, the one measured kinds, and no change rate of torches or roofs is
+  measured. Flooded per section over the 27 sections round it, kept until a cell in them changes."
   (:require [engine.perception.store :as store]))
 
 (def ^:private ^:const n 48)
@@ -12,87 +14,33 @@
 (def ^:private max-kept "Sections whose light is kept per body, past which the kept ones are dropped." 1024)
 
 (def ^:private scratch
-  (delay #js {:filter (js/Uint8Array. cells) :faces (js/Uint8Array. cells) :block (js/Uint8Array. cells) :sky (js/Uint8Array. cells)
-              :buckets (into-array (repeatedly 16 #(js/Int32Array. cells))) :counts (js/Int32Array. 16)}))
-
-(def ^:private dx #js [0 0 0 0 -1 1])
-(def ^:private dy #js [-1 1 0 0 0 0])
-(def ^:private dz #js [0 0 -1 1 0 0])
-
-(defn- flood!
-  "light.mjs's flood over the window: from the bucketed cells, each level less a cell's filter (at least 1) a step,
-  through faces neither side covers."
-  [^js levels ^js filt ^js faces ^js buckets ^js counts]
-  (let [strides #js [(- (* n n)) (* n n) (- n) n -1 1]
-        ^js dx dx ^js dy dy ^js dz dz]
-    (loop [l 15]
-      (when (pos? l)
-        (let [^js q (aget buckets l)]
-          (loop [h 0]
-            (when (< h (aget counts l))
-              (let [a (aget q h)]
-                (when (== l (aget levels a))
-                  (let [x (mod a n) z (mod (js/Math.floor (/ a n)) n) y (js/Math.floor (/ a (* n n)))
-                        fa (aget faces a)]
-                    (dotimes [d 6]
-                      (let [bx (+ x (aget dx d)) by (+ y (aget dy d)) bz (+ z (aget dz d))]
-                        (when (and (< -1 bx n) (< -1 by n) (< -1 bz n))
-                          (let [b (+ a (aget strides d))
-                                f (aget filt b)
-                                nl (- l (max f 1))]
-                            (when (and (> nl (aget levels b))
-                                       (zero? (bit-and 1 (bit-shift-right fa d)))
-                                       (zero? (bit-and 1 (bit-shift-right (aget faces b) (bit-xor d 1)))))
-                              (aset levels b nl)
-                              (aset (aget buckets nl) (aget counts nl) b)
-                              (aset counts nl (inc (aget counts nl)))))))))))
-              (recur (inc h)))))
-        (recur (dec l))))))
+  (delay #js {:states (js/Int32Array. cells) :block (js/Uint8Array. cells) :sky (js/Uint8Array. cells)}))
 
 (defn- section-light
-  "Uint8Array(4096) by store/cell-index: the packed light (sky << 4 | block) of section cx sy cz from memory."
+  "Uint8Array(4096) by store/cell-index: the packed light (sky << 4 | block) of section cx sy cz from memory, by
+  light.mjs's relight over the 27 sections round it."
   [^js table ^js store cx sy cz]
   (let [^js s @scratch
-        ^js filt (.-filter s) ^js faces (.-faces s) ^js block (.-block s) ^js sky (.-sky s)
-        ^js buckets (.-buckets s) ^js counts (.-counts s)
-        ^js emit (.-emit table) ^js t-filter (.-filter table) ^js t-faces (.-faces table)
-        push! (fn [l k] (aset (aget buckets l) (aget counts l) k) (aset counts l (inc (aget counts l))))]
-    (.fill counts 0)
-    (.fill sky 0)
+        ^js states (.-states s) ^js sky (.-sky s) ^js block (.-block s)
+        ^js emit (.-emit table) ^js t-filter (.-filter table)]
+    (.fill block 0)
     (doseq [a [0 1 2] b [0 1 2] c [0 1 2]]
       (let [^js sec (.get store (store/section-key (+ cx a -1) (+ sy b -1) (+ cz c -1)))
             ^js ids (some-> sec .-ids)
             ^js bits (some-> sec .-sky)]
         (dotimes [i 4096]
           (let [k (+ (* (+ (* (+ (* 16 b) (bit-shift-right i 8)) n) (* 16 c) (bit-and (bit-shift-right i 4) 15)) n) (* 16 a) (bit-and i 15))
-                v (if ids (aget ids i) 0)]
-            (if (zero? v)
-              (do (aset filt k 15) (aset faces k 0) (aset block k 0))
-              (let [id (dec v) e (aget emit id) f (aget t-filter id)]
-                (aset filt k f)
-                (aset faces k (aget t-faces id))
-                (aset block k e)
-                (when (pos? e) (push! e k))
-                (when (and bits (< f 15) (pos? (bit-and (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7)))))
-                  (aset sky k 15))))))))
-    (flood! block filt faces buckets counts)
-    (.fill counts 0)
-    ;; only a full-sky cell beside a dimmer one has light to give
-    (dotimes [gy n]
-      (dotimes [gz n]
-        (dotimes [gx n]
-          (let [k (+ (* (+ (* gy n) gz) n) gx)]
-            (when (and (== 15 (aget sky k))
-                       (or (and (pos? gx) (< (aget sky (dec k)) 15)) (and (< gx (dec n)) (< (aget sky (inc k)) 15))
-                           (and (pos? gz) (< (aget sky (- k n)) 15)) (and (< gz (dec n)) (< (aget sky (+ k n)) 15))
-                           (and (pos? gy) (< (aget sky (- k (* n n))) 15)) (and (< gy (dec n)) (< (aget sky (+ k (* n n))) 15))))
-              (push! 15 k))))))
-    (flood! sky filt faces buckets counts)
-    (let [out (js/Uint8Array. 4096)]
+                v (if ids (aget ids i) 0)
+                id (max 0 (dec v))]
+            (aset states k id)
+            (aset sky k (if (and bits (pos? v) (< (aget t-filter id) 15) (pos? (bit-and (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7))))) 15 0))))))
+    (let [^js out (.relight table #js {:table table :states states :sky sky :block block :size #js [n n n] :interiorSky true})
+          ^js lsky (.-sky out) ^js lblock (.-block out)
+          res (js/Uint8Array. 4096)]
       (dotimes [i 4096]
         (let [k (+ (* (+ (* (+ 16 (bit-shift-right i 8)) n) 16 (bit-and (bit-shift-right i 4) 15)) n) 16 (bit-and i 15))]
-          (aset out i (bit-or (bit-shift-left (aget sky k) 4) (aget block k)))))
-      out)))
+          (aset res i (bit-or (bit-shift-left (aget lsky k) 4) (aget lblock k)))))
+      res)))
 
 (defn- neighbours-mask
   "The sections of the 27 round cx sy cz that are in memory, as bits, and the latest write among them."

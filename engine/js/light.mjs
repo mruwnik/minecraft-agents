@@ -117,7 +117,7 @@ export function lightTableCached (registry, version, dir = tableCacheDir) {
   if (read && read.length % 3 === 0) {
     const n = read.length / 3
     const part = (i) => new Uint8Array(read.buffer, read.byteOffset + i * n, n).slice()
-    return { emit: part(0), filter: part(1), faces: part(2) }
+    return { emit: part(0), filter: part(1), faces: part(2), relight: relightBox }
   }
   const table = lightTable(registry)
   const tmp = `${file}.${process.pid}.tmp`
@@ -126,7 +126,7 @@ export function lightTableCached (registry, version, dir = tableCacheDir) {
     fs.writeFileSync(tmp, Buffer.concat([table.emit, table.filter, table.faces]))
     fs.renameSync(tmp, file)
   } catch { /* an unwritable cache only costs the build next time */ }
-  return table
+  return { ...table, relight: relightBox }
 }
 
 export const boxIndex = (size, x, y, z) => (y * size[2] + z) * size[0] + x
@@ -177,7 +177,8 @@ function flood (levels, filter, faces, states, size, isSky) {
   }
 }
 
-export function relightBox ({ table, states, sky, block, size }) {
+// interiorSky: the sky input's interior cells are sky sources too (a caller that knows which cells see the open sky)
+export function relightBox ({ table, states, sky, block, size, interiorSky = false }) {
   const [sx, sy, sz] = size
   const cells = sx * sy * sz
   ensureBuckets(cells)
@@ -194,6 +195,7 @@ export function relightBox ({ table, states, sky, block, size }) {
           outSky[i] = sky[i]
         } else {
           outBlock[i] = emit[states[i]]
+          if (interiorSky) outSky[i] = sky[i]
         }
       }
     }
@@ -215,7 +217,7 @@ export function relightBox ({ table, states, sky, block, size }) {
   }
   seedAll(outBlock, true)
   flood(outBlock, filter, faces, states, size, false)
-  seedAll(outSky, false)
+  seedAll(outSky, interiorSky)
   flood(outSky, filter, faces, states, size, true)
   return { sky: outSky, block: outBlock }
 }

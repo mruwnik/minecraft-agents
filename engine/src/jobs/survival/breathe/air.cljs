@@ -244,7 +244,8 @@
         feet (breath/feet-cell (.self p))
         tried (set (:crawled (ctx/mem c)))
         r (crawl-radius)
-        glow (fn [{:keys [x y z]}] (if (and raw (look/light-known? raw x y z)) (bit-and (.lightAt raw x y z) 15) 0))
+        light-at (when raw (look/remembered-light-fn p raw))
+        glow (fn [{:keys [x y z]}] (if light-at (max 0 (bit-and (light-at x y z) 15)) 0))
         own (glow feet)
         open? (fn [cell] (every? #(contains? breath/swimmable (breath/seen-water-name p (update cell :y + %))) [0 1]))]
     (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))

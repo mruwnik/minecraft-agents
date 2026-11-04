@@ -200,6 +200,15 @@ test('a removed torch comes back 0: old interior values are ignored', () => {
   assert.equal(r.block.every((v) => v === 0), true)
 })
 
+test('interiorSky: an interior sky source spreads sideways a level a cell, and the cached table carries relight', () => {
+  const b = makeBox([9, 9, 9])
+  b.sky[at(b, 4, 4, 4)] = 15
+  assert.equal(get(relight(b), b, 'sky', 6, 4, 4), 0, 'ignored by default')
+  const r = relightBox({ table, ...b, interiorSky: true })
+  assert.deepEqual([5, 6, 7].map((x) => get(r, b, 'sky', x, 4, 4)), [14, 13, 12])
+  assert.equal(lightTableCached(registry, '26.1', fs.mkdtempSync(path.join(os.tmpdir(), 'lt-'))).relight, relightBox)
+})
+
 test('input arrays are not mutated', () => {
   const b = makeBox([9, 9, 9])
   b.states[at(b, 4, 4, 4)] = sid('torch')
@@ -225,7 +234,7 @@ test('the cached table equals the built one, on the first call and when read bac
   try {
     const built = lightTableCached(registry, '26.1', dir)
     const read = lightTableCached(registry, '26.1', dir)
-    for (const t of [built, read]) assert.deepEqual(t, table)
+    for (const { emit, filter, faces } of [built, read]) assert.deepEqual({ emit, filter, faces }, table)
     assert.equal(fs.readdirSync(dir).length, 1)
   } finally {
     fs.rmSync(dir, { recursive: true })
