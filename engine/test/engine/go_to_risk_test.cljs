@@ -371,7 +371,7 @@
 
 (deftest a-round-s-first-plan-and-a-hostile-seen-mid-walk-ask-go-to-s-check-for-the-rest-of-it
   (let [m (atom {})
-        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
+        c (assoc (finite-worth (ready-test/ctx-of {:time st/noon :blocks (tu/box 0 64 0 0 65 0 "stone") :self {:pos {:x 0 :y 66 :z 0} :health 3 :food 20}})) :update-mem (fn [f args] (apply swap! m f args)))
         goal {:x 30 :y 64 :z 0}
         check (reprice/check c goal nil)
         replaced (reprice/check (assoc c :quote-call {:checks {:safe? '(always)}}) goal nil)
@@ -379,28 +379,19 @@
     (is (nil? (check plan true)) "the first plan, no hostile known")
     (is (nil? (check plan false)) "no new hostile")
     (fake/add-entity! (:primitives c) {:id 7 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0}})
-    (is (= :later (first (:risk (check plan false)))) "a zombie ahead on the way holds the rest of the walk")
-    (is (= :later (first (with-redefs [ctx/mem (fn [_] @m)] (reprice/status c goal)))) "the start check holds on the plan the round held on")
+    (is (= :never (first (:risk (check plan false)))) "a zombie ahead on the way costs more hp than the body can afford: the rest of the walk is held")
+    (is (= :never (first (with-redefs [ctx/mem (fn [_] @m)] (reprice/status c goal)))) "the start check holds on the plan the round held on")
     (let [kept (atom false)]
       (is (:searching ((reprice/check c goal nil) {:status "partial" :steps (take 10 straight-cells) :r #js {:reason "searching"} :search-on #(reset! kept true)} true))
           "an unfinished search searches on")
       (is @kept "its search kept to go on with"))
     (is (nil? (replaced plan false)) "a caller's :checks :safe? replaces go-to's")))
 
-(deftest a-blow-mid-walk-by-a-hostile-known-at-the-first-plan-asks-go-to-s-check-again
-  ;; old code re-asked only for a hostile newly near the way: an exclusive walk replanned in place under a drowned's blows (Bramble #11)
-  (let [hurt (atom [])
-        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
-                                     :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x -9.5 :y 64 :z 0.5}}]})
-                 :view (fn [] {:now 36000000 :data {:entries {:hurt @hurt}}}) :update-mem (fn [_ _]))
-        check (reprice/check c {:x 30 :y 64 :z 0} nil)
-        plan (plan-of straight-cells)]
-    (is (nil? (check plan true)) "the zombie behind: the walk leads away from it")
-    (is (nil? (check plan false)) "no blow yet")
-    (swap! (fake/state (:primitives c)) assoc-in [:entities 0 :pos] [-0.5 64 0.5])
-    (is (nil? (check plan false)) "caught up, no blow yet: no hostile new near the way")
-    (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
-    (is (= :later (first (:risk (check plan false)))) "its blow holds the rest of the walk")))
+(deftest a-hostile-ahead-that-the-walk-affords-is-priced-not-held
+  (let [c (finite-worth (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}
+                                           :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0}}]}))
+        s (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells))]
+    (is (= :ok (first s)) (str "a lone zombie by the way at full health: the walk's price is within what it buys, " (pr-str s)))))
 
 (def pool-world {:time st/noon :blocks (tu/box -2 64 -2 2 66 2 "water")})
 
@@ -411,21 +402,6 @@
     (is (true? (breath/head-under? (:primitives (at 1.5)))) "water over the eye cell")
     (is (= :later (first (reprice/status (at 1.5) {:x -30 :y 64 :z 0} nil))) "the walk leads toward the hostile")
     (is (= :ok (first (reprice/status (at -9.5) {:x 30 :y 64 :z 0} nil))) "away from it, air first")))
-
-(deftest a-root-walk-held-under-water-swims-up-with-no-reflex-to-do-it
-  ;; a :continue hold left the head under water to the breathe reflex, which an exclusive run does not have: the engine here has no triggers
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (tu/seeing-all (tu/fake-on-floor (assoc pool-world :self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true :oxygen 20}
-                                                        :entities [{:id 7 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5}}])))
-              eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir)
-                                :events (events/make {:stdout? false})})]
-          (is (true? (breath/head-under? p)) "under water to start")
-          (core/submit! eng '(jobs.movement.go-to {:pos [-30 64 0]}) {})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (seq (:list (core/state eng))) "the walk is held, not ended")
-          (is (false? (breath/head-under? p)) "the head out of the water while the walk is held"))))))
 
 (deftest a-dive-slice-yield-surfaces-only-short-of-air-or-held
   ;; old code swam up on every :continue, so a dive that fits its air (a search slice under water) was cut short

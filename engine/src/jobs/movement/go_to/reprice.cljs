@@ -17,14 +17,15 @@
             [jobs.lib.walk-risk :as risk]))
 
 (defn status
-  "go-to's own safe? for the walk to pos on plan (risk/status; none: the plan its round held on, to its goal): not threatened
-  (ready/threatened-walking, on the plan's way when there is one) and the risk acceptable; with the head under water only the hostiles are priced (ok :submerged, air first)."
+  "go-to's own safe? for the walk to pos on plan (risk/status; none: the plan its round held on, to its goal): with a plan the
+  walk's price (risk/status: hostiles that catch it included, against the stay) decides, no hostile gate;
+  with the head under water only the hostiles are priced (ok :submerged, air first)."
   ([c pos] (let [kept (risk/planned c)] (status c (or (:goal kept) pos) kept)))
   ([c pos plan]
    (if (breath/head-under? (:primitives c))
      (let [t (ready/threatened-walking c pos (when plan (risk/timed-way c pos plan)))]
        (if (= :ok (first t)) (contract/ok :submerged "head under water: air first") t))
-     (contract/all [(ready/threatened-walking c pos (when plan (risk/timed-way c pos plan))) (risk/status c pos plan)]))))
+     (risk/status c pos plan))))
 
 (defn unfinished?
   "Whether plan walks to where a search that has not ended has got to (wsearch/unfinished-plan, which drops the search
