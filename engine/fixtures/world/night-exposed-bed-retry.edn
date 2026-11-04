@@ -60,9 +60,9 @@
    :act [[:job (jobs.debug.notify {:text "queued"})]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 40}
             {:event {:source :job :kind :child_started :data {:slot :log-out}} :within-s 60}
-            {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 120}
+            {:event {:source :action :kind :logged-out} :within-s 60}
             {:no-event {:source :job :kind :holding :data {:reason "exposed"}} :for-s 30}]
-   :limit-s 150}
+   :limit-s 80}
   {:name "obstructed-bed-is-named-and-tried-once"
    :time :night
    :time-why :sleep

@@ -62,6 +62,15 @@
             {:no-event {:source :job :kind :shelter.room_open} :for-s 20}]
    :after [[:body-near [13.5 0 13.5] 1.5]]
    :limit-s 60}
+  ;; 712b3b0b: sheltered with nobody asleep: the night ends roofed and does not log out (a log-out is only a courtesy to a sleeper)
+  {:name "sheltered-with-no-sleeper-does-not-log-out"
+   :time-why :dawn-decision
+   :blocks [[:set [9 1 9] "torch"]]
+   :memory [{:kind :bed-open :data {:pos #xyz [12 0 12]} :policy {:cap 5 :ttl 600000}}]
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :log-out}} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
+   :limit-s 60}
   ;; 9570fa13: a stale :bed place far off, the hut bed live as the respawn bed (spawn point set at its head)
   {:name "stale-far-bed-place-the-hut-spawn-bed-is-slept-in"
    :time :night-exclusive
