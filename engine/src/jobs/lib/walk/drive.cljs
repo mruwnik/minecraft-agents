@@ -8,6 +8,7 @@
             [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [engine.game :as game]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -157,16 +158,18 @@
   [c [x y z :as cell]]
   (let [p (:primitives c)
         pos (u/self-pos c)
-        [ax _ az :as at] (mapv #(js/Math.floor (% pos)) [:x :y :z])]
+        [ax _ az :as at] (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        eye {:x (:x pos) :y (+ (:y pos) game/eye-height) :z (:z pos)}
+        worth? #(and (unseen-round? p %) (look/ray-unseen? p eye (zipmap [:x :y :z] (map + % [0.5 0.5 0.5]))))]
     (when (and (<= (js/Math.abs (- x ax)) 1) (<= (js/Math.abs (- z az)) 1) (not= [x z] [ax az])
                (not (lip-unsafe? c {:from at :floor cell})))
       (await (lean-to! c (lip at cell))))
     (when-let [pt (column-point cell (:see-lit-depth (cost/walk-unknown-prices)) #(dig-look/unknown? p %))]
       (await (ctx/act c :look (clj->js {:pos pt})))
       (look/see! c))
-    (loop [points (edge-points pos y #(unseen-round? p %))]
+    (loop [points (edge-points pos y worth?)]
       (when-let [pt (first points)]
-        (when (unseen-round? p (mapv #(js/Math.floor (% pt)) [:x :y :z]))
+        (when (worth? (mapv #(js/Math.floor (% pt)) [:x :y :z]))
           (await (ctx/act c :look (clj->js {:pos pt})))
           (look/see! c))
         (recur (rest points))))))

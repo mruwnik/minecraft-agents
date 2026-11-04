@@ -550,7 +550,7 @@
                     (:pos (aimed c {:x (:x pos) :z (:z pos)})))]
     (if (and aimed-pos (not= (:y aimed-pos) (:y pos)))
       (do (ctx/update-mem! c update :column-reaims (fnil inc 0)) true)
-      (boolean (await (look/survey! c :near))))))
+      (boolean (await (look/survey-ground! c))))))
 
 (defn ^:async learn-spent!
   "A walk spent its learned replans. One that got a block nearer the goal than the body has been, whether straight

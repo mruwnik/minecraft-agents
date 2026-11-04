@@ -49,6 +49,17 @@
     (remember! unlooked wall)
     (is (not (look/look-shows? unlooked {:x 6 :y 64 :z 0})) "the wall seen hides it")))
 
+(deftest a-ray-is-unseen-only-up-to-the-first-seen-rock
+  (let [p (tu/fake-on-floor {:blocks wall})
+        wrap #(perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))
+        eye {:x 2.5 :y 65.6 :z 0.5}
+        behind {:x 6.5 :y 65.5 :z 0.5}]
+    (.setOwner p "t1")
+    (is (look/ray-unseen? (wrap) eye behind) "nothing seen yet: a look may show something")
+    (let [w (remember! (wrap) wall)]
+      (is (not (look/ray-unseen? w eye behind)) "the wall seen first hides the cell behind it: a look adds nothing")
+      (is (look/ray-unseen? w eye {:x -6.5 :y 65.5 :z 0.5}) "the other way is still unseen"))))
+
 (deftest a-block-behind-a-wall-is-not-seen-and-one-in-view-is
   (let [p (seeing {:blocks (merge wall {"6,64,0" "coal_ore" "0,64,5" "iron_ore"})})]
     (is (= ["iron_ore"] (names-of (look/seen-blocks p {:names ["coal_ore" "iron_ore"] :radius 16}))))

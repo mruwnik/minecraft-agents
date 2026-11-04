@@ -4,6 +4,7 @@
   perception's memory. Nothing is sensed through walls: jobs read blocks and entities through the seen-* helpers here
   (memory of what the body saw, players, hostiles it saw or heard), never through blocks/entities as a scan."
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.reach :as reach]
             [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -105,6 +106,24 @@
   (when (or (nil? (.-sensedAt p)) (up-unseen? p eye dir))
     {:x (+ (:x eye) (* (glance-near) dx)) :y (+ (:y eye) (* 1.7 (glance-near))) :z (+ (:z eye) (* (glance-near) dz))}))
 
+(defn ray-unseen?
+  "Whether a cell on the segment from eye to pt is unknown before the first seen solid cell (rock hides what is behind it,
+  so a look there adds nothing). True without a perception."
+  [p eye pt]
+  (let [n (inc (int (* 4 (js/Math.hypot (- (:x pt) (:x eye)) (- (:y pt) (:y eye)) (- (:z pt) (:z eye))))))
+        at (fn [k] (let [t (/ k n)] (mapv #(js/Math.floor (+ (% eye) (* t (- (% pt) (% eye))))) [:x :y :z])))]
+    (loop [k 0 last (at 0)]
+      (if (> k n)
+        false
+        (let [cell (at k)]
+          (if (= cell last)
+            (recur (inc k) last)
+            (let [b (when (some? (.-sensedAt p)) (u/seen-block p (zipmap [:x :y :z] cell)))
+                  kind (if b (reach/kind-of b) :unknown)]
+              (cond (keyword-identical? :unknown kind) true
+                    (keyword-identical? :solid kind) false
+                    :else (recur (inc k) cell)))))))))
+
 (def hazards-only
   "A want for a look that searches for entities: no block is wanted, only the hazards every targeted look checks."
   {})
@@ -190,13 +209,14 @@
   checked between looks, not after the last. want: see!."
   ([c f] (look-around-until! c f (glance-effort)))
   ([c f effort] (look-around-until! c f effort nil))
-  ([c f effort want]
+  ([c f effort want] (look-around-until! c f effort want false))
+  ([c f effort want ground?]
    (let [{:keys [x y z]} (cell-of (u/self-pos c))
          eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}
          p (:primitives c)]
      (loop [steps (round-steps eye)]
        (if-let [[pt d] (first steps)]
-         (if-let [pt (or pt (up-glance p eye d))]
+         (if-let [pt (or (when-not (and ground? pt (not (ray-unseen? p eye pt))) pt) (when-not pt (up-glance p eye d)))]
            (do (await (ctx/act c :look (clj->js {:pos pt})))
                (see! c effort :look-around want)
                (or (f) (recur (rest steps))))
@@ -241,6 +261,14 @@
   ([c per effort want]
    (when-not (surveyed? c per want)
      (await (look-around! c effort want)))))
+
+(defn ^:async survey-ground!
+  "survey! within near-blocks for the ground round the body: a look whose ray shows no unseen cell before rock is skipped,
+  as it would add nothing. True when the body looked (or the round's looks were all already seen), nil when surveyed."
+  [c]
+  (when-not (surveyed? c :near)
+    (await (look-around-until! c (constantly nil) (glance-effort) nil true))
+    true))
 
 (defn ^:async survey-until!
   "survey! for entities: test (f) after each look and return the first truthy one (entities count only while in view);
