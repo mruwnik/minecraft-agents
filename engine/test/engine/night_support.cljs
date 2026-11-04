@@ -135,9 +135,14 @@
   (into {"10,66,0" "stone"}
         (for [x [9 10 11] y [64 65] z [-1 0 1] :when (not (#{[10 0] [9 0]} [x z]))] [(str x "," y "," z) "stone"])))
 
+(defn torch-row
+  "Torches on the ground beside a route along z 0 from x0 to x1, close enough that every cell of the route holds their block light."
+  [[x0 x1]]
+  (into {} (for [x (range x0 (inc x1) 6)] [(str x ",64,2") "torch"])))
+
 (def lit-world
-  "A lit route home with the body's own cell dark: darkness is the light of the cell it stands in, so a lit cell is no night to shelter from."
-  {:time night :inventory st/dirt-stack :blocks (merge wide-ground home-roof) :light-default [15 15] :light {[0 64 0] [15 0]}})
+  "A route home lit by torches (:lit-route, x range, laid by night-at-home), the body's own cell the fake's dark default: darkness is the light of the cell it stands in, so a lit cell is no night to shelter from."
+  {:time night :inventory st/dirt-stack :blocks (merge wide-ground home-roof) :light-default [15 0] :lit-route [-40 130]})
 
 (defn know-home! [eng pos] (mem/write! (:store eng) :home {:pos pos} mem/place-policy))
 
@@ -147,7 +152,8 @@
   ([world pos args] (night-at-home world pos args {}))
   ([world pos args {:keys [unseen rand ray-deg radius home?] :or {ray-deg 2 radius 24 home? true}}]
   (let [[seen sink] (tu/legacy-capture-sink)
-        raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} (dissoc world :light-default :light :zones)))
+        raw-p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor}
+                              (-> world (dissoc :light-default :light :zones :lit-route) (update :blocks merge (some-> (:lit-route world) torch-row)))))
         _ (swap! (fake/state raw-p) merge (select-keys world [:light-default :light]))
         per (perception/create (fake-raw/create raw-p) {:ray-deg ray-deg :radius radius :now (constantly 1000000) :rand (or rand (constantly 0.5))})
         p (perception/wrap raw-p per)
@@ -260,7 +266,7 @@
 (defn dawn-holds-now? [eng p] ((:when (get triggers/all :dawn)) p (mem/view (:store eng)) {} nil))
 
 ;; ------------------------------------------------------------------ flee somewhere safer
-(def dark-world (assoc lit-world :light-default [15 0]))
+(def dark-world (dissoc lit-world :lit-route))
 
 (defn flee-home-night
   "night-at-home in the dark with a home at x 10 the time left does not cover (home-walk-margin-s 0), no placing or digging, nothing but the home to see: the

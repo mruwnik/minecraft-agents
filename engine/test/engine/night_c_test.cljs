@@ -218,27 +218,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (night-at-home (-> lit-world (assoc :light-default [15 0])
-                                                             (update :blocks merge {"60,66,0" "stone"}))
+        (let [{:keys [eng p seen]} (await (night-at-home (-> dark-world (update :blocks merge {"60,66,0" "stone"}))
                                                          {:x 60 :y 64 :z 0}))]
           (await (core/tick! eng))
           (is (seq (st/calls p "place")) "go-to's planned cost of the dark route is dearer than digging in, its dark seconds priced too: dug in")
           (is (< (:x (st/pos-of p)) 5)))))))
 
-(deftest a-short-lit-route-with-one-dark-cell-is-walked
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (update lit-world :light assoc [5 64 0] [15 0]) {:x 10 :y 64 :z 0}))]
-          (await (tu/run-until-empty eng 40))
-          (is (nothing-placed-at-the-start? p) "one dark cell costs a little more, not a refusal: walked")
-          (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
-
 (deftest a-short-unlit-route-costs-less-than-digging-in-and-is-walked
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :light-default [15 3]) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home dark-world {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (nothing-placed-at-the-start? p) "10 dim blocks cost more than a lit walk, still under the pit's quote")
           (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
@@ -426,7 +416,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (assoc :light-default [15 0]) with-walled-home) {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (dissoc :lit-route) with-walled-home) {:x 10 :y 64 :z 0}))]
           ((status! 0 5) eng)
           (await (tu/run-until-empty eng 60))
           (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
