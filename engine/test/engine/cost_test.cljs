@@ -1014,6 +1014,13 @@
                ["a bare horizontal log" place {[0 64 0] (log "x")}]
                ["a 2x2 of logs beside a pane" place {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y") [1 64 0] #js {:name "glass_pane"}}]]]
         (is (= expected (price sensed [0 64 0])) what)))
+    (let [air #js {:name "air"} dirt #js {:name "dirt"} stone #js {:name "stone"}
+          price (fn [sensed cell] ((cost/destroyed-fn #(get sensed %)) (.-name (get sensed cell)) cell false))]
+      (is (= place (price {[0 67 0] dirt [1 67 0] dirt [0 66 0] air [1 66 0] air} [0 67 0])) "a dirt span over open air is a laid roof")
+      (is (= place (price {[0 68 0] dirt [0 67 0] dirt [1 67 0] dirt [0 66 0] air [1 66 0] air} [0 68 0])) "dirt on the roof is part of it")
+      (is (= 0 (price {[0 67 0] dirt [0 66 0] air} [0 67 0])) "a lone overhang is natural")
+      (is (= 0 (price {[0 67 0] dirt [1 67 0] dirt [0 66 0] dirt [1 66 0] dirt} [0 67 0])) "dirt over dirt is the ground")
+      (is (= 0 (price {[0 67 0] stone [1 67 0] stone [0 66 0] air [1 66 0] air} [0 67 0])) "a cave ceiling is natural"))
     (is (< (cost/destroyed-s "wheat" "air" 2 false) (cost/destroyed-s "wheat" "air" 5 false)) "a crop grown further loses more")))
 
 (deftest a-craft-step-is-priced-with-its-timeouts-and-the-retries-after-them

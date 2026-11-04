@@ -63,13 +63,32 @@
               (or (not vertical?)
                   (some #(rules/tree-wood? (at %)) side)))))))
 
+(def soil #"^(?:dirt|coarse_dirt|grass_block|podzol|mud|clay|sand|red_sand|gravel)$")
+
+(defn placed-roof?
+  "True when the soil block at cell looks like a roof someone laid: known open air under it (or under the soil column it
+  tops, one block more) and a soil neighbour beside it, itself over open air, so a flat span. Natural overhangs are rarer
+  than a laid roof, and a wrong guess only prices a put-back. (sensed cell) is a sensed block or nil."
+  [sensed [x y z]]
+  (let [name-at (fn [c] (let [b (sensed c)] (when-not (or (nil? b) (true? (.-unknown b))) (.-name b))))
+        open? (fn [c] (boolean (some-> (name-at c) bs/air)))
+        soil? (fn [c] (boolean (some->> (name-at c) (re-find soil))))
+        roof? (fn [[cx cy cz]] (and (soil? [cx cy cz])
+                                    (or (open? [cx (dec cy) cz])
+                                        (and (soil? [cx (dec cy) cz]) (open? [cx (- cy 2) cz])))))]
+    (boolean
+     (and (roof? [x y z])
+          (let [ry (if (soil? [x (dec y) z]) (dec y) y)]
+            (some #(roof? [(+ x (first %)) ry (+ z (second %))]) [[1 0] [-1 0] [0 1] [0 -1]]))))))
+
 (defn destroyed-fn
   "(fn [n cell own?]) destroyed-s of digging block n at cell, the block over it and the crop's age read by
   (sensed cell) (a sensed block or nil: .-name, .-age, .-unknown). A crop over cell is an open cell a route does not
-  dig, so the farmland under it pays it. Tree wood that looks placed (placed-log?) is priced as a build."
+  dig, so the farmland under it pays it. Tree wood that looks placed (placed-log?) and a soil roof over open air (placed-roof?) are priced as a build."
   [sensed]
   (fn [n [x y z :as cell] own?]
-    (let [own? (or own? (and (rules/tree-wood? n) (placed-log? sensed cell)))
+    (let [own? (or own? (and (rules/tree-wood? n) (placed-log? sensed cell))
+                     (and (some? n) (re-find soil n) (placed-roof? sensed cell)))
           above (sensed [x (inc y) z])
           over (when (and above (not (true? (.-unknown above)))) (.-name above))
           crop (cond (contains? crops/ripe-age n) (sensed cell) (contains? crops/ripe-age over) above)]
