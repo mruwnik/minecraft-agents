@@ -83,7 +83,7 @@
                                    [[zombie] {:self {:health 10} :inventory [{:name "diamond_sword" :count 1}]} 30000 "the same zombie a diamond sword answers: the death it risks is worth less than the longer stint"]
                                    [[zombie] {:self {:health 10} :inventory [{:name "cobblestone" :count 32}]} 175050 "a block for every open cell carried, but on open ground the zombie strikes through whichever side is still open while every cell goes up: away until morning"]
                                    [[(assoc zombie :pos {:x 38 :y 64 :z 0})] {} 30000 "a zombie beyond its follow range: back after :offline-ms"]
-                                   [[{:id 9 :name "skeleton" :kind "hostile" :pos {:x 14 :y 64 :z 0} :health 20}] {:self {:health 10}} 175050 "a skeleton with a line of fire is a known threat: away until morning"]
+                                   [[{:id 9 :name "skeleton" :kind "hostile" :pos {:x 14 :y 64 :z 0} :health 20}] {:self {:health 4}} 175050 "a skeleton with a line of fire is a known threat to a body it can kill in the stint: away until morning"]
                                    [[] {} 30000 "no hostile known: back after :offline-ms"]]]
     (is (= ms (log-out/away-ms {:primitives (tu/fake (merge {:floor tu/walk-floor :time 20000 :entities entities} world))
                                 :args {:offline-ms 30000} :id "j1" :slots [] :engine {:warned (atom #{})}
