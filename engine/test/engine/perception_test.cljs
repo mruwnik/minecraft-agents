@@ -292,7 +292,7 @@
     (perception/pass! per)
     (let [a (at)]
       (is (= ["gold_block" true -5] [(.-name a) (.-visible a) (.-z (.-pos a))]))
-      (is (= #{"name" "pos" "ageMs" "visible" "fullCube"} (set (js/Object.keys a)))))))
+      (is (= #{"name" "pos" "ageMs" "visible" "fullCube" "opaque"} (set (js/Object.keys a)))))))
 
 (deftest sensedAt-sees-a-block-changed-within-the-same-tick
   (let [{:keys [p per]} (rig {"0,65,-5" "gold_block"})

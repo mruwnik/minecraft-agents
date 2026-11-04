@@ -26,7 +26,7 @@
 (deftest a-lit-cell-in-line-is-seen-and-recorded-without-a-pass
   (let [{:keys [per]} (rig {"0,65,4" "gold_block"})]
     (is (nil? (seen-name per [0 65 4])))
-    (is (= {:name "gold_block" :pos [0 65 4] :full-cube true :age-ms 0 :visible true}
+    (is (= {:name "gold_block" :pos [0 65 4] :full-cube true :opaque true :age-ms 0 :visible true}
            (dissoc (perception/glance! per [0 65 4]) :state-id)))
     (is (= "gold_block" (seen-name per [0 65 4])))))
 
@@ -128,7 +128,7 @@
     (perception/pass! per)
     (turn! p 180)
     (swap! clock + 30000)
-    (is (= {:name "gold_block" :pos [0 65 4] :full-cube true :age-ms 30000 :visible false}
+    (is (= {:name "gold_block" :pos [0 65 4] :full-cube true :opaque true :age-ms 30000 :visible false}
            (dissoc (perception/sensed per [0 65 4]) :state-id)))))
 
 (deftest a-remembered-fluid-door-or-fire-reads-as-remembered-however-old

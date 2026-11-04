@@ -183,7 +183,7 @@
       (save))))
 
 (defn block-base
-  "The answer for state id without its place (name, properties, age, full-cube), kept per id: the same for every cell."
+  "The answer for state id without its place (name, properties, age, full-cube, opaque: stops the eye), kept per id: the same for every cell."
   [{:keys [raw st]} id]
   (let [^js cache (.-blockBases ^js st)]
     (or (.get cache id)
@@ -192,7 +192,8 @@
               base (cond-> {:name (.-name info) :state-id id}
                      props (assoc :properties props)
                      (:age props) (assoc :age (js/Number (:age props)))
-                     (.-fullCube info) (assoc :full-cube true))]
+                     (.-fullCube info) (assoc :full-cube true)
+                     (some-> ^js raw (.sightTable) (aget id) pos?) (assoc :opaque true))]
           (.set cache id base)
           base))))
 

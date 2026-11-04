@@ -1102,7 +1102,6 @@
                       (when (contains? (:ages w) pos) (aset o "age" (get-in w [:ages pos])))
                       (when (seq props) (aset o "properties" (to-js props)))
                       (when (full-cube? block) (aset o "fullCube" true))
-                      (when-not (sight-passes? block) (aset o "opaque" true))
                       o))))
               "pathWorld" (fn [unknown] (let [{:keys [snapshot table space]} (steer/path-world @state)]
                                           #js {:snapshot (if unknown (let [w @state] (steer/masked snapshot unknown (into #{} (map first) (steer/buried w)) w)) snapshot) :table table :space space}))

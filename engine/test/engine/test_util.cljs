@@ -95,12 +95,15 @@
 (defn sensed-by
   "A sensedAt over p's blockAt that answers {:unknown true} for a position whose coordinates are not finite numbers
   (a malformed pos): perception knows nothing there, while the fake's blockAt would say air. Likewise for a column
-  outside the floor rectangle the world was made with (:floor-rect) and its built columns: real ground goes on there, unseen."
+  outside the floor rectangle the world was made with (:floor-rect) and its built columns: real ground goes on there, unseen.
+  Marks opaque the blocks sight does not pass, as perception's answers do (blockAt has no such key)."
   [p]
   (let [{:keys [floor-rect built-columns]} @(fake-world/state (oracle p))]
     (fn [pos] (if (and (every? #(js/Number.isFinite (aget pos %)) ["x" "y" "z"])
                        (not (and floor-rect (beyond-floor? floor-rect built-columns pos))))
-                (.blockAt (oracle p) pos)
+                (let [b (.blockAt (oracle p) pos)]
+                  (when (and b (not (fake-world/sight-passes? (.-name b)))) (aset b "opaque" true))
+                  b)
                 #js {:unknown true :pos pos}))))
 
 (defn with-sky-only
