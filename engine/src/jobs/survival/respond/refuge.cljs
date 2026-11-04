@@ -149,6 +149,7 @@
   {:class :at}: its class and feet cell, for event-counts wall-places): a step's result, else nil."
   [c trespass?]
   (when-let [refuge (await (pillar/plan! c trespass?))]
+    (pillar/note-base! c (mapv (:anchor refuge) [:x :y :z]))
     (ctx/emit! c :retreat.pillar :info {:class (:class refuge) :at (mapv (:anchor refuge) [:x :y :z])})
     (await (start-refuge! c refuge))))
 

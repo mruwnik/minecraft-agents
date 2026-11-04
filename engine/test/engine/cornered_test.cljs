@@ -2013,6 +2013,25 @@
             (await (respond.pillar/raise! (stub-ctx p m))))
           (is (= {:pillar {:clear 1}} (:seen-fails @m)) "counted under the refuge's class, not the one the body stands in now"))))))
 
+(deftest a-pillar-part-built-is-priced-at-the-blocks-left
+  (let [open-s (fn [base y]
+                 (let [m (atom {:pillar-base base})
+                       p (tu/fake-on-floor {:self {:pos {:x 0.5 :y y :z 0.5}} :inventory [{:name "dirt" :count 20}]})
+                       c (stub-ctx p m)]
+                   (with-stub-mem
+                     (fn []
+                       (with-redefs [respond.pillar/pillar-item (fn ([_] "dirt") ([_ _] "dirt"))
+                                     respond.pillar/pillar-climb (constantly 0)
+                                     respond.pillar/mob-class (constantly :clear)
+                                     ctx/since (constantly [])
+                                     ctx/now (constantly 1000)]
+                         (:open-s (cornered/pillar-cover c [])))))))
+        whole (open-s [0 64 0] 64)]
+    (is (< 0 whole))
+    (is (< (open-s [0 64 0] 65) whole) "one block under the body: the cost of two blocks, not three")
+    (is (< (open-s [0 64 0] 66) (open-s [0 64 0] 65)))
+    (is (= whole (open-s [5 60 5] 66)) "a pillar in another column is a fresh one")))
+
 (deftest the-covers-are-priced-once-while-what-they-read-stays
   (let [m (atom {})
         p (tu/fake-on-floor {:blocks dead-end :inventory [{:name "dirt" :count 20}] :entities [(zombie 3 64 0)]})

@@ -128,6 +128,21 @@
 
 (defn cell-map [[x y z]] {:x x :y y :z z})
 
+(defn note-base!
+  "Remember the feet cell a flight's first pillar here began from (lifted reads the rise from it); a new column starts over."
+  [c [x y z :as feet]]
+  (let [[bx _ bz] (:pillar-base (ctx/mem c))]
+    (when-not (and (== x bx) (== z bz))
+      (ctx/update-mem! c assoc :pillar-base feet))))
+
+(defn lifted
+  "Blocks of this flight's pillar the body already stands on (an attempt a mob cut short): its rise above where the
+  flight's first pillar here began, 0 in another column."
+  [c]
+  (let [[x y z] (pl/feet-cell c)
+        [bx by bz] (:pillar-base (ctx/mem c))]
+    (if (and bx (== x bx) (== z bz)) (max 0 (min (dec (pillar-height)) (- y by))) 0)))
+
 (defn melee-hostiles
   "The hostiles seen within 4 that strike (not a shooter, a creeper or an enderman), as look/seen-entities maps."
   [p]
