@@ -141,6 +141,13 @@
           (back-unsafe c until-morning) until-morning
           :else (min (:offline-ms (:args c)) until-morning))))
 
+(defn stint-s
+  "Seconds a log-out with the default args takes from here (quote-of's, a stay not asked), nil when one is known unsupported."
+  [c]
+  (when-not (sh-sleepers/log-out-unsupported? (ctx/view c))
+    (let [c (update c :args #(merge (a/defaults args) %))]
+      (/ (+ (away-ms c) (:news-ms (:args c))) 1000))))
+
 (defn ^:async quote-of [c]
   (let [s (if (staying? c)
             (/ (max 0 (- (stay-deadline c) (ctx/now c))) 1000)

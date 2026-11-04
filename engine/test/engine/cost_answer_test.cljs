@@ -616,8 +616,9 @@
     (is (= 1 (stays false)) "no open sky over it: the mob is still there when the hide ends")
     (is (< (stays true) 1) "burning under open sky it may pass")))
 
-(deftest a-cover-a-mob-may-pass-waits-out-the-seconds-till-the-sun-burns-it
-  (let [secs #(:seconds (cost/cover-answer {:mobs [(assoc (mob "zombie" 3) :burns %1)] :dawn-s %2} {:open-s 2 :seconds 32}))]
-    (is (= 32 (secs true 0)) "by day the hide is its own seconds")
-    (is (= 300 (secs true 300)) "at dusk it lasts till dawn")
-    (is (= 32 (secs false 300)) "a mob the sun does not burn is not waited out: the fight is owed instead")))
+(deftest a-cover-is-worth-its-cheapest-exit-the-sun-a-log-out-or-the-fight-owed
+  (let [fight {:damage 5 :hit 3 :seconds 5}
+        price (fn [burns args] (cost/answer-price (body 20) (cost/cover-answer (merge {:mobs [(assoc (mob "zombie" 3) :burns burns)] :then [(update fight :seconds * 1000)]} args) {:open-s 2 :seconds 32}) here))]
+    (is (< (price true {:dawn-s 100}) (price true {:dawn-s 900})) "a burner is waited out: dusk costs more than just before dawn")
+    (is (= (price false {:dawn-s 100}) (price false {})) "the sun is no exit from a mob that does not burn")
+    (is (< (price false {:log-out-s 60}) (price false {})) "a log-out ends the stay of a mob that stays")))
