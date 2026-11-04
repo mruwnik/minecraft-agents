@@ -48,9 +48,9 @@
 (defn cell-of [{:keys [x y z]}] [x y z])
 
 (defn finish-leg!
-  "Writes the leg's side to :walk-looked when it is still unseen after the walk."
+  "Writes the leg's side to :walk-looked when it is still unseen after the walk, or after a look from where a walk shows no more."
   [c side]
-  (when (and (look/unseen? (:primitives c) [side]) (:edge-walked (ctx/mem c)))
+  (when (and (look/unseen? (:primitives c) [side]) (or (:edge-walked (ctx/mem c)) (:edge-close (ctx/mem c))))
     (ctx/remember! c :walk-looked {:cells [(cell-of side)]} walked-policy)))
 
 (defn ended
@@ -81,7 +81,7 @@
             next-leg (when (and (judged? c) (not (look/unseen? (:primitives c) [side]))) (ready/next-leg c from (:tried (ctx/mem c))
                                     {:stands (:stands (ctx/mem c)) :route-from from :route-to (:at (:args c))}))]
         (if next-leg
-          (do (ctx/update-mem! c assoc :leg (update next-leg :side (fn [[x y z]] {:x x :y y :z z})) :edge-walked false) :again)
+          (do (ctx/update-mem! c assoc :leg (update next-leg :side (fn [[x y z]] {:x x :y y :z z})) :edge-walked false :edge-close false) :again)
           (let [w (if (u/within? (sh-sense/feet (:primitives c)) from 0)
                     {:kind :done}
                     (await (ctx/call c :back 'jobs.movement.go-to {:pos from :range 0 :ways #{:walk} :floor cost-health/spend-down})))]

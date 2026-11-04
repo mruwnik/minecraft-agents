@@ -2,7 +2,7 @@
   "Look first, judge after: an unseen cell is open until looked at (a player walks up and looks). The unseen sides of the
   closed region the body stands in under a cover, and the unseen cells of a roof column, are looked at, nearest first, and
   walked towards when a look cannot show them, a walk only while its price (walk-risk/look-cost) and the walks before it
-  are bought by the call's worth. Memory keys :edge-looked, :edge-phase, :edge-spent, :edge-walked, :edge-t0 are the calling job's."
+  are bought by the call's worth. Memory keys :edge-looked, :edge-phase, :edge-spent, :edge-walked, :edge-close, :edge-t0 are the calling job's."
   (:require [jobs.lib.cost :as cost]
             [jobs.lib.clock :as clock]
             [jobs.lib.cost.health :as cost-health]
@@ -185,7 +185,9 @@
                    in-range? (fn [at] (some-> (look/near-of p) (>= (u/dist at {:x (first cell) :y (second cell) :z (nth cell 2)}))))
                    near (or to ((walkable-near-fn p feet) reach-to))
                    shown-from? (fn [at] (and (in-range? at) (look/line-clear? p (eye-at at) target)))
-                   near (when-not (or (shown-from? feet) (and near (u/within? feet near 1)) (and (in-range? feet) near (not (shown-from? near)))) near)
+                   no-new-view? (or (shown-from? feet) (and near (u/within? feet near 1)) (and (in-range? feet) near (not (shown-from? near))))
+                   near (when-not no-new-view? near)
+                   _ (when no-new-view? (ctx/update-mem! c assoc :edge-close true))
                    spent (:edge-spent (ctx/mem c) 0)
                    price (when (and near (= 1 phase)) (walk-price c near worth))
                    _ (when price (ctx/update-mem! c assoc :edge-spent (+ spent price)))
