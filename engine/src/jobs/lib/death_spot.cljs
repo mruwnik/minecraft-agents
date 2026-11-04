@@ -104,6 +104,13 @@
             (for [{{:keys [death-t pos]} :data} (ctx/entries c :deaths) :when (and pos (> death-t since))] [death-t pos])
             (at :respawned (comp list :pos)) (at :hurt (comp list :pos)) (at :moved (juxt :from :to)))))
 
+(defn bare-headed?
+  "Whether the worn equipment of mob entity e (mineflayer's array, head last) was sensed and holds nothing on the head: a
+  helmet saves it from the sun, and equipment never sensed counts as worn, the worse case."
+  [^js e]
+  (let [eq (some-> e .-equipment)]
+    (boolean (and eq (nil? (aget eq 5))))))
+
 (defn burns-by-day?
   "Whether mob (one of threat/burns-in-sun) standing at pos would burn once the sun is up: no rain now and sky light
   reaching down its column (a shaded or roofed mob stays)."

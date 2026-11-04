@@ -251,7 +251,7 @@
         specs (if given (select-keys given ways) (covers c ways))
         equipment (cost/equipment-of (.-equipment (.self (:primitives c))))
         mobs (mapv #(let [m (hostile/mob-near (:primitives c) %)]
-                      (assoc m :burns (death-spot/burns-by-day? (:primitives c) (:name m) (danger-q/mob-pos (:primitives c) %))))
+                      (assoc m :burns (and (death-spot/bare-headed? %) (death-spot/burns-by-day? (:primitives c) (:name m) (danger-q/mob-pos (:primitives c) %)))))
                    hostiles)
         body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)

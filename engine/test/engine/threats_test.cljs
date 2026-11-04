@@ -151,3 +151,9 @@
     (is (= 2 (count (threats/known-threats two))))
     (is (> (chance two) (chance one) 0) "the second skeleton adds its own shots")
     (is (> (toll two) (toll one) 0) "and its own toll")))
+
+(deftest a-helmet-saves-a-mob-from-the-sun-and-unsensed-equipment-counts-as-worn
+  (let [mob #(clj->js (cond-> {} % (assoc :equipment %)))]
+    (is (death-spot/bare-headed? (mob [nil nil nil nil nil nil])) "sensed, nothing on the head: it burns")
+    (is (not (death-spot/bare-headed? (mob [nil nil nil nil nil {:name "iron_helmet"}]))) "a helmet keeps it from burning")
+    (is (not (death-spot/bare-headed? (mob nil))) "equipment never sensed: the worse case, no burn")))
