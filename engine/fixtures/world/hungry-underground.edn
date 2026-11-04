@@ -1,5 +1,5 @@
 ;; Cards 094af74a, 69be7630: a buried body is not walked out by hunger, and a badly hurt one does not mine on.
-;; buried: sealed in a stone room lit by glowstone (no sky light; the body is far from its spawn, so a death is dear and the hurt body is the low-health trigger's: get-food is submitted directly), food 5-9 (drained by hunger), hp 6 (fragile: a starving non-fragile body would explore), nothing carried: get-food stops (no-food "not searched underground", or too-dangerous while food is still above 0) and takes no walk.
+;; buried: sealed in a dark stone room ( the body is far from its spawn, so a death is dear and the hurt body is the low-health trigger's: get-food is submitted directly), food 5-9 (drained by hunger), hp 6 (fragile: a starving non-fragile body would explore), nothing carried: get-food stops (no-food "not searched underground", or too-dangerous while food is still above 0) and takes no walk.
 ;; low-health: food 8 (no regeneration) and hp 1.5, nothing to eat: gather.mine stops :cannot-heal (get-kit feeds then)
 ;; and digs nothing; once instant health heals it, the mine runs.
 {:defaults
@@ -9,7 +9,7 @@
   :limit-s 90}
  :cases
  [{:name "buried-hungry-body-does-not-explore"
-   :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow] [:set [14 3 16] "glowstone"]]
+   :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow]]
    :act [[:rcon "effect give $BODY minecraft:hunger 60 60 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [5-9]$" 60] [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 14 minecraft:generic"]
          [:job (jobs.survival.get-food {:carry 0})]]

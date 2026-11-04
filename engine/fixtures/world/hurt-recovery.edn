@@ -13,7 +13,7 @@
  [{:name "hurt-hungry-body-waits-out-the-night-shut-in"
    :time :night :time-why :dawn-decision
    :register [{:trigger :low-health}]
-   :blocks [[:fill [14 0 14] [18 4 18] "stone" :hollow] [:set [16 4 16] "glowstone"]]
+   :blocks [[:fill [14 0 14] [18 4 18] "stone" :hollow]]
    :act [[:rcon "effect give $BODY minecraft:hunger 60 60 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [5-9]$" 60] [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 30}
