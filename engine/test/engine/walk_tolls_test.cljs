@@ -70,7 +70,7 @@
     (is (= (wworld/tolls-key tolled) (wworld/tolls-key (wworld/with-tolls pw (cost/zone-tolls [[6 64 1] [5 64 0]])))))
     (is (= 2 (.-size (.-cells (.-tolls (wplan/plan-options tolled 1 nil nil))))))
     (is (= (wworld/tolls-key tolled) (wworld/tolls-key (wworld/with-dangers tolled nil))) "other costs keep the tolls")
-    (is (= [[5 64 0 12] [6 64 1 10]] (mapv (juxt :x :y :z :factor) (wworld/tolls-key (wworld/with-tolls tolled [{:x 5 :y 64 :z 0 :factor 2}]))))
+    (is (= [[5 64 0 4] [6 64 1 3]] (mapv (juxt :x :y :z :factor) (wworld/tolls-key (wworld/with-tolls tolled [{:x 5 :y 64 :z 0 :factor 2}]))))
         "tolls added later add to the cells already tolled")))
 
 (deftest a-toll-that-drifts-a-little-keeps-the-search-key

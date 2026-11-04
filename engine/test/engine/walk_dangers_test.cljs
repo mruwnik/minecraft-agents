@@ -108,7 +108,8 @@
     (is (= (with z) (with (assoc z :x 21.2))) "a step within its 4 blocks: the same search goes on")
     (is (not= (with z) (with (assoc z :x 30.5))) "moved on")
     (is (not= (with z) (with)) "died: none left")
-    (is (not= (with z) (with z (assoc z :mob "skeleton"))) "another came")))
+    (is (not= (with z) (with z (assoc z :mob "skeleton"))) "another came")
+    (is (= (with z (assoc z :mob "skeleton")) (with (assoc z :mob "skeleton") z)) "the order they are met in is no change")))
 
 (defn key-of [world]
   (let [c (ready-test/ctx-of (merge {:floor [-5 -20 45 20]} world))]

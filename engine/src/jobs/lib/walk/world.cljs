@@ -407,11 +407,12 @@
 
 (defn tolls-key
   "What a kept search's key holds of pw's tolls (with-tolls, with-edges): the cells with their factors and the edges with
-  their seconds, nil for none. A cell's factors count to two significant digits: one that follows the body's health or
-  breath (flood tolls) drifts at every quote, and a key that changed with it would restart the search each time."
+  their seconds, nil for none. A cell's factors count by their power of two: ones that follow the body's health or breath
+  (flood tolls) or a mob's moves (threat tolls) drift at every quote, and a key that changed with them would restart the
+  search each time, so a quote that needs more than one round never ended."
   [pw]
   (when-let [^js t (.-tolls pw)]
-    (let [coarse (fn [f] (if (and (number? f) (js/isFinite f)) (js/parseFloat (.toPrecision f 2)) f))
+    (let [coarse (fn [f] (if (and (number? f) (pos? f) (js/isFinite f)) (js/Math.round (js/Math.log2 f)) f))
           list (some->> (.-list t) (mapv #(-> % (update :factor coarse) (update :trample-factor coarse))))]
       (if-let [rows (.-edgeRows t)] [list rows] list))))
 
@@ -426,7 +427,8 @@
   [pw]
   (some->> (.-dangers pw) array-seq
            (mapv (fn [^js d] [(.-mob d) (js/Math.round (/ (.-x d) 4)) (js/Math.round (/ (.-y d) 4)) (js/Math.round (/ (.-z d) 4))
-                            (/ (js/Math.round (* 10 (.-rate d))) 10)]))))
+                            (/ (js/Math.round (* 10 (.-rate d))) 10)]))
+           sort vec))
 
 (defn solid-fn
   "solid? for executor/with-free-sides over a pathWorld."
