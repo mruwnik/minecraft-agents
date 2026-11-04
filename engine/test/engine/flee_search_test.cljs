@@ -393,6 +393,16 @@
           (is (not (identical? a moved)) "a chaser elsewhere is priced afresh")
           (is (not (identical? a (await (settings/with-settings {::search/max-nodes 100} #(price [(zombie -4.5)]))))) "other settings are priced afresh"))))))
 
+(deftest a-dark-way-is-caught-at-the-same-dead-end-race-its-price-uses
+  ;; the flee answer once took 1 - way-on whatever other way led back out, while the price paid the cheaper walk back
+  (let [chance #(into {} (map (juxt :end :dead-chance)) (search/scored [] {:x 0.5 :y 64 :z 0.5} %))
+        alone (chance [east])
+        homed (chance [east home])
+        end (assoc (end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5) :dead-chance 0)]
+    (is (= 0.5 (get alone (:end east))) "no way back: trapped at the dead end's chance")
+    (is (zero? (get homed (:end east))) "a seen way home with no chaser in reach: no blow lands on the way back")
+    (is (= 0 (:chance (search/caught-chance [end] {:k 0 :n 0} {} nil))) "the flight's chance is the end's, not 1 - way-on")))
+
 (deftest a-search-that-routed-nothing-is-no-certain-catch
   (let [open (search/caught-chance [] {:k 0 :n 0} {} nil)
         boxed (search/caught-chance [] {:k 0 :n 40} {} nil)]

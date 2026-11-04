@@ -18,7 +18,7 @@
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; wear-saved: the wear of a dear tool a spare's digs save; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; dark-or-lit: a dark stay against lighting it; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark), spawn-share its share of cells that spawn.
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; search-cell-s, flood-cell-s: the CPU seconds of one cell a route search expands, of one cell go-to's room flood visits (measured, engine.search-recount-test); landing-problem, planner-landing, landing-factor: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps, unseen-step-s of one, walk-step-s a walked block; stair-leg-pricer, pillar-s: a stair step's and a pillar's seconds with the unseen step on top (go-to's escalations, surface-up, the one-way climb-out); unseen-fall-s: the fall and climb out when an unseen floor a step down is not there; gap-look-cost: a refused gap jump over unseen floors filled now or looked at first; dead-end-cost: what an unseen dead end costs a flight; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; least-block-s: the least a plan prices a block; search-cell-s, flood-cell-s: the CPU seconds of one cell a route search expands, of one cell go-to's room flood visits (measured, engine.search-recount-test); landing-problem, planner-landing, landing-factor: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; air-left-s, wet-move-s, wet-way-s, wet-spare-s, wet-ok?: the air a walk over unseen water keeps back at its last breath, each move at its measured pace; swim-profile: its swimH from Depth Strider on the boots; gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's peek and aim prices of unseen cells (jobs.lib.cost.planner); way-on-chance, unseen-share: the one price of walking over unseen cells, a dead end and a mob in the dark at the worse case, from how often the seen ways near the body go on (the planner's :cell); unseen-route-s: that price of a route's unseen steps, unseen-step-s of one, walk-step-s a walked block; stair-leg-pricer, pillar-s: a stair step's and a pillar's seconds with the unseen step on top (go-to's escalations, surface-up, the one-way climb-out); unseen-fall-s: the fall and climb out when an unseen floor a step down is not there; gap-look-cost: a refused gap jump over unseen floors filled now or looked at first; dead-end-cost, dead-end-race: what an unseen dead end costs a flight and the chance it catches it; flight-caught-chance: the chance a flight is caught by its way, from its search's ways.
     tolls    farm-tolls, zone-tolls, flood-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort; fail-chance,
              failing-step-s: a step the walker failed at, priced by its failures (jobs.lib.cost.tolls).
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience and the ::extra-s setting (default 0); spawn-worth: a respawn point's worth; goal-value (item-value with measured gathers), worth-to, find-worth, items-find-worth, search-radius: what a find is worth, how far its legs may go; opening-price, hold-price: opening a shelter to mobs against holding on in it; leg-start, leg-price, dig-leg-price: a walk or dig leg's clock seconds and hp lost, never under its straight line; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
@@ -236,20 +236,30 @@
   [there back dark]
   (+ there (* dark back)))
 
+(defn dead-end-race
+  "{:cost :chance} of an unseen dead end that catches the body at (counts) (1 less way-on-chance) when it is a dead end:
+  :cost seconds, the cheapest of trapped (what the chasers cost where they corner the body; chance 1) and backs
+  [{:s :caught-s :unseen? :trapped}], a walk back to a fork and away along another way: its seconds and that way's price
+  on, trapped once a blow lands (hit: one each answer/melee-gap-s over caught-s, the seconds a chaser is within its
+  blow: reach-s), else, when that way runs unseen too, its own dead end at the same chance and its trapped. :chance the
+  chance the body is caught by it at the cheapest option (the dead end's chance times hit; no chaser, no blow); never
+  below 0 in cost."
+  [counts trapped backs]
+  (let [dead (- 1 (way-on-chance counts))
+        options (cons {:cost trapped :hit 1}
+                      (map (fn [b]
+                             (let [hit (- 1 (js/Math.exp (- (/ (:caught-s b) answer/melee-gap-s))))]
+                               {:cost (max 0 (+ (:s b) (* hit trapped) (if (:unseen? b) (* (- 1 hit) dead (:trapped b)) 0)))
+                                :hit (if (:unseen? b) (+ hit (* (- 1 hit) dead)) hit)}))
+                           backs))
+        best (reduce #(if (< (:cost %2) (:cost %1)) %2 %1) options)]
+    {:cost (* dead (:cost best)) :chance (* dead (:hit best))}))
+
 (defn dead-end-cost
-  "Seconds a route that runs on into cells the body has not seen adds past their unseen-share (its planner price):
-  at the chance the way does not go on (counts), what a dead end costs: trapped (what the chasers cost where they corner the body), or the
-  cheapest of backs [{:s :caught-s :unseen? :trapped}], a walk back to a fork and away along another way: its seconds
-  and that way's price on, trapped once a blow lands (one each answer/melee-gap-s over caught-s, the seconds a chaser is
-  within its blow: reach-s), else, when that way runs unseen too, its own dead end at the same chance and its trapped;
-  never below 0."
+  "Seconds a route that runs on into cells the body has not seen adds past their unseen-share (its planner price): the
+  :cost of dead-end-race, backs as there; trapped is the dead end's price with no way back."
   ([counts trapped] (dead-end-cost counts trapped nil))
-  ([counts trapped backs]
-   (let [dead (- 1 (way-on-chance counts))]
-     (* dead (reduce min trapped (map (fn [b]
-                                        (let [hit (- 1 (js/Math.exp (- (/ (:caught-s b) answer/melee-gap-s))))]
-                                          (max 0 (+ (:s b) (* hit trapped) (if (:unseen? b) (* (- 1 hit) dead (:trapped b)) 0)))))
-                                      backs))))))
+  ([counts trapped backs] (:cost (dead-end-race counts trapped backs))))
 
 (defn unseen-route-s
   "Seconds the steps of route ([{:x :y :z}] cells) add over cells kind-at reads :ground (a seen-lookup's unseen cell):
@@ -338,11 +348,11 @@
 (defn flight-caught-chance
   "The chance a flight is caught by the way its search found (flee-answer :caught; jobs.lib.cost.caught/prior is added there,
   whatever the way): 1 with no way left (way? false: every way it planned is cut); 0 on a way the race calls free; when
-  the way runs on into cells the body has not seen (unseen?), that way's dead end (1 less way-on-chance of counts): met
-  on the way back, the chasers catch it."
-  [{:keys [way? unseen? counts]}]
+  the way runs on into cells the body has not seen (unseen?), the chance its dead end catches it: :dead-chance, the
+  :chance of dead-end-race of the end (its search's backs), else that of a dead end with no way back (counts)."
+  [{:keys [way? unseen? counts dead-chance]}]
   (cond (not way?) 1
-        unseen? (- 1 (way-on-chance counts))
+        unseen? (or dead-chance (:chance (dead-end-race counts 0 nil)))
         :else 0))
 
 (def item-value value/item-value)

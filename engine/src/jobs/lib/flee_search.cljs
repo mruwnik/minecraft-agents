@@ -354,16 +354,21 @@
                                      (into (map #(update % :t + (- at-fork e-fork))) (subvec (:cells e) (inc f)))))
      :unseen? (some? (:unseen e)) :trapped (when (:unseen e) (trap-s chasers e))}))
 
-(defn dead-end
-  "Seconds a dead end at the first unseen cell of scored end r adds to its price: cost/dead-end-cost of its :counts and
-  trap-s, backs along the ways out of pool (open or running on unseen, not caught, not a cover end, not through that
-  cell; back-via); 0 when r does not reach a cell unseen."
+(defn dead-end-race
+  "cost/dead-end-race {:cost :chance} of a dead end at the first unseen cell of scored end r; nil when r does not reach
+  a cell unseen. Its :counts and trap-s, backs along the ways out of pool (open or running on unseen, not caught, not a cover end, not through that
+  cell; back-via)."
   [chasers r pool]
-  (if-not (and (:trapped r) (< (:seen-n r) (count (:cells r))))
-    0
+  (when (and (:trapped r) (< (:seen-n r) (count (:cells r))))
     (let [shut (cell-of (nth (:cells r) (:seen-n r)))
           out? #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (not (:cover? %)) (not-any? (fn [c] (= shut (cell-of c))) (:cells %)))]
-      (cost/dead-end-cost (:counts r) (trap-s chasers r) (map #(back-via chasers r %) (filter out? pool))))))
+      (cost/dead-end-race (:counts r) (trap-s chasers r) (map #(back-via chasers r %) (filter out? pool))))))
+
+(defn dead-end
+  "Seconds a dead end at the first unseen cell of scored end r adds to its price (dead-end-race); 0 when r does not reach
+  a cell unseen."
+  [chasers r pool]
+  (:cost (dead-end-race chasers r pool) 0))
 
 (defn scored
   "priced (price!) scored against chasers [{:name (mob-kind) :pos}] from where the body stands (from): :arrive (the
@@ -380,9 +385,10 @@
                          (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :caught? (pos? c-s))))
                      priced)]
      (mapv (fn [e]
-             (let [d (dead-end chasers e (or pool raced))
+             (let [race (dead-end-race chasers e (or pool raced))
+                   d (:cost race 0)
                    price (+ (:price e) d)]
-               (assoc e :dead-end d :price price :score (- (min (:arrive e) unreached-s) price))))
+               (assoc e :dead-end d :dead-chance (:chance race) :price price :score (- (min (:arrive e) unreached-s) price))))
            raced))))
 
 (defn covers
@@ -518,7 +524,7 @@
         caught (filter :caught? ring)]
     (cond
       refuge? {:chance 0 :refuge-s (door-s picked (:door? opts))}
-      best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts})}
+      best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts :dead-chance (:dead-chance best)})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught))))
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter :unseen ring)))
