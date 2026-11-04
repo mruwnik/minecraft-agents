@@ -157,8 +157,6 @@
   (let [hs (homes c rooms blast?)]
     (assoc (await (respond.goal/judge! c hs covered? (dead-end-covers c))) :homes hs)))
 
-(declare caught-chance!)
-
 (defn ^:async caught-chance-once!
   "{:chance :seconds :cornered?} of the flight's next step from where the body stands (flee-search/caught-chance), for
   the fight-or-flee weighing, from what that step judges by: its chasers (flight/look over the memory flee! resumes,
@@ -190,15 +188,16 @@
         chance)))))
 
 (defn ^:async caught-chance!
-  "caught-chance-once!, after a look at the cells its flight would look at first (:look): a way that may be there is
-  priced after the glance the flight takes anyway, not before it."
+  "caught-chance-once!, after one look at the cells its flight would look at first (:look): a way that may be there is
+  priced after the glance the flight takes anyway, not before it. One pass: the price asked again after the look is
+  the answer, whatever it still wants to look at (cells past the glance memory would cycle for ever)."
   ([c] (await (caught-chance! c nil)))
   ([c specs]
    (let [r (await (caught-chance-once! c specs))]
      (if-let [cells (:look r)]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
            (await (dig-look/look-unknown! c cells))
-           (await (caught-chance! c specs)))
+           (await (caught-chance-once! c specs)))
        r))))
 
 (defn ^:async look-ahead!

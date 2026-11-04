@@ -27,6 +27,8 @@
             [jobs.survival.respond-to-hostile :as respond]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.survival.hide-out :as hide-out]
+            [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.flee-search :as flee-search]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.cover :as cover]
             [jobs.survival.respond.state :as respond.state]
@@ -953,6 +955,23 @@
           (await (run-job! s 'pricer {}))
           (is (= [#{7 8} #{7} #{7}] @priced) "both known; the price and the flight's step both run from the chasing zombie alone"))))))
 
+(deftest the-flee-price-looks-once-however-many-cells-it-wants-to-look-at
+  ;; more unseen cells than the glance memory holds, so the looked-at cells are never all remembered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (atom 0)
+              cells (vec (for [x (range (inc (cornered/glance-memory))) ] [x 64 0]))
+              s (setup-sensed {:entities [(zombie 7 2 {})]})
+              s (assoc-in s [:eng :jobs 'pricer]
+                          {:round (fn ^:async r [c]
+                                    (with-redefs [flee-search/caught-chance (fn [& _] {:chance 1 :look cells})
+                                                  dig-look/look-unknown! (fn [_c _cells] (swap! looks inc) (js/Promise.resolve nil))]
+                                      (await (cover/caught-chance! c)))
+                                    (ctx/end c :done nil))})]
+          (await (run-job! s 'pricer {}))
+          (is (= 1 @looks) "one look pass, then the price as asked again"))))))
+
 (deftest a-kept-flee-price-is-asked-again-once-its-chaser-is-dead
   (async done
     (tu/run-async done
@@ -971,7 +990,7 @@
           (await (run-job! s 'pricer {}))
           (let [[chased dead fresh] @prices]
             (is (not= chased dead) (str "the zombie at 2 blocks catches the flight; dead, it chases nothing " (pr-str @prices)))
-            (is (= (dissoc fresh :way-scan) (dissoc dead :way-scan)) "the price asked again is the one asked afresh (the way scan only records the ways sampled, which the first ask's looks change)")))))))
+            (is (= (dissoc fresh :look) (dissoc dead :look)) "the price asked again is the one asked afresh (:look, the cells still to look at, depends on the looks taken)")))))))
 
 (deftest a-flight-target-behind-the-body-is-looked-at-first
   (async done
