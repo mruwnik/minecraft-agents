@@ -9,6 +9,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -135,6 +136,12 @@
 
 (def walk-ways #{:walk :clear-seal})
 
+(defn own-seal-near?
+  "Whether a :shelter block the body placed still stands within the take-back radius of its feet: the quote's walls are its own."
+  [c]
+  (boolean (seq (filter #(= :shelter (:purpose %))
+                        (ledger/near-of (ledger/entries c) {:pos (sh-sense/feet (:primitives c)) :radius ledger/seal-clear-radius})))))
+
 (def seal-ways "The walk of a body shut in its shelter also digs out of it." (conj walk-ways :dig-out))
 
 (def no-way-reasons
@@ -225,7 +232,7 @@
         bed (bed-of c)
         taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted? :price (sense/fails-to c)}))
-        sealed? (boolean (sh-inside/sheltered-in c))
+        sealed? (boolean (or (sh-inside/sheltered-in c) (own-seal-near? c)))
         quote-args {:pos bed :range 2 :ways (if sealed? seal-ways walk-ways)}
         t0 (ctx/now c)
         q (when-not (taken?) (await (ctx/quote c 'jobs.movement.go-to quote-args)))
