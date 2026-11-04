@@ -7,7 +7,8 @@
   and has no floor, keeps a stand-in y (the body's feet); go-to aims again every step, so it resolves from
   seen cells on approach; a provisional one it first walks to within approach-range of. A y with no standable cell within the
   range is re-aimed to its column's standable cell nearest it, at most :y-slack blocks off, never past a solid (leads-to?;
-  seen cells, an unseen one from the world the plans read).
+  seen cells, an unseen one from the world the plans read). A y cell seen open whose floor is not yet in view is aimed
+  provisionally at the lowest seen open cell of its column (open-air-under), and aims again every step.
 
   Rules of go-to: :pos [x z] or {:x :z} (no y) walks to the surface of that
   column, else under cover the ground nearest the body's feet (unseen: first to within 8 of a height estimated from the seen columns around it, then looks); a y the planner finds no standable cell within :range of, or under :unknown a y seen in the ground with no seen stand within :range (asked before the first walk, pre-aim!), is re-aimed once to its column's
@@ -129,6 +130,14 @@
       (cond (keyword-identical? :unknown k) (min y (inc g))
             (and (free? k) (> g min-y)) (recur (dec g))))))
 
+(defn open-air-under
+  "For a y goal cell seen open, its column seen open down to an unseen cell above lo: the lowest seen open cell over it
+  (the floor is not in view yet: aim down the column, not out over the unseen land); else nil."
+  [kind-at x z y lo]
+  (when (free? (kind-at x y z))
+    (when-let [g (unseen-under kind-at x z y lo)]
+      (when (< g y) g))))
+
 (defn waypoint
   "A cell to walk to toward the column x z from the body's feet [bx by bz] when its estimate has no stand in reach: the
   seen ground (nearest by, within estimate-reach; a head cell not seen counts as open, as a seen slope's air) at least
@@ -171,6 +180,9 @@
         (if-let [g (unseen-under seen x z (estimate seen x z body-y) min-y)]
           {:pos {:x x :y g :z z} :resolved true :provisional true}
           {:pos {:x x :y body-y :z z}})))
-    (if-let [g (when (pos? slack) (let [ka (kind-at p raw?)] (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %))))]
-      {:pos (assoc goal :y g) :resolved true :why :explicit}
-      {:pos goal})))
+    (let [ka (kind-at p raw?)]
+      (if-let [g (when (pos? slack) (ground ka x z y (- y slack) (+ y slack) #(leads-to? ka x z y %)))]
+        {:pos (assoc goal :y g) :resolved true :why :explicit}
+        (if-let [g (when (pos? slack) (open-air-under ka x z y (- y slack)))]
+          {:pos (assoc goal :y g) :resolved true :provisional true :why :explicit}
+          {:pos goal})))))

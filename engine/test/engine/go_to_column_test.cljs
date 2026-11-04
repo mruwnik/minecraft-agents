@@ -512,3 +512,22 @@
           (is (:arrived @out) (pr-str @out))
           (is (>= y 74) (str "on the platform: at " (at p)))
           (is (<= (js/Math.hypot (- 12 x) (- 16 z)) 3.5) (str "at " (at p))))))))
+
+(deftest a-y-goal-in-mid-air-over-unseen-lower-ground-is-re-aimed-down-its-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; the body on a plateau (feet 72), the goal cell (25,72,0) open air 8 over the floor (feet 64); the floor round
+        ;; the column is unseen until the body is down the steps
+        (let [steps (into {} (mapcat (fn [i] (box (+ 5 i) 64 -3 (+ 5 i) (- 70 i) 3 "stone")) (range 7)))
+              world {:blocks (merge flat (box -2 64 -3 4 71 3 "stone") steps) :self {:pos {:x 0.5 :y 72 :z 0.5}}}
+              {:keys [eng p]} (gt/setup world)
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                          (gt/recording-parent out {:pos [25.5 72 0.5] :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}})))]
+          (aset p "sensedAt" (fn [pos] (if (and (< (first (at p)) 12) (>= (.-x pos) 17) (< (.-y pos) 66)) #js {:unknown true} (.blockAt p pos))))
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 30))
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (> 4 (js/Math.abs (- 25 (first (at p))))) (str "at " (at p)))
+          (is (= 64 (js/Math.floor (second (at p)))) (str "on the floor: " (at p))))))))

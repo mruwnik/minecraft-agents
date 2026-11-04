@@ -36,6 +36,15 @@
    :expect [{:event {:source :job :kind :mine.left-zone} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :back}} :for-s 150 :until {:source :job :kind :mine.left-zone}}]
    :limit-s 180}
+  {:name "walks-down-out-of-its-zone-from-a-plateau"
+   ;; the body on a 5-high stone plateau that is its own zone; the exit cells at its feet y hang in the air over the floor: go-to aims them down their column, so the walk out arrives instead of exploring
+   :blocks [[:fill [2 0 8] [30 9 24] "air"] [:fill [13 0 13] [19 4 19] "stone"]]
+   :body {:at [16.5 5 16.5]}
+   :zones [{:name "home" :min [13 0 13] :max [19 9 19] :owner "$body"}]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.left-zone} :within-s 90 :of-job true}]
+   :after [[:block [16 4 16] "stone"]]
+   :limit-s 110}
   {:name "ignore-zones-digs-in-place"
    :blocks [[:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
    :zones [{:name "home" :min [14 -1 14] :max [18 3 18] :owner "$body"}]
