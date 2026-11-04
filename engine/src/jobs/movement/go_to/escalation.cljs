@@ -147,22 +147,6 @@
                                :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c))))
     :again))
 
-(defn zone-exit?
-  "Whether the body stands in another's zone, claim or plan: leaving it is never refused by it."
-  [c [x y z]]
-  (some? (access/foreign-holder c {:x x :y y :z z})))
-
-(defn exit-dig-fn
-  "(may-dig? cell) for the way out of the holding at feet: zones are ignored only in cells that holding covers or that
-  nobody holds, so a neighbouring zone, claim or plan still refuses."
-  [c feet]
-  (let [home (access/foreign-holder c (zipmap [:x :y :z] feet))
-        free (may-dig-fn (assoc-in c [:args :ignore-zones?] true))]
-    (fn [cell]
-      (and (free cell)
-           (let [h (access/foreign-holder c (zipmap [:x :y :z] cell))]
-             (or (nil? h) (= h home)))))))
-
 (defn dig-progress?
   "Whether dig-route escalation e ends more than a block nearer goal than best, the least any way before it started
   from: a distance, or with dive? (a climb away from a dive, whose best is a height to gain) the height still to gain."
@@ -340,7 +324,6 @@
                                       (gap-fill c result (:skip opts))
                                       (drop-fill c result (:skip opts) feet))))
         choosable? #(not= :none (:step (worth-it (choose % opts))))
-        zone-free (exit-dig-fn c feet)
         ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
         drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
                   (when (and (= :drop (some-> kind keyword)) at (not (one-way/too-deep? (second feet) (second at) (second goal))) (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
@@ -359,7 +342,6 @@
             spot {:step :approach :pos spot}
             drop-in {:step :approach :pos drop-in}
             @own @own
-            (and (zone-exit? c feet) (choosable? zone-free)) (assoc (worth-it (choose zone-free opts)) :exit-zone true)
             (choosable? (constantly true)) {:step :none :why :zone}
             :else (or @priced-own e))
         e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
@@ -591,7 +573,7 @@
   to it (memory :dug-s). A child that ends other than done gives up, with its cause, unless it got part of the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
+        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         args (cond-> args
                (and (= :clear-path step) (js/isFinite (dig-left-s c))) (assoc :max-dig-s (max 0 (dig-left-s c)))
                ;; the stair's kept drops outlive it: this call's walks must not spend them before the put-back
