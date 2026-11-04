@@ -1,6 +1,6 @@
 ;; Card ab58ec22 (b37e22cd, 0a82bb14): from-plan in a long dark hall (no dawn lights it; a never-lit cell) at night, no torch carried.
-;; Should-succeed: a seen chest of torches is fetched and the far site built. A fetch with no source is not worth it: the build waits for dawn
-;; (:later, the cell is fetched for then), it does not fail.
+;; Should-succeed: a seen chest of torches is fetched and the far site built. With no source the fetch fails and the build does not fail:
+;; a 2-cell job is short work, so its dark stay is cheaper than the dawn wait (stay priced as the job's work seconds) and it is built unlit.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:build :light :night :fetch]
@@ -18,9 +18,9 @@
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
    :after [[:block [50 0 16] "oak_planks"] [:block [51 0 16] "oak_planks"]]}
-  {:name "hall-at-night-no-source-waits-for-dawn-not-failing"
+  {:name "hall-at-night-no-source-short-job-builds-unlit-not-failing"
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :failed} :for-s 20 :of-job true}
-            {:no-event {:source :job :kind :stopped} :for-s 1 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 1 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :failed} :for-s 1 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 1 :of-job true}]
+   :after [[:block [50 0 16] "oak_planks"] [:block [51 0 16] "oak_planks"]]}]}
