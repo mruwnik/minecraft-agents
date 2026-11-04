@@ -110,6 +110,13 @@
     (swap! (fake/state p) assoc :light-default [0 0])
     (is (= 0 ((look/see-lit-fn w) 1 64 0)) "dark")))
 
+(deftest table-now-equals-a-fresh-table-across-times-and-seeing-levels
+  (let [{:keys [p w]} (sensed wall-world)
+        raw (:raw (aget w "perception"))]
+    (doseq [t [0 6000 12500 13500 18000 23000 0] m [0.2 0.5 0.2]]
+      (swap! (fake/state p) assoc :time t)
+      (is (= (vec (light/visible-table (light/darken-now raw) m)) (vec (light/table-now raw m))) (str t " " m)))))
+
 (deftest lit-or-near-fn-builds-the-light-table-once-for-all-its-cells
   (let [{:keys [w]} (sensed wall-world)
         tables (atom 0)

@@ -46,8 +46,17 @@
   (let [sky (.sky ^js raw)]
     (sky-darken (.-timeOfDay sky) (.-rain sky) (.-thunder sky))))
 
-(defn table-now [raw seeing-min]
-  (visible-table (darken-now raw) seeing-min))
+(def ^:private last-table (volatile! nil))
+
+(defn table-now
+  "visible-table at the sky now; the last one is kept while darken and seeing-min are unchanged (it is only read)."
+  [raw seeing-min]
+  (let [darken (darken-now raw) [d m t] @last-table]
+    (if (and (== d darken) (== m seeing-min))
+      t
+      (let [t (visible-table darken seeing-min)]
+        (vreset! last-table [darken seeing-min t])
+        t))))
 
 (defn max-light
   "Per channel, the brighter of two packed lights."

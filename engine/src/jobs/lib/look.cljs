@@ -532,11 +532,10 @@
   (some-> (frontier-value p cell) (bit-shift-right 1)))
 
 (defn- frontier-lit?
-  "Whether the nearest frontier cell to the cell is lit; the feet's light (feet-lit?) when none lies within
-  base-rates/unseen-d-max."
-  [p cell d]
-  (let [v (when (< d base-rates/unseen-d-max) (frontier-value p cell))]
-    (if v (== 1 (bit-and v 1)) (feet-lit? p))))
+  "Whether the nearest frontier cell to the cell is lit (v: its frontier-value); the feet's light (feet-lit?) when none
+  lies within base-rates/unseen-d-max."
+  [p v d]
+  (if (and v (< d base-rates/unseen-d-max)) (== 1 (bit-and v 1)) (feet-lit? p)))
 
 (defn unseen-solid-fn
   "(fn [cell-y d]) base-rates/unseen-solid for the body of primitives p: the chance an unseen cell at height cell-y, d from
@@ -557,11 +556,11 @@
   [p]
   (let [solid-at (or (unseen-solid-fn p) (fn [y d lit? & [adj]] (base-rates/unseen-solid y 0 d lit? nil adj)))]
     (fn
-      ([cell] (let [[_ y _] cell d (or (frontier-distance p cell) 1)]
-                (solid-at y d (frontier-lit? p cell d))))
+      ([cell] (let [[_ y _] cell v (frontier-value p cell) d (or (some-> v (bit-shift-right 1)) 1)]
+                (solid-at y d (frontier-lit? p v d))))
       ([[_ y _ :as cell] beside-solid?]
-       (let [d (or (frontier-distance p cell) 1)]
-         (solid-at y d (frontier-lit? p cell d) beside-solid?))))))
+       (let [v (frontier-value p cell) d (or (some-> v (bit-shift-right 1)) 1)]
+         (solid-at y d (frontier-lit? p v d) beside-solid?))))))
 
 (defn unseen-solid?-fn
   "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5); kept by
