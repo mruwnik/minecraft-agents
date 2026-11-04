@@ -21,11 +21,21 @@
 
 (declare entity-of)
 
-(defn quote-of [c]
+(defn job-time-quote
+  "The :job-time quote [least typical most] when the entity is `dist` blocks away."
+  [dist]
   (let [click (settings/get settings ::click-s)
-        e (entity-of (:primitives c) (:on (:args c)))
-        walk (/ (if e (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (settings/get settings ::scan-radius)) (cost/walk-blocks-per-s))]
-    {:uses {:job-time [click (+ click walk) (+ click (* walk (max-walks)))]}}))
+        walk (/ dist (cost/walk-blocks-per-s))]
+    [click (+ click walk) (+ click (* walk (max-walks)))]))
+
+(defn worst-job-time
+  "The most a use takes when the entity is not in sight: it is looked for out to the scan radius."
+  []
+  (last (job-time-quote (settings/get settings ::scan-radius))))
+
+(defn quote-of [c]
+  (let [e (entity-of (:primitives c) (:on (:args c)))]
+    {:uses {:job-time (job-time-quote (if e (u/dist (u/self-pos c) (u/pos-of (.-pos e))) (settings/get settings ::scan-radius)))}}))
 
 (defn bad-args [c]
   (when-not (pos-int? (:on (:args c))) "items.use needs a positive entity id as :on"))

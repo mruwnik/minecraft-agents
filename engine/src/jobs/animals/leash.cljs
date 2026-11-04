@@ -71,7 +71,7 @@
   (+ (fetch-time/one-unit-s)
      (cost/look-s (look/round-size))
      (/ (or radius default-radius) fight/walk-speed)
-     (last (get-in (use-entity/quote-of nil) [:uses :job-time]))))
+     (use-entity/worst-job-time)))
 
 (def defaults {:spend {:job-time default-time}})
 
