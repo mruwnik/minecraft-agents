@@ -97,6 +97,16 @@
           (is (some #(re-find #"nothing to roof the pit with" (str (:text %))) (seen/failed s)))
           (is (= [:stopped :no-way] ((juxt :status :reason) @(:out s))) "the call reports the stop, not success"))))))
 
+(deftest a-dig-pit-stopped-by-its-plan-keeps-the-reason-and-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (await (seen/see-surface! (seen/sensing {:blocks seen/ground :inventory [{:name "wooden_sword" :count 1}]})))
+              s (await (seen/tick-out! (seen/setup p 'jobs.survival.dig-pit {:for :night})))]
+          (is (empty? (seen/digs p)) "nothing dug")
+          (is (= :no-tool (:reason @(:out s))))
+          (is (re-find #"cannot harvest stone" (str (:text @(:out s))))))))))
+
 (deftest walls-count-unsensed-rock-over-the-head-that-a-place-answers-occupied-as-sealed
   (async done
     (tu/run-async done
