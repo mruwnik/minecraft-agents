@@ -90,7 +90,7 @@
            [:block [12 1 10] "air"] [:block [12 2 10] "air"] [:block [12 2 9] "air"] [:not-block [12 1 9] "air"]
            [:not-block [13 1 10] "air"] [:block [13 1 7] "air"] [:block [13 1 8] "air"] [:block [16 1 10] "oak_fence_gate"] [:block [16 1 12] "air"]
            [:not-block [10 1 7] "air"] [:not-block [17 1 12] "air"] [:not-block [14 3 6] "air"]]}
-  {:name "training-row-tunnel-spares-cells-already-built"
+  {:name "training-row-tunnel-keeps-a-cell-already-built"
    :blocks [[:fill [9 0 4] [20 4 15] "stone"] [:fill [9 1 12] [9 2 12] "air"] [:set [8 0 12] "stone"] [:set [12 1 11] "lectern"] [:set [12 2 11] "oak_slab[type=top]"]]
    :body {:at [8.5 1 12.5]}
    :plans [{:id "row" :metadata {:by "$body"}

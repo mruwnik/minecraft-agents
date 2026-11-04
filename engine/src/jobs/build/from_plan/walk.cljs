@@ -169,16 +169,6 @@
       (ctx/update-mem! c update :unchecked (fnil conj #{}) pos))
     :again))
 
-(defn spared-cells
-  "The cells the plan has matched whose block costs something to put back (cost/destroyed-fn: a lectern, a slab; plain
-  natural fill costs nothing, a tunnel may cut it and the build refills it): a tunnel never digs these."
-  [p cells]
-  (let [priced (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))]
-    (into [] (comp (filter #(= :match (:answer %)))
-                   (filter #(some-> (u/sensed p (zipmap [:x :y :z] (:pos %))) .-name (priced (:pos %) false) pos?))
-                   (map :pos))
-          cells)))
-
 (defn ^:async tunnel-to!
   "A cell shut in by rock: with a pickaxe, cut a way (jobs.access.tunnel) to the deepest such cell, so the body stands in the
   plan's cells and fills them while backing out; without one the cell is given up :no-tool at once. :continue while the
@@ -208,7 +198,7 @@
                                      (nil? (look-verdict c cells %)))
                                cells)
                   deepest (if (seq open) (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %))) open) cell)
-                  r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :spare (spared-cells p cells) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                  r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
               (= :continue r) :continue
               (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil

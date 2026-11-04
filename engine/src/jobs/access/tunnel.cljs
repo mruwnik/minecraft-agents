@@ -20,6 +20,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.choose :as choose]
             [jobs.lib.dig-look :as look]
             [jobs.lib.ledger :as ledger]
@@ -28,6 +29,7 @@
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
+            [jobs.lib.util :as u]
             [jobs.lib.sense :as sense]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk.drive :as drive]))
@@ -54,12 +56,12 @@
   from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
   target's own column counts as a last run step; when that step is refused, no line is judged and its reason is the
-  heading's. A heading reads at most ::heading-reads cells: longer lines past them are not judged (:read-bound if none else fits). The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
+  heading's. A heading reads at most ::heading-reads cells: longer lines past them are not judged (:read-bound if none else fits). The cheapest valid line wins (seconds: each step walked, each cell cut at its dig time and what the dig destroys, a built block put back; cost/destroyed-fn), among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
   Every line refused by a zone, claim or plan waits (:refused) while all are refused. Else no
   valid line ends before any walk or dig with the reason all judged lines share (:hazard
-  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded). :too-far: no line fits within :max-length. :read-bound: none was found within the reads allowed.
+  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded). :too-far: no line fits within :max-length. :too-dear: the cheapest line costs more than the call's worth (:price-s). :read-bound: none was found within the reads allowed.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
   Then the body walks to the entry (a go-to child planning no deeper than 16 below the lower of body and entry; failing: :walk-in-failed, nothing possible) and the stair child cuts
@@ -112,7 +114,6 @@
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :through {:doc "the id of a plan the tunnel is cut for (a build reaching cells in rock): its footprint is no obstacle" :spec string? :default nil}
-   :spare {:doc "cells [x y z] the tunnel never digs (a plan's finished work): a line through one is refused :footprint" :spec (a/coll-of ::a/pos) :default nil}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; unset: bare-handed when no tool can be fetched (jobs.access.stair)" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
@@ -288,7 +289,7 @@
   (let [cells (ln/line-cells plan)
         e (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
                            {:dir dir :heading heading :ways (need/call-ways c) :need-drop (:need-drop (:args c)) :y ((cells (:steps plan)) 1) :on-lava (:on-lava (:args c) :seal)
-                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :through (:through (:args c)) :spare (:spare (:args c))})))]
+                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :through (:through (:args c))})))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
@@ -336,6 +337,15 @@
   [c {:keys [reason outside] :as stop}]
   (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false))))
 
+(defn price-input
+  "The rules' input with the prices a line is chosen by: a walked step, and a cut cell's dig with what the dig destroys
+  (cost/destroyed-fn: a built block is put back)."
+  [c in]
+  (let [p (:primitives c)
+        destroyed (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))]
+    (assoc in :step-s (cost/walk-step-s)
+           :cell-s (fn [n cell] (+ (or (when n (cost/dig-cost n)) 0) (destroyed n cell false))))))
+
 (defn ^:async choose!
   "Judge the lines and keep the best, or finish with why there is none. A refusal that read cells the body has not
   seen is decided again after a look at them (jobs.lib.sense/decide!)."
@@ -345,27 +355,31 @@
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
+      (let [in (price-input c (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :filler? (some? (choose/filler c :build))))
+            a (await (sense/decide! c ::approach #(ln/approach in target feet max-length (set accept) (:heading (:args c)))
                                     {:retry? #(not (:entry %)) :price (sense/fails-to c #(sense/walk-between-s % target))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :read-bound :no-approach} (:reason a)))
                        (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
-          (if (:entry a)
+          (cond
+            (and (:entry a) (> (ln/line-price in a) (ctx/worth c)))
+            (finish! c :too-dear {:why "the cheapest line costs more than the call's worth" :price-s (ln/line-price in a)})
+            (:entry a)
             (do (ctx/update-mem! c assoc :plan a :dug [])
                 (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
                                                                     ", " (:steps a) " steps, run " (:run a))))
                 :again)
-            (finish! c (:reason a) (dissoc a :reason))))))))
+            :else (finish! c (:reason a) (dissoc a :reason))))))))
 
 (defn ^:async leg!
   "The first leg of a diagonal target: a kept tunnel child to the waypoint (its stand is in the target's column), then
   the plan is chosen again from there. :again or :continue; else the job ends with the leg's stop."
   [c w]
-  (let [{:keys [ways accept ignore-zones? on-lava max-length need-drop through spare]} (:args c)
+  (let [{:keys [ways accept ignore-zones? on-lava max-length need-drop through]} (:args c)
         e (waits/waiting-out c (await (ctx/call c :leg 'jobs.access.tunnel
                            (cond-> {:target w :max-length max-length :accept accept :need-drop need-drop
-                                    :ignore-zones? ignore-zones? :on-lava on-lava :through through :spare spare}
+                                    :ignore-zones? ignore-zones? :on-lava on-lava :through through}
                              (some? ways) (assoc :ways ways)))))]
     (cond
       (= :continue e) :continue

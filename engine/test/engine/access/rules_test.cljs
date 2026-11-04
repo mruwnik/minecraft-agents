@@ -225,10 +225,3 @@
     "wheat_seeds" "oak_sapling" "white_carpet" "torch" "sugar_cane" "nether_wart" "brown_mushroom" "pink_petals" "carrot" "melon_seeds" "rail" "powered_rail" "lever")
   (are [item] (not (rules/no-collision? "1.21.4" item))
     "cobblestone" "wheat" "sand" "soul_torch_holder" "oak_planks" "wheat_seeds_item" nil))
-
-(deftest a-spared-cell-is-not-dug-whatever-it-holds
-  (are [n spare ignore expected] (= expected (verdict (dig (world [5 64 5] n) [5 64 5] :spare-cells spare :ignore-zones? ignore)))
-    "lectern" #{[5 64 5]} false {:ok false :reason :footprint}
-    "stone" #{[5 64 5]} true {:ok false :reason :footprint}
-    "stone" #{[6 64 5]} false {:ok true}
-    "lectern" #{} false {:ok true}))

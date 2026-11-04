@@ -29,8 +29,9 @@
 
 (def reads-per-heading 6000)
 
-(defn approach [named target & {:keys [zones footprints max-length accept ways feet] :or {zones [] footprints #{} max-length 24 accept #{} feet [0 65 0]}}]
-  (ln/approach {:heading-reads reads-per-heading :block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
+(defn approach [named target & {:keys [zones footprints max-length accept ways feet cell-s] :or {zones [] footprints #{} max-length 24 accept #{} feet [0 65 0]}}]
+  (ln/approach (cond-> {:heading-reads reads-per-heading :block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
+                 cell-s (assoc :cell-s cell-s))
                    target feet max-length accept))
 
 (defn stair-target [{:keys [stand heading]}]
@@ -78,6 +79,18 @@
     {[3 64 5] "water"} nil
     {[3 64 5] "lava"} nil
     {[3 70 5] :unloaded} nil))
+
+(def lectern-costs-more (fn [n _] (if (= "lectern" n) 500 0)))
+
+(deftest a-line-round-a-built-block-beats-one-through-it-and-the-only-line-is-still-taken
+  (let [target [0 60 0]
+        plain (approach {} target)
+        built {(:stand plain) "lectern"}
+        round (approach built target :cell-s lectern-costs-more)
+        sole (approach built target :cell-s lectern-costs-more :max-length 8 :accept #{})]
+    (is (= plain (approach built target)) "unpriced, the shortest line is still the one through it")
+    (is (not= (:heading plain) (:heading round)) (pr-str round))
+    (is (some? (:entry sole)))))
 
 (def cave-room
   (into {} (for [x [-1 0 1] y [60 61] z [-1 0 1]] [[x y z] "air"])))
@@ -351,6 +364,14 @@
             (is (= :stopped (:status @out)) (str reason))
             (is (empty? (digs p)) (str reason))
             (is (= [0 65 0] (feet p)) (str reason))))))))
+
+(deftest a-cheapest-line-dearer-than-the-calls-worth-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (tunnel! {:blocks ground} {:target [6 57 0] :worth 1} (fn [_])))]
+          (is (= :too-dear (:reason @out)) (pr-str @out))
+          (is (empty? (digs p))))))))
 
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
 

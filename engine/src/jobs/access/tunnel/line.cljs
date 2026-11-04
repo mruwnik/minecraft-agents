@@ -179,6 +179,17 @@
              :level (first (filter #(level-from? % feet) nearby))})
           {:stop (if-let [q (first fitting)] (line-stop stop-at q) {:reason (if (more?) :too-far :read-bound)})})))))
 
+(defn line-price
+  "Seconds the line of plan costs: each step walked (in :step-s, default 1) and each cell it cuts, (:cell-s in) block cell
+  (its dig and what the dig destroys; default 0), the block read by (:block-at in)."
+  [in plan]
+  (let [{:keys [steps stand]} (line plan)
+        cell-s (or (:cell-s in) (constantly 0))
+        step-s (:step-s in 1)
+        cells (fn [feet shape] (+ step-s (transduce (map #(cell-s ((:block-at in) %) %)) + 0 (:cut shape))))]
+    (reduce + (cells stand (geo/step-cells stand :level (:heading plan)))
+            (map (fn [[feet shape]] (cells feet shape)) steps))))
+
 (defn cuts-floor?
   "Whether the line of plan cuts the floor under feet (the body would come back to a hole where it stood)."
   [plan feet]
@@ -215,7 +226,7 @@
           per (into {} (map (fn [h] [h (judge h)])) (if only [only] heading-order))
           plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h)) (:level (per h))])) (keys per)))]
       (if (seq plans)
-        (first (sort-by (juxt #(not (level-from? % feet)) #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
+        (first (sort-by (juxt #(not (level-from? % feet)) #(far-entry? % feet) (memoize #(line-price in %)) #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
         (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
               real (remove #(#{:too-far :read-bound} (:reason %)) (vals stops))
               reasons (set (map :reason real))]

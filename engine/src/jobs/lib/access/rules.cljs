@@ -12,7 +12,6 @@
     :shafts      ids of :mineshaft plans: their footprint does not refuse a :dig (jobs.lib.access.zones)
     :footprints  cells other plans claim: a set, or a map {cell plan-id} (what jobs.lib.world/footprints gives),
                  in which case a :footprint refusal names the :plan
-    :spare-cells set of cells a dig must leave (a plan's finished work a tunnel or stair cut for it passes): :footprint
     :claims      the active area claims (jobs.lib.world/claims)
     :self        the body's name
     :now         the clock in ms
@@ -145,8 +144,6 @@
    #(when (and keep-base? (= :dig action))
       (let [over (block-at [(cell 0) (inc (cell 1)) (cell 2)])]
         (when (and over (re-find door-block over)) (refuse :base-block :block over))))
-   #(when (and (= :dig action) (contains? (:spare-cells in) cell))
-      (refuse :footprint))
    #(when-not ignore-zones?
       (let [v (social-verdict action in)]
         (when-not (:ok v) v)))])
