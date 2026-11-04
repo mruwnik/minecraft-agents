@@ -367,7 +367,8 @@
   (let [own-s (:own-s route-opts)
         guess-risk (:guess-risk route-opts)
         worth-s (:worth-s route-opts)
-        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s)
+        dearer? (:dearer? route-opts)
+        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s :dearer?)
         [fx fy fz] from
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
         known (js/Map.)
@@ -443,15 +444,18 @@
             (let [a (search refused)
                   bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
               (cond (= :searching a) a
-                    (nil? (:dig a)) nil
+                    (nil? (:dig a)) (when (and dearer? (= :dearer (:problem a))) :dearer)
                     (empty? bad) a
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
-    (when (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (cost/affords? (:seconds a) (or worth-s ##Inf))))
+    (cond
+      (= :dearer a) :dearer
+      (and dearer? a (:dig a) (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (not (cost/affords? (:seconds a) (or worth-s ##Inf)))) :dearer
+      (or (= :searching a) (and a (<= (route-s p (:dig a) own? fetch?) (max-route-s)) (cost/affords? (:seconds a) (or worth-s ##Inf))))
       a)))
 
 (defn route-cells
   "[{:cell :block :guess :class}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
-  rock), :class its guess-class; [] when nothing is left to dig; :searching or nil as route-answer."
+  rock), :class its guess-class; [] when nothing is left to dig; :searching or nil as route-answer; :dearer under route-opts :dearer?."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
   ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
@@ -459,7 +463,7 @@
    (let [a (route-answer p from goal may-dig? own? floors-unseen-ok? fetch? route-opts)
          block-at (escape/block-at-of p)]
      (cond
-       (= :searching a) a
+       (#{:searching :dearer} a) a
        a (let [sensed #(u/sensed p (zipmap [:x :y :z] %))]
            (mapv (fn [cell] (let [guess (dig-look/unknown? p cell)]
                               (cond-> {:cell cell :block (block-at cell) :guess guess}
@@ -546,22 +550,25 @@
   "A buried body's next leg of a dig toward a goal: {:step
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
   does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
-  longer than the call has left (dig-left-s)."
+  longer than the call has left (dig-left-s); {:step :none :why :past-worth} when no end is reached because every
+  route to them costs more than the goal is worth (the search stopped at that bound, not at the end of the rock)."
   [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
-          found (loop [ends (leg-ends from goal)]
-                  (when-let [end (first ends)]
-                    (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin leg-margin))]
+          found (loop [ends (leg-ends from goal) dear? false]
+                  (if-let [end (first ends)]
+                    (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin leg-margin :dearer? true))]
                       (cond (= :searching cells) :searching
-                            (seq cells) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
-                            :else (recur (rest ends))))))]
-      (if (= :searching found)
-        {:step :searching}
-        (when-let [[cells s] found]
-          (if (<= s (dig-left-s c))
-            {:step :dig-route :cells cells :leg-s s}
-            {:step :none :why :dig-budget :dug-s (:dug-s (ctx/mem c) 0) :budget-s (call-budget-s c)}))))))
+                            (seq (if (= :dearer cells) nil cells)) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
+                            :else (recur (rest ends) (or dear? (= :dearer cells)))))
+                    (when dear? :dearer)))]
+      (cond
+        (= :searching found) {:step :searching}
+        (= :dearer found) {:step :none :why :past-worth}
+        found (let [[cells s] found]
+                (if (<= s (dig-left-s c))
+                  {:step :dig-route :cells cells :leg-s s}
+                  {:step :none :why :dig-budget :dug-s (:dug-s (ctx/mem c) 0) :budget-s (call-budget-s c)}))))))
 
 (defn nearest-stand
   "A cell [x y z] the body can walk to (a flood of at most reach-room/room-cells cells) nearest goal: of the cells no farther

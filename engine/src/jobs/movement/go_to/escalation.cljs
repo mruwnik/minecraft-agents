@@ -307,7 +307,11 @@
                                     (or (when (#{:none :approach} (:step e)) (frontier-way (:primitives c) feet goal %1 %2))
                                         e)))
                      ;; its route searches are shared through the slice's answers: choose runs again per zone rule below
-                     rock-dig? #(or (dig-leg c feet goal %1 %2) (escape-way/choose (:primitives c) feet goal %1 %2))
+                     rock-dig? #(let [l (dig-leg c feet goal %1 %2)]
+                                  (if (= :past-worth (:why l))
+                                    (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
+                                      (if (or (= :approach (:step e)) (and (= :none (:step e)) (not (:why e)))) l e))
+                                    (or l (escape-way/choose (:primitives c) feet goal %1 %2))))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
                      #(or (dig-way (:primitives c) feet goal %1 %2) (escape-way/choose (:primitives c) feet goal %1 %2))
                      @shut? #(or (climb-route/climb-way (:primitives c) feet goal %1 %2) (escape-way/choose (:primitives c) feet goal %1 %2))

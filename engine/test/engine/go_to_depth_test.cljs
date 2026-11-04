@@ -555,6 +555,8 @@
           (is (<= 25 (first (gt/at p)))))
         (let [{:keys [out p] :as s2} (await (climb! in-phantom {:pos [26 48 0] :worth 1}))]
           (is (= [false :unreachable] [(:arrived @out) (:reason @out)]) (pr-str @out))
+          (is (= [:none :past-worth] ((juxt :step :why) (:escalation @out))) (pr-str (:escalation @out)))
+          (is (re-find #"costs more than the goal is worth" (str (:text @out))) (pr-str (:text @out)))
           (is (empty? (filter #(= :dig-route (:step %)) (gt/events-of s2 :go-to.escalated))) "the dig is held to what the goal is worth: no leg is begun")
           (is (> 4 (first (gt/at p))) "it stays by its start, no tunnel dug toward the goal"))))))
 
