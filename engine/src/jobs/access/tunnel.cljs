@@ -32,6 +32,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.sense :as sense]
             [jobs.lib.trip :as trip]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.walk.drive :as drive]))
 
 (def doc
@@ -113,7 +114,6 @@
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 96" :spec (a/int-in 1 96) :default 24}
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
-   :avoid-entries {:doc "entries [x y z] no line starts from: ones a caller found the body cannot walk to" :spec (a/coll-of a/position?) :default nil}
    :through {:doc "the id of a plan the tunnel is cut for (a build reaching cells in rock): its footprint is no obstacle" :spec string? :default nil}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; unset: bare-handed when no tool can be fetched (jobs.access.stair)" :spec (a/or-of boolean? #{:auto}) :default :auto}})
@@ -347,6 +347,19 @@
     (assoc in :step-s (cost/walk-step-s)
            :cell-s (fn [n cell] (+ (or (when n (cost/dig-cost n)) 0) (destroyed n cell false))))))
 
+(defn ^:async approach-walkable!
+  "The line to cut (ln/approach), its entry one go-to quotes a walk to: an entry no route reaches (the top of a roof just
+  placed, one block up) is set aside and the next line chosen. The walk is quoted for the chosen line only."
+  [c in target feet max-length accept]
+  (loop [in in]
+    (let [a (await (sense/decide! c ::approach #(ln/approach in target feet max-length (set accept) (:heading (:args c)))
+                                  {:retry? #(not (:entry %)) :price (sense/fails-to c #(sense/walk-between-s % target))}))
+          entry (:entry a)]
+      (if (and entry (not= entry feet) (not (ln/far-entry? a feet))
+               (= ##Inf (walk-pick/quoted-s c (await (walk-pick/quote! c (child/walk-into-args :in entry))))))
+        (recur (update in :avoid-entries (fnil conj #{}) entry))
+        a))))
+
 (defn ^:async choose!
   "Judge the lines and keep the best, or finish with why there is none. A refusal that read cells the body has not
   seen is decided again after a look at them (jobs.lib.sense/decide!)."
@@ -356,9 +369,8 @@
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [in (price-input c (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :avoid-entries (set (map (fn [v] (let [{:keys [x y z]} (a/cell v)] [x y z])) (:avoid-entries (:args c)))) :filler? (some? (choose/filler c :build))))
-            a (await (sense/decide! c ::approach #(ln/approach in target feet max-length (set accept) (:heading (:args c)))
-                                    {:retry? #(not (:entry %)) :price (sense/fails-to c #(sense/walk-between-s % target))}))]
+      (let [in (price-input c (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :filler? (some? (choose/filler c :build))))
+            a (await (approach-walkable! c in target feet max-length accept))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :read-bound :no-approach} (:reason a)))
                        (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]

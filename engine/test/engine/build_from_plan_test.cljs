@@ -282,18 +282,6 @@
           (is (= [[3 64 2] "ring"] (distinct @targets)) "the target, and the plan whose footprint the tunnel may cut")
           (is (= {[3 64 2] :unreachable} (:given-up result)) "a tunnel that fails gives the cell up"))))))
 
-(deftest an-entry-the-tunnel-could-not-walk-to-is-not-offered-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [avoid (atom [])
-              tunnel {:round (fn ^:async w [c] (swap! avoid conj (:avoid-entries (:args c)))
-                               (ctx/end c :nothing-possible :walk-in-failed {:reason :walk-in-failed :entry [7 70 2] :cell [7 70 2]}))}
-              {:keys [eng]} (rock-start [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}] tunnel)
-              _ (await (child-outcome eng job {:plan "ring"} 200))]
-          (is (nil? (first @avoid)))
-          (is (= [#{[7 70 2]}] (distinct (map set (rest @avoid))))))))))
-
 (deftest a-tunnel-that-is-already-at-its-end-and-leaves-the-cell-shut-is-tried-then-the-cell-given-up
   (async done
     (tu/run-async done

@@ -198,7 +198,7 @@
                                      (nil? (look-verdict c cells %)))
                                cells)
                   deepest (if (seq open) (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %))) open) cell)
-                  r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :avoid-entries (:bad-entries (ctx/mem c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                  r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (cond
               (= :continue r) :continue
               (= :done (:kind r))
@@ -207,9 +207,7 @@
                                       (and already? (<= (plan/tunnel-tries) (get-in % [:tunnels (:pos deepest)] 0)))
                                       (walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c))))
                 :again)
-              :else (do (ctx/update-mem! c #(cond-> (walk-fail % (:pos deepest) :unreachable (give-up) (u/self-pos c))
-                                              (= :walk-in-failed (:reason (:data r))) (update :bad-entries (fnil conj #{}) (vec (:entry (:data r))))))
-                        :again)))))))))
+              :else (do (ctx/update-mem! c walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c)) :again)))))))))
 
 (defn stand-choices
   "{:all :inner} of cell: the stands to place or dig it from (stands-for), and with none standable beside it, the cells

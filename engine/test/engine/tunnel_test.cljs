@@ -380,6 +380,24 @@
           (is (= :too-dear (:reason @out)) (pr-str @out))
           (is (empty? (digs p))))))))
 
+(deftest an-entry-no-route-reaches-is-priced-out-and-the-next-line-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real (get registry/jobs 'jobs.movement.go-to)
+              asked (atom [])
+              go-to (assoc real :quote-of
+                           (fn ^:async q [c]
+                             (swap! asked conj (vec (:pos (:args c))))
+                             (if (= 1 (count @asked))
+                               {:kind :nothing-possible :cause :stuck}
+                               (await ((:quote-of real) c)))))
+              s (setup {:blocks ground} {:target [6 57 0]} (fn [_]) :jobs {'jobs.movement.go-to go-to})
+              {:keys [out]} (await (tick-out! s))]
+          (is (= :reached (:reason @out)) (pr-str @out))
+          (is (<= 2 (count @asked)))
+          (is (not= (first @asked) (second @asked)) "the entry no route reaches is not quoted again"))))))
+
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))
 
 (defn ^:async tick-n! [{:keys [eng clock]} n]
