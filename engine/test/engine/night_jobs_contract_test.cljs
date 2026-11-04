@@ -207,6 +207,10 @@
   (is (not (sleep/no-way-quote? {:found false :reason :partial :unseen-floors true})) "the search only spent its nodes over land never seen"))
 
 (deftest a-walk-past-its-first-quotes-bound-without-a-whole-way-is-late
-  (is (true? (sleep/late-walk? {:found false :reason :partial :unseen-floors true} 1000 1001)) "past the first quote's bound with no whole way known")
-  (is (false? (sleep/late-walk? {:found false :reason :partial :unseen-floors true} 1000 999)) "within the bound")
-  (is (false? (sleep/late-walk? {:found true} 1000 1001)) "a whole way is known"))
+  (let [partial {:found false :reason :partial :unseen-floors true}]
+    (is (true? (sleep/late-walk? partial 1 1001)) "more walking than the bound (1 s) with no whole way known")
+    (is (false? (sleep/late-walk? partial 1 999)) "within the bound")
+    (is (false? (sleep/late-walk? partial 1 0)) "a resumed sleep that preempted or held long has spent no walking")
+    (is (false? (sleep/late-walk? partial ##Inf 1e9)) "a partial quote with an infinite bound is never late")
+    (is (false? (sleep/late-walk? partial nil 1e9)) "no bound taken")
+    (is (false? (sleep/late-walk? {:found true} 1 1001)) "a whole way is known")))

@@ -26,7 +26,7 @@
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never digs, builds or pillars its way to a bed, so a bed behind someone's wall is :bed-unreachable.
-  A walk is bounded by its first quote's upper bound (:job-time, go-to's :spend); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
+  The time spent walking is bounded by the first quote's own upper bound (:job-time, go-to's :spend); a walk that outlasts it while the quote has no whole way ends it the same way. Before each walk go-to's quote is asked (while its search goes on, the round yields :continue), and again after a walk that did not arrive: when it finds no route (the land is closed, the bed walled in), the job ends :bed-unreachable at once (no retries; the entry keeps the night from calling it again for ten minutes). After a walk that did not arrive, a quote whose search still goes on, or spent its node budget (:budget), also ends it (over unseen land that search has no end).
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -151,9 +151,9 @@
   (and (false? (:found route)) (not (:unseen-floors route)) (contains? no-way-reasons (some-> (:reason route) keyword))))
 
 (defn late-walk?
-  "Whether the walk outlasted its first quote's upper bound (due, ms) while the latest quote's route (nil: no quote) still has no whole way."
-  [route due now]
-  (boolean (and route due (not (true? (:found route))) (< due now))))
+  "Whether the time spent walking (spent-ms) passed the first quote's upper bound (hi, s; nil: none) while the latest quote's route (nil: no quote) still has no whole way."
+  [route hi spent-ms]
+  (boolean (and route hi (not (true? (:found route))) (< (* 1000 hi) spent-ms))))
 
 (defn give-up-unreachable-now!
   "Warn bed_unreachable, remember the bed in :bed-unreachable (so the night stops holding for it) and end nothing-possible, at once."
@@ -230,10 +230,12 @@
             (ctx/update-mem! c assoc :walk-hi hi :walk-due (+ (ctx/now c) (* 1000 hi))))
         walk-hi (:walk-hi (ctx/mem c))
         walk-args (cond-> quote-args walk-hi (assoc :spend {:job-time walk-hi}))
-        late? (late-walk? route (:walk-due (ctx/mem c)) (ctx/now c))
+        late? (late-walk? route walk-hi (:walk-spent (ctx/mem c) 0))
         no-way? (no-way-quote? route)
         searching? (= :searching (some-> (:reason route) keyword))
-        walk (when-not (or (taken?) no-way? late? searching?) (await (child/call-walk* c :go walk-args)))]
+        t0 (ctx/now c)
+        walk (when-not (or (taken?) no-way? late? searching?) (await (child/call-walk* c :go walk-args)))
+        _ (when walk (ctx/update-mem! c update :walk-spent (fnil + 0) (- (ctx/now c) t0)))]
     (cond
       (and (taken?) (:reflex c)) (do (ctx/remember! c :bed-unreachable {:pos bed} unreachable-policy)
                                      (ctx/end c :nothing-possible :bed-occupied {:pos bed :text "the bed is occupied; skipped for ten minutes"}))
