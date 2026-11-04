@@ -351,11 +351,14 @@
      :caught (when target (search/caught-chance ends counts {:hazards hazards} (:glanced (ctx/mem c))))}))
 
 (defn ^:async back-off!
-  "Step back to target (back-off-search!'s): :again, nil when the walk is blocked (the option is tried then)."
+  "Step back to target (back-off-search!'s): :again, nil when the walk is blocked or a chaser hit the body on it (the option is tried then:
+  a chaser that keeps up is not outrun, and the next step prices the covers and the fight instead)."
   [c target]
-  (if-not (await (step! c :back-off target 0))
-    (do (flight/tried! c :back-off) nil)
-    :again))
+  (let [health0 (.-health (.self (:primitives c)))
+        moved? (await (step! c :back-off target 0))]
+    (if (and moved? (>= (.-health (.self (:primitives c))) health0))
+      :again
+      (do (flight/tried! c :back-off) (if moved? :again nil)))))
 
 (defn ^:async hold!
   "One hold (a pause of flight/wait-ms) in a spot an enderman cannot use: :again, or nil once the flight has held

@@ -481,7 +481,12 @@
         (doseq [[label go-to want] [["walks" {} {:r :again :tried false}]
                                     ["gives up" {'jobs.movement.go-to {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
                                                                        :round (fn ^:async no-leg [c] (ctx/end c :nothing-possible :unreachable {:arrived false}))}}
-                                     {:r nil :tried true}]]]
+                                     {:r nil :tried true}]
+                                    ["is hit on the way" {'jobs.movement.go-to {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
+                                                                                :round (fn ^:async hit-leg [c]
+                                                                                         (swap! (fake/state (:primitives c)) update-in [:self :health] - 2)
+                                                                                         (ctx/end c :done nil {:arrived true}))}}
+                                     {:r :again :tried true}]]]
           (let [out (atom nil)
                 s (setup {:entities [(zombie 7 2 {})]})
                 s (update-in (assoc-in s [:eng :jobs 'backer] (backer out)) [:eng :jobs] merge go-to)]
