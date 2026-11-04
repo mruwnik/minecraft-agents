@@ -156,38 +156,3 @@
   "Steps of a straight walk between two cells: the larger of the sideways and the vertical run; what a walk costs at least, times a step's seconds."
   [[ax ay az] [bx by bz]]
   (max (+ (js/Math.abs (- ax bx)) (js/Math.abs (- az bz))) (js/Math.abs (- ay by))))
-
-(defn toward
-  "The remembered frontier cell (open, its head open, a seen floor that is not, a face neighbour never seen) to walk to and
-  look from nearest goal: fewer steps from goal than from, within the memory's reach of from (perception's
-  max-seen-radius), and a way through it under max-s were the unseen open (step-s a step); of those the one whose way is
-  cheapest with each step past it priced extra-s more. nil when none."
-  [p from goal max-fall step-s extra-s max-s]
-  (when-let [st (st-of p)]
-    (let [mf (max 1 max-fall)
-          open? (open-fn)
-          id (fn [x y z] (inc (store/remembered-id st x y z)))
-          [fx fy fz] from [gx gy gz] goal
-          apart (fn [x y z ax ay az] (steps (js/Math.abs (- x ax)) (js/Math.abs (- y ay)) (js/Math.abs (- z az)) mf))
-          left (apart fx fy fz gx gy gz)
-          r store/max-seen-radius
-          frontier? (fn [x y z]
-                      (and (open? (id x (inc y) z))
-                           (let [f (id x (dec y) z)] (and (pos? f) (not (open? f))))
-                           (or (zero? (id (inc x) y z)) (zero? (id (dec x) y z)) (zero? (id x y (inc z))) (zero? (id x y (dec z)))
-                               (zero? (id x (+ y 2) z)))))
-          secs (sections st)
-          best #js [##Inf nil]]
-      (doseq [k (section-keys [(- fx r) (- fy r) (- fz r)] [(+ fx r) (+ fy r) (+ fz r)])
-              :let [^js s (.get secs k)]
-              :when (and s (< (steps (gap gx (* 16 (.-cx s))) (gap gy (* 16 (.-sy s))) (gap gz (* 16 (.-cz s))) mf) left))]
-        (let [^js ids (.-ids s)]
-          (each-cell! s (fn [x y z i]
-                          (when (open? (aget ids i))
-                            (let [on (apart x y z gx gy gz) to (apart fx fy fz x y z)
-                                  price (+ (* step-s to) (* (+ step-s extra-s) on))]
-                              (when (and (< on left) (<= to r) (<= (* step-s (+ to on)) max-s) (< price (aget best 0))
-                                         (frontier? x y z))
-                                (aset best 0 price)
-                                (aset best 1 [x y z]))))))))
-      (aget best 1))))

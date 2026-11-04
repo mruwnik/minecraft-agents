@@ -1,0 +1,21 @@
+;; jobs.gather.mine cut-via (card 93d35cb2): iron ore seen through a 12-deep glass wall that is another player's (no dig route crosses it), the way round is unseen rock reached by a seen tunnel; go-to walks it (cut-via had its own frontier walk, found dead and deleted).
+;; Tunnel x 5, z 16..23 (the body at its north end); way round z 23, x 6..17 east to the chamber x 18..22, z 16..23 holding the ore at [20 0 18]; a stone wall z 22 hides the way round from the tunnel's north end.
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:light :lit :height 12 :floor "stone"}
+  :blocks [[:fill [3 0 8] [25 5 28] "stone"]
+           [:fill [5 0 16] [5 1 23] "air"]
+           [:fill [6 0 16] [17 1 21] "glass"]
+           [:fill [18 0 16] [22 1 23] "air"]
+           [:fill [6 0 23] [17 1 23] "air"]
+           [:set [20 0 18] "iron_ore"]
+           [:set [5 2 17] "glowstone"] [:set [5 2 21] "glowstone"] [:set [7 2 23] "glowstone"] [:set [10 2 23] "glowstone"] [:set [13 2 23] "glowstone"] [:set [16 2 23] "glowstone"]
+           [:set [19 2 17] "glowstone"] [:set [21 2 22] "glowstone"]]
+  :body {:at [5.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "ore-seen-through-zoned-glass-is-reached-the-way-round"
+   :zones [{:name "glass-$tag" :min [6 0 16] :max [17 1 21] :owner "Other"}]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 20 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
+   :after [[:item "raw_iron" 1] [:block [10 0 18] "glass"] [:block [14 0 17] "glass"] [:block [8 1 20] "glass"]]}]}

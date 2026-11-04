@@ -61,16 +61,3 @@
     (is (not-any? #{[0 64 0] [1 64 0] [1 63 0]} (seen/opened w m lo hi)) "not one open or solid as it was")
     (is (= [] (seen/opened w m [-5 60 -8] hi)) "outside the box")
     (is (= [] (seen/opened w (seen/mark w lo hi) lo hi)) "against a fresh mark")))
-
-(deftest the-frontier-toward-a-goal-is-a-seen-stand-at-sight-s-edge-on-the-goal-s-side
-  (let [w (seeing (tu/fake-on-floor {}))
-        ;; the body looks west and south
-        f (seen/toward w [0 64 0] [-28 64 8] 3 0.3 1 100)]
-    (is (vector? f))
-    (is (< (f 0) -4) (str f " is out toward the goal"))
-    (is (< 0 (f 2)) (str f " is on the goal's side"))
-    (is (remembered? w f))
-    (is (some #(not (remembered? w %)) [(update f 0 inc) (update f 0 dec) (update f 2 inc) (update f 2 dec) (update f 1 + 2)]) "a face it has not seen")
-    (is (nil? (seen/toward w [0 64 0] [-28 64 8] 3 0.3 1 5)) "no way through it under max-s, were the unseen open")
-    (is (nil? (seen/toward w [0 64 0] [0 64 0] 3 0.3 1 100)) "none nearer a goal the body stands at")))
-
