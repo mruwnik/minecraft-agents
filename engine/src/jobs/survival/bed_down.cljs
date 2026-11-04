@@ -1,5 +1,6 @@
 (ns jobs.survival.bed-down
-  (:require [jobs.lib.shelter.fill :as fill]
+  (:require [engine.notes :as notes]
+            [jobs.lib.shelter.fill :as fill]
             [jobs.lib.block-sets :as bs]
             [engine.game :as game]
             [jobs.lib.ready :as ready]
@@ -269,9 +270,9 @@
         (and (false? (.-onGround self)) (not (.-inWater self)) (nil? (.-vehicle self))))))
 
 (defn log-out-open?
-  "Whether a log-out is an answer now: another player sleeps and the body is the only one awake (sh-sleepers/log-out-for-sleepers?), and it is not mid-danger."
+  "Whether a log-out is an answer now: another player sleeps and no stranger is awake (sh-sleepers/log-out-for-sleepers?), and it is not mid-danger."
   [c]
-  (and (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))
+  (and (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c) (notes/bodies-of c))
        (not (mid-danger? c))))
 
 (def answer-order [:bed :sealed :log-out :home :shelter :niche :flee :exposed])

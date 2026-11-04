@@ -138,7 +138,7 @@
 
 (defn bed-holds?
   "The bed terms of night-holds?: night by the clock, awake, the :bed way, and a bed to use, a look round for one, a
-  carried bed to put down, or another player asleep with the body the only one awake (sh-sleepers/log-out-for-sleepers?). Not a bed to put down while shut in the body's own shelter: the
+  carried bed to put down, or another player asleep and no stranger awake (sh-sleepers/log-out-for-sleepers?). Not a bed to put down while shut in the body's own shelter: the
   night job ends :dug-in there before it sets one down (bed-to-use skips a bed whose walk leaves a safe shelter)."
   [p view args permit?]
   (let [buried (buried-outside-hut? p)
@@ -150,7 +150,7 @@
           (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
               (unlooked-for-bed? p view)
               (and (not buried) (not own) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
-              (and (or (not buried) own) (sh-sleepers/log-out-for-sleepers? p view)))))))
+              (and (or (not buried) own) (sh-sleepers/log-out-for-sleepers? p view (or (:agents args) #{}))))))))
 
 (defn night-holds?
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit).

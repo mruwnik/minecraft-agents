@@ -127,6 +127,17 @@
     (is (true? (holds? (assoc world :players ["Alex"]) (status! 1 2))) "a sleeper and the body the only one awake")
     (is (false? (holds? world (fn [_]))) "alone")))
 
+(deftest the-bodies-of-the-world-log-out-with-the-body-but-a-stranger-awake-does-not
+  (let [open? (fn [players agents seed!]
+                (let [{:keys [eng]} (st/setup {})
+                      p (tu/fake {:time night :players players})]
+                  (st/looked-round! eng p)
+                  (seed! eng)
+                  (sh-sleepers/log-out-open? p (mem/view (:store eng)) agents)))]
+    (is (true? (open? ["Ann" "Bo" "Hal"] #{"Ann" "Bo"} (status! 1 4))) "two bodies awake, the human asleep: the body logs out, so does the other")
+    (is (false? (open? ["Ann" "Bo" "Hal" "Cy"] #{"Ann" "Bo"} (status! 1 5))) "a stranger awake besides the sleeper: the vote is not completed")
+    (is (false? (open? ["Ann" "Hal"] #{"Ann"} (fn [_]))) "nobody known asleep")))
+
 (deftest a-count-sent-while-the-body-lay-in-bed-counts-the-body-itself
   (let [world {:time night :blocks roof}
         slept-and-woke (fn [status] [[:sleep-status status] [:slept {}] [:woke {}]])]

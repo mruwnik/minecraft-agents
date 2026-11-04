@@ -197,6 +197,13 @@
                            :text (str "notes of " (:body opts) " cannot be written (" error ")")}))
           {:status :error :error error})))))
 
+(defn bodies
+  "The names of the bodies of the world: this one and every other with a notes file (those files are the bodies' own)."
+  [s now]
+  (load-own! s)
+  (refresh! s now)
+  (conj (set (keys (:files @(:state s)))) (body s)))
+
 ;; ------------------------------------------------------------------ through a job's ctx
 
 (defn store-of [c] (:notes (:world (:engine c))))
@@ -205,6 +212,16 @@
   "The world's live notes (merged, see all) for a job's check or round; [] when the body has no notes store."
   [c]
   (if-let [s (store-of c)] (all s (ctx/now c)) []))
+
+(defn world-bodies
+  "bodies of the notes store of world kn (the engine's world), now ms; #{} without one."
+  [kn now]
+  (if-let [s (:notes kn)] (bodies s now) #{}))
+
+(defn bodies-of
+  "world-bodies for a job's ctx."
+  [c]
+  (world-bodies (:world (:engine c)) (ctx/now c)))
 
 (defn note!
   "Write notes [{:kind :what :pos :ttl-ms ...}] as this body's, stamped :by (the body), :t (now) and :until

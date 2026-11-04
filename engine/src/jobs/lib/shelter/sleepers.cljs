@@ -94,27 +94,30 @@
         counted (- (:sleeping (:data status) 0) (if (counts-self? p view status) 1 0))]
     (max (count (sleeping-players p (default-player-radius))) counted)))
 
-(defn awake-others
-  "How many other players are online and not known asleep: each would have to log out too for the sleepers to skip the
-  night, and none is known to (unknown is the worse case)."
-  [p view]
-  (max 0 (- (others-online p) (sleepers-known p view))))
+(defn strangers-awake
+  "How many online players who are not bodies of this world (agents, the names in the set) are awake: each would have to
+  log out too for the sleepers to skip the night, and none is known to. The sleepers known by count only are taken as
+  strangers (the courtesy is to them); a body awake is taken to log out for the sleeper as well."
+  [p view agents]
+  (let [strangers (count (remove agents (array-seq (.-players (.self p)))))
+        agent-sleepers (count (filter #(agents (.-username %)) (sleeping-players p (default-player-radius))))]
+    (max 0 (- strangers (- (sleepers-known p view) agent-sleepers)))))
 
 (defn log-out-open?
-  "Night, another player known asleep (others-asleep?), the body the only one awake (awake-others 0, so its log-out
-  completes the vote), and no log-out tonight that failed (unsupported, closed)."
-  [p view]
+  "Night, another player known asleep (others-asleep?), no stranger awake (strangers-awake 0: the bodies in agents log
+  out as well, so the body's log-out completes the vote), and no log-out tonight that failed (unsupported, closed)."
+  [p view agents]
   (let [out (sh-clock/latest-since view :log-out (sh-clock/tonight p view))]
     (and (sh-sense/night? p)
          (not (log-out-unsupported? view))
          (or (nil? out) (contains? #{"ok" "cut"} (:status (:data out))))
          (others-asleep? p view)
-         (zero? (awake-others p view)))))
+         (zero? (strangers-awake p view agents)))))
 
 (defn log-out-for-sleepers?
   "log-out-open? for a body awake."
-  [p view]
-  (and (not (sh-sense/sleeping? p)) (log-out-open? p view)))
+  [p view agents]
+  (and (not (sh-sense/sleeping? p)) (log-out-open? p view agents)))
 
 (defn sleepers-short
   "How many players besides the body must still lie down for the night to skip (0: its own sleep skips it): tonight's

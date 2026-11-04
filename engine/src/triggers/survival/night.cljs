@@ -7,13 +7,14 @@
     a bed item carried and no bed to use (sh-beds/bed-place-wanted?)
     a look round first (sh/unlooked-for-bed?): a bed known or carried and cells beside the feet never seen, or a closed hut
       not looked round from tonight while it could still sleep
-    another player asleep with the body the only one awake (sh-sleepers/log-out-for-sleepers?)
+    another player asleep and no stranger awake (sh-sleepers/log-out-for-sleepers?)
     not safe from the night (sh-inside/safe-from-night?: shut in a closed, roofed room with no dark spawnable cell beyond the 24-block spawn-free radius; a roof with open sides or a cave is not; a buried body is never unsafe for the trigger: waiting out the night changes nothing underground)
     an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed
   it put down outside its own zone, or a doorway block it filled (scaffold ledger :bed, :doorway), still stands. Safe from the night (its dug-in shelter too) with no bed and no sleeper it does not
   hold: the queue runs. An agent that wants the night for itself mutes it."
-  (:require [jobs.lib.body :as body]
+  (:require [engine.notes :as notes]
+            [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sleepers :as sh-sleepers]))
@@ -23,4 +24,4 @@
 (defn night
   [world memory args kn]
   (and (not (body/recovery-pending? memory :night))
-       (sh/night-holds? world memory (assoc args :buried-works true) (sh-beds/bed-permit world kn (:now memory)))))
+       (sh/night-holds? world memory (assoc args :buried-works true :agents (notes/world-bodies kn (:now memory))) (sh-beds/bed-permit world kn (:now memory)))))
