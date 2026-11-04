@@ -120,7 +120,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in blocked-by nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
+  [pos {:keys [blocks why kind detail escalation shut-in blocked-by nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation) (blocked-words blocked-by))
@@ -159,7 +159,7 @@
                              (str "its own stair up failed (" (escalation-words escalation) "); cut one from another spot")
                              "cut a stair up")
                            ", or set the walk.world y-margin setting to walk the deep way")
-           :detour (str "the only way found is " route " blocks long for a goal that was " straight " blocks away, mostly over cells the body has never seen under ground: " (when extra-s (str "its walk past the straight line costs " extra-s " s, more than the " worth-s " s the goal is worth: ")) "dig toward the goal, or pass a higher :worth to walk it")
+           :detour (str "the only way found is " (or blocks route) " blocks long for a goal that was " straight " blocks away, mostly over cells the body has never seen under ground: " (when extra-s (str "its walk past the straight line costs " extra-s " s, more than the " worth-s " s the goal is worth: ")) "dig toward the goal, or pass a higher :worth to walk it")
            :door-stuck "a door in the way will not open"
            :unseen-floors (str (if turn-back-s
                                  (str "the way goes over floors it has not seen, each not there at chance " (.toFixed p-absent 2) " (from the floors walks found there and not): turning back from them costs "

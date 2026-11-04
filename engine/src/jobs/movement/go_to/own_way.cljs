@@ -21,11 +21,11 @@
       way (memory :own-way-top), a plan that goes more than ::climb/cave-dip below it back down a stair of its own.
     A set jobs.lib.walk.world/y-margin switches all of this off.
   - A body under ground (jobs.lib.shelter.sense/buried?) whose goal is under ::climb-rise above it
-    walks no found way longer than ::detour/ratio times the distance to its goal at the call's start (at least
-    ::detour/floor blocks) when it has unseen cells, their walk toll (cost/unseen-route-s) counted in its length, before it weighs a dug way (escalate-choose/detour-way); a goal sealed
-    by seen solid blocks on all six sides bounds any body so, to the walk a dug way to it costs (detour/sealed-blocks);
-    with none it walks the way when its walk past the straight line costs no more than the goal is worth (the call's
-    :worth, else a tour's; mem :detour-ok), else gives up :why :detour with :route, :straight, :allowed (blocks), :extra-s
+    walks no found way whose walk past the straight line, its unseen cells' toll (cost/unseen-route-s) counted in its
+    length, costs more than the goal is worth (the call's :worth, else a tour's), before it weighs a dug way
+    (escalate-choose/detour-way); a goal sealed by seen solid blocks on all six sides bounds any body so, to the walk a
+    dug way to it costs (detour/sealed-blocks); with none it walks the way when that walk costs no more than the goal
+    is worth (mem :detour-ok), else gives up :why :detour with :route (priced), :blocks, :straight, :allowed, :extra-s
     and :worth-s before it sets out. See jobs.movement.go-to.detour."
   (:require [engine.ctx :as ctx]
             [jobs.lib.escape.way :as escape-way]
@@ -119,14 +119,17 @@
   (let [p (:primitives c)
         kind-at (kinds/seen-kind-at p)
         unseen? #(keyword-identical? :unknown (kind-at %1 %2 %3))
-        dug-blocks (let [[gx gy gz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
-                         near (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]] [(+ gx dx) (+ gy dy) (+ gz dz)])]
-                     (when (every? (fn [[x y z]] (keyword-identical? :solid (kind-at x y z))) near)
-                       (detour/sealed-blocks straight (/ (reduce + (map (fn [[x y z]] (tools/clear-ms p (.-name (u/seen-block p {:x x :y y :z z})))) near)) (count near)))))
+        [gx gy gz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
+        solid (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]
+                    :let [cell [(+ gx dx) (+ gy dy) (+ gz dz)]]
+                    :when (keyword-identical? :solid (apply kind-at cell))]
+                cell)
+        rock (if (seq solid) (map (fn [[x y z]] (.-name (u/seen-block p {:x x :y y :z z}))) solid) ["stone"])
+        dug-blocks (detour/sealed-blocks straight (/ (reduce + (map #(tools/clear-ms p %) rock)) (count rock)))
         bound? (and (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
     (fn [{:keys [status steps] :as plan} first?]
       (or (when stair-check (stair-check plan first?))
-          (when (and bound? (= "found" status) (not (:detour-ok (ctx/mem c))) (or dug-blocks (sh-sense/buried? p))) (detour/refusal steps straight unseen? (wworld/unseen-share p) dug-blocks))))))
+          (when (and bound? (= "found" status) (not (:detour-ok (ctx/mem c))) (or (= 6 (count solid)) (sh-sense/buried? p))) (detour/refusal steps straight unseen? (wworld/unseen-share p) dug-blocks (ctx/worth c)))))))
 
 (defn straight-from!
   "Blocks from the goal the call's first walk round found the body, d then (memory :detour-from)."

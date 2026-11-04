@@ -461,9 +461,9 @@
         (let [{:keys [out p]} (await (gt/go! in-loop {:pos across :unknown false :worth 20}))
               walk-s #(/ (js/Math.round (* 10 (:cost (cost/walk-cost {:distance %})))) 10)
               worth-s (- 20 (walk-s 6))]
-          (is (= {:arrived false :why :detour :route 84 :straight 6 :allowed 48 :extra-s (walk-s 78) :worth-s worth-s}
-                 (select-keys @out [:arrived :why :route :straight :allowed :extra-s :worth-s])))
-          (is (re-find (re-pattern (str "84 blocks.*6 blocks away.*costs " (walk-s 78) " s, more than the " worth-s " s the goal is worth.*:worth")) (str (:text @out))))
+          (is (= {:arrived false :why :detour :route 175 :blocks 84 :straight 6 :extra-s (walk-s 169) :worth-s worth-s}
+                 (select-keys @out [:arrived :why :route :blocks :straight :extra-s :worth-s])))
+          (is (re-find (re-pattern (str "84 blocks.*6 blocks away.*costs " (walk-s 169) " s, more than the " worth-s " s the goal is worth.*:worth")) (str (:text @out))))
           (is (= [0.5 64 0.5] (gt/at p)) "it did not set out"))))))
 
 ;; The loop with stone between its corridors (x 0..39, z 1..5): 5 blocks of rock part the body from its goal.
@@ -506,11 +506,8 @@
       (fn ^:async t []
         (is (true? (:arrived @(:out (await (gt/go! in-loop {:pos across :unknown false})))))
             "with no dug way, a goal worth a tour is worth the long way's 23.4 s")
-        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 1000} #(gt/go! in-loop {:pos across :unknown false})))))))
-        (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across :unknown false}))))) "sky light on the body")
-        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 100}
-                                             #(gt/go! in-loop {:pos across :unknown false}))))))
-            "setting ::detour/floor")))))
+                (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across :unknown false}))))) "sky light on the body")
+        (is (true? (:arrived @(:out (await (gt/go! in-loop {:pos across :unknown false :worth 1000}))))) "a worth above the long way's walk")))))
 
 (def line-20 (mapv (fn [x] {:x x :y 64 :z 0}) (range 21)))
 
@@ -518,16 +515,20 @@
 
 (defn priced-route [steps unseen?] (js/Math.round (first (detour/priced-length steps share unseen?))))
 
-(deftest a-way-is-a-detour-when-long-for-its-goal-with-its-unseen-cells-priced
-  (let [loop-60 (mapv #(update % :x * 3) line-20)]
+;; walk-s of a straight-line walk of d blocks: what a goal worth that much just affords
+(defn walk-s [d] (:cost (cost/walk-cost {:distance d})))
+
+(deftest a-way-is-a-detour-when-its-priced-walk-past-the-straight-line-costs-more-than-the-goal-is-worth
+  (let [loop-60 (mapv #(update % :x * 3) line-20)
+        refused #(detour/refusal %1 6 %2 share nil %3)]
     (is (< 60 (priced-route loop-60 (constantly true))) "unseen cells add their toll to the length")
     (is (= 60 (priced-route loop-60 (constantly false))))
-    (are [steps straight unseen? out] (= out (detour/refusal steps straight unseen? share))
-      loop-60 6 (constantly false) nil
-      loop-60 15 (constantly true) nil
-      line-20 2 (constantly false) nil)
-    (is (= {:detour true :route 60 :straight 6 :allowed 48} (detour/refusal loop-60 6 (constantly true) share)))
-    (is (nil? (detour/refusal loop-60 6 (fn [x _ _] (= x 0)) share)) "a long way seen but for a cell has no unseen toll to speak of")))
+    (is (nil? (refused loop-60 (constantly false) (+ (walk-s 6) (walk-s 56)))) "seen: 54 blocks past the line is affordable")
+    (is (some? (refused loop-60 (constantly false) (+ (walk-s 6) (walk-s 52)))))
+    (is (some? (refused loop-60 (constantly true) (+ (walk-s 6) (walk-s 56)))) "a worth for the plain walk does not pay the unseen toll")
+    (is (= {:detour true :route (priced-route loop-60 (constantly true)) :blocks 60 :straight 6}
+           (refused loop-60 (constantly true) 1)) "the unseen toll is in :route, the plain length in :blocks")
+    (is (nil? (refused line-20 (constantly false) 1000)))))
 
 ;; A body under ground reads rock it never saw as rock (jobs.lib.walk.rock): a cave mouth it saw is no portal to a cheap
 ;; way through unseen rock. A chamber (x 0..2, feet 60, z -1..1) in a stone mass, a side cave from its west wall stepping
@@ -652,7 +653,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (climb! {:blocks (merge (box -2 63 -34 30 63 34 "stone") (box 10 64 -30 11 69 30 "stone")
+        (let [{:keys [out p] :as s} (await (climb! {:blocks (merge (box -2 63 -34 30 63 34 "stone") (box 10 64 -8 11 69 8 "stone")
                                                                    (box 16 64 0 16 64 0 "stone"))
                                                     :self {:pos {:x 3.5 :y 64 :z 0.5}} :light [0 15]
                                                     :seen [[-2 63 -34 9 70 34]] :inventory [{:name "stone_pickaxe" :count 1}]}
@@ -696,8 +697,8 @@
   (let [loop-40 (mapv #(update % :x * 2) line-20)
         dug (detour/sealed-blocks 6 500)]
     (is (< 6 dug 40) "digging 6 stone blocks takes longer than walking them, shorter than the 40-block loop")
-    (is (= (js/Math.round dug) (:allowed (detour/refusal loop-40 6 (constantly true) 0.5 dug))) "the loop is refused at the dug way's walk")
-    (is (nil? (detour/refusal loop-40 6 (constantly true) 0.5 (detour/sealed-blocks 6 5000))) "a dug way dearer than the loop is not preferred")
-    (is (some? (detour/refusal (mapv #(update % :x * 0.7) line-20) 6 (constantly true) 0.5 dug))
+    (is (= (js/Math.round dug) (:allowed (detour/refusal loop-40 6 (constantly true) 0.5 dug ##Inf))) "the loop is refused at the dug way's walk")
+    (is (nil? (detour/refusal loop-40 6 (constantly true) 0.5 (detour/sealed-blocks 6 5000) ##Inf)) "a dug way dearer than the loop is not preferred")
+    (is (some? (detour/refusal (mapv #(update % :x * 0.7) line-20) 6 (constantly true) 0.5 dug ##Inf))
         "a loop shorter than the dug way's walk, its unseen toll added, is dearer than digging")
-    (is (nil? (detour/refusal (mapv #(update % :x * 0.7) line-20) 6 (constantly false) 0.5 dug)) "the same loop seen is cheaper than digging")))
+    (is (nil? (detour/refusal (mapv #(update % :x * 0.7) line-20) 6 (constantly false) 0.5 dug ##Inf)) "the same loop seen is cheaper than digging")))

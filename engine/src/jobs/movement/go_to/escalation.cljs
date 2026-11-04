@@ -138,12 +138,12 @@
      :escalation-best (min d (or best d))}))
 
 (defn detour-escalate!
-  "Start escalation e (detour-way) instead of giving up :detour (why: the bound's {:route :straight :allowed}); a
+  "Start escalation e (detour-way) instead of giving up :detour (why: the bound's {:route :blocks :straight :allowed}); a
   later give-up keeps the detour as its reason. :again."
   [c tries why e]
   (let [feet (end/feet-cell c)]
     (ctx/emit! c :go-to.escalated :info (merge why {:step (:step e) :why :detour :n 1 :at feet
-                                                    :text (str "the only way round is " (:route why) " blocks for a goal " (:straight why)
+                                                    :text (str "the only way round is " (:blocks why) " blocks for a goal " (:straight why)
                                                                " blocks off: " (name (:step e)) " instead")}))
     (ctx/update-mem! c #(assoc % :detour-tried true :give-up {:tries tries :status :detour :result (merge {:status :no-path :reason :detour} why)}
                                :fruitless 1 :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
@@ -351,19 +351,19 @@
     (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (route-owner c)))
     (ctx/hold-still! c (when (= :searching (:step e)) :searching))
     (cond
-      lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
+      lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up :escalate-failed :route-search) (assoc :cave-ok true)))
           :again)
-      (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
+      (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation failed}))
       ;; past the count a dig route is still taken while it ends more than a block nearer the goal than any way before
       (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
-      (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
+      (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
       (= :searching (:step e))
       (do (search-begun! c feet goal opts)
           (ctx/update-mem! c assoc :escalate-now true :escalate-failed failed)
           :again)
-      (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
+      (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       (start-hold c pos feet e) (reprice/end c (start-hold c pos feet e))
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
