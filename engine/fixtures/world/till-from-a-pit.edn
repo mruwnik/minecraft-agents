@@ -1,0 +1,15 @@
+;; Card 5e233ad0: jobs.farm.till from the bottom of a 3-deep pit climbs out and hoes the rim dirt; the climb's dig route must never
+;; dig the cell the job came to till. Stone mass x 8..24, z 8..24, y 0..2 with a dirt block x 14..18 round the 1-wide shaft [16 0..2 16] the body stands in; the target is the dirt at [22 2 16] on top of the stone.
+;; Should-succeed: the cell ends farmland, tilled 1. Should-fail: none; the target dug away would end the job :skipped or stopped and the :block check would fail.
+{:defaults
+ {:tags [:farm :till :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [8 0 8] [24 2 24] "stone"] [:fill [14 0 14] [18 2 18] "dirt"] [:set [22 2 16] "dirt"] [:fill [16 0 16] [16 2 16] "air"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_hoe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "pit-body-tills-the-rim-dirt-without-digging-it"
+   :act [[:job (jobs.farm.till {:area {:pos #xyz [22 2 16] :radius 0} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:tilled 1}} :within-s 100 :of-job true}]
+   :after [[:block [22 2 16] "farmland"]]}]}
