@@ -144,11 +144,12 @@
         q))))
 
 (defn fits-after-look?
-  "Whether a pillar fits at feet once plan! has looked at the rise: the climb chance kept (climb-of) stands, since a look
-  reads the rise cells it priced open as they are, and only room? is asked again of the world as sensed now."
+  "Whether a pillar fits at feet once plan! has looked at the rise: the climb chance kept (climb-of) for these feet stands,
+  though the mobs have moved since (they close in while the decision runs; the build meets one in its cell on its own), since a
+  look reads the rise cells it priced open as they are; only room? is asked again of the world as sensed now."
   [c feet]
   (let [p (:primitives c) kept (::climb (ctx/mem c))]
-    (if (and (= [feet (mob-cells p)] (:key kept)) (<= 0 (- (ctx/now c) (:t kept)) (check-cache/ttl-ms)))
+    (if (and (= feet (first (:key kept))) (<= 0 (- (ctx/now c) (:t kept)) (check-cache/ttl-ms)))
       (boolean (and (some? (:q kept)) (room-unseen-open? p feet)))
       (pillar-fits? p feet))))
 
