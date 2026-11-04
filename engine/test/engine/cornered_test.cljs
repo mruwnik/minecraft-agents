@@ -4,6 +4,7 @@
   or the fist) instead of failing the same round again and again."
   (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
+            [jobs.lib.pillar :as lpl]
             [jobs.lib.blocks :as lb]
             [jobs.lib.combat :as combat]
             [jobs.lib.ledger :as ledger]
@@ -2051,6 +2052,20 @@
     (is (< (open-s [0 64 0] 65) whole) "one block under the body: the cost of two blocks, not three")
     (is (< (open-s [0 64 0] 66) (open-s [0 64 0] 65)))
     (is (= whole (open-s [5 60 5] 66)) "a pillar in another column is a fresh one")))
+
+(deftest the-pillar-climb-priced-is-kept-for-the-plan-after-its-look
+  (let [m (atom {})
+        p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 20}]})
+        c (stub-ctx p m)
+        asked (atom 0)]
+    (with-stub-mem
+      (fn []
+        (with-redefs [respond.pillar/pillar-climb (fn [_ _] (swap! asked inc) 0.25)
+                      ctx/now (constantly 1000)]
+          (is (= 0.25 (respond.pillar/climb-of c)))
+          (is (true? (respond.pillar/fits-after-look? c (lpl/feet-cell c))) "the kept chance stands after the look")
+          (is (= 0.25 (respond.pillar/climb-of c)))
+          (is (= 1 @asked) "the cold frontier search is paid once, not again after the look's memory write"))))))
 
 (deftest the-covers-are-priced-once-while-what-they-read-stays
   (let [m (atom {})

@@ -203,7 +203,7 @@
   [c hostiles]
   (when-let [climb (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
                         (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
-                        (pillar/pillar-climb (:primitives c) (pl/feet-cell c)))]
+                        (pillar/climb-of c))]
     (let [s (* (settings/get settings ::pillar-s) (/ (- (pillar/pillar-height) (pillar/lifted c)) (pillar/pillar-height)))
           seconds (+ s (hide-out/quiet-s))
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))

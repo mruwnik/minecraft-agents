@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
@@ -104,6 +105,12 @@
   (set (map #(let [{:keys [x y z]} (danger-q/mob-pos p %)] (mapv js/Math.floor [x y z]))
             (danger-q/known-hostiles p (danger-q/hostile-radius) {}))))
 
+(defn room-unseen-open?
+  "room? where the body at primitives p stands at feet, a cell it has not sensed read open (plan! looks at the rise first)."
+  [p feet]
+  (let [block-at (escape/block-at-of p) unseen? (escape/unseen-of p)]
+    (room? (fn [cell] (if (unseen? cell) "air" (block-at cell))) feet)))
+
 (defn pillar-climb
   "The chance a mob climbs to the top of a pillar where the body at primitives p stands at feet (climb-chance from the
   hostiles it knows, a cell it has not sensed solid by lk/unseen-solid-at-fn), nil when the pillar has no room? there
@@ -117,9 +124,33 @@
         chance-of (memoize (fn [cell] (cond (not (unseen? cell)) (seen cell)
                                          (rise cell) [0 1]
                                          :else (let [s (solid-at cell)] [s (- 1 s)]))))]
-    (when (room? (fn [cell] (if (unseen? cell) "air" (block-at cell))) feet)
+    (when (room-unseen-open? p feet)
       (let [q (climb-chance chance-of feet (mob-cells p))]
         (when (< q 1) q)))))
+
+(declare pillar-fits?)
+
+(defn climb-of
+  "pillar-climb at the body's feet, kept in the job's memory for check-cache/ttl-ms while its feet and the cells the hostiles
+  near fill stay: the first cold ask pays for the frontier field and light, which the next write to the memory (a look)
+  drops."
+  [c]
+  (let [p (:primitives c) feet (pl/feet-cell c) key [feet (mob-cells p)] now (ctx/now c)
+        kept (::climb (ctx/mem c))]
+    (if (and (= key (:key kept)) (<= 0 (- now (:t kept)) (check-cache/ttl-ms)))
+      (:q kept)
+      (let [q (pillar-climb p feet)]
+        (ctx/update-mem! c assoc ::climb {:key key :t now :q q})
+        q))))
+
+(defn fits-after-look?
+  "Whether a pillar fits at feet once plan! has looked at the rise: the climb chance kept (climb-of) stands, since a look
+  reads the rise cells it priced open as they are, and only room? is asked again of the world as sensed now."
+  [c feet]
+  (let [p (:primitives c) kept (::climb (ctx/mem c))]
+    (if (and (= [feet (mob-cells p)] (:key kept)) (<= 0 (- (ctx/now c) (:t kept)) (check-cache/ttl-ms)))
+      (boolean (and (some? (:q kept)) (room-unseen-open? p feet)))
+      (pillar-fits? p feet))))
 
 (defn pillar-fits?
   "Whether a pillar fits where the body at primitives p stands at feet (pillar-climb)."
@@ -167,7 +198,7 @@
     (when item
       (doseq [cell (map #(escape/up feet %) (range 1 (+ 2 (pillar-height))))]
         (when (look/unknown? p cell) (await (look/look-at! c cell)))))
-    (when (and item (pillar-fits? p feet))
+    (when (and item (fits-after-look? c feet))
       (let [cells (mapv #(escape/up feet %) (range (pillar-height)))
             refusal (some #(access/trespass-refusal (access/rules-input c) :place (cell-map %)) cells)]
         (when (or trespass? (nil? refusal))
