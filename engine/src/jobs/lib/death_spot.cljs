@@ -45,7 +45,8 @@
   newer one kept covers? the spot of."
   [c]
   (let [deaths (keep #(when (:pos (:data %)) {:pos (:pos (:data %)) :cause (:cause (:data %))}) (ctx/entries c :deaths))
-        record (fn [e] {:pos (:pos (:data e)) :cause (hurt-cause (:data e))})]
+        record (fn [e] {:pos (:pos (:data e)) :cause (hurt-cause (:data e))})
+        body (cost/death-body (:primitives c) (ctx/view c))]
     (reduce (fn [kept {:keys [data] :as e}]
               (if (or (some #(covers? c % (:pos data)) deaths)
                       (some #(covers? c (record %) (:pos data)) kept))
@@ -53,7 +54,7 @@
                 (conj kept e)))
             []
             (->> (ctx/entries c :hurt)
-                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food :heal (cost/death-s (:primitives c) (ctx/view c) pos)))))
+                 (filter #(let [{:keys [health food pos]} (:data %)] (and pos health (risk/too-hurt? health food :heal (cost/death-cost body pos)))))
                  reverse))))
 
 (defn recent

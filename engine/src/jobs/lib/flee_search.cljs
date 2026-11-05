@@ -295,10 +295,10 @@
 (defn swim-fn
   "A fn of a point to the blocks of the straight line from `from` to it (sampled each half block) that the body knows to be
   water (feet and the cell under in breath/swimmable, as breath/swimming?): a chaser is timed at its swim speed only
-  over water that is shown, else at its land speed. Memoised per point: a search scores the same cells many times."
-  [c from]
+  over water that is shown, else at its land speed. Memoised per point: a search scores the same cells many times; wet
+  (a Map of cell to whether it is water) is shared by the chasers of a search, whose lines to one end overlap."
+  [c from wet]
   (let [p (:primitives c)
-        wet (js/Map.)
         wet-cell? (fn [x y z]
                     (let [k (str x "," y "," z)]
                       (if (.has wet k)
@@ -321,11 +321,12 @@
   (a shot spot has none) other than a creeper or a shooter (a blast or an arrow passes where it cannot walk: the
   straight line stands)."
   [c chasers]
-  (mapv (fn [{:keys [mob pos] :as ch}]
-          (cond-> (assoc ch :swim (swim-fn c pos))
-            (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
-            (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
-        chasers))
+  (let [wet (js/Map.)]
+    (mapv (fn [{:keys [mob pos] :as ch}]
+            (cond-> (assoc ch :swim (swim-fn c pos wet))
+              (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
+              (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
+          chasers)))
 
 (def unreached-s
   "The arrival a :score counts for an end no chaser can get to: past any real one, so such ends rank first and among

@@ -161,3 +161,16 @@
     (is (death-spot/bare-headed? (mob [nil nil nil nil nil nil])) "sensed, nothing on the head: it burns")
     (is (not (death-spot/bare-headed? (mob [nil nil nil nil nil {:name "iron_helmet"}]))) "a helmet keeps it from burning")
     (is (not (death-spot/bare-headed? (mob nil))) "equipment never sensed: the worse case, no burn")))
+
+(deftest near-deaths-prices-the-body-once-not-once-a-hurt-entry
+  (let [now (atom 0)
+        s (mem/open (tu/tmp-dir) {:now #(deref now)})
+        builds (atom 0)
+        body (cost/death-body (tu/fake-on-floor {}) nil)]
+    (doseq [x [0 50 100]]
+      (swap! now inc)
+      (mem/write! s :hurt {:health 1 :food 20 :pos {:x x :y 64 :z 0}} mem/default-policy))
+    (reset! now 1000)
+    (with-redefs [cost/death-body (fn [_ _] (swap! builds inc) body)]
+      (is (= 3 (count (death-spot/near-deaths (ctx-on (tu/fake-on-floor {}) (mem/view s)))))))
+    (is (= 1 @builds))))
