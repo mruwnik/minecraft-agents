@@ -286,6 +286,15 @@
 (defn dist [[ax ay az] [bx by bz]] (js/Math.hypot (- ax bx) (- ay by) (- az bz)))
 (defn block-name [w pos] (get-in w [:blocks pos] "air"))
 (defn body-pos [w] (get-in w [:self :pos]))
+
+(def by-name-cache (js/WeakMap.))
+
+(defn blocks-by-name
+  "blocks ({pos name}) as {name [[pos name] ...]}, built once per blocks map: a named query on a big floor reads only its names."
+  [blocks]
+  (or (.get by-name-cache blocks)
+      (let [v (group-by val blocks)] (.set by-name-cache blocks v) v)))
+
 (def near? use-on/near-block?)
 (defn entity-near? [w pos] (<= (dist (body-pos w) pos) reach))
 (defn find-entity [w id] (first (filter #(= id (:id %)) (:entities w))))
@@ -1063,7 +1072,10 @@
                       ok? (cond names (set names) match #(match %) :else (constantly true))]
                   (if (:offline w)
                     #js []
-                    (->> (:blocks w)
+                    (->> (let [blocks (or (:blocks w) {})]
+                           (cond names (mapcat (blocks-by-name blocks) (set names))
+                                 match (let [idx (blocks-by-name blocks)] (mapcat idx (filter ok? (keys idx))))
+                                 :else blocks))
                          (keep (let [bp (body-pos w) [bx by bz] bp]
                                  (fn [[pos block]]
                                    (let [[x y z] pos] ; the box test first: most blocks of a big floor lie far out
