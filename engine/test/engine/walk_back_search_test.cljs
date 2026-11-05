@@ -62,3 +62,12 @@
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
       #(do (is (= :searching (ask 100)) "within the worth the search goes on")
            (is (nil? (ask 0.5)) "no route is within 0.5 s: the search ends at once")))))
+
+(deftest a-search-ended-under-a-worth-is-not-the-answer-to-an-ask-without-one
+  (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        id (str (random-uuid))
+        ask #(choose/route-answer p [0 64 0] [10 70 0] (constantly true) (constantly false) false false
+                                  (assoc (choose/search-opts {:slice (choose/route-slice id) :bound-s 100 :guess-risk {}}) :worth-s % :pillar-s (fn [_ _ _ _] 1.5) :place-s 1))]
+    (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+      #(do (is (nil? (ask 0.5)))
+           (is (= :searching (ask nil)) "the same ask under no worth searches on its own")))))
