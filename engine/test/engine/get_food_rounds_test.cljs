@@ -614,8 +614,10 @@
               worth-with (fn ^:async worth-with [notes]
                            (let [{:keys [eng]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes notes)]
                              (reset! worths [])
-                             (await (one-round! eng {}))
-                             (first @worths)))]
+                             (loop [n 0]
+                               (await (one-round! eng {}))
+                               (when (and (empty? @worths) (< n 20)) (recur (inc n))))
+                             (last @worths)))]
           (set! child/search-args (fn [opts] (swap! worths conj (:worth opts)) (real opts)))
           (try
             (let [bare (await (worth-with []))

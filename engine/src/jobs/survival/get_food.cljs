@@ -471,15 +471,14 @@
       (do (ctx/update-mem! c assoc :explored "not searched: food is worth no walk") nil)
       :else
       (let [start? (not= "started" (:explored (ctx/mem c)))
-            alt (when start? (await (cheapest-noted! c (set (:noted-walked (ctx/mem c))))))]
-        (if (= :searching alt)
+            alt (await (cheapest-noted! c (set (:noted-walked (ctx/mem c)))))]
+        (if (and start? (= :searching alt))
           :continue
           (do
             (when start?
-              (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))
-                                               :explore-worth (min (animals/search-benefit c) (:walk-s alt ##Inf)))
+              (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c)))
                                       (update :explore-runs (fnil inc 0)))))
-            (let [worth (or (:explore-worth (ctx/mem c)) (animals/search-benefit c))
+            (let [worth (min (animals/search-benefit c) (if (map? alt) (:walk-s alt) ##Inf))
                   opts (merge {:worth worth :spend {:job-time worth}} (when (map? e) e))
                   e (await (child/run!* c :explore 'jobs.explore.search
                                         (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys crops/food-ripe-age) (keys crops/wild-food)))))
