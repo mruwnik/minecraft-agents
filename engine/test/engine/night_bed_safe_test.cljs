@@ -207,10 +207,12 @@
         (let [{:keys [eng clock]} (setup overdue-in-open-lit-tunnel)
               quote! pick/quote!
               searches (atom 0)
+              asked (atom [])
               unsafe-when-answered (atom nil)]
           (mem/write! (:store eng) :bed {:pos far-bed} mem/place-policy)
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (set! pick/quote! (fn ^:async q [c args]
+                              (when (and (= far-bed (:pos args)) (= 2 (:range args)) (not (:ways args))) (swap! asked conj args))
                               (if (< (swap! searches inc) 4)
                                 {:estimate true}
                                 (do (when-not @unsafe-when-answered (reset! unsafe-when-answered [(count (st/entries eng :bed-walk-unsafe))]))
@@ -218,7 +220,8 @@
           (core/submit! eng '(jobs.survival.night) {})
           (try (await (core/tick! eng))
                (finally (set! pick/quote! quote!)))
-          (is (= [0] @unsafe-when-answered) "no route yet is not no route: the bed is not written off while the search goes on"))))))
+          (is (= [0] @unsafe-when-answered) "no route yet is not no route: the bed is not written off while the search goes on")
+          (is (some (comp #{##Inf} :worth) @asked) (str "the walk-to-bed quote is asked at endless worth: " (pr-str @asked))))))))
 
 (def on-open-ground
   "The body on the open floor at night, the far bed 35 blocks off over the same dark ground, no hostile known (overdue: a bed in
