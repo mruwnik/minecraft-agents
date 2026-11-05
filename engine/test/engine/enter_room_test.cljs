@@ -14,6 +14,7 @@
             [engine.shelter-support :as st]
             [jobs.lib.walk-risk :as risk]
             [engine.ctx :as ctx]
+            [jobs.lib.rooms :as room-lib]
             [jobs.survival.enter-room :as enter-room]
             [engine.test-util :as tu]))
 
@@ -220,17 +221,27 @@
               {:keys [p]} (await (enter! world {}))]
           (is (> (:z (st/pos-of p)) 9) "in the far hut, not walked round the wall to the near one"))))))
 
-(deftest the-pick-of-a-room-stands-until-the-doors-change-and-the-picked-room-is-gone
+(deftest the-pick-is-made-again-whenever-the-doors-seen-change
   (let [room (fn [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
         [a b c] (map room [1 2 3])
-        picks? (fn [cands picked picked-doors]
+        picks? (fn [cands picked-doors]
                  (with-redefs [enter-room/target-of (fn [_] {:pos (:pos a)})
                                enter-room/candidates (fn [_] cands)
-                               ctx/mem (fn [_] {:picked picked :picked-doors picked-doors})]
+                               ctx/mem (fn [_] {:picked-doors picked-doors})]
                    (enter-room/picks-seen? {:args {}})))]
-    (is (true? (picks? [a b] nil nil)) "two doors seen, nothing picked yet")
-    (is (false? (picks? [a b] (:pos a) #{(:door a) (:door b)})) "the pick stands while the doors stand")
-    (is (false? (picks? [a b] nil #{(:door a) (:door b)})) "a pick that found no route is not tried again on the same doors")
-    (is (false? (picks? [a b c] (:pos a) #{(:door a) (:door b)})) "a new door seen: the pick, still a candidate, stands")
-    (is (true? (picks? [b c] (:pos a) #{(:door a) (:door b)})) "the picked room is gone and the doors changed: picked again")
-    (is (false? (picks? [a] nil nil)) "one door: nothing to choose")))
+    (is (true? (picks? [a b] nil)) "two doors seen, nothing picked yet")
+    (is (false? (picks? [a b] #{(:door a) (:door b)})) "the doors stand")
+    (is (true? (picks? [a b c] #{(:door a) (:door b)})) "a newly seen door is priced too")
+    (is (false? (picks? [a] nil)) "one door: nothing to choose")))
+
+(deftest the-room-whose-route-is-cheapest-is-picked-whatever-the-door-order
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (fn [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
+              [near far] (map room [1 40])
+              price {(:door near) 90 (:door far) 4}]
+          (with-redefs [enter-room/candidates (fn [_] [near far])
+                        room-lib/mid identity
+                        room-lib/route-cost (fn ^:async f [_ args] (get price (:pos args)))]
+            (is (= {:pos (:pos far)} (await (enter-room/pick-seen {}))) "the far door by line, the cheap dig, wins")))))))

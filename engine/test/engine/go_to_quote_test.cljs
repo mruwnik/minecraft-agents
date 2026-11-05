@@ -101,6 +101,16 @@
           (is (nil? (:partial (:route walk))) (pr-str (:route walk)))
           (is (= ##Inf (first (get-in walk [:uses :job-time]))) "walking alone never gets out")
           (is (js/isFinite (first (get-in any [:uses :job-time]))) "digging out may"))))))
+(deftest a-walk-less-goal-is-quoted-with-the-seconds-of-the-dig-route-escalation-would-take
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
+              walk (:route (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :ways #{:walk}}))))
+              any (:route (:quote (await (preview shut-in {:pos [10 64 1] :range 0}))))]
+          (is (nil? (:dig-seconds walk)) "a walking call prices no dig")
+          (is (false? (:found any)))
+          (is (pos? (:dig-seconds any)) (pr-str any)))))))
 
 (deftest a-partial-route-keeps-a-least-and-has-no-most
   (async done

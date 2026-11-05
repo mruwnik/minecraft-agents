@@ -170,10 +170,12 @@
 (defn ^:async quote-of
   "The planner's route to the goal from where the body stands, with this call's policy, costs, dangers, tolls and
   limits, walked nowhere (go-to.preview): time from its seconds, health its planned damage, :moves-to the goal cell,
-  :route what the planner found."
+  :route what the planner found, with :dig-seconds (choose/dig-price: the dig route and the walk on) when it found no walk and the call may dig."
   [c]
   (let [c (with-limits (health/with-body-food c))]
-    (preview/quote-of-route (await (preview/route! c)) (ways/escalating? c) (:back (:args c)))))
+    (let [r (await (preview/route! c))
+          dig-s (when (and (not (:found r)) (:goal r) (ways/escalating? c)) (choose/dig-price c (:goal r)))]
+      (preview/quote-of-route (cond-> r dig-s (assoc :dig-seconds dig-s)) (ways/escalating? c) (:back (:args c))))))
 
 (defn limits-fit
   "Never :bad-args for a floor or leg out of range, before the engine's floor check could hold the call."

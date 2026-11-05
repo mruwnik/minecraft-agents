@@ -380,7 +380,8 @@
          (sort-by #(u/dist here (:pos %))))))
 
 (defn ^:async route-cost
-  "Seconds go-to's quote plans for the walk go-to-args, dark cells priced in (the planner's own cost), or nil with no route."
+  "Seconds go-to's quote plans for the walk go-to-args, dark cells priced in (the planner's own cost), else what the dig route it
+  would escalate to costs (:dig-seconds), or nil with no route."
   [c go-to-args]
   (let [r (:route (await (ctx/quote c 'jobs.movement.go-to go-to-args)))]
-    (when (:found r) (+ (:seconds r) (or (:dark-seconds r) 0)))))
+    (if (:found r) (+ (:seconds r) (or (:dark-seconds r) 0)) (:dig-seconds r))))

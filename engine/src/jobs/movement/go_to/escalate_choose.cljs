@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.access :as access]
             [jobs.lib.aim :as aim]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -725,6 +726,21 @@
           (when (> (second goal) (second feet))
             (let [e (escape-way/choose p feet goal may-dig? opts)]
               (when (= :stair (:step e)) e)))))))
+
+(defn dig-price
+  "Seconds the fewest cells dug (dig-way) from the feet to the stand cell goal ([x y z]) cost go-to call c, the rest of the
+  way walked as a quote prices it; nil when the call may not dig a route or none is found within its budget. A quote asks
+  this when the walk's planner found no walk."
+  [c goal]
+  (when (ways/way? c :clear-path)
+    (let [p (:primitives c)
+          feet (end/feet-cell c)
+          opts (merge {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :bound-s (call-budget-s c) :node-s (cost/search-cell-s)}
+                      (range-opts c (zipmap [:x :y :z] goal)))
+          e (dig-way p feet goal (may-dig-fn c) opts)]
+      (when (= :dig-route (:step e))
+        (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts))
+           (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)))))))))
 
 (def stair-first-rise
   "How far above the feet a goal is for a found plan to be weighed against a stair up."

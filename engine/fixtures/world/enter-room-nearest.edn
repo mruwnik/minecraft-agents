@@ -2,6 +2,7 @@
 ;; and shuts the door. Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, open oak door at [15 0..1 18]; body 2 south of it looking north.
 ;; Should-succeed: the open door is walked to, the body ends inside and the door is shut.
 ;; Should-succeed 2: a hut inside a glass ring 3 blocks off beats a hut 50 blocks round (go-to's quote with its digging ways prices both): the body digs in, door shut on A, B's door at [65 0 14] still open. Old code quoted walking only: A had no walk, so B was walked to.
+;; Should-succeed 3: the same ring hut, while the door of a hut 8 blocks off sits 86 blocks round a long wall: the dig through the glass is cheaper, the nearer door is not entered (straight-line order says the other hut; only the price picks this one).
 ;; Should-fail: the same hut with a cell of another's plan inside it (a bed spot beside the door) is not walked into (a fill there would trespass): no-room, the body stays outside.
 {:defaults
  {:tags [:night :survival]
@@ -47,4 +48,27 @@
             [:set [65 1 14] "oak_door[facing=south,half=upper,hinge=left,open=true]"]]
    :act [[:job (jobs.survival.enter-room)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.enter-room"}} :within-s 70 :of-job true}]
-   :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5] [:block [65 0 14] "oak_door[half=lower,open=true]"]]}]}
+   :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5] [:block [65 0 14] "oak_door[half=lower,open=true]"]]}
+  {:name "the-glass-ring-room-is-dug-to-not-the-nearer-door-a-long-wall-detour-away"
+   :plot {:floor "grass_block" :length 80 :width 48}
+   :body {:at [15.5 0 40.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 3}
+   :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+            [:fill [13 0 13] [17 2 17] "air"]
+            [:fill [15 0 18] [15 1 18] "air"]
+            [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=true]"]
+            [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=true]"]
+            [:fill [10 0 10] [20 3 10] "glass"]
+            [:fill [10 0 21] [20 3 21] "glass"]
+            [:fill [10 0 10] [10 3 21] "glass"]
+            [:fill [20 0 10] [20 3 21] "glass"]
+            [:fill [10 4 10] [20 4 21] "glass"]
+            [:fill [24 0 36] [30 3 42] "oak_planks" :hollow]
+            [:fill [25 0 37] [29 2 41] "air"]
+            [:fill [24 0 39] [24 1 39] "air"]
+            [:set [24 0 39] "oak_door[facing=west,half=lower,hinge=left,open=true]"]
+            [:set [24 1 39] "oak_door[facing=west,half=upper,hinge=left,open=true]"]
+            [:fill [22 0 3] [22 3 47] "stone"]]
+   :act [[:job (jobs.survival.enter-room)]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.enter-room"}} :within-s 80 :of-job true}]
+   :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5] [:block [24 0 39] "oak_door[half=lower,open=true]"]]
+   :limit-s 100}]}

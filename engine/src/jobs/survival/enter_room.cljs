@@ -6,6 +6,7 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.ledger :as ledger]
@@ -146,16 +147,13 @@
 
 (defn picks-seen?
   "Whether the target is the nearest room seen (no :at, no :place, no usable home), of several doors, and no pick of it stands
-  (a pick is made again only when the doors seen changed and the picked room is no longer a candidate)."
+  (a pick is made again whenever the doors seen change, so a newly seen cheaper door is priced)."
   [c]
   (let [t (target-of c)
-        cands (candidates c)
-        doors (set (map :door cands))
-        picked (or (:room-pick c) (:picked (ctx/mem c)))]
+        doors (set (map :door (candidates c)))]
     (boolean (and t (nil? (:name t)) (not (:at (:args c)))
                   (next doors)
-                  (not= doors (:picked-doors (ctx/mem c)))
-                  (not (some #(= picked (:pos %)) cands))))))
+                  (not= doors (:picked-doors (ctx/mem c)))))))
 
 (defn at-target?
   "Whether the body is within a step and a half of the place, or in the room that holds it (read-only: a quote runs this)."
@@ -237,7 +235,7 @@
       :else (contract/ok :room "a room to enter"))))
 
 (defn ^:async quote-of [c0]
-  (let [c (cond-> c0 (picks-seen? c0) (assoc :room-pick (:pos (await (pick-seen c0)))))
+  (let [c (cond-> c0 (picks-seen? c0) (assoc :room-pick (:pos (await (check-cache/cached c0 [::pick (set (map :door (candidates c0))) (mapv js/Math.floor (map (sh-sense/feet (:primitives c0)) [:x :y :z]))] #(pick-seen c0))))))
         p (:primitives c)
         t (target-of c)
         job-time (settings/get settings ::job-time-s)
