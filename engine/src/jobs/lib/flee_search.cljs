@@ -447,41 +447,36 @@
   [e]
   (and (:open? e) (not (:cover? e)) (nil? (:pos (:target e))) (pos? (:gain e)) (> (:arrive e) (:s e))))
 
+(defn at-step-or-end
+  "A fn of end entry e (choose): whether f (cell -> bool) holds of e's step cell or its end."
+  [f]
+  (fn [e] (boolean (or (f (:step e)) (f (:end e))))))
+
 (defn choose
   "The end entry a flee step takes among scored ends (scored, covers), its :step the cell the step walks to (step-of,
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
   nothing on the chasers over standing still, pockets that gain less than their walk takes, those with every step
-  cell refused, those never? holds of (at the step cell or the end), those passing near hazards, and with dry-only? the wet ones (wet?).
-  Priced, not left out: each mark an end has costs it mark-s seconds (the death the mark risks, cost/death-s): wet? holds of
-  its step cell or end, avoid-route (end entry -> bool) of it, each of avoid (cell -> bool) of its step cell or end. The
-  tiers in this order: a :cover? end, a preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and
-  only when none of those is left (a closed cave, a wall's foot) a pocket; a tier's best is its highest :score less its
-  marks, and the first tier whose best has the fewest mark seconds wins. Open ways that every chaser cuts leave the
-  pockets out: they are traps."
-  [ends {:keys [refused never? hazards wet? dry-only? avoid avoid-route prefer? mark-s]}]
-  (let [either (fn [f] (fn [e] (or (f (:step e)) (f (:end e)))))
-        marks (fn [e] (+ (if (and wet? ((either wet?) e)) 1 0)
-                         (count (filter #((either %) e) avoid))
-                         (if (and avoid-route (avoid-route e)) 1 0)))
-        ok (->> ends
+  cell refused, those never? holds of (at the step cell or the end) and those passing near hazards. Priced, not left
+  out: each of marks ({:holds? (end entry -> bool) :s seconds}, e.g. at-step-or-end of a cell test) that holds of an
+  end costs it its :s, the death the mark risks, off its :score. The end with the highest score so priced wins, covers,
+  homes, open ways and pockets alike. A cover end (out of every ranged chaser's fire: a hit avoided outright, which a score
+  does not count) and a preferred one (prefer?: e.g. a safe home, a run into a refuge priced as a cover) add a bonus
+  past any score, a cover's the greater, and rank among themselves by score. A pocket only when no open way is left
+  uncut: open ways that every chaser cuts leave the pockets out, they are traps."
+  [ends {:keys [refused never? hazards marks prefer?]}]
+  (let [ok (->> ends
                 (remove :caught?)
                 (filter #(or (:cover? %) (pos? (:gain %))))
                 (filter #(or (:open? %) (> (:gain %) (:s %))))
                 (keep #(when-let [step (step-of % (or refused #{}))] (assoc % :step step)))
-                (remove #(and never? ((either never?) %)))
+                (remove #(and never? ((at-step-or-end never?) %)))
                 (remove #(hazard-near? hazards (:cells %)))
-                (remove #(and dry-only? wet? ((either wet?) %)))
-                (map #(assoc % :bad (* mark-s (marks %)))))
-        best (fn [xs] (when (seq xs) (apply max-key #(- (:score %) (:bad %)) (reverse xs))))
+                (map #(assoc % :net (- (+ (:score %) (cond (:cover? %) (* 2 unreached-s) (and prefer? (prefer? %)) unreached-s :else 0)) (transduce (comp (filter (fn [m] ((:holds? m) %))) (map :s)) + 0 marks)))))
         ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
         traps? (and (seq ways) (every? :caught? ways))
-        tiers [(best (filter :cover? ok))
-               (when prefer? (best (filter prefer? ok)))
-               (best (filter :open? ok))]
-        won (or (seq (remove nil? tiers)) (some-> (when-not traps? (best ok)) vector))]
-    (when (seq won)
-      (let [least (apply min (map :bad won))]
-        (first (filter #(= least (:bad %)) won))))))
+        open (filter :open? ok)
+        pool (cond (seq open) open traps? nil :else ok)]
+    (when (seq pool) (apply max-key :net (reverse pool)))))
 
 (defn into-unseen?
   "Whether the step of end entry e (choose) is cut short by a cell the body has not seen: its route's seen part ends

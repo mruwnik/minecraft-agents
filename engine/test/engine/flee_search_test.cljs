@@ -374,43 +374,53 @@
     (is (nil? (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3 :unseen [4 64 3])] {}))
         "nor one whose route goes on unseen: unseen counts as the worse case, a dead end")))
 
-(deftest pick-orders-cover-then-a-safe-home-then-the-score
-  (let [home (assoc (end-of 0 9 1) :target {:pos {:x 0 :y 64 :z 9} :kind :home})
-        ends [(end-of 6 0 9) home (end-of -2 4 0 :cover? true)]]
-    (is (= {:x -2 :y 64 :z 4} (search/pick ends {})) "out of the line of fire first")
-    (is (= {:x 0 :y 64 :z 9} (search/pick (pop ends) {:prefer? #(= :home (:kind (:target %)))})) "then the safe home")
-    (is (= {:x 6 :y 64 :z 0} (search/pick (pop ends) {})) "else the best score")))
+(defn mark
+  "A choose mark of cell test f costing s seconds."
+  [f s]
+  {:holds? (search/at-step-or-end f) :s s})
 
-(deftest pick-keeps-dry-and-wanted-ends-while-it-can
+(deftest pick-ranks-every-end-by-one-price-a-cover-and-a-safe-home-outrank-any-score
+  (let [home (assoc (end-of 0 9 1) :price 3 :target {:pos {:x 0 :y 64 :z 9} :kind :home})
+        cover (end-of -2 4 0 :cover? true :score 1e6)
+        open (end-of 6 0 9)
+        pocket (end-of 3 3 50 :found? false)
+        prefer? #(= :home (:kind (:target %)))]
+    (is (= {:x -2 :y 64 :z 4} (search/pick [open home cover] {})) "out of the line of fire first")
+    (is (= {:x 0 :y 64 :z 9} (search/pick [open home] {:prefer? prefer?})) "then the safe home")
+    (is (= {:x 6 :y 64 :z 0} (search/pick [open home] {})) "else the best score")
+    (is (= {:x 6 :y 64 :z 0} (search/pick [open pocket] {})) "a pocket only when no open way is left, whatever its score")))
+
+(deftest pick-prices-its-marks-by-what-each-risks
   (let [wet? #(pos? (:x %))
-        ends [(end-of 6 0 9) (end-of -6 0 2)]]
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:wet? wet? :mark-s 100})) "a dry end beats a better wet one")
-    (is (= {:x 6 :y 64 :z 0} (search/pick [(end-of 6 0 9)] {:wet? wet?})) "only water: a swim")
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:wet? wet? :mark-s 8})) "a mark costs its seconds: 9 less 8 loses to 2")
-    (is (= {:x 6 :y 64 :z 0} (search/pick ends {:wet? wet? :mark-s 0.5})) "a mark cheaper than the score gap does not turn the pick")
-    (is (nil? (search/pick [(end-of 6 0 9)] {:wet? wet? :dry-only? true})) "a drowned chases: no swim")
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:avoid [wet? (constantly true)] :mark-s 100})) "both avoids hold of the wet end, one of the dry: the dry end has fewer marks")
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:avoid [wet? wet?] :mark-s 5})) "two avoids cost twice one: 9 less 10 loses to 2")
-    (is (= {:x 6 :y 64 :z 0} (search/pick ends {:avoid [wet?] :mark-s 5})) "one avoid of 5 does not turn 9 against 2")
-    (is (= {:x -6 :y 64 :z 0} (search/pick [(end-of 6 0 9 :cover? true) (end-of -6 0 2 :cover? true)] {:wet? wet? :mark-s 100})) "a marked cover end loses to an unmarked one")
-    (is (= {:x 6 :y 64 :z 0} (search/pick [(end-of 6 0 9 :cover? true) (end-of -6 0 2 :found? false)] {:wet? wet? :mark-s 100})) "a marked cover end beats an unmarked pocket")
-    (is (= {:x 6 :y 64 :z 0} (search/pick [(end-of 6 0 9) (end-of -6 0 2 :found? false)] {:wet? wet? :mark-s 100})) "a marked open end beats an unmarked pocket")
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:never? wet?})))
+        ends [(end-of 6 0 9) (end-of -6 0 2)]
+        east {:x 6 :y 64 :z 0}
+        west {:x -6 :y 64 :z 0}]
+    (is (= west (search/pick ends {:marks [(mark wet? 100)]})) "a dear mark: a dry end beats a better wet one")
+    (is (= east (search/pick [(end-of 6 0 9)] {:marks [(mark wet? 100)]})) "only water: a swim")
+    (is (= west (search/pick ends {:marks [(mark wet? 8)]})) "a mark costs its seconds: 9 less 8 loses to 2")
+    (is (= east (search/pick ends {:marks [(mark wet? 0.5)]})) "a mark cheaper than the score gap does not turn the pick")
+    (is (= west (search/pick ends {:marks [(mark wet? 5) (mark wet? 5)]})) "two marks cost twice one: 9 less 10 loses to 2")
+    (is (= east (search/pick ends {:marks [(mark wet? 5)]})) "one mark of 5 does not turn 9 against 2")
+    (is (= west (search/pick ends {:marks [(mark wet? 100) (mark (constantly true) 100)]})) "marks of different cells add up per end: 200 on the wet end, 100 on the other")
+    (is (= west (search/pick [(end-of 6 0 9 :cover? true) (end-of -6 0 2 :cover? true)] {:marks [(mark wet? 100)]})) "a marked cover end loses to an unmarked one")
+    (is (= east (search/pick [(end-of 6 0 9 :cover? true) (end-of -6 0 2 :found? false)] {:marks [(mark wet? 100)]})) "a marked cover end beats an unmarked pocket")
+    (is (= east (search/pick [(end-of 6 0 9) (end-of -6 0 2 :found? false)] {:marks [(mark wet? 100)]})) "a marked open end beats an unmarked pocket")
     (is (nil? (search/pick [(end-of 6 0 9)] {:never? wet?})) "never? leaves none: cornered")
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:hazards [{:x 6 :y 64 :z 1}]})) "a route past a hazard is left out")))
+    (is (= west (search/pick ends {:never? wet?})))
+    (is (= west (search/pick ends {:hazards [{:x 6 :y 64 :z 1}]})) "a route past a hazard is left out")))
 
-(deftest an-avoided-place-on-the-first-leg-leaves-the-end-out-though-the-end-is-clear
+(deftest a-mark-on-the-first-leg-prices-the-end-though-the-end-is-clear
   (let [past (end-of 20 0 9 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3} {:x 20 :y 64 :z 0 :t 10}])
         other (end-of 0 12 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 0 :y 64 :z 5 :t 3} {:x 0 :y 64 :z 12 :t 10}])
         near-5? #(< (js/Math.abs (- (:x %) 5)) 2)]
-    (is (= {:x 0 :y 64 :z 5} (search/pick [past other] {:avoid [near-5?] :mark-s 100})))))
+    (is (= {:x 0 :y 64 :z 5} (search/pick [past other] {:marks [(mark near-5? 100)]})))))
 
-(deftest a-route-through-an-avoided-cell-loses-to-one-that-keeps-clear-while-one-is-left
+(deftest a-route-through-a-marked-cell-loses-to-one-that-keeps-clear-and-is-taken-when-none-does
   (let [through (end-of 0 20 9 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 0 :y 64 :z 5 :t 3} {:x 0 :y 64 :z 20 :t 10}])
         clear (end-of 12 0 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 12 :y 64 :z 0 :t 10}])
-        door? (fn [e] (some #(= 5 (:z %)) (:cells e)))]
-    (is (= {:x 12 :y 64 :z 0} (search/pick [through clear] {:avoid-route door? :mark-s 100})))
-    (is (= {:x 0 :y 64 :z 5} (search/pick [through] {:avoid-route door? :mark-s 100})) "none clear: the route is taken")))
+        door-route {:holds? (fn [e] (some #(= 5 (:z %)) (:cells e))) :s 100}]
+    (is (= {:x 12 :y 64 :z 0} (search/pick [through clear] {:marks [door-route]})))
+    (is (= {:x 0 :y 64 :z 5} (search/pick [through] {:marks [door-route]})) "none clear: the route is taken")))
 
 (deftest the-unseen-cells-the-routes-stopped-before-are-where-to-look-nearest-first-each-once
   (let [ends [(end-of 4 0 1 :found? false :s 0.8 :unseen [5 64 0])

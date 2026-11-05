@@ -142,19 +142,30 @@
         bystanders (bystander-spots c threats)
         floor (flight/floor c)
         known (ledger/ways-of c)
-        door? (fn [cell] (some-> (block-at cell) (str/ends-with? "_door")))]
+        door? (fn [cell] (some-> (block-at cell) (str/ends-with? "_door")))
+        body (threats/death-body c)
+        death (cost/death-s p (ctx/view c))
+        risk (fn [chance] (* death chance))
+        drowned? (boolean (some #(= "drowned" (.-name %)) threats))
+        wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
+        other-mob (risk (:chance (cost/spawn-kill body from)))
+        creeper (some #(when (combat/creeper? %) (.-name %)) threats)
+        near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
+        mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})
+        marks (concat [(mark near-other? other-mob)]
+                      (map #(mark % other-mob) (flight/avoid-ends c))
+                      (when creeper
+                        [{:holds? (fn [e] (boolean (some door? (:cells e))))
+                          :s (risk (:chance (cost/threat-parts body creeper nil from)))}]))]
     {:refused (:refused (ctx/mem c))
-     :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
-                            (not (and covered? (covered? end)))
-                            (not (contains? known [(:x end) (dec (:y end)) (:z end)]))))
+     :never? (fn [end] (or (and (< (:y end) floor) (walk/roofed? block-at end)
+                                (not (and covered? (covered? end)))
+                                (not (contains? known [(:x end) (dec (:y end)) (:z end)])))
+                           (and drowned? (wet? end))))
      :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
-     :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
-     :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
-     :mark-s (cost/death-s p (ctx/view c))
-     :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
      :door? door?
-     :avoid-route (when (some combat/creeper? threats) (fn [e] (some door? (:cells e))))
-     :prefer? (when home #(= home (:pos (:target %))))}))
+     :prefer? (when home #(= home (:pos (:target %))))
+     :marks marks}))
 
 (defn usable
   "The goal of judged (judge!) when nothing speaks against it, else nil."
