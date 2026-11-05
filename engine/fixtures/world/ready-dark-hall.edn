@@ -31,6 +31,12 @@
    :expect [{:event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}
+  ;; card 8e135e57: the walk-look legs down a dark dug tunnel are one decision with a total bound: the job ends and no further leg follows the refusal
+  {:name "the-walk-look-legs-down-a-long-dark-tunnel-end-with-the-refusal"
+   :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
+   :act [[:job (jobs.debug.ready-probe {:stay-s 5000 :worth 208})]]
+   :expect [{:event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :walk-look.ended} :for-s 25 :from-event {:source :job :kind :stopped :message [:contains "farther than 24 blocks"]}}]}
   {:name "a-short-stay-at-the-far-end-of-a-long-dark-tunnel-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [40 0 16]})]

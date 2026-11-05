@@ -756,8 +756,10 @@
   (let [sides [[8 64 0] [8 65 0]]]
     (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:declined [[8 64 0] [8 65 0]]}))
         "a leg that ended with its walk not bought is not offered by the next check")
-    (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:spent 1e9}))
-        "legs that have spent the worth bound the next one")))
+    (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:spent {[0 64 0] 1e9}}))
+        "legs that have spent the worth on this hall bound the next one")
+    (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel sides {:spent {[500 64 0] 1e9}}))
+        "seconds spent judging another hall are another decision: this one has its own budget")))
 
 (deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
   (let [c (ctx-of (assoc tunnel :time st/noon))

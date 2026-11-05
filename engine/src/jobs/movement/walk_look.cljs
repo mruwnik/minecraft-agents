@@ -50,20 +50,21 @@
 (defn finish-leg!
   "Writes the leg to the :walk-looked entry: a side still unseen after a walk (or a look from where a walk shows no more) with the
   stand it was looked from, so every side within sight of that stand is one judgment; an unseen side whose walk was not bought,
-  kept until a leg walks; and the seconds the leg spent."
-  [c side to]
+  kept until a leg walks; and the seconds the leg spent, kept per hall `at`."
+  [c side to at]
   (let [m (ctx/mem c)
         unseen? (look/unseen? (:primitives c) [side])
         looked? (or (:edge-walked m) (:edge-close m))
         spent (- (:edge-spent m 0) (:booked m 0))
         before (:data (ctx/latest c :walk-looked))
         cell (cell-of side)
+        hall (ready/hall-key at)
         stand (let [[x y z] (if (vector? to) to [(:x to) (:y to) (:z to)])] {:x x :y y :z z})]
     (when (or unseen? (pos? spent))
       (ctx/update-mem! c assoc :booked (:edge-spent m 0))
       (ctx/remember! c :walk-looked
                      (cond-> {:cells (:cells before) :stands (:stands before) :declined (when-not looked? (:declined before))
-                              :spent (+ (:spent before 0) spent)}
+                              :spent (update (let [sp (:spent before)] (when (map? sp) sp)) hall (fnil + 0) spent)}
                        (and unseen? looked?) (-> (update :cells #(vec (distinct (conj (vec %) cell)))) (update :stands #(vec (distinct (conj (vec %) stand)))))
                        (and unseen? (not looked?)) (update :declined #(vec (distinct (conj (vec %) cell)))))
                      walked-policy))))
@@ -90,7 +91,7 @@
         cell (cell-of side)]
     (if (and (look/unseen? (:primitives c) [side]) (not (contains? (:edge-looked (ctx/mem c)) cell)))
       (await (look-edge/look! c [cell] to))
-      (let [_ (finish-leg! c side to)
+      (let [_ (finish-leg! c side to (:at (:args c)))
             _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
             _ (when (:edge-walked (ctx/mem c)) (ctx/update-mem! c update :stands (fnil conj #{}) (if (vector? to) (let [[x y z] to] {:x x :y y :z z}) (select-keys to [:x :y :z]))))
             next-leg (when (and (judged? c) (not (look/unseen? (:primitives c) [side]))) (ready/next-leg c from (:tried (ctx/mem c))

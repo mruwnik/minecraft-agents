@@ -85,16 +85,22 @@
         t (if (zero? len2) 0 (-> (/ (+ (* (- (:x q) (:x a)) (d :x)) (* (- (:y q) (:y a)) (d :y)) (* (- (:z q) (:z a)) (d :z))) len2) (max 0) (min 1)))]
     (u/dist q {:x (+ (:x a) (* t (d :x))) :y (+ (:y a) (* t (d :y))) :z (+ (:z a) (* t (d :z)))})))
 
+(defn hall-key
+  "The key the seconds legs spent are kept under: the hall judged (a cell, map or vector), :none for a caller with none."
+  [at]
+  (cond (map? at) [(:x at) (:y at) (:z at)] (some? at) (vec at) :else :none))
+
 (defn walked-state
   "What the walk-look legs before this call left in body memory (:walk-looked, one entry): `:skip` the cells to offer no leg for
   (looked at from close by and still unseen, or whose walk was refused since the last walked leg), `:stands` the cells ({:x :y :z})
-  looked from, `:left` the call's worth less the seconds the legs have spent."
-  [c]
+  looked from, `:left` the call's worth less the seconds the legs have spent on the hall `at` (another hall is another decision,
+  with its own budget)."
+  [c at]
   (let [{:keys [cells stands spent declined]} (:data (ctx/latest c :walk-looked))
         worth (ctx/worth c)]
     {:skip (into (set cells) declined)
      :stands (set stands)
-     :left (some-> worth (- (or spent 0)))}))
+     :left (some-> worth (- (get (when (map? spent) spent) (hall-key at) 0)))}))
 
 (defn next-leg
   "{:side :to}: the next walk to look of the walk-look run that began at `from` ({:x :y :z}), or nil: look-edge/far-side over the
@@ -104,7 +110,7 @@
   ([c from tried] (next-leg c from tried {}))
   ([c from tried {:keys [stands route-from route-to]}]
   (let [p (:primitives c)
-        {:keys [skip left] :as state} (walked-state c)
+        {:keys [skip left] :as state} (walked-state c route-to)
         walked (into (set tried) skip)
         near (or (look/near-of p) 4)
         route-to (when route-to (if (vector? route-to) (zipmap [:x :y :z] route-to) route-to))
