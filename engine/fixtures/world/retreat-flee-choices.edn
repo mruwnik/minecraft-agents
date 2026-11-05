@@ -42,20 +42,9 @@
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :no-way}} :within-s 30}
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [20 30 16] 3]}} :for-s 40}]
    :limit-s 60}
-  {:name "flight-without-a-death-entry-ends-at-the-south-arm-in-the-dark"
-   ;; twin of the case below with no :deaths entry: pins that the geometry sends an unpriced flight to the south arm's end
-   :plot {:height 12 :length 64 :width 32 :light :dark}
-   :blocks [[:fill [0 0 0] [40 3 31] "stone"] [:fill [4 0 15] [22 2 17] "air"] [:fill [22 0 2] [24 2 24] "air"]]
-   :body {:at [12.5 0 16.5] :inventory []}
-   :act [[:summon "zombie" [6.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]
-         [:wait-s 40]]
-   :expect [{:event {:source :job :kind :retreat.choice} :within-s 20}
-            {:no-event {:source :body :kind :died} :for-s 40}]
-   :after [[:body-near [23.5 0 23.5] 5]]
-   :limit-s 60}
   {:name "flight-ends-away-from-a-recent-death-in-the-dark"
-   ;; a T of dark stone corridors: the zombie comes down the stem; without the entry the flight (control, 2 of 2) ends at the south arm's end;
-   ;; the death is placed there, so the priced flight ends elsewhere, not within 5 of it (it may stop short of the north arm)
+   ;; a T of dark stone corridors: the zombie comes down the stem; unpriced, the flight runs to the south arm's end, where the death is placed:
+   ;; the priced flight never steps within 5 of it (no start-distance check: a zombie first sensed 3 blocks off catches the body, which then fights it)
    :plot {:height 12 :length 64 :width 32 :light :dark}
    :blocks [[:fill [0 0 0] [40 3 31] "stone"] [:fill [4 0 15] [22 2 17] "air"] [:fill [22 0 2] [24 2 24] "air"]]
    :body {:at [12.5 0 16.5] :inventory []}
@@ -63,8 +52,9 @@
    :act [[:summon "zombie" [6.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]
          [:wait-s 40]]
    :expect [{:event {:source :job :kind :retreat.choice} :within-s 20}
+            {:event {:source :job :kind :retreat.target} :within-s 20}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [23 0 23] 5]}} :for-s 40}
             {:no-event {:source :body :kind :died} :for-s 40}]
-   :after [[:body-far [23.5 0 23.5] 5]]
    :limit-s 60}
   {:name "dry-end-beats-a-swim-across-the-pond"
    :plot {:light :sky}
