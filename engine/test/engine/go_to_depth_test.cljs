@@ -713,6 +713,10 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated)))))))))
 
+(deftest the-dug-way-s-walk-is-priced-for-a-goal-ten-million-blocks-off-without-a-cell-by-cell-loop
+  (is (< (js/Math.abs (- (/ (detour/sealed-blocks 1e7 500) 1e7) (/ (detour/sealed-blocks 6 500) 6))) 1e-9) "linear in the blocks")
+  (is (= (detour/sealed-blocks 5 500) (detour/sealed-blocks 4.2 500)) "whole blocks, rounded up"))
+
 (deftest a-way-to-a-sealed-goal-is-bound-by-the-walk-a-dug-way-costs
   (let [loop-40 (mapv #(update % :x * 2) line-20)
         dug (detour/sealed-blocks 6 500)]

@@ -13,7 +13,8 @@
   "Walk blocks that take as long as digging straight blocks through a goal's sealed surroundings, clear-ms the ms each
   block of them takes to break (cost/dig-cells-s): a loop longer than that costs more than the dug way."
   [straight clear-ms]
-  (/ (cost/dig-cells-s (repeat (js/Math.ceil straight) clear-ms)) (cost/walk-step-s)))
+  (let [step (cost/walk-step-s)]
+    (* (js/Math.ceil straight) (+ 1 (/ clear-ms 1000 step)))))
 
 (defn priced-length
   "Blocks of walk a way's steps cost: their length and the unseen cells' toll (cost/unseen-route-s at share, the walk's
