@@ -1,0 +1,28 @@
+;; Card 771da7f8: a walk's unfinished-search end is taken only when nearer the goal than the body has been (closest-so-far), so a way that first
+;; leads away from the goal must still be walked. A 40-block pocket (x 60..100, z 10..14) holds the body at its back; the goal is 5 blocks east behind a
+;; 3-thick back wall; the only way is 75 west along the pocket, 18 south, 90 east along z 28..30 and 18 north to the goal's room (x 104..110, z 10..14).
+;; Seen: open bedrock walls in daylight. Unseen: the same maze roofed and lit, so walls and roof hide the way from the body (a dark maze is another rule: unseen floors).
+;; Both: go-to arrives (not :unreachable, no loop).
+{:defaults
+ {:tags [:movement :planner :large]
+  :time :any
+  :plot {:height 12 :length 124 :width 44 :light :lit}
+  :blocks [[:fill [0 0 0] [123 11 43] "bedrock"]
+           [:fill [60 0 10] [100 11 14] "air"]
+           [:fill [20 0 10] [59 11 14] "air"]
+           [:fill [20 0 15] [24 11 29] "air"]
+           [:fill [20 0 28] [110 11 30] "air"]
+           [:fill [106 0 15] [110 11 27] "air"]
+           [:fill [104 0 10] [110 11 14] "air"]]
+  :body {:at [96.5 0 12.5] :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 400}
+ :cases
+ [{:name "u-shaped-route-open-walls-arrives"
+   :act [[:job (jobs.movement.go-to {:pos #at [108 0 12] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 380 :of-job true}]
+   :after [[:body-near [108.5 0 12.5] 3]]}
+  {:name "u-shaped-route-roofed-arrives"
+   :blocks [[:fill [0 5 0] [123 5 43] "bedrock"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [108 0 12] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 380 :of-job true}]
+   :after [[:body-near [108.5 0 12.5] 3]]}]}
