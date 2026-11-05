@@ -72,6 +72,22 @@
       (doseq [x (range 8 16) y (range 64 72) z (range 0 8)] (solid-at [x y z])))
     (is (= 1 @built))))
 
+(deftest a-write-to-a-far-section-keeps-the-block-and-one-in-its-margin-works-it-out-again
+  (let [w (seeing (tu/fake-on-floor {:blocks cave}))
+        ^js st (:st (aget w "perception"))
+        built (atom 0)
+        f frontier/block-field
+        price #(doseq [x (range 8 16) y (range 64 72) z (range 0 8)] (frontier/distance w [x y z]))
+        write! (fn [x] (store/record! st (store/store-of st (.-dim st)) x 65 0 1 1000000))]
+    (with-redefs [frontier/block-field (fn [& args] (swap! built inc) (apply f args))]
+      (price)
+      (write! 400)
+      (price)
+      (is (= 1 @built) "a section far off: kept")
+      (write! 12)
+      (price)
+      (is (= 2 @built) "a section the block reads: worked out again"))))
+
 (deftest the-solid-verdict-is-the-chance-over-a-half-from-the-block-distance
   (let [w (seeing (tu/fake-on-floor {:blocks (assoc cave "3,65,0" "air")}))
         chance (look/unseen-solid-at-fn w)

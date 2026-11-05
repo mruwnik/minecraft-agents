@@ -90,25 +90,49 @@
 (defn- block-key [bx by bz]
   (+ (* (+ (* (+ bx 4194304) 8388608) (+ bz 4194304)) 128) (+ by 64)))
 
+(defn- stamps-of
+  "The section stamps (store/section-stamp) of every section a block's field reads: its margin, and the ring of sections
+  round it that the remembered light of a margin cell reads."
+  [^js st lo-x lo-y lo-z]
+  (let [m (dec base-rates/unseen-d-max)
+        sx (dec (bit-shift-right (- lo-x m 1) 4)) ex (inc (bit-shift-right (+ lo-x side m) 4))
+        sy (dec (bit-shift-right (- lo-y m 1) 4)) ey (inc (bit-shift-right (+ lo-y side m) 4))
+        sz (dec (bit-shift-right (- lo-z m 1) 4)) ez (inc (bit-shift-right (+ lo-z side m) 4))
+        out #js []]
+    (doseq [x (range sx (inc ex)) y (range sy (inc ey)) z (range sz (inc ez))]
+      (.push out (store/section-stamp st (.-dim st) x y z)))
+    out))
+
+(defn- same-stamps? [^js a ^js b]
+  (and (== (.-length a) (.-length b))
+       (loop [i 0] (or (== i (.-length a)) (and (== (aget a i) (aget b i)) (recur (inc i)))))))
+
 (defn field-value
   "block-field's value at the cell: 2 * distance (at base-rates/unseen-d-max for a cell that is not itself a frontier) plus
-  1 for a lit nearest frontier, from blocks worked out a time and kept while the body's memory takes no write and light-key
-  (what lit-fn depends on, as the sky's darkening) stays: for pricing many cells."
+  1 for a lit nearest frontier, from blocks worked out a time and kept while the memory sections they read take no write
+  (a look changes few) and light-key (what lit-fn depends on, as the sky's darkening) stays: for pricing many cells."
   ([p cell] (field-value p cell nil nil))
   ([p [x y z] lit-fn light-key]
    (when-let [^js st (some-> (aget p "perception") :st)]
      (when (.-stores st)
        (let [^js kept (let [^js c (.get fields st)]
-                        (if (and c (== (.-writes c) (.-writes st)) (identical? (.-dim c) (.-dim st)) (= (.-light c) light-key))
+                        (if (and c (identical? (.-dim c) (.-dim st)) (= (.-light c) light-key))
                           c
-                          (let [c #js {:writes (.-writes st) :dim (.-dim st) :light light-key :blocks (js/Map.)}] (.set fields st c) c)))
+                          (let [c #js {:dim (.-dim st) :light light-key :blocks (js/Map.)}] (.set fields st c) c)))
              bx (js/Math.floor (/ x side)) by (js/Math.floor (/ y side)) bz (js/Math.floor (/ z side))
              k (block-key bx by bz)
              ^js blocks (.-blocks kept)
-             ^js field (or (.get blocks k)
-                           (let [f (block-field (store/store-of st (.-dim st)) (* side bx) (* side by) (* side bz) lit-fn)]
-                             (.set blocks k f)
-                             f))]
+             writes (.-writes st)
+             ^js hit (when-let [^js e (.get blocks k)]
+                       (cond (== (.-at e) writes) e
+                             (same-stamps? (.-stamps e) (stamps-of st (* side bx) (* side by) (* side bz)))
+                             (do (set! (.-at e) writes) e)))
+             ^js e (or hit
+                       (let [f (block-field (store/store-of st (.-dim st)) (* side bx) (* side by) (* side bz) lit-fn)
+                             e #js {:field f :at writes :stamps (stamps-of st (* side bx) (* side by) (* side bz))}]
+                         (.set blocks k e)
+                         e))
+             ^js field (.-field e)]
          (aget field (+ (- x (* side bx)) (* side (+ (- z (* side bz)) (* side (- y (* side by))))))))))))
 
 (defn distance
