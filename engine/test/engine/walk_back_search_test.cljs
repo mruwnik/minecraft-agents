@@ -39,3 +39,16 @@
            (is (nil? (ask)) "a full heap ends it as no route")
            (is (= :too-big (peek @seen)) "with the reason too-big")
            (is (pos? (first @seen)) "its nodes are priced"))))))
+
+(deftest a-kept-search-goes-on-as-the-chains-time-left-shrinks
+  (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        search dig-route/search
+        starts (atom 0)
+        id (str (random-uuid))
+        ask #(choose/route-answer p [0 64 0] [10 70 0] (constantly true) (constantly false) false false
+                                  (assoc (choose/search-opts {:slice (choose/route-slice id)}) :bound-s %))]
+    (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+      #(with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+         (ask 100)
+         (ask 99.6)
+         (is (= 1 @starts) "the second round asks the same search, not a new one")))))

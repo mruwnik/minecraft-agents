@@ -315,16 +315,24 @@
   (let [nodes (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes)]
     {:id id :left (volatile! nodes) :floor (quot nodes 2) :asked (volatile! {})}))
 
+(defn unfinished-kept
+  "[key kept] of the call id's kept search that asks k's question but for the :bound-s and has not ended or ended with no
+  route (the chain's time left falls every round: a search begun again at each would never get on, and a smaller bound finds no route a larger one did not)."
+  [id k]
+  (let [same (fn [k] (update k 3 dissoc :bound-s))]
+    (first (for [[k2 kept] (get @kept-routes id) :when (and (= (same k2) (same k)) (or (not (:ended? kept)) (nil? (:dig (:a kept)))))] [k2 kept]))))
+
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
   slice has left; :searching while it has not ended."
   [{:keys [id left asked]} k start]
   (if-let [a (get @asked k)]
     a
-    (let [run (or (get-in @kept-routes [id k]) (start))
+    (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (unfinished-kept id k))
+          run (or (:run kept) (start))
           [a used] (if (pos? @left) (run @left) [nil 0])]
       (vswap! left - used)
-      (swap! kept-routes assoc-in [id k] run)
+      (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run run :a a :ended? (or (some? a) (:ended? kept) false)})))
       (vswap! asked assoc k (or a :searching))
       (or a :searching))))
 
@@ -361,7 +369,7 @@
 (defn searching-ends
   "The [from goal] of the call id's kept searches that have not ended."
   [id]
-  (into #{} (keep (fn [[k run]] (when-not (first (run 0)) (vec (take 2 k))))) (get @kept-routes id)))
+  (into #{} (keep (fn [[k kept]] (when-not (:ended? kept) (vec (take 2 k))))) (get @kept-routes id)))
 
 (defn forget-routes!
   "Drop the kept searches of go-to call id: it has ended."
