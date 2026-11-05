@@ -13,7 +13,7 @@ check() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want [$3]
 
 # Fake repo: tools copied in, stub npx, a live "server" pid so no server start.
 mkdir -p "$T/repo/tools" "$T/repo/dashboard/.shadow-cljs" "$T/repo/engine/out/test/cljs-runtime" "$T/bin" "$T/res"
-cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/test-run.mjs" "$TOOLS/res-slot" "$TOOLS/res-slot.mjs" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$TOOLS/bundle-jobs-check" "$TOOLS/engine-src-hash" "$T/repo/tools/" 2>/dev/null
+cp "$TOOLS/compile" "$TOOLS/test-engine" "$TOOLS/res-slot" "$TOOLS/res-slot.json" "$TOOLS/compile-idle-watch" "$TOOLS/bundle-jobs-check" "$TOOLS/engine-src-hash" "$TOOLS"/*.mjs "$T/repo/tools/" 2>/dev/null
 printf '{"floorMb":0,"kinds":{"tests":{"needMb":1,"max":1}}}' > "$T/res/cfg.json"
 export RES_SLOT_DIR="$T/res" RES_SLOT_CONFIG="$T/res/cfg.json"
 sleep 300 & SRV=$!; trap 'kill $SRV 2>/dev/null; rm -rf "$T"' EXIT
