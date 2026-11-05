@@ -451,7 +451,7 @@
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
   nothing on the chasers over standing still, pockets that gain less than their walk takes, those with every step
   cell refused, those never? holds of (at the step cell or the end), those passing near hazards, and with dry-only? the wet ones (wet?).
-  Priced, not left out: each mark an end has costs it mark-s seconds (default 1, the death the mark risks): wet? holds of
+  Priced, not left out: each mark an end has costs it mark-s seconds (the death the mark risks, cost/death-s): wet? holds of
   its step cell or end, avoid-route (end entry -> bool) of it, each of avoid (cell -> bool) of its step cell or end. The
   tiers in this order: a :cover? end, a preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and
   only when none of those is left (a closed cave, a wall's foot) a pocket; a tier's best is its highest :score less its
@@ -459,7 +459,6 @@
   pockets out: they are traps."
   [ends {:keys [refused never? hazards wet? dry-only? avoid avoid-route prefer? mark-s]}]
   (let [either (fn [f] (fn [e] (or (f (:step e)) (f (:end e)))))
-        mark-s (or mark-s 1)
         marks (fn [e] (+ (if (and wet? ((either wet?) e)) 1 0)
                          (count (filter #((either %) e) avoid))
                          (if (and avoid-route (avoid-route e)) 1 0)))
