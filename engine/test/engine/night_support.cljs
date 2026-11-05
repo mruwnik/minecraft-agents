@@ -286,8 +286,8 @@
 
 (defn ^:async flee-with
   "The home flee night (a roofed home the time left does not cover) with go-to's quote of every walk walk-pick asks for (pick/quote!) answering by answer-of (a fn of the
-  go-to args of the flight's walk, the ones with a :floor), and the seen blocks seen (a js array, none by default); [log seen calls]: the child log, the events and the args each quote was asked."
-  [answer-of & [seen-blocks]]
+  go-to args of the flight's walk, the ones with a :floor), the seen blocks seen (a js array, none by default) and blocks (a map) in the world besides; [log seen calls]: the child log, the events and the args each quote was asked."
+  [answer-of & [seen-blocks blocks]]
   (let [calls (atom [])
         real pick/quote!]
     (set! pick/quote! (fn ^:async q [c args]
@@ -295,7 +295,7 @@
                           (do (swap! calls conj args) (answer-of args))
                           (await (real c args)))))
     (try
-      (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
+      (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"} blocks) {}))]
         (when seen-blocks (aset p "seenBlocks" (fn [_] seen-blocks)))
         [(await (with-child-log #(tu/run-until-empty eng 80))) seen @calls])
       (finally (set! pick/quote! real)))))

@@ -27,6 +27,15 @@
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :ground}} :within-s 150}
             {:event {:source :job :kind :shut-in.sealed} :within-s 200}]
    :limit-s 230}
+  {:name "powder-snow-ground-is-never-quoted"
+   :time :night :time-why :dawn-decision
+   ;; card 97ad6887: a powder snow strip lies nearer than the dirt; the planner cannot stand on it, so no flee quote ends goal-not-standable
+   :blocks [[:fill [0 -6 0] [18 -2 31] "air"] [:fill [19 -1 10] [21 -1 22] "powder_snow"] [:fill [22 -6 10] [30 -1 22] "dirt"]]
+   :body {:at [2.5 0 16.5] :inventory [["dirt" 2]]}
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :shelter.fled :data {:target :ground}} :within-s 150}
+            {:no-event {:source :job :kind :planned :data {:why "goal-not-standable"}} :for-s 150 :until {:source :job :kind :shelter.fled}}]
+   :limit-s 230}
   {:name "flees-to-an-overhang-and-walls-in"
    :blocks [[:fill [0 -6 0] [18 -2 31] "air"] [:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
    ;; walling the 3-wide mouth takes 10 blocks: 6 side cells and the 4 diagonal cells a mob could stand in

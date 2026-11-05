@@ -150,6 +150,22 @@
           (is (= [far] (map #(:pos (nth % 2)) (filter #(= :flee (first %)) log))) "the farthest ground site, the only one go-to reaches, is walked to")
           (is (< 16 (count (filter :floor calls))) "quoted past the nearest 16"))))))
 
+(deftest seen-ground-the-planner-cannot-stand-on-is-never-quoted
+  ;; KitOak93 on a snow plateau: powder snow is ground a site's rules took and go-to answers goal-not-standable, 100-200 quotes a round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:x -14 :y 64 :z 2}
+              powder (for [x (range -8 -12 -1) z (range -2 3)] {:x x :y 63 :z z})
+              ground (into-array (concat (for [{:keys [x y z]} powder] #js {:name "powder_snow" :pos #js {:x x :y y :z z}})
+                                         (for [z (range -2 3)] #js {:name "dirt" :pos #js {:x -14 :y 63 :z z}})))
+              [log _ calls] (await (flee-with (fn [{:keys [pos]}] (if (= far pos) {:uses {:job-time [0 7 0]}} (contract/ending :nothing-possible {:reason :goal-not-standable} nil)))
+                                              ground (into {} (for [{:keys [x y z]} powder] [(str x "," y "," z) "powder_snow"]))))
+              powder-feet (set (map #(update % :y inc) powder))]
+          (is (= [far] (map #(:pos (nth % 2)) (filter #(= :flee (first %)) log))))
+          (is (not-any? (comp powder-feet :pos) calls) "no walk onto powder snow is quoted")
+          (is (seq (filter :floor calls))))))))
+
 (deftest with-no-reachable-target-the-night-holds-exposed
   (async done
     (tu/run-async done
