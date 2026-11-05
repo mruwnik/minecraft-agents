@@ -130,6 +130,7 @@
         base (assoc base :child-wait child-wait
                     :section-depth (or (:section-depth base) (atom 0)) :held (or (:held base) (atom nil)))
         id (mem/path->id root slots)
+        owner (or token (:quoted-token base))
         check! #(own! eng base)
         wrote! (fn [kind] (emit! eng {:source :job :kind :memory_written :level :debug :job id
                                       :chain chain :round round :reflex reflex :memory kind}))
@@ -180,6 +181,7 @@
      :note-walk (fn [status moved] (check!) (record-act! eng base :walk #js {:status status} moved))
      :call (fn [slot def child-args] (call eng base child-ending slot def child-args))
      :quote (fn [def quote-args deadline self?]
+              (when (and owner (not (owner? eng owner))) (throw (cut-error)))
               (quote/quote! eng base def quote-args deadline self? #(quote-ctx eng base def quote-args % self?)))
      :next-way quote/next-way
      :child-ending child-ending
@@ -193,7 +195,7 @@
      :resolve-attention (fn [request-id reason]
                           (check!)
                           (resolve-attention! eng request-id reason))
-     :alive? #(do (spin-guard! root slots) (or (nil? token) (owner? eng token)))
+     :alive? #(do (spin-guard! root slots) (or (nil? owner) (owner? eng owner)))
      :check-limits #(when (and token (owner? eng token)) (limits/check! eng base))
      :hold-still (fn [reason] (check!) (hold-still! eng token root reason))
      :open-section (fn [section level]
@@ -231,10 +233,10 @@
 
 (defn quote-ctx
   "The ctx def's quote-of gets for a call with args under base, qd the quote deadline: token-less, so it cannot act,
-  call or write. self?: base's own frame. Otherwise a child's in a slot of its own, carrying the would-be call keys
+  call or write; it is alive (ctx/alive?) while the round that asked owns the body, so a cut round's quote stops. self?: base's own frame. Otherwise a child's in a slot of its own, carrying the would-be call keys
   (:quote-call) and what is left of them, and the call in :quoting for the duplicate check of quotes below it."
   [eng base def args qd self?]
-  (let [b (assoc base :token nil :quote-deadline qd)]
+  (let [b (assoc base :token nil :quote-deadline qd :quoted-token (or (:token base) (:quoted-token base)))]
     (if self?
       (assoc (make-ctx eng b) :job-ways (:ways def))
       (let [slot ::quote

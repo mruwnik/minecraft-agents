@@ -118,6 +118,32 @@
           (is (= 1 (:slow-quotes @world)) "a quote asked past the deadline does not run")
           (is (= {:uses {:job-time [1 2 3]}} (:got @world)) "the outer quote ended past it, answered"))))))
 
+;; ---------------------------------------------------------------- a cut round's quotes
+
+(def cut-in-quote
+  {:args no-args :round (constantly :continue)
+   :quote-of (fn [c]
+               (swap! world update :alive (fnil conj []) (ctx/alive? c))
+               (.setOwner (:primitives (:engine c)) "a reflex")
+               (swap! world update :alive (fnil conj []) (ctx/alive? c))
+               {:uses {:job-time [1 1 1]}})})
+
+(deftest a-cut-rounds-quote-stops-and-it-asks-no-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'cut-in-quote cut-in-quote
+                                    'asker {:args no-args
+                                            :round (fn ^:async asker-round [c]
+                                                     (await (ctx/quote c 'cut-in-quote {}))
+                                                     (try (await (ctx/quote c 'cut-in-quote {}))
+                                                          (catch :default e (swap! world assoc :second (.-code e))))
+                                                     :continue)}})]
+          (core/submit! eng '(asker) {})
+          (await (core/tick! eng))
+          (is (= [true false] (:alive @world)) "the quote's search loops stop once the round that asked is cut")
+          (is (= "cut" (:second @world)) "the cut round's next quote throws the cut, as an act would"))))))
+
 ;; ---------------------------------------------------------------- duplicates
 
 (def ping
