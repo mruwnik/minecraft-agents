@@ -607,14 +607,16 @@
                 false))))))
 
 (defn ^:async walkable-bed
-  "The bed the night walks to now: of the beds sh-beds/beds-to-use names, the :bed place when it leads them (no bed is seen) and its walk is safe, else the one whose walk go-to quotes cheapest (cheapest-walk!; the first
+  "The bed the night walks to now: of the beds sh-beds/beds-to-use names (a bed refused on price judged at its own bed-worth), the :bed place when it leads them (no bed is seen) and its walk is safe, else the one whose walk go-to quotes cheapest (cheapest-walk!; the first
   when none is priced; no time limit, a far bed's walk is weighed against staying by bed-walk-safe?), if its walk bed-walk-safe? finds fine, unless a bed-down is already under way; :searching while a quote's search goes on; else nil."
   [c]
   (let [p (:primitives c)
         radius (bed-down/radius c)
         permit? (bed-down/bed-permit c)
-        first-bed (first (sh-beds/beds-to-use p (ctx/view c) radius permit? ##Inf))
-        worth (if first-bed (await (bed-worth c first-bed :bed)) (ctx/worth c))
+        refused (filter #(sh-beds/walk-unsafe? p (ctx/view c) % ##-Inf) (sh-beds/beds-to-use p (ctx/view c) radius permit? ##Inf))
+        worths (atom {})
+        _ (doseq [bed refused] (swap! worths assoc bed (await (bed-worth c bed :bed))))
+        worth #(get @worths %)
         beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) radius permit? worth)) {:price (sense/fails-to c)}))
         walk #(hash-map :pos % :range 2)
         placed (mem/place (ctx/view c) :bed)

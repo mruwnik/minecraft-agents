@@ -227,19 +227,21 @@
 (defn walk-unsafe?
   "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state).
   An entry that carries a :worth (a refusal on price) counts while worth does not exceed it, and always when no worth is
-  given (a caller that cannot re-price treats the bed as refused)."
+  given (a caller that cannot re-price treats the bed as refused). worth may be a fn of the bed pos: each bed is judged at
+  the worth its own walk is priced at."
   ([p view pos] (walk-unsafe? p view pos nil))
   ([p view pos worth]
    (let [since (sh-clock/tonight p view)
          now (delay (walk-state p view pos))
-         holds? (fn [d] (if-let [w (:worth d)] (or (nil? worth) (<= worth w)) true))]
+         at (if (fn? worth) (worth pos) worth)
+         holds? (fn [d] (if-let [w (:worth d)] (or (nil? at) (<= at w)) true))]
      (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (holds? (:data %)) (= @now (:state (:data %))))
                     (mem/entries view :bed-walk-unsafe))))))
 
 (defn beds-to-use
   "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place within radius (a bed set with
   jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds, nearest first, and the live
-  :spawn-bed at any distance (go-to prices the walk; worth, when given, is the call's: a walk refused on price at no less is skipped, none skips every priced refusal), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
+  :spawn-bed at any distance (go-to prices the walk; worth, when given (a number, or a fn of the bed pos), is the call's: a walk refused on price at no less is skipped, none skips every priced refusal), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken

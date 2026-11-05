@@ -591,3 +591,18 @@
             (await (st/tick-n eng 12)))
           (is (= 1 @refusals) "the refused bed is asked once, not on every pass")
           (is (number? (:worth (first (st/entries eng :bed-walk-unsafe)))) "the refusal carries the worth it was priced at"))))))
+
+(deftest the-night-asks-a-refused-bed-again-when-its-bed-worth-rises
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup on-open-ground)
+              refusals (atom 0)
+              worth (atom 1)
+              priced (fn [& _] (swap! refusals inc) (reset! worth 100) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (with-redefs [child/call-walk* priced
+                        night/bed-worth (fn ^:async [& _] @worth)]
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 12)))
+          (is (< 1 @refusals) "worth rose above the one it was refused at: the bed is asked again"))))))
