@@ -342,7 +342,7 @@
 
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
-  slice has left; :searching while it has not ended."
+  slice has left; :searching while it has not ended. An ended search keeps its answer only: its cell maps are freed."
   [{:keys [id left asked]} k start]
   (if-let [a (get @asked k)]
     a
@@ -350,7 +350,7 @@
           run (or (:run kept) (start))
           [a used] (if (pos? @left) (run @left) [nil 0])]
       (vswap! left - used)
-      (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run run :a a :ended? (or (some? a) (:ended? kept) false)})))
+      (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (fn [_] [a 0 (constantly false)]) run) :a a :ended? (or (some? a) (:ended? kept) false)})))
       (vswap! asked assoc k (or a :searching))
       (or a :searching))))
 

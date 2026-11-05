@@ -1074,6 +1074,19 @@
     (ask)
     (is (= 1 (count (get @choose/kept-routes (:id slice)))) "a new fn is the same search")))
 
+(deftest an-ended-sliced-search-keeps-its-answer-not-its-cell-maps
+  (let [slice (choose/route-slice "ended-frees")
+        k [[0 64 0] [9 64 0] false {} {} #{}]
+        starts (atom 0)
+        start #(do (swap! starts inc) (fn [_] [{:problem :too-big} 5 (fn [] false)]))
+        a (choose/sliced-answer slice k start)
+        kept (get-in @choose/kept-routes [(:id slice) k])]
+    (is (= {:problem :too-big} a))
+    (is (= 0 (second ((:run kept) 100))) "what is kept is the answer, not the search that holds its cell maps")
+    (vreset! (:asked slice) {})
+    (is (= {:problem :too-big} (choose/sliced-answer slice k start)))
+    (is (= 1 @starts) "the ended search is not begun again")))
+
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))
     [8 60 0] 12 false true
