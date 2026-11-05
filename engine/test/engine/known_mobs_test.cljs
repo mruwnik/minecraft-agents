@@ -117,10 +117,24 @@
     (mapv (fn [z] (later! clock 1000) (move! p 1 {:x 0.5 :y 64 :z z}) (speed)) zs)))
 
 (deftest a-mob-closing-steadily-carries-the-larger-of-two-windows
-  (let [[s1 s2 s3] (speeds-over [11.0 9.5 8.5])]
+  (let [[s1 s2 s3] (speeds-over [11.0 9.5 8.25])]
     (is (nil? s1) "one window: no agreement yet")
     (is (< 1.49 s2 1.51) "two windows closing at 1.5 blocks: that speed")
-    (is (< 0.99 s3 1.51))))
+    (is (< 1.24 s3 1.51))))
+
+(deftest a-mob-pausing-then-lunging-has-no-speed
+  (is (= [nil nil nil] (speeds-over [11.0 10.0 7.0])) "closing 1 then 3 blocks a window: not steady, so not shown slow"))
+
+(deftest a-bending-path-reports-its-arc-speed-not-the-chord
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "zombie" 0 12)]})
+        speed #(some-> (first (.knownMobs p)) .-speed)]
+    (speed)
+    (let [window (fn [[a b]]
+                   (later! clock 500) (move! p 1 {:x (first a) :y 64 :z (second a)}) (speed)
+                   (later! clock 500) (move! p 1 {:x (first b) :y 64 :z (second b)}) (speed))]
+      (window [[1.0 12.0] [0.5 11.5]])
+      (window [[1.0 11.0] [0.5 10.5]])
+      (is (< 1.4 (speed) 1.5) "each window walks 1.41 of path for a 1.0 chord"))))
 
 (deftest a-mob-that-stood-then-charges-has-no-speed
   (is (= [nil nil] (speeds-over [12.5 9.5])) "a standing window, then a charge: game speed"))

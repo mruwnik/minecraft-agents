@@ -34,6 +34,9 @@
 (def mob-speed-min-moved
   "Blocks a mob must move over mob-speed-window-ms for its speed to count: under 0.5 is the jitter of a mob standing about."
   0.5)
+(def mob-speed-steady
+  "Two windows' paces agree when the slower is at least this share of the faster: a mob pausing at a door then lunging has windows far apart, a steady chaser's are close."
+  0.75)
 
 (defn mob-ground-speed
   "ground-speed of a mob whose move control runs at `speed`: its chase goal's speed modifier x its movement_speed attribute."
