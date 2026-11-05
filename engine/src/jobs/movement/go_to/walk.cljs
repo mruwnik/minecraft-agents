@@ -557,7 +557,7 @@
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
             stair-check (turn-back-check c (reprice/check c pos (route-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
-            round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :on-floor #(count-floor! c %1 %2) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
+            round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :closest #(:closest (cut/record c)) :on-floor #(count-floor! c %1 %2) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again
         (let [{walked :result status :status to :to} round

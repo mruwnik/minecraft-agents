@@ -259,7 +259,8 @@
   ([search ms one-way] (unfinished-plan search ms one-way true))
   ([search ms one-way progress] (unfinished-plan search ms one-way progress (constantly false)))
   ([search ms one-way progress wet-ok?] (unfinished-plan search ms one-way progress wet-ok? (constantly true)))
-  ([search ms one-way progress wet-ok? priced?]
+  ([search ms one-way progress wet-ok? priced?] (unfinished-plan search ms one-way progress wet-ok? priced? (constantly true)))
+  ([search ms one-way progress wet-ok? priced? end-ok?]
    (let [walled (:walled search)
          ^js pr (when (and progress (not (:unlimited search))) (.progress ^js (:limited search)))
          nearer? (fn [distance] (>= (- (.-startDistance pr) distance) progress-blocks))
@@ -269,11 +270,22 @@
          whole (when path (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled) wet-ok?))
          {dry :steps refused :refused} (if (and whole (= :open one-way)) (wplan/cut-refused whole priced?) {:steps whole})
          steps (when path (wplan/stop-short dry (.-dangers ^js walled)))
-         walk? (>= (count steps) 2)
+         walk? (and (>= (count steps) 2) (end-ok? (peek steps)))
          r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? path) :ms ms}]
      (cond-> {:r r :status (.-status r) :pw walled :ms ms :steps (when walk? steps)}
        (and (not walk?) (< (count steps) (count dry))) (assoc :stopped-short true)
        (and walk? past (not refused)) (assoc :one-way-taken {:kind (nth executor/move-names (.-move ow)) :at [(.-x ow) (.-y ow) (.-z ow)]})))))
+
+(defn nearer-than-closest
+  "A fn of a plan's last step: whether it ends nearer the goal cell to than the body has been in this call (c's :closest, a
+  fn of the blocks, nil when unknown). A progress end no nearer sends the body back over ground it turned away from."
+  [c to]
+  (let [closest (when-let [f (:closest c)] (f))
+        [gx gy gz] to]
+    (if-not closest
+      (constantly true)
+      (fn [{:keys [px py pz]}]
+        (< (js/Math.hypot (- px gx 0.5) (- py gy) (- pz gz 0.5)) closest)))))
 
 (defn unfinished-like
   "The body's unfinished search that plans the same walk as key k from the same cell, whatever its dangers, tolls and avoided
@@ -311,7 +323,7 @@
                               (assoc search :within within :quote-only (not= "found" (.-status ^js (:r within))))))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
-      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true)) :fresh fresh?)
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to)) :fresh fresh?)
             partial? (= "partial" (:status plan))]
         (keep-search! who k (when-not partial? search))
         (cond-> plan partial? (assoc :search-on #(keep-search! who k search)))))))

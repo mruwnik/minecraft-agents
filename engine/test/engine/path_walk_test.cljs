@@ -723,3 +723,10 @@
     (is (nil? (walk/landing-cells steps 3)))
     (is (= 10 (count (walk/orthogonal-landing-cells steps 1))) "own column and the four beside it, feet and head")
     (is (not-any? #{[0 64 -1] [2 65 1]} (walk/orthogonal-landing-cells steps 1)) "no diagonal")))
+
+(deftest a-search-end-no-nearer-than-the-body-has-been-is-no-progress
+  (let [end-ok? (wsearch/nearer-than-closest {:closest (constantly 50)} [0 0 0])
+        no-record (wsearch/nearer-than-closest {} [0 0 0])]
+    (is (end-ok? {:px 30.5 :py 0 :pz 0.5}) "30 blocks from the goal, the body got to 50")
+    (is (not (end-ok? {:px 150.5 :py 0 :pz 0.5})) "150 blocks away: back over ground it turned away from")
+    (is (no-record {:px 150.5 :py 0 :pz 0.5}) "no walk record, no bound")))
