@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.access :as access]
@@ -412,9 +413,10 @@
   body longer than the least of route-opts :worth-s and :bound-s with what it carries, or with
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
-  floors-unseen-ok? (a pocket's floor shows only from inside it). Other route-opts go to the search (:place-s,
+  floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own, read as rock with the chance
+  it is none (look/unseen-solid-at-fn) priced as a fall of one-way/::max-speculative-drop, in the route's seconds. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
-  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s (what the goal is worth) and the straight dig (each cell's dig seconds, a walked step and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -446,6 +448,11 @@
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
+        ;; the goal's unseen floor is read as rock; the chance it is none is the chance of a fall of the longest speculative drop (the depth is unseen)
+        floor-s (let [f (sensed gx (dec gy) gz)]
+                  (if (true? (some-> f .-unknown))
+                    (* (- 1 ((look/unseen-solid-at-fn p) [gx (dec gy) gz])) ((:fall-s prices) (min (:max-fall prices) (settings/get one-way/settings ::one-way/max-speculative-drop))))
+                    0))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig. A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
@@ -476,7 +483,7 @@
                          heads (map head-s (cons from cells))]
                      (when (and (not-any? refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells)))
                                 (every? some? steps) (every? some? heads))
-                       {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
+                       {:seconds (+ floor-s (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
                                     (* (:node-s route-opts 0) 2 (count cells)))
                         :dig (vec (distinct (for [[x y z] (cons from cells)
                                                   cell (if (= [x y z] from) [[x (inc y) z]] [[x (inc y) z] [x y z]])
@@ -493,10 +500,11 @@
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
-                 (let [m (max-s refused)]
-                   (if slice
-                     (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
-                     (dig-route/route seen-floor from goal (opts refused m)))))
+                 (let [m (- (max-s refused) floor-s)
+                       a (if slice
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
+                           (dig-route/route seen-floor from goal (opts refused m)))]
+                   (cond-> a (:dig a) (update :seconds + floor-s))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
         a (when-not (contains? spent [from goal])
