@@ -108,3 +108,48 @@
       (is (seq near))
       (is (= (priced false) (chance)) "lit feet, dark frontier: the dark table")
       (is (not= (priced true) (chance))))))
+
+(defn- kept-blocks [^js st] (.-blocks (.get @#'frontier/fields st)))
+
+(deftest a-write-in-the-light-ring-only-works-the-block-out-again-and-one-beyond-it-keeps-it
+  (let [w (seeing (tu/fake-on-floor {:blocks cave}))
+        ^js st (:st (aget w "perception"))
+        built (atom 0)
+        f frontier/block-field
+        price #(doseq [x (range 8 16) y (range 64 72) z (range 0 8)] (frontier/distance w [x y z]))
+        write! (fn [sx] (store/record! st (store/store-of st (.-dim st)) (* 16 sx) 65 0 1 1000000))
+        margin-sx (bit-shift-right (- 8 (dec base-rates/unseen-d-max) 1) 4)
+        ring-sx (dec margin-sx)]
+    (with-redefs [frontier/block-field (fn [& args] (swap! built inc) (apply f args))]
+      (price)
+      (write! (dec ring-sx))
+      (price)
+      (is (= 1 @built) "a section beyond the ring: kept")
+      (write! ring-sx)
+      (price)
+      (is (= 2 @built) "a section only in the light ring: worked out again"))))
+
+(deftest a-forgotten-section-works-the-block-out-again
+  (let [w (seeing (tu/fake-on-floor {:blocks cave}))
+        ^js st (:st (aget w "perception"))
+        built (atom 0)
+        f frontier/block-field
+        price #(doseq [x (range 8 16) y (range 64 72) z (range 0 8)] (frontier/distance w [x y z]))]
+    (with-redefs [frontier/block-field (fn [& args] (swap! built inc) (apply f args))]
+      (price)
+      (.delete (store/store-of st (.-dim st)) (store/section-key 0 4 0))
+      (set! (.-writes st) (inc (.-writes st)))
+      (price)
+      (is (= 2 @built)))))
+
+(deftest the-kept-blocks-stay-within-the-blocks-of-the-remembered-sections
+  (let [w (seeing (tu/fake-on-floor {:blocks cave}))
+        ^js st (:st (aget w "perception"))
+        price-at (fn [sx]
+                   (store/record! st (store/store-of st (.-dim st)) (* 16 sx) 65 0 1 1000000)
+                   (frontier/distance w [(* 16 sx) 65 0]))]
+    (doseq [sx (range 20 60)] (price-at sx))
+    (is (<= 40 (.-size (kept-blocks st))))
+    (while (> (.-count st) 2) (store/evict-oldest! st))
+    (price-at 100)
+    (is (<= (.-size (kept-blocks st)) (* 8 (.-count st))))))

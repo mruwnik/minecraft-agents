@@ -107,6 +107,18 @@
   (and (== (.-length a) (.-length b))
        (loop [i 0] (or (== i (.-length a)) (and (== (aget a i) (aget b i)) (recur (inc i)))))))
 
+(defn- forget-unremembered!
+  "Drops the kept blocks whose own memory section has gone. Memory is capped, so past one block field per block of a
+  remembered section (a section holds (16 / side)^3 of them) some are of forgotten land; this bounds the kept fields by the cap."
+  [^js st ^js blocks]
+  (when (> (.-size blocks) (* 8 (.-count st)))
+    (let [dead #js []]
+      (.forEach blocks (fn [^js e k]
+                         (when (== -1 (store/section-stamp st (.-dim st) (bit-shift-right (* side (.-bx e)) 4)
+                                                           (bit-shift-right (* side (.-by e)) 4) (bit-shift-right (* side (.-bz e)) 4)))
+                           (.push dead k))))
+      (.forEach dead #(.delete blocks %)))))
+
 (defn field-value
   "block-field's value at the cell: 2 * distance (at base-rates/unseen-d-max for a cell that is not itself a frontier) plus
   1 for a lit nearest frontier, from blocks worked out a time and kept while the memory sections they read take no write
@@ -129,7 +141,8 @@
                              (do (set! (.-at e) writes) e)))
              ^js e (or hit
                        (let [f (block-field (store/store-of st (.-dim st)) (* side bx) (* side by) (* side bz) lit-fn)
-                             e #js {:field f :at writes :stamps (stamps-of st (* side bx) (* side by) (* side bz))}]
+                             e #js {:field f :bx bx :by by :bz bz :at writes :stamps (stamps-of st (* side bx) (* side by) (* side bz))}]
+                         (forget-unremembered! st blocks)
                          (.set blocks k e)
                          e))
              ^js field (.-field e)]
