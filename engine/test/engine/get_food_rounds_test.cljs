@@ -605,6 +605,25 @@
             (recur (inc n))))
           (is (some #(= :noted-walk (:slot %)) (events-of seen :child_started)) "once the search found nothing, a remembered animal is a candidate at any distance, priced by go-to"))))))
 
+(deftest a-search-is-worth-no-more-than-the-walk-to-a-noted-animal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [worths (atom [])
+              real child/search-args
+              worth-with (fn ^:async worth-with [notes]
+                           (let [{:keys [eng]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes notes)]
+                             (reset! worths [])
+                             (await (one-round! eng {}))
+                             (first @worths)))]
+          (set! child/search-args (fn [opts] (swap! worths conj (:worth opts)) (real opts)))
+          (try
+            (let [bare (await (worth-with []))
+                  noted (await (worth-with [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]))]
+              (is (pos? noted))
+              (is (< noted bare) "a find saves at most the walk to the cow already known"))
+            (finally (set! child/search-args real))))))))
+
 (deftest a-noted-animal-is-walked-toward-only-when-its-meat-is-worth-the-walk
   (async done
     (tu/run-async done

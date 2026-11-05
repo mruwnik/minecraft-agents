@@ -24,7 +24,7 @@
          [:rcon "execute at $BODY run tp $BODY ~46 ~-3 ~"] [:wait-s 3]
          [:job (jobs.explore.search {:target "sheep" :scan-radius 16 :use-notes false :settings {:jobs.explore.search/max-legs 0}})] [:wait-s 5]
          [:rcon "execute at $BODY run tp $BODY ~-46 ~3 ~"] [:wait-s 3]
-         [:job (jobs.survival.get-food {:explore {:worth 0}})]]
+         [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 150}
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 150 :until {:source :job :kind :food.killed}}]
    :limit-s 220}
@@ -35,7 +35,7 @@
          [:rcon "execute at $BODY run tp $BODY ~46 ~-3 ~"] [:wait-s 3]
          [:job (jobs.explore.search {:target "sheep" :scan-radius 16 :use-notes false :settings {:jobs.explore.search/max-legs 0}})] [:wait-s 5]
          [:rcon "execute at $BODY run tp $BODY ~-46 ~3 ~"] [:wait-s 3]
-         [:job (jobs.survival.get-food {:explore {:worth 0}})]]
+         [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "was not reached"]}} :within-s 150}]
    :limit-s 220}
 ]}

@@ -80,7 +80,7 @@
 (a/defargs args
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
-   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (a search priced by what food is worth the body now) or a map of the search's options over it (:max-distance, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (a search priced by what food is worth the body now, at most the walk to the cheapest noted animal: a find saves no more) or a map of the search's options over it (:max-distance, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
    :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default nil}
    :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})
@@ -369,7 +369,7 @@
 
 (defn ^:async cheapest-noted!
   "The noted animal (animals/noted-targets) whose walk costs least per hunger point of its meat and less than the meat is
-  worth, the walk priced from go-to's quote (jobs.lib.walk-pick); :searching when none is priced yet because a quote's search goes on; nil when none, the first priced out kept as :noted-lost."
+  worth, the walk priced from go-to's quote (jobs.lib.walk-pick), with :walk-s that walk's seconds; :searching when none is priced yet because a quote's search goes on; nil when none, the first priced out kept as :noted-lost."
   [c done]
   (let [me (u/self-pos c)
         points #(max 1 (or (foods/points (animals/meat (:what %))) 1))
@@ -382,12 +382,13 @@
                     (:estimate q) (do (vreset! searching true) ##Inf)
                     (< s worth) (/ s (points n))
                     :else (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q s worth)})) ##Inf))))
-        pick (:pick (await (pick/best! c (animals/noted-targets c done (hunt-radius c))
-                                       {:bound #(animals/noted-price me %)
-                                        :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
-                                        :price price})))]
+        res (await (pick/best! c (animals/noted-targets c done (hunt-radius c))
+                               {:bound #(animals/noted-price me %)
+                                :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
+                                :price price}))
+        pick (:pick res)]
     (cond
-      pick pick
+      pick (assoc (:pick res) :walk-s (pick/quoted-s c (:quote res)))
       @searching :searching
       :else (do (when @out (ctx/update-mem! c assoc :noted-lost @out)) nil))))
 
@@ -469,28 +470,34 @@
       (not (pos? (animals/search-benefit c)))
       (do (ctx/update-mem! c assoc :explored "not searched: food is worth no walk") nil)
       :else
-      (do
-        (when-not (= "started" (:explored (ctx/mem c)))
-          (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0)))))
-        (let [worth (animals/search-benefit c)
-              opts (merge {:worth worth :spend {:job-time worth}} (when (map? e) e))
-              e (await (child/run!* c :explore 'jobs.explore.search
-                                    (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys crops/food-ripe-age) (keys crops/wild-food)))))
-                                    {:max-calls 1}))]
-          (if (= :continue e)
-            :continue
-            (let [res (:data e)]
-              (ctx/update-mem! c assoc :found-reach
-                               (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
-              (if (and (only-spared? (:found res) (spared-uuids c)) (< (:explore-runs (ctx/mem c)) (child/max-fruitless)))
-                (do (ctx/update-mem! c #(-> % (assoc :skip-ids (vec (spared-uuids c))) (dissoc :explored)))
-                    :again)
-                (do
-                  (ctx/update-mem! c assoc :explored
-                                   (report/explored-text res))
-                  (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter #(and (:id %) (not (spare/gone? c % (hunt-radius c)))) (:found res))))]
-                    (ctx/update-mem! c assoc :walk-to (:pos noted)))
-                  (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))) (hunt-radius c))) :again))))))))))
+      (let [start? (not= "started" (:explored (ctx/mem c)))
+            alt (when start? (await (cheapest-noted! c (set (:noted-walked (ctx/mem c))))))]
+        (if (= :searching alt)
+          :continue
+          (do
+            (when start?
+              (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))
+                                               :explore-worth (min (animals/search-benefit c) (:walk-s alt ##Inf)))
+                                      (update :explore-runs (fnil inc 0)))))
+            (let [worth (or (:explore-worth (ctx/mem c)) (animals/search-benefit c))
+                  opts (merge {:worth worth :spend {:job-time worth}} (when (map? e) e))
+                  e (await (child/run!* c :explore 'jobs.explore.search
+                                        (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys crops/food-ripe-age) (keys crops/wild-food)))))
+                                        {:max-calls 1}))]
+              (if (= :continue e)
+                :continue
+                (let [res (:data e)]
+                  (ctx/update-mem! c assoc :found-reach
+                                   (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
+                  (if (and (only-spared? (:found res) (spared-uuids c)) (< (:explore-runs (ctx/mem c)) (child/max-fruitless)))
+                    (do (ctx/update-mem! c #(-> % (assoc :skip-ids (vec (spared-uuids c))) (dissoc :explored)))
+                        :again)
+                    (do
+                      (ctx/update-mem! c assoc :explored
+                                       (report/explored-text res))
+                      (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter #(and (:id %) (not (spare/gone? c % (hunt-radius c)))) (:found res))))]
+                        (ctx/update-mem! c assoc :walk-to (:pos noted)))
+                      (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))) (hunt-radius c))) :again))))))))))))
 
 (defn rod-carried?
   "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within its ::bank-radius."
