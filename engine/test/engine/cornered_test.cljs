@@ -608,7 +608,7 @@
 (defn pillar-entries [eng]
   (filterv #(= :pillar (:purpose %)) (ledger/open-entries (mem/view (:store eng)))))
 
-(deftest an-unarmed-body-with-the-zombie-in-its-doorway-pillars-up-instead-of-punching
+(deftest an-unarmed-body-with-the-zombie-beyond-its-doorway-cell-pillars-up-without-striking
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -624,6 +624,16 @@
               "every pillar block is in the scaffold ledger, for the cleanup")
           (is (= [] (:list (core/state eng))) "done once the zombie has gone")
           (is (empty? (blocked-events seen))))))))
+
+(deftest a-zombie-pressed-into-the-column-is-struck-once-before-the-first-jump
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(assoc (zombie 0 64 1.1) :health 1000)]}
+                                   1000 (constantly nil)))]
+          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "the pressed zombie is struck before the jump"))))))
 
 (deftest a-pillar-through-anothers-zone-is-built-only-after-every-other-way-failed
   (async done

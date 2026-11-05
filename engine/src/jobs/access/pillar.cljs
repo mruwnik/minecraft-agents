@@ -14,6 +14,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.access :as access]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as sight]
@@ -310,9 +311,12 @@
 
 (defn ^:async strike-out!
   "Strike a seen hostile whose box overlaps cell (the server refuses a block there) once, right before the jump that
-  places into it."
+  places into it. A calm enderman is left alone: a strike provokes it."
   [c cell]
-  (when-let [mob (pl/mob-in (filter #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell)]
+  (when-let [mob (pl/mob-in (->> (sight/seen-entities (:primitives c) {:radius 4})
+                                 (filter #(= "hostile" (:kind %)))
+                                 (remove #(danger-q/calm-enderman? (clj->js %))))
+                            cell)]
     (await (pl/strike! c mob))))
 
 (defn refused? "Whether a jumpPlace result says the server refused the block." [^js r] (boolean (some-> (.-reason r) (str/starts-with? "place-failed"))))

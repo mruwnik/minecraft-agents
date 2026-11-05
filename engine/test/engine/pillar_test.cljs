@@ -600,6 +600,16 @@
           (is (empty? (of-kind seen :stopped)))
           (is (= [7] (mapv #(.-id (.-args %)) (calls p "attack")))))))))
 
+(deftest a-calm-enderman-in-the-cell-is-not-struck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "enderman" :kind "hostile" :height 2.9 :angry false)]})]
+          (refuse-while-a-mob-stands-in! p nil)
+          (core/submit! eng (list job {:height 3 :worth 60 :checks {:safe? '(always)}}) {})
+          (await (ticks s eng 20))
+          (is (zero? (count (calls p "attack"))) "a swing would provoke it"))))))
+
 (deftest a-pillar-told-not-to-wait-for-mobs-ends-at-once-naming-it
   (async done
     (tu/run-async done
