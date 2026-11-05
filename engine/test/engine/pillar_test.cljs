@@ -585,6 +585,21 @@
           (is (finished? eng))
           (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
 
+(deftest a-hostile-pressed-into-the-cell-is-struck-out-of-it-before-the-jump
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "zombie" :kind "hostile" :height 1.95)]})]
+          (refuse-while-a-mob-stands-in! p nil)
+          (.override (.-world p) "attack"
+                     (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
+          (core/submit! eng (list job {:height 3 :worth 60 :checks {:safe? '(always)}}) {})
+          (await (ticks s eng 20))
+          (is (finished? eng))
+          (is (= [0 67 0] (feet p)))
+          (is (empty? (of-kind seen :stopped)))
+          (is (= [7] (mapv #(.-id (.-args %)) (calls p "attack")))))))))
+
 (deftest a-pillar-told-not-to-wait-for-mobs-ends-at-once-naming-it
   (async done
     (tu/run-async done

@@ -48,7 +48,8 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
   - a seen mob other than a hostile stands in the cell: it waits for it to move on (a failed jump while one does is not counted), up to
-    ::mob-waits looks (an escape from danger sets it 0 in the call's :settings), then gives up :mob-in-cell (:mob its name); a hostile there is not waited on
+    ::mob-waits looks (an escape from danger sets it 0 in the call's :settings), then gives up :mob-in-cell (:mob its name); a seen hostile there is struck once just before the jump (its
+    knockback clears the cell; a player hits a mob pressed against the column, it does not leave of itself)
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
@@ -303,10 +304,16 @@
             (if (centred? c [x z] [hx hz]) :in :failed))))))
 
 (defn mob-in-cell
-  "A seen mob other than a hostile in cell: one to wait for. A hostile there is not waited on while it hits; the
-  failed places end the pillar, for its caller to deal with the mob."
+  "A seen mob other than a hostile in cell: one to wait for. A hostile there is not waited on while it hits (strike-out!)."
   [c cell]
   (pl/mob-in (remove #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell))
+
+(defn ^:async strike-out!
+  "Strike a seen hostile whose box overlaps cell (the server refuses a block there) once, right before the jump that
+  places into it."
+  [c cell]
+  (when-let [mob (pl/mob-in (filter #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell)]
+    (await (pl/strike! c mob))))
 
 (defn refused? "Whether a jumpPlace result says the server refused the block." [^js r] (boolean (some-> (.-reason r) (str/starts-with? "place-failed"))))
 
@@ -472,7 +479,8 @@
         (= :place (:step step))
         (if-let [mob (mob-in-cell c (:cell step))]
           (await (wait-out-mob! c l step mob))
-          (await (place! c l step)))
+          (do (await (strike-out! c (:cell step)))
+              (await (place! c l step))))
 
         (= :ceiling (:reason step)) (await (dig-ceiling! c l step))
         :else (finish! c l step)))))

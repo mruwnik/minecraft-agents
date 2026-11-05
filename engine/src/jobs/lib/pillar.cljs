@@ -1,7 +1,8 @@
 (ns jobs.lib.pillar
   "What the pillar job shares with the jobs that stand on or beside one (bridge, fell-tree, respond.refuge): the blocks
   it builds with, the cell a free cell is, the cell the body stands in, what is carried."
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.util :as u]))
 
@@ -36,3 +37,10 @@
                           (< (- ez hw) (inc z)) (> (+ ez hw) z)
                           (< ey (inc y)) (> (+ ey (or height 1.8)) y))))
                  entities)))
+
+(defn ^:async strike!
+  "Look at mob (a seen-entities map) and strike it once: its knockback shoves it a step away."
+  [c mob]
+  (let [{:keys [x y z]} (:pos mob)]
+    (await (ctx/act c :look #js {:pos #js {:x x :y (+ y 1) :z z}}))
+    (await (ctx/act c :attack #js {:id (:id mob)}))))

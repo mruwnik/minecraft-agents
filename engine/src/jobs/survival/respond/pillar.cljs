@@ -247,10 +247,8 @@
               (some #(pl/mob-in hostiles %) cells))]
     (when mob
       (ctx/update-mem! c update :knocks (fnil inc 0))
-      (let [{:keys [x y z]} (:pos mob)]
-        (await (ctx/act c :look #js {:pos #js {:x x :y (+ y 1) :z z}}))
-        (await (ctx/act c :attack #js {:id (:id mob)}))
-        true))))
+      (await (pl/strike! c mob))
+      true)))
 
 (defn ^:async knock-off!
   "strike-out! of the feet cell the pillar's next block goes into; the jump may still be in the air, so the cell under it counts too."

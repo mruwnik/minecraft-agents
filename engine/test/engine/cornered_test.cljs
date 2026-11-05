@@ -614,7 +614,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen while-hidden]}
               (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
-                                            :entities [(zombie 0 64 1)]}
+                                            :entities [(zombie 0 64 1.5)]}
                                    1000 (fn [{:keys [eng p]}] {:list (:list (core/state eng))
                                                                :y (js/Math.floor (second (:pos (fake/self p))))})))]
           (is (zero? (count (calls p "attack"))) "no fist fight")
@@ -752,7 +752,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen while-hidden]}
               (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
-                                            :entities [(zombie 0 64 1)]}
+                                            :entities [(assoc (zombie 0 64 1) :health 1000)]}
                                    1000 (fn [{:keys [p]}] (js/Math.floor (second (:pos (fake/self p)))))
                                    [] (fn [p]
                                         (.override (.-world p) "jumpPlace"
@@ -762,7 +762,7 @@
                                                        (impl token args)))))))]
           (is (= 67 while-hidden) "the third pillar went up whole")
           (is (hiding? seen))
-          (is (= 2 (count (calls p "attack"))) "each refusal ends that pillar: the zombie in the cell is struck and the next step decides again")
+          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "the zombie pressed into the cell is struck before the first jump")
           (is (= 3 (count (filter #(= :retreat.pillar (:kind %)) @seen))) "three pillars begun"))))))
 
 (deftest a-pillar-is-classed-beside-only-when-a-melee-mobs-box-overlaps-a-cell-it-fills
@@ -811,7 +811,7 @@
         (let [placed (atom 0)
               {:keys [eng p seen while-hidden]}
               (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
-                                            :entities [(zombie 0 64 1)]}
+                                            :entities [(zombie 0 64 1.5)]}
                                    1000 (fn [{:keys [p]}] (js/Math.floor (second (:pos (fake/self p)))))
                                    [] (fn [p]
                                         (.override (.-world p) "jumpPlace"
@@ -830,7 +830,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen while-hidden]}
               (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
-                                            :entities [(zombie 0 64 1)]}
+                                            :entities [(zombie 0 64 1.5)]}
                                    1000 (fn [{:keys [p]}] (js/Math.floor (second (:pos (fake/self p)))))
                                    [] (fn [p] (.override (.-world p) "jumpPlace"
                                                          (fn [token args impl]
@@ -846,7 +846,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
-                                                            :entities [(zombie 0 64 1)]}
+                                                            :entities [(zombie 0 64 1.5)]}
                                                    1000 (constantly nil)))]
           (is (= [] (:list (core/state eng))))
           (is (zero? (count (calls p "attack")))))))))
@@ -1000,7 +1000,7 @@
   "The doorway world with an armed, unarmoured body carrying dirt and zombies at z 1..n in the doorway."
   [n]
   {:blocks doorway :inventory [{:name "wooden_axe" :count 1} {:name "dirt" :count 20}]
-   :entities (mapv #(assoc (zombie 0 64 %) :id (+ 20 %)) (range 1 (inc n)))})
+   :entities (mapv #(assoc (zombie 0 64 (+ % 0.5)) :id (+ 20 %)) (range 1 (inc n)))})
 
 (def seldom-refused
   "::pillar-mob-fails under which a pillar beside a mob seldom fails: 1 in 4."
@@ -1037,7 +1037,7 @@
                                               (fn [p]
                                                 (.override (.-world p) "jumpPlace"
                                                            (fn [token args impl]
-                                                             (if (empty? (calls p "attack"))
+                                                             (if (= 1 (count (calls p "jumpPlace")))
                                                                (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
                                                                (impl token args))))))))))
               pillars (keep #(when (= :retreat.cornered (:kind %)) (:pillar (:prices %))) @seen)]
@@ -1934,7 +1934,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "dirt" :count 20}] :entities [(zombie 0 64 1)]})
+        (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "dirt" :count 20}] :entities [(zombie 0 64 1.5)]})
               hurt (atom false)]
           (.override (.-world p) "wait"
                      (fn [token a impl]
