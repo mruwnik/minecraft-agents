@@ -14,11 +14,10 @@
             [jobs.lib.seal :as seal]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.walk-pick :as pick]
-            [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.world :as wworld]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
@@ -36,7 +35,7 @@
   (let [^js by-name (js/Map.)
         ground? (fn [name]
                   (when-not (.has by-name name)
-                    (.set by-name name (and (rules/natural? name) (not (rules/falling? name)) (tools/can-harvest? p name))))
+                    (.set by-name name (and (rules/natural? name) (not (rules/falling? name)) (not (bs/bad-floor name)) (tools/can-harvest? p name))))
                   (.get by-name name))]
     (->> solids
          (filter #(ground? (:name %)))
@@ -63,9 +62,10 @@
         seen-free? (fn [{:keys [x y z] :as cell}] (and (not (.has solid (key-of x y z)))
                                                        (not (:unknown (look/seen-block p cell)))))]
     (->> solids
-         (keep (fn [{{:keys [x y z]} :pos}]
+         (keep (fn [{{:keys [x y z]} :pos name :name}]
                  (let [f {:x x :y (inc y) :z z}]
-                   (when (and (loop [dy 2] (and (<= dy roof-height) (or (.has solid (key-of x (+ y 1 dy) z)) (recur (inc dy)))))
+                   (when (and (not (bs/bad-floor name))
+                              (loop [dy 2] (and (<= dy roof-height) (or (.has solid (key-of x (+ y 1 dy) z)) (recur (inc dy)))))
                               (seen-free? f) (seen-free? (update f :y inc)))
                      {:kind :cave :pos f})))))))
 
@@ -110,8 +110,7 @@
 (defn ^:async flee-target
   "The place not yet tried tonight, somewhere safer than here (see the doc), whose walk go-to quotes cheapest (jobs.lib.walk-pick/
   cheapest!: every candidate within flee-radius is ranked by the least its straight walk takes and quoted best-first, as the flight itself
-  will walk, until the best quoted is no dearer than the next bound; a site's own tests, the planner's goal-not-standable verdict
-  (wplan/goal-stand-problem, no search), ground-ok? and cave-needed, asked only when its turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
+  will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
   :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none with
   the flee-radius setting 0 or after sites/max-flees). Candidates: the bed, the home, caves, ground."
   [c survey?]
@@ -127,16 +126,11 @@
             cands (->> (concat bed places (sites p flee-radius))
                        (remove #(contains? tried (:pos %))))
             needed (atom {})
-            pw (delay (wworld/path-world p (wworld/unknown-spec c)))
-            stands? (fn [{:keys [kind pos]}]
-                      (or (= :roofed-place kind) (nil? @pw)
-                          (not= :goal-not-standable (wplan/goal-stand-problem c @pw [(:x pos) (:y pos) (:z pos)] (:range (flee-args {:kind kind}))))))
             ok? (fn [{:keys [kind pos] :as x}]
-                  (and (stands? x)
-                       (case kind
-                         :ground (ground-ok? c x)
-                         :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
-                         true)))
+                  (case kind
+                    :ground (ground-ok? c x)
+                    :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
+                    true))
             walk #(assoc (flee-args %) :floor cost-health/spend-down :worth ##Inf)
             best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
                                                  :walk walk :ok? ok? :quote pick/quote-once!}))]

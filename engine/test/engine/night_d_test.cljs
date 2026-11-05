@@ -150,6 +150,11 @@
           (is (= [far] (map #(:pos (nth % 2)) (filter #(= :flee (first %)) log))) "the farthest ground site, the only one go-to reaches, is walked to")
           (is (< 16 (count (filter :floor calls))) "quoted past the nearest 16"))))))
 
+(deftest flee-ground-sites-skip-powder-snow-and-keep-other-seen-ground
+  (let [p (tu/fake {})
+        solids [{:name "powder_snow" :pos {:x 0 :y 63 :z 0}} {:name "dirt" :pos {:x 1 :y 63 :z 0}} {:name "dirt" :pos {:x 5 :y 40 :z 5}}]]
+    (is (= [{:x 1 :y 64 :z 0} {:x 5 :y 41 :z 5}] (map :pos (flee/ground-sites p solids))) "seen dirt stays a candidate, wherever it is")))
+
 (deftest seen-ground-the-planner-cannot-stand-on-is-never-quoted
   ;; KitOak93 on a snow plateau: powder snow is ground a site's rules took and go-to answers goal-not-standable, 100-200 quotes a round
   (async done

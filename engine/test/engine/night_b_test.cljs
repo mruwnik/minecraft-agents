@@ -497,6 +497,12 @@
     (is (pit-site/pit-site? p {:x 1 :y 64 :z 1}) "one layer of dirt shows nothing against a pit; dig-in finds out")
     (is (not (pit-site/pit-site? p {:x 9 :y 64 :z 9})) "no ground to stand on")))
 
+(deftest a-pit-site-is-never-over-powder-snow
+  (let [floor (fn [name] (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) name]))}))
+        site {:x 1 :y 64 :z 1}]
+    (is (pit-site/pit-site? (floor "dirt") site))
+    (is (not (pit-site/pit-site? (floor "powder_snow") site)) "a body sinks through powder snow")))
+
 (deftest a-pit-site-needs-ground-the-carried-tools-dig
   (let [stone (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "stone"]))
         site {:x 1 :y 64 :z 1}]
