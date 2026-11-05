@@ -706,6 +706,12 @@
       (and (= :none (:step e)) (contains? (:approached opts) near)) e
       :else {:step :approach :pos near})))
 
+(defn dig-opts
+  "dig-way's opts for go-to call c digging toward pos, its route searches sliced through slice."
+  [c pos slice]
+  (merge {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
+         (range-opts c pos)))
+
 (defn detour-way
   "A buried body's way to a goal its only found way reaches by a long detour (walk.cljs :detour): the cheapest cells
   dug from the feet into goal pos (dig-way), {:step :searching} while that search goes on (kept for the call: ask again),
@@ -717,8 +723,7 @@
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
           slice (route-slice (route-owner c))
-          opts (merge {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
-                      (range-opts c pos))
+          opts (dig-opts c pos slice)
           may-dig? (may-dig-fn c)
           e (dig-way p feet goal may-dig? opts)]
       (keep-routes! slice)
@@ -729,18 +734,23 @@
 
 (defn dig-price
   "Seconds the fewest cells dug (dig-way) from the feet to the stand cell goal ([x y z]) cost go-to call c, the rest of the
-  way walked as a quote prices it; nil when the call may not dig a route or none is found within its budget. A quote asks
-  this when the walk's planner found no walk."
+  way walked as a quote prices it, and no more than the call's worth; :searching while the dig search goes on (it goes on at
+  the next quote of the call); nil when the call may not dig a route or none is found. A quote asks this when the
+  walk's planner found no walk."
   [c goal]
   (when (ways/way? c :clear-path)
     (let [p (:primitives c)
           feet (end/feet-cell c)
-          opts (merge {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :bound-s (call-budget-s c) :node-s (cost/search-cell-s)}
-                      (range-opts c (zipmap [:x :y :z] goal)))
+          slice (route-slice (or (:route-owner (ctx/mem c)) (str (:id c) "/quote")))
+          opts (assoc (dig-opts c (zipmap [:x :y :z] goal) slice) :bound-s (call-budget-s c) :node-s (cost/search-cell-s))
           e (dig-way p feet goal (may-dig-fn c) opts)]
-      (when (= :dig-route (:step e))
-        (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts))
-           (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)))))))))
+      (keep-routes! slice)
+      (case (:step e)
+        :searching :searching
+        :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts))
+                              (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)))))]
+                     (when (cost/affords? s (ctx/worth c)) s))
+        nil))))
 
 (def stair-first-rise
   "How far above the feet a goal is for a found plan to be weighed against a stair up."

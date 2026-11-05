@@ -110,7 +110,19 @@
               any (:route (:quote (await (preview shut-in {:pos [10 64 1] :range 0}))))]
           (is (nil? (:dig-seconds walk)) "a walking call prices no dig")
           (is (false? (:found any)))
-          (is (pos? (:dig-seconds any)) (pr-str any)))))))
+          (is (pos? (:dig-seconds any)) (pr-str any))
+          (is (= (:dig-seconds any) (first (get-in (:quote (await (preview shut-in {:pos [10 64 1] :range 0}))) [:uses :job-time])))
+              "go-to's own time is the dig route's, not the too-expensive refusal"))))))
+
+(deftest a-dig-dearer-than-the-calls-worth-is-no-dig-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
+              cheap (:route (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :worth 100000}))))
+              dear (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :worth 0.001})))]
+          (is (pos? (:dig-seconds cheap)))
+          (is (nil? (:dig-seconds (:route dear))) (pr-str (:route dear))))))))
 
 (deftest a-partial-route-keeps-a-least-and-has-no-most
   (async done
