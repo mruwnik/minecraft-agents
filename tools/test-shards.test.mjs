@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal, ensureBundle } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -266,4 +266,46 @@ test('test-shard-exec: a full disk names its cause', async () => {
   const full = () => { throw Object.assign(new Error('no space'), { code: 'ENOSPC' }) }
   assert.equal(isolateOrExplain('/e', 1, full, (m) => lines.push(m)), null)
   assert.match(lines[0], /ENOSPC: disk full/)
+})
+
+test('ensureBundle: a fresh stamp skips the compile; changed sources or a failed compile do not', () => {
+  const d = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-stamp-'))
+  try {
+    const stamp = path.join(d, 'stamp'), bundle = path.join(d, 'test.cjs')
+    fs.writeFileSync(bundle, '')
+    let n = 0
+    const ok = () => { n++; return { status: 0 } }
+    ensureBundle(ok, { hash: 'h1', stamp, bundle })
+    ensureBundle(ok, { hash: 'h1', stamp, bundle })
+    assert.equal(n, 1)
+    ensureBundle(ok, { hash: 'h2', stamp, bundle })
+    assert.equal(n, 2)
+    assert.equal(ensureBundle(() => ({ status: 1 }), { hash: 'h3', stamp, bundle }).status, 1)
+    assert.equal(fs.existsSync(stamp), false)
+  } finally { fs.rmSync(d, { recursive: true, force: true }) }
+})
+
+test('parts started together compile once and each runs its tests (a part with no tests fails)', async () => {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-parts-'))
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    fs.mkdirSync(path.join(root, 'tools'))
+    for (const f of ['test-shards.mjs', 'test-shard-exec.mjs', 'res-slot.mjs', 'test-run.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
+    fs.writeFileSync(path.join(root, 'tools/compile'), `#!/bin/sh\necho x >> ${path.join(root, 'compiles')}\nsleep 1\nexit 0\n`, { mode: 0o755 })
+    fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
+    fs.mkdirSync(path.join(root, 'engine/node_modules'))
+    fs.mkdirSync(path.join(root, 'engine/test'))
+    for (const x of ['a', 'b']) fs.writeFileSync(path.join(root, `engine/test/${x}_test.cljs`), `(ns ${x}-test)\n`)
+    fs.writeFileSync(path.join(root, 'engine/out/test.cjs'), "require('fs').appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({var: \"#'t/t\", ms: 1}) + '\\n')\n")
+    const run = (part) => new Promise((resolve) => {
+      let out = ''
+      const p = spawn(process.execPath, [path.join(root, 'tools/test-shards.mjs'), '--part', part, '--shards', '1', '--slots', '2'], {
+        cwd: root, env: { ...process.env, LIVE_TESTS_NONCE: 'n0', RES_SLOT_DIR: path.join(root, 'slots'), TEST_EVENTS: '' } })
+      p.stdout.on('data', (c) => { out += c }); p.stderr.on('data', (c) => { out += c })
+      p.on('exit', (code) => resolve({ code, out }))
+    })
+    const rs = await Promise.all([run('1/2'), run('2/2')])
+    assert.deepEqual(rs.map((r) => r.code), [0, 0], rs.map((r) => r.out).join('\n'))
+    assert.equal(fs.readFileSync(path.join(root, 'compiles'), 'utf8').trim().split('\n').length, 1)
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })

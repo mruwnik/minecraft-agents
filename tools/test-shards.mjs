@@ -8,8 +8,10 @@
 //  TEST_EVENTS=1: prints the live-tests @@test lines (phase, plan, result per test, progress) as the shards produce them (engine.timing-test emits them).
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
 //  Refuses a hand run (needs run_tests' LIVE_TESTS_NONCE).
+//  Parts started together share one compile: the first builds under engine/out/test-bundle.lock and stamps the source hash (engine/out/test-full.stamp), the others skip it; shard copies hold the lock shared. A run in which no test ran fails.
 //  Isolation: each shard (tools/test-shard-exec.mjs) copies out/test.cjs and out/test/cljs-runtime to ~/.cache/mc-test-run/mc-test-run-<its pid>/out (disk, not tmpfs) once it holds its slot, runs that copy and removes it, so waiting shards hold no disk (a full copy is 336 MB); per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -150,11 +152,37 @@ export const writeAtomic = (file, text) => {
 
 const weightsFile = path.join(engine, 'test-weights.json')
 
+// Parts started together share one :test bundle: the first compiles under an exclusive lock and stamps the source hash; the others find the stamp and skip the compile, so none rewrites the bundle another is copying (copies take the same lock shared, tools/test-shard-exec.mjs).
+export const bundleLock = path.join(engine, 'out/test-bundle.lock')
+const stampFile = path.join(engine, 'out/test-full.stamp')
+export const bundleHash = (root = repo) => {
+  const h = crypto.createHash('sha256')
+  const dirs = ['engine/src', 'engine/js', 'engine/test'].map((d) => path.join(root, d)).filter((d) => fs.existsSync(d))
+  const files = [...dirs.flatMap(walk), ...['dashboard/shadow-cljs.edn', 'dashboard/package.json', 'dashboard/package-lock.json'].map((f) => path.join(root, f)).filter((f) => fs.existsSync(f))].sort()
+  for (const f of files) h.update(path.relative(root, f)).update('\0').update(fs.readFileSync(f)).update('\0')
+  return h.digest('hex')
+}
+const bundleFresh = (hash, stamp, bundle) => fs.existsSync(bundle) && fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === hash
+// Stamp = the hash taken before the compile read the sources, so an edit during the compile leaves the bundle looking stale.
+export const ensureBundle = (compile, { hash = bundleHash(), stamp = stampFile, bundle = path.join(engine, 'out/test.cjs') } = {}) => {
+  if (bundleFresh(hash, stamp, bundle)) return { status: 0 }
+  fs.rmSync(stamp, { force: true })
+  const c = compile()
+  if (c.status === 0) fs.writeFileSync(stamp, hash)
+  return c
+}
+const compileEngineTest = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' })
+const compileShared = () => {
+  if (bundleFresh(bundleHash(), stampFile, path.join(engine, 'out/test.cjs'))) return { status: 0 }
+  fs.mkdirSync(path.dirname(bundleLock), { recursive: true })
+  return spawnSync('flock', ['-x', bundleLock, process.execPath, fileURLToPath(import.meta.url), '--ensure-bundle'], { stdio: 'inherit' })
+}
+
 // A hand run (Bash) would take a full suite's RAM beside the other agents' work; run_tests (integration included) exports LIVE_TESTS_NONCE.
 export const refusal = (env) => env.LIVE_TESTS_NONCE ? null
   : 'test-shards: a full engine run goes through mcp__live-tests__run_tests (suite engine-full or engine-full-N); refusing a hand run'
 
-const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' }) } = {}) => {
+const main = async ({ compile = compileShared } = {}) => {
   const refused = refusal(process.env)
   if (refused) { console.error(refused); process.exit(2) }
   const argv = process.argv.slice(2)
@@ -185,7 +213,7 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
     const limit = Number(process.env.MC_TEST_TIMEOUT_S) || WHOLE_RUN_CAP_S
     const stallS = Number(process.env.MC_TEST_STALL_S) || stallLimitS(slowestPriorMs(nss, priorTests))
     let stalled = false, stop = () => {}
-    const r = await runInSlot(slotsNow, ['node', path.join(repo, 'tools/test-shard-exec.mjs'), engine, 'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, '{bundle}', `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined, (p) => { const prev = stop, w = watchStall(file, stallS, () => { stalled = true; killStalled(p.pid) }); stop = () => { prev(); w() } })
+    const r = await runInSlot(slotsNow, ['node', path.join(repo, 'tools/test-shard-exec.mjs'), engine, 'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${RES.kinds.tests.heapMb}`, '{bundle}', `--test=${nss.join(',')}`], { cwd: engine, env: { ...process.env, MC_TEST_TIMINGS: file, MC_TEST_BUNDLE_LOCK: bundleLock, NODE_PATH: path.join(repo, 'node_modules') } }, events ? (chunk) => events.feed(i, chunk) : undefined, events ? () => events.waiting(i) : undefined, (p) => { const prev = stop, w = watchStall(file, stallS, () => { stalled = true; killStalled(p.pid) }); stop = () => { prev(); w() } })
     stop()
     events?.end(i)
     if (stalled) { r.code = 124; r.out += `\n${stallMessage('test-shards', stallS, fs.readFileSync(file, 'utf8').split('\n'), nss)} (shard ${i})\n` } else
@@ -210,11 +238,15 @@ const main = async ({ compile = () => spawnSync(path.join(repo, 'tools/compile')
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
   const tests = parse(lines).filter((r) => r.var).length
   console.log(`test-shards: ${tests} tests, wall ${((Date.now() - t0) / 1000).toFixed(0)} s, shard peak RSS MB: ${peaks.map((k) => Math.round(k / 1024)).join(' ')} (sum ${Math.round(peaks.reduce((a, b) => a + b, 0) / 1024)})`)
+  if (!tests && !bad) { console.error('test-shards: no test ran (empty part or bundle without tests); failing'); bad++ }
   console.log(`slowest tests (full list: ${timingFile}):`)
   for (const r of slowest(lines, top)) console.log(`  ${String(r.ms).padStart(6)} ms  ${r.var}`)
   process.exitCode = bad ? 1 : 0
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main()
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv[2] === '--ensure-bundle') process.exit(ensureBundle(compileEngineTest).status ?? 1)
+  main()
+}
 
 export { main }

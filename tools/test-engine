@@ -70,6 +70,7 @@ fi
 phase compiling
 # build only the requested namespaces (plus engine.timing-test, which test-run always keeps) and their deps
 rx="^($(printf '%s\n' "$@" | tr ',' '\n' | sed -e 's#/.*##' -e 's#\.#\\.#g' | sort -u | paste -sd'|')|engine\\.timing-test)\$"
+rm -f "$repo/engine/out/test-full.stamp" # the narrowed bundle is not the full one test-shards stamped
 compile_retry engine test --ns-regexp "$rx" || exit $?
 phase testing
 node "$repo/tools/test-run.mjs" "$@"; rc=$?
