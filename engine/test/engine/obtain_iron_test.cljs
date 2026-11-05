@@ -160,10 +160,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-12 -12 16 16] :floor-block "dirt") [f/own-zone])]
+        (let [[s rounds] (stub-mine (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1}]) :floor [-12 -12 16 16] :floor-block "dirt") [f/own-zone]))]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 4))
           (is (empty? (f/events-of s :obtain.exploring)) "no surface search")
-          (is (seq (mine-events s)) "the mine child ran"))))))
+          (is (pos? @rounds) "the mine child ran"))))))
 
 (deftest an-iron-pickaxe-with-no-ore-seen-goes-to-the-mine-by-default
   (async done
