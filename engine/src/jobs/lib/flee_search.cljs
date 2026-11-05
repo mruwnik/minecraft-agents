@@ -458,12 +458,10 @@
   nothing on the chasers over standing still, pockets that gain less than their walk takes, those with every step
   cell refused, those never? holds of (at the step cell or the end) and those passing near hazards. Priced, not left
   out: each of marks ({:holds? (end entry -> bool) :s seconds}, e.g. at-step-or-end of a cell test) that holds of an
-  end costs it its :s, the death the mark risks, off its :score. The end with the highest score so priced wins, covers,
-  homes, open ways and pockets alike. A cover end (out of every ranged chaser's fire: a hit avoided outright, which a score
-  does not count) and a preferred one (prefer?: e.g. a safe home, a run into a refuge priced as a cover) add a bonus
-  past any score, a cover's the greater, and rank among themselves by score. A pocket only when no open way is left
-  uncut: open ways that every chaser cuts leave the pockets out, they are traps."
-  [ends {:keys [refused never? hazards marks prefer?]}]
+  end costs it its :s, the death the mark risks (a negative :s credits the death a place removes: a closed room), off
+  its :score (a cover end counts as unreached: no fire reaches it). The end with the highest score so priced wins,
+  covers, homes and open ways alike. A pocket only when no open way is left uncut: open ways that every chaser cuts leave the pockets out, they are traps."
+  [ends {:keys [refused never? hazards marks]}]
   (let [ok (->> ends
                 (remove :caught?)
                 (filter #(or (:cover? %) (pos? (:gain %))))
@@ -471,7 +469,7 @@
                 (keep #(when-let [step (step-of % (or refused #{}))] (assoc % :step step)))
                 (remove #(and never? ((at-step-or-end never?) %)))
                 (remove #(hazard-near? hazards (:cells %)))
-                (map #(assoc % :net (- (+ (:score %) (cond (:cover? %) (* 2 unreached-s) (and prefer? (prefer? %)) unreached-s :else 0)) (transduce (comp (filter (fn [m] ((:holds? m) %))) (map :s)) + 0 marks)))))
+                (map #(assoc % :net (- (if (:cover? %) (max (:score %) unreached-s) (:score %)) (transduce (comp (filter (fn [m] ((:holds? m) %))) (map :s)) + 0 marks)))))
         ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
         traps? (and (seq ways) (every? :caught? ways))
         open (filter :open? ok)

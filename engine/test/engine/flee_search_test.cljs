@@ -379,15 +379,19 @@
   [f s]
   {:holds? (search/at-step-or-end f) :s s})
 
-(deftest pick-ranks-every-end-by-one-price-a-cover-and-a-safe-home-outrank-any-score
+(deftest pick-ranks-every-end-by-one-price-a-cover-and-a-home-win-only-by-what-they-save
   (let [home (assoc (end-of 0 9 1) :price 3 :target {:pos {:x 0 :y 64 :z 9} :kind :home})
-        cover (end-of -2 4 0 :cover? true :score 1e6)
+        cover (end-of -2 4 0 :cover? true)
         open (end-of 6 0 9)
+        unreached (end-of 6 0 search/unreached-s)
         pocket (end-of 3 3 50 :found? false)
-        prefer? #(= :home (:kind (:target %)))]
-    (is (= {:x -2 :y 64 :z 4} (search/pick [open home cover] {})) "out of the line of fire first")
-    (is (= {:x 0 :y 64 :z 9} (search/pick [open home] {:prefer? prefer?})) "then the safe home")
-    (is (= {:x 6 :y 64 :z 0} (search/pick [open home] {})) "else the best score")
+        in-fire (mark #(not= -2 (:x %)) 20)
+        room (mark #(= 0 (:x %)) -10)]
+    (is (= {:x -2 :y 64 :z 4} (search/pick [unreached cover] {:marks [in-fire]})) "an end no chaser reaches but in the line of fire pays for it: the cover end wins")
+    (is (= {:x 6 :y 64 :z 0} (search/pick [unreached cover] {})) "no fire: a cover is no better than an unreached end")
+    (is (= {:x -2 :y 64 :z 4} (search/pick [open cover] {})) "a cover is unreached however the race scored it")
+    (is (= {:x 0 :y 64 :z 9} (search/pick [open home] {:marks [room]})) "a closed room credits the death it removes")
+    (is (= {:x 6 :y 64 :z 0} (search/pick [open home] {:marks [(assoc room :s -2)]})) "a smaller credit does not turn 9 against 1")
     (is (= {:x 6 :y 64 :z 0} (search/pick [open pocket] {})) "a pocket only when no open way is left, whatever its score")))
 
 (deftest pick-prices-its-marks-by-what-each-risks

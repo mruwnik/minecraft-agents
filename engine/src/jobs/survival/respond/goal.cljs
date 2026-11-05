@@ -150,17 +150,25 @@
         wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
         other-mob (risk (:chance (cost/spawn-kill body from)))
         creeper (some #(when (combat/creeper? %) (.-name %)) threats)
+        names (distinct (map #(.-name %) threats))
+        shooters (distinct (map #(.-name %) (filter combat/ranged? threats)))
+        chance-of (fn [ns] (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) ns))))
         near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
         mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})
         marks (concat [(mark near-other? other-mob)]
                       (map #(mark % other-mob) (flight/avoid-ends c))
                       (when creeper
                         [{:holds? (fn [e] (boolean (some door? (:cells e))))
-                          :s (risk (:chance (cost/threat-parts body creeper nil from)))}]))]
+                          :s (risk (:chance (cost/threat-parts body creeper nil from)))}])
+                      (when (and covered? (seq shooters))
+                        [{:holds? (fn [e] (not (covered? (:end e)))) :s (risk (chance-of shooters))}])
+                      (when home
+                        [{:holds? #(= home (:pos (:target %))) :s (- (risk (chance-of names)))}]))]
     {:refused (:refused (ctx/mem c))
      :never? (fn [end] (or (and (< (:y end) floor) (walk/roofed? block-at end)
                                 (not (and covered? (covered? end)))
                                 (not (contains? known [(:x end) (dec (:y end)) (:z end)])))
+                           ;; a mark prices a risk, not a swim: choose cannot weigh it against the cornered swim-out
                            (and drowned? (wet? end))))
      :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
      :door? door?
