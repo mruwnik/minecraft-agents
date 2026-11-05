@@ -49,7 +49,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
-            [jobs.movement.go-to.escalate-choose :refer [call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
+            [jobs.movement.go-to.escalate-choose :refer [way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
@@ -178,23 +178,6 @@
     (doseq [{g :cell class :class} guesses
             :when (or (dug g) (= bad g))]
       (note-guess! c g class (not= bad g)))))
-
-(defn guess-risk
-  "{class chance}: the chance a guess of each escape/guess-classes class is not diggable (cost/guess-bad-chance): those this
-  call looked at on top of the measured prior."
-  [c]
-  (let [looks (:guess-looks (ctx/mem c))]
-    (into {} (map (fn [k] [k (cost/guess-bad-chance k (get looks k))])) escape/guess-classes)))
-
-(defn way-opts
-  "The opts of go-to call c's choice of a way from feet (escape-way/choose and the dig ways): a search that stood the body
-  still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
-  own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
-  [c feet fetch? slice]
-  {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
-   :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
-   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c))) :bound-s (call-budget-s c)
-   :risk-s (fn [cells goal work-s] (risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn own-cut?
   "Whether the escalation under way may cut the body's own builds (:own-cut, chosen by own-way)."

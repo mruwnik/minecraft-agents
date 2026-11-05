@@ -1181,3 +1181,19 @@
           (is (true? (:arrived @out)))
           (is (seq dug))
           (is (every? #(>= (get-in % [:pos :y]) 64) dug) "no cell under the tunnel's floor is dug"))))))
+
+(deftest a-dig-quote-searches-with-the-opts-the-escalation-digs-with
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 12 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        seen (atom nil)
+        real choose/dig-way]
+    (.setOwner (:primitives eng) "tx")
+    (ctx/update-mem! c assoc :guess-looks {:placed {:all 3 :bad 3}} :spent-routes #{[1 2]})
+    (with-redefs [choose/dig-way (fn [p from goal may-dig? opts] (reset! seen opts) (real p from goal may-dig? opts))]
+      (choose/dig-price c [10 64 0]))
+    (let [feet (vec (map #(js/Math.floor %) [0 64 0]))
+          way (choose/way-opts c feet false nil)]
+      (is (every? #(contains? @seen %) [:spent :own-s :risk-s :guess-risk :worth-s]) (pr-str (keys @seen)))
+      (is (= (:guess-risk way) (:guess-risk @seen)))
+      (is (pos? (:placed (:guess-risk @seen))) "the looks this call made price the quote's route too")
+      (is (= #{[1 2]} (:spent @seen))))))

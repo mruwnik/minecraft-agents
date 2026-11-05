@@ -30,7 +30,7 @@
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
-            [jobs.lib.own-builds :refer [may-dig-fn own-placed-fn]]
+            [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))
@@ -706,11 +706,22 @@
       (and (= :none (:step e)) (contains? (:approached opts) near)) e
       :else {:step :approach :pos near})))
 
-(defn dig-opts
-  "dig-way's opts for go-to call c digging toward pos, its route searches sliced through slice."
-  [c pos slice]
-  (merge {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
-         (range-opts c pos)))
+(defn guess-risk
+  "{class chance}: the chance a guess of each escape/guess-classes class is not diggable (cost/guess-bad-chance): those this
+  call looked at on top of the measured prior."
+  [c]
+  (let [looks (:guess-looks (ctx/mem c))]
+    (into {} (map (fn [k] [k (cost/guess-bad-chance k (get looks k))])) escape/guess-classes)))
+
+(defn way-opts
+  "The opts of go-to call c's choice of a way from feet (escape-way/choose and the dig ways): a search that stood the body
+  still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
+  own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
+  [c feet fetch? slice]
+  {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
+   :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
+   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c))) :bound-s (call-budget-s c)
+   :risk-s (fn [cells goal work-s] (walk-risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn detour-way
   "A buried body's way to a goal its only found way reaches by a long detour (walk.cljs :detour): the cheapest cells
@@ -723,7 +734,7 @@
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
           slice (route-slice (route-owner c))
-          opts (dig-opts c pos slice)
+          opts (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c pos))
           may-dig? (may-dig-fn c)
           e (dig-way p feet goal may-dig? opts)]
       (keep-routes! slice)
@@ -742,7 +753,7 @@
     (let [p (:primitives c)
           feet (end/feet-cell c)
           slice (route-slice (or (:route-owner (ctx/mem c)) (str (:id c) "/quote")))
-          opts (assoc (dig-opts c (zipmap [:x :y :z] goal) slice) :bound-s (call-budget-s c) :node-s (cost/search-cell-s))
+          opts (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :node-s (cost/search-cell-s))
           e (dig-way p feet goal (may-dig-fn c) opts)]
       (keep-routes! slice)
       (case (:step e)
