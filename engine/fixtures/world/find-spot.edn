@@ -45,7 +45,7 @@
             {:no-event {:source :system :kind :error} :for-s 30}]
    :limit-s 150}
   ;; Should-succeed: every 16 x 16 patch within range 24 of the body lies on ground waving 0 to 8 high in steps of 1 (period 16 in x, from
-  ;; 41 to 89), so levelling it (at least 512 blocks, about 280 s) costs more than the caller's :worth (2000 s wet, about 170 s as these cells stay dry: no water is known); the job walks on and
+  ;; 41 to 89), so levelling it (at least 512 blocks, about 280 s) costs more than the caller's :patch-worth (2000 s wet, about 170 s as these cells stay dry: no water is known); the job walks on and
   ;; ends done with a flat spot (:work 0) on either side.
   {:name "ridged-range-is-no-spot-explores-to-flat-ground"
    :plot {:light :lit}
