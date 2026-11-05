@@ -267,10 +267,11 @@
   (and (<= (+ (* (- x tx) (- x tx)) (* (- z tz) (- z tz))) 2) (<= (js/Math.abs (- y ty)) 1)))
 
 (defn before?
-  "Heap order of open entries #js [f g x y z]: lower f, then lower g."
+  "Heap order of open entries #js [f g x y z]: lower f, then higher g: on open ground many cells tie on f, and the deeper
+  one goes on toward the target where the shallower would fill the whole box between the ends."
   [a b]
   (let [fa (aget a 0) fb (aget b 0)]
-    (or (< fa fb) (and (== fa fb) (< (aget a 1) (aget b 1))))))
+    (or (< fa fb) (and (== fa fb) (> (aget a 1) (aget b 1))))))
 
 (defn heap-swap! [h i j]
   (let [t (aget h i)]

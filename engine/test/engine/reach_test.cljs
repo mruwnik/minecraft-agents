@@ -37,6 +37,11 @@
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20]})]
     (is (true? (reach/walkable-way? p {:x 6.5 :y 64 :z 0.5} body)))))
 
+(deftest a-way-across-open-ground-is-found-not-given-up-on-budget
+  (let [ground (fn [_ y _] (if (< y 64) :solid :open))]
+    (is (number? (reach/search-steps (partial reach/forward ground) [0 64 0] [50 64 50]))
+        "every cell of the 50 x 50 box ties on f: a search that took the shallower first filled the box past node-budget")))
+
 (deftest a-sealed-body-has-no-way-from-a-mob-outside
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls})]
     (is (false? (reach/walkable-way? p {:x 6.5 :y 64 :z 0.5} body)))))
