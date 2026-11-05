@@ -734,13 +734,15 @@
            first))))
 
 (defn far-unloaded
-  "The cell at the body's height under the nearest unloaded column [{:pos [x y z]}] farther than ::load-reach from the body, nil when none
+  "The cell at the body's height under the nearest unloaded column [{:pos [x y z]}] farther than ::load-reach from the body and not one a walk toward already failed, nil when none
   or while the ground under the body is itself unloaded (a body just logged in: its own chunks come first)."
   [c unloaded]
   (let [[bx y bz] (here c)
-        reach (settings/get settings ::load-reach)]
+        reach (settings/get settings ::load-reach)
+        walked (into #{} (map (fn [{[x _ z] :pos}] [x z])) (:failed (ctx/mem c)))]
     (when (u/sensed (:primitives c) {:x (js/Math.floor bx) :y (dec (js/Math.floor y)) :z (js/Math.floor bz)})
       (some->> unloaded
+               (remove (fn [{[x _ z] :pos}] (walked [x z])))
                (map (fn [{[x _ z] :pos}] [(xz-dist [bx bz] [x z]) x z]))
                (filter #(> (first %) reach))
                (sort-by first)

@@ -1183,3 +1183,16 @@
     (tu/set-sensed! p (fn [_] #js {:visible true}))
     (is (= #{} (search/departed {:primitives p} [{:kind :seen :what "cow" :id "u1" :pos up}] [] 6))
         "the 3D scan of 6 never reached the cow, so its visible cell proves nothing")))
+
+(deftest a-far-unloaded-column-whose-walk-got-nowhere-is-not-walked-toward-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [300 0] 16 40))
+              unloaded-end {:kind :condition-failed :cause :goal-unloaded :data {:reason :goal-unloaded}}
+              asked (atom [])
+              s (with-redefs [child/call-walk* (fn [_ _ a] (swap! asked conj (:pos a)) (js/Promise.resolve unloaded-end))]
+                  (await (search! {:target "diamond_block" :center [300 64 0] :max-distance 40} {:unloaded cells} 80)))]
+          (is (finished? s) "the search ends")
+          (is (seq @asked))
+          (is (apply distinct? @asked) (pr-str @asked)))))))
