@@ -1314,15 +1314,12 @@
           (is (= [-10 64 10] (first-target seen))))))))
 
 (deftest a-flight-target-never-crosses-seen-rock-to-the-cave-behind-it
-  ;; the tunnel's sides stay unseen after the looks: priced, not read as rock; its one way on runs past the zombie
+  ;; the tunnel's sides stay unseen until the flight has looked at them (price-after-flight asks again after each look); its one way on runs past the zombie
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [out (atom nil)
-              s (setup-sensed {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]})
-              s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
-          (await (run-job! s 'targeter {:step 6}))
-          (is (nil? @out) (str "the cave behind its rock wall is no way, nor the tunnel past the zombie: " (pr-str @out))))))))
+        (let [{:keys [target]} (await (price-after-flight {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]}))]
+          (is (nil? target) (str "the cave behind its rock wall is no way, nor the tunnel past the zombie: " (pr-str target))))))))
 
 (deftest a-buried-flight-takes-the-stair-the-body-cut-instead-of-a-hop-across-the-cave
   (async done
