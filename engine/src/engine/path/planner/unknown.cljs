@@ -126,17 +126,31 @@
         (set! (.-dark-best-y s) y)
         (set! (.-dark-best-z s) z))))
 
+  ;; the cell price of a move into x y z with an unseen feet or head cell: options.unknown.cellAt's, cached as darkOf
+  ;; (keys stored +1), else unk-cell
+  (unkCellOf [s x y z]
+    (if (nil? (.-unk-cell-at s))
+      (.-unk-cell s)
+      (let [key (inc (.keyOf s x y z 0))
+            slot (bit-and (.hashOf s x y z 0) (dec TABLE))]
+        (if (== (aget (.-unk-keys s) slot) key)
+          (aget (.-unk-prices s) slot)
+          (let [v (.call ^js (.-unk-cell-at s) nil x y z)]
+            (aset (.-unk-keys s) slot key)
+            (aset (.-unk-prices s) slot v)
+            v)))))
+
   ;; True when the move from node p into x y z is refused for options.unknown: its stand is on a phantom floor that the walk
   ;; cannot stop to check first (unseen-refused), or was missed or cannot be seen, and is not lit (dark-refused). Else sets what it
-  ;; costs (move-unk, seconds: cell times dsec when its feet, head or floor is unseen, else times their changedNear, and a peek over a drop or an aim at a
+  ;; costs (move-unk, seconds: dsec times unkCellOf when its feet or head is unseen, else times cell (times changedNear but on a phantom floor), and a peek over a drop or an aim at a
   ;; level or up one onto a phantom floor, and light-cost when a torch must light it) and move-light.
   (unseenRefuses [s x y z move p dsec]
     (set! (.-move-light s) 0)
     (if-not ^boolean (.phantomAt s x y z)
-      (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.-unk-cell s)) (* dsec (.-unk-cell s) (.changedNear s x y z))))
+      (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.unkCellOf s x y z)) (* dsec (.-unk-cell s) (.changedNear s x y z))))
           false)
       (let [d (js/Math.max 0 (- (aget (.-ys s) p) y))
-            priced (+ (* dsec (.-unk-cell s)) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
+            priced (+ (* dsec (if (pos? (.unknownCells s x y z)) (.unkCellOf s x y z) (.-unk-cell s))) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
         (cond
           (not ^boolean (.gateCheckable s move p)) (do (set! (.-unseen-refused s) true) true)
           (and (not ^boolean (.missedAt s x (dec y) z)) ^boolean (.seeable s x y z d)) (do (set! (.-move-unk s) priced) false)

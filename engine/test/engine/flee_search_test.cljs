@@ -15,6 +15,7 @@
             [jobs.lib.flee-search :as search]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.util :as u]
             [jobs.survival.respond.goal :as respond.goal]))
 
 (defn box
@@ -679,3 +680,24 @@
   (is (= {:chance 1 :cornered? true} (search/caught-chance (with-meta [] {:planned 12 :unrouted {"exhausted" 12}}) {:k 0 :n 0} {} nil)))
   (is (< (:chance (search/caught-chance (with-meta [] {:planned 12 :unrouted {"exhausted" 11 "over-budget" 1}}) {:k 0 :n 0} {} nil)) 1)
       "a route lost to the node budget leaves a way unknown"))
+
+(def dark-t
+  "A dark T of stone: a stem 3 wide along z -1..1 from x -12 to x 5, its far end the arms' wall, the arms x 6..8 from z -12 to z 8."
+  (merge (carve rock [[-12 -1 5 1] [6 -12 8 8]]) (box -32 66 -32 32 66 32 "stone")))
+
+(deftest a-ring-route-prices-each-unseen-cell-by-its-chance-of-rock
+  ;; card 5cb2fb2d: every unseen cell cost the flat way-on share, so a guessed route through the rock right behind a seen
+  ;; wall cost no more than one on along the arm the body saw run into the dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks dark-t :light-default [0 0] :self {:pos {:x -2.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              ^js unk (.. (search/costed (ctx-of p) nil (constantly true) true) -snapshot -unknown)
+              behind-wall (.cellAt unk 0 64 3)
+              arm-on (.cellAt unk 7 64 3)]
+          (is (u/seen-block p {:x 0 :y 64 :z 2}) "the stem wall is seen")
+          (is (nil? (u/seen-block p {:x 7 :y 64 :z 3})) "the arm runs on unseen")
+          (is (< arm-on behind-wall) (str "arm " arm-on ", behind the wall " behind-wall))
+          (is (<= behind-wall (.-cellMax unk))))))))

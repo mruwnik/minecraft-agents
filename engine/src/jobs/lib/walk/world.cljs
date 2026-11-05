@@ -176,9 +176,18 @@
         :ground))))
 
 (defn without-rock
-  "The mask spec unknown with no rock guess: a walk whose search prices unseen cells itself (jobs.lib.flee-search)."
+  "The mask spec unknown with no rock guess: a walk whose search prices unseen cells itself (jobs.lib.flee-search), each
+  by the chance it is rock (path-world's cellAt, shut-cell-fn)."
   [^js unknown]
   (doto unknown (unchecked-set "noRock" true)))
+
+(defn shut-cell-fn
+  "(fn [x y z]) the planner's options.unknown.cellAt: cost/unseen-cell-share of kit at the chance the feet and head cells
+  at x y z are not both open, an unseen one solid at look/unseen-solid-at-fn beside a seen solid cell or not."
+  [p kit]
+  (let [solid-at (look/unseen-solid-at-fn p)
+        open (fn [x y z] (if (u/seen-block p {:x x :y y :z z}) 1 (- 1 (solid-at [x y z] (look/beside-seen-solid? p [x y z])))))]
+    (fn [x y z] (cost/unseen-cell-share (- 1 (* (open x y z) (open x (inc y) z))) kit))))
 
 (defn with-seeds
   "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil) and own (feet cells the
@@ -190,7 +199,7 @@
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
   or felt read void_air (its known cells as remembered, however old), and the snapshot carries the planner's options.unknown:
-  the spec with the mask's id, changed (memory-age/changed-fn: the chance a remembered cell changed), cell (unseen-share), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
+  the spec with the mask's id, changed (memory-age/changed-fn: the chance a remembered cell changed), cell (unseen-share; without-rock: cellAt each), seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Where
   the rock guess holds (rock-guess?), an unseen cell past ::rock-beyond of every seen open cell, the
   feet and the spec's seeds (with-seeds), at a height the guess does not spare (spare-fn), reads stone (jobs.lib.walk.rock), or with the spec's rockEdge the loaded edge (a
   frontier, the snapshot's edge); the mask's rockBeyond says so (0: none)."
@@ -206,7 +215,10 @@
                   (js/Object.assign #js {} unknown
                                     #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :under (boolean under?) :blockedId stone :known known :memoryEpoch (memory-epoch-fn p)
                                          :changed (memory-age/changed-fn (aget p "perception"))
-                                         :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
+                                         :cell (unseen-share p) :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}
+                                    (when (.-noRock unknown)
+                                      (let [kit (kit-of p nil)]
+                                        #js {:cellAt (shut-cell-fn p kit) :cellMax (cost/unseen-cell-share 1 kit)}))))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k

@@ -67,6 +67,12 @@
       (is (found? r))
       (is (near? (* 0.4 (step-secs r)) (dark-secs r))))))
 
+(deftest a-move-into-unseen-cells-costs-their-own-price-where-the-caller-gives-one
+  (let [r (run (line [0 63 "stone"] [1 63 "stone"] [1 64 U] [1 65 U]) (pf/near 1 64 2)
+               (unk {:cellAt (fn [x y _] (if (= [x y] [1 64]) 1.5 0)) :cellMax 1.5}))]
+    (is (found? r))
+    (is (near? (* 1.5 (step-secs r)) (dark-secs r)) "cellAt of the feet cell, not cell")))
+
 (deftest a-jump-up-onto-an-unseen-floor-costs-the-aim
   (let [w (line [0 63 "stone"] [1 64 U])
         r (run w (pf/near 1 65 2) (unk {}))]

@@ -557,6 +557,12 @@
        (let [v (frontier-value p cell) d (or (some-> v (bit-shift-right 1)) 1)]
          (solid-at y d (frontier-lit? p v d) beside-solid?))))))
 
+(defn beside-seen-solid?
+  "Whether a face neighbour of cell [x y z] is a cell the body has seen solid (unseen-solid-at-fn's beside-solid?)."
+  [p [x y z]]
+  (boolean (some (fn [[dx dy dz]] (when-let [b (u/seen-block p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})] (keyword-identical? :solid (reach/kind-of b))))
+                 [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
+
 (defn unseen-solid?-fn
   "(fn [[x y z]]) whether an unseen cell is more likely solid than open (unseen-solid-at-fn's chance over 0.5); kept by
   cell, the body's state read at the first ask."

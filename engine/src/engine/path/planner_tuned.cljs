@@ -83,6 +83,7 @@
      unseen feet, head or floor cell costs cell times its seconds, and peekS a drop onto a phantom floor, aimS a level or up step
      (in cost.darkSeconds; jobs.lib.cost/unknown-prices). No fall goes into an unseen cell, risk looks stop there, and no
      goal-enclosed, goal-not-standable or start-enclosed proof rests on one. missed and noLight are Sets of cell-key.
+     cellAt(x, y, z) (nil: cell everywhere) is the cell price of a move whose feet or head cell at x y z is unseen, at most cellMax.
      changed(x, y, z) (nil: 0 everywhere) is the chance a remembered cell changed since it was seen (unseen at that chance):
      a move costs cell times its seconds times the most of its feet, head and floor cells', and a drop into remembered water
      adds that chance of the dry fall to the pool's floor as risk (its damage, or deathHp when it kills; default lethal-s
@@ -264,7 +265,7 @@
   [^js unknown ^js costs]
   (if (nil? unknown)
     0
-    (+ (or-else (.-cell unknown) 0)
+    (+ (js/Math.max (or-else (.-cell unknown) 0) (or-else (.-cellMax unknown) 0))
        (/ (+ (js/Math.max (or-else (.-peekS unknown) 0) (or-else (.-aimS unknown) 0)) (js/Math.max 0 (or-else (.-lightCost unknown) 0)))
           (js/Math.min (unchecked-get costs "walkS") (unchecked-get costs "sprintS"))))))
 
@@ -307,6 +308,7 @@
         ^js unknown (.-unknown options)
         unk (some? unknown)
         see-lit (when unk (.-seeLit unknown))
+        cell-at (when unk (.-cellAt unknown))
         rw (option options "riskWeight" 2)
         lethal-s (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) (if (some? dark-shares) (apply max (array-seq dark-shares)) 0)
                                  (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
@@ -423,6 +425,8 @@
      (when (some? see-lit) (js/Float64Array. TABLE)) (when (some? see-lit) (js/Uint8Array. TABLE))
      ;; slip-keys slip-flags
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE)
+     ;; unk-cell-at unk-keys unk-prices
+     cell-at (when (some? cell-at) (js/Float64Array. TABLE)) (when (some? cell-at) (js/Float64Array. TABLE))
      ;; move-unk move-light lights dark-refused unseen-refused dark-best-x dark-best-y dark-best-z dark-best-d
      0 0 (js/Uint8Array. cap) false false 0 0 0 js/Infinity
      ;; rivals

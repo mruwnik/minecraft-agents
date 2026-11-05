@@ -6,7 +6,7 @@
   ::max-nodes (a named target ::target-max-nodes) and the ring ends together within ::ring-nodes, ring headings away
   from the chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false) unless the
   chasers have given the body up there. Ring
-  routes plan through unseen cells as through seen ones (no rock guess), a flee step walks only the seen part.
+  routes plan through unseen cells (no rock guess), each priced by the chance it is rock (wworld/shut-cell-fn), a flee step walks only the seen part.
   Each end is priced (the planner's price plus the death the route risks from the known threats not chasing and the mobs
   met spawning on it (spawn-light/spawns-over), a death about where the body stands: cost/route-death-cost, plus, scored, a dead end where it runs unseen: dead-end) and scored against
   the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s over its way, its threat
