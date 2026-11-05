@@ -314,6 +314,7 @@ test('bundleHash covers every source path of the shadow config, the engine packa
     put('dashboard/shadow-cljs.edn', '{:source-paths ["src" "../engine/src" "../engine/test-support"]}')
     const files = ['dashboard/src/a.cljs', 'engine/src/b.cljs', 'engine/test-support/c.cljs', 'engine/package.json', 'engine/package-lock.json', 'engine/js/d.mjs']
     for (const f of files) put(f, '1')
+    fs.symlinkSync(root, path.join(root, 'engine/src/linked-dir'))
     const base = bundleHash(root)
     for (const f of files) {
       put(f, '2')

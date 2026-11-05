@@ -25,7 +25,12 @@ const engine = path.join(repo, 'engine')
 // @@test lines are left out: the live forwarder already passed them on, and a copy in the dump would be counted again as results.
 export const failureDump = (all, max = 20000, out = all.split('\n').filter((l) => !l.includes('@@test ')).join('\n')) => out.length <= max ? out : `...(cut, ${out.length - max} chars before)\n${out.slice(-max)}`
 
-const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
+// A symlink to a directory (a worktree links shared data dirs into the tree) is data, not source: skipped, or the hash read would hit EISDIR.
+const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+  const p = path.join(dir, e.name)
+  if (e.isSymbolicLink()) return fs.statSync(p, { throwIfNoEntry: false })?.isFile() ? [p] : []
+  return e.isDirectory() ? walk(p) : [p]
+})
 
 export const testNamespaces = (root = path.join(engine, 'test')) =>
   walk(root).filter((f) => /\.clj[cs]$/.test(f))
