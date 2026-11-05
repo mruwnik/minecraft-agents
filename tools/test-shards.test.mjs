@@ -243,6 +243,8 @@ test('main end: a failing shard with a large output reaches a pipe reader throug
     fs.writeFileSync(path.join(root, 'tools/compile'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
     fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
     fs.mkdirSync(path.join(root, 'engine/node_modules'))
+    fs.mkdirSync(path.join(root, 'dashboard'))
+    fs.writeFileSync(path.join(root, 'dashboard/shadow-cljs.edn'), '{:source-paths ["src"]}')
     fs.mkdirSync(path.join(root, 'engine/test'))
     fs.writeFileSync(path.join(root, 'engine/test/x_test.cljs'), '(ns x-test)\n')
     fs.writeFileSync(path.join(root, 'engine/out/test.cjs'), "process.stdout.write('y'.repeat(300000) + 'END\\n'); process.exitCode = 1\n")
@@ -315,6 +317,18 @@ test('bundleHash covers every source path of the shadow config, the engine packa
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
+test('bundleHash throws when the shadow config is missing or has no source paths', () => {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-nocfg-'))
+  try {
+    assert.throws(() => bundleHash(root), /missing/)
+    fs.mkdirSync(path.join(root, 'dashboard'))
+    for (const t of ['{}', '{:source-paths []}']) {
+      fs.writeFileSync(path.join(root, 'dashboard/shadow-cljs.edn'), t)
+      assert.throws(() => bundleHash(root), /no :source-paths/)
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
 test('parts started together compile once and each runs its tests (a part with no tests fails)', async () => {
   const root = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-parts-'))
   try {
@@ -324,6 +338,8 @@ test('parts started together compile once and each runs its tests (a part with n
     fs.writeFileSync(path.join(root, 'tools/compile'), `#!/bin/sh\necho x >> ${path.join(root, 'compiles')}\nsleep 1\nexit 0\n`, { mode: 0o755 })
     fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
     fs.mkdirSync(path.join(root, 'engine/node_modules'))
+    fs.mkdirSync(path.join(root, 'dashboard'))
+    fs.writeFileSync(path.join(root, 'dashboard/shadow-cljs.edn'), '{:source-paths ["src"]}')
     fs.mkdirSync(path.join(root, 'engine/test'))
     for (const x of ['a', 'b']) fs.writeFileSync(path.join(root, `engine/test/${x}_test.cljs`), `(ns ${x}-test)\n`)
     fs.writeFileSync(path.join(root, 'engine/out/test.cjs'), "require('fs').appendFileSync(process.env.MC_TEST_TIMINGS, JSON.stringify({var: \"#'t/t\", ms: 1}) + '\\n')\n")

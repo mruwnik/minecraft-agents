@@ -158,9 +158,10 @@ const stampFile = path.join(engine, 'out/test-full.stamp')
 // Every input of the :test build: the shadow config's :source-paths (read from it, so a new path is hashed too), the engine JS the bundle loads, and the config and package files.
 export const bundleInputs = (root = repo) => {
   const cfg = path.join(root, 'dashboard/shadow-cljs.edn')
-  const text = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : ''
-  const vec = /:source-paths\s*\[([^\]]*)\]/.exec(text)?.[1] ?? ''
+  if (!fs.existsSync(cfg)) throw new Error(`bundleInputs: ${cfg} is missing`)
+  const vec = /:source-paths\s*\[([^\]]*)\]/.exec(fs.readFileSync(cfg, 'utf8'))?.[1] ?? ''
   const srcDirs = [...vec.matchAll(/"([^"]+)"/g)].map((m) => path.resolve(root, 'dashboard', m[1]))
+  if (!srcDirs.length) throw new Error(`bundleInputs: no :source-paths strings in ${cfg}`)
   const dirs = [...new Set([...srcDirs, path.join(root, 'engine/js')])].filter((d) => fs.existsSync(d))
   const extra = ['dashboard/shadow-cljs.edn', 'dashboard/package.json', 'dashboard/package-lock.json', 'engine/package.json', 'engine/package-lock.json'].map((f) => path.join(root, f)).filter((f) => fs.existsSync(f))
   return [...new Set([...dirs.flatMap(walk), ...extra])].sort()
