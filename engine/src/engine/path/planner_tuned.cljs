@@ -425,8 +425,9 @@
      (when (some? see-lit) (js/Float64Array. TABLE)) (when (some? see-lit) (js/Uint8Array. TABLE))
      ;; slip-keys slip-flags
      (js/Float64Array. TABLE) (js/Uint8Array. TABLE)
-     ;; unk-cell-at unk-keys unk-prices
+     ;; unk-cell-at unk-keys unk-prices unk-cell-max
      cell-at (when (some? cell-at) (js/Float64Array. TABLE)) (when (some? cell-at) (js/Float64Array. TABLE))
+     (if unk (js/Math.max (or-else (.-cell unknown) 0) (or-else (.-cellMax unknown) 0)) 0)
      ;; move-unk move-light lights dark-refused unseen-refused dark-best-x dark-best-y dark-best-z dark-best-d
      0 0 (js/Uint8Array. cap) false false 0 0 0 js/Infinity
      ;; rivals

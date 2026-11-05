@@ -158,7 +158,7 @@
    ^js missed ^js no-light ^js see-keys ^js see-flags ^js slip-keys ^js slip-flags
    ;; options.unknown.cellAt (fn x y z -> the cell price of a feet cell, nil: unk-cell everywhere; see unkCellOf), cached
    ;; in unk-keys and unk-prices as darkOf
-   ^js unk-cell-at ^js unk-keys ^js unk-prices
+   ^js unk-cell-at ^js unk-keys ^js unk-prices unk-cell-max
    ;; what the move being made adds (set by unseenRefuses): seconds, and 1 when it lights its landing; each node's light flag;
    ;; a phantom floor was refused for want of sight (dark-refused; the refused stand nearest the goal, dark-best-*) or because
    ;; the walk could not stop to check it first (unseen-refused)
