@@ -592,17 +592,20 @@
           (is (= 1 @refusals) "the refused bed is asked once, not on every pass")
           (is (number? (:worth (first (st/entries eng :bed-walk-unsafe)))) "the refusal carries the worth it was priced at"))))))
 
-(deftest the-night-asks-a-refused-bed-again-when-its-bed-worth-rises
+(deftest a-refused-bed-is-judged-at-its-own-bed-worth-not-the-nearest-beds
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (setup on-open-ground)
-              refusals (atom 0)
-              worth (atom 1)
-              priced (fn [& _] (swap! refusals inc) (reset! worth 100) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+        (let [near {:x 15 :y 64 :z 0}
+              {:keys [eng p clock]} (setup (assoc-in on-open-ground [:blocks "15,64,0"] "red_bed"))
+              asked (atom [])
+              priced (fn [_ _ args] (swap! asked conj (:pos args)) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+          (st/know-bed! eng near)
           (swap! clock + (* 4 sh-clock/ms-per-day))
+          (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 50 :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
           (with-redefs [child/call-walk* priced
-                        night/bed-worth (fn ^:async [& _] @worth)]
+                        night/bed-worth (fn ^:async [_ bed _] (if (= bed near) 100 1))]
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 12)))
-          (is (< 1 @refusals) "worth rose above the one it was refused at: the bed is asked again"))))))
+          (is (some #{near} @asked) "the near bed, worth 100, is walked")
+          (is (not-any? #{far-bed} @asked) "the far bed was refused at 50 and its own worth is 1: not asked again"))))))
