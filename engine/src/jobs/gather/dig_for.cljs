@@ -59,7 +59,7 @@
   1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
      drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost (judged within 8 blocks of the dug cell; from farther mine.drop-unreached). The count is the inventory's.
   2. Carrying the goal ends :count; digs failed in a row end :gave-up when another is not worth its price (cost/try-again? :dig); :dry-digs (setting) digs that raised no count end :no-drops.
-  3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first; mine.targets), with :torches a torch first in a dark cell no hung one reaches (torches carried or craftable).
+  3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first, one that cannot start as the body stands on nothing yet keeps the target and yields; mine.targets), with :torches a torch first in a dark cell no hung one reaches (torches carried or craftable).
   4. No target: look round once per cell, then by a mineshaft (:descend-shaft, mine.descent) or a stair down (:descend-stair, :descend-limit, to the ore's :level) to
      find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
   5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches where the planner says (jobs.lib.torch-plan;
@@ -309,8 +309,9 @@
                                                (skip! c pos) :again)
       (some? pos) (let [walked (await (walk-to-dig! c pos targets))
                         cell (access/cell pos)
-                        float? (and (= :blocked walked) (floating? c (targets/cluster-of pos targets)))
-                        cut (when (and (= :blocked walked) (not float?) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
+                        mid-air? (and (= :blocked walked) (result/mid-air? (near/last-walk c)))
+                        float? (and (= :blocked walked) (not mid-air?) (floating? c (targets/cluster-of pos targets)))
+                        cut (when (and (= :blocked walked) (not mid-air?) (not float?) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
                                        (not (#{:off-plan :needs-health :damage-budget} (result/why (near/last-walk c))))
                                        (not (contains? (:target-cut (ctx/mem c)) cell)))
                               (let [cluster (targets/cluster-of pos targets)
@@ -318,6 +319,7 @@
                                 (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
                                 r))]
                     (cond
+                      mid-air? (do (u/failed! c) :continue)
                       float? (do (skip-unreachable! c pos targets) :again)
                       (= :risky walked) (do (targets/skip-risky! c pos (:data (near/last-walk c))) :again)
                       (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)

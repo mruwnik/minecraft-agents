@@ -217,6 +217,19 @@
             (await (run-ticks s 60))
             (is (= [4] (map :cluster (events-of s :mine.unreachable))) (str why))))))))
 
+(deftest a-walk-that-cannot-start-in-mid-air-keeps-the-target-and-yields
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              stub {:round (fn [c] (swap! walks inc) (ctx/end c :nothing-possible {:reason :unreachable :why :start-not-standable} {:arrived false}))}
+              s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
+          (await (run-ticks s 3))
+          (is (= 3 @walks) "one walk a round: the round is given back until the body lands")
+          (is (empty? (events-of s :mine.walk-failed)))
+          (is (not (finished? s))))))))
+
 ;; Juniper j754: the walk to an ore waited for day for ever (go-to at night); mine gave the round back for 12 minutes.
 (deftest a-walk-that-keeps-waiting-is-skipped-after-the-stall-rounds
   (async done
@@ -353,7 +366,7 @@
                                 :self {:pos [-4.5 64 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
           (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false}) {})
-          (await (run-ticks s 120))
+          (await (run-until s 120 #(seq (events-of % :mine.stair-plan))))
           (is (= [4 60 0] (:own-stair (first (events-of s :mine.stair-plan)))) "the walk down the old stair is priced as a route through the cliff"))))))
 
 (deftest a-plain-dig-is-not-moved-from-a-building

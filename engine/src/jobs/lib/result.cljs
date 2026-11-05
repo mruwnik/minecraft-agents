@@ -20,6 +20,12 @@
                     (:inside-own-shelter (:data e))
                     (:inside-own-shelter (:cause e))))))
 
+(defn mid-air?
+  "Whether go-to's ending e gave up because the body stands on nothing yet (:start-not-standable): it lands, then walks, so
+  it is no verdict on the target."
+  [e]
+  (and (map? e) (not= :done (:kind e)) (= :start-not-standable (why e))))
+
 (defn permanent-walk?
   "Whether go-to's ending e is a verdict on the cell (held :unreachable), not something that may pass: a refused call
   (:bad-pos, :unsupported) or an :unreachable whose :why is permanent (a door stuck, a stuck step, no progress, a move
