@@ -691,7 +691,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (climb! (assoc in-phantom :blocks (dissoc phantom "4,60,0" "4,61,0")) {:pos [26 48 0] :worth 20}))
+        (let [{:keys [out p] :as s} (await (climb! (assoc in-phantom :blocks (dissoc phantom "4,60,0" "4,61,0")) {:pos [26 48 0] :worth 40}))
               digs (filter #(and (= :child_ended (:kind %)) (= :done (:status %)) (re-find #"/dig$" (:job %))) @(:seen s))
               cell-s (cost/dig-cells-s [(tools/clear-ms p "stone")])]
           (is (= [false :dig-budget] [(:arrived @out) (:why (:escalation @out))]) (pr-str @out))
