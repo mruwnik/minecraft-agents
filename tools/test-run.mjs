@@ -9,6 +9,7 @@ import os from 'node:os'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
+import { topSelf } from './prof-top.mjs'
 import { fileURLToPath } from 'node:url'
 import { pidAlive } from './res-slot.mjs'
 
@@ -282,6 +283,14 @@ export const missingNss = (engineDir, specs) =>
     return !fs.readFileSync(f, 'utf8').split('\n').some((l) => l.startsWith(`${ns.replaceAll('-', '_')}.${mungeName(name)} = `))
   })
 
+// MC_TEST_PROF=<dir>: the test node writes a V8 cpuprofile there (the compile's node processes do not), and the top self-time functions print after the run.
+export const profArgs = (dir) => dir ? ['--cpu-prof', `--cpu-prof-dir=${dir}`] : []
+const printProfiles = (dir) => {
+  if (!dir || !fs.existsSync(dir)) return
+  fs.readdirSync(dir).filter((f) => f.endsWith('.cpuprofile')).map((f) => path.join(dir, f)).filter((f) => fs.statSync(f).mtimeMs >= startedAt)
+    .forEach((f) => { console.log(`top self-time functions, ${f}`); topSelf(JSON.parse(fs.readFileSync(f, 'utf8'))).forEach((l) => console.log(l)) })
+}
+const startedAt = Date.now()
 const readText = (f) => fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : ''
 const readJson = (f, d) => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : d
 
@@ -309,7 +318,7 @@ const main = async () => {
     fs.writeFileSync(timings, '')
     child = spawn(path.join(tools, 'res-slot'),
       ['tests', '--need', String(needMb(nss.length, res.kinds.tests)), '--',
-        'timeout', '-k', '10', String(limit), 'node', `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${chunk.join(',')}`],
+        'timeout', '-k', '10', String(limit), 'node', ...profArgs(process.env.MC_TEST_PROF), `--max-old-space-size=${res.kinds.tests.heapMb}`, path.join(runDir, 'out/test.cjs'), `--test=${chunk.join(',')}`],
       { cwd: engine, stdio: 'inherit', env: { ...process.env, MC_TEST_TIMINGS: timings, NODE_PATH: path.join(repo, 'node_modules') } })
     const stop = watchStall(timings, stallS, () => { stalled = true; killStalled(child.pid) }, { firstS: Number(process.env.MC_TEST_FIRST_S) || FIRST_RESULT_S })
     const exited = await new Promise((resolve) => child.on('exit', (status) => resolve(status ?? 1)))
@@ -322,6 +331,7 @@ const main = async () => {
       console.error(`test-engine: TIMEOUT, killed after ${limit} s (prior timing ~${Math.round(expected / 1000)} s); last finished test: ${lastFinished(lines) ?? 'none'}`)
     if (exited !== 0) { code = exited; break }
   }
+  printProfiles(process.env.MC_TEST_PROF)
   const owed = minTests(specs)
   if (code === 0 && finished < owed) {
     console.error(`test-engine: FAILED, ${finished} tests finished but ${owed} were named (a green run with missing tests is not a pass)`)
