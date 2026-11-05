@@ -1136,7 +1136,7 @@
     (is (< (prior 20) (:chance caught)))))
 
 ;; Card 9bc046bb: a creeper seen 9 blocks off left the body's mob memory (it could have drifted) while it fought a zombie; the fight priced no blast and the creeper blew
-(deftest a-creeper-seen-and-lost-by-the-fight-adds-its-blast-at-the-chance-it-is-still-there
+(deftest a-creeper-seen-and-lost-by-the-fight-adds-its-blast-by-the-chance-it-is-still-there
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :entities [(zombie 9 4 1)]}))
         c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
         blasts #(:blasts (hostile-fight/fight-answer c (danger-q/dangers p 16 {:ranged-radius 16} {}) (constantly nil)))
@@ -1144,8 +1144,9 @@
     (is (empty? (blasts)) "no creeper known")
     (with-redefs [look/seen-block (constantly {:name "air" :age-ms 600000})]
       (lost 6)
-      (let [[b] (blasts)]
-        (is (< 0 b (cost/blast-hurt (cost/armour-stats nil) (js/Math.hypot 2 1))) "it comes to the fight in time; its blast weighs the chance it is still there")
+      (let [[{:keys [hp chance]}] (blasts)]
+        (is (= hp (cost/blast-hurt (cost/armour-stats nil) (js/Math.hypot 2 1))) "it comes to the fight in time, its whole blast")
+        (is (< 0 chance 1) "by the chance it is still there")
         (lost 60)
         (is (empty? (blasts)) "one lost 60 blocks off does not reach the fight before it ends")))))
 

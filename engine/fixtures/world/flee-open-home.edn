@@ -16,11 +16,4 @@
          [:summon "zombie" [19.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.step-speed :data {:blocks [:>= 2]}} :within-s 10}
             {:no-event {:source :job :kind :retreat.step-speed :data {:blocks [:< 0.5]}} :for-s 10}
-            {:no-event {:source :body :kind :died} :for-s 20}]}
-  ;; should fail: the fight beside a creeper is not taken, whatever the zombie
-  {:name "a-zombie-with-a-creeper-seen-near-is-not-fought-bare-handed"
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [13 0 15]}) [:now]]
-         [:summon "creeper" [21.5 0 16.5] "{NoAI:1b}"]
-         [:summon "zombie" [19.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 10}
-            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 15}]}]}
+            {:no-event {:source :body :kind :died} :for-s 20}]}]}

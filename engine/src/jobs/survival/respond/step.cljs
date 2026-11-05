@@ -68,7 +68,7 @@
                     verdicts)
         goal (at (:goal judged))
         blast (mapv #(str (.-name %) " " (.-id %)) blast)
-        lean (at (or (:start (first (:rooms survey))) (:home judged) (respond.goal/usable judged) (when (empty? blast) (cover/home-pos c))))
+        lean (at (or (:start (first (:rooms survey))) (respond.goal/closed-home judged) (respond.goal/usable judged)))
         choice {:blast blast :rooms rooms :dropped (:dropped survey) :home (at (cover/home-pos c)) :home-why (when (cover/home-pos c) (:home-why judged)) :goal goal :goal-why (:why judged) :lean lean}]
     (when (not= choice (:choice-said (ctx/mem c)))
       (ctx/update-mem! c assoc :choice-said choice)

@@ -2,7 +2,7 @@
   "The one price of each answer to hostiles, so the reflexes take the cheapest (decide). Pure.
 
   An answer is {:damage hp :hit hp :shape :blasts [hp] :spread [hp] :seconds s :then [answer] :caught {:chance :damage :hit :blasts}}:
-  the hp it is expected to cost, the creeper blasts in it landing for certain (:spread: as many equally likely blast
+  the hp it is expected to cost, the creeper blasts in it landing for certain, or by a chance ({:hp :chance}, chance-blast; :spread: as many equally likely blast
   totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too; with :stays only by that chance, the
   answer itself again one of them: its mobs may still be there when it ends; :at-once, at the health it leaves) and,
   for a walk away, the chance its mobs catch it and the blows they then land. answer-price: the hp at the health each
@@ -94,20 +94,42 @@
 
 (defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
 
+(defn chance-blast
+  "A blast of hp that comes by chance: hp itself when it is sure."
+  [hp chance]
+  (if (>= chance 1) hp {:hp hp :chance chance}))
+
+(defn blast-hp "hp of blast b when it comes." [b] (if (map? b) (:hp b) b))
+
+(defn blast-mean "hp blast b is expected to deal." [b] (if (map? b) (* (:chance b) (:hp b)) b))
+
+(defn blast-totals
+  "[chance hp] of each set of blasts that may come, summed, by its chance."
+  [blasts]
+  (reduce (fn [outs b]
+            (if (map? b)
+              (concat (map (fn [[w t]] [(* w (:chance b)) (+ t (:hp b))]) outs) (map (fn [[w t]] [(* w (- 1 (:chance b))) t]) outs))
+              (map (fn [[w t]] [w (+ t b)]) outs)))
+          [[1 0]]
+          blasts))
+
 (defn small
-  "hp of answer's damage in its small blows, the ones its :shape is the width of: less its :blasts and its :spread's mean."
+  "hp of answer's damage in its small blows, the ones its :shape is the width of: less its :blasts' and :spread's means."
   [{:keys [damage blasts spread]}]
-  (- damage (reduce + 0 blasts) (mean spread)))
+  (- damage (reduce + 0 (map blast-mean blasts)) (mean spread)))
 
 (defn blows-outcome
   "{:dies :lived} of the blows of answer against body (death/blow-outcome's): of its :damage (its count's :shape), its
-  :blasts sure (each of its :spread too, averaged), or of the :caught blows for its :chance."
+  :blasts landing first (each set that may come by its chance, each of its :spread too, averaged), or of the :caught
+  blows for its :chance."
   [body {:keys [caught] :as answer}]
   (let [outcome (fn [{:keys [hit blasts spread shape] :as a}]
-                  (let [sure (reduce + 0 blasts)
-                        blows (small a)
-                        os (map #(death/blow-outcome body (+ blows sure %) hit (+ sure %) shape) (or (seq spread) [0]))]
-                    {:dies (mean (map :dies os)) :lived (mean (map :lived os))}))
+                  (let [blows (small a)
+                        spread (or (seq spread) [0])
+                        os (for [[w sure] (blast-totals blasts) s spread]
+                             [(/ w (count spread)) (death/blow-outcome body (+ blows sure s) hit (+ sure s) shape)])]
+                    {:dies (reduce + (map (fn [[w o]] (* w (:dies o))) os))
+                     :lived (reduce + (map (fn [[w o]] (* w (:lived o))) os))}))
         clean (outcome answer)]
     (if caught
       (let [c (:chance caught) o (outcome caught)]
@@ -285,7 +307,7 @@
           chance (reduce + 0 (map first parts))
           caught (when (pos? chance)
                    (let [blasts (:blasts (second (apply max-key first parts)))
-                         sure (reduce + 0 blasts)
+                         sure (reduce + 0 (map blast-mean blasts))
                          {:keys [damage shape]} (mix (map (fn [[w o]] [(/ w chance) (assoc o :damage (- (:damage o) sure))]) parts))]
                      (cond-> {:chance chance :damage (+ damage sure) :hit (reduce max 0 (map (comp :hit second) parts)) :blasts blasts}
                        shape (assoc :shape shape))))]
@@ -535,8 +557,8 @@
         {creepers true others false} (group-by #(= "creeper" (:name %)) mobs)
         blasts (vec (for [{:keys [name distance speed] :as m} creepers
                           :when (<= (/ (max 0 (- (or distance 0) swell-start)) (or speed (danger/chase-speed name))) seconds)]
-                      (* (:weight m 1) (blow stats m))))]
-    (cond-> (-> (blows-over stats others seconds) (update :damage + (reduce + 0 blasts)) (update :hit #(reduce max % blasts)) (assoc :seconds 0))
+                      (chance-blast (blow stats m) (:weight m 1))))]
+    (cond-> (-> (blows-over stats others seconds) (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max % (map blast-hp blasts))) (assoc :seconds 0))
       (seq blasts) (assoc :blasts blasts))))
 
 (defn stand-loss

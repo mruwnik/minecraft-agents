@@ -1194,7 +1194,7 @@
           (is (not= [3 90 0] (first-target seen)) "26 up and 3 across is no way out")
           (is (= :no-way (:goal-why (choice seen))) (pr-str (choice seen))))))))
 
-(deftest a-home-the-body-reaches-first-wins-over-the-goal-of-the-walk-it-was-on
+(deftest an-open-home-the-body-reaches-first-does-not-drop-the-goal-of-the-walk-it-was-on
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1204,8 +1204,8 @@
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -30 :y 64 :z 8}}))
               [x] (first-target seen)
               e (choice seen)]
-          (is (neg? x) (str "west, to the home side, not to the errand's goal: " (pr-str (first-target seen))))
-          (is (= [:home-safer [-30 64 8] [-12 64 0]] [(:goal-why e) (:goal e) (:lean e)]) (pr-str e))
+          (is (neg? x) (str "west, away from the zombie: " (pr-str (first-target seen))))
+          (is (= [nil [-30 64 8] [-30 64 8]] [(:goal-why e) (:goal e) (:lean e)]) (str "a bed in the open is no refuge to drop the errand for: " (pr-str e)))
           (is (= ["zombie 7 [6 64 0]"] (:hostiles e)) "the choice names the hostiles and where they were"))))))
 
 (deftest a-flight-does-not-walk-to-a-goal-beside-a-place-it-fled-a-mob-from

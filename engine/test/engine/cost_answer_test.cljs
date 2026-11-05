@@ -67,6 +67,14 @@
       (is (< (js/Math.abs (- (:shape caught) (fight/sum-shape [[(:damage wet) (:shape wet)] [(answer/small (:caught walk)) (:shape (:caught walk))]]))) 1e-9)
           "the walk caught after the fight: the width of both parts' blows"))))
 
+(deftest a-lethal-blast-that-comes-by-chance-kills-by-that-chance
+  (let [blows {:damage 10 :hit 1 :seconds 1}
+        dies #(answer/blows-chance (body 20) %)]
+    (is (< 0.45 (dies (assoc blows :damage 17.5 :blasts [(cost/chance-blast 15 0.5)])) 0.55)
+        "10 hp of small blows on 20 hp live; with the 15 hp blast they kill: a half chance of it, about a half chance of death")
+    (is (= (dies (assoc blows :damage 25 :blasts [15])) (dies (assoc blows :damage 25 :blasts [(cost/chance-blast 15 1)])))
+        "a sure blast")))
+
 (deftest a-fight-goes-bad-at-the-trial-fights-prior-and-a-flight-after-it-adds-its-own-catch
   (let [f #(cost/fight-answer (assoc (fight "stone_sword" (mob "zombie" 0)) :health %))
         bad (caught/fight-prior "zombie" 20 "stone_sword" 1)]

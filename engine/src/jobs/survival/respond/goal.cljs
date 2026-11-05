@@ -73,6 +73,12 @@
   [ends homes]
   (first (filter #(when-let [e (search/named ends %)] (nil? (search/safe-why e))) homes)))
 
+(defn closed-home
+  "judged's safe home (:home) when it is the closed room of its homes (:room), else nil: a home that is no closed room (a
+  bed in the open) is a place to run to, not one that removes the chasers' death."
+  [{:keys [home room]}]
+  (when (and home (= home room)) home))
+
 (defn home-why
   "Pure: why home (a position, or nil) is no safe run (flee-search/safe-why of its end in search ends; :no-way when it
   was not planned); nil when it is safe or there is no home."
@@ -83,7 +89,7 @@
 (defn verdict
   "Pure: why a flight does not go to goal, its end e in the flight's search, nil when it may: :hostile-nearer when
   beaten? (a chaser gets there first even against a straight walk: flee-search/beaten-to?), flee-search/safe-why
-  (:no-way: not planned whole, :past-hostile, :hostile-nearer); :home-safer: home (safe-home) lies elsewhere (farther than same-place from it)."
+  (:no-way: not planned whole, :past-hostile, :hostile-nearer); :home-safer: home (closed-home) lies elsewhere (farther than same-place from it)."
   [goal e {:keys [home beaten?]}]
   (cond
     beaten? :hostile-nearer
@@ -94,24 +100,24 @@
 (declare under-floor? margin)
 
 (defn ^:async judge!
-  "What the flight makes of its goal and homes (positions) this step, from one flee search (flee-search/search!, from
+  "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
   cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only): {:goal (active) :why (:given-up, else verdict; nil: it
-  may go there) :home (safe-home of homes) :home-why (of the last of homes) :ends (the search's scored ends)}."
-  [c homes covered? covers]
+  may go there) :home (safe-home of homes) :room :home-why (of the last of homes) :ends (the search's scored ends)}."
+  [c homes room covered? covers]
   (let [goal (active c)
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))}))
         home (safe-home ends homes)]
-    {:goal goal :home home :ends ends :home-why (home-why ends (last homes))
+    {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))
      :why (when goal
             (cond
               (given-up? c goal) :given-up
               (under-floor? c goal) :under-floor
               :else (verdict goal (search/named ends goal)
-                             {:home home
+                             {:home (closed-home {:home home :room room})
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn block-at-fn
@@ -134,7 +140,7 @@
 (defn choose-opts
   "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
   price of a flight (respond.cover/caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
-  so their cornered verdicts agree. covered? (cell -> bool, a ranged threat's cover) and home (a safe home's pos that is a closed room, respond.cover/closed-home) when given."
+  so their cornered verdicts agree. covered? (cell -> bool, a ranged threat's cover) and home (a safe home's pos that is a closed room, closed-home) when given."
   [c threats covered? home]
   (let [p (:primitives c)
         from (u/self-pos c)

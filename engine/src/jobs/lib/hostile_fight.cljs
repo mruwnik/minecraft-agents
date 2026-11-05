@@ -277,7 +277,7 @@
   search's caught-chance; nil the prior alone; cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
-  swell start) is added, in :blasts; so is that of one seen and lost (sighted-blasting), times the chance it is still there."
+  swell start) is added, in :blasts; so is that of one seen and lost (sighted-blasting), coming by the chance it is still there (cost/chance-blast)."
   [c near struck-of & [walk-q caught]]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
@@ -296,11 +296,12 @@
             spot (danger-q/mob-pos p (first fought))
             blast-at #(cost/blast-hurt stats (min cost/swell-start (u/dist % spot)))
             blasts (concat (map #(blast-at (danger-q/mob-pos p %)) creepers)
-                           (map (fn [{:keys [pos weight]}] (* weight (blast-at pos))) sighted))
-            a (if (seq blasts) (cost/fight-answer (update fight :health #(max 1 (- % (reduce + 0 blasts))))) a)]
-        (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) (reduce + 0 blasts))
+                           (map (fn [{:keys [pos weight]}] (cost/chance-blast (blast-at pos) weight)) sighted))
+            blast-hp (reduce + 0 (map cost/blast-mean blasts))
+            a (if (seq blasts) (cost/fight-answer (update fight :health #(max 1 (- % blast-hp)))) a)]
+        (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) blast-hp)
                                    :hit (max (:hit x) hardest)
-                                   :blasts (vec (filter pos? blasts))}
+                                   :blasts (vec (filter (comp pos? cost/blast-hp) blasts))}
                             (:shape x) (assoc :shape (cost-fight/sum-shape [[(walk-hp walk-q) nil] [(max (cost/small x) (* rate (:seconds a))) (:shape x)]]))))]
           (cond-> (assoc (felt a) :seconds seconds :creepers (vec creepers))
             (:caught a) (assoc :caught (assoc (felt (:caught a)) :chance (:chance (:caught a))))

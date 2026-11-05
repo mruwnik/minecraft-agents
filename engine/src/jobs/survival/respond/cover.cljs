@@ -142,12 +142,6 @@
   [c rooms blast?]
   (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)])))
 
-(defn closed-home
-  "judged's safe home (:home) when it is the closed room of its homes (the first, :room), else nil: a home that is no
-  closed room (a bed in the open) is a place to run to, not one that removes the chasers' death."
-  [{:keys [home room]}]
-  (when (and home (= home room)) home))
-
 (defn dead-end-covers
   "The covers a dead end of the flee search is priced with (respond.goal/judge!): the cornered step's where the body
   stands (cornered-covers, against the hostiles it weighs, from the ways' specs when given), built when the search
@@ -157,11 +151,11 @@
 
 (defn ^:async judge!
   "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
-  (glance-away!), the homes kept as :homes and the closed room's start among them as :room (closed-home)."
+  (glance-away!), the homes kept as :homes."
   [c covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
   (let [hs (homes c rooms blast?)]
-    (assoc (await (respond.goal/judge! c hs covered? (dead-end-covers c))) :homes hs :room (when-not blast? (:start (first rooms))))))
+    (assoc (await (respond.goal/judge! c hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c))) :homes hs)))
 
 (defn ^:async caught-chance-once!
   "{:chance :seconds :cornered?} of the flight's next step from where the body stands (flee-search/caught-chance), for
@@ -189,9 +183,8 @@
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
                            blast? (seq (blast p threats))
                            rooms (:rooms (survey c threats false))
-                           judged (assoc (await (respond.goal/judge! c (homes c rooms blast?) covered? (dead-end-covers c specs)))
-                                         :room (when-not blast? (:start (first rooms))))]
-                       (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (closed-home judged)) glanced)))
+                           judged (await (respond.goal/judge! c (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))]
+                       (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (respond.goal/closed-home judged)) glanced)))
             chance (cond-> chance (and chance scan) (assoc :way-scan scan) (:refuge-s chance) (assoc :hide-s (hide-out/quiet-s)))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance)))))
@@ -216,7 +209,7 @@
   (when-let [cells (search/unseen-ahead (:ends judged) (:glanced (ctx/mem c)))]
     (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
     (await (dig-look/look-unknown! c cells))
-    (merge (await (respond.goal/judge! c (:homes judged) covered? (dead-end-covers c))) (select-keys judged [:homes :room]))))
+    (assoc (await (respond.goal/judge! c (:homes judged) (:room judged) covered? (dead-end-covers c))) :homes (:homes judged))))
 
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
@@ -234,7 +227,7 @@
      way
      (let [p (:primitives c)
            from (u/self-pos c)
-           opts-for #(respond.goal/choose-opts c threats covered? (closed-home %))
+           opts-for #(respond.goal/choose-opts c threats covered? (respond.goal/closed-home %))
            first-pick (search/choose (:ends judged) (opts-for judged))
            again (when (or (nil? first-pick) (search/into-unseen? first-pick)) (await (look-ahead! c covered? judged)))
            e (if again
