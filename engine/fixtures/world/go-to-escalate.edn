@@ -44,8 +44,9 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [17 1 16] "coal_ore"] [:block [17 1 15] "coal_ore"] [:body-near [23.5 4 16.5] 2]]}
-  {:name "sealed-room-clear-path-arrives-and-shuts-the-door"
-   ;; a hollow stone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
+  {:name "sealed-room-dug-wall-arrives-and-shuts-the-door"
+   ;; the 2-cell door in the east wall is one dig route (the priced choice, cheaper than a :clear-path step over the same cells); the
+   ;; wall is another's plan, so it is put back. A hollow stone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
    ;; body inside at feet y 1; the goal outside to the east
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "stone" :hollow]]
@@ -54,7 +55,7 @@
                                  :want [:any "stone"]}]}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:not-block [20 1 16] "air"] [:not-block [20 2 16] "air"] [:body-near [24.5 1 16.5] 2]]}
