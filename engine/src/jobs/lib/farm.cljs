@@ -22,11 +22,16 @@
   "True when a water cell of water-set (a set of [x y z]) lies within ::water-reach in x and
   z of the farmland at x y z, at its y or one above."
   [water-set x y z]
-  (let [r (water-reach)]
+  (let [r (water-reach)
+        offsets (* 2 (inc (* 2 r)) (inc (* 2 r)))]
     (boolean (and (seq water-set)
-                  (some (fn [[dx dz]] (or (contains? water-set [(+ x dx) y (+ z dz)])
-                                          (contains? water-set [(+ x dx) (inc y) (+ z dz)])))
-                        (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dz]))))))
+                  ;; whichever is fewer: the water cells, or the cells within reach
+                  (if (< (count water-set) offsets)
+                    (some (fn [[wx wy wz]] (and (<= (js/Math.abs (- wx x)) r) (<= (js/Math.abs (- wz z)) r) (or (== wy y) (== wy (inc y)))))
+                          water-set)
+                    (some (fn [[dx dz]] (or (contains? water-set [(+ x dx) y (+ z dz)])
+                                            (contains? water-set [(+ x dx) (inc y) (+ z dz)])))
+                          (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dz])))))))
 
 (defn wet?
   "Whether the farmland at {:x :y :z} is hydrated by water the body has seen (see hydrated?)."

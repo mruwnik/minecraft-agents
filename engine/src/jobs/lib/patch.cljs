@@ -223,7 +223,7 @@
         farmable-at? (memo grounds (fn [x z t] (contains? bs/farmable-ground (name-fn {:x x :y t :z z}))))
         lit? (crop-lit-fn p)
         wet-ring (wet-ring-fn waters (max w h) from)
-        wet? (fn [x z y] (farm/hydrated? waters x y z))
+        wet? (memo (volatile! {}) (fn [x z y] (farm/hydrated? waters x y z)))
         fetch-s (fn [x z] (when (seq waters)
                             (let [cx (+ x (/ (dec w) 2)) cz (+ z (/ (dec h) 2))]
                               (* 2 (walk-s (reduce min (map (fn [[wx _ wz]] (js/Math.hypot (- wx cx) (- wz cz))) waters)))))))

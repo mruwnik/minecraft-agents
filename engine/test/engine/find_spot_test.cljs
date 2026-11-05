@@ -155,6 +155,8 @@
   (is (= (:score (pt/score-patch {:tops [63 63] :cells (cells 2 {}) :sky true :away 0}))
          (:score (pt/score-patch {:tops [63 63] :cells (cells 2 {}) :sky false :away 0})))))
 
+(def far-water "More water cells than lie within reach of a cell, all far from x 0." (set (for [i (range 200)] [400 63 i])))
+
 (deftest hydrated-table
   (are [ws x y z expected] (= expected (farm/hydrated? ws x y z))
     #{[4 63 0]} 0 63 0 true
@@ -168,6 +170,8 @@
     #{[-4 64 4]} 0 63 0 true
     #{[5 63 4]} 0 63 0 false
     #{[400 63 0] [0 63 -4]} 0 63 0 true
+    (into #{[0 64 -4]} far-water) 0 63 0 true
+    (into #{[5 63 0]} far-water) 0 63 0 false
     #{} 0 63 0 false))
 
 (deftest max-step-table
