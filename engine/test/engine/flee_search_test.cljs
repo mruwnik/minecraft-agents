@@ -371,10 +371,12 @@
 (deftest pick-keeps-dry-and-wanted-ends-while-it-can
   (let [wet? #(pos? (:x %))
         ends [(end-of 6 0 9) (end-of -6 0 2)]]
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:wet? wet?})) "a dry end beats a better wet one")
+    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:wet? wet? :mark-s 100})) "a dry end beats a better wet one")
     (is (= {:x 6 :y 64 :z 0} (search/pick [(end-of 6 0 9)] {:wet? wet?})) "only water: a swim")
+    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:wet? wet? :mark-s 8})) "a mark costs its seconds: 9 less 8 loses to 2")
+    (is (= {:x 6 :y 64 :z 0} (search/pick ends {:wet? wet? :mark-s 0.5})) "a mark cheaper than the score gap does not turn the pick")
     (is (nil? (search/pick [(end-of 6 0 9)] {:wet? wet? :dry-only? true})) "a drowned chases: no swim")
-    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:avoid [wet? (constantly true)]})) "an avoid that leaves none is skipped")
+    (is (= {:x -6 :y 64 :z 0} (search/pick ends {:avoid [wet? (constantly true)] :mark-s 100})) "an avoid that leaves none is skipped")
     (is (= {:x -6 :y 64 :z 0} (search/pick ends {:never? wet?})))
     (is (nil? (search/pick [(end-of 6 0 9)] {:never? wet?})) "never? leaves none: cornered")
     (is (= {:x -6 :y 64 :z 0} (search/pick ends {:hazards [{:x 6 :y 64 :z 1}]})) "a route past a hazard is left out")))
@@ -383,14 +385,14 @@
   (let [past (end-of 20 0 9 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3} {:x 20 :y 64 :z 0 :t 10}])
         other (end-of 0 12 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 0 :y 64 :z 5 :t 3} {:x 0 :y 64 :z 12 :t 10}])
         near-5? #(< (js/Math.abs (- (:x %) 5)) 2)]
-    (is (= {:x 0 :y 64 :z 5} (search/pick [past other] {:avoid [near-5?]})))))
+    (is (= {:x 0 :y 64 :z 5} (search/pick [past other] {:avoid [near-5?] :mark-s 100})))))
 
 (deftest a-route-through-an-avoided-cell-loses-to-one-that-keeps-clear-while-one-is-left
   (let [through (end-of 0 20 9 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 0 :y 64 :z 5 :t 3} {:x 0 :y 64 :z 20 :t 10}])
         clear (end-of 12 0 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 12 :y 64 :z 0 :t 10}])
         door? (fn [e] (some #(= 5 (:z %)) (:cells e)))]
-    (is (= {:x 12 :y 64 :z 0} (search/pick [through clear] {:avoid-route door?})))
-    (is (= {:x 0 :y 64 :z 5} (search/pick [through] {:avoid-route door?})) "none clear: the route is taken")))
+    (is (= {:x 12 :y 64 :z 0} (search/pick [through clear] {:avoid-route door? :mark-s 100})))
+    (is (= {:x 0 :y 64 :z 5} (search/pick [through] {:avoid-route door? :mark-s 100})) "none clear: the route is taken")))
 
 (deftest the-unseen-cells-the-routes-stopped-before-are-where-to-look-nearest-first-each-once
   (let [ends [(end-of 4 0 1 :found? false :s 0.8 :unseen [5 64 0])

@@ -450,32 +450,38 @@
   "The end entry a flee step takes among scored ends (scored, covers), its :step the cell the step walks to (step-of,
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
   nothing on the chasers over standing still, pockets that gain less than their walk takes, those with every step
-  cell refused, those never? holds of (at the step cell or the end, as for wet?), those passing near hazards; wet ones (wet?) while a dry one is left, all with
-  dry-only?; then the ends whose entry avoid-route (end entry -> bool) holds of, while that leaves some; then the ends each of avoid (cell -> bool, most wanted first) holds of at the step cell or the end, while that leaves some: the route
-  there is the planner's, its first steps often shared by every end. Of the rest, in this order: a :cover? end, a
-  preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and only when none of those is left (a
-  closed cave, a wall's foot) a pocket; the best :score of each. Open ways that every chaser cuts leave the pockets
-  out: they are traps."
-  [ends {:keys [refused never? hazards wet? dry-only? avoid avoid-route prefer?]}]
+  cell refused, those never? holds of (at the step cell or the end), those passing near hazards, and with dry-only? the wet ones (wet?).
+  Priced, not left out: each mark an end has costs it mark-s seconds (default 1, the death the mark risks): wet? holds of
+  its step cell or end, avoid-route (end entry -> bool) of it, each of avoid (cell -> bool) of its step cell or end. The
+  tiers in this order: a :cover? end, a preferred one (prefer?: end entry -> bool, e.g. a safe home), an :open? end, and
+  only when none of those is left (a closed cave, a wall's foot) a pocket; a tier's best is its highest :score less its
+  marks, and the first tier whose best has the fewest mark seconds wins. Open ways that every chaser cuts leave the
+  pockets out: they are traps."
+  [ends {:keys [refused never? hazards wet? dry-only? avoid avoid-route prefer? mark-s]}]
   (let [either (fn [f] (fn [e] (or (f (:step e)) (f (:end e)))))
+        mark-s (or mark-s 1)
+        marks (fn [e] (+ (if (and wet? ((either wet?) e)) 1 0)
+                         (count (filter #((either %) e) avoid))
+                         (if (and avoid-route (avoid-route e)) 1 0)))
         ok (->> ends
                 (remove :caught?)
                 (filter #(or (:cover? %) (pos? (:gain %))))
                 (filter #(or (:open? %) (> (:gain %) (:s %))))
                 (keep #(when-let [step (step-of % (or refused #{}))] (assoc % :step step)))
                 (remove #(and never? ((either never?) %)))
-                (remove #(hazard-near? hazards (:cells %))))
-        dry (if wet? (remove (either wet?) ok) ok)
-        ok (if (or dry-only? (seq dry)) dry ok)
-        ok (reduce (fn [os bad?] (let [kept (remove (either bad?) os)] (if (seq kept) kept os))) ok avoid)
-        ok (if avoid-route (let [kept (remove avoid-route ok)] (if (seq kept) kept ok)) ok)
-        best (fn [xs] (when (seq xs) (apply max-key :score (reverse xs))))
+                (remove #(hazard-near? hazards (:cells %)))
+                (remove #(and dry-only? wet? ((either wet?) %)))
+                (map #(assoc % :bad (* mark-s (marks %)))))
+        best (fn [xs] (when (seq xs) (apply max-key #(- (:score %) (:bad %)) (reverse xs))))
         ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
-        traps? (and (seq ways) (every? :caught? ways))]
-    (or (best (filter :cover? ok))
-        (when prefer? (best (filter prefer? ok)))
-        (best (filter :open? ok))
-        (when-not traps? (best ok)))))
+        traps? (and (seq ways) (every? :caught? ways))
+        tiers [(best (filter :cover? ok))
+               (when prefer? (best (filter prefer? ok)))
+               (best (filter :open? ok))]
+        won (or (seq (remove nil? tiers)) (some-> (when-not traps? (best ok)) vector))]
+    (when (seq won)
+      (let [least (apply min (map :bad won))]
+        (first (filter #(= least (:bad %)) won))))))
 
 (defn into-unseen?
   "Whether the step of end entry e (choose) is cut short by a cell the body has not seen: its route's seen part ends

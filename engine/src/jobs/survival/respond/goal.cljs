@@ -149,6 +149,7 @@
      :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
      :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
      :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
+     :mark-s (cost/death-s p (ctx/view c))
      :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
      :door? door?
      :avoid-route (when (some combat/creeper? threats) (fn [e] (some door? (:cells e))))
