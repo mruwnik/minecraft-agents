@@ -723,9 +723,11 @@
                  sh-inside/dark-hall (fn [& _] (when (seq sides) :roofed))
                  sh-sense/buried? (constantly true)]
      (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2))) (fn [s] (first (:look-first (nth s 2)))))
-                (ready/hall-status (cond-> (for-iron (ctx-of (assoc world :time st/noon)))
-                                     walk-looked (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data (if (map? walk-looked) walk-looked {:cells walk-looked})} walk-look/walked-policy)})))
-                                   nil))))))
+                (let [c (for-iron (ctx-of (assoc world :time st/noon)))
+                      data (if (map? walk-looked) walk-looked {:cells walk-looked})]
+                  (ready/hall-status (cond-> c
+                                       walk-looked (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data (merge {:root (:root c)} data)} walk-look/walked-policy)})))
+                                     nil)))))))
 
 (def long-tunnel
   "A 1x2 tunnel x 0..40 sealed at both ends, the body at its west end."
@@ -759,7 +761,9 @@
     (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:spent {[0 64 0] 1e9}}))
         "legs that have spent the worth on this hall bound the next one")
     (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel sides {:spent {[500 64 0] 1e9}}))
-        "seconds spent judging another hall are another decision: this one has its own budget")))
+        "seconds spent judging another hall are another decision: this one has its own budget")
+    (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel sides {:root "an earlier call" :spent {[0 64 0] 1e9} :declined [[8 64 0] [8 65 0]]}))
+        "a budget spent and sides declined by an earlier call's decision do not bind this call")))
 
 (deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
   (let [c (ctx-of (assoc tunnel :time st/noon))

@@ -50,20 +50,20 @@
 (defn finish-leg!
   "Writes the leg to the :walk-looked entry: a side still unseen after a walk (or a look from where a walk shows no more) with the
   stand it was looked from, so every side within sight of that stand is one judgment; an unseen side whose walk was not bought,
-  kept until a leg walks; and the seconds the leg spent, kept per hall `at`."
+  kept until a leg walks; and the seconds the leg spent, kept per hall `at`. The entry belongs to the root job that wrote it: another root's write starts it afresh, so it lives as long as one decision."
   [c side to at]
   (let [m (ctx/mem c)
         unseen? (look/unseen? (:primitives c) [side])
         looked? (or (:edge-walked m) (:edge-close m))
         spent (- (:edge-spent m 0) (:booked m 0))
-        before (:data (ctx/latest c :walk-looked))
+        before (ready/walked-data c)
         cell (cell-of side)
         hall (ready/hall-key at)
         stand (let [[x y z] (if (vector? to) to [(:x to) (:y to) (:z to)])] {:x x :y y :z z})]
     (when (or unseen? (pos? spent))
       (ctx/update-mem! c assoc :booked (:edge-spent m 0))
       (ctx/remember! c :walk-looked
-                     (cond-> {:cells (:cells before) :stands (:stands before) :declined (when-not looked? (:declined before))
+                     (cond-> {:root (:root c) :cells (:cells before) :stands (:stands before) :declined (when-not looked? (:declined before))
                               :spent (update (let [sp (:spent before)] (when (map? sp) sp)) hall (fnil + 0) spent)}
                        (and unseen? looked?) (-> (update :cells #(vec (distinct (conj (vec %) cell)))) (update :stands #(vec (distinct (conj (vec %) stand)))))
                        (and unseen? (not looked?)) (update :declined #(vec (distinct (conj (vec %) cell)))))

@@ -90,13 +90,19 @@
   [at]
   (cond (map? at) [(:x at) (:y at) (:z at)] (some? at) (vec at) :else :none))
 
+(defn walked-data
+  "The :walk-looked entry of this call's root job; another root's entry is a finished decision and counts as none."
+  [c]
+  (let [d (:data (ctx/latest c :walk-looked))]
+    (when (= (:root d) (:root c)) d)))
+
 (defn walked-state
   "What the walk-look legs before this call left in body memory (:walk-looked, one entry): `:skip` the cells to offer no leg for
   (looked at from close by and still unseen, or whose walk was refused since the last walked leg), `:stands` the cells ({:x :y :z})
   looked from, `:left` the call's worth less the seconds the legs have spent on the hall `at` (another hall is another decision,
-  with its own budget)."
+  with its own budget). Only the entry of this call's root job counts."
   [c at]
-  (let [{:keys [cells stands spent declined]} (:data (ctx/latest c :walk-looked))
+  (let [{:keys [cells stands spent declined]} (walked-data c)
         worth (ctx/worth c)]
     {:skip (into (set cells) declined)
      :stands (set stands)

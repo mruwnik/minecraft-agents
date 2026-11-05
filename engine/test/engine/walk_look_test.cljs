@@ -49,7 +49,7 @@
         (is (= [0 [0 64 0] nil [:completed]] (await (walk-look nil 0)))
             "a walk the worth does not buy is not walked, and the side is not remembered as looked at from close by")))))
 
-(deftest sides-looked-at-past-the-memory-cap-are-still-remembered
+(deftest the-walk-looked-entry-is-one-and-belongs-to-the-latest-root-job
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -63,9 +63,9 @@
             (doseq [side sides]
               (core/submit! eng (list 'jobs.movement.walk-look {:side side :to [6 64 0]}) {})
               (await (tu/tick-until-idle! eng 40))))
-          (is (= (set sides) (set (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked)))))
-              "21 legs, one more than the memory cap: the latest entry still holds the first side")
-          (is (= 1 (count (mem/entries (mem/view (:store eng)) :walk-looked))) "the sides are stored once, not copied per leg"))))))
+          (is (= [(last sides)] (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked))))
+              "each call is a decision of its own: the sides of the calls before it are not kept")
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :walk-looked))) "the entry is rewritten, not copied per leg"))))))
 
 (deftest a-leg-whose-walk-is-not-bought-records-its-side-as-declined-so-it-is-not-offered-again
   (async done
