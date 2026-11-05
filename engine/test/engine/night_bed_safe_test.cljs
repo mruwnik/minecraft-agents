@@ -302,14 +302,12 @@
   (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time dusk :blocks hut/tunnel}))
         c {:id "j1" :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}
         price (fn [n] (night/bed-walk-price c far-bed (assoc (dark-route n) :found true) 12))
-        [none one ten] (map price [0 1 10])
-        home (/ (+ (:walk-hp one) (:walk-hp ten)) 2)]
+        [none one ten] (map price [0 1 10])]
     (is (zero? (:dark-seconds (dark-route 0))))
     (is (pos? (:dark-seconds (dark-route 1))))
     (is (< (:dark-seconds (dark-route 1)) (:dark-seconds (dark-route 10))))
     (is (< (:walk-hp none) (:walk-hp one)) "the one dark cell adds a price")
-    (is (< (:walk-hp one) (:walk-hp ten)) "and less than ten of them")
-    (is (< (:walk-hp one) home (:walk-hp ten)) "a home alternative between the two: the route with one dark cell still beats it, the dark route loses")))
+    (is (< (:walk-hp one) (:walk-hp ten)) "and less than ten of them")))
 
 (deftest at-dusk-with-no-bed-the-trigger-waits-for-the-dark
   (let [{:keys [eng p]} (st/setup {:time dusk :blocks st/ground})
