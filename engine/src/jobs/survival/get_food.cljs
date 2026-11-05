@@ -369,23 +369,27 @@
 
 (defn ^:async cheapest-noted!
   "The noted animal (animals/noted-targets) whose walk costs least per hunger point of its meat and less than the meat is
-  worth, the walk priced from go-to's quote (jobs.lib.walk-pick); nil when none, the first priced out kept as :noted-lost."
+  worth, the walk priced from go-to's quote (jobs.lib.walk-pick); :searching when none is priced yet because a quote's search goes on; nil when none, the first priced out kept as :noted-lost."
   [c done]
   (let [me (u/self-pos c)
         points #(max 1 (or (foods/points (animals/meat (:what %))) 1))
         out (volatile! nil)
+        searching (volatile! false)
         price (fn [n q]
                 (let [s (pick/quoted-s c q)
                       worth (pick/ev-worth (animals/noted-benefit c n) q)]
-                  (if (< s worth)
-                    (/ s (points n))
-                    (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q s worth)})) ##Inf))))
+                  (cond
+                    (:estimate q) (do (vreset! searching true) ##Inf)
+                    (< s worth) (/ s (points n))
+                    :else (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q s worth)})) ##Inf))))
         pick (:pick (await (pick/best! c (animals/noted-targets c done (hunt-radius c))
                                        {:bound #(animals/noted-price me %)
                                         :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
                                         :price price})))]
-    (when (and (nil? pick) @out) (ctx/update-mem! c assoc :noted-lost @out))
-    pick))
+    (cond
+      pick pick
+      @searching :searching
+      :else (do (when @out (ctx/update-mem! c assoc :noted-lost @out)) nil))))
 
 (defn forgive
   "Mem m without the entity ids `ids` among the animals passed over: the hunt may have given up on one before a walk lit the way to it (a dark drop)."
@@ -446,6 +450,7 @@
                 (await (cheapest-noted! c (set (:noted-walked (ctx/mem c))))))]
     (cond
       (not e) nil
+      (= :searching noted) :continue
       (and done? (not noted) (nil? (:walk-to (ctx/mem c)))) nil
       (risk/search-refused? c)
       (do (when-not done? (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c))))) nil)

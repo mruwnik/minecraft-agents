@@ -30,6 +30,7 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.pace :as pace]
+            [jobs.lib.walk-pick :as pick]
             [jobs.survival.get-food :as get-food]))
 
 (defn setup
@@ -641,6 +642,20 @@
           (let [text (str (:text (first (none-endings seen))))]
             (is (re-find #"animal noted at \[40 64 0\] was not reached" text))
             (is (not (re-find #"no food source is known" text)))))))))
+
+(deftest a-noted-walk-whose-quote-search-goes-on-is-not-priced-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]
+              {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)
+              quote! pick/quote!]
+          (set! pick/quote! (fn [_ _] (js/Promise.resolve {:estimate true :uses {:job-time [1e6 1e6 ##Inf]}
+                                                           :route {:text "the quote's search goes on at the next quote"}})))
+          (try (await (one-round! eng {}))
+               (finally (set! pick/quote! quote!)))
+          (is (not-any? #(re-find #"was not reached" (str (:text %))) (none-endings seen))
+              "a quote still searching is no price: the noted animal is not given up on"))))))
 
 (deftest a-noted-animal-priced-out-is-named-with-the-walk-and-the-meat-figures
   (is (= "the walk costs 301 s and the meat is worth 120 s" (get-food/quote-why {} 300.6 120.2)))
