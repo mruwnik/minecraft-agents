@@ -314,9 +314,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[out st shown] (await (pit-escape 2))]
-          (is (= {:arrived true} out) shown)
-          (is (= [:pillar] st)))))))
+        (let [digs (atom [])
+              {:keys [out seen]} (await (run-go-to {:self {:pos {:x 0 :y 61 :z 0}} :blocks pit
+                                                    :inventory [{:name "dirt" :count 2}]}
+                                                   {:pos [10 64 0] :range 1}
+                                                   (fn [{:keys [p]}]
+                                                     (.override (.-world p) "dig" (fn [token args impl] (swap! digs conj (js->clj args)) (impl token args))))))]
+          (is (= {:arrived true} out) (pr-str (last seen)))
+          ;; the far rim cells are unseen from the pit, so the climb route plans them as digs after the pillar; once up, the body sees them open
+          (is (= :pillar (first (steps seen))))
+          (is (empty? @digs) "no cell is dug on the way out"))))))
 
 (def deep-pit
   "A 5-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..65; stone ground east of it (x 3..14) topped at the rim."
