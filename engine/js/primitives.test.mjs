@@ -1705,6 +1705,21 @@ for (const [event, reason] of [['end', 'socket closed'], ['kicked', 'bye']]) {
   })
 }
 
+test('a drop reports how it ended and the socket error just before it', async () => {
+  const bots = []
+  const { seen } = await online({ connect: connectOnce(bots) })
+  const err = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
+  bots[0].emit('error', err)
+  bots[0].emit('end', 'socketClosed')
+  await untilSeen(seen, 'online')
+  const d = seen.find(e => e.kind === 'disconnected')
+  assert.equal(d.reason, 'socketClosed')
+  assert.equal(d.via, 'end')
+  assert.equal(d.error, 'write EPIPE')
+  assert.equal(d.code, 'EPIPE')
+  assert.equal(typeof d.errorAgoMs, 'number')
+})
+
 test('a body killed while its client hung reports the death the fresh bot logged in with: the old pack at the death spot, then the respawn', async () => {
   const bots = []
   const connect = async () => {

@@ -319,10 +319,13 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         settleFromNow()
         emit({ kind: 'respawned', pos: here(), dimension: target.game?.dimension })
       },
-      end: reason => dropped(String(reason)),
-      kicked: reason => dropped(JSON.stringify(reason)),
+      end: reason => dropped(String(reason), 'end'),
+      kicked: reason => dropped(JSON.stringify(reason), 'kicked'),
       // an unhandled 'error' on an EventEmitter throws and takes the process down; report it instead
-      error: err => emit({ kind: 'error', reason: String(err?.message ?? err) })
+      error: err => {
+        lastError = { error: String(err?.message ?? err), ...(err?.code && { code: err.code }), at: Date.now() }
+        emit({ kind: 'error', reason: String(err?.message ?? err) })
+      }
     }
     Object.entries(handlers).forEach(([name, fn]) => target.on(name, fn))
     if (entityDeathListeners.size) removalEvents.forEach(([n, f]) => target.on(n, f))
@@ -473,11 +476,16 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
 
   // The bound bot's connection ended without the body asking for it (offline unbinds before it quits, so its own
   // quit never lands here): the body is down and starts bringing itself back.
-  const dropped = reason => {
+  // mineflayer ends with 'socketClosed' whatever closed the socket: the socket's own error (write EPIPE, ECONNRESET)
+  // arrives as a separate 'error' just before, so the drop carries the last one seen and how long before it came.
+  let lastError = null
+  const dropped = (reason, via) => {
     if (closed) return
     if (!isOffline()) rememberSelf()
     down = true
-    emit({ kind: 'disconnected', reason })
+    const { at, ...cause } = lastError ?? {}
+    emit({ kind: 'disconnected', reason, via, ...(lastError && { ...cause, errorAgoMs: Date.now() - at }) })
+    lastError = null
     // a call still waiting on the dead bot would sit until its time bound: cut it now so its job resumes after the reconnect
     for (const call of [...inflight]) call.cut()
     autoReconnect()

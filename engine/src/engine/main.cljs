@@ -239,7 +239,7 @@
                           (perception/start! per {:file seen-file :io seen-io
                                                   :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
                           (fn []))
-        stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng))
+        stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng) #(heap/running-context eng))
         _ (js/setTimeout (fn [] (try ((:body/warm hooks/all))
                                      (catch :default e
                                        (core/emit! eng {:source :system :kind :warm-failed :level :warn :text (str "warming the tables failed: " (or (ex-message e) e))}))))
