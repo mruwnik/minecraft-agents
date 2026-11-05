@@ -623,7 +623,9 @@
             (let [bare (await (worth-with []))
                   noted (await (worth-with [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]))]
               (is (pos? noted))
-              (is (< noted bare) "a find saves at most the walk to the cow already known"))
+              (is (< noted bare) "a find saves at most the walk to the cow already known")
+              (is (= bare (await (worth-with [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 1000001}])))
+                  "a note that has expired caps nothing: the worth is read from the notes at each start"))
             (finally (set! child/search-args real))))))))
 
 (deftest a-noted-animal-is-walked-toward-only-when-its-meat-is-worth-the-walk
