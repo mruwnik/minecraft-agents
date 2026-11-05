@@ -264,16 +264,17 @@
 
 (defn ^:async dig-route-run!
   "go-to into below-pocket's goal for a body carrying inventory over blocks; {:out :p :seen :digs}, digs the args of each
-  jobs.blocks.dig call. sense (fn [p]) replaces the fake's omniscient sensing when given."
-  [blocks inventory sense]
-  (let [{:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory inventory})
+  jobs.blocks.dig call. sense (fn [p]) replaces the fake's omniscient sensing when given; zones as setup's."
+  ([blocks inventory sense] (dig-route-run! blocks inventory sense nil))
+  ([blocks inventory sense zones]
+  (let [{:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory inventory} zones)
         digs (atom [])
         out (atom :not-done)
         dig-round (get-in eng [:jobs 'jobs.blocks.dig :round])
         eng (-> eng
-                (assoc-in [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0 :unknown false}))
+                (assoc-in [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0 :unknown false :ignore-zones? (boolean zones)}))
                 (assoc-in [:jobs 'jobs.blocks.dig :round] (fn [c] (swap! digs conj (:args c)) (dig-round c))))]
     (some-> sense (apply [p]))
     (core/submit! eng '(recording-parent) {})
     (await (tick-out! eng 1000))
-    {:out out :p p :seen seen :digs digs}))
+    {:out out :p p :seen seen :digs digs})))

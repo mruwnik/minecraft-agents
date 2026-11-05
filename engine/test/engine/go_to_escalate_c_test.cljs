@@ -714,7 +714,16 @@
           (is (= #{false} (set (map (comp boolean :chest :ways) @(:digs two)))) "a spare pickaxe: no fetch")
           (is (= #{true} (set (map :need-drop @(:digs one)))) "a fetching dig needs a tool, else it punches the rock by hand and the route was priced for a tool it never gets")
           (is (= #{false} (set (map :need-drop @(:digs two)))))
+          (is (= #{false} (set (map :collect @(:digs one)))) "rock nobody else owns is left as dug: nothing is put back")
           (is (= #{#{:lava-adjacent}} (set (map :accept @(:digs one)))) "seen lava beside a route cell is sealed by the dig, not a refusal that ends the route"))))))
+
+(deftest a-dig-route-through-another-s-zone-picks-up-its-drops-for-the-put-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen digs]} (await (dig-route-run! below-pocket [{:name "stone_pickaxe" :count 1}] nil [{:name "vault" :owner "Miles" :min [-60 0 -60] :max [60 120 60]}]))]
+          (is (= #{true} (set (map :collect @digs))))
+          (is (seq (mapcat :cells (events-of seen :go-to.restored))) "the dug blocks are carried, so the put-back places some (old code left every drop on the ground)"))))))
 
 (deftest a-dig-route-cell-a-look-leaves-unseen-is-dug-and-the-lava-behind-it-sealed
   ;; [3 62 0] stays unseen until dug whatever the body looks at (occluded, too old); lava at [4 62 0] beside it shows only

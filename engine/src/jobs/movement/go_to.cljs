@@ -109,7 +109,7 @@
      c pos
      (await
       (cond
-        (:restore-now m) (await (restore/restore-round! c))
+        (:restore-now m) (await (restore/restore-round! c pos))
         (:escalation m) (await (esc/escalation-round! c pos))
         (:escalate-now m) (do (ctx/update-mem! c dissoc :escalate-now)
                               (await (esc/escalate! c pos nil)))

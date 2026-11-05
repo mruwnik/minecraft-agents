@@ -193,13 +193,6 @@
                                       unseen (assoc :guessed-rows rows)))
                 :again)))))
 
-(defn room-for-drop?
-  "A free slot, or a carried stack of what block drops (b/drops-of) under 64."
-  [p block]
-  (let [drops (set (b/drops-of p block))]
-    (boolean (or (pos? (u/free-slots p))
-                 (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
-
 (defn own-build
   "The refusal naming the plan this body made that covers cell, unless the spare-own-builds setting is false; else nil."
   [c cell]
@@ -392,7 +385,7 @@
           (bs/air seen) :open
           (and (nil? seen) (some? (.-sensedAt p)) (nil? (u/sensed p (pos cell)))) {:unloaded cell}
           :else (let [block (or seen b/hidden-guess)
-                      d {:cell cell :block block :collect (room-for-drop? p block)}]
+                      d {:cell cell :block block :collect (b/room-for-drop? p block)}]
                   (ctx/update-mem! c assoc :digging d)
                   {:digging d}))))))
 

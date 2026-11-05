@@ -38,6 +38,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.step-off :as step-off]
+            [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
@@ -611,6 +612,7 @@
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
           n (block-at cell)
+          pos (zipmap [:x :y :z] cell)
           undiggable? (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) cell)))]
       (cond
         (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (when-not looked (note-guess! c cell beside (not undiggable?))) :replan)
@@ -618,9 +620,9 @@
         undiggable? :not-diggable
         :else
         (let [fetch? (fetch-tool? c)
-              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent} :not-protected? true}
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent} :not-protected? true
+                    :collect (and (or (own-cut? c) (some? (tidy/refusal c :dig pos))) (b/room-for-drop? p n))}
               args (cond-> args (own-cut? c) (assoc :settings {:jobs.lib.access/spare-own-builds false}))
-              pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))
               e (if boxed? (await (b/dig-cell-ending! c pos (update args :accept conj :under-feet))) e)

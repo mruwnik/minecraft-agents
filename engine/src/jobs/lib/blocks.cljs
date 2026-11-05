@@ -373,6 +373,13 @@
     (ctx/update-mem! c dissoc :tool-wear)
     e))
 
+(defn room-for-drop?
+  "A free slot, or a carried stack of what block drops (drops-of) under 64."
+  [p block]
+  (let [drops (set (drops-of p block))]
+    (boolean (or (pos? (u/free-slots p))
+                 (some #(and (drops (:name %)) (< (:count %) 64)) (u/inventory p))))))
+
 (defn ^:async dig-cell!
   "dig-cell-ending!, said as what came of it (dig-outcome)."
   [c pos args]

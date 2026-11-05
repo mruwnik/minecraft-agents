@@ -656,7 +656,7 @@
           (is (= 20 (.-health (.self p))) "no drop hurt")
           (is (seq (events-of seen :go-to.restore-skipped)) "the put-back ran once the walk got on")
           (is (restores-after-the-last-stair? seen))
-          (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
+          (is (= (dug-cells p) (into (holes eng) (mapcat :cells (events-of seen :go-to.restored)))) "every dug cell is in the ledger or was put back"))))))
 
 (deftest go-to-pillars-up-a-deep-shaft-in-one-pillar
   (async done
