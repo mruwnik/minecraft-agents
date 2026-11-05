@@ -882,9 +882,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [seed [5 8 9]]
-          (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} :rand (seeded-rand seed)})]
-            (hide-drop-until-beside! (:p s) [2 64 0] (atom []))
-            (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
-            (await (run-ticks s 40))
-            (is (= 1 (get (inv s) "raw_iron")) (str "seed " seed ": the drop is cut to and picked up"))))))))
+        ;; seed 5's rand sequence ends the walk to the drop :unseen-floor-dark (8 and 9 do the same)
+        (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} :rand (seeded-rand 5)})]
+          (hide-drop-until-beside! (:p s) [2 64 0] (atom []))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
+          (await (run-until s 40 #(= 1 (get (inv %) "raw_iron"))))
+          (is (= 1 (get (inv s) "raw_iron")) "the drop is cut to and picked up"))))))
