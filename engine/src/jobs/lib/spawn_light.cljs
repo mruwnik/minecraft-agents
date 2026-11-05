@@ -89,11 +89,24 @@
          (pos? (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})}))
          (not (look/dark-in-sight? p cell)))))
 
+(defn- unseen-walk-weight
+  "The share of a walked unseen cell that is open ground in a dark hall: 1 minus the chance it is rock (look/unseen-solid-at-fn;
+  the body digs rock, and a tunnel of its own is no hall) times the hall prior of an unseen edge (cost/hall-chance, by sky or roof),
+  as a seen dark cell is weighted by its hall (Q345). 1 for a seen cell."
+  [p cell]
+  (let [cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
+        sky? (pos? (or (sh-sense/sky-light-at p cell) 0))]
+    (if (seen-light p cell)
+      1
+      (* (- 1 ((look/unseen-solid-at-fn p) [(:x cell) (:y cell) (:z cell)]))
+         (cost/hall-chance (if sky? :sky :roofed))))))
+
 (defn dark-share
-  "chance-at of cell (under the sky's darkening subtract, default now) as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between."
+  "chance-at of cell (under the sky's darkening subtract, default now) as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between.
+  A walked unseen cell counts at its unseen-walk-weight."
   [p cell caves-free? & [subtract]]
   (let [dark (cost/spawn-chance [0 0 0])]
-    (if (pos? dark) (/ (chance-at p cell caves-free? subtract) dark) 0)))
+    (if (pos? dark) (/ (* (unseen-walk-weight p cell) (chance-at p cell caves-free? subtract)) dark) 0)))
 
 (defn share-of
   "dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once and their spawn-regions

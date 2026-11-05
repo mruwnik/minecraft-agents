@@ -42,6 +42,10 @@
 (def inside {:x 5 :y 64 :z 0})
 (def night-hut (merge (hut/hut-world inside {}) {:time st/night}))
 
+(defn open-ground
+  "Takes every unseen cell for open ground, so a test of the light prior prices the cells it names by their light alone."
+  [] (constantly (constantly 0)))
+
 (defn plan-of "A found plan of go-to over cells." [cells] {:status "found" :steps (vec cells)})
 
 (defn straight-plan "A found plan of the body of c on the straight way to goal, at the feet's height." [c goal]
@@ -174,6 +178,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+       (let [solid look/unseen-solid-at-fn]
+        (set! look/unseen-solid-at-fn (open-ground))
+        (try
         (doseq [[spawn inventory held?] [[[0 64 0] [] false] [[0 64 0] diamond-kit false]
                                          [[-5000 64 0] diamond-kit true]]]
           (let [world (-> night-hut (assoc :inventory inventory) (assoc-in [:self :worldSpawn] spawn))
@@ -187,7 +194,8 @@
               goal {:x 195 :y 64 :z 0}
               [_ text {:keys [wait]}] (risk/status c goal (straight-plan c goal))]
           (is (= :dawn wait) "a goal worth arrival still waits for a cheaper way")
-          (is (re-find #"hp" text)))))))
+          (is (re-find #"hp" text)))
+        (finally (set! look/unseen-solid-at-fn solid))))))))
 
 (deftest standing-hostiles-that-burn-at-sunrise-are-gone-from-the-dawn-walk-but-shaded-ones-stay
   (let [zombies (for [[i x] (map-indexed vector [48 52 56])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ x 0.5) :y 64 :z 3.5}})
@@ -308,13 +316,16 @@
         dark-night (lit-by (ready-test/ctx-of (assoc open :time st/night)) [0 0])
         dark-s #(:dark-s (risk/estimate %1 %2))]
     ;; nothing seen but the body's own cell: priced by the measured shares of open ground the sky lights, by height
-    (with-redefs [sh-sense/seen-cell? (constantly false)]
+    (with-redefs [sh-sense/seen-cell? (constantly false) look/unseen-solid-at-fn (open-ground)]
       (is (< (* 3 (dark-s c {:x 95 :y 64 :z 0})) (dark-s sealed {:x 95 :y 64 :z 0}))
           "unseen open ground by day is mostly lit by the sky, round a body no sky light reaches mostly dark")
       (is (< (dark-s c {:x 95 :y 84 :z 0}) (dark-s c {:x 95 :y 64 :z 0})) "a goal above the body makes no cave of the ground at its level")
       (is (< (* 3 (dark-s c {:x 95 :y 64 :z 0})) (dark-s c {:x 5 :y 20 :z 90})) "unseen ground far below is under ground more likely than not")
       (is (< (dark-s lit-hall {:x 10 :y 64 :z 0}) (dark-s dark-night {:x 10 :y 64 :z 0}))
-          "at night, unseen ground beside a body in block light 14 is lit nearer it, less so past unseen cells (the old guess read it dark by the clock)"))))
+          "at night, unseen ground beside a body in block light 14 is lit nearer it, less so past unseen cells (the old guess read it dark by the clock)"))
+    (with-redefs [sh-sense/seen-cell? (constantly false)]
+      (is (< (dark-s c {:x 95 :y 64 :z 0}) (with-redefs [look/unseen-solid-at-fn (open-ground)] (dark-s c {:x 95 :y 64 :z 0})))
+          "unseen ground at the body's level is likelier rock than open: dug, not spawned on"))))
 
 (deftest a-held-plan-is-kept-until-the-body-moves-or-a-block-it-knows-changes
   (let [m (atom {})
@@ -883,8 +894,9 @@
 (deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))
         goal {:x 40 :y 64 :z 0}]
-    (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
-    (is (= :ok (first (planned-status c goal))))))
+    (with-redefs [look/unseen-solid-at-fn (open-ground)]
+      (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
+      (is (= :ok (first (planned-status c goal)))))))
 
 (deftest a-body-in-a-sealed-dark-hall-whose-wait-lowers-nothing-walks-at-its-price
   ;; night, full health, fed: no healing, no sky over the seen way for dawn to light, no threat to move off; only the dark
