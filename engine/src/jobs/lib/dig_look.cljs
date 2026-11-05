@@ -55,8 +55,8 @@
       (let [name-at (fn [[dx dy dz] k] (u/seen-name p {:x (+ (:x cell) (* k dx)) :y (+ (:y cell) (* k dy)) :z (+ (:z cell) (* k dz))}))
             depth (rock-depth)
             ;; [unseen cells before it, name] of the first block seen along d, when it is solid
-            behind (fn [d] (loop [k 1] (when (<= k depth) (if-let [n (name-at d k)] (when (solid/solid? n) [(dec k) n]) (recur (inc k))))))]
-        (when (every? #(or (except (shift cell %)) (let [n (name-at % 1)] (or (nil? n) (solid/solid? n)))) neighbours)
+            behind (fn [d] (loop [k 1] (when (<= k depth) (if-let [n (name-at d k)] (when (solid/hides-cells? n) [(dec k) n]) (recur (inc k))))))]
+        (when (every? #(or (except (shift cell %)) (let [n (name-at % 1)] (or (nil? n) (solid/hides-cells? n)))) neighbours)
           (when-let [[_ nearest] (reduce (fn [best d] (let [e (behind d)] (if (and e (or (nil? best) (neg? (compare e best)))) e best))) nil neighbours)]
             (if (loose-ground nearest) nearest "stone"))))))))
 

@@ -103,7 +103,7 @@
               :dark? (if (> (or level 1) 1)
                        #(< (or (sh-sense/light-at p (zipmap [:x :y :z] %)) 0) level)
                        #(torch/perceived-dark? p %))
-              :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
+              :open? #(solid/room? (block-at %))
               :spots spots :sources torches})))
 
 (defn half-seen?
@@ -120,7 +120,7 @@
         block-at (access/seen-at p)
         looked (set (:viewed (ctx/mem c)))
         here (u/self-pos c)
-        open? #(let [n (block-at %)] (and n (not (solid/solid? n))))]
+        open? #(solid/room? (block-at %))]
     (->> (area c)
          (filter #(and (not (looked %))
                        (or (half-seen? p %)

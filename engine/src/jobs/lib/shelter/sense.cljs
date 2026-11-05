@@ -241,7 +241,7 @@
   "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
   [p pos]
   (let [n (u/seen-name p pos)]
-    (and (some? n) (or (not (solid/solid? n)) (.endsWith n "_bed")))))
+    (and (some? n) (or (solid/room? n) (.endsWith n "_bed")))))
 
 (defn doorway?
   "Whether the cell is a gap in a wall: solid on both sides along one horizontal axis and free on both ends of the other."

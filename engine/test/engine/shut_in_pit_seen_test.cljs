@@ -80,6 +80,15 @@
           (is (= 62 (feet-y p)))
           (is (empty? (no-way-stops seen))))))))
 
+(deftest a-pit-cell-of-powder-snow-is-dug-out-not-taken-as-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (run-pit! {:blocks (assoc ground "1,64,0" "powder_snow" "0,64,0" "powder_snow")}))]
+          (is (= [[1 64 0] [0 64 0] [0 63 0] [1 63 0] [1 62 0]] (digs p)) "the snow cells are dug like rock")
+          (is (= 62 (feet-y p)))
+          (is (empty? (no-way-stops seen))))))))
+
 (defn hover-over-digs!
   "A dig leaves the body where it stands for the moment (the fall into the hole takes ticks on a server): the job decides
   its step into the hole while the body is still over it."

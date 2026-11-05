@@ -155,6 +155,13 @@
         solids [{:name "powder_snow" :pos {:x 0 :y 63 :z 0}} {:name "dirt" :pos {:x 1 :y 63 :z 0}} {:name "dirt" :pos {:x 5 :y 40 :z 5}}]]
     (is (= [{:x 1 :y 64 :z 0} {:x 5 :y 41 :z 5}] (map :pos (flee/ground-sites p solids))) "seen dirt stays a candidate, wherever it is")))
 
+(deftest a-cave-site-needs-two-free-cells-not-powder-snow
+  (let [roof {:name "stone" :pos {:x 0 :y 66 :z 0}}
+        ground {:name "dirt" :pos {:x 0 :y 63 :z 0}}
+        site (fn [name] (flee/cave-sites (tu/seeing-all (tu/fake {:blocks {"0,64,0" name "0,65,0" "air"}})) [ground roof]))]
+    (is (= [{:kind :cave :pos {:x 0 :y 64 :z 0}}] (site "air")))
+    (is (empty? (site "powder_snow")) "feet in snow")))
+
 (deftest seen-ground-the-planner-cannot-stand-on-is-never-quoted
   ;; KitOak93 on a snow plateau: powder snow is ground a site's rules took and go-to answers goal-not-standable, 100-200 quotes a round
   (async done

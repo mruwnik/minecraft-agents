@@ -167,7 +167,7 @@
   "Whether the body sees cell open: sensed, not solid and dry."
   [p cell]
   (let [n (u/seen-name p cell)]
-    (and (some? n) (not (solid/solid? n)) (not (wet? p cell)))))
+    (and (solid/room? n) (not (wet? p cell)))))
 
 (defn roof-held?
   "Whether a block placed at roof has a side to be placed against other than open (the pit's open cell beside it): a

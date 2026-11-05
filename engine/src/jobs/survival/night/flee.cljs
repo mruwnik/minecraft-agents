@@ -60,7 +60,7 @@
         ^js solid (js/Set.)
         _ (doseq [{{:keys [x y z]} :pos} solids] (.add solid (key-of x y z)))
         seen-free? (fn [{:keys [x y z] :as cell}] (and (not (.has solid (key-of x y z)))
-                                                       (not (:unknown (look/seen-block p cell)))))]
+                                                       (let [b (look/seen-block p cell)] (and (not (:unknown b)) (solid/room? (:name b))))))]
     (->> solids
          (keep (fn [{{:keys [x y z]} :pos name :name}]
                  (let [f {:x x :y (inc y) :z z}]

@@ -18,6 +18,17 @@
        (not (.endsWith name "_leaves"))
        (not (.endsWith name "_sapling"))))
 
+(defn hides-cells?
+  "Whether a block shows nothing of the cells behind it: solid, or powder snow (opaque yet no wall)."
+  [name]
+  (or (solid? name) (= "powder_snow" name)))
+
+(defn room?
+  "Whether a body can stand or step in a block: not nil (unloaded), not solid, and not a bad-floor block (powder snow
+  is no wall or roof, yet a body sinks into it)."
+  [name]
+  (and (some? name) (not (solid? name)) (not (bs/bad-floor name))))
+
 (defn cell
   "The block cell {:x :y :z} containing a position."
   [{:keys [x y z]}]

@@ -503,6 +503,13 @@
     (is (pit-site/pit-site? (floor "dirt") site))
     (is (not (pit-site/pit-site? (floor "powder_snow") site)) "a body sinks through powder snow")))
 
+(deftest a-pit-site-never-has-its-feet-in-powder-snow
+  (let [blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))
+        site {:x 1 :y 64 :z 1}]
+    (is (pit-site/pit-site? (tu/fake {:blocks blocks}) site))
+    (is (not (pit-site/pit-site? (tu/fake {:blocks (assoc blocks "1,64,1" "powder_snow")}) site)) "feet in snow")
+    (is (not (pit-site/pit-site? (tu/fake {:blocks (assoc blocks "1,65,1" "powder_snow")}) site)) "head in snow")))
+
 (deftest a-pit-site-needs-ground-the-carried-tools-dig
   (let [stone (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "stone"]))
         site {:x 1 :y 64 :z 1}]

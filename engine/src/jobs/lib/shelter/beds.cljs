@@ -121,7 +121,7 @@
   ([p permit? radius]
    (let [{:keys [x y z] :as start} (sh-sense/feet p)
          bed? (fn [named] (and (some? named) (.endsWith named "_bed")))
-         free? (fn [named] (and (some? named) (or (bed? named) (not (solid/solid? named)))))]
+         free? (fn [named] (and (some? named) (or (bed? named) (solid/room? named))))]
      (loop [queue (conj cljs.core/PersistentQueue.EMPTY start) seen #{start}]
        (when-let [pos (peek queue)]
          (let [step (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]

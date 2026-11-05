@@ -95,10 +95,12 @@
   [c f]
   (clear-of? (failed c) f))
 
+(defn- unseen-or-room? [name] (or (nil? name) (solid/room? name)))
+
 (defn standing?
   "Whether the three block names (below, at, over the feet; each a fn of no args) leave standing room over ground the carried tools dig and a body can stand on (not bs/bad-floor)."
   [p below at over]
-  (and (solid/solid? (below)) (not (bs/bad-floor (below))) (not (solid/solid? (at))) (not (solid/solid? (over))) (tools/can-harvest? p (below))))
+  (and (solid/solid? (below)) (not (bs/bad-floor (below))) (unseen-or-room? (at)) (unseen-or-room? (over)) (tools/can-harvest? p (below))))
 
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
