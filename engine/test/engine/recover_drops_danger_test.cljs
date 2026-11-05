@@ -540,9 +540,11 @@
         (let [{:keys [eng seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
               walk-leg! fetch/walk-leg!
               run!* child/run!*
-              seals (atom 0)]
+              seals (atom 0)
+              walk-worths (atom [])]
           (set! fetch/walk-leg! (fn [_ _] [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
           (let [stub (fn ^:async stub [c slot & more]
+                      (when (= :seal-walk slot) (swap! walk-worths conj (:worth (second more))))
                       (if (= :seal slot)
                         (do (swap! seals inc) {:kind :done :data {:removed []}})
                         (await (apply run!* c slot more))))]
@@ -552,7 +554,30 @@
           (await (run-until-empty eng 60))
           (set! fetch/walk-leg! walk-leg!)
           (set! child/run!* run!*)
-          (is (= 2 @seals) "the seal is tried again, up to twice a trip"))))))
+          (is (= 2 @seals) "the seal is tried again, up to twice a trip")
+          (is (and (seq @walk-worths) (every? #(and (number? %) (< % ##Inf)) @walk-worths)) (str "the walk to the seal is priced at the pile's value: " (pr-str @walk-worths))))))))
+
+(deftest a-walk-stuck-far-from-a-sealed-pile-leaves-the-seal-alone
+  ;; KitOak92: a walk that timed out 57 blocks off sent a walk-only, unpriced seal-walk down to the pile from the surface.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
+              walk-leg! fetch/walk-leg!
+              run!* child/run!*
+              slots (atom [])]
+          (set! fetch/walk-leg! (fn [_ _] [{:kind :nothing-possible :cause {:reason :unreachable :why :stuck} :data {:arrived false :why :stuck}}]))
+          (let [stub (fn ^:async stub [c slot & more]
+                       (swap! slots conj slot)
+                       (await (apply run!* c slot more)))]
+            (set! (.-cljs$core$IFn$_invoke$arity$4 stub) stub)
+            (set! (.-cljs$core$IFn$_invoke$arity$5 stub) stub)
+            (set! child/run!* stub))
+          (await (run-until-empty eng 60))
+          (set! fetch/walk-leg! walk-leg!)
+          (set! child/run!* run!*)
+          (is (not-any? #{:seal-walk :seal} @slots) (pr-str @slots))
+          (is (= 2 (count (ledger/open-entries (mem/view (:store eng))))) "the plug is still there"))))))
 
 ;; ------------------------------------------------------------ night: safe? judges the pile
 

@@ -332,14 +332,14 @@
      (and (>= n loop-starts) (>= best (dec (:best seen))))]))
 
 (defn ^:async clear-goal-seal!
-  "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :out-of-sight, :ladder-gap, :start-enclosed)
+  "A goal the walk could not reach (ledger/seal-blocked-whys)
   with blocks of the body's own ledger within ledger/seal-clear-radius of the goal (a dig-in's seal beside a gate, a plug in a stair
   mouth) or of its feet (a retreat's seal that shuts the body in, once the hostile is gone): one jobs.access.cleanup
   child takes them back: :again, so the walk is planned again. The cells the cleanup left for a known hostile (held
   :hostile-near or :danger: the shelter keeps the hostile out) are kept (mem :seal-kept): no escalation of the call cuts
   them (own-builds/may-dig-fn), so the way out it prices goes another side."
   [c pos result]
-  (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
+  (when (and (ways/way? c :clear-seal) (ledger/seal-blocked-whys (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})
           entries (ledger/entries c)
           near (first (filter #(seq (ledger/near-of entries %)) [(at [(:x pos) (:y pos) (:z pos)]) (at (end/feet-cell c))]))]

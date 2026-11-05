@@ -91,6 +91,10 @@
 
 (def seal-clear-radius "Blocks round a goal or the feet within which go-to and leave-shelter take back the body's own seals." 3)
 
+(def seal-blocked-whys
+  "go-to's reasons a goal was not reached that a seal round it can be the cause of: walled off, or a search that ran out of land."
+  #{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed})
+
 (def kind :scaffold)
 
 (def policy {:cap 1 :ttl :forever :durable? true})

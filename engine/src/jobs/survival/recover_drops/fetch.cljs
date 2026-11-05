@@ -26,8 +26,10 @@
     (child/fruitless! c :seal)
     (ctx/update-mem! c assoc :phase :go)
     (dth/save-trip! c)
-    (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
-      (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks cfg/own-checks})))
+    (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))
+          worth (:value (:decided (ctx/mem c)))]
+      (await (child/run!* c :seal-walk 'jobs.movement.go-to (cond-> {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks cfg/own-checks}
+                                                             (number? worth) (assoc :worth worth)))))
     (let [r (await (child/run!* c :seal 'jobs.access.cleanup {:of :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc cfg/own-checks :fit? '(always))}))]
       (when (and (= :done (:kind r)) (seq (:removed (:data r))))
         (ctx/update-mem! c assoc :seal-cleared true)))
@@ -62,7 +64,7 @@
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the
   cost are weighed again; one that got no nearer counts as a walk that did not arrive), else :declined (go-to waits on the
-  world, or it did not arrive (the body's own seal near the pile is taken back first): the next run walks again while the pile is worth it, and the window closes it). A walk
+  world, or it did not arrive (when go-to's reason says the pile may be walled off, ledger/seal-blocked-whys, the body's own seal near the pile is taken back first): the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
   (let [before (u/self-pos c)
@@ -74,7 +76,7 @@
       (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter walked)
       (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
-      (and (not (:arrived walked)) (not (:leg walked)) (await (clear-seal! c pos))) :next
+      (and (not (:arrived walked)) (not (:leg walked)) (ledger/seal-blocked-whys (result/why r)) (await (clear-seal! c pos))) :next
       (:leg walked)
       (let [nearer (nearer? before (u/self-pos c) pos)]
         (ctx/update-mem! c assoc :recheck true :blocked (not nearer))
