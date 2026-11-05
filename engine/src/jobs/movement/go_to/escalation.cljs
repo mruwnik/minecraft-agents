@@ -10,7 +10,7 @@
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs), makes a way instead of giving up, one child job
     each (jobs.lib.escape.way/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
-    through a wall toward the goal, the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, tried first for a shut-in body, none dearer than the call's worth; for a shut-in body with no stair, pillar or door out, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
+    through a wall toward the goal, the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, tried first for a shut-in body, none dearer than the call's worth, nor than a stair or pillar from the feet, and with neither of those a leg of it (escalate-choose/dig-leg); for a shut-in body with no stair, pillar or door out, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot). Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what a dig route or stair dug in another's zone, claim or plan (with :ignore-zones?;
@@ -287,7 +287,8 @@
                                              (way-guesses (:primitives c) w from) (:guess-risk opts) worth)))
         ;; the way a body could make from the cell it would approach, when it is one that is past the worth
         past-from? (fn [from] (past? from (escape-way/choose (:primitives c) from goal spare (update opts :skip (fnil conj #{}) :approach))))
-        ;; a dig route competes with the stair and pillar, searched no further than they cost
+        ;; a dig route competes with the stair and pillar, searched no further than they cost; with neither, one leg
+        ;; toward the goal: a route to a far goal under its worth alone searches a ball of guessed rock that outgrows the heap
         dug-or-chosen (fn [may-dig? o]
                         (let [p (:primitives c)
                               e (escape-way/choose p feet goal may-dig? o)
@@ -295,7 +296,9 @@
                           (if-not (or none? (#{:stair :pillar} (:step e)))
                             e
                             (let [price #(escape-way/price p feet % (:own-s o))
-                                  d (dig-way p feet goal may-dig? (cond-> o (not none?) (update :bound-s #(min (or % ##Inf) (price e)))))]
+                                  d (if none?
+                                      (dig-leg c feet goal may-dig? o)
+                                      (dig-way p feet goal may-dig? (update o :bound-s #(min (or % ##Inf) (price e)))))]
                               (cond (nil? d) e
                                     (or none? (= :searching (:step d))) d
                                     (< (price d) (price e)) d

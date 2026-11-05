@@ -12,6 +12,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.look :as look]
@@ -695,3 +696,27 @@
                                                   {:pos [6 64 0] :range 1}))]
           (is (= [:pillar] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
           (is (true? (:arrived @out)) (pr-str @out)))))))
+
+;; at the edge of its seen ground, with no stair or pillar toward a goal past a hundred blocks of unseen (read as
+;; rock), a route searched the whole way under the goal's worth expanded a ball of guessed rock: 200k+ nodes, the heap
+;; full (farm-tend's far field). A leg toward the goal is searched instead.
+(deftest a-far-goal-past-unseen-ground-with-no-stair-or-pillar-is-searched-a-leg-at-a-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [search dig-route/search
+              nodes (atom 0)
+              slice (settings/get dig-route/settings ::dig-route/max-nodes)]
+          (set! dig-route/search (fn [block-at from goal opts]
+                                   (let [run (search block-at from goal opts)]
+                                     (fn [n & [m]]
+                                       (let [[_ used :as r] (run n m)]
+                                         (when (> (swap! nodes + used) slice)
+                                           (throw (js/Error. (str "the call's route searches expanded " @nodes " cells, past one slice"))))
+                                         r)))))
+          (try
+            (let [{:keys [out]} (await (run-job! {:self {:pos {:x 40.5 :y 64 :z 2.5}} :seeing-all true
+                                                       :floor [-5 -5 40 10] :blocks (box 150 63 0 154 63 4 "stone")}
+                                                      {:pos [152 64 2] :range 0}))]
+              (is (<= @nodes slice) (pr-str @nodes (select-keys @out [:why :text]))))
+            (finally (set! dig-route/search search))))))))
