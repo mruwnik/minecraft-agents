@@ -2509,12 +2509,12 @@
 
 (defn ^:async never-lit-status
   "The start status lights-itself gives a never-lit build cell for a torchless body whose ways fetch from chests, 2 torches
-  owed, a chest 40 blocks east booked as holding torches, at time of day t, the ground's light [sky block] light, known (its memory's light, stubbed) only where it is torch-lit (an unseen cell is judged dark by night, whatever the world holds)."
+  owed, a chest 40 blocks east booked as holding torches, at time of day t, the ground's light [sky block] light, known (its memory's light, stubbed) only where it is torch-lit (an unseen cell is judged dark by night, whatever the world holds), and open ground (an unseen walk is weighted by its chance of rock; this test is about the dark)."
   [t light]
   (let [s (f/start (-> (f/bare []) (assoc :time t :light {} :light-default light) (update :blocks assoc "40,64,0" "chest")) [(assoc f/own-zone :max [50 70 6])])
         out (atom nil)
         parent {:round (fn ^:async lit-round [c]
-                         (reset! out (with-redefs [fp-light/torches-owed (constantly 2) need/fetch-opts (constantly {:how #{:chest}}) sense/seen-cell? (constantly (= [15 15] light))
+                         (reset! out (with-redefs [look/unseen-solid-at-fn (constantly (constantly 0)) fp-light/torches-owed (constantly 2) need/fetch-opts (constantly {:how #{:chest}}) sense/seen-cell? (constantly (= [15 15] light))
                                                      look/known-light-at (fn [_ _ _ _] (+ (* 16 (first light)) (second light)))]
                                        ((fp-light/lights-itself (constantly no-light) (constantly [])) c)))
                          (ctx/end c :done nil))}
