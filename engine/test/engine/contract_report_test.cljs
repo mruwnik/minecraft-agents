@@ -163,7 +163,7 @@
                          (-> (impl token a)
                              (.then (fn [r]
                                       (swap! (fake/state p) assoc :inventory [])
-                                      (js/setTimeout #(swap! (fake/state p) update :inventory (fn [_] (update-in full [0 :count] dec))) 20)
+                                      (js/setImmediate #(swap! (fake/state p) update :inventory (fn [_] (update-in full [0 :count] dec))))
                                       r))))))
           (await (core/tick! eng))
           (is (= {:uses {:items {"bread" 1}}} (tally eng id []))))))))

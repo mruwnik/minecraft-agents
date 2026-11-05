@@ -56,6 +56,11 @@
     (reset! (:bag eng) (:inventory after))
     (add-delta! eng root slots (contract/act-delta before after))))
 
+(defn beat
+  "A promise that resolves after ms of wall clock: the wait for the client's inventory to settle (a test stands in a next turn)."
+  [ms]
+  (js/Promise. (fn [ok] (js/setTimeout ok ms))))
+
 (defn ^:async count-act-settled!
   "count-act! for an act that returned: when it seems to have used items, the bag is read again after a beat and that
   read counts. Not for a failed or cut act, which must not wait."
@@ -63,7 +68,7 @@
   (let [first-after (snapshot eng)
         first-delta (contract/act-delta before first-after)
         [after delta] (if (seq (get-in first-delta [:uses :items]))
-                        (do (await (js/Promise. (fn [ok] (js/setTimeout ok (* settle-ticks (settings/physics-ms (:primitives eng)))))))
+                        (do (await (beat (* settle-ticks (settings/physics-ms (:primitives eng)))))
                             (let [a (snapshot eng)] [a (contract/act-delta before a)]))
                         [first-after first-delta])]
     (reset! (:bag eng) (:inventory after))
