@@ -1,7 +1,11 @@
 // Why JavaScript: node --test file for tools/changed-tests.mjs (a Node tool, like the other tools/*.mjs).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { selectTests, fanout, suiteArgs, rangeOf, parseGreen, formatGreen } from './changed-tests.mjs'
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { selectTests, fanout, suiteArgs, rangeOf, parseGreen, formatGreen, changedFiles, defaultBase } from './changed-tests.mjs'
 
 const ns = (name, requires = '', extra = '') => `(ns ${name}\n  "doc (:require [fake.x])"\n  (:require ${requires}) ; [commented.out]\n  )\n${extra}`
 // Fake tree: a -> b -> c (src chain); fake is shared test infra; jobs.k only named by a quoted symbol.
@@ -138,4 +142,17 @@ test('the last-green record is "<rev> <iso time>" and reads back', () => {
   assert.deepEqual(parseGreen(text), { rev: 'abc1234', time: '2026-10-16T12:00:00.000Z' })
   assert.equal(parseGreen(''), null)
   assert.equal(parseGreen('not a rev\n'), null)
+})
+
+test('the default base is the merge-base with master: own commits and edits count, masters newer commits do not', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'changed-base-'))
+  try {
+    const git = (...a) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: dir, encoding: 'utf8' })
+    const put = (f, t) => fs.writeFileSync(path.join(dir, f), t)
+    git('init', '-q', '-b', 'master'); put('base.txt', '1'); git('add', '.'); git('commit', '-qm', 'base')
+    git('switch', '-q', '-c', 'fix/x'); put('mine.txt', '1'); git('add', '.'); git('commit', '-qm', 'mine')
+    git('switch', '-q', 'master'); put('newer.txt', '1'); git('add', '.'); git('commit', '-qm', 'newer on master')
+    git('switch', '-q', 'fix/x'); put('edit.txt', '1')
+    assert.deepEqual(changedFiles(dir, defaultBase(dir)), ['edit.txt', 'mine.txt'])
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 })

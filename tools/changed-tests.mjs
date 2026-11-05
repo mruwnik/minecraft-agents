@@ -135,14 +135,9 @@ export const changedFiles = (repo, arg = 'HEAD') => {
   return [...new Set([...git(repo, 'diff', '--name-only', from, '--'), ...git(repo, 'ls-files', '--others', '--exclude-standard')])].sort()
 }
 
-// A fixer branch (fix/*) is cut from job-contract or engine-mvp: default to everything since the cut, committed or not.
-const defaultBase = (repo) => {
-  const branch = git(repo, 'rev-parse', '--abbrev-ref', 'HEAD')[0]
-  if (!branch?.startsWith('fix/')) return 'HEAD'
-  for (const b of ['job-contract', 'engine-mvp']) {
-    try { return git(repo, 'merge-base', 'HEAD', b)[0] } catch { /* branch absent */ }
-  }
-  return 'HEAD'
+// Everything this worktree changed since it left master, committed or not; master's newer commits are not its changes.
+export const defaultBase = (repo) => {
+  try { return git(repo, 'merge-base', 'HEAD', 'master')[0] } catch { return 'HEAD' }
 }
 
 const WIDE = 60
