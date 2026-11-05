@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal, ensureBundle } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal, ensureBundle, bundleHash } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -283,6 +283,36 @@ test('ensureBundle: a fresh stamp skips the compile; changed sources or a failed
     assert.equal(ensureBundle(() => ({ status: 1 }), { hash: 'h3', stamp, bundle }).status, 1)
     assert.equal(fs.existsSync(stamp), false)
   } finally { fs.rmSync(d, { recursive: true, force: true }) }
+})
+
+test('ensureBundle: a bundle rewritten after the stamp (same sources) is stale', () => {
+  const d = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-sig-'))
+  try {
+    const stamp = path.join(d, 'stamp'), bundle = path.join(d, 'test.cjs')
+    fs.writeFileSync(bundle, 'a')
+    let n = 0
+    const ok = () => { n++; return { status: 0 } }
+    ensureBundle(ok, { hash: 'h', stamp, bundle })
+    fs.writeFileSync(bundle, 'narrowed bundle')
+    ensureBundle(ok, { hash: 'h', stamp, bundle })
+    assert.equal(n, 2)
+  } finally { fs.rmSync(d, { recursive: true, force: true }) }
+})
+
+test('bundleHash covers every source path of the shadow config, the engine package files and the dashboard sources', () => {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-hash-'))
+  try {
+    const put = (f, t) => { fs.mkdirSync(path.dirname(path.join(root, f)), { recursive: true }); fs.writeFileSync(path.join(root, f), t) }
+    put('dashboard/shadow-cljs.edn', '{:source-paths ["src" "../engine/src" "../engine/test-support"]}')
+    const files = ['dashboard/src/a.cljs', 'engine/src/b.cljs', 'engine/test-support/c.cljs', 'engine/package.json', 'engine/package-lock.json', 'engine/js/d.mjs']
+    for (const f of files) put(f, '1')
+    const base = bundleHash(root)
+    for (const f of files) {
+      put(f, '2')
+      assert.notEqual(bundleHash(root), base, f)
+      put(f, '1')
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
 test('parts started together compile once and each runs its tests (a part with no tests fails)', async () => {

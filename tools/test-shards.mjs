@@ -155,20 +155,30 @@ const weightsFile = path.join(engine, 'test-weights.json')
 // Parts started together share one :test bundle: the first compiles under an exclusive lock and stamps the source hash; the others find the stamp and skip the compile, so none rewrites the bundle another is copying (copies take the same lock shared, tools/test-shard-exec.mjs).
 export const bundleLock = path.join(engine, 'out/test-bundle.lock')
 const stampFile = path.join(engine, 'out/test-full.stamp')
+// Every input of the :test build: the shadow config's :source-paths (read from it, so a new path is hashed too), the engine JS the bundle loads, and the config and package files.
+export const bundleInputs = (root = repo) => {
+  const cfg = path.join(root, 'dashboard/shadow-cljs.edn')
+  const text = fs.existsSync(cfg) ? fs.readFileSync(cfg, 'utf8') : ''
+  const vec = /:source-paths\s*\[([^\]]*)\]/.exec(text)?.[1] ?? ''
+  const srcDirs = [...vec.matchAll(/"([^"]+)"/g)].map((m) => path.resolve(root, 'dashboard', m[1]))
+  const dirs = [...new Set([...srcDirs, path.join(root, 'engine/js')])].filter((d) => fs.existsSync(d))
+  const extra = ['dashboard/shadow-cljs.edn', 'dashboard/package.json', 'dashboard/package-lock.json', 'engine/package.json', 'engine/package-lock.json'].map((f) => path.join(root, f)).filter((f) => fs.existsSync(f))
+  return [...new Set([...dirs.flatMap(walk), ...extra])].sort()
+}
 export const bundleHash = (root = repo) => {
   const h = crypto.createHash('sha256')
-  const dirs = ['engine/src', 'engine/js', 'engine/test'].map((d) => path.join(root, d)).filter((d) => fs.existsSync(d))
-  const files = [...dirs.flatMap(walk), ...['dashboard/shadow-cljs.edn', 'dashboard/package.json', 'dashboard/package-lock.json'].map((f) => path.join(root, f)).filter((f) => fs.existsSync(f))].sort()
-  for (const f of files) h.update(path.relative(root, f)).update('\0').update(fs.readFileSync(f)).update('\0')
+  for (const f of bundleInputs(root)) h.update(path.relative(root, f)).update('\0').update(fs.readFileSync(f)).update('\0')
   return h.digest('hex')
 }
-const bundleFresh = (hash, stamp, bundle) => fs.existsSync(bundle) && fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === hash
+// The stamp holds the source hash and the bundle's mtime and size, so a bundle rebuilt or replaced by anything else (a targeted compile) reads as stale.
+const bundleSig = (bundle) => { const st = fs.statSync(bundle); return `${st.mtimeMs}:${st.size}` }
+const bundleFresh = (hash, stamp, bundle) => fs.existsSync(bundle) && fs.existsSync(stamp) && fs.readFileSync(stamp, 'utf8') === `${hash}\n${bundleSig(bundle)}`
 // Stamp = the hash taken before the compile read the sources, so an edit during the compile leaves the bundle looking stale.
 export const ensureBundle = (compile, { hash = bundleHash(), stamp = stampFile, bundle = path.join(engine, 'out/test.cjs') } = {}) => {
   if (bundleFresh(hash, stamp, bundle)) return { status: 0 }
   fs.rmSync(stamp, { force: true })
   const c = compile()
-  if (c.status === 0) fs.writeFileSync(stamp, hash)
+  if (c.status === 0) fs.writeFileSync(stamp, `${hash}\n${bundleSig(bundle)}`)
   return c
 }
 const compileEngineTest = () => spawnSync(path.join(repo, 'tools/compile'), ['engine', 'test'], { stdio: 'inherit' })

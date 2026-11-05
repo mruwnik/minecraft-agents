@@ -63,6 +63,8 @@ if [ "$stop" = 0 ] && [ -z "$outdir" ] && [ "${builds[*]}" = body-release ]; the
   tmp_bundle="$repo/engine/out/body-release.new.cjs"
   extra+=(--config-merge '{:output-to "../engine/out/body-release.new.cjs" :output-dir "../engine/out/body-release.new"}')
 fi
+# any :test build replaces the bundle test-shards stamped as fresh (tools/test-shards.mjs ensureBundle rewrites the stamp after its own compile)
+[ "$project" = engine ] && [ "$stop" = 0 ] && for b in "${builds[@]}"; do [ "$b" = test ] && rm -f "$repo/engine/out/test-full.stamp"; done
 # the dashboard's own unit-test build is :dashboard-test (:test is the engine's)
 [ "$project" = dashboard ] && for i in "${!builds[@]}"; do [ "${builds[$i]}" = test ] && builds[$i]=dashboard-test; done
 

@@ -30,6 +30,11 @@ timeout 20 "$C" dashboard test >/dev/null 2>&1; check "dashboard test is the :da
 timeout 20 "$C" dashboard ui --output-dir out/public/js.new >/dev/null 2>&1; check "--output-dir passes a :output-dir config merge" "$(grep -c 'shadow-cljs compile ui --config-merge {:output-dir "out/public/js.new"}' "$T/npx.log")" 1
 timeout 20 "$C" dashboard agent-tools >/dev/null 2>&1; check "agent-tools is a release build (the CLIs load one file)" "$(grep -c 'shadow-cljs release agent-tools' "$T/npx.log")" 1
 
+# any engine :test build (a targeted run's too) drops the full-run stamp; other builds keep it
+echo stamp > "$T/repo/engine/out/test-full.stamp"
+timeout 20 "$C" engine body >/dev/null 2>&1; check "a non-test build keeps the stamp" "$(test -f "$T/repo/engine/out/test-full.stamp" && echo kept)" kept
+timeout 20 "$C" engine test --ns-regexp '^x$' >/dev/null 2>&1; check "a :test build drops the stamp" "$(test -f "$T/repo/engine/out/test-full.stamp" && echo kept || echo gone)" gone
+
 # an undeclared-var / undeclared-ns / fn-arity warning fails the build; other warnings do not
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\necho "$WARN"\n' "$T" > "$T/bin/npx"
 WARN='------ WARNING #1 - :undeclared-var ---' timeout 20 "$C" engine test >/dev/null 2>&1; check "undeclared-var fails" "$?" 1
@@ -99,7 +104,7 @@ for n in engine.a-test engine.b-test engine.hang-test engine.stall-test; do : > 
 out=$(timeout 30 "$T/repo/tools/test-engine" engine.a-test engine.b-test 2>&1); check "test-engine rc" "$?" 0
 check "test-engine ns args" "$(grep -c -- '--test=engine.a-test,engine.b-test' <<<"$out")" 1
 check "test-engine heap flag" "$(grep -c -- '--max-old-space-size=[0-9][0-9]*\b' <<<"$out")" 1
-check "test-engine private copy" "$(grep -c -- '/tmp/mc-test-run-[0-9]*/out/test.cjs' <<<"$out")" 1
+check "test-engine private copy" "$(grep -c -- '/mc-test-run-[0-9]*/out/test.cjs' <<<"$out")" 1
 # a hung run is killed after the timeout (exit 124) and says so
 out=$(MC_TEST_TIMEOUT_S=2 timeout 30 "$T/repo/tools/test-engine" engine.hang-test 2>&1); check "hung run rc" "$?" 124
 check "hung run message" "$(grep -c 'TIMEOUT, killed after 2 s' <<<"$out")" 1
