@@ -234,7 +234,7 @@
                first-pick)
            round1 #(/ (js/Math.round (* 10 %)) 10)]
        (ctx/emit! c :retreat.search :debug
-                  {:chasers (mapv (fn [{:keys [name pos]}] [name (mapv #(js/Math.round (% pos)) [:x :y :z])]) (respond.goal/chasers c))
+                  {:chasers (mapv (fn [{:keys [name pos speed]}] (cond-> [name (mapv #(js/Math.round (% pos)) [:x :y :z])] speed (conj (/ (js/Math.round (* 10 speed)) 10)))) (respond.goal/chasers c))
                    :from (mapv js/Math.floor (search/cell-of from))
                    :picked (some-> e :end search/cell-of)
                    :ends (mapv (fn [e] (cond-> (select-keys e [:open? :caught? :cover? :unseen])
