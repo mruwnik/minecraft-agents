@@ -1157,6 +1157,17 @@
           (is (some #(and (= :dig-route (:step %)) (< (second (:at %)) 61)) (filter #(= :go-to.escalated (:kind %)) seen)) "the short dig is taken from the plain, not the top")
           (is (= [80 51 56] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos (.self p))))))))))))
 
+(deftest a-dig-route-over-guessed-rock-is-tried-from-the-top-when-its-search-can-end
+  ;; the near twin of the plateau case: the pocket lies a few cells under the top, so the search from the top ends and the dig is tried there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box 0 50 0 29 60 20 "stone") {"14,55,10" "air" "14,56,10" "air"})
+              {:keys [out seen]} (await (run-go-to {:self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                   {:pos [14 55 10] :range 0}))]
+          (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) (map (juxt :step :at) (filter #(= :go-to.escalated (:kind %)) seen))))
+          (is (some #(and (= :dig-route (:step %)) (= 61 (second (:at %)))) (filter #(= :go-to.escalated (:kind %)) seen)) "a dig route over guessed rock is tried from the top"))))))
+
 (deftest a-buried-bodys-shut-in-verdict-reads-the-unseen-rock-as-its-plans-do
   ;; a dark 1x2 pocket in a stone mass, its walls mostly unseen: the plans read unseen cells past rock-beyond as stone and
   ;; find no way, so the verdict must too (read as open ground, the body was free: no escalation on :start-enclosed,
