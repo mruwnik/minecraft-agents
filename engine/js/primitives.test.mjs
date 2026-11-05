@@ -342,6 +342,21 @@ test('attack reports hit at once when the hurt target shows lowered health above
   assert.ok(Date.now() - t0 < 300 * SCALE)
 })
 
+test('attack reports hit at once when the metadata health of the hurt mob drops above 0', async t => {
+  mockClock(t)
+  const { bot, p } = rig(ownWorld())
+  bot.registry = { ...bot.registry, entitiesByName: { zombie: { metadataKeys: ['a', 'b', 'health'] } } }
+  bot.entities[8] = { ...bot.entities[8], health: undefined, metadata: [0, 0, 20] }
+  bot.attack = async () => {
+    bot.entities[8].metadata = [0, 0, 14]
+    bot.emit('entityHurt', bot.entities[8])
+  }
+  const t0 = Date.now()
+  const result = await driveClock(t, p.attack('t1', { id: 8 }))
+  assert.deepEqual([result.status, result.health], ['hit', 14])
+  assert.ok(Date.now() - t0 < 300 * SCALE)
+})
+
 test('attack resolves early when entityHurt arrives after a delay', async t => {
   mockClock(t)
   const { bot, p } = rig(ownWorld())

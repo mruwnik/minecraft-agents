@@ -6,7 +6,7 @@ import { leaveBed } from './bed.mjs'
 import { mountVehicle, dismountVehicle, paddleBoat } from './vehicle.mjs'
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
-import { sleepMs, bedRefusalOf, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
+import { sleepMs, metaValue, bedRefusalOf, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
 import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
@@ -242,6 +242,12 @@ export function createMove (env) {
       }
     })
   }
+  // mineflayer sets no .health on other entities; a living mob's health is its metadata field, by registry index
+  const mobHealth = e => {
+    if (!e) return undefined
+    const h = typeof e.health === 'number' ? e.health : metaValue(env.bot, e, 'health')
+    return typeof h === 'number' ? h : undefined
+  }
   const attack = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'attack needs an entity id')
@@ -249,7 +255,7 @@ export function createMove (env) {
       const target = env.bot.entities[a.id]
       if (!target) return { status: 'gone' }
       if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > setting('prim/attack-reach')) return { status: 'out-of-reach' }
-      const healthBefore = typeof target.health === 'number' ? target.health : -1
+      const healthBefore = mobHealth(target) ?? -1
       let hurtSeen = false
       const onHurt = entity => { if (entity?.id === a.id) hurtSeen = true }
       let deadSeen = false
@@ -266,7 +272,7 @@ export function createMove (env) {
         }
         // a lethal hit's hurt and death statuses can arrive in separate reads: give the death one poll
         const deathDeadline = Date.now() + setting('prim/death-wait-ms') * timeScale
-        const survived = () => { const h = env.bot.entities[a.id]?.health; return typeof h === 'number' && h > 0 && h < healthBefore }
+        const survived = () => { const h = mobHealth(env.bot.entities[a.id]); return typeof h === 'number' && h > 0 && h < healthBefore }
         while (hurtSeen && !deadSeen && env.bot.entities[a.id] && !survived() && Date.now() < deathDeadline) {
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
@@ -276,7 +282,7 @@ export function createMove (env) {
         env.bot.removeListener('entityDead', onDead)
       }
       const now = env.bot.entities[a.id]
-      const health = typeof now?.health === 'number' ? now.health : undefined
+      const health = mobHealth(now)
       const killed = deadSeen || !now || (health !== undefined && health <= 0)
       return { status: killed ? 'killed' : 'hit', ...(health !== undefined && { health }), hurt: hurtSeen || killed }
     })
