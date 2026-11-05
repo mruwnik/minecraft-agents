@@ -295,16 +295,18 @@
   depend on the job asking."
   [c k thunk]
   (let [p (:primitives c)
-        kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
-        epoch (world-epoch p)
-        hit (.get kept (pr-str k))]
-    (if (and hit (some? epoch) (= epoch (:epoch hit)) (not (::check-cache/fresh c)))
-      (:v hit)
-      (let [v (thunk)]
-        ;; an entry of another epoch is never hit again; each holds a whole toll vector (MBs of cells)
-        (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (= epoch (:epoch e)) (.delete kept key)))
-        (.set kept (pr-str k) {:epoch epoch :v v})
-        v))))
+        epoch (world-epoch p)]
+    (if (nil? epoch)
+      (thunk)
+      (let [kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
+            hit (.get kept (pr-str k))]
+        (if (and hit (= epoch (:epoch hit)) (not (::check-cache/fresh c)))
+          (:v hit)
+          (let [v (thunk)]
+            ;; an entry of another epoch is never hit again; each holds a whole toll vector (MBs of cells)
+            (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (= epoch (:epoch e)) (.delete kept key)))
+            (.set kept (pr-str k) {:epoch epoch :v v})
+            v))))))
 
 ;; ---------------------------------------------------------------- reads kept across checks
 

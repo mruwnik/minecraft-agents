@@ -154,11 +154,13 @@
     (is (= ["[:b]"] (vec (es6-iterator-seq (.keys ^js (.get field/bodies p))))) "a value no check can hit is not held")))
 
 (deftest a-body-without-a-world-epoch-keeps-no-shared-value
-  (let [c {:primitives #js {} :view (fn [] {:now 0 :data {}})}
+  (let [p #js {}
+        c {:primitives p :view (fn [] {:now 0 :data {}})}
         n (atom 0)]
     (field/shared c [:a] #(swap! n inc))
     (field/shared c [:a] #(swap! n inc))
-    (is (= 2 @n))))
+    (is (= 2 @n))
+    (is (nil? (.get field/bodies p)) "nothing is stored for a body without an epoch")))
 
 (deftest a-shared-field-is-kept-until-the-fakes-world-changes
   (let [p (tu/fake-on-floor {:floor [-40 -20 40 20] :self {:pos {:x 12.5 :y 64 :z 0.5}}})
