@@ -233,6 +233,10 @@
   (is (nil? (seen-check "wooden_pickaxe" #{:craft :gather} (into {} (for [y (range 64 68)] [(str "40," y ",0") "oak_log"]))))
       "its three logs and six crafts from nothing are worth more than a walk of 40 blocks"))
 
+(deftest a-root-stick-is-not-worth-a-walk-to-a-tree-at-the-edge-of-sight
+  (is (= :not-worth (:reason (seen-check "stick" #{:craft :gather} (into {} (for [y (range 64 68)] [(str "40," y ",0") "oak_log"])))))
+      "a stick made from a fraction of a log is worth less than a walk of 40 blocks"))
+
 (deftest a-plans-smelts-cost-the-smelt-price-fuel-included-in-the-steps-the-quote-and-the-gather-cost
   (let [c (ctx {:inventory (kit 0)})
         v (game/version-of (:primitives c))
