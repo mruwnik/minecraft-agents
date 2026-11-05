@@ -26,6 +26,9 @@
   (let [deep (fn [c] (or ({[30 8 0] "air" [0 20 0] "air" [0 21 0] "air"} c) (if (< (c 1) 20) "stone" "air")))]
     (is (= {:problem :dearer} (dr/route deep [0 20 0] [30 8 0] {:max-s 5 :step-s 0.2 :max-nodes 100000})) "every route left is dearer: the search stops unbounded by any box")
     (is (seq (:dig (dr/route deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3 :max-nodes 100000}))) "within the bound it is found")
+    (let [run (dr/search deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3})]
+      (run 10)
+      (is (= {:problem :dearer} (first (run 100000 5))) "a search begun under a larger bound goes on under the lower one it is handed"))
     (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000})) "a bound in seconds of digging")))
 
 (deftest a-goal-walled-in-ends-without-a-flood-however-wide-the-wall

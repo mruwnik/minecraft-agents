@@ -342,17 +342,18 @@
 
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
-  slice has left; :searching while it has not ended. An ended search keeps its answer only: its cell maps are freed."
-  [{:keys [id left asked]} k start]
-  (if-let [a (get @asked k)]
-    a
-    (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (unfinished-kept id k))
-          run (or (:run kept) (start))
-          [a used] (if (pos? @left) (run @left) [nil 0])]
-      (vswap! left - used)
-      (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (fn [_] [a 0 (constantly false)]) run) :a a :ended? (or (some? a) (:ended? kept) false)})))
-      (vswap! asked assoc k (or a :searching))
-      (or a :searching))))
+  slice has left under max-s when given (a kept search goes on under the call's bound as it falls); :searching while it has not ended. An ended search keeps its answer only: its cell maps are freed."
+  ([slice k start] (sliced-answer slice k start nil))
+  ([{:keys [id left asked]} k start max-s]
+   (if-let [a (get @asked k)]
+     a
+     (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (unfinished-kept id k))
+           run (or (:run kept) (start))
+           [a used] (if (pos? @left) (run @left max-s) [nil 0])]
+       (vswap! left - used)
+       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (fn [& _] [a 0 (constantly false)]) run) :a a :ended? (or (some? a) (:ended? kept) false)})))
+       (vswap! asked assoc k (or a :searching))
+       (or a :searching)))))
 
 (defn flood-cells-per-node
   "Flood cells that cost a slice as much CPU as one search node expanded: cost/search-cell-s over cost/flood-cell-s."
@@ -425,6 +426,7 @@
         dearer? (:dearer? route-opts)
         route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s :dearer?)
         [fx fy fz] from
+        [gx gy gz] goal
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
         known (js/Map.)
         sensed (fn [x y z] (let [k (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512)]
@@ -434,7 +436,8 @@
                      (when-let [b (sensed x y z)]
                        (if-not (true? (.-unknown b))
                          (.-name b)
-                         (let [a (when-not floors-unseen-ok? (sensed x (inc y) z))]
+                         ;; the goal's own floor shows only from inside it, as a pocket's: read as a void, no route would end there
+                         (let [a (when-not (or floors-unseen-ok? (and (== x gx) (== (inc y) gy) (== z gz))) (sensed x (inc y) z))]
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
         prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s})
@@ -446,8 +449,7 @@
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig. A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
-        straight (fn [refused] (let [[gx gy gz] goal
-                         leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
+        straight (fn [refused] (let [leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
                          up (if (< fy gy) (max (:step-s prices) (:stair-s prices)) (+ (:step-s prices) ((:fall-s prices) 1)))
                          down? (< gy fy)
                          ly (if down? gy fy)
@@ -459,7 +461,7 @@
                                                       here (sensed x y z)]
                                                   (if (and f (not (true? (.-unknown f))))
                                                     (not (dig-route/open? (.-name f)))
-                                                    (or (nil? here) (true? (.-unknown here)) (not (dig-route/open? (.-name here)))))))
+                                                    (or floors-unseen-ok? (= [x y z] goal) (nil? here) (true? (.-unknown here)) (not (dig-route/open? (.-name here)))))))
                          cell-s (fn [[x y z :as cell]]
                                   (let [unseen? (true? (some-> (sensed x y z) .-unknown))
                                         nm (block-at cell)
@@ -481,17 +483,20 @@
                                                   :when (not (let [nm (block-at cell)] (or (nil? nm) (dig-route/open? nm))))]
                                               cell)))})))
         straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
-        opts (fn [refused] (merge prices
-                                  {:max-s (min (or (:bound-s route-opts) ##Inf) (* (straight-s refused) (+ 1 1e-9))) :back-h? true}
+        ;; a route dearer than worth-s is none: no search goes on past it
+        max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
+        opts (fn [refused m] (merge prices
+                                  {:max-s m :back-h? true}
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
-                 (if slice
-                   (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (assoc (opts refused) :full? dig-route/heap-full?)))
-                   (dig-route/route seen-floor from goal (opts refused))))
+                 (let [m (max-s refused)]
+                   (if slice
+                     (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
+                     (dig-route/route seen-floor from goal (opts refused m)))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
         a (when-not (contains? spent [from goal])

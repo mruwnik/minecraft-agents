@@ -1175,3 +1175,42 @@
       (is (= (:guess-risk way) (:guess-risk @seen)))
       (is (pos? (:placed (:guess-risk @seen))) "the looks this call made price the quote's route too")
       (is (= #{[1 2]} (:spent @seen))))))
+
+(defn ^:async priced-search-run!
+  "run-job! with every dig-route search counted: {:out :seen :searched-s (nodes expanded at each search's :node-s) :first-max-s
+  (the first search's bound: the straight dig from where the call began)}. A search bounded past that, or searches that
+  cost past it, throw."
+  [spec args]
+  (let [search dig-route/search
+        spent (atom 0)
+        first-max (atom nil)]
+    (set! dig-route/search (fn [block-at from goal opts]
+                             (let [run (search block-at from goal opts)]
+                               (when (> (:max-s opts) (swap! first-max #(or % (:max-s opts))))
+                                 (throw (js/Error. (str "a search bounded at " (:max-s opts) " s, past the straight dig from the start"))))
+                               (fn [n & [m]]
+                                 (let [[a used :as r] (run n m)]
+                                   (when (> (swap! spent + (* used (:node-s opts))) @first-max)
+                                     (throw (js/Error. "the searches cost more than the straight dig from the start")))
+                                   r)))))
+    (try (let [{:keys [out seen]} (await (run-job! spec args))]
+           {:out @out :seen seen :searched-s @spent :first-max-s @first-max})
+         (finally (set! dig-route/search search)))))
+
+;; at sight 20 the pocket's air shows from the plain, its floor does not: read as a void, no route ended there and the
+;; search from the plain had nothing but the call's worth (1800 s, ~18M nodes) to bound it. The deeper pockets under a
+;; plateau top are the near twin of a-dig-route-over-guessed-rock-is-tried-from-the-top.
+(deftest a-search-toward-a-pocket-seen-through-rock-costs-no-more-than-the-straight-dig-from-the-start
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[sight mass [x y z :as pocket]] [[20 (merge (box 0 50 0 49 54 39 "stone") (box 0 55 0 20 60 20 "stone")) [40 51 30]]
+                                                 [20 (merge (box 0 50 0 49 54 39 "stone") (box 0 55 0 20 60 20 "stone")) [40 52 30]]
+                                                 [nil (box 0 50 0 29 60 20 "stone") [14 52 10]]
+                                                 [nil (box 0 50 0 29 60 20 "stone") [14 51 10]]]]
+          (let [blocks (merge mass {(str x "," y "," z) "air" (str x "," (inc y) "," z) "air"})
+                {:keys [out searched-s first-max-s]} (await (priced-search-run! (cond-> {:self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                                                  sight (assoc :sight sight))
+                                                                                {:pos pocket :range 0}))]
+            (is (true? (:arrived out)) (pr-str pocket (select-keys out [:why :text :escalation])))
+            (is (<= searched-s first-max-s) (pr-str pocket searched-s first-max-s))))))))

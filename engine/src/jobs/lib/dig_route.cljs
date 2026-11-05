@@ -86,7 +86,7 @@
 (def back-pace "Steps of the search back from the goal (its lower bound) to each cell the search proper expands: one is cheaper." 4)
 
 (defn search
-  "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
+  "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
   [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil)} :as opts}]
@@ -276,8 +276,9 @@
         ;; still save more than the search has spent (a ski rental's rule: at worst twice the best), against the route in
         ;; hand (its cheapest end reached) or max-s
         spent-s (fn [] (if node-s (* node-s (.-size done)) 0))
-        bound-s (fn [] (min (or max-s ##Inf) (aget incumbent 0)))
-        ended (fn [] (if (<= (aget incumbent 0) (or max-s ##Inf)) (route-to (aget incumbent 1)) {:problem :dearer}))
+        max-s (volatile! (or max-s ##Inf))
+        bound-s (fn [] (min @max-s (aget incumbent 0)))
+        ended (fn [] (if (<= (aget incumbent 0) @max-s) (route-to (aget incumbent 1)) {:problem :dearer}))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
@@ -340,34 +341,37 @@
                                          (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
                                            (for [dx ds dy ds dz ds]
                                              [(+ ax dx) (+ ay dy) (+ az dz)]))))))
-    (fn [n]
-      (let [start (.-size done)
-            limit (+ start n)
-            ;; whether a cell read in an earlier slice reads otherwise now
-            stale? (fn [] (let [out (volatile! false)]
-                            (.forEach read (fn [k i] (let [[x y z] (.get read-at i)]
-                                                       (when (not= (.-name k) (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))
-                                                         (vreset! out true)))))
-                            @out))
-            a (or @answer
-                  ;; a physical limit: the heap holds no more
-                  (when (and full? (full?)) (let [e (ended)] (if (:dig e) e {:problem :too-big})))
-                  (loop []
-                    (or
-                     (loop [i 0] (when (and (< i back-pace) (not @back-over)) (or (back-step!) (recur (inc i)))))
-                     (let [top (heap-pop! queue)
-                          ck (some-> top (aget 2))]
-                      (cond
-                        (nil? top) {:problem :no-route}
-                        ;; the heuristic is a lower bound: every route left costs more
-                        (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
-                        (.has done ck) (recur)
-                        (end-key? ck) (route-to ck)
-                        ;; the popped cell goes back: the next run expands it first
-                        (>= (.-size done) limit) (do (heap-push! queue top) nil)
-                        :else (do (.add done ck) (expand! ck) (recur)))))))]
-        (vreset! answer a)
-        [a (- (.-size done) start) stale?]))))
+    (fn run
+      ([n] (run n nil))
+      ([n max-s']
+       (when max-s' (vswap! max-s min max-s'))
+       (let [start (.-size done)
+             limit (+ start n)
+             ;; whether a cell read in an earlier slice reads otherwise now
+             stale? (fn [] (let [out (volatile! false)]
+                             (.forEach read (fn [k i] (let [[x y z] (.get read-at i)]
+                                                        (when (not= (.-name k) (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))
+                                                          (vreset! out true)))))
+                             @out))
+             a (or @answer
+                   ;; a physical limit: the heap holds no more
+                   (when (and full? (full?)) (let [e (ended)] (if (:dig e) e {:problem :too-big})))
+                   (loop []
+                     (or
+                      (loop [i 0] (when (and (< i back-pace) (not @back-over)) (or (back-step!) (recur (inc i)))))
+                      (let [top (heap-pop! queue)
+                           ck (some-> top (aget 2))]
+                       (cond
+                         (nil? top) {:problem :no-route}
+                         ;; the heuristic is a lower bound: every route left costs more
+                         (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
+                         (.has done ck) (recur)
+                         (end-key? ck) (route-to ck)
+                         ;; the popped cell goes back: the next run expands it first
+                         (>= (.-size done) limit) (do (heap-push! queue top) nil)
+                         :else (do (.add done ck) (expand! ck) (recur)))))))]
+         (vreset! answer a)
+         [a (- (.-size done) start) stale?])))))
 
 (defn body-prices
   "route's prices for the body of primitives p, as go-to prices its walks: a step's walk-cost, a fall's hp (fall-damage at
