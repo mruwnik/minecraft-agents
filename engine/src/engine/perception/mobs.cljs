@@ -23,7 +23,8 @@
   which says nothing of a speed). A window's pace (:last) is the path length its samples walked over the window, and counts only
   when the mob moved constants/mob-speed-min-moved or more toward the body (chord); :speed is the larger of two windows in a row
   that both counted and agree within constants/mob-speed-steady, else nil (game speed): a mob that stood then charges, pauses and
-  lunges, wanders in bursts, or walks away or sideways is not shown slow, since slowness is invisible and only steady closing is evidence."
+  lunges, wanders in bursts, or walks away or sideways is not shown slow, since slowness is invisible and only steady closing is evidence. A heard mob is not sampled (a player cannot read its
+  position over time): sense-mobs! drops its track, :last and :speed."
   [^js old pos body now]
   (let [^js track (some-> old .-track)
         fresh #js {:pos pos :at now}]
@@ -130,7 +131,7 @@
                   ^js pos (.-pos e)
                   seen? (keyword-identical? how :seen)
                   at #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
-                  ^js obs (observed old at eye now)]
+                  ^js obs (if seen? (observed old at eye now) #js {})]
               (.set sensed (.-id e) e)
               (.delete (.-faded st) (.-id e))
               (.set mobs (.-id e)

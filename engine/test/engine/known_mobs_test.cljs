@@ -303,6 +303,16 @@
       (is (false? (.-seen m)))
       (is (true? (.-heard m))))))
 
+(deftest a-heard-mob-closing-steadily-has-no-speed
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "zombie" 0 12)]})]
+    (dark-around! p 0 12)
+    (is (true? (.-heard (first (known p)))))
+    (doseq [z [11.0 9.5 8.0 6.5]]
+      (later! clock 1000)
+      (move! p 1 {:x 0.5 :y 64 :z z})
+      (dark-around! p 0 z)
+      (is (nil? (.-speed (first (known p)))) "a player cannot time a mob it only hears"))))
+
 (deftest a-seen-mob-that-walks-into-the-dark-stays-remembered
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 0 8)]})]
     (is (= [1] (danger-ids p)) "seen in the light")
