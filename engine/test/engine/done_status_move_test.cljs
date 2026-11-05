@@ -22,7 +22,6 @@
    ['jobs.movement.boat-recover {:id 7} :later {}]
    ['jobs.movement.boat-land {} :later {}]
    ['jobs.movement.cross-water {:pos [7 64 0]} :later {}]
-   ['jobs.access.clear-path {:heading :east} :later {}]
    ['jobs.access.cleanup {:of "j"} :ok {}]
    ['jobs.access.toggle {:pos [3 64 0] :state :open} :later {}]
    ['jobs.access.pillar {:height 3} :later {}]

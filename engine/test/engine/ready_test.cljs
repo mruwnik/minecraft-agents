@@ -451,7 +451,7 @@
     pen/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 11}} :ok))
 
 (deftest a-roaming-or-working-job-waits-for-food-when-hurt-and-only-food-heals
-  (doseq [j '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge jobs.animals.herd
+  (doseq [j '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.bridge jobs.animals.herd
               jobs.gather.get-seeds jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.village.roll jobs.forestry.maintain
               jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.forestry.prepare jobs.survival.restore-broken]
           :let [fit (:fit? (get registry/jobs j))]]
@@ -464,7 +464,7 @@
         line (fn [j] (first (filter #(= :ok (at j %)) (range 0.5 20 0.05))))]
     (doseq [js ['[jobs.gather.cast-obsidian jobs.blocks.clear-cells jobs.village.breed jobs.forestry.maintain jobs.forestry.prepare
                   jobs.apiary.maintain jobs.apiary.guard jobs.apiary.harvest jobs.survival.restore-broken jobs.access.pillar]
-               '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.clear-path jobs.access.bridge
+               '[jobs.strip.site jobs.strip.loot-cart jobs.build.from-plan jobs.build.rail jobs.access.bridge
                  jobs.animals.herd jobs.gather.get-seeds jobs.access.tunnel]]
             :let [h (line (first js))]
             j js]
@@ -985,7 +985,7 @@
       20 [] :later walk)))
 
 (deftest a-hurt-body-waits-to-start-the-access-and-boat-jobs
-  (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge jobs.blocks.clear-cells jobs.build.path
+  (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.bridge jobs.blocks.clear-cells jobs.build.path
               jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.mount]]
     (is (= :later (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 1 :food 5} :inventory [{:name "bread" :count 1}]})) (str j))))
 

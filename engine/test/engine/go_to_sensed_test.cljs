@@ -1,5 +1,5 @@
 (ns engine.go-to-sensed-test
-  "go-to's adjacent reads (escalation, escape, clear-path, pass, near, reach, retreat, vehicle) answer from what the
+  "go-to's adjacent reads (escalation, escape, pass, near, reach, retreat, vehicle) answer from what the
   body feels, sees or remembers, never from the raw blockAt: behind stone a cell is unknown, a dig lays it open. The
   primitives are wrapped; their blockAt throws."
   (:require [cljs.test :refer [deftest is async]]
@@ -22,7 +22,6 @@
             [engine.settings :as settings]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
-            [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -31,7 +30,6 @@
             [jobs.lib.pass :as pass]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
-            [jobs.lib.tools :as tools]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.vehicle :as vehicle]
             [jobs.lib.walk.drive :as drive]
@@ -117,7 +115,7 @@
     (is (= {:cells [[1 65 0] [1 64 0]] :through [2 64 0]} (door 63 6)) "a floor at the wall's foot level is as before, no fall")
     (is (= [2 60 0] (:through (door 59 6 #{[2 59 0]}))))
     (is (true? (:floor-unseen (door 59 6 #{[2 59 0]}))) "a landing floor never sensed is marked")
-    (is (true? (:unseen (door 59 6 #{[2 59 0]}))) "and is a guess clear-path looks at")
+    (is (true? (:unseen (door 59 6 #{[2 59 0]}))) "and is a guess a dig looks at")
     (is (nil? (:floor-unseen (door 59 6))) "a sensed floor is not")
     (let [wet (escape/door (fn [c] (case (second c)
                                      63 (if (<= 0 (first c) 1) "stone" "air")
@@ -131,54 +129,6 @@
 (deftest escape-door-over-seen-cells-is-as-before
   (let [{:keys [w]} (sensed-only (assoc (wall-east 1) :blocks ground))]
     (is (nil? (escape/door (escape/block-at-of w) (escape/unseen-of w) [0 64 0] [1 0] 3)) "open ground seen ahead: no door")))
-
-(defn ^:async run-clear-path
-  "Run clear-path :east (with args) over the sensed-only world spec as a child; its result."
-  [spec & [args]]
-  (let [clock (atom 1000000)
-        [_ sink] (tu/legacy-capture-sink)
-        {:keys [w]} (sensed-only spec)
-        out (atom :not-done)
-        parent (tu/recording-parent 'jobs.access.clear-path (merge {:heading :east} args) out)
-        eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
-                          :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(recording-parent) {})
-    (loop [i 0]
-      (when (and (< i 80) (seq (:list (core/state eng))))
-        (swap! clock + 700)
-        (await (core/tick! eng))
-        (recur (inc i))))
-    @out))
-
-(deftest clear-path-digs-on-into-a-wall-thicker-than-it-could-see
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [r (await (run-clear-path (assoc (wall-east 2) :inventory [{:name "wooden_pickaxe" :count 1}])))]
-          (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
-          (is (= 4 (count (:dug r))) "both rows"))))))
-
-(deftest clear-path-takes-an-opening-beside-a-dug-cell-for-the-far-side
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [spec (-> (wall-east 3 (box 4 64 -1 4 65 1 "stone"))
-                       (assoc :inventory [{:name "wooden_pickaxe" :count 1}])
-                       (update :blocks dissoc "1,64,1" "1,65,1"))
-              r (await (run-clear-path spec))]
-          (is (= [:done [1 64 1]] [(:status r) (:through r)]) (pr-str r)))))))
-
-(deftest clear-path-in-solid-rock-stops-at-what-it-may-spend-with-a-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [spec (assoc (wall-east 8) :inventory [{:name "wooden_pickaxe" :count 1}])
-              cell-s (cost/dig-cells-s [(tools/clear-ms (tu/fake spec) "stone")])
-              r (await (run-clear-path spec {:max-dig-s (* 7 cell-s)}))]
-          (is (= [:stopped :too-dear] [(:status r) (:reason r)]) (pr-str r))
-          (is (<= (count (:dug r)) 6) "no more rows than the seconds it may spend")
-          (is (string? (:why r))))))))
 
 (deftest a-floor-the-body-has-not-seen-may-be-a-hazard
   (let [{:keys [w]} (sensed-only (wall-east 1 {"3,63,0" "magma_block"}))

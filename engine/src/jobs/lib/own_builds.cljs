@@ -70,7 +70,7 @@
   (cond->> (own-placed-fn c) own-cut? (own-fn c)))
 
 (defn not-diggable
-  "The block at cell when an escalation's stair or clear-path child may not cut it (escape/diggable?: not a protected
+  "The block at cell when an escalation's stair child may not cut it (escape/diggable?: not a protected
   block), else nil. For a cell first seen while digging; the zone, claim and footprint rules are the dig's own."
   [block-at cell]
   (when-not (escape/diggable? block-at (constantly true) cell)

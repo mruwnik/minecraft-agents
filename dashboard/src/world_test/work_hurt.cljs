@@ -17,7 +17,7 @@
 
 (def long-jobs #{"jobs.gather.mine" "jobs.gather.dig-for" "jobs.gather.shaft-descent" "jobs.gather.strip-tunnel" "jobs.access.tunnel"
                  "jobs.build.pen" "jobs.build.path" "jobs.build.rail-line"})
-(def work-jobs #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.access.clear-path" "jobs.build.from-plan"
+(def work-jobs #{"jobs.access.stair" "jobs.access.bridge" "jobs.access.pillar" "jobs.build.from-plan"
                  "jobs.build.rail" "jobs.blocks.clear-cells" "jobs.animals.herd" "jobs.village.breed" "jobs.village.roll"
                  "jobs.gather.get-seeds" "jobs.gather.cast-obsidian" "jobs.survival.restore-broken" "jobs.movement.boat-launch"
                  "jobs.movement.boat-recover" "jobs.movement.mount"})

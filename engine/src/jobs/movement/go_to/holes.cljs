@@ -50,7 +50,7 @@
          vec)))
 
 (defn hole-tag
-  "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs; clear-path's are noted by go-to after each round and in its cleanup.
+  "What marks a hole as this go-to's in the tidy ledger; its stair child writes it (:note) as it digs.
   :mend while the escalation cuts the body's own builds (:own-cut): every hole of it is put back, own ground or not."
   [c]
   (cond-> {:escalation true :go-to (:id c)} (:own-cut (:escalation (ctx/mem c))) (assoc :mend true)))

@@ -1,5 +1,4 @@
 {:args [
- [jobs.access.clear-path :max-dig-s]
  [jobs.access.stair :direction]
  [jobs.access.stair :stock-torches]
  [jobs.access.tunnel :heading]

@@ -25,7 +25,6 @@
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, host-blocks: the rock its veins replace, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
     destroy  destroyed-s, destroyed-fn: what digging a cell destroys, in seconds of replacing it (a crop's growth, farmland's dirt and till, a build put back with put-back-s; natural terrain and tree wood nothing, a log that looks placed (horizontal, in a line, joined to planks or glass) a build) (jobs.lib.cost.destroy).
-    door     wall-on-chance, door-s: a door's price through a wall whose far side is unseen, from counted wall rows (jobs.lib.cost.door).
     look     look-answer, look-value, closed-chance, closed-cell-chance, round-looks, turn-chance, turn-saving, cell-looks, redo-every, look-s: the value of a look before deciding, a boundary's unseen part closed, the looks a decision's unknown cells pay (jobs.lib.cost.look).
     find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; ore-of, seen-ore, tunnel-ore, ore-chance: an ore's blocks expected among the faces a look sees or a tunnel cuts and the chance of a vein there; ore-level: the height a tunnel for it runs at; leg-chance, look-leg-chance (from what the body saw), tunnel-chance: a search leg's or a tunnel leg's chance of a find, tunnel-rate: a tunnel's blocks of ore per second over the cells it cuts (a heading's price), chance-of: leg i's; leg-stops?: a search's :price stop; search-s: its seconds per find, leg-spacing: the blocks between its legs (jobs.lib.cost.find).
     farm     field-share: the share of a field's unseen cells ripe or sowable, from the measured passes and its seen cells; ripe-chance: a cell seen growing ripe by now, at the game's growth rate, growing-s: the seconds of them within the server's simulation distance of the body; harvests, sown-worth: the harvests a crop still to grow is worth now and what a sown cell is worth (its food at food-point-worth); field-step-s: the measured seconds of a tend step, earthwork-s: levelling a patch's cells off height (jobs.lib.cost.farm).
@@ -41,7 +40,6 @@
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.destroy :as destroy]
-            [jobs.lib.cost.door :as door]
             [jobs.lib.cost.farm :as farm]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.find :as find]
@@ -280,9 +278,6 @@
   "Seconds a row of cells dug and walked into takes: clear-ms, the ms each cell's block takes to break, plus a walked step each."
   [clear-ms]
   (transduce (map #(+ (/ % 1000) (walk-step-s))) + 0 clear-ms))
-
-(def wall-on-chance door/wall-on-chance)
-(def door-s door/door-s)
 
 (defn unseen-step-s
   "Seconds one step into a cell not seen takes on top: unseen-route-s of one such step at the share of the world not seen."

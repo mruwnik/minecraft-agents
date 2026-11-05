@@ -129,10 +129,3 @@
                  (await (ending-of spec {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"0,63,0" "stone"}})))
               (pr-str spec)))))))
 
-(deftest clear-path-with-no-wall-waits-no-door-before-a-round
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= {:reasons [:no-door] :rounds 0 :listed? true}
-               (await (waiting-on '(jobs.access.clear-path {:heading :east})
-                                  {:self {:pos {:x 0 :y 64 :z 0}} :blocks {"0,63,0" "stone"}} []))))))))

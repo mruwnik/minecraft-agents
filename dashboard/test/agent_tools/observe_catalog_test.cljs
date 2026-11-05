@@ -10,7 +10,7 @@
    "jobs.farm.till" {}
    "jobs.farm.plant" {}
    "jobs.items.craft" {}
-   "jobs.access.clear-path" {:category "phase"}
+   "jobs.access.stair" {:category "phase"}
    "jobs.survival.unwedge" {:category "reflex"}
    "jobs.debug.notify" {:category "debug"}
    "jobs.primitive.dig" {:category "phase"}
@@ -48,7 +48,7 @@
   (async done
     (.then (catalog/read! fake-get "sock" {:all true})
            (fn [answer]
-             (is (= ['[jobs.access.clear-path] '[jobs.survival.unwedge] '[jobs.primitive.dig jobs.primitive.place]]
+             (is (= ['[jobs.access.stair] '[jobs.survival.unwedge] '[jobs.primitive.dig jobs.primitive.place]]
                     ((juxt :phase :reflex :primitive) answer)))
              (done)))))
 

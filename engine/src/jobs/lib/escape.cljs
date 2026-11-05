@@ -3,7 +3,7 @@
   way (its escalation; jobs.lib.escape.way prices and chooses one):
   - pit-depth: how many levels up from the feet are walled on at least three sides.
   - rim-pillar: how high to pillar beside a wall to step onto its top (a pit too wide for pit-depth).
-  - door: the cells of a thin wall straight ahead with a floor beyond it, or a landing at most drop-limit below (jobs.access.clear-path digs them).
+  - door: the cells of a thin wall straight ahead with a floor beyond it, or a landing at most drop-limit below (dig-in-leave digs them).
   - stair-heading: a heading with a solid block in front to stair up on (jobs.access.stair).
   - stair-cuts: the cells a stair up cuts.
   - door-beside?: whether a door or gate borders the cells the body can walk to (a way out go-to handles).
