@@ -256,8 +256,9 @@
                                " declined; dropped, it may fire again after the trigger's cooldown")})
         (end-reflex! eng run :declined nil))
     (:error :cut)
-    (do (emit! eng {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run)
-                    :error (str error)})
+    (do (emit! eng (if (= :cut status)
+                     {:source :job :kind :cut :level :info :job (:id run) :reflex (:reflex run) :error (str error)}
+                     {:source :job :kind :failed :level :warn :job (:id run) :reflex (:reflex run) :error (str error)}))
         (end-reflex! eng run (if (= :cut status) :cut :failed) nil))
     (if (stopped-result? result)
       (do (emit! eng {:source :job :kind :stopped :level :warn :job (:id run) :reflex (:reflex run)

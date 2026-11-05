@@ -50,6 +50,10 @@
 (defn ^:async fail-round [_]
   (throw (js/Error. "nope")))
 
+(defn ^:async drop-then-fail-round [c]
+  (swap! (fake/state (:primitives c)) assoc :offline true)
+  (throw (js/TypeError. "Cannot read properties of undefined (reading 'x')")))
+
 (defn ^:async attention-round [c]
   (ctx/request-attention! c :storage_blocked :chest_full {:item "oak_log" :count 24} "Chest is full")
   :continue)
@@ -113,6 +117,7 @@
    'parent-walk (tu/job parent-walk-round)
    'eat (tu/job eat-round)
    'fail (tu/job fail-round)
+   'drop-then-fail (tu/job drop-then-fail-round)
    'attention (tu/job attention-round)
    'attention-done (tu/job attention-done-round)
    'write-fail (tu/job write-fail-round)
@@ -148,6 +153,7 @@
               :when (fn [_ m _] (let [t (:t (mem/latest m :looked))] (or (nil? t) (>= (- (:now m) t) 45000))))}
    :never {:name :never :job '(eat) :when (constantly false)}
    :boom {:name :boom :job '(fail) :persistence :retry :when (constantly true)}
+   :dropped {:name :dropped :job '(drop-then-fail) :persistence :retry :when (constantly true)}
    :gated {:name :gated :job '(gated) :persistence :retry :when (constantly true)}
    :gated-child {:name :gated-child :job '(any-gated) :persistence :retry :when (constantly true)}})
 
@@ -380,6 +386,16 @@
           (is (= {} (:instances (core/state eng))) "one chance")
           (is (= {} (:failed (core/state eng))))
           (is (some #(and (= :failed (:kind %)) (= :boom (:reflex %))) @seen)))))))
+
+(deftest a-reflex-job-that-throws-while-the-body-is-offline-is-cut-not-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup)]
+          (core/register-reflex! eng {:trigger :dropped})
+          (await (core/tick! eng))
+          (is (not-any? #(and (= :failed (:kind %)) (= :dropped (:reflex %))) @seen) "a dropped connection is no failure")
+          (is (some #(and (= :cut (:kind %)) (= :dropped (:reflex %)) (= :info (:level %))) @seen)))))))
 
 (deftest a-restart-keeps-the-failed-mark
   (async done
