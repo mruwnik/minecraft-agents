@@ -241,7 +241,7 @@
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
-        looked (into #{} (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))]
+        looked (:skip (ready/walked-state c))]
     (check-cache/cached c [::look-leg (sense/known-memory p) (mapv js/Math.floor [(:x feet) (:y feet) (:z feet)]) looked]
                         #(->> (unseen-cells c)
                               (remove (fn [{:keys [x y z]}] (looked [x y z])))
@@ -257,7 +257,7 @@
   [c]
   (if-let [{:keys [side to]} (look-leg c)]
     (let [cost (walk-risk/look-cost c (walk-risk/look-way c to 1))
-          worth (ctx/worth c)]
+          worth (:left (ready/walked-state c))]
       (if (and cost (<= cost worth))
         (contract/later :unseen (str "part of the apiary was never seen: the walk to look costs " (price/round1 cost) " s of its " (price/round1 worth) " s")
                         :look-first ['jobs.movement.walk-look {:side side :to to}])

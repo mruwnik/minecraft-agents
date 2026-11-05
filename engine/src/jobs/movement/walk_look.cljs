@@ -41,18 +41,32 @@
 (def fit? ready/ok)
 
 (def walked-policy
-  "A side looked at from close by and still unseen stays so: a remembered solid cell does not change (jobs.lib.memory-age).
-  The cap bounds the entries only: each carries every cell before it (finish-leg!), so a dropped one loses none."
-  {:cap 20 :ttl :forever})
+  "One entry, rewritten by every leg with all it held (finish-leg!): a side looked at from close by and still unseen stays so
+  (a remembered solid cell does not change, jobs.lib.memory-age)."
+  {:cap 1 :ttl :forever})
 
 (defn cell-of [{:keys [x y z]}] [x y z])
 
 (defn finish-leg!
-  "Writes the leg's side to :walk-looked when it is still unseen after the walk, or after a look from where a walk shows no more."
-  [c side]
-  (when (and (look/unseen? (:primitives c) [side]) (or (:edge-walked (ctx/mem c)) (:edge-close (ctx/mem c))))
-    (let [before (into [] (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))]
-      (ctx/remember! c :walk-looked {:cells (vec (distinct (conj before (cell-of side))))} walked-policy))))
+  "Writes the leg to the :walk-looked entry: a side still unseen after a walk (or a look from where a walk shows no more) with the
+  stand it was looked from, so every side within sight of that stand is one judgment; an unseen side whose walk was not bought,
+  kept until a leg walks; and the seconds the leg spent."
+  [c side to]
+  (let [m (ctx/mem c)
+        unseen? (look/unseen? (:primitives c) [side])
+        looked? (or (:edge-walked m) (:edge-close m))
+        spent (- (:edge-spent m 0) (:booked m 0))
+        before (:data (ctx/latest c :walk-looked))
+        cell (cell-of side)
+        stand (let [[x y z] (if (vector? to) to [(:x to) (:y to) (:z to)])] {:x x :y y :z z})]
+    (when (or unseen? (pos? spent))
+      (ctx/update-mem! c assoc :booked (:edge-spent m 0))
+      (ctx/remember! c :walk-looked
+                     (cond-> {:cells (:cells before) :stands (:stands before) :declined (when-not looked? (:declined before))
+                              :spent (+ (:spent before 0) spent)}
+                       (and unseen? looked?) (-> (update :cells #(vec (distinct (conj (vec %) cell)))) (update :stands #(vec (distinct (conj (vec %) stand)))))
+                       (and unseen? (not looked?)) (update :declined #(vec (distinct (conj (vec %) cell)))))
+                     walked-policy))))
 
 (defn ended
   "The ending of kind with cause, with the info walk-look.ended of the first side."
@@ -76,7 +90,7 @@
         cell (cell-of side)]
     (if (and (look/unseen? (:primitives c) [side]) (not (contains? (:edge-looked (ctx/mem c)) cell)))
       (await (look-edge/look! c [cell] to))
-      (let [_ (finish-leg! c side)
+      (let [_ (finish-leg! c side to)
             _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
             _ (when (:edge-walked (ctx/mem c)) (ctx/update-mem! c update :stands (fnil conj #{}) (if (vector? to) (let [[x y z] to] {:x x :y y :z z}) (select-keys to [:x :y :z]))))
             next-leg (when (and (judged? c) (not (look/unseen? (:primitives c) [side]))) (ready/next-leg c from (:tried (ctx/mem c))

@@ -64,4 +64,21 @@
               (core/submit! eng (list 'jobs.movement.walk-look {:side side :to [6 64 0]}) {})
               (await (tu/tick-until-idle! eng 40))))
           (is (= (set sides) (set (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked)))))
-              "21 legs, one more than the memory cap: the latest entry still holds the first side"))))))
+              "21 legs, one more than the memory cap: the latest entry still holds the first side")
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :walk-looked))) "the sides are stored once, not copied per leg"))))))
+
+(deftest a-leg-whose-walk-is-not-bought-records-its-side-as-declined-so-it-is-not-offered-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/seeing-all (tu/fake-on-floor tunnel))
+              eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs registry/jobs
+                                :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now #(deref clock)})})]
+          (with-redefs [ctx/worth (constantly 0)
+                        look/unseen? (constantly true)]
+            (core/submit! eng '(jobs.movement.walk-look {:side [8 64 0] :to [6 64 0]}) {})
+            (await (tu/tick-until-idle! eng 40)))
+          (let [d (:data (mem/latest (mem/view (:store eng)) :walk-looked))]
+            (is (= [[8 64 0]] (:declined d)))
+            (is (empty? (:cells d)))))))))

@@ -715,7 +715,7 @@
 (defn own-cell-exposure
   "hall-status where the body stands at the west end of the tunnel world, a dark hall judged by an unseen edge while
   sides (the unseen sides of the tunnel) are left, [kind reason look-first-child-job]; walk-looked, the cells a walk-look
-  already looked at."
+  already looked at (or the whole entry, a map)."
   ([world sides] (own-cell-exposure world sides nil))
   ([world sides walk-looked]
    (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] nil))
@@ -724,7 +724,7 @@
                  sh-sense/buried? (constantly true)]
      (lit 0 0 #((juxt first (fn [s] (:reason (nth s 2))) (fn [s] (first (:look-first (nth s 2)))))
                 (ready/hall-status (cond-> (for-iron (ctx-of (assoc world :time st/noon)))
-                                     walk-looked (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:cells walk-looked}} walk-look/walked-policy)})))
+                                     walk-looked (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data (if (map? walk-looked) walk-looked {:cells walk-looked})} walk-look/walked-policy)})))
                                    nil))))))
 
 (def long-tunnel
@@ -745,6 +745,19 @@
       "a stretch 30 blocks down is walked to by its price, as a near one: no radius refuses the walk")
   (is (= [:never :exposed nil] (own-cell-exposure long-tunnel [[8 64 0] [8 65 0]] [[8 64 0] [8 65 0]]))
       "a stretch a walk-look looked at from close by and could not make out: another walk shows nothing, the stay is priced"))
+
+(deftest the-sides-of-one-dark-corridor-seen-from-a-stand-walked-to-are-one-judgment
+  (let [sides [[8 64 0] [8 65 0] [9 64 0] [9 65 0]]]
+    (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel sides)) "premise: unlooked, a leg is offered")
+    (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:cells [[8 64 0]] :stands [{:x 6 :y 64 :z 0}]}))
+        "one side looked at from a stand: the others within sight of it get no leg of their own")))
+
+(deftest a-side-whose-walk-was-refused-is-not-offered-again-and-legs-already-paid-count-against-the-worth
+  (let [sides [[8 64 0] [8 65 0]]]
+    (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:declined [[8 64 0] [8 65 0]]}))
+        "a leg that ended with its walk not bought is not offered by the next check")
+    (is (= [:never :exposed nil] (own-cell-exposure long-tunnel sides {:spent 1e9}))
+        "legs that have spent the worth bound the next one")))
 
 (deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
   (let [c (ctx-of (assoc tunnel :time st/noon))

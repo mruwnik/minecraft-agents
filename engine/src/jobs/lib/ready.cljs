@@ -85,6 +85,17 @@
         t (if (zero? len2) 0 (-> (/ (+ (* (- (:x q) (:x a)) (d :x)) (* (- (:y q) (:y a)) (d :y)) (* (- (:z q) (:z a)) (d :z))) len2) (max 0) (min 1)))]
     (u/dist q {:x (+ (:x a) (* t (d :x))) :y (+ (:y a) (* t (d :y))) :z (+ (:z a) (* t (d :z)))})))
 
+(defn walked-state
+  "What the walk-look legs before this call left in body memory (:walk-looked, one entry): `:skip` the cells to offer no leg for
+  (looked at from close by and still unseen, or whose walk was refused since the last walked leg), `:stands` the cells ({:x :y :z})
+  looked from, `:left` the call's worth less the seconds the legs have spent."
+  [c]
+  (let [{:keys [cells stands spent declined]} (:data (ctx/latest c :walk-looked))
+        worth (ctx/worth c)]
+    {:skip (into (set cells) declined)
+     :stands (set stands)
+     :left (some-> worth (- (or spent 0)))}))
+
 (defn next-leg
   "{:side :to}: the next walk to look of the walk-look run that began at `from` ({:x :y :z}), or nil: look-edge/far-side over the
   region round `from`, minus the sides a walk-look looked at in vain and `tried` (the cells [x y z] this run's legs went to),
@@ -93,14 +104,15 @@
   ([c from tried] (next-leg c from tried {}))
   ([c from tried {:keys [stands route-from route-to]}]
   (let [p (:primitives c)
-        walked (into (set tried) (mapcat (comp :cells :data)) (ctx/entries c :walk-looked))
+        {:keys [skip left] :as state} (walked-state c)
+        walked (into (set tried) skip)
         near (or (look/near-of p) 4)
         route-to (when route-to (if (vector? route-to) (zipmap [:x :y :z] route-to) route-to))
         walks? (and route-to (not (u/within? route-from route-to 1)))
         off-route? (fn [[x y z]] (and walks? (> (segment-dist route-from route-to {:x x :y y :z z}) near)))]
     (look-edge/far-side p (sh-sense/feet p) from (fn [side] (or (walked side) (off-route? side)))
-                        (fn [to] (some->> (walk-risk/look-way c to 1) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % (ctx/worth c)))))
-                        (or stands #{})))))
+                        (fn [to] (some->> (walk-risk/look-way c to 1) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % left))))
+                        (into (or stands #{}) (:stands state))))))
 
 (defn walk-look
   "The exposure s with :look, the one leg of the jobs.movement.walk-look child to the cell look-edge/far-side shows the far
