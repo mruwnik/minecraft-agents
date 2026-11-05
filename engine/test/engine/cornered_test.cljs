@@ -625,7 +625,12 @@
           (is (= [] (:list (core/state eng))) "done once the zombie has gone")
           (is (empty? (blocked-events seen))))))))
 
-(deftest a-zombie-pressed-into-the-column-is-struck-once-before-the-first-jump
+(defn first-strike
+  "The :strike ids of the body's first jumpPlace."
+  [p]
+  (some-> (first (calls p "jumpPlace")) .-args .-strike js->clj))
+
+(deftest a-zombie-pressed-into-the-column-is-struck-as-the-first-jump-starts
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -633,7 +638,8 @@
               (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
                                             :entities [(assoc (zombie 0 64 1.1) :health 1000)]}
                                    1000 (constantly nil)))]
-          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "the pressed zombie is struck before the jump"))))))
+          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "no strike ahead of the jump: the zombie would press back first")
+          (is (= [7] (first-strike p)) "the jump strikes the pressed zombie as it starts"))))))
 
 (deftest a-pillar-through-anothers-zone-is-built-only-after-every-other-way-failed
   (async done
@@ -772,7 +778,7 @@
                                                        (impl token args)))))))]
           (is (= 67 while-hidden) "the third pillar went up whole")
           (is (hiding? seen))
-          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "the zombie pressed into the cell is struck before the first jump")
+          (is (= [7] (first-strike p)) "the zombie pressed into the cell is struck as the first jump starts")
           (is (= 3 (count (filter #(= :retreat.pillar (:kind %)) @seen))) "three pillars begun"))))))
 
 (deftest a-pillar-is-classed-beside-only-when-a-melee-mobs-box-overlaps-a-cell-it-fills

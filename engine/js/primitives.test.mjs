@@ -2412,9 +2412,9 @@ test('a bucket is used only after a physics tick has sent the look at the suppor
 
 // A stub body that rises when jump goes on, lets placeBlock fill the cell it left, and lands one block higher when
 // jump goes off: the three things the real physics and server do. `rise` false leaves the body on the ground.
-const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }], rise = true, hang = [], pos = [0.5, 64, 0.5], pinned = false } = {}) => {
+const pillarRig = ({ blocks = {}, items = [{ name: 'dirt', count: 3, slot: 36 }], rise = true, hang = [], pos = [0.5, 64, 0.5], pinned = false, entities = {} } = {}) => {
   const all = { '0,63,0': 'stone', ...blocks }
-  const { bot, p } = rig({ blocks: all, items, hang, pos })
+  const { bot, p } = rig({ blocks: all, items, hang, pos, entities })
   const startOf = () => Math.floor(bot.entity.position.y)
   let start = null
   const press = bot.setControlState
@@ -2453,6 +2453,16 @@ test('jumpPlace raises the body one block per repetition: look down, jump, place
   assert.deepEqual(placeCalls, [[63, 1], [64, 1]], 'against the block under the start cell, on its top face')
   assert.deepEqual(bot.calls.filter(c => c.name === 'look').map(c => c.args[1]), [-Math.PI / 2, -Math.PI / 2])
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false], ['jump', true], ['jump', false]])
+})
+
+test('jumpPlace strikes the nearest listed mob in reach in the tick the jump starts', async t => {
+  mockClock(t)
+  const zombie = (id, x) => ({ id, name: 'zombie', type: 'hostile', position: new Vec3(x, 64, 0.5), height: 1.95 })
+  const { bot, p } = pillarRig({ entities: { 8: zombie(8, 1.1), 9: zombie(9, 1.7), 10: zombie(10, 9) } })
+  assert.deepEqual(await driveClock(t, p.jumpPlace('t1', { item: 'dirt', strike: [10, 9, 8] })), { status: 'done', placed: 1, struck: [8] })
+  const order = bot.calls.filter(c => ['setControlState', 'attack', '_placeBlockWithOptions'].includes(c.name)).map(c => c.name === 'setControlState' ? c.args.join(':') : c.name)
+  assert.deepEqual(order.slice(0, 3), ['jump:true', 'attack', '_placeBlockWithOptions'])
+  assert.deepEqual(bot.calls.filter(c => c.name === 'attack').map(c => c.args[0].id), [8])
 })
 
 test('jumpPlace centres an off-centre body in its cell, sneaking, before it jumps', () => virtually(async () => {

@@ -49,8 +49,8 @@
   - a block is carried: :item, or without it dirt while any is carried, then cobblestone
   - the cell passes jobs.lib.access.rules/may-place?
   - a seen mob other than a hostile stands in the cell: it waits for it to move on (a failed jump while one does is not counted), up to
-    ::mob-waits looks (an escape from danger sets it 0 in the call's :settings), then gives up :mob-in-cell (:mob its name); a seen hostile there is struck once just before the jump (its
-    knockback clears the cell; a player hits a mob pressed against the column, it does not leave of itself)
+    ::mob-waits looks (an escape from danger sets it 0 in the call's :settings), then gives up :mob-in-cell (:mob its name); the nearest seen hostile in reach is struck in the tick
+    each jump starts (its knockback clears the cell and keeps it from hitting mid-rise; struck sooner, it presses back)
 
   A knockback (a failed jump with the body airborne or more than 0.2 off its start point) is not a refusal: it waits to land,
   walks back to where it began (go-to child if off the column, then a short centring nudge) and tries again; up to 8 per pillar, then :off-column.
@@ -305,19 +305,18 @@
             (if (centred? c [x z] [hx hz]) :in :failed))))))
 
 (defn mob-in-cell
-  "A seen mob other than a hostile in cell: one to wait for. A hostile there is not waited on while it hits (strike-out!)."
+  "A seen mob other than a hostile in cell: one to wait for. A hostile there is not waited on while it hits: the jump strikes it (strike-ids)."
   [c cell]
   (pl/mob-in (remove #(= "hostile" (:kind %)) (sight/seen-entities (:primitives c) {:radius 4})) cell))
 
-(defn ^:async strike-out!
-  "Strike a seen hostile whose box overlaps cell (the server refuses a block there) once, right before the jump that
-  places into it. A calm enderman is left alone: a strike provokes it."
-  [c cell]
-  (when-let [mob (pl/mob-in (->> (sight/seen-entities (:primitives c) {:radius 4})
-                                 (filter #(= "hostile" (:kind %)))
-                                 (remove #(danger-q/calm-enderman? (clj->js %))))
-                            cell)]
-    (await (pl/strike! c mob))))
+(defn strike-ids
+  "Ids of the seen hostiles the jump strikes the nearest of, when in reach, as it starts (jumpPlace :strike): one pressed into
+  the cell refuses the block, one that hits mid-rise stops the rise. A calm enderman is left alone: a strike provokes it."
+  [c]
+  (->> (sight/seen-entities (:primitives c) {:radius 4})
+       (filter #(= "hostile" (:kind %)))
+       (remove #(danger-q/calm-enderman? (clj->js %)))
+       (mapv :id)))
 
 (defn refused? "Whether a jumpPlace result says the server refused the block." [^js r] (boolean (some-> (.-reason r) (str/starts-with? "place-failed"))))
 
@@ -361,7 +360,7 @@
   (let [block-at (access/sensed-at (:primitives c) nil)
         l (ledger/intend l {:cell cell :item item :before (block-at cell) :job (:id c) :purpose purpose})
         _ (ledger/remember! c l)
-        r (await (ctx/act c :jumpPlace #js {:item item :count 1}))]
+        r (await (ctx/act c :jumpPlace #js {:item item :count 1 :strike (clj->js (strike-ids c))}))]
     (if (pos? (or (.-placed r) 0))
       (do (ledger/remember! c (ledger/confirm l cell))
           (u/progress! c)
@@ -483,8 +482,7 @@
         (= :place (:step step))
         (if-let [mob (mob-in-cell c (:cell step))]
           (await (wait-out-mob! c l step mob))
-          (do (await (strike-out! c (:cell step)))
-              (await (place! c l step))))
+          (await (place! c l step)))
 
         (= :ceiling (:reason step)) (await (dig-ceiling! c l step))
         :else (finish! c l step)))))

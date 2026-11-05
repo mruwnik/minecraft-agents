@@ -186,16 +186,23 @@ export function createMove (env) {
     })
   }
 
+  const inReach = e => dist(eye(), { x: e.position.x, y: e.position.y + (e.height ?? 1) / 2, z: e.position.z }) <= setting('prim/attack-reach')
+  const nearest = es => es.reduce((best, e) => (!best || dist(eye(), e.position) < dist(eye(), best.position) ? e : best), null)
+
   // Pillars up: for each repetition the body looks straight down, jumps, and once its feet clear the cell it stood in
   // places the item there against the block under that cell (the placed block lands under the falling body), releases
   // jump and waits to stand one block higher. Stops at the first thing that goes wrong and reports what it achieved.
+  // strike (entity ids): the nearest of them in reach is struck in the tick the jump starts, so its knockback carries it
+  // out of the cell and out of hitting range for the rise (struck earlier, it presses back first; a hit mid-rise stops the rise).
   const jumpPlace = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(typeof a.item === 'string', 'jumpPlace needs item')
     need(a.count === undefined || a.count === null || (Number.isInteger(a.count) && a.count >= 1), 'jumpPlace needs count, an integer of at least 1')
+    need(a.strike === undefined || a.strike === null || (Array.isArray(a.strike) && a.strike.every(isNum)), 'jumpPlace strike must be a list of entity ids')
     const count = Math.min(a.count ?? 1, setting('prim/jump-place-max'))
     let placed = 0
-    const outcome = reason => ({ status: placed === count ? 'done' : placed > 0 ? 'partial' : 'failed', placed, ...(reason && { reason }) })
+    const struck = []
+    const outcome = reason => ({ status: placed === count ? 'done' : placed > 0 ? 'partial' : 'failed', placed, ...(reason && { reason }), ...(struck.length && { struck }) })
     return act(token, { boundS: setting('prim/jump-place-block-s') * count, onTimeout: () => outcome('timeout') }, async ctx => {
       let pressed = false
       const release = () => { if (pressed) { pressed = false; env.bot.setControlState('jump', false) } }
@@ -217,8 +224,10 @@ export function createMove (env) {
           ctx.alive()
           await env.bot.look(env.bot.entity.yaw ?? 0, -Math.PI / 2, true)
           ctx.alive()
+          const target = nearest((a.strike ?? []).map(id => env.bot.entities[id]).filter(e => e && inReach(e)))
           pressed = true
           env.bot.setControlState('jump', true)
+          if (target) { env.bot.attack(target); struck.push(target.id) }
           const riseDeadline = Date.now() + setting('prim/rise-wait-ms') * timeScale
           while (env.bot.entity.position.y < start.y + 1.01 && Date.now() < riseDeadline) await pause(20)
           if (env.bot.entity.position.y < start.y + 1.01) return outcome('not-raised')
@@ -254,7 +263,7 @@ export function createMove (env) {
     return act(token, { boundS: 1 }, async ctx => {
       const target = env.bot.entities[a.id]
       if (!target) return { status: 'gone' }
-      if (dist(eye(), { x: target.position.x, y: target.position.y + (target.height ?? 1) / 2, z: target.position.z }) > setting('prim/attack-reach')) return { status: 'out-of-reach' }
+      if (!inReach(target)) return { status: 'out-of-reach' }
       const healthBefore = mobHealth(target) ?? -1
       let hurtSeen = false
       const onHurt = entity => { if (entity?.id === a.id) hurtSeen = true }

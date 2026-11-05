@@ -585,30 +585,40 @@
           (is (finished? eng))
           (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
 
-(deftest a-hostile-pressed-into-the-cell-is-struck-out-of-it-before-the-jump
+(defn strikes
+  "The :strike ids of each jumpPlace call."
+  [p]
+  (mapv #(vec (some-> (.-strike (.-args %)) js->clj)) (calls p "jumpPlace")))
+
+(deftest a-hostile-pressed-into-the-cell-is-struck-as-the-jump-starts
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "zombie" :kind "hostile" :height 1.95)]})]
-          (refuse-while-a-mob-stands-in! p nil)
-          (.override (.-world p) "attack"
-                     (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
+          (.override (.-world p) "jumpPlace"
+                     (fn [token args impl]
+                       (if (and (seq (fake/entities p)) (not (some #{7} (js->clj (.-strike args)))))
+                         (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
+                         (do (swap! (fake/state p) assoc :entities []) (impl token args)))))
           (core/submit! eng (list job {:height 3 :worth 60 :checks {:safe? '(always)}}) {})
           (await (ticks s eng 20))
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))
           (is (empty? (of-kind seen :stopped)))
-          (is (= [7] (mapv #(.-id (.-args %)) (calls p "attack")))))))))
+          (is (= [7] (first (strikes p))) "the first jump strikes the zombie")
+          (is (empty? (calls p "attack")) "no strike apart from the jump: the mob would press back before it"))))))
 
 (deftest a-calm-enderman-in-the-cell-is-not-struck
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {:entities [(assoc cow :name "enderman" :kind "hostile" :height 2.9 :angry false)]})]
+        (let [{:keys [eng p] :as s} (setup {:entities [(assoc cow :name "enderman" :kind "hostile" :height 2.9 :angry false)]})]
           (refuse-while-a-mob-stands-in! p nil)
           (core/submit! eng (list job {:height 3 :worth 60 :checks {:safe? '(always)}}) {})
           (await (ticks s eng 20))
-          (is (zero? (count (calls p "attack"))) "a swing would provoke it"))))))
+          (is (seq (strikes p)))
+          (is (every? empty? (strikes p)) "a swing would provoke it")
+          (is (zero? (count (calls p "attack")))))))))
 
 (deftest a-pillar-told-not-to-wait-for-mobs-ends-at-once-naming-it
   (async done
