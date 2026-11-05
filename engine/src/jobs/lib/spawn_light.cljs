@@ -102,14 +102,18 @@
          (cost/hall-chance (if sky? :sky :roofed))))))
 
 (defn dark-share
-  "chance-at of cell (under the sky's darkening subtract, default now) as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between.
-  A walked unseen cell counts at its unseen-walk-weight."
+  "chance-at of cell (under the sky's darkening subtract, default now) as a share of that of a cell certainly dark: 1 dark, 0 lit, the chance of dark between."
   [p cell caves-free? & [subtract]]
   (let [dark (cost/spawn-chance [0 0 0])]
-    (if (pos? dark) (/ (* (unseen-walk-weight p cell) (chance-at p cell caves-free? subtract)) dark) 0)))
+    (if (pos? dark) (/ (chance-at p cell caves-free? subtract) dark) 0)))
+
+(defn walk-dark-share
+  "dark-share of a cell the body walks over: an unseen one counts at its unseen-walk-weight. A place the body stays at or aims for must be open: dark-share."
+  [p cell caves-free? & [subtract]]
+  (* (unseen-walk-weight p cell) (dark-share p cell caves-free? subtract)))
 
 (defn share-of
-  "dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once and their spawn-regions
+  "walk-dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once and their spawn-regions
   flooded once (sh-inside/*regions*, the caller's when bound): for the walks of one decision."
   [p caves-free? subtract]
   (let [kept (js/Map.)
@@ -118,7 +122,7 @@
       (let [k (str x "," y "," z)]
         (if (.has kept k)
           (.get kept k)
-          (let [v (binding [sh-inside/*regions* regions] (dark-share p (select-keys cell [:x :y :z]) caves-free? subtract))] (.set kept k v) v))))))
+          (let [v (binding [sh-inside/*regions* regions] (walk-dark-share p (select-keys cell [:x :y :z]) caves-free? subtract))] (.set kept k v) v))))))
 
 (defn dark-seconds
   "Seconds of the walk where a mob could spawn, times (seconds from the start at each cell): every k-th cell and the

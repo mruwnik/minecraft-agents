@@ -27,10 +27,12 @@
 (deftest a-walked-unseen-cell-counts-at-the-chance-it-is-open-ground-in-a-hall-not-rock-the-body-digs
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
         cell {:x 15 :y 64 :z 0}
-        share #(with-redefs [look/unseen-solid-at-fn (constantly (constantly %))] (spawn-light/dark-share p cell false))]
+        share #(with-redefs [look/unseen-solid-at-fn (constantly (constantly %))] (spawn-light/walk-dark-share p cell false))
+        stay #(with-redefs [look/unseen-solid-at-fn (constantly (constantly %))] (spawn-light/dark-share p cell false))]
+    (is (= (stay 0) (stay 1) (/ (spawn-light/chance-at p cell false) open-night-chance)) "a stay or goal cell is open ground whatever the rock prior says")
     (is (zero? (share 1)) "certain rock is the body's own tunnel")
     (is (< (share 0.75) (share 0.25) (share 0)) "the likelier rock, the less")
-    (is (< (share 0) (/ (spawn-light/chance-at p cell false) open-night-chance)) "and an unseen edge's hall is a prior under 1")))
+    (is (< (share 0) (stay 0)) "and an unseen edge's hall is a prior under 1")))
 
 (deftest exposure-of-a-walk-out-of-shelter-judges-a-cell-by-its-light-only-once-seen
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))

@@ -122,7 +122,7 @@
                            (remove #(or (inside [(:x %) (:y %) (:z %)]) (sh-sense/solid-at? p %)) cells)))
                 (seq (sh-inside/way-out-cells p room)))]
     (if way
-      {:share (/ (transduce (map #(spawn-light/dark-share p % caves-free? sky)) + 0 way) (count way))
+      {:share (/ (transduce (map #(spawn-light/walk-dark-share p % caves-free? sky)) + 0 way) (count way))
        :dawn? (boolean (some #(spawn-light/dawn-lowers? p %) way))}
       {:share 1 :dawn? false})))
 

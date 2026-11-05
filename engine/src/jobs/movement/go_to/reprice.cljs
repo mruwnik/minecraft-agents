@@ -41,7 +41,7 @@
   cut); the plan itself when no step is one and it passes status to its end. Else nil."
   [c pos plan]
   (let [p (:primitives c)
-        [prefix more] (split-with #(< (spawn-light/dark-share p % false) 0.5) (:steps plan))
+        [prefix more] (split-with #(< (spawn-light/walk-dark-share p % false) 0.5) (:steps plan))
         steps (vec prefix)
         end (peek steps)
         feet (mapv js/Math.floor ((juxt :x :y :z) (u/self-pos c)))]

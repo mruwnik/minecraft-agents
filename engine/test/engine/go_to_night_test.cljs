@@ -15,6 +15,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -155,7 +156,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [rounds (atom [])
+        (with-redefs [look/unseen-solid-at-fn (constantly (constantly 0))]
+         (let [rounds (atom [])
               {:keys [eng p]} (parent-world (fn ^:async walker [c]
                                               (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
                                                 (swap! rounds conj r)
@@ -163,19 +165,20 @@
           (core/submit! eng '(walker) {})
           (await (ticks eng 4))
           (is (= inside (st/pos-of p)))
-          (is (= [:condition-failed :risky] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))])))))))
+          (is (= [:condition-failed :risky] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))]))))))))
 
 (deftest a-parent-walking-with-walk-into-or-run!-waits-with-the-childs-risky-reason
   (async done
     (tu/run-async done
       (fn ^:async t []
+        (with-redefs [look/unseen-solid-at-fn (constantly (constantly 0))]
         (doseq [walk [(fn ^:async walker [c] (await (child/walk-into!* c :walk [15 64 0])))
                       (fn ^:async walker [c] (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))]]
           (let [{:keys [eng p]} (parent-world walk)
                 id (core/submit! eng '(walker) {})]
             (await (ticks eng 4))
             (is (= inside (st/pos-of p)))
-            (is (= :risky (:reason (waiting-of eng id))) "the parent waits with the child's reason")))))))
+            (is (= :risky (:reason (waiting-of eng id))) "the parent waits with the child's reason"))))))))
 
 (deftest an-exclusive-go-to-at-night-walks
   (async done

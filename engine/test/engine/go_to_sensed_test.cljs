@@ -13,6 +13,7 @@
             [engine.go-to-column-test :as gcol]
             [engine.go-to-doors-test :as gd]
             [engine.memory :as mem]
+            [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.util :as u]
             [engine.fake.raw-world :as fake-raw]
@@ -1268,10 +1269,10 @@
         track! (fn [{:keys [p] :as s}]
                  (look! s)
                  (add-watch (fake/state p) :track (fn [_ _ _ b] (swap! cells conj (mapv js/Math.floor (:pos (:self b)))))))
-        {:keys [out]} (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.05}
+        {:keys [out]} (with-redefs [look/unseen-solid-at-fn (constantly (constantly 0))] (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.05}
                                #(run-go-to (cond-> {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 4 :food 20} :blocks (:blocks tunnel) :radius 16 :exact-eye true :bodyHitbox true}
                                              (:states tunnel) (assoc :states (:states tunnel)))
-                                           {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true :worth 400} track!)))]
+                                           {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true :worth 400} track!))))]
     {:out out
      :cave (sort (filter #(>= (nth % 2) 5) @cells))
      :turn (sort (filter #(and (= 20 (first %)) (<= 1 (nth % 2) 2)) @cells))}))
