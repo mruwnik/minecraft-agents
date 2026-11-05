@@ -225,7 +225,7 @@
   (is (= [[1 0] [3 -1]] (wake-cells-with ["1,63,0" "3,63,-1"])) "behind the foot, then the other side")
   (is (= [[3 0]] (wake-cells-with [])) "nowhere to stand: on the bed"))
 
-(deftest the-shelter-is-priced-from-the-worst-cell-the-body-may-get-up-at
+(deftest a-lit-patch-in-a-dark-field-does-not-change-the-shelter-price
   (async done
     (tu/run-async done
       (fn ^:async t []

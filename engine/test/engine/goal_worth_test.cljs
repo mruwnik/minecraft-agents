@@ -195,6 +195,16 @@
     (is (< (Math/abs (- gain (- night day))) 1e-6) "the night's exposure less the same span by day")
     (is (< gain night))))
 
+(deftest the-open-night-is-priced-at-the-worst-of-the-cells-the-body-may-stand-in
+  (let [c (ctx-of (tu/fake-on-floor {:time 14000}) {} {})
+        cells [{:x 0 :y 64 :z 0} {:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0} {:x 3 :y 64 :z 0}]
+        chance #(case (:x %2) 0 0.5 0)
+        price (fn [cs] (with-redefs [spawn-light/night-chance chance] (bed-down/open-price c cs 600)))
+        at (fn [cell] (bed-down/exposed-price c (chance nil cell) 600 cell))]
+    (is (pos? (at (first cells))))
+    (is (= (at (first cells)) (price cells)) "one dangerous cell among four safe ones sets the price: a mean over the cells would give a quarter of it")
+    (is (= (price [(first cells)]) (price cells)))))
+
 (deftest the-night-is-worth-the-skip-the-other-players-online-wait-for-while-the-body-stays-awake
   (let [night #(worth 'jobs.survival.night (tu/seeing-all (tu/fake-on-floor {:time 14000 :players %})) {})
         left (second (get-in (sh-clock/night-left-quote {:primitives (tu/fake {:time 14000})}) [:uses :job-time]))]
