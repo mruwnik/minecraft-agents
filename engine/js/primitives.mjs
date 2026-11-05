@@ -484,7 +484,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     if (!isOffline()) rememberSelf()
     down = true
     const { at, ...cause } = lastError ?? {}
-    emit({ kind: 'disconnected', reason, via, ...(lastError && { ...cause, errorAgoMs: Date.now() - at }) })
+    emit({ kind: 'disconnected', reason, via, ...(lastError && { ...cause, 'error-ago-ms': Date.now() - at }) })
     lastError = null
     // a call still waiting on the dead bot would sit until its time bound: cut it now so its job resumes after the reconnect
     for (const call of [...inflight]) call.cut()

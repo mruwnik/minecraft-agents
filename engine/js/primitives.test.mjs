@@ -1717,7 +1717,7 @@ test('a drop reports how it ended and the socket error just before it', async ()
   assert.equal(d.via, 'end')
   assert.equal(d.error, 'write EPIPE')
   assert.equal(d.code, 'EPIPE')
-  assert.equal(typeof d.errorAgoMs, 'number')
+  assert.equal(typeof d['error-ago-ms'], 'number')
 })
 
 test('a body killed while its client hung reports the death the fresh bot logged in with: the old pack at the death spot, then the respawn', async () => {
