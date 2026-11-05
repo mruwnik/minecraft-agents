@@ -753,19 +753,23 @@
 
 (defn dig-price
   "Seconds the fewest cells dug (dig-way) from the feet to the stand cell goal ([x y z]) cost go-to call c, the rest of the
-  way walked as a quote prices it, and no more than the call's worth; :searching while the dig search goes on (it goes on at
-  the next quote of the call); nil when the call may not dig a route or none is found. A quote asks this when the
-  walk's planner found no walk."
+  way walked as a quote prices it, and no more than the call's worth; nil when the call may not dig a route or none is found.
+  A running call (route-owner) has its search go on, :searching, at its next quote; a quote of no running call asks one
+  slice and gets :budget when that spent its nodes (no search is kept: each quote ask would otherwise grow it for ever, at
+  no time spent). A quote asks this when the walk's planner found no walk."
   [c goal]
   (when (ways/way? c :clear-path)
     (let [p (:primitives c)
           feet (end/feet-cell c)
-          slice (route-slice (or (:route-owner (ctx/mem c)) (str (:id c) "/quote")))
+          owner (:route-owner (ctx/mem c))
+          quote-id (str (:id c) "/quote")
+          slice (route-slice (or owner quote-id))
           opts (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :node-s (cost/search-cell-s))
           e (dig-way p feet goal (may-dig-fn c) opts)]
       (keep-routes! slice)
+      (when (and (not owner) (= :searching (:step e))) (forget-routes! quote-id))
       (case (:step e)
-        :searching :searching
+        :searching (if owner :searching :budget)
         :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts))
                               (cost-planner/rest-s (js/Math.round (u/dist (zipmap [:x :y :z] feet) (zipmap [:x :y :z] goal)))))]
                      (when (cost/affords? s (ctx/worth c)) s))

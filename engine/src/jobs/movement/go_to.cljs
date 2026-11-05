@@ -175,7 +175,7 @@
   (let [c (with-limits (health/with-body-food c))]
     (let [r (await (preview/route! c))
           dig-s (when (and (not (:found r)) (:goal r) (ways/escalating? c)) (choose/dig-price c (:goal r)))
-          r (cond (= :searching dig-s) (assoc r :reason :searching :near (or (:near r) 0))
+          r (cond (#{:searching :budget} dig-s) (assoc r :reason dig-s :near (or (:near r) 0))
                   dig-s (assoc r :dig-seconds dig-s)
                   :else r)]
       (preview/quote-of-route r (ways/escalating? c) (:back (:args c))))))
