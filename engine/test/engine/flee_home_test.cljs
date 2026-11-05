@@ -368,7 +368,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [counts (atom {})
-              restores [(counting! counts :closed-room #(identity rooms/refuge-room?) #(set! rooms/refuge-room? %))
+              restores [(counting! counts :closed-room #(identity rooms/flood-refuge?) #(set! rooms/flood-refuge? %))
                         (counting! counts :room #(identity reach-room/room) #(set! reach-room/room %))
                         (counting! counts :walk-steps #(identity reach-room/walk-steps) #(set! reach-room/walk-steps %))
                         (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]
@@ -468,6 +468,7 @@
               home-why #(some (fn [d] (when (= [5 64 0] (:at d)) (:why d))) (:dropped (rooms/survey c home)))]
           (is (= :unseen (home-why)) "a cell not seen leaves the home neither closed nor open")
           (reset! hidden false)
+          (swap! (fake/state p) update :blocks #(into {} %))
           (is (nil? (home-why)) "seen, the home is a refuge")
           (is (= 1 (count (:rooms (rooms/survey c home))))))))))
 
@@ -482,6 +483,7 @@
               _ (.override (.-world p) "look" (fn ^:async o [token args impl]
                                                 (swap! looks inc)
                                                 (reset! hidden (disj @hidden (let [q (.-pos args)] [(js/Math.floor (.-x q)) 64 (js/Math.floor (.-z q))])))
+                                                (swap! (fake/state p) update :blocks #(into {} %))
                                                 (await (impl token args))))]
           (core/submit! eng '(test.flight) {})
           (await (tu/run-until-empty eng 6))

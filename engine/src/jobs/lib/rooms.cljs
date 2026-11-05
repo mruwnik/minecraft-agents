@@ -86,10 +86,28 @@
                        out))]
     (some? (reach-room/flood-cells next-cells (first cells) reach-room/room-cells))))
 
-(defn refuge-room?
+(defn flood-refuge?
   "Whether cell pos holds a closed room (jobs.lib.reach.room/room) that stays closed past the edge of sight (closed-past-sight?)."
   [p pos]
   (boolean (some->> (reach-room/room p pos) (closed-past-sight? p))))
+
+(defonce refuge-kept (js/WeakMap.))
+
+(defn refuge-room?
+  "flood-refuge? of cell pos, kept per body while the world stays the same (reach-room/steady-key and the body's world epoch):
+  a flight asks for each door side from its price, its survey and every enter-room quote."
+  [p pos]
+  (let [key (str (some-> (aget p "perception") reach-room/steady-key) "|" (some-> (aget p "worldEpoch") (.call p)))
+        kept (let [h (.get refuge-kept p)]
+               (if (and h (= key (:key h)))
+                 h
+                 (let [h {:key key :m (js/Map.)}] (.set refuge-kept p h) h)))
+        k (pr-str (select-keys pos [:x :y :z]))]
+    (if (.has (:m kept) k)
+      (.get (:m kept) k)
+      (let [v (flood-refuge? p pos)]
+        (.set (:m kept) k v)
+        v))))
 
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
