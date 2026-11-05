@@ -108,18 +108,35 @@
     (is (= [1] (danger-ids p)))
     (is (true? (hostile-near? p)))))
 
-(deftest a-mob-known-moving-carries-its-observed-speed
-  (let [{:keys [p clock]} (rig {:entities [(mob 1 "zombie" 0 4)]})
+(defn speeds-over
+  "The observed speed after each one-second window of a zombie starting at z 12, which moves to each of `zs` (blocks along z; x 0.5)."
+  [zs]
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "zombie" 0 12)]})
         speed #(some-> (first (.knownMobs p)) .-speed)]
-    (is (nil? (speed)) "first sample: none yet")
-    (later! clock 500)
-    (move! p 1 {:x 1.0 :y 64 :z 4.5})
-    (is (nil? (speed)) "the window is not full until a second is up")
-    (later! clock 500)
-    (move! p 1 {:x 1.5 :y 64 :z 4.5})
-    (is (< 0.99 (speed) 1.01) "one block over the second")
-    (later! clock 1000)
-    (is (nil? (speed)) "a mob that stood a window through has no speed to price")))
+    (speed)
+    (mapv (fn [z] (later! clock 1000) (move! p 1 {:x 0.5 :y 64 :z z}) (speed)) zs)))
+
+(deftest a-mob-closing-steadily-carries-the-larger-of-two-windows
+  (let [[s1 s2 s3] (speeds-over [11.0 9.5 8.5])]
+    (is (nil? s1) "one window: no agreement yet")
+    (is (< 1.49 s2 1.51) "two windows closing at 1.5 blocks: that speed")
+    (is (< 0.99 s3 1.51))))
+
+(deftest a-mob-that-stood-then-charges-has-no-speed
+  (is (= [nil nil] (speeds-over [12.5 9.5])) "a standing window, then a charge: game speed"))
+
+(deftest a-mob-that-wanders-in-bursts-has-no-speed
+  (is (= [nil nil nil] (speeds-over [11.0 11.0 10.0]))))
+
+(deftest a-mob-walking-away-has-no-speed
+  (is (= [nil nil nil] (speeds-over [13.0 14.0 15.0]))))
+
+(deftest a-mob-walking-sideways-has-no-speed
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "zombie" 0 12)]})]
+    (doseq [x [1.5 2.5 3.5]]
+      (later! clock 1000)
+      (move! p 1 {:x x :y 64 :z 12.5}))
+    (is (nil? (.-speed (first (.knownMobs p)))))))
 
 (deftest a-creeper-lost-from-sight-stays-a-sighting-for-hours
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]

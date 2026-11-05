@@ -18,18 +18,27 @@
 
 
 (defn observed
-  "A mob's observed speed record after a sample at pos at time now: old's {:track {:pos :at} :speed} carried on, the track
-  restarted every constants/mob-speed-window-ms (or when the mob went unsensed for longer than three windows, which says nothing of a
-  speed), :speed blocks a second over the last full window when the mob moved constants/mob-speed-min-moved or more, else nil."
-  [^js old pos now]
+  "A mob's observed speed record after a sample at pos at time now, the body being at `body`: old's {:track {:pos :at} :last :speed}
+  carried on, the track restarted every constants/mob-speed-window-ms (or when the mob went unsensed for longer than three windows,
+  which says nothing of a speed). A window's pace (:last) counts only when the mob moved constants/mob-speed-min-moved or more
+  toward the body; :speed is the larger of two windows in a row that both counted, else nil (game speed): a mob that stood then
+  charges, wanders in bursts, or walks away or sideways is not shown slow, since slowness is invisible and only steady closing is evidence."
+  [^js old pos body now]
   (let [^js track (some-> old .-track)
         fresh #js {:pos pos :at now}]
     (cond
       (nil? track) #js {:track fresh}
-      (< (- now (.-at track)) constants/mob-speed-window-ms) #js {:track track :speed (.-speed old)}
+      (< (- now (.-at track)) constants/mob-speed-window-ms) #js {:track track :last (.-last old) :speed (.-speed old)}
       (> (- now (.-at track)) (* 3 constants/mob-speed-window-ms)) #js {:track fresh}
-      :else (let [moved (js/Math.hypot (- (.-x pos) (.-x (.-pos track))) (- (.-z pos) (.-z (.-pos track))))]
-              #js {:track fresh :speed (when (>= moved constants/mob-speed-min-moved) (/ moved (/ (- now (.-at track)) 1000)))}))))
+      :else (let [^js from (.-pos track)
+                  dx (- (.-x pos) (.-x from)) dz (- (.-z pos) (.-z from))
+                  bx (- (.-x body) (.-x from)) bz (- (.-z body) (.-z from))
+                  bd (js/Math.hypot bx bz)
+                  toward (if (pos? bd) (/ (+ (* dx bx) (* dz bz)) bd) 0)
+                  secs (/ (- now (.-at track)) 1000)
+                  pace (when (>= toward constants/mob-speed-min-moved) (/ (js/Math.hypot dx dz) secs))
+                  before (.-last old)]
+              #js {:track fresh :last pace :speed (when (and pace before) (max pace before))}))))
 
 (defn mob-lit?
   "Whether the mob at pos stands in light bright enough to make out: the light rule of the sight table, read at the
@@ -113,7 +122,7 @@
                   ^js pos (.-pos e)
                   seen? (keyword-identical? how :seen)
                   at #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
-                  ^js obs (observed old at now)]
+                  ^js obs (observed old at eye now)]
               (.set sensed (.-id e) e)
               (.delete (.-faded st) (.-id e))
               (.set mobs (.-id e)
@@ -124,6 +133,7 @@
                          :seenPos (if seen? at (some-> old .-seenPos))
                          :heard (keyword-identical? how :heard)
                          :track (.-track obs)
+                         :last (.-last obs)
                          :speed (.-speed obs)}))))
         (doseq [[id ^js m] (vec (es6-iterator-seq (.entries mobs)))]
           (let [gone? (not (.has listed id))]
