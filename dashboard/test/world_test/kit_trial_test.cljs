@@ -119,3 +119,11 @@
                       (fn [never]
                         (is (false? never))
                         (done))))))))
+
+(deftest heap-oom-in-body-err-counts-as-crash
+  (let [err "<--- Last few GCs --->\nFATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n"
+        rep (k/report {:started-ms t0} [queued-goal] (at 5) err)]
+    (is (= 1 (:crashes rep)))
+    (is (= 1 (count (:crash-reasons rep))))
+    (is (some #{:crash} (:failed (k/clean rep))))
+    (is (= 0 (:crashes (k/report {:started-ms t0} [queued-goal] (at 5) "warning: x\n"))))))

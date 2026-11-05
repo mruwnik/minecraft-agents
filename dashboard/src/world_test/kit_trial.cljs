@@ -183,14 +183,20 @@
              :when (and (= :queued (:kind e)) (= :job (:source e)) (not= goal-job (first chain)) (= :agent (get-in e [:data :by])))]
          {:kind (:kind e) :at-ms (ms e) :job (first chain)})))
 
+(defn fatal-lines
+  "Lines of the body's stderr that record the process dying (V8 fatal error, e.g. heap OOM): no event is written then."
+  [err]
+  (vec (filter #(re-find #"FATAL ERROR" %) (str/split-lines (or err "")))))
+
 (defn crashes
-  "Body restarts: generation ids seen after the first."
-  [events]
-  (max 0 (dec (count (distinct (keep :generation-id events))))))
+  "Body restarts (generation ids seen after the first) plus deaths of the process recorded in its stderr."
+  ([events] (crashes events nil))
+  ([events err]
+   (+ (max 0 (dec (count (distinct (keep :generation-id events))))) (count (fatal-lines err)))))
 
 (defn report
-  "run (the run.edn map), events from its start, end-ms -> the report map."
-  [{:keys [started-ms goal-job given]} events end-ms]
+  "run (the run.edn map), events from its start, end-ms, the body's stderr text -> the report map."
+  [{:keys [started-ms goal-job given]} events end-ms & [err]]
   (let [goal-job (or goal-job (goal-job-of events))
         m (milestones events)
         ended (goal-end events goal-job)
@@ -203,7 +209,8 @@
      :stalls (stalls events started-ms end-ms)
      :give-ups (give-ups events)
      :interventions (interventions events goal-job)
-     :crashes (crashes events)
+     :crashes (crashes events err)
+     :crash-reasons (fatal-lines err)
      :kit-days (days (:kit-done m))}))
 
 (defn clean
@@ -343,7 +350,9 @@
                      f (path/join (repo) (run-dir world run) "run.edn")
                      r (reader/read-string (str (fs/readFileSync f "utf8")))
                      now (js/Date.now)
-                     rep (report r (read-events world run (:started-ms r)) now)
+                     err-f (path/join (repo) (run-dir world run) "body.err")
+                     err (when (fs/existsSync err-f) (str (fs/readFileSync err-f "utf8")))
+                     rep (report r (read-events world run (:started-ms r)) now err)
                      c (clean rep)]
                  (js/console.log (pr-str (assoc rep :verdict c)))
                  (js/console.log (table rep))
