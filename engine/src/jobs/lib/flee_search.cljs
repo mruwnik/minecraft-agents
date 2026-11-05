@@ -203,7 +203,7 @@
   (-> in
       (update :others #(mapv cell-key-of %))
       (update :caught-by #(mapv cell-key-of %))
-      (update :chasers #(mapv (juxt :name :mob :calm? :pos :burns) %))
+      (update :chasers #(mapv (juxt :name :mob :calm? :pos :burns :speed) %))
       (update :policy #(into {} (remove (comp fn? val)) %))
       (dissoc :covers)))
 
@@ -290,7 +290,7 @@
   "Seconds the first of chasers ({:name :pos :way}) takes to reach pos (cost/arrival-s over its way, way-at), ##Inf
   with none."
   [chasers pos]
-  (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos (way-at % pos) (swim-at % pos)) chasers)))
+  (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos (way-at % pos) (swim-at % pos) (:speed %)) chasers)))
 
 (defn swim-fn
   "A fn of a point to the blocks of the straight line from `from` to it (sampled each half block) that the body knows to be
@@ -339,8 +339,8 @@
   [chasers cells]
   (reduce max 0 (map (fn [ch]
                        (let [way #(way-at ch %)
-                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %))) cells)]
-                         (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %)})))
+                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells)]
+                         (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %) :speed (:speed ch)})))
                      (remove :calm? chasers))))
 
 (defn trap-s

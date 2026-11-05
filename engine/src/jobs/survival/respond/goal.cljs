@@ -60,6 +60,7 @@
         known (remove #(dead (.-id %)) (flight/known-chasers p))
         ids (set (map #(.-id %) known))]
     (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :pos (danger-q/mob-pos p e) :burns (:burns (hostile-loss/mob-near p e))}
+                         (some? (.-speed e)) (assoc :speed (.-speed e))
                          (and (combat/enderman? e) (not (true? (.-angry e)))) (assoc :calm? true))) known)
         (into (comp (map :data) (remove #(ids (:id %)))
                     (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (:mob %) :mob (:mob %) :pos pos})))

@@ -28,6 +28,13 @@
   [input speed]
   (/ (* 20 input speed) (- 1 (* (unchecked-get values "groundSlipperiness") (unchecked-get values "groundDrag")))))
 
+(def mob-speed-window-ms
+  "The span a mob's speed is observed over: one second is 20 position samples at 20 ticks a second, enough to tell a walk from a pause."
+  1000)
+(def mob-speed-min-moved
+  "Blocks a mob must move over mob-speed-window-ms for its speed to count: under 0.5 is the jitter of a mob standing about."
+  0.5)
+
 (defn mob-ground-speed
   "ground-speed of a mob whose move control runs at `speed`: its chase goal's speed modifier x its movement_speed attribute."
   [speed]

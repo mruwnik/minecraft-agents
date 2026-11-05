@@ -16,6 +16,21 @@
 
 (def mob-middle 0.9)
 
+
+(defn observed
+  "A mob's observed speed record after a sample at pos at time now: old's {:track {:pos :at} :speed} carried on, the track
+  restarted every constants/mob-speed-window-ms (or when the mob went unsensed for longer than three windows, which says nothing of a
+  speed), :speed blocks a second over the last full window when the mob moved constants/mob-speed-min-moved or more, else nil."
+  [^js old pos now]
+  (let [^js track (some-> old .-track)
+        fresh #js {:pos pos :at now}]
+    (cond
+      (nil? track) #js {:track fresh}
+      (< (- now (.-at track)) constants/mob-speed-window-ms) #js {:track track :speed (.-speed old)}
+      (> (- now (.-at track)) (* 3 constants/mob-speed-window-ms)) #js {:track fresh}
+      :else (let [moved (js/Math.hypot (- (.-x pos) (.-x (.-pos track))) (- (.-z pos) (.-z (.-pos track))))]
+              #js {:track fresh :speed (when (>= moved constants/mob-speed-min-moved) (/ moved (/ (- now (.-at track)) 1000)))}))))
+
 (defn mob-lit?
   "Whether the mob at pos stands in light bright enough to make out: the light rule of the sight table, read at the
   cells of its feet and head."
@@ -97,7 +112,8 @@
             (let [^js old (.get mobs (.-id e))
                   ^js pos (.-pos e)
                   seen? (keyword-identical? how :seen)
-                  at #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}]
+                  at #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
+                  ^js obs (observed old at now)]
               (.set sensed (.-id e) e)
               (.delete (.-faded st) (.-id e))
               (.set mobs (.-id e)
@@ -106,7 +122,9 @@
                          :at now
                          :seenAt (if seen? now (some-> old .-seenAt))
                          :seenPos (if seen? at (some-> old .-seenPos))
-                         :heard (keyword-identical? how :heard)}))))
+                         :heard (keyword-identical? how :heard)
+                         :track (.-track obs)
+                         :speed (.-speed obs)}))))
         (doseq [[id ^js m] (vec (es6-iterator-seq (.entries mobs)))]
           (let [gone? (not (.has listed id))]
             (when (or gone? (> (- now (.-at m)) (mob-forget-ms per (.-name m))))
@@ -153,6 +171,7 @@
                                      :distance (js/Math.hypot (- (.-x pos) fx) (- (.-y pos) fy) (- (.-z pos) fz))
                                      :visible false})]
                      (when (= "creeper" (.-name m)) (aset base "creeper" true))
+                     (when (some? (.-speed m)) (aset base "speed" (.-speed m)))
                      (js/Object.assign base #js {:seen (some? (.-seenAt m))
                                                  :heard (and (some? live) (.-heard m))
                                                  :remembered (nil? live)

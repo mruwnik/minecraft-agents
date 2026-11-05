@@ -279,43 +279,48 @@
 
 (defn leg-s
   "Seconds a chaser (mob-kind name) takes over blocks of way of which swim-blocks (clamped to it) are water: those at its
-  swim-chase-speed, the rest at its chase-speed. Water not shown is land."
-  [chaser blocks swim-blocks]
-  (let [wet (min blocks (max 0 (or swim-blocks 0)))]
-    (+ (/ wet (swim-chase-speed chaser)) (/ (- blocks wet) (chase-speed chaser)))))
+  swim-chase-speed, the rest at speed (the chaser's observed one, default its chase-speed). Water not shown is land."
+  ([chaser blocks swim-blocks] (leg-s chaser blocks swim-blocks nil))
+  ([chaser blocks swim-blocks speed]
+   (let [wet (min blocks (max 0 (or swim-blocks 0)))]
+     (+ (/ wet (swim-chase-speed chaser)) (/ (- blocks wet) (or speed (chase-speed chaser)))))))
 
 (defn arrival-s
   "Seconds a chaser (mob-kind name) at pos takes to come within ::melee-reach of `at` ({:x :y :z}) at its chase-speed
   (the game's; ::chase-speed for a mob it does not list), or way blocks, its way to within its blow of `at` (default:
   the straight line less ::melee-reach), of which swim-blocks are water (leg-s): the race is against a flight at its
-  measured pace (flee-walk-speed, flee-stop-s), so no margin over the game's speed."
+  measured pace (flee-walk-speed, flee-stop-s), so no margin over the game's speed. speed: the chaser's observed blocks a
+  second (a slowed or hasted mob; the body sees no effects), else its game speed."
   ([chaser pos at] (arrival-s chaser pos at nil nil))
   ([chaser pos at way] (arrival-s chaser pos at way nil))
-  ([chaser pos at way swim-blocks]
-   (leg-s chaser (way-blocks pos at way) swim-blocks)))
+  ([chaser pos at way swim-blocks] (arrival-s chaser pos at way swim-blocks nil))
+  ([chaser pos at way swim-blocks speed]
+   (leg-s chaser (way-blocks pos at way) swim-blocks speed)))
 
 (defn swim-arrivals
   "Seconds a melee chaser (mob-kind name) at pos takes to within its blow of each point of route ([{:x :y :z}]), way as
-  caught-on?'s; swim, a fn of a route point to the blocks of its way the chaser swims (nil: none shown, all land)."
-  [chaser pos route way swim]
-  (mapv (fn [p] (leg-s chaser (way-blocks pos p (way p)) (when swim (swim p)))) route))
+  caught-on?'s; swim, a fn of a route point to the blocks of its way the chaser swims (nil: none shown, all land);
+  speed its observed one (arrival-s)."
+  ([chaser pos route way swim] (swim-arrivals chaser pos route way swim nil))
+  ([chaser pos route way swim speed]
+   (mapv (fn [p] (leg-s chaser (way-blocks pos p (way p)) (when swim (swim p)) speed)) route)))
 
 (defn caught-on?
   "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
   from the start the body is there): at some point of it the chaser arrives (swim-arrivals: at its swim speed over the
   water swim shows) before the body wins the race there (wins-race?, by margin-s: default ::race-margin-s); way, a
   fn of a route point to the chaser's blocks there (nil: the straight line); swim, its blocks of water there (nil: none)."
-  [{:keys [chaser pos route margin-s way swim]}]
+  [{:keys [chaser pos route margin-s way swim speed]}]
   (let [margin (or margin-s (settings/get settings ::race-margin-s))]
     (boolean (some true? (map (fn [p a] (not (wins-race? (:t p) a margin)))
-                              route (swim-arrivals chaser pos route (or way (constantly nil)) swim))))))
+                              route (swim-arrivals chaser pos route (or way (constantly nil)) swim speed))))))
 
 (defn reach-s
   "Seconds a melee chaser (caught-on?'s) is within its blow of a body walking route ([{:x :y :z :t}] from where
   it starts): at each point the chaser gets to (swim-arrivals) before the body, from its arrival to the body's, at most
   the body's walk there from the point before."
-  [{:keys [chaser pos route way swim]}]
-  (let [arrivals (swim-arrivals chaser pos route (or way (constantly nil)) swim)]
+  [{:keys [chaser pos route way swim speed]}]
+  (let [arrivals (swim-arrivals chaser pos route (or way (constantly nil)) swim speed)]
     (reduce + 0 (map (fn [prev p a] (min (max 0 (- (:t p) a)) (- (:t p) (:t prev))))
                      route (rest route) (rest arrivals)))))
 

@@ -108,6 +108,19 @@
     (is (= [1] (danger-ids p)))
     (is (true? (hostile-near? p)))))
 
+(deftest a-mob-known-moving-carries-its-observed-speed
+  (let [{:keys [p clock]} (rig {:entities [(mob 1 "zombie" 0 4)]})
+        speed #(some-> (first (.knownMobs p)) .-speed)]
+    (is (nil? (speed)) "first sample: none yet")
+    (later! clock 500)
+    (move! p 1 {:x 1.0 :y 64 :z 4.5})
+    (is (nil? (speed)) "the window is not full until a second is up")
+    (later! clock 500)
+    (move! p 1 {:x 1.5 :y 64 :z 4.5})
+    (is (< 0.99 (speed) 1.01) "one block over the second")
+    (later! clock 1000)
+    (is (nil? (speed)) "a mob that stood a window through has no speed to price")))
+
 (deftest a-creeper-lost-from-sight-stays-a-sighting-for-hours
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]
     (is (= [1] (danger-ids p)))

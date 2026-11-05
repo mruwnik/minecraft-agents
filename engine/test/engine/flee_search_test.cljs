@@ -279,6 +279,19 @@
           ;; card fbe87241: a hungry body's walk was slowed twice (the planner's walk, then the walk share again): every way caught
           (is (some? (search/pick creeper {})) "a body too hungry to sprint walks away from a creeper 7 behind"))))))
 
+(deftest a-chaser-observed-slower-than-its-kind-is-left-behind
+  ;; the body sees no Slowness, only how fast a mob moves: a baby zombie 3 behind a body too hungry to sprint catches
+  ;; the flight at the game's speed, not once it was seen to cover 1 block a second
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [from {:x 0.5 :y 64 :z 0.5}
+              baby {:name "baby" :mob "zombie" :pos {:x -2.5 :y 64 :z 0.5}}
+              normal (await (ends-of field from [baby] [] {:food 6}))
+              slowed (await (ends-of field from [(assoc baby :speed 1)] [] {:food 6}))]
+          (is (nil? (search/pick normal {})) "unseen speed: priced at the game's, every way caught")
+          (is (some? (search/pick slowed {})) "a baby seen to crawl is outrun by a way"))))))
+
 (deftest a-chaser-behind-a-wall-is-timed-along-its-way-round-it
   ;; the old arrival ran a straight line through the wall: every way was caught
   (async done
