@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal, ensureBundle, bundleHash } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal, ensureBundle, bundleHash, fullNamespaces, mergeTimingLines } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -379,4 +379,16 @@ test('bundleStale: a missing stamp or a bundle that differs from the stamped one
     fs.writeFileSync(bundle, 'abcdef')
     assert.equal(bundleStale(dir), true)
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('fullNamespaces: the full run leaves out the fuzz namespace, which has its own suite', () => {
+  const nss = fullNamespaces()
+  assert.ok(testNamespaces().includes('engine.job-fuzz-test'))
+  assert.ok(!nss.includes('engine.job-fuzz-test'))
+})
+
+test('mergeTimingLines: a part keeps other tests\' lines and replaces those it just ran', () => {
+  const l = (var_, ms) => JSON.stringify({ var: var_, ms })
+  const out = mergeTimingLines([l('a/x', 1), l('b/y', 2), JSON.stringify({ 'peak-rss-kb': 5 })], [l('b/y', 9), JSON.stringify({ 'peak-rss-kb': 7 })])
+  assert.deepEqual(out.map((x) => JSON.parse(x)), [{ var: 'a/x', ms: 1 }, { var: 'b/y', ms: 9 }, { 'peak-rss-kb': 7 }])
 })

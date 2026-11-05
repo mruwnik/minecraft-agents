@@ -32,6 +32,9 @@ export const testNamespaces = (root = path.join(engine, 'test')) =>
     .map((f) => fs.readFileSync(f, 'utf8').match(/^\(ns\s+(?:\^\S+\s+)*([^\s()]+-test)[\s)]/m)?.[1])
     .filter(Boolean).sort()
 
+// engine.job-fuzz-test has its own suite (fuzz, 50 cases per job); the full run leaves it out.
+export const fullNamespaces = (root) => testNamespaces(root).filter((n) => n !== 'engine.job-fuzz-test')
+
 export const parsePart = (spec) => {
   const m = /^(\d+)\/(\d+)$/.exec(spec ?? '')
   const i = m && Number(m[1]), n = m && Number(m[2])
@@ -68,6 +71,13 @@ export const nsMs = (lines) => {
 // Times of the shards that finished ok: a run with one failing shard still refreshes the rest.
 export const finishedNsMs = (shards) => nsMs(shards.filter((s) => s.ok).flatMap((s) => s.lines))
 export const mergeWeights = (old, fresh, nss) => Object.fromEntries(nss.filter((x) => fresh[x] != null || old[x] != null).map((x) => [x, fresh[x] ?? old[x]]))
+
+// A part run keeps the earlier parts' per-test lines and replaces those of the tests it just ran, so the stall limits read fresh times; a full run replaces the file.
+export const mergeTimingLines = (old, fresh) => {
+  const ran = new Set(parse(fresh).filter((r) => r.var).map((r) => r.var))
+  const keep = old.filter(Boolean).filter((l) => { try { const r = JSON.parse(l); return !r.var || !ran.has(r.var) } catch { return false } })
+  return [...keep.filter((l) => !l.includes('peak-rss-kb')), ...fresh.filter(Boolean)]
+}
 
 const RES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
 const FLOOR_MB = RES.floorMb, SHARD_MB = RES.kinds.tests.needMb // shared with tools/res-slot: floor kept for others; worst shard peak seen
@@ -207,7 +217,7 @@ const main = async ({ compile = compileShared } = {}) => {
   const priorTests = fs.existsSync(timingFile) ? fs.readFileSync(timingFile, 'utf8').split('\n') : []
   const partIdx = argv.indexOf('--part')
   const part = partIdx < 0 ? null : parsePart(argv[partIdx + 1])
-  const all = testNamespaces()
+  const all = fullNamespaces()
   const split = splitShards(part ? partOf(all, part.i, part.n, readPrior(weightsFile)) : all, prior, shards)
   const events = process.env.TEST_EVENTS === '1' ? eventForwarder((l) => console.log(l), split.map((nss) => nss.length)) : null
   if (events) console.log('@@test {"event":"phase","name":"compiling"}')
@@ -243,7 +253,7 @@ const main = async ({ compile = compileShared } = {}) => {
     fs.writeFileSync(log, r.out)
     bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${failureDump(r.out)}`)
   }
-  if (!part) fs.writeFileSync(timingFile, lines.filter(Boolean).join('\n') + '\n')
+  fs.writeFileSync(timingFile, mergeTimingLines(part ? priorTests : [], lines).join('\n') + '\n')
   const fresh = finishedNsMs(finished)
   if (Object.keys(fresh).length) writeAtomic(nsFile, JSON.stringify({ ...(part ? readPrior(nsFile) : {}), ...fresh }))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
