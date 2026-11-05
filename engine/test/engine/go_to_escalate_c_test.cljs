@@ -1201,6 +1201,17 @@
         (is (= :budget (choose/dig-price c [38 64 0])))
         (is (empty? @choose/kept-routes) "nothing is kept: asked at no time cost, a kept search would grow with every quote")))))
 
+(deftest a-dig-quote-of-a-running-call-goes-on-searching
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+    (.setOwner (:primitives eng) "tx")
+    (ctx/update-mem! c assoc :route-owner "j9")
+    (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+      (fn []
+        (is (= :searching (choose/dig-price c [38 64 0])) "the call's search goes on at its next quote")
+        (is (seq (get @choose/kept-routes "j9")))
+        (choose/forget-routes! "j9")))))
+
 (deftest a-dig-quote-searches-with-the-opts-the-escalation-digs-with
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 12 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})

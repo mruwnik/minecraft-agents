@@ -122,17 +122,17 @@
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
-  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a route dug (:dig-seconds, whole, walk on included) is priced as such; a search still going on (:searching) is priced so too, from its :near blocks, marked :estimate true; one that spent its node budget (:budget: not known yet, not no route) is priced so but is no estimate to wait on (callers go on with the price); none at all, or a refusal, is ##Inf unless escalating? (a way
+  adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a route dug (:dig-seconds, whole, walk on included) is priced as such; a search still going on (:searching) is priced so too, from its :near blocks, with an unfinished dig search's :rest-dig-s, marked :estimate true; one that spent its node budget (:budget: not known yet, not no route) is priced so but is no estimate to wait on (callers go on with the price); none at all, or a refusal, is ##Inf unless escalating? (a way
   that changes the world may still get there). Health: the planned damage. :moves-to the goal. :risk the route's walk risk.
   `back?` (go-to :back): the time is the walk there and back, as the risk prices it."
-  [{:keys [found seconds partial near reason damage goal dig-seconds] :as r} escalating? back?]
+  [{:keys [found seconds partial near reason damage goal dig-seconds rest-dig-s] :as r} escalating? back?]
   (let [searching? (= :searching reason)
         budget? (= :budget reason)
         legs (if back? 2 1)
         s (* legs (or seconds (:seconds partial) 0))
         [ex _ ez] (last (:waypoints partial))
         rest-blocks (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))
-        left-s (* legs (cost-planner/rest-s rest-blocks))
+        left-s (* legs (+ (cost-planner/rest-s rest-blocks) (or rest-dig-s 0)))
         time (cond
                found [s s (* s (quote-most-factor))]
                dig-seconds (let [d (* legs dig-seconds)] [d d ##Inf])

@@ -282,14 +282,32 @@
 
 (defn route-s
   "Seconds digging cells ([x y z]) takes with the quickest tool carried (with a wooden pickaxe too when fetch?), blocks
-  own? calls the body's own not counted."
-  [p cells own? fetch?]
-  (let [block-at (escape/block-at-of p)]
+  own? calls the body's own not counted; block-at reads them (default escape/block-at-of)."
+  ([p cells own? fetch?] (route-s p (escape/block-at-of p) cells own? fetch?))
+  ([p block-at cells own? fetch?]
     (transduce (comp (remove #(and own? (own? % (block-at %))))
                      (map #(/ (cond-> (tools/clear-ms p (block-at %))
                                 fetch? (min (js/Number (.clearTime p (block-at %) "wooden_pickaxe"))))
                               1000)))
                + 0 cells)))
+
+(defn rest-dig-s
+  "Seconds an unfinished dig search's rest is expected to cost (dig-price's :searching or :budget, so a quote does not
+  price it as a walk): route-s of the solid feet and head cells on the straight line from cell from into goal, a cell not
+  sensed or not loaded as rock (access/hidden-guess) at the measured chance it is solid (look/unseen-solid-at-fn)."
+  [c from goal]
+  (let [p (:primitives c)
+        block-at (escape/block-at-of p)
+        rock-at #(or (block-at %) access/hidden-guess)
+        solid-at (look/unseen-solid-at-fn p)
+        own? (own-placed-fn c)
+        fetch? (fetch-tool? c)
+        share #(cond (or (nil? (block-at %)) (dig-look/unknown? p %)) (solid-at %)
+                     (escape/solid? (block-at %)) 1
+                     :else 0)]
+    (transduce (comp (mapcat (fn [[x y z]] [[x y z] [x (inc y) z]]))
+                     (map #(let [k (share %)] (if (zero? k) 0 (* k (route-s p rock-at [%] own? fetch?))))))
+               + 0 (concat (escape/line-cells from goal) [goal]))))
 
 (def route-searches
   "The most route searches route-cells makes round cells may-dig? refuses."

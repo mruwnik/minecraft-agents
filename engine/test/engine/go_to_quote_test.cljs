@@ -114,6 +114,19 @@
           (is (= (:dig-seconds any) (first (get-in (:quote (await (preview shut-in {:pos [10 64 1] :range 0}))) [:uses :job-time])))
               "go-to's own time is the dig route's, not the too-expensive refusal"))))))
 
+(deftest an-unfinished-dig-quote-prices-the-dig-of-the-rest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
+              {:keys [quote]} (await (preview shut-in {:pos [10 64 1] :range 0 :settings {:jobs.lib.dig-route/max-nodes 1}}))
+              {:keys [reason rest-dig-s near]} (:route quote)
+              [least mean] (get-in quote [:uses :job-time])]
+          (is (= :budget reason) (pr-str (:route quote)))
+          (is (> rest-dig-s 0) "the wall in the way is rock to dig")
+          (is (< (js/Math.abs (- mean least rest-dig-s (cost-planner/rest-s near))) 1e-9)
+              "the expected time digs the rest, not only walks it"))))))
+
 (deftest a-dig-dearer-than-the-calls-worth-is-no-dig-price
   (async done
     (tu/run-async done
