@@ -137,7 +137,7 @@
   "Pick the field's place into memory: :continue while the search runs, :again once set, else the ending."
   [c]
   (let [{:keys [w h]} (:args c)
-        e (await (ctx/call c :spot 'jobs.farm.find-spot {:w w :h h :worth (cost/food-search-worth cost/food-reserve-points)}))]
+        e (await (ctx/call c :spot 'jobs.farm.find-spot {:w w :h h :patch-worth (cost/food-search-worth cost/food-reserve-points)}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (let [spot (first (:spots (:data e)))]
