@@ -553,7 +553,9 @@
                     prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
                 (is (= (or held? (= :fight (key (apply min-key val prices)))) (= :fight decision)) (str why ": " (pr-str prices)))
                 (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
-                (is (= (and heard-only? (= :fight decision)) (boolean (seq (filterv :mute-s @seen)))) (str why ": a body with nothing to fight ends done, leaving the heard mob (not no-response)"))))))))))
+                (let [mutes (filterv :mute-s @seen)]
+                  (is (= (= :fight decision) (boolean (seq mutes))) (str why ": a fight where the mob never comes ends done, leaving the mob watched (not no-response)"))
+                  (is (= (and heard-only? (= :fight decision)) (boolean (some #(re-find #"heard" (str (:text %))) mutes))) (str why ": a heard-only mob is left as heard")))))))))))
 
 (deftest a-roofed-body-hit-lately-does-not-stay-for-a-mob-it-only-hears
   (async done
