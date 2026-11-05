@@ -264,6 +264,17 @@
       (is (false? (proofs/proved-way? kind-at pr [2 64 7] [0 64 0])) "settled by the proof")
       (is (= dead (.-size (.-dead pr))) "no new cell searched"))))
 
+(deftest a-body-on-a-pillar-is-settled-by-its-small-closure-not-a-flood-of-the-field
+  (let [slot (merge (tu/box -1 64 -1 8 65 -1 "stone") (tu/box -1 64 1 8 65 1 "stone") (tu/box -1 64 0 -1 65 0 "stone")
+                    (tu/box 0 64 0 0 65 0 "stone"))
+        p (tu/fake {:self {:pos {:x 0.5 :y 66 :z 0.5}} :floor [-20 -20 20 20] :blocks slot})
+        looked (volatile! #{})
+        raw (reach/lookup p)
+        kind-at (fn [x y z] (vswap! looked conj [x y z]) (raw x y z))
+        pr (danger-q/query-proofs p)]
+    (is (false? (proofs/proved-way? kind-at pr [4 64 0] [0 66 0])) "no mob below a 2-high pillar walks up it")
+    (is (< (count @looked) reach/node-budget) "settled by the closure back from the body, not by the forward search flooding the field")))
+
 ;; ---- light (card 01b5462f): a mob in the dark is seen only close up
 
 (defn dark! [p cells] (swap! (fake/state p) assoc :light cells))
