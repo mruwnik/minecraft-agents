@@ -57,7 +57,8 @@ export const splitShards = (nss, ms, n) => {
 // Part i of n by committed weights (engine/test-weights.json, refreshed with --write-weights), not the live timings file: every part must compute the same split.
 export const partOf = (nss, i, n, weights) => (splitShards([...nss].sort(), weights, n)[i - 1] ?? []).sort()
 
-const parse = (lines) => lines.filter(Boolean).map((l) => JSON.parse(l))
+// A line that does not parse (a file being written right now) is skipped.
+const parse = (lines) => lines.filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)] } catch { return [] } })
 export const slowest = (lines, k) => parse(lines).filter((r) => r.var).sort((a, b) => b.ms - a.ms).slice(0, k)
 // A shard that exits 0 but logged no test (crash before the first test, empty namespace list) is a failure, not a pass.
 export const shardOutcome = (code, lines) =>
@@ -78,7 +79,17 @@ export const mergeWeights = (old, fresh, nss) => Object.fromEntries(nss.filter((
 export const mergeTimingLines = (old, fresh) => {
   const ran = new Set(parse(fresh).filter((r) => r.var).map((r) => r.var))
   const keep = old.filter(Boolean).filter((l) => { try { const r = JSON.parse(l); return !r.var || !ran.has(r.var) } catch { return false } })
-  return [...keep.filter((l) => !l.includes('peak-rss-kb')), ...fresh.filter(Boolean)]
+  return [...keep.filter((l) => l.includes('"var"')), ...fresh.filter(Boolean)]
+}
+// Parts end at the same time: the merge re-reads the file under an exclusive lock (a snapshot taken at start loses the other parts' lines) and renames the result into place.
+export const mergeTimingFile = (file, fresh, part) => {
+  const old = part && fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split('\n') : []
+  writeAtomic(file, mergeTimingLines(old, fresh).join('\n') + '\n')
+}
+const mergeLocked = (file, fresh, part) => {
+  const tmp = `${file}.${process.pid}.merge`
+  fs.writeFileSync(tmp, fresh.join('\n'))
+  try { return spawnSync('flock', ['-x', `${file}.lock`, process.execPath, fileURLToPath(import.meta.url), '--merge-timings', file, tmp, part ? '1' : '0'], { stdio: 'inherit' }) } finally { fs.rmSync(tmp, { force: true }) }
 }
 
 const RES = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'res-slot.json'), 'utf8'))
@@ -256,7 +267,7 @@ const main = async ({ compile = compileShared } = {}) => {
     fs.writeFileSync(log, r.out)
     bad++; console.log(`--- shard ${r.i} FAILED (${o.why}), output kept in ${log} ---\n${failureDump(r.out)}`)
   }
-  fs.writeFileSync(timingFile, mergeTimingLines(part ? priorTests : [], lines).join('\n') + '\n')
+  mergeLocked(timingFile, lines, part)
   const fresh = finishedNsMs(finished)
   if (Object.keys(fresh).length) writeAtomic(nsFile, JSON.stringify({ ...(part ? readPrior(nsFile) : {}), ...fresh }))
   const peaks = parse(lines).filter((r) => r['peak-rss-kb']).map((r) => r['peak-rss-kb'])
@@ -269,6 +280,7 @@ const main = async ({ compile = compileShared } = {}) => {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (process.argv[2] === '--merge-timings') { mergeTimingFile(process.argv[3], fs.readFileSync(process.argv[4], 'utf8').split('\n'), process.argv[5] === '1'); process.exit(0) }
   if (process.argv[2] === '--ensure-bundle') process.exit(ensureBundle(compileEngineTest).status ?? 1)
   main()
 }

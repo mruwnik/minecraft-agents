@@ -1,11 +1,12 @@
 // Why JavaScript: node --test file for tools/test-shards.mjs (a Node launcher).
 import fs from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, weightsFromTimings, refusal, ensureBundle, bundleHash, fullNamespaces, mergeTimingLines } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, weightsFromTimings, refusal, ensureBundle, bundleHash, fullNamespaces, mergeTimingLines, mergeTimingFile } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -396,4 +397,20 @@ test('mergeTimingLines: a part keeps other tests\' lines and replaces those it j
   const l = (var_, ms) => JSON.stringify({ var: var_, ms })
   const out = mergeTimingLines([l('a/x', 1), l('b/y', 2), JSON.stringify({ 'peak-rss-kb': 5 })], [l('b/y', 9), JSON.stringify({ 'peak-rss-kb': 7 })])
   assert.deepEqual(out.map((x) => JSON.parse(x)), [{ var: 'a/x', ms: 1 }, { var: 'b/y', ms: 9 }, { 'peak-rss-kb': 7 }])
+})
+
+test('mergeTimingFile: a part merges into the file as it is now, so lines another part wrote since this one started stay; started lines of old runs go', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merge-timings-'))
+  const file = path.join(dir, 't.jsonl')
+  const l = (v, ms) => JSON.stringify({ var: v, ms })
+  const started = JSON.stringify({ started: 1 })
+  mergeTimingFile(file, [started, l('a/x', 1)], true)
+  mergeTimingFile(file, [started, l('b/y', 2)], true)
+  const out = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((x) => JSON.parse(x))
+  fs.rmSync(dir, { recursive: true })
+  assert.deepEqual(out, [{ var: 'a/x', ms: 1 }, { started: 1 }, { var: 'b/y', ms: 2 }])
+})
+
+test('weightsFromTimings: a half-written last line is skipped', () => {
+  assert.deepEqual(weightsFromTimings('{"var":"#\'a-test/x","ms":5}\n{"var":"#\'a-te', {}, ['a-test']), { 'a-test': 5 })
 })
