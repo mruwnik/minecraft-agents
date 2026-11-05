@@ -454,7 +454,8 @@
                      equipment (cost/equipment-of (.-equipment self))]
                  (cost/unseen-fall-s :down 1 {:health (.-health self) :equipment equipment :max-drop (:max-fall prices)
                                               :carried (:count (escape/carried-pillar-item p) 0) :share (wworld/unseen-share p)}))
-        ;; only a floor under a cell seen open: under a guessed cell it is the rock mass the dig prices as a guess
+        ;; the chance by the cell prior (look/unseen-solid-at-fn), not turn-back's per-step-kind floor-absent-chance: a route here crosses
+        ;; rock-mass cells the same prior prices, and has no walked steps' own counts. Only a floor under a cell seen open: under a guessed cell it is the rock mass the dig prices as a guess
         floor-absent-s (fn [[x y z :as cell]]
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (* (- 1 (solid-at cell)) fall-s) 0)))
@@ -511,7 +512,7 @@
         search (fn [refused]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall-s] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
                            (dig-route/route seen-floor from goal (opts refused m)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was

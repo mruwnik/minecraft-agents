@@ -1217,7 +1217,7 @@
 
 (deftest a-walk-over-an-unseen-floor-of-a-loosened-pass-is-priced-over-the-chance-the-floor-is-none
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "1,64,0" "air" "1,65,0" "air" "2,64,0" "air" "2,65,0" "air" "3,64,0" "air" "3,65,0" "air")
-        p (hiding-with-pickaxe world #{[1 63 0] [2 63 0] [3 63 0]})
+        p (hiding-with-pickaxe world #{[1 63 0] [2 63 0]})
         seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
                               (:seconds (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) true false {:worth-s ##Inf}))))]
     (is (< (seconds 1) (seconds 0.5)) "the likelier an unseen floor is a void, the dearer the walk over it")))
