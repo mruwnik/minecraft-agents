@@ -59,11 +59,9 @@
    ::bed-tries {:default 3 :doc "Placements of the carried bed the server may refuse before :bed-place-failed; a foot cell refused twice is left for another row." :spec (a/int-in 1 nil)}})
 
 (defn bed-permit
-  "Whether the body may use a bed (sh-beds/bed-permit over the job's world), and its walk was not refused on price at a
-  worth no less than this call's."
+  "Whether the body may use a bed (sh-beds/bed-permit over the job's world)."
   [c]
-  (let [permit? (sh-beds/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c))]
-    (fn [pos] (and (permit? pos) (not (sh-beds/walk-unsafe? (:primitives c) (ctx/view c) pos (ctx/worth c)))))))
+  (sh-beds/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c)))
 
 (defn radius [c] (sh-beds/bed-radius (ctx/view c)))
 
@@ -301,7 +299,7 @@
   "The :bed argument, else the bed sh-beds/bed-to-use picks."
   [c]
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
-      (sh-beds/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c))))
+      (sh-beds/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c) (ctx/worth c))))
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
@@ -502,7 +500,7 @@
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
-                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c)) {:price (sense/fails-to c)})))
+                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c) (ctx/worth c)) {:price (sense/fails-to c)})))
         answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c)) (await (carried-answer c)))]
     (cond
       (:seal (ctx/mem c)) (await (seal-and-sleep! c))

@@ -226,26 +226,27 @@
 
 (defn walk-unsafe?
   "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state).
-  With a worth, an entry that carries a :worth (a refusal on price) counts only while worth does not exceed it; without,
-  only entries with no :worth count (beds-to-use: a priced refusal is the caller's to judge by its worth)."
+  An entry that carries a :worth (a refusal on price) counts while worth does not exceed it, and always when no worth is
+  given (a caller that cannot re-price treats the bed as refused)."
   ([p view pos] (walk-unsafe? p view pos nil))
   ([p view pos worth]
    (let [since (sh-clock/tonight p view)
          now (delay (walk-state p view pos))
-         holds? (fn [d] (if-let [w (:worth d)] (and (some? worth) (<= worth w)) true))]
+         holds? (fn [d] (if-let [w (:worth d)] (or (nil? worth) (<= worth w)) true))]
      (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %))) (holds? (:data %)) (= @now (:state (:data %))))
                     (mem/entries view :bed-walk-unsafe))))))
 
 (defn beds-to-use
   "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place within radius (a bed set with
   jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds, nearest first, and the live
-  :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
+  :spawn-bed at any distance (go-to prices the walk; worth, when given, is the call's: a walk refused on price at no less is skipped, none skips every priced refusal), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
   outside goes back to a bed), or while a :sleep-failed entry is unexpired. nil otherwise. Beds the body has seen
   (perception's memory, within radius) count as well as the remembered one."
-  [p view radius permit?]
+  ([p view radius permit?] (beds-to-use p view radius permit? nil))
+  ([p view radius permit? worth]
   (when (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
              (or (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms)) (not (sh-inside/safe-from-night? p)))
              (empty? (mem/entries view :sleep-failed)))
@@ -253,7 +254,7 @@
           overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
-                             (not (walk-unsafe? p view pos))
+                             (not (walk-unsafe? p view pos worth))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (distinct (concat (some-> (seen-bed p ok?) vector)
                         (let [standing (sh-spawn/standing-beds p view radius)
@@ -262,12 +263,12 @@
                         (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
                              distinct
                              (sort-by #(u/dist (u/self-pos {:primitives p}) %))
-                             (filter ok?)))))))
+                             (filter ok?))))))))
 
 (defn bed-to-use
   "The first of beds-to-use: the bed seen, else the nearest by straight line (a caller that walks prices them with go-to: the night)."
-  [p view radius permit?]
-  (first (beds-to-use p view radius permit?)))
+  ([p view radius permit?] (first (beds-to-use p view radius permit?)))
+  ([p view radius permit? worth] (first (beds-to-use p view radius permit? worth))))
 
 (defn sleep-walk-s
   "Seconds the quote of a sleep at bed (jobs.survival.sleep, bed-down) gives its walk: the straight distance at

@@ -499,6 +499,23 @@
     (swap! clock + (* 3 sh-clock/ms-per-day))
     (is (= far-bed (use-bed)) "a verdict of an earlier night is not tonight's")))
 
+(deftest a-bed-refused-on-price-is-no-bed-to-a-caller-with-no-worth-to-re-price
+  (let [{:keys [eng p]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
+                                :blocks {"40,64,0" "red_bed"} :inventory [{:name "red_bed" :count 1}]})
+        view #(mem/view (:store eng))]
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 5 :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
+    (is (nil? (sh-beds/bed-to-use p (view) 128 (constantly true))) "no worth: the refusal holds")
+    (is (true? (sh-beds/bed-place-wanted? p (view) 128 (constantly true))) "so the carried bed goes down")
+    (is (= far-bed (sh-beds/bed-to-use p (view) 128 (constantly true) ##Inf)) "a call at a higher worth prices it again")))
+
+(deftest a-bed-refused-on-price-does-not-call-the-night-trigger
+  (let [{:keys [eng p]} (setup roof-over-open-sides)
+        view #(mem/view (:store eng))]
+    (st/looked-round! eng p)
+    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 5 :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
+    (is (false? (sh/night-holds? p (view) {} (constantly true))))))
+
 (deftest an-unsafe-bed-walk-is-asked-again-when-the-body-is-hurt-or-its-kit-changes
   (let [{:keys [eng p raw]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
                                 :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})

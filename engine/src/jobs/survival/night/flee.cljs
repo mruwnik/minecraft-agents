@@ -119,7 +119,7 @@
         tried (set (:flee-failed m))]
     (when (and (pos? flee-radius) (< (or (:flees m) 0) (sites/max-flees)))
       (let [here (sh-sense/feet p)
-            bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
+            bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c) (ctx/worth c))]
                   (when (< (bed-down/radius c) (u/dist here pos) (inc flee-radius)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
             cands (->> (concat bed places (sites p flee-radius))
