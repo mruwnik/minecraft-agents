@@ -29,14 +29,17 @@
    :expect [{:no-event {:source :job :kind :retreat_blocked} :for-s 40}]
    :after [[:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 0]]
    :limit-s 60}
+  ;; Three zombies in the file: one alone priced fight and plug-dig alike (both death-priced), a coin flip.
   {:name "pocket-when-pickaxe-and-no-blocks"
    :plot {:floor "obsidian"}
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [11.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 50}
             {:no-event {:source :job :kind :retreat_blocked} :for-s 50 :until {:source :job :kind :retreat_sealed}}]
    :after [[:body-near [5.5 0 16.5] 2.0]
-           [:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 1]]
+           [:entities "type=zombie,tag=wt" [[2 0 10] [30 4 22]] 3]]
    :limit-s 70}
   ;; 05fc51cf: a pocket that lays a cave open (parallel tunnels 2 cells off both walls, one cell behind the back wall) is given up, not sealed.
   ;; What follows is free: the 2 blocks the dig yielded may plug the tunnel (the mob then has no way: flight ends :closed) or the body fights.
