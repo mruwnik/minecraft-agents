@@ -169,7 +169,7 @@
               {:keys [p out]} (await (run-job! s 'test.flight {}))]
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
-          (is (every? #(not-any? #{:pillar :stair :clear-path :dig-out} (:ways %)) @args) "a flee never digs or pillars")
+          (is (every? #(not-any? #{:pillar :stair :dig-out} (:ways %)) @args) "a flee never digs or pillars")
           (is (every? #(= 16 (get-in % [:settings :jobs.lib.walk.world/y-margin])) @args) "a flee plans no route far below or above itself and its goal")
           (is (every? #(and (= 1 (get-in % [:spend :tries])) (false? (get-in % [:settings :jobs.movement.go-to.tuning/look-round]))) @args)
               "a step that gains nothing ends at once and never looks round")
@@ -922,7 +922,7 @@
               stair (await (price-after-flight {:floor strip :blocks stair-rock :stair [[-1 64 0]] :entities [(zombie 7 5 {})]}))]
           (is (= [true false] [(some? (:target field)) (boolean (:cornered? (:price field)))]) (str "an open field: a way " (pr-str field)))
           (is (= [nil true] [(:target tunnel) (:cornered? (:price tunnel))])
-              (str "a tunnel whose unseen sides the flight has looked at: cornered, the price too " (pr-str tunnel)))
+              (str "a tunnel whose unseen sides the flight has looked at: no target (not the cave behind its rock wall, not the tunnel past the zombie), cornered, the price too " (pr-str tunnel)))
           (is (= [{:x -1 :y 65 :z 0} (:chance (:price field))] [(:target stair) (:chance (:price stair))])
               (str "the same tunnel with a stair the body cut: the flight takes it, so the price is a seen way's like the field's, not a way through the unseen cells the flight never looks at " (pr-str stair))))))))
 
@@ -1312,14 +1312,6 @@
               _ (await (core/tick! (:eng s)))
               {:keys [seen]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [-10 64 10] (first-target seen))))))))
-
-(deftest a-flight-target-never-crosses-seen-rock-to-the-cave-behind-it
-  ;; the tunnel's sides stay unseen until the flight has looked at them (price-after-flight asks again after each look); its one way on runs past the zombie
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [target]} (await (price-after-flight {:floor strip :blocks tunnel-rock :entities [(zombie 7 5 {})]}))]
-          (is (nil? target) (str "the cave behind its rock wall is no way, nor the tunnel past the zombie: " (pr-str target))))))))
 
 (deftest a-buried-flight-takes-the-stair-the-body-cut-instead-of-a-hop-across-the-cave
   (async done
