@@ -161,7 +161,7 @@
                         [{:holds? (fn [e] (boolean (some door? (:cells e))))
                           :s (risk (:chance (cost/threat-parts body creeper nil from)))}])
                       (when (and covered? (seq shooters))
-                        [{:holds? (fn [e] (not (covered? (:end e)))) :s (risk (chance-of shooters))}])
+                        [{:holds? (search/at-step-or-end (complement covered?)) :s (risk (chance-of shooters))}])
                       (when home
                         [{:holds? #(= home (:pos (:target %))) :s (- (risk (chance-of names)))}]))]
     {:refused (:refused (ctx/mem c))
