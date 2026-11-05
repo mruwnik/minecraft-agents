@@ -602,7 +602,7 @@
                                                   :inventory [{:name "stone_pickaxe" :count 1}]}
                                                  {:pos [1 78 0]}))]
           (is (true? (:arrived @out)) (pr-str @out))
-          (is (= :stair (:step (first (gt/events-of s :go-to.escalated)))) (pr-str (map #(select-keys % [:step :at]) (gt/events-of s :go-to.escalated)))))))))
+          (is (= #{:approach :stair} (set (map :step (gt/events-of s :go-to.escalated)))) (pr-str (map #(select-keys % [:step :at]) (gt/events-of s :go-to.escalated)))))))))
 
 ;; A chamber (x 0..2, feet 60, z 0) in a stone mass and a pocket (x 9..10, feet 57) the body has seen, the rock between
 ;; never seen: the leg that ends short of the goal is followed by a last one into it.
