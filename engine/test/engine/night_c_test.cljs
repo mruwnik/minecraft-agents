@@ -277,50 +277,6 @@
                (finally (set! pick/quote! quote!)))
           (is (< (count @quoted) 10) "one quote's search ran out of land: one search proves the other 140-odd sites out of reach too, none quoted"))))))
 
-(deftest of-two-far-homes-the-one-go-to-quotes-a-walk-to-is-taken-not-the-straight-line-nearer
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [walled-near (into {"-18,66,0" "stone"}
-                                (for [x [-19 -18 -17] y [64 65] z [-1 0 1] :when (not= [x z] [-18 0])] [(str x "," y "," z) "stone_bricks"]))
-              world (assoc lit-world :blocks (merge wide-ground walled-near (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split k ","))] (str (+ x 12) "," y "," z)) v])) home-roof)))
-              {:keys [eng p]} (await (night-at-home world {:x -18 :y 64 :z 0} {:roofed-places [:home :cabin]}))]
-          (mem/write! (:store eng) :cabin {:pos {:x 22 :y 64 :z 0}} mem/place-policy)
-          (await (tu/run-until-empty eng 80))
-          (is (= 22 (js/Math.floor (:x (st/pos-of p)))) "walked to the cabin go-to can reach, past the nearer home it cannot"))))))
-
-(deftest a-remembered-place-too-far-to-walk-in-the-time-left-is-not-quoted
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [quoted (atom [])
-              quote! pick/quote!
-              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:roofed-places [:home :far] :settings no-flee}))]
-          (mem/write! (:store eng) :far {:pos {:x 4000 :y 64 :z 0}} mem/place-policy)
-          (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
-          (try (await (tu/run-until-empty eng 60))
-               (finally (set! pick/quote! quote!)))
-          (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked to the home that fits")
-          (is (seq @quoted))
-          (is (not-any? #(= :far (:place %)) @quoted) "the place no walk could cover in the time left costs no search"))))))
-
-(deftest a-place-whose-walk-is-far-longer-than-digging-in-costs-is-not-quoted-however-much-time-is-left
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [quoted (atom [])
-              quote! pick/quote!
-              {:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0}
-                                                    {:roofed-places [:home :far]
-                                                     :settings (assoc no-flee :jobs.survival.night.sites/home-walk-margin-s 1000000)}))]
-          (mem/write! (:store eng) :far {:pos {:x 3000 :y 64 :z 0}} mem/place-policy)
-          (set! pick/quote! (fn [c args] (swap! quoted conj args) (quote! c args)))
-          (try (await (tu/run-until-empty eng 60))
-               (finally (set! pick/quote! quote!)))
-          (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked to the home that costs less than digging in")
-          (is (some #(= :home (:place %)) @quoted))
-          (is (not-any? #(= :far (:place %)) @quoted) "a walk of minutes costs more than any other answer: not asked"))))))
-
 (deftest a-carried-bed-waits-for-a-home-far-off-whose-walk-go-to-quotes-no-dearer-than-digging-in
   (async done
     (tu/run-async done

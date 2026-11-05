@@ -1,4 +1,4 @@
-;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place (:roofed-places [:home])
+;; Cards dcedd0f5, a9ae340d: at night a body without a bed walks to a close remembered roofed place
 ;; when go-to's planned route (a cell seen dark or unseen at night costs twice a lit one) is no dearer than the walls' quote (the :room way of survival.shut-in, survival.enter-room),
 ;; else it digs in where it stands (dig-in.sealed; cobblestone carried). Open ground (64x32 plot,
 ;; body at x 4.5, z 16.5); home = a stone hut (5x5, hollow, an open oak door in its west wall the job shuts) or, in the open-roof case, a bare stone slab at y 2 over 3x3 cells (roofed within the default roof height 4), torches beside the line at z 15, the first 13+ cells from the body: a torch lights 13 cells, and a body in light is safe from the night.
@@ -58,28 +58,4 @@
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}]
    :after [[:block [18 0 16] "oak_door[half=lower,open=false]"] [:body-near [20.5 0 16.5] 2.5]]
-   :limit-s 110}
-  ;; card 0730e37e: of two remembered homes beyond the walk radius the one enter-room's quote can walk is taken, not the straight-line nearer one (a roofed cell sealed in stone, no route)
-  {:name "far-home-with-a-route-is-walked-past-a-nearer-sealed-one"
-   :time :night :time-why :night-light
-   :blocks [[:fill [38 0 24] [42 4 28] "stone"] [:fill [39 0 25] [41 2 27] "air"]
-            [:fill [48 0 14] [52 3 18] "stone" :hollow] [:fill [49 0 15] [51 2 17] "air"] [:fill [48 0 16] [48 1 16] "air"] [:set [48 0 16] "oak_door[facing=west,half=lower,hinge=left,open=true]"] [:set [48 1 16] "oak_door[facing=west,half=upper,hinge=left,open=true]"]
-            [:set [17 0 15] "torch"] [:set [23 0 15] "torch"] [:set [29 0 15] "torch"] [:set [35 0 15] "torch"] [:set [41 0 15] "torch"] [:set [47 0 15] "torch"]]
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [40 0 26]}) [:now]]
-         [:job (jobs.memory.set-place {:name :cabin :pos #at [50 0 16]}) [:now]]
-         [:job (jobs.survival.night {:roofed-places [:home :cabin]})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 130 :of-job true}]
-   :after [[:block [48 0 16] "oak_door[half=lower,open=false]"] [:body-near [50.5 0 16.5] 2.5]]
-   :limit-s 140}
-  ;; card 785853e8: the nearer remembered home is a stone cell with no door; the walk on to the hut with the open door (12 blocks past it) is taken
-  {:name "sealed-home-on-the-line-walks-on-to-the-hut"
-   :time :night :time-why :night-light
-   :blocks [[:fill [38 0 14] [42 4 18] "stone"] [:fill [39 0 15] [41 2 17] "air"]
-            [:fill [56 0 14] [60 3 18] "stone" :hollow] [:fill [57 0 15] [59 2 17] "air"] [:fill [56 0 16] [56 1 16] "air"] [:set [56 0 16] "oak_door[facing=west,half=lower,hinge=left,open=true]"] [:set [56 1 16] "oak_door[facing=west,half=upper,hinge=left,open=true]"]
-            [:set [17 0 12] "torch"] [:set [23 0 12] "torch"] [:set [29 0 12] "torch"] [:set [35 0 12] "torch"] [:set [41 0 12] "torch"] [:set [47 0 12] "torch"] [:set [53 0 12] "torch"]]
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [40 0 16]}) [:now]]
-         [:job (jobs.memory.set-place {:name :cabin :pos #at [58 0 16]}) [:now]]
-         [:job (jobs.survival.night {:roofed-places [:home :cabin]})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
-   :after [[:block [56 0 16] "oak_door[half=lower,open=false]"] [:body-near [58.5 0 16.5] 2.5]]
-   :limit-s 160}]}
+   :limit-s 110}]}

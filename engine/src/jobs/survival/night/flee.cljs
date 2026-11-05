@@ -111,7 +111,7 @@
   will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its
   turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
   :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none with
-  the flee-radius setting 0 or after sites/max-flees). Candidates: the bed, :roofed-places, caves, ground."
+  the flee-radius setting 0 or after sites/max-flees). Candidates: the bed, the home, caves, ground."
   [c survey?]
   (let [m (ctx/mem c)
         p (:primitives c)
@@ -121,7 +121,7 @@
       (let [here (sh-sense/feet p)
             bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c) (ctx/worth c))]
                   (when (< (bed-down/radius c) (u/dist here pos) (inc flee-radius)) [{:kind :bed :pos pos}]))
-            places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
+            places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] flee-radius))
             cands (->> (concat bed places (sites p flee-radius))
                        (remove #(contains? tried (:pos %))))
             needed (atom {})

@@ -7,7 +7,7 @@
             [clojure.string :as str]))
 
 (a/defargs settings
-  {:jobs.survival.night.sites/home-walk-margin-s {:default 60 :doc "Seconds of walking past the start of the dark that a remembered roofed place (:roofed-places) is still worth: its walk (all lit) may take past the dark's start before it is walked to, bed or not." :spec (a/num-in 0 nil)}
+  {:jobs.survival.night.sites/home-walk-margin-s {:default 60 :doc "Seconds of walking past the start of the dark that the remembered roofed home is still worth: its walk (all lit) may take past the dark's start before it is walked to, bed or not." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/flee-radius {:default 64 :doc "When no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/wall-value {:default 3 :doc "A block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/max-sites {:default 4 :doc "Shut-in calls a night makes (each a failed site) before it cuts a niche or holds exposed." :spec (a/int-in 0 nil)}
