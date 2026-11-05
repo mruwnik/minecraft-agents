@@ -1250,7 +1250,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [;; the table is what the body sees by; its memory of light comes from the torch blocks
-        lit (into {} (for [x (range -30 4) z (range 2 13) y [63 64 65]] [[x y z] [0 8]]))
+        lit (into {} (for [x (range -30 4) z (range 2 15) y [63 64 65]] [[x y z] [0 8]]))
               torches (into {} (for [x (range -30 4 6)] [(str x ",64,14") "torch"]))
               world {:time 18000 :light-default [15 0] :light lit :blocks torches}
               out (await (target-after world []))
