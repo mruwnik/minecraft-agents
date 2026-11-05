@@ -11,6 +11,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.perception.rays :as rays]
+            [engine.planner-fixture :as pf]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
@@ -289,6 +290,26 @@
     (is (< (:walk (walk-price tunnel 5)) (:walk (walk-price tunnel 30))) "in the ground the work a walk costs grows with it")
     (is (< (:walk-hp (walk-price tunnel 30)) (:walk (walk-price tunnel 30))) "beyond its hp")
     (is (= (:walk-hp (walk-price {} 30)) (:walk (walk-price {} 30))) "on open ground the night stops the work either way")))
+
+(defn dark-route
+  "The planner's route over an open floor from x 0 to x 38 with dark feet cells over the whole width at x 5 to 5+n-1 (crossed, not sidestepped): {:seconds :dark-seconds}, as go-to quotes it."
+  [n]
+  (let [r (pf/run (pf/world {}) (pf/near 38 64 20) {:dark {:at (fn [x _ _] (if (< 4 x (+ 5 n)) 1 0)) :factor 1 :night true}} {:x 0 :y 64 :z 20})
+        cost (get-in r [:path :cost])]
+    {:seconds (:seconds cost) :dark-seconds (:darkSeconds cost)}))
+
+(deftest a-route-with-one-dark-cell-is-priced-by-that-cell-not-as-a-dark-route
+  (let [p (tu/seeing-all (tu/fake {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time dusk :blocks hut/tunnel}))
+        c {:id "j1" :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}
+        price (fn [n] (night/bed-walk-price c far-bed (assoc (dark-route n) :found true) 12))
+        [none one ten] (map price [0 1 10])
+        home (/ (+ (:walk-hp one) (:walk-hp ten)) 2)]
+    (is (zero? (:dark-seconds (dark-route 0))))
+    (is (pos? (:dark-seconds (dark-route 1))))
+    (is (< (:dark-seconds (dark-route 1)) (:dark-seconds (dark-route 10))))
+    (is (< (:walk-hp none) (:walk-hp one)) "the one dark cell adds a price")
+    (is (< (:walk-hp one) (:walk-hp ten)) "and less than ten of them")
+    (is (< (:walk-hp one) home (:walk-hp ten)) "a home alternative between the two: the route with one dark cell still beats it, the dark route loses")))
 
 (deftest at-dusk-with-no-bed-the-trigger-waits-for-the-dark
   (let [{:keys [eng p]} (st/setup {:time dusk :blocks st/ground})
