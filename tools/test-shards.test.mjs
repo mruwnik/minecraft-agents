@@ -5,7 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, refusal, ensureBundle, bundleHash, fullNamespaces, mergeTimingLines } from './test-shards.mjs'
+import { splitShards, partOf, parsePart, testNamespaces, slowest, memSlots, eventForwarder, shardOutcome, failureDump, readPrior, writeAtomic, runInSlot, finishedNsMs, mergeWeights, weightsFromTimings, refusal, ensureBundle, bundleHash, fullNamespaces, mergeTimingLines } from './test-shards.mjs'
 
 test('splitShards: every namespace exactly once, loads balanced by prior timing', () => {
   const nss = ['a-test', 'b-test', 'c-test', 'd-test', 'e-test']
@@ -188,6 +188,11 @@ test('finishedNsMs: namespace times come from every shard that finished ok, a fa
   const ok = { ok: true, lines: [line('a-test/x', 5), line('a-test/y', 7)] }
   const bad = { ok: false, lines: [line('b-test/x', 9)] }
   assert.deepEqual(finishedNsMs([ok, bad]), { 'a-test': 12 })
+})
+
+test('weightsFromTimings: a namespace weighs the sum of its tests, not the last run of one of them', () => {
+  const lines = ['{"var":"#\'a-test/x","ms":20000}', '{"var":"#\'a-test/y","ms":6000}', '{"peak-rss-kb":5}', '']
+  assert.deepEqual(weightsFromTimings(lines.join('\n'), { a: 697, b: 2 }, ['a', 'b', 'a-test']), { a: 697, b: 2, 'a-test': 26000 })
 })
 
 test('mergeWeights: fresh times replace old ones, old ones stay for namespaces not rerun, deleted namespaces drop', () => {

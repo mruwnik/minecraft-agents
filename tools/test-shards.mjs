@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Why JavaScript: a thin Node launcher (spawns the compiled test runner in shards, takes a machine-wide flock slot per shard); no engine behaviour.
 // Usage: tools/test-engine --full [--part i/N] [--shards N] [--slots M] [--slowest K]
-//  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` merges engine/out/test-ns-ms.json (written after any run, from the shards that passed) into it; with free memory for P shards, N=P parts of `--shards 1` balance best; timings are merged into test-ns-ms.json, and its per-test lines into the timings file.
+//  --part i/N: runs only part i (1-based) of N: a greedy longest-first split by the committed engine/test-weights.json (a function of names and that file alone, so parts never overlap or leave a gap); `--write-weights` merges the per-namespace sums of engine/out/test-timings.jsonl into it; with free memory for P shards, N=P parts of `--shards 1` balance best; timings are merged into test-ns-ms.json, and its per-test lines into the timings file.
 //  Splits the engine test namespaces over N node processes (default 4), balanced by the per-namespace ms of the previous run (engine/out/test-ns-ms.json).
 //  At most M shard processes run at once machine-wide (default: (MemAvailable - floorMb) / kinds.tests.needMb, 1..shardMax): each takes res-slot's 'tests' slot tests.<i> (i < M; slots above shardMax stay for targeted runs), so parallel agents cannot OOM the machine.
 //  Each shard is killed when no test has finished for stallLimitS (tools/test-run.mjs), so a hung test frees its slot; the failure names the last finished test and the namespaces not reached.
@@ -70,6 +70,8 @@ export const nsMs = (lines) => {
 
 // Times of the shards that finished ok: a run with one failing shard still refreshes the rest.
 export const finishedNsMs = (shards) => nsMs(shards.filter((s) => s.ok).flatMap((s) => s.lines))
+// Weights come from the per-test timings file, which every run merges per test; test-ns-ms.json is overwritten by any run of a namespace, so a one-deftest run left a fraction of its time there.
+export const weightsFromTimings = (text, old, nss) => mergeWeights(old, nsMs(text.split('\n')), nss)
 export const mergeWeights = (old, fresh, nss) => Object.fromEntries(nss.filter((x) => fresh[x] != null || old[x] != null).map((x) => [x, fresh[x] ?? old[x]]))
 
 // A part run keeps the earlier parts' per-test lines and replaces those of the tests it just ran, so the stall limits read fresh times; a full run replaces the file.
@@ -207,12 +209,13 @@ const main = async ({ compile = compileShared } = {}) => {
   const refused = refusal(process.env)
   if (refused) { console.error(refused); process.exit(2) }
   const argv = process.argv.slice(2)
+  const timingFile = path.join(engine, 'out/test-timings.jsonl')
   const opt = (name, d) => { const i = argv.indexOf(name); return i < 0 ? d : Number(argv[i + 1]) }
-  if (argv.includes('--write-weights')) return writeAtomic(weightsFile, JSON.stringify(mergeWeights(readPrior(weightsFile), readPrior(path.join(engine, 'out/test-ns-ms.json')), testNamespaces())) + '\n')
+  if (argv.includes('--write-weights')) return writeAtomic(weightsFile, JSON.stringify(weightsFromTimings(fs.existsSync(timingFile) ? fs.readFileSync(timingFile, 'utf8') : '', readPrior(weightsFile), testNamespaces())) + '\n')
   const shards = opt('--shards', 4), fixedSlots = opt('--slots', null), top = opt('--slowest', 15)
   const slotsNow = () => fixedSlots ?? memSlots(availableMb())
   fs.mkdirSync(slotDir(), { recursive: true })
-  const nsFile = path.join(engine, 'out/test-ns-ms.json'), timingFile = path.join(engine, 'out/test-timings.jsonl')
+  const nsFile = path.join(engine, 'out/test-ns-ms.json')
   const prior = readPrior(nsFile)
   const priorTests = fs.existsSync(timingFile) ? fs.readFileSync(timingFile, 'utf8').split('\n') : []
   const partIdx = argv.indexOf('--part')
