@@ -1,7 +1,7 @@
 (ns jobs.explore.look
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a] [engine.settings :as settings] [engine.entity-observations :as obs] [jobs.lib.util :as u]
-            ["minecraft-data" :as minecraft-data] [engine.contract :as contract] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
+            [jobs.lib.game-facts :as facts] [engine.contract :as contract] [engine.ctx :as ctx] [engine.game :as game] [jobs.lib.look :as look] [jobs.lib.places :as places]))
 (def doc
   "Observe the nearby blocks and entities the body has seen, once, without moving or changing the world. :at inspects one exact
   block as last seen, with properties (a cell never seen is :unknown). Nearby samples are nearest first and bounded;
@@ -42,7 +42,7 @@
 (defn block-name-checker
   "A fn of a block name: does minecraft-data list it for the body's version?"
   [p]
-  (let [by-name (.-blocksByName (minecraft-data (game/version-of p)))]
+  (let [by-name (.-blocksByName (facts/data (game/version-of p)))]
     (fn [n] (.hasOwnProperty by-name n))))
 (defn options
   "The args with names listed and :at parsed, or {:error text} for what the arg specs do not say (name lists, :useful? with

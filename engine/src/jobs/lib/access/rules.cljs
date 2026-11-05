@@ -40,7 +40,7 @@
     dig:   :not-loaded, :base-block, :footprint, :zone, :no-zones, then the hazards
     place: :not-loaded, :footprint, :zone, :own-body, :not-replaceable, :no-zones
   A cell holding air, water, lava or a bubble column can be placed into."
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [jobs.lib.game-facts :as facts]
             [clojure.string :as str]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.block-sets :as bs]))
@@ -55,7 +55,7 @@
 (defn shape-of
   "The collision shape minecraft-data for version gives block (a name): \"block\", \"empty\", nil for no such block."
   [version block]
-  (some-> block (->> (aget (aget (minecraft-data version) "blocksByName"))) (aget "boundingBox")))
+  (some-> block (->> (aget (aget (facts/data version) "blocksByName"))) (aget "boundingBox")))
 
 (defn empty-shape?
   "Whether block has an empty collision shape (shape-of): air, fluids, torches, plants. A body stands in it and reaches past it."

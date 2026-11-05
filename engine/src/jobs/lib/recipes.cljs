@@ -14,8 +14,7 @@
   :ungathered (items that count as crafted or carried even when gatherable: the plan then takes another way, e.g. charcoal for coal).
   The plan also has :uses {name n}, the carried units its crafts take.
   (lacking version have item n) says why a craft cannot start."
-  (:require ["minecraft-data" :as minecraft-data]
-            [jobs.lib.game-facts :as facts]
+  (:require [jobs.lib.game-facts :as facts]
             [clojure.string]
             [clojure.set]))
 
@@ -34,7 +33,7 @@
 (defn recipes-of
   "{result name [{:count n made per craft :needs {name n} :table? bool}]} for a minecraft-data version."
   [version]
-  (let [md (minecraft-data version)
+  (let [md (facts/data version)
         name-of (fn [id] (some-> (aget (.-items md) id) .-name))]
     (reduce (fn [acc [_ rs]]
               (reduce (fn [acc r]
@@ -60,7 +59,7 @@
   (every plank species in a chest). Vanilla takes any member of such a tag in each slot, so carried members add up.
   Planks (planks? true) take only their own species' log forms; other recipes (a campfire) take any log."
   [version planks?]
-  (let [md (minecraft-data version)
+  (let [md (facts/data version)
         name-of (fn [id] (some-> (aget (.-items md) id) .-name))
         groups (group-by (fn [r] [(id-of (.-result r)) (map #(= -1 %) (slots-of r))])
                          (mapcat (comp array-seq second) (js/Object.entries (.-recipes md))))

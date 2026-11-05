@@ -1,7 +1,7 @@
 (ns jobs.items.get-tool
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
-            ["minecraft-data" :as minecraft-data]
+            [jobs.lib.game-facts :as facts]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -40,7 +40,7 @@
 (defn known-block?
   "Whether minecraft-data lists the block for the body's version."
   [p name]
-  (.hasOwnProperty (.-blocksByName (minecraft-data (game/version-of p))) name))
+  (.hasOwnProperty (.-blocksByName (facts/data (game/version-of p))) name))
 
 (defn tools-for
   "The tool names that will do, cheapest first, or {:error text}. Empty for a block the hand harvests."

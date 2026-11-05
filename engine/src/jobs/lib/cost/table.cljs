@@ -1,7 +1,6 @@
 (ns jobs.lib.cost.table
   "The item worth table of jobs.lib.cost.value: the default basis and the table built from minecraft-data (see that namespace's doc)."
-  (:require ["minecraft-data" :as minecraft-data]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [jobs.lib.cost.base-rates :as base-rates]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.gear :as gear]
@@ -115,7 +114,7 @@
   "{block name [item name ..]} of what minecraft-data lists each block drops for a version (memoised)."
   (memoize
    (fn [version]
-     (let [data (minecraft-data version)]
+     (let [data (facts/data version)]
        (into {} (map (fn [b] [(.-name b) (vec (keep #(some-> (aget data "items" %) .-name) (array-seq (aget b "drops"))))]))
              (array-seq (aget data "blocksArray")))))))
 
@@ -123,7 +122,7 @@
   "Seconds digging the block name takes, the item base's dig term (dig-seconds); nil for a block never dug (bedrock) or
   one minecraft-data does not know. Options :version and :basis as item-value's."
   [name & {:keys [version basis]}]
-  (let [md (minecraft-data (or version @game/version))
+  (let [md (facts/data (or version @game/version))
         b (aget (.-blocksByName md) name)]
     (when (and b (number? (.-hardness b)) (not (neg? (.-hardness b))))
       (dig-seconds md (deep-merge default-basis basis) b))))
@@ -132,7 +131,7 @@
   "Items of name a kill of mob is expected to drop (entityLoot: chance x mean stack), nil when it drops none. Option
   :version as item-value's."
   [mob name & {:keys [version]}]
-  (let [md (minecraft-data (or version @game/version))]
+  (let [md (facts/data (or version @game/version))]
     (some (fn [e] (when (= name (.-item e)) (* (.-dropChance e) (mean-range (.-stackSizeRange e)))))
           (some-> (aget (.-entityLoot md) mob) .-drops array-seq))))
 
@@ -178,7 +177,7 @@
   "[{:name :count}] a ripe crop block of name drops when cut (block-yields of its age-7 loot), nil for a block minecraft-data
   does not know. Options :version and :basis as item-value's."
   [name & {:keys [version basis]}]
-  (let [md (minecraft-data (or version @game/version))
+  (let [md (facts/data (or version @game/version))
         b (aget (.-blocksByName md) name)
         loot (when b (aget (.-blockLoot md) name))]
     (when b
@@ -281,7 +280,7 @@
 (defn build-table-with
   "build-table's table, the blocks priced with tool-price (tier -> seconds, see block-sources)."
   [version overrides basis tool-price]
-  (let [md (minecraft-data version)
+  (let [md (facts/data version)
         basis (full-basis basis)
         items (array-seq (.-itemsArray md))
         names (map #(.-name %) items)
@@ -356,7 +355,7 @@
   tier above the default (a diamond pickaxe is made of ore an iron pickaxe digs, so one pass would price it without the iron
   pickaxe; three passes settle the diamond tier). The extra args only key table-for's memo."
   [version overrides basis & _]
-  (let [md (minecraft-data version)
+  (let [md (facts/data version)
         basis* (full-basis basis)]
     (nth (iterate #(build-table-with version overrides basis (tool-price-fn md basis* %))
                   (build-table-with version overrides basis (constantly 0)))
@@ -371,7 +370,7 @@
 (defn groups-of
   "The override groups item name belongs to."
   [version name]
-  (let [md (minecraft-data version)
+  (let [md (facts/data version)
         item (aget (.-itemsByName md) name)
         cats (set (some-> item .-enchantCategories array-seq))
         ore-drop? (some (fn [b] (and (ore-block? (.-name b))

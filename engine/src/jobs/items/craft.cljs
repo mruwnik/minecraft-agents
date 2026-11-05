@@ -1,5 +1,5 @@
 (ns jobs.items.craft
-  (:require ["minecraft-data" :as minecraft-data]
+  (:require [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
             [clojure.string :as str]
@@ -71,7 +71,7 @@
 (defn suggestions
   "Up to three item names of the version that end in or contain item, the ones ending in it first (chain: iron_chain)."
   [p item]
-  (let [names (js->clj (js/Object.keys (.-itemsByName (minecraft-data (game/version-of p)))))
+  (let [names (js->clj (js/Object.keys (.-itemsByName (facts/data (game/version-of p)))))
         tail (str "_" item)]
     (vec (take 3 (concat (sort-by (juxt count identity) (filter #(str/ends-with? % tail) names))
                          (sort-by (juxt count identity) (filter #(and (str/includes? % item) (not (str/ends-with? % tail))) names)))))))
@@ -83,7 +83,7 @@
         p (:primitives c)]
     (cond
       (not (string? item)) {:reason :bad-args :why "no item name"}
-      (not (.hasOwnProperty (.-itemsByName (minecraft-data (game/version-of p))) item))
+      (not (.hasOwnProperty (.-itemsByName (facts/data (game/version-of p))) item))
       (let [near (suggestions p item)]
         {:reason :unknown-item :item item
          :why (str "no item named " item " in this version" (when (seq near) (str "; did you mean " (str/join " or " near) "?")))}))))

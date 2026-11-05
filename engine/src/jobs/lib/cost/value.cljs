@@ -39,7 +39,7 @@
   way passes its own table, and the durability and enchantment terms do not apply to a priced
   item. A row [regex price :per-stack] prices the whole stack, not each item."
   (:require [engine.args :as a]
-            ["minecraft-data" :as minecraft-data]
+            [jobs.lib.game-facts :as facts]
             [clojure.set :as set]
             [clojure.string :as str]
             [jobs.lib.recipes :as recipes]
@@ -123,7 +123,7 @@
         :else 0))
 
 (defn enchant-worth [version basis enchants]
-  (let [md (minecraft-data version)]
+  (let [md (facts/data version)]
     (reduce + 0 (map (fn [e]
                        (let [ench (some->> (or (:name e) (:id e)) str (aget (.-enchantmentsByName md)))
                              weight (or (some-> ench .-weight) 10)
@@ -148,7 +148,7 @@
         [price per-stack] (or (when (and enchanted (enchanted? entry)) [enchanted true])
                               (price-of prices name)
                               (when else [else false]))
-        md (minecraft-data version)
+        md (facts/data version)
         item (aget (.-itemsByName md) name)
         base (get table name ((tbl/override-fn (get group-overrides "unknown")) (:unknown-each basis)))
         grouped (reduce (fn [w g] ((tbl/override-fn (get group-overrides g)) w))
@@ -178,7 +178,7 @@
 (def ^:private measured
   (memoize
    (fn [version counts k]
-     (let [md (minecraft-data version)
+     (let [md (facts/data version)
            terrain (get-in tbl/default-basis [:find :terrain])
            tree #(tree-each version %1 {:ore-scan-s %2 :terrain %3})
            rows (for [[n {:keys [s got]}] counts
@@ -259,7 +259,7 @@
   (let [basis (tbl/deep-merge {:craft-step (craft-step-s)} (tbl/deep-merge (when-not (get-in basis [:find :ore-scan-s]) (:basis (measured-worth version))) basis))]
     [(tbl/table-for version name-overrides basis) (tbl/full-basis basis)]))
 
-(def ^:private smelts-of (memoize (fn [version] (tbl/smelt-sources (map #(.-name %) (array-seq (.-itemsArray (minecraft-data version))))))))
+(def ^:private smelts-of (memoize (fn [version] (tbl/smelt-sources (map #(.-name %) (array-seq (.-itemsArray (facts/data version))))))))
 
 (def ^:private fuel-each (memoize tbl/fuel-each))
 
@@ -359,7 +359,7 @@
   "Seconds of wear on tool `dear` that digging n blocks with tool `spare` instead saves: dear's whole item-value over
   its maxDurability for each use, at most spare's maxDurability uses (n nil: all of them). 0 when either has none."
   [dear spare n & {:keys [version]}]
-  (let [md (minecraft-data (or version @game/version))
+  (let [md (facts/data (or version @game/version))
         uses #(some-> (aget (.-itemsByName md) %) .-maxDurability)
         dear-uses (uses dear)
         spare-uses (uses spare)]
@@ -524,7 +524,7 @@
        (reduce (fn [m [out n ins]]
                  (let [pts (get-in food [out :points])]
                    (if (and pts (apply = ins)) (update m (first ins) (fnil max 0) (/ (* pts n) (count ins))) m)))
-               {} (tbl/recipe-list (minecraft-data version)))))))
+               {} (tbl/recipe-list (facts/data version)))))))
 
 (defn food-points
   "Hunger points one item of name gives at best: eaten (none when harmful), cooked or made into a food alone (meal-points); 0 when none."

@@ -1,7 +1,7 @@
 (ns jobs.items.equip
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
-            ["minecraft-data" :as minecraft-data]
+            [jobs.lib.game-facts :as facts]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -34,7 +34,7 @@
 (def equipment-keys {"hand" :mainHand "off-hand" :offHand})
 
 (defn known-item? [p name]
-  (.hasOwnProperty (.-itemsByName (minecraft-data (game/version-of p))) name))
+  (.hasOwnProperty (.-itemsByName (facts/data (game/version-of p))) name))
 
 (defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
 

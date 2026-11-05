@@ -6,7 +6,7 @@
   (:require [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
-            ["minecraft-data" :as minecraft-data]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.cost.survival :as survival]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.cost.armour :as armour]))
@@ -268,7 +268,7 @@
   "Whether mob {:name :kind} is hostile for minecraft-data version: its entity type \"hostile\" (or category
   \"Hostile mobs\"); a name minecraft-data does not know goes by :kind."
   [version {:keys [name kind]}]
-  (let [e (some-> (minecraft-data version) (aget "entitiesByName") (aget name))]
+  (let [e (some-> (facts/data version) (aget "entitiesByName") (aget name))]
     (if e
       (or (= "hostile" (aget e "type")) (= "Hostile mobs" (aget e "category")))
       (= "hostile" kind))))

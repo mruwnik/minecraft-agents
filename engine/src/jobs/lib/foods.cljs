@@ -4,7 +4,7 @@
   mob and fish buckets as foods (they are not eaten); those are left out."
   (:require [engine.args :as a]
             [engine.settings :as settings]
-            ["minecraft-data" :as minecraft-data]
+            [jobs.lib.game-facts :as facts]
             [clojure.string :as str]
             [engine.game :as game]
             [jobs.lib.util :as u]))
@@ -18,7 +18,7 @@
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."
   (memoize
    (fn [version]
-     (->> (array-seq (.-foodsArray (minecraft-data version)))
+     (->> (array-seq (.-foodsArray (facts/data version)))
           (remove #(str/ends-with? (.-name %) "_bucket"))
           (map (fn [f] [(.-name f) {:points (.-foodPoints f) :saturation (.-saturation f)}]))
           (into {})))))

@@ -4,6 +4,10 @@
             [clojure.string :as str]
             [engine.game :as game]))
 
+(def data
+  "minecraft-data for a version (memoised: each minecraft-data call walks the whole version list before its own cache)."
+  (memoize minecraft-data))
+
 (def stack-size "Items in a full stack of a stacking item." 64)
 (def slot-max "Items one furnace or chest slot holds at most." 64)
 (def ripe-level "The honey level at which a hive can be harvested." 5)
@@ -46,7 +50,7 @@
   count items.obtain's recipe plans craft by, for a check that counts what carried items make."
   (memoize
    (fn [version item input]
-     (let [md (minecraft-data version)
+     (let [md (data version)
            id #(some-> (aget (.-itemsByName md) %) .-id)
            ids (fn [r] (keep #(if (number? %) % (some-> % .-id))
                              (if (.-inShape r) (mapcat array-seq (array-seq (.-inShape r))) (array-seq (.-ingredients r)))))]
