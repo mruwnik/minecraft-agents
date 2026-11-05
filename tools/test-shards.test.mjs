@@ -239,7 +239,7 @@ test('main end: a failing shard with a large output reaches a pipe reader throug
   try {
     const here = path.dirname(fileURLToPath(import.meta.url))
     fs.mkdirSync(path.join(root, 'tools'))
-    for (const f of ['test-shards.mjs', 'test-shard-exec.mjs', 'res-slot.mjs', 'test-run.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
+    for (const f of ['test-shards.mjs', 'test-shard-exec.mjs', 'res-slot.mjs', 'test-run.mjs', 'prof-top.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
     fs.writeFileSync(path.join(root, 'tools/compile'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
     fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
     fs.mkdirSync(path.join(root, 'engine/node_modules'))
@@ -334,7 +334,7 @@ test('parts started together compile once and each runs its tests (a part with n
   try {
     const here = path.dirname(fileURLToPath(import.meta.url))
     fs.mkdirSync(path.join(root, 'tools'))
-    for (const f of ['test-shards.mjs', 'test-shard-exec.mjs', 'res-slot.mjs', 'test-run.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
+    for (const f of ['test-shards.mjs', 'test-shard-exec.mjs', 'res-slot.mjs', 'test-run.mjs', 'prof-top.mjs', 'res-slot.json']) fs.copyFileSync(path.join(here, f), path.join(root, 'tools', f))
     fs.writeFileSync(path.join(root, 'tools/compile'), `#!/bin/sh\necho x >> ${path.join(root, 'compiles')}\nsleep 1\nexit 0\n`, { mode: 0o755 })
     fs.mkdirSync(path.join(root, 'engine/out/test/cljs-runtime'), { recursive: true })
     fs.mkdirSync(path.join(root, 'engine/node_modules'))
