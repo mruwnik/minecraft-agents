@@ -355,3 +355,28 @@ test('parts started together compile once and each runs its tests (a part with n
     assert.equal(fs.readFileSync(path.join(root, 'compiles'), 'utf8').trim().split('\n').length, 1)
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
+
+test('isolateFresh: a bundle replaced while the part waited is rebuilt, then copied; one that keeps changing fails', async () => {
+  const { isolateFresh } = await import('./test-shard-exec.mjs')
+  const seq = ['stale', { runDir: '/r' }]
+  const rebuilt = []
+  assert.deepEqual(isolateFresh('/e', '/l', () => seq.shift(), (l) => { rebuilt.push(l); return { status: 0 } }, () => {}), { runDir: '/r' })
+  assert.deepEqual(rebuilt, ['/l'])
+  assert.equal(isolateFresh('/e', '/l', () => 'stale', () => ({ status: 0 }), () => {}), null)
+})
+
+test('bundleStale: a missing stamp or a bundle that differs from the stamped one is stale', async () => {
+  const { bundleStale } = await import('./test-shard-exec.mjs')
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'bstale-'))
+  try {
+    fs.mkdirSync(path.join(dir, 'out'))
+    const bundle = path.join(dir, 'out/test.cjs'), stamp = path.join(dir, 'out/test-full.stamp')
+    fs.writeFileSync(bundle, 'abc')
+    assert.equal(bundleStale(dir), true)
+    const st = fs.statSync(bundle)
+    fs.writeFileSync(stamp, `h\n${st.mtimeMs}:${st.size}`)
+    assert.equal(bundleStale(dir), false)
+    fs.writeFileSync(bundle, 'abcdef')
+    assert.equal(bundleStale(dir), true)
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
