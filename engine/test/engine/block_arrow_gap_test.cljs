@@ -160,6 +160,10 @@
         (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {}))]
           (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a block is fetched through a need child"))))))
 
+(deftest powder-snow-is-no-wall-roof-or-floor
+  (is (not (solid/solid? "powder_snow")) "mobs and arrows pass through it")
+  (is (solid/solid? "stone")))
+
 (deftest an-invisible-light-block-is-no-support
   (let [at {"1,1,0" "light" "0,0,0" "stone"}
         solid-at? #(solid/solid? (at (str (:x %) "," (:y %) "," (:z %))))]

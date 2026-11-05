@@ -3,10 +3,10 @@
   (:require [jobs.lib.block-sets :as bs]))
 
 (def non-solid
-  "Block names that are not a roof: air, fluids, plants and fixtures a body can stand in, and the invisible light block."
+  "Block names that are not a roof: air, fluids, plants and fixtures a body can stand in, powder snow (mobs and arrows pass it), and the invisible light block."
   (into (into bs/air bs/fluids)
         #{"short_grass" "grass" "tall_grass" "fern" "large_fern" "torch" "wall_torch" "soul_torch" "soul_wall_torch" "snow" "vine" "dead_bush"
-          "seagrass" "tall_seagrass" "fire" "sugar_cane"}))
+          "seagrass" "tall_seagrass" "fire" "sugar_cane" "powder_snow"}))
 
 (defn solid?
   "Whether a block name counts as solid: not nil (unloaded), not non-solid or walk-through, and not leaves or a
