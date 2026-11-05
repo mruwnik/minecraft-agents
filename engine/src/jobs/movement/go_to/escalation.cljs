@@ -311,7 +311,7 @@
                                       e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))
                                       price (fn [w] (escape-way/price (:primitives c) feet w (:own-s %2)))]
                                   (cond
-                                    (and e (#{:stair :pillar} (:step e)) (<= (price e) (price l))) e
+                                    (and e (= :pillar (:step e)) (<= (price e) (price l))) e
                                     (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
                                       (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (and (= :none (:step e)) (not (:why e)))) l e))
