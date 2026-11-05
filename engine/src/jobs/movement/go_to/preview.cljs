@@ -21,6 +21,7 @@
             [jobs.lib.walk-risk :as risk]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.result :as end]
+            [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.tuning :refer [quote-most-factor]]
             [jobs.movement.go-to.turn-back :as turn-back]))
 
@@ -107,7 +108,7 @@
       (let [doors (or doors :shut)
             policy (cond-> (assoc (wworld/body-policy c) :max-nodes (wworld/unknown-max-nodes))
                      (not= :never doors) (update :moves conj :open))
-            spec (when unknown (wworld/with-seeds (wworld/unknown-spec c) [(:x pos) (:y pos) (:z pos)] nil))
+            spec (when unknown (torch/round-unknown (assoc c :unknown (wworld/with-seeds (wworld/unknown-spec c) [(:x pos) (:y pos) (:z pos)] nil))))
             plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
                                     (when-not (= :closed one-way) :open) wsearch/round-budget false
                                     (wworld/dangers?) (set (:fault-cells (ctx/mem c))) (wworld/dark?)

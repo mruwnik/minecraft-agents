@@ -1470,3 +1470,8 @@
                         notes/note! (constantly nil)]
             (is (nil? (await (animals/nearest-or-look {:primitives p :args {}} {:radius 20 :lift 0}))) "the cow found by the relook is read as penned, not hunted")
             (is (= 2 @reads) "one read for the first target, one for the one found")))))))
+
+(deftest forgive-clears-the-pass-over-of-the-animals-named
+  (let [m (get-food/forgive {:skipped-animals [1 2] :chases {1 3 2 1}} [1])]
+    (is (= [2] (:skipped-animals m)))
+    (is (= {2 1} (:chases m)))))

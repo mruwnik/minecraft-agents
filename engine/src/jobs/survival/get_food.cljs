@@ -387,16 +387,32 @@
     (when (and (nil? pick) @out) (ctx/update-mem! c assoc :noted-lost @out))
     pick))
 
+(defn forgive
+  "Mem m without the entity ids `ids` among the animals passed over: the hunt may have given up on one before a walk lit the way to it (a dark drop)."
+  [m ids]
+  (-> m
+      (update :skipped-animals #(vec (remove (set ids) %)))
+      (update :chases #(apply dissoc % ids))))
+
+(defn forgive-noted!
+  "After the walk to the noted animal (uuid :walk-id), the animal in sight with that uuid is hunted afresh: the walk changed where the body stands and what it carries."
+  [c]
+  (let [uuid (:walk-id (ctx/mem c))
+        ids (keep #(when (= uuid (.-uuid %)) (.-id %))
+                  (look/seen-objs (:primitives c) {:radius (hunt-radius c) :kind "passive" :names animals/food-animals :max 16}))]
+    (when (seq ids) (ctx/update-mem! c forgive ids))))
+
 (defn ^:async walk-to-noted!
   "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
   [c]
   (let [pos (:walk-to (ctx/mem c))
         e (await (child/run!* c :noted-walk 'jobs.movement.go-to (noted-walk-args c pos (:walk-worth (ctx/mem c)) (:noted-near (ctx/mem c)))))]
+    (when-not (= :continue e) (forgive-noted! c))
     (cond
       (= :continue e) :continue
       (and (not (:noted-near (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
       (do (ctx/update-mem! c assoc :noted-near true) :again)
-      :else (do (ctx/update-mem! c #(cond-> (dissoc % :walk-to :walk-worth :noted-near)
+      :else (do (ctx/update-mem! c #(cond-> (dissoc % :walk-to :walk-worth :walk-id :noted-near)
                                       (not= :done (:kind e)) (assoc :noted-lost {:pos pos :why (get-in e [:data :text] "the walk ended")})))
                 :again))))
 
@@ -442,7 +458,7 @@
         (do (when-not done? (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave")) nil))
       (or noted (:walk-to (ctx/mem c)))
       (do (when noted
-            (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted) :walk-worth (animals/noted-benefit c noted)) (update :noted-walked (fnil conj []) (:id noted)))))
+            (ctx/update-mem! c #(-> % (assoc :walk-to (:pos noted) :walk-worth (animals/noted-benefit c noted) :walk-id (:id noted)) (update :noted-walked (fnil conj []) (:id noted)))))
           (await (walk-to-noted! c)))
       done? nil
       (not (pos? (animals/search-benefit c)))
