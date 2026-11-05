@@ -104,14 +104,18 @@
 (defn blast-mean "hp blast b is expected to deal." [b] (if (map? b) (* (:chance b) (:hp b)) b))
 
 (defn blast-totals
-  "[chance hp] of each set of blasts that may come, summed, by its chance."
+  "[chance hp] of each hp total the blasts may sum to, by its chance: equal totals merge, so the count follows the distinct totals."
   [blasts]
-  (reduce (fn [outs b]
-            (if (map? b)
-              (concat (map (fn [[w t]] [(* w (:chance b)) (+ t (:hp b))]) outs) (map (fn [[w t]] [(* w (- 1 (:chance b))) t]) outs))
-              (map (fn [[w t]] [w (+ t b)]) outs)))
-          [[1 0]]
-          blasts))
+  (let [add (fn [m t w] (update m t (fnil + 0) w))]
+    (->> blasts
+         (reduce (fn [outs b]
+                   (reduce-kv (fn [m t w]
+                                (if (map? b)
+                                  (-> m (add (+ t (:hp b)) (* w (:chance b))) (add t (* w (- 1 (:chance b)))))
+                                  (add m (+ t b) w)))
+                              {} outs))
+                 {0 1})
+         (map (fn [[t w]] [w t])))))
 
 (defn small
   "hp of answer's damage in its small blows, the ones its :shape is the width of: less its :blasts' and :spread's means."

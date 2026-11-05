@@ -72,8 +72,16 @@
         dies #(answer/blows-chance (body 20) %)]
     (is (< 0.45 (dies (assoc blows :damage 17.5 :blasts [(cost/chance-blast 15 0.5)])) 0.55)
         "10 hp of small blows on 20 hp live; with the 15 hp blast they kill: a half chance of it, about a half chance of death")
-    (is (= (dies (assoc blows :damage 25 :blasts [15])) (dies (assoc blows :damage 25 :blasts [(cost/chance-blast 15 1)])))
-        "a sure blast")))
+    (is (= (dies (assoc blows :damage 25 :blasts [15])) (dies (assoc blows :damage 25 :blasts [{:hp 15 :chance 1}])))
+        "a blast of chance 1 is a sure blast")
+    (is (< 0.9 (dies (assoc blows :damage 25 :blasts [15])))
+        "10 hp of small blows and a sure 15 hp blast kill 20 hp")))
+
+(deftest many-chance-blasts-sum-to-the-binomial-over-few-totals
+  (let [n 40 outs (answer/blast-totals (repeat n (cost/chance-blast 3 0.5)))]
+    (is (= (inc n) (count outs)) "equal totals merge: n + 1 outcomes, not 2^n")
+    (is (< (js/Math.abs (- 1 (reduce + (map first outs)))) 1e-9) "the chances still sum to 1")
+    (is (< (js/Math.abs (- (/ n 2) (reduce + (map (fn [[w t]] (* w (/ t 3))) outs)))) 1e-9) "the mean count is n/2")))
 
 (deftest a-fight-goes-bad-at-the-trial-fights-prior-and-a-flight-after-it-adds-its-own-catch
   (let [f #(cost/fight-answer (assoc (fight "stone_sword" (mob "zombie" 0)) :health %))
