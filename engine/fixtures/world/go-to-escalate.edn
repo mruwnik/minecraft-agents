@@ -1,7 +1,7 @@
 ;; Card b40b4dea: go-to escalation. A body shut in (a pit, a sealed room) whose search runs out of land makes a way:
 ;; pillar (pit + enough blocks), clear-path (a wall up to 3 thick toward the goal), stair up; then it puts back what
 ;; stair or clear-path dug. :ways #{:walk :clear-seal}, bedrock, or open ground never change the world.
-;; Card 30615854: it digs only natural terrain outside others' zones, a door or gate beside the enclosure is its way
+;; Card 30615854 (Q67): it digs any block outside others' zones, claims and plans (a build too); in them nothing is dug (:why :zone). A door or gate beside the enclosure is its way
 ;; out (no escalation), and a cut escalation's holes stay in the :tidy ledger (restore-broken puts them back).
 ;; It notes and puts back only holes in another's zone, claim or plan (owner Q139): the put-back cases dig through
 ;; another's plan with :ignore-zones?; in plain natural ground its holes stay and no put-back event comes.
@@ -80,7 +80,7 @@
    :after [[:body-near [24.5 1 16.5] 2]]
    :limit-s 150}
   {:name "built-wall-room-is-never-dug"
-   ;; the same room of oak planks, the walls another owner's zones: never dug; go-to gives up with :escalation {:step :none :why :no-dig}
+   ;; the same room of oak planks, the walls another owner's zones: never dug; go-to gives up with :escalation {:step :none :why :zone}
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "oak_planks" :hollow]]
    :zones [{:name "w-west" :min [12 0 12] :max [12 3 20] :owner "Other"} {:name "w-east" :min [20 0 12] :max [20 3 20] :owner "Other"}
@@ -88,10 +88,11 @@
            {:name "w-floor" :min [12 0 12] :max [20 0 20] :owner "Other"} {:name "w-roof" :min [12 3 12] :max [20 3 20] :owner "Other"}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "oak_planks"] [:block [20 2 16] "oak_planks"]]}
   {:name "walled-yard-iron-door-in-line-digs-out"
    ;; a stone-walled yard (no roof), a shut iron door in the east wall straight toward the goal: an iron door is a wall,
@@ -141,14 +142,18 @@
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 2 16.5] 2]]}
-  {:name "cobblestone-wall-room-is-never-dug"
+  {:name "cobblestone-wall-room-in-others-zones-is-never-dug"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
+   :zones [{:name "w-west" :min [12 0 12] :max [12 3 20] :owner "Other"} {:name "w-east" :min [20 0 12] :max [20 3 20] :owner "Other"}
+           {:name "w-north" :min [12 0 12] :max [20 3 12] :owner "Other"} {:name "w-south" :min [12 0 20] :max [20 3 20] :owner "Other"}
+           {:name "w-floor" :min [12 0 12] :max [20 0 20] :owner "Other"} {:name "w-roof" :min [12 3 12] :max [20 3 20] :owner "Other"}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}
   {:name "pen-gate-behind-a-tree-trunk-cuts-the-trunk"
    ;; a fence pen (the fence another owner's zone, so never dug) whose gate gives onto a tree: the log over the cell behind the gate shuts the walk;
@@ -174,9 +179,10 @@
            {:name "w-floor" :min [12 0 12] :max [20 0 20] :owner "Other"} {:name "w-roof" :min [12 3 12] :max [20 3 20] :owner "Other"}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "oak_log"] [:block [20 2 16] "oak_log"]]}
   {:name "pillar-refused-by-others-plan-stairs-out-and-leaves-holes"
    ;; another plan's footprint holds the shaft cells above the floor: the pillar's places are refused, so the body stairs
