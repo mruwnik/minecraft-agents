@@ -1,5 +1,5 @@
 (ns engine.go-to-escalate-c-test
-  "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
+  "jobs.movement.go-to escalation (pillar, stair, dig route, a walk to a wall) and jobs.lib.escape, against the fake
   world."
   (:require [clojure.string :as str]
             [jobs.movement.go-to.search-bound :as search-bound]
@@ -32,21 +32,7 @@
             [triggers.access.scaffold-left :as scaffold-left]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
-            [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet block events-of calls pit-cells pit stone-pit in-pit room in-room hollow ba ledge-room on-ledge wide-pit plank-yard holes dug-cells foreign trespass deep-pit stone-room run-in-shelter! ledger restores-after-the-last-stair? deep-shaft own-pit-wall cobble-room room-and-deck pocket free-by-pocket high-pocket moat door-cell dark-at gap-tunnel long-loop loop-tolls stair-below-surface cave below-pocket dig-route-run!]]))
-
-(deftest escape-choose-walks-along-the-wall-when-the-wall-in-line-is-an-iron-door
-  (let [iron (-> room (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
-        c (escape-way/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0])]
-    (is (= :approach (:step c)))
-    (is (not= [2 64 0] (:pos c)))))
-
-(deftest escape-choose-searches-for-a-door-spot-once
-  (let [iron (-> room (assoc "3,64,0" "iron_door" "3,65,0" "iron_door"))
-        calls (atom 0)
-        real escape-way/door-spot]
-    (with-redefs [escape-way/door-spot (fn [& args] (swap! calls inc) (apply real args))]
-      (escape-way/choose (tu/fake (merge in-room {:blocks iron :self {:pos {:x 2 :y 64 :z 0}}})) [2 64 0] [8 64 0]))
-    (is (= 1 @calls))))
+            [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet block events-of calls pit-cells pit stone-pit in-pit room in-room hollow ba ledge-room on-ledge wide-pit plank-yard holes dug-cells foreign trespass deep-pit stone-room run-in-shelter! ledger restores-after-the-last-stair? deep-shaft own-pit-wall cobble-room room-and-deck pocket free-by-pocket high-pocket moat dark-at gap-tunnel long-loop loop-tolls stair-below-surface cave below-pocket dig-route-run!]]))
 
 (deftest go-to-escalates-on-a-door-that-doors-never-refuses
   (let [ok? (fn [result doors] (choose/escalate-reason? result doors))]
@@ -153,7 +139,7 @@
         (let [{:keys [out p seen]} (await (run-job! free-by-pocket {:pos [8 64 0] :range 0}))]
           (is (true? (:arrived @out)) "not shut in, but the goal is: it digs to it")
           (is (= [8 64 0] (feet p)))
-          (is (some #{:clear-path} (map :step (events-of seen :go-to.escalated)))))))))
+          (is (some #{:dig-route} (map :step (events-of seen :go-to.escalated)))))))))
 
 (deftest a-free-body-digs-down-to-a-walled-in-goal-below-it
   (async done
@@ -292,7 +278,7 @@
         (let [{:keys [out p seen]} (await (run-job! (assoc-in free-by-pocket [:self :pos] {:x -15 :y 64 :z 0}) {:pos [8 64 0] :range 0}))]
           (is (true? (:arrived @out)))
           (is (= [8 64 0] (feet p)))
-          (is (= [:approach :clear-path] (take 2 (map :step (events-of seen :go-to.escalated)))))
+          (is (= [:approach :dig-route] (take 2 (map :step (events-of seen :go-to.escalated)))))
           (is (every? #(<= 5 (first %) 8) (dug-cells p)) "nothing dug on the open land of the walk there"))))))
 
 (deftest a-free-body-stairs-or-pillars-up-into-a-higher-walled-in-goal
@@ -338,20 +324,6 @@
           (is (= {:why :goal-cut-off :reason :unreachable :arrived false} (select-keys @out [:why :reason :arrived]))
               "the default budget lets drops of 10 in, and still no way leads up onto the deck"))))))
 
-(deftest door-back-is-a-seen-standable-cell-or-one-not-seen-yet
-  (let [back (escape/door-back (tu/fake door-cell) [0 64 0])
-        [bx by bz] back
-        walled (update door-cell :blocks assoc (str bx "," by "," bz) "stone")
-        seen-wall (tu/fake walled)
-        dark-wall (tu/fake walled)
-        _ (dark-at dark-wall [back])]
-    (is (some? back))
-    (is (nil? (escape/door-back seen-wall [0 64 0])) "a wall it sees")
-    (is (= back (escape/door-back dark-wall [0 64 0])) "a wall it has not seen: go and look, not an x-ray read")
-    (let [dark-door (tu/fake door-cell)]
-      (dark-at dark-door [[0 64 0]])
-      (is (nil? (escape/door-back dark-door [0 64 0])) "a door cell it has not sensed is no known door: not read through"))))
-
 (deftest drop-edges-and-nearest-stand-read-only-cells-the-body-has-seen
   (let [slab (box -3 63 -3 3 63 3 "stone")
         outside (for [x (range -6 7) z (range -6 7) y (range 58 68) :when (or (> (js/Math.abs x) 3) (> (js/Math.abs z) 3))] [x y z])
@@ -376,13 +348,6 @@
     (is (not= [2 64 0] (escape-way/wall-spot dark [0 64 0] [9 64 0])) "the cell it would stand in never seen: not offered")
     (is (true? (escape/open-door-beside? door-seen [0 64 0])))
     (is (false? (escape/open-door-beside? door-dark [0 64 0])) "the only way to the door runs through a cell never seen")))
-
-(deftest door-spot-is-the-cheapest-cell-whose-door-leaves-the-body-cheaper-off-toward-the-goal
-  (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box 5 64 -8 5 65 8 "stone") (box -5 64 -8 -5 65 8 "stone"))
-        p (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
-    (is (= [4 64 0] (escape-way/door-spot p [0 64 0] [10 64 0] (constantly true) #{})) "the wall ahead is the door; the one behind is not")
-    (is (nil? (escape-way/door-spot p [0 64 0] [10 64 0] (constantly false) #{})) "a wall that may not be dug is no door")
-    (is (not= [4 64 0] (escape-way/door-spot p [0 64 0] [10 64 0] (constantly true) #{[4 64 0]})) "a cell walked to already is not offered again")))
 
 (deftest wall-spot-is-the-cheapest-wall-toward-the-goal-not-the-nearest
   (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box -2 64 2 -2 65 2 "stone") (box 7 64 0 7 65 0 "stone"))
@@ -411,34 +376,6 @@
     (is (= 3 (count (:steps route))))
     (is (< 0 (:seconds route)))
     (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
-
-(deftest a-door-over-a-drop-is-priced-with-the-falls-hp
-  (let [blocks (fn [floor-y] (merge (box -1 63 -1 1 63 1 "stone") (box 1 64 -1 1 65 1 "stone") (box 2 floor-y -1 4 floor-y 1 "stone")))
-        price (fn [floor-y] (escape-way/price (tu/fake {:blocks (blocks floor-y) :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
-                                              [0 64 0] {:step :clear-path :heading :east}))]
-    (is (< (price 63) (price 59)) "the four-block drop beyond the wall adds its hp to the door's price")))
-
-(deftest a-door-over-a-seven-block-drop-is-offered-and-priced
-  (let [blocks (fn [floor-y] (merge (box -1 63 -1 1 63 1 "stone") (box 1 64 -1 1 65 1 "stone") (box 2 floor-y -1 4 floor-y 1 "stone")))
-        p (fn [floor-y] (tu/fake {:blocks (blocks floor-y) :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}))
-        e {:step :clear-path :heading :east}]
-    (is (= 57 (second (:through (escape/door (escape/block-at-of (p 56)) (constantly false) [0 64 0] [1 0] (escape/drop-limit (p 56)))))) "a full-health body survives seven blocks")
-    (is (< (escape-way/price (p 59) [0 64 0] e) (escape-way/price (p 56) [0 64 0] e)))))
-
-(deftest a-door-fall-prices-its-hp-unless-it-lands-in-water-and-a-floor-unseen-dearer
-  (let [p (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
-        unseen-body {:health (.-health (.self p)) :equipment (cost/equipment-of (.-equipment (.self p))) :max-drop (escape/drop-limit p)
-                     :carried 0 :share (wworld/unseen-share p)}
-        s #(escape-way/door-fall-s p (merge {:fall 5} %))]
-    (is (= 0 (escape-way/door-fall-s p nil)))
-    (is (pos? (s {})) "five blocks cost two hp")
-    (is (= 0 (s {:on "water"})) "water takes no fall damage")
-    (is (< (s {:on "hay_block"}) (s {:on "stone"})) "hay takes most of the fall off")
-    (is (< (s {:on "stone"}) (s {:on "stone" :floor-unseen true})) "a floor never sensed adds the fall and climb out when it is not there")
-    (is (= (s {:on "water"}) (s {:on "water" :floor-unseen true})) "an unseen floor under water adds no fall")
-    (is (= (s {:on "stone" :floor-unseen true})
-           (+ (s {:on "stone"}) (* (cost/floor-absent-chance :drop nil) (- (cost/unseen-fall-s :drop 5 unseen-body) (s {:on "stone"})))))
-        "the unseen part beyond the fall's hp is weighted by the chance the floor is absent")))
 
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
@@ -669,7 +606,7 @@
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
-          (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))) "three stuck walks round the wall, then a door through it"))))))
+          (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated))) "three stuck walks round the wall, then a dig through it"))))))
 
 (deftest one-stuck-walk-under-one-try-gives-up-without-digging
   (async done
@@ -698,9 +635,6 @@
 
 (deftest a-stair-through-its-own-pen-picks-up-its-drops
   (is (= [true false] (map #(:collect (second (esc/escalation-job {:step :stair :heading :east :steps 2 :own-cut %} nil false false false))) [true nil]))))
-
-(deftest a-door-through-its-own-pen-shuts-its-mouth-behind-the-body
-  (is (= [true nil] (map #(:close-behind (second (esc/escalation-job {:step :clear-path :heading :east :own-cut %} nil false false false))) [true nil]))))
 
 (deftest a-dig-route-s-digs-fetch-a-pickaxe-as-fetch-tool-says
   (async done
@@ -910,12 +844,13 @@
 (deftest a-cut-dig-route-through-the-bodys-own-build-is-walked-before-its-holes-are-put-back
   (let [{:keys [eng]} (gt/setup {:blocks {}})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
-        run! (fn [e] (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-pending) (assoc :escalation e)))
-               (esc/escalated! c [20 2 10] e true)
+        run! (fn [e & [done?]] (ctx/update-mem! c #(-> % (dissoc :restore-now :restore-pending) (assoc :escalation e)))
+               (esc/escalated! c [20 2 10] e (not (false? done?)))
                (select-keys (ctx/mem c) [:restore-now :restore-pending]))]
     (.setOwner (:primitives eng) "tx")
     (is (= {:restore-pending true} (run! {:step :dig-route :own-cut true})) "walk through first")
-    (is (= {:restore-now true :restore-pending true} (run! {:step :clear-path :own-cut true})) "a door's cut is closed behind at once")))
+    (is (= {:restore-now true :restore-pending true} (run! {:step :dig-route :own-cut true} false)) "a route stopped in a dead end is closed behind at once")
+    (is (= {:restore-now true :restore-pending true} (run! {:step :stair :own-cut true})) "a stair's cut is closed behind at once")))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
@@ -993,7 +928,7 @@
             (is (> (second (feet p)) 59) (str floor " feet " (feet p)))))))))
 
 (deftest every-escalation-child-runs-hurt
-  (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east}]]
+  (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2}]]
     (is (= '(always) (get-in (second (esc/escalation-job e nil false false false)) [:checks :fit?])) (str (:step e))))
   (is (nil? (:checks (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false false)))) "go-to's own fit is ready/ok"))
 

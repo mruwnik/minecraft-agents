@@ -50,7 +50,7 @@
     recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
   - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round the body shut in by them, or round a
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
-    block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
+    block), :dig-route (a route dug through the walls), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
   - Its safe? is: no hostile near (a walk leading away from every hostile near is not held, unless one catches the walk (ready/melee-catches?) or has hurt the body lately) and the walk's risk acceptable (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of the hostiles near the way that catch it, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). The risk is priced on go-to's plan: its round asks it of the first plan before a step of it, and again mid-walk on a re-plan that knows of a new hostile near the way or a blow by a mob not felt before (jobs.movement.go-to.reprice): when it fails the round ends as a failed can-run? would, the plan kept for the start check to hold on; a plan to where an unfinished search has got to searches on instead. A caller's :checks (an escape job's
     defaults, an agent's own) replace it.

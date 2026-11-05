@@ -29,14 +29,13 @@
 
 
 (defn planned-cells
-  "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts or clear-path's door, those
+  "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts, those
   the body has sensed (the child notes what it digs of the rest)."
   [p {:keys [step heading steps]} feet]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
         cells (case step
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
-                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading) (escape/drop-limit p)))
                 nil)]
     (vec (for [cell cells :let [n (block-at cell)] :when (and (escape/solid? n) (not (unseen? cell)))] {:cell cell :block n}))))
 

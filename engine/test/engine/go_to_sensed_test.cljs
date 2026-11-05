@@ -285,7 +285,7 @@
 
 (defn steps [seen] (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))
 
-(deftest go-to-clears-a-door-out-of-a-sealed-room-it-sees-from-inside
+(deftest go-to-digs-out-of-a-sealed-room-it-sees-from-inside
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -293,7 +293,7 @@
                                                     :inventory [{:name "dirt" :count 2}]}
                                                    {:pos [8 64 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          (is (= [:clear-path] (steps seen))))))))
+          (is (seq (steps seen)) "it digs its way out: a dig route or a stair, whichever prices lower"))))))
 
 (defn ^:async pit-escape
   "The result and escalation steps of go-to out of the 3-deep pit carrying n dirt."
@@ -711,11 +711,11 @@
               parent {:round (fn ^:async r [c]
                                (let [c (assoc c :unknown true)]
                                  (await (torch/hold-torch! c))
-                                 (ctx/update-mem! c assoc :escalation {:step :clear-path :heading [1 0]})
+                                 (ctx/update-mem! c assoc :escalation {:step :stair :heading :east :steps 2})
                                  (await (esc/escalation-round! c {:x 5 :y 64 :z 0}))
                                  (ctx/end c :done nil)))}
               w (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks ground :inventory [{:name "torch" :count 4}]})
-              eng (core/create {:primitives (:w w) :jobs (assoc registry/jobs 'jobs.access.clear-path child 'torch-parent parent)
+              eng (core/create {:primitives (:w w) :jobs (assoc registry/jobs 'jobs.access.stair child 'torch-parent parent)
                                 :triggers {} :dir (tu/tmp-dir) :now (constantly 1000000) :backoff false})]
           (core/submit! eng '(torch-parent) {})
           (loop [i 0] (when (and (< i 20) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))

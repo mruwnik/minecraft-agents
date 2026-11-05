@@ -1,4 +1,4 @@
-;; Card 0b9191bc: the mine's walk to a seen target carries the worth of the target's whole touching vein (go-to's :worth), so go-to's clear-path
+;; Card 0b9191bc: the mine's walk to a seen target carries the worth of the target's whole touching vein (go-to's :worth), so go-to's dig route
 ;; prices a wall as the mine's cut does. Iron-bars wall spans the plot (seen through): two thick (x 20..21) in the first two cases, five thick (x 8..12, body at [4.5 0 16.5]) in the sand pair, where one sand is declined and three are dug to.
 {:defaults
  {:tags [:mine :jobs] :time :any

@@ -1,5 +1,5 @@
 ;; Card a72339fe: a body walled into a closed stone room (no door, no light, buried) with a pile in the cave beyond the wall digs out when
-;; collect-drops may :dig; the search walk escalates through go-to's priced clear-path instead of ending :exhausted.
+;; collect-drops may :dig; the search walk escalates through go-to's priced dig route instead of ending :exhausted.
 ;; Room x 8..10, wall x 11..12, cave x 13..24 (z 16, 2 high); the pile lies at x 22, out of sight.
 {:defaults
  {:tags [:forestry :collect-drops :survival :jobs]

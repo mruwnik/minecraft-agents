@@ -1,5 +1,5 @@
 (ns engine.go-to-escalate-b-test
-  "jobs.movement.go-to escalation (pillar, stair, clear-path, a walk to a wall) and jobs.lib.escape, against the fake
+  "jobs.movement.go-to escalation (pillar, stair, dig route, a walk to a wall) and jobs.lib.escape, against the fake
   world."
   (:require [engine.contract :as contract]
             [cljs.test :refer [deftest is are async]]
@@ -33,7 +33,7 @@
             [triggers.access.scaffold-left :as scaffold-left]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
-            [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet block events-of calls pit-cells pit stone-pit in-pit room in-room hollow ba ledge-room on-ledge wide-pit plank-yard holes dug-cells foreign trespass deep-pit stone-room run-in-shelter! ledger restores-after-the-last-stair? deep-shaft own-pit-wall cobble-room room-and-deck pocket free-by-pocket high-pocket moat door-cell dark-at gap-tunnel long-loop loop-tolls stair-below-surface cave below-pocket dig-route-run!]]))
+            [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet block events-of calls pit-cells pit stone-pit in-pit room in-room hollow ba ledge-room on-ledge wide-pit plank-yard holes dug-cells foreign trespass deep-pit stone-room run-in-shelter! ledger restores-after-the-last-stair? deep-shaft own-pit-wall cobble-room room-and-deck pocket free-by-pocket high-pocket moat dark-at gap-tunnel long-loop loop-tolls stair-below-surface cave below-pocket dig-route-run!]]))
 
 (deftest escape-stair-cuts-are-each-step-s-three-cells
   (is (= [[0 63 0] [1 63 0] [1 62 0] [1 64 0] [2 64 0] [2 63 0]] (escape/stair-cuts [0 61 0] [1 0] 2))))
@@ -46,10 +46,15 @@
 (defn built-wall [wall]
   (apply dissoc (merge room (box -3 64 -3 3 65 3 wall)) (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z))))
 
-(deftest escape-choose-digs-any-built-block-nobody-claims
-  (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
-    (is (= :clear-path (:step (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)}) [2 64 0] [8 64 0])))
-        wall)))
+(deftest go-to-digs-any-built-block-nobody-claims
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
+          (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall) :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    {:pos [8 64 0] :range 1}))]
+            (is (= {:arrived true} @out) wall)
+            (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated))) wall)))))))
 
 (deftest escape-choose-never-digs-built-blocks-in-a-claimed-zone
   (doseq [wall ["oak_planks" "bricks" "glass" "white_wool" "cobblestone" "stone_bricks"]]
@@ -64,7 +69,7 @@
 
 (deftest escape-choose-breaks-out-of-a-glass-shaft-nobody-claims-and-not-one-in-a-claim
   (let [p (tu/fake {:self {:pos {:x 0.5 :y 60 :z 0.5}} :blocks glass-shaft})]
-    (is (contains? #{:clear-path :stair} (:step (escape-way/choose p [0 60 0] [6 60 0]))) "no claim: glass breaks by hand")
+    (is (= :stair (:step (escape-way/choose p [0 60 0] [6 60 0]))) "no claim: glass breaks by hand")
     (is (= {:step :none :why :no-dig} (escape-way/choose p [0 60 0] [6 60 0] (constantly false))) "claimed: a build stays")))
 
 (deftest go-to-breaks-out-of-a-glass-shaft-with-an-empty-pack
@@ -80,20 +85,22 @@
     (is (= {:step :none :why :no-dig} (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks (built-wall wall)}) [2 64 0] [8 64 0]))
         wall)))
 
-(deftest escape-choose-prefers-a-stair-to-a-clear-path
+(deftest escape-choose-stairs-up-a-hill-to-a-higher-goal
   (let [hill (merge room (box 3 64 -3 8 66 3 "dirt"))]
     (is (= :stair (:step (escape-way/choose (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks hill}) [2 64 0] [8 67 0]))))))
 
-(deftest escape-choose-digs-through-a-thin-wall-in-a-tunnel-to-a-goal-on-its-level
-  ;; Juniper #47: a 1-wide tunnel sealed by one dirt block read as a pit, and the stair climbed 18 blocks
-  (let [tunnel (merge (apply dissoc (box -8 62 -2 8 67 2 "stone")
-                             (for [x (range -6 7) :when (not= x 1) y [64 65]] (str x "," y ",0")))
-                      {"1,64,0" "dirt" "1,65,0" "dirt"})
-        p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks tunnel})]
-    (is (= {:step :clear-path :heading :east} (escape-way/choose p [0 64 0] [6 64 0])))
-    (is (= [2 64 0] (escape-way/way-end p [0 64 0] [6 64 0] {:step :clear-path :heading :east})) "the door's far side")
-    (is (= {:step :clear-path :heading :east} (escape-way/choose p [0 64 0] [6 66 0]))
-        "a goal above: the plug's door and a step up from its far side cost less than a stair up the 4-deep tunnel's rock")))
+(deftest go-to-digs-through-a-thin-wall-in-a-tunnel-to-a-goal-on-its-level
+  ;; a 1-wide tunnel sealed by one dirt block reads as a pit: the plug is dug, no stair climbs 18 blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [tunnel (merge (apply dissoc (box -8 62 -2 8 67 2 "stone")
+                                   (for [x (range -6 7) :when (not= x 1) y [64 65]] (str x "," y ",0")))
+                            {"1,64,0" "dirt" "1,65,0" "dirt"})
+              {:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tunnel :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                  {:pos [6 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated)))))))))
 
 (deftest escape-choose-stairs-up-out-of-a-sealed-tunnel-to-a-goal-through-thick-rock
   ;; Rowan #22: a 1-wide pocket (two sides walled, pit depth 0), goal on its level behind rock with no floor beyond
@@ -237,7 +244,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [east-wall (shape/with-author {:id "hut" :parts [{:id "east" :box [[3 64 -3] [3 66 3]] :want "dirt"}]} "Fake")
-              go (fn [plans] (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to {:pos [8 64 0] :range 1} {:plans plans}))
+              ;; the other walls are thick, so the natural way round is dearer than the put-back of two own cells
+              thick (merge room (box -6 64 -6 12 65 -4 "dirt") (box -6 64 4 12 65 6 "dirt") (box -6 64 -6 -4 65 6 "dirt"))
+              go (fn [plans] (run-job! (merge in-room {:blocks thick}) 'jobs.movement.go-to {:pos [8 64 0] :range 1} {:plans plans}))
               own (await (go {"hut" east-wall}))
               free (await (go {}))]
           (is (= {:arrived true} @(:out own)))
@@ -307,30 +316,6 @@
   floor x -10..14, z -10..10."
   (merge (box -10 63 -10 14 63 10 "stone")
          (apply dissoc (box -6 64 -6 6 65 6 "stone") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
-
-(deftest go-to-mends-a-dead-end-cut-of-its-own-pen-before-the-next-way
-  ;; a door whose far side, past what the body saw, has no floor (water, no landing) ends in a dead end; its cut opens the pen, so it is put back before the next way
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 66 2]}]
-              cow {:id 7 :name "cow" :kind "passive" :pos {:x -1.5 :y 64 :z -1.5}}
-              kept (atom [])
-              done! restore/restore-done!
-              {:keys [out p seen]} (with-redefs [restore/restore-done! (fn [c] (swap! kept conj (filterv #(= "the put-back of the stair's cut" (:why %)) (reserve/entries (ctx/view c)))) (done! c))]
-                                     (await (run-job! {:sight 3 :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (assoc thick-pit-pen "7,63,0" "water") :entities [cow]
-                                                       :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                      'jobs.movement.go-to {:pos [10 64 0] :range 1} zones true)))]
-          (is (= {:arrived true} @out))
-          (is (some seq @kept) (str "the stair's drops are still held for the put-back after the stair ended: " (pr-str @kept)))
-          (is (= [:go-to.escalated :go-to.escalation-stopped :go-to.restored]
-                 (take 3 (map :kind (filter #(#{:go-to.escalated :go-to.escalation-stopped :go-to.restored} (:kind %)) @seen))))
-              "the dead end's cut is put back before the next way, not once the walk is on")
-          (is (some #{[3 64 0]} (:cells (first (events-of seen :go-to.restored)))) "the cell that opens into the pen first")
-          (is (= (set (for [x [3 4 5] y [64 65]] [x y 0])) (set (:cells (first (events-of seen :go-to.restored))))) "the whole dead end is put back")
-          ;; the next way, a stair through the pen wall, picks up its drops: nothing is left open for want of a block
-          (is (empty? (filter #(= :need (:why %)) (mapcat :cells (events-of seen :go-to.restore-skipped)))) (pr-str (events-of seen :go-to.restore-skipped)))
-          (is (not-any? #(= "air" (block p %)) [[3 64 0] [3 65 0]]) "the pen wall is whole again"))))))
 
 (deftest go-to-reads-its-own-pen-once-per-escalation-round
   ;; choose-escalation! and the replan hold the pen read in c (with-own-pen); without it each fn reads the pen itself (own-builds/pen-of).
@@ -447,7 +432,7 @@
           (is (empty? (events-of seen :go-to.by-hand)))
           (is (= "stone" (block p [1 62 0])) "the stone is left"))))))
 
-(deftest go-to-cancelled-mid-clear-path-notes-the-cell-dug-so-far
+(deftest go-to-cancelled-mid-dig-route-notes-the-cell-dug-so-far
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -505,14 +490,14 @@
           (is (= "dirt" (block p [1 62 0])))
           (is (empty? (holes eng))))))))
 
-(deftest clear-path-collects-what-it-digs-so-go-to-can-put-it-back
+(deftest a-dig-route-collects-what-it-digs-so-go-to-can-put-it-back
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
                                                 (merge {:pos [8 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
-          (is (= [:clear-path] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated))))
           (is (empty? (events-of seen :go-to.restore-skipped)) "nothing carried at the start: the dug dirt was picked up")
           (is (= "dirt" (block p [3 64 0])))
           (is (= "dirt" (block p [3 65 0]))))))))
@@ -523,12 +508,7 @@
     (is (= {:step :stair :heading :east :steps 3}
            (escape-way/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true) {:skip #{:pillar}})))
     (is (= :none (:step (escape-way/choose (tu/fake with-dirt) [0 61 0] [10 64 0] (constantly true)
-                                       {:skip #{:pillar :stair :clear-path :approach}}))))))
-
-(deftest escape-choose-offers-no-approach-when-clear-path-is-barred
-  (let [p (tu/fake {:self {:pos {:x 1 :y 64 :z 0}} :blocks room})]
-    (is (= :approach (:step (escape-way/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar}}))) "the door spot, when digging is allowed")
-    (is (= :none (:step (escape-way/choose p [1 64 0] [8 64 0] (constantly true) {:skip #{:stair :pillar :clear-path}}))) "no walk to a door that may not be dug")))
+                                       {:skip #{:pillar :stair :approach}}))))))
 
 (deftest escape-door-beside-counts-only-doors-the-body-can-open
   (let [at (fn [b] (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (assoc room "3,64,0" b)}))
@@ -627,15 +607,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [blocks (apply dissoc (merge (box 10 59 10 30 59 22 "grass_block") (box 10 60 10 22 61 22 "stone"))
+        (let [blocks (apply dissoc (merge (box 10 59 10 30 59 22 "bedrock") (box 10 60 10 22 61 22 "stone"))
                             (for [x (range 14 19) z (range 14 19) y [60 61]] (str x "," y "," z)))
               plan (shape/with-author {:id "pit" :parts [{:id "inside" :box [[14 60 14] [18 61 18]] :want [:any "air"]}]} "Fake")
               cows [{:id 7 :name "cow" :kind "passive" :pos {:x 15.5 :y 60 :z 15.5}} {:id 8 :name "cow" :kind "passive" :pos {:x 17.5 :y 60 :z 17.5}}]
-              {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows}
+              {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows :inventory [{:name "stone_pickaxe" :count 1}]}
                                                     'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}}))]
           (is (= {:arrived true} @out))
           (is (seq (dug-cells-of p)))
-          (is (= (dug-cells-of p) (set (concat (mapcat :cells (events-of seen :go-to.restored)) (map :cell (mapcat :cells (events-of seen :go-to.restore-skipped))))))
+          ;; a dig call on a cell that was air (a guessed cell the look showed open) digs nothing
+          (is (= (set (filter #(contains? blocks (apply str (interpose "," %))) (dug-cells-of p))) (set (concat (mapcat :cells (events-of seen :go-to.restored)) (map :cell (mapcat :cells (events-of seen :go-to.restore-skipped))))))
               "every cell dug is put back, or left for restore-broken when nothing carried fills it"))))))
 
 (deftest go-to-takes-back-the-own-blocks-that-shut-the-body-in-when-the-goal-is-farther-than-the-clear-radius
@@ -695,7 +676,7 @@
               {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks fence-pen :entities [cow] :inventory [{:name "cobblestone" :count 5}]}
                                                     'jobs.movement.go-to {:pos [8 64 0] :range 1} zones))]
           (is (= {:arrived true} @out))
-          (is (= [:clear-path] (map :step (events-of seen :go-to.escalated))))
+          (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))))
           (is (= [[[3 64 0]]] (map :cells (events-of seen :go-to.restored))) "the cut fence is put back")
           (is (= "oak_fence" (block p [3 64 0]))))))))
 

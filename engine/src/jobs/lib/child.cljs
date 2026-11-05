@@ -112,7 +112,7 @@
   (cond-> {:pos cell :range 0 :ways #{:walk :clear-seal}}
     (#{:in :out} slot) (assoc :settings {:jobs.lib.walk.world/y-margin entry-depth})))
 
-(def back-ways "A walk back to a line the body was cutting digs through a cliff, as a player with a pickaxe would; no stair or pillar inside a stair." #{:walk :clear-seal :clear-path})
+(def back-ways "A walk back to a line the body was cutting digs through a cliff, as a player with a pickaxe would; no stair or pillar inside a stair." #{:walk :clear-seal :dig-route})
 
 (defn walk-back-args "The walk (and, via jobs.lib.price/walk-back-worth?, the quote) of a way back to `cell`: one place for its ways." [slot cell]
   (assoc (walk-into-args slot cell) :ways back-ways))

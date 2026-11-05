@@ -1,6 +1,6 @@
 (ns jobs.movement.go-to.escalate-choose
   "go-to's choice of a way out of a shut-in body, or in to a walled-in goal: whether a give-up may escalate, and which
-  pillar, stair, clear-path, dig route or walk to the wall to take."
+  pillar, stair, dig route or walk to the wall to take."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -446,7 +446,7 @@
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig. A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
-        straight-s (fn [refused] (let [[gx gy gz] goal
+        straight (fn [refused] (let [[gx gy gz] goal
                          leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
                          up (if (< fy gy) (max (:step-s prices) (:stair-s prices)) (+ (:step-s prices) ((:fall-s prices) 1)))
                          down? (< gy fy)
@@ -472,12 +472,15 @@
                                                 (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm h))))
                          steps (map cell-s cells)
                          heads (map head-s (cons from cells))]
-                     (cond
-                       (some refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells))) ##Inf
-                       (and (every? some? steps) (every? some? heads))
-                       (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
-                          (* (:node-s route-opts 0) 2 (count cells)))
-                       :else ##Inf)))
+                     (when (and (not-any? refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells)))
+                                (every? some? steps) (every? some? heads))
+                       {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
+                                    (* (:node-s route-opts 0) 2 (count cells)))
+                        :dig (vec (distinct (for [[x y z] (cons from cells)
+                                                  cell (if (= [x y z] from) [[x (inc y) z]] [[x (inc y) z] [x y z]])
+                                                  :when (not (let [nm (block-at cell)] (or (nil? nm) (dig-route/open? nm))))]
+                                              cell)))})))
+        straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
         opts (fn [refused] (merge prices
                                   {:max-s (min (or (:bound-s route-opts) ##Inf) (* (straight-s refused) (+ 1 1e-9))) :back-h? true}
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
@@ -495,6 +498,8 @@
             ;; with a :range the goal is worked from a stand within it, never dug away
             (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) n 1]
             (let [a (search refused)
+                  ;; the straight dig needs no search: when the search prices its own expansions past it, it is the route
+                  a (if-let [st (when (= :dearer (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
                   bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) (when (and dearer? (= :dearer (:problem a))) :dearer)
@@ -524,7 +529,7 @@
                  (:dig a)))))))
 
 (defn way-guesses
-  "[{:cell :class}]: the cells stair or door e from feet cuts that the body has not sensed (read as rock), each with its
+  "[{:cell :class}]: the cells stair e from feet cuts that the body has not sensed (read as rock), each with its
   guess-class."
   [p {:keys [step heading steps]} feet]
   (let [block-at (escape/block-at-of p)
@@ -532,7 +537,6 @@
         sensed #(u/sensed p (zipmap [:x :y :z] %))
         cells (case step
                 :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
-                :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading) (escape/drop-limit p)))
                 nil)]
     (vec (for [cell cells :when (unseen? cell)] {:cell cell
                                                 :class (guess-class sensed cell)}))))
@@ -547,8 +551,9 @@
   "route-answer's route-opts for a choice's opts: its :slice, its :spent searches, its :own-s and :own-cut
   (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s]}]
+  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed?]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :node-s (cost/search-cell-s)}
+    closed? (assoc :max-fall 1)
     slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
     guess-risk (assoc :guess-risk guess-risk :worth-s worth-s)))
@@ -679,11 +684,10 @@
           (some->> @edge (hash-map :step :approach :pos))))))
 
 (defn leads-in?
-  "Whether escape-way/choose's way e from cell from leads into a walled-in goal: a door, a stair or pillar up to a higher
+  "Whether escape-way/choose's way e from cell from leads into a walled-in goal: a stair or pillar up to a higher
   goal, a walk along the wall to a goal not below it."
   [{:keys [step]} from goal]
   (case step
-    :clear-path true
     (:stair :pillar) (> (second goal) (second from))
     :approach (>= (second goal) (second from))
     false))
@@ -722,8 +726,9 @@
                 :else e)
         in? (and (or (leads-in? e from goal) (true? rim) (= :searching (:step e)))
                  (or here? (not= :approach (:step e))))
+        dw (when-not in? (dig-way p from goal may-dig? opts))
         e (cond in? e
-                :else (or (dig-way p from goal may-dig? opts)
+                :else (or dw
                           (if (= :none (:step e)) e {:step :none :why :no-dig})))]
     (cond
       (= :searching (:step e)) e
@@ -744,9 +749,9 @@
   still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
   own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
   [c feet fetch? slice]
-  {:own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
+  {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
-   :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget (ctx/mem c))) :bound-s (call-budget-s c)
+   :guess-risk (guess-risk c) :worth-s (when (:escalation (ctx/mem c)) (:fallback-s (:replan-budget (ctx/mem c)))) :bound-s (call-budget-s c)
    :risk-s (fn [cells goal work-s] (walk-risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn detour-way
@@ -776,7 +781,7 @@
   slice and gets :budget when that spent its nodes (no search is kept: each quote ask would otherwise grow it for ever, at
   no time spent). A quote asks this when the walk's planner found no walk."
   [c goal]
-  (when (ways/way? c :clear-path)
+  (when (ways/way? c :dig-route)
     (let [p (:primitives c)
           feet (end/feet-cell c)
           owner (:route-owner (ctx/mem c))
@@ -883,6 +888,6 @@
   chosen escape); way when it is no priced span (a leave-shelter, an approach, none) or dearer."
   [p feet way & fills]
   (let [fill (first (remove nil? fills))]
-    (if (and fill (or (not (#{:stair :pillar :clear-path :dig-route :bridge} (:step way))) (<= (escape-way/price p feet fill) (escape-way/price p feet way))))
+    (if (and fill (or (not (#{:stair :pillar :dig-route :bridge} (:step way))) (<= (escape-way/price p feet fill) (escape-way/price p feet way))))
       fill
       way)))

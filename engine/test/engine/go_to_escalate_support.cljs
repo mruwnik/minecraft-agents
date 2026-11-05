@@ -214,13 +214,6 @@
   [liquid]
   (merge (box -20 62 -20 20 62 20 "stone") (box -20 63 -20 20 63 20 "stone") (box 3 63 -5 13 63 5 liquid) {"8,63,0" "stone"}))
 
-;; ---- door-back reads what the body senses
-(def door-cell
-  {:self {:pos {:x 0.5 :y 64 :z 0.2}}
-   :floor tu/walk-floor
-   :blocks {"0,64,0" "oak_door" "0,65,0" "oak_door"}
-   :states {"0,64,0" {:open false :half "lower" :facing "north"} "0,65,0" {:open false :half "upper" :facing "north"}}})
-
 (defn dark-at [p cells]
   (let [sensed (.-sensedAt p) dark (set cells)]
     (aset p "sensedAt" (fn [q] (if (dark [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))))

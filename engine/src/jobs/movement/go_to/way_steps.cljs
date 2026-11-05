@@ -4,12 +4,12 @@
 
 (def ways
   "The ways in order; :clear-seal takes the body's own ledger blocks back from round a goal it cannot reach."
-  [:walk :clear-seal :clear-path :pillar :stair :dig-out])
+  [:walk :clear-seal :dig-route :pillar :stair :dig-out])
 
 (def way-steps
   "The escalation steps (jobs.lib.escape.way/choose and go-to's own) of each way that changes the world. A walk to the
   nearest wall (:approach) belongs to none: it only readies the others."
-  {:pillar #{:pillar :fill-gap} :clear-path #{:clear-path :dig-route} :stair #{:stair} :dig-out #{:leave-shelter}})
+  {:pillar #{:pillar :fill-gap} :dig-route #{:dig-route} :stair #{:stair} :dig-out #{:leave-shelter}})
 
 (defn way?
   "Whether the call allows way k: its frozen call's :ways; before the call starts (a condition), the args' (all when

@@ -1,12 +1,12 @@
 ;; Card b40b4dea: go-to escalation. A body shut in (a pit, a sealed room) whose search runs out of land makes a way:
-;; pillar (pit + enough blocks), clear-path (a wall up to 3 thick toward the goal), stair up; then it puts back what
-;; stair or clear-path dug. :ways #{:walk :clear-seal}, bedrock, or open ground never change the world.
+;; pillar (pit + enough blocks), dig route (a wall toward the goal), stair up; then it puts back what
+;; stair or dig route dug. :ways #{:walk :clear-seal}, bedrock, or open ground never change the world.
 ;; Card 30615854 (Q67): it digs any block outside others' zones, claims and plans (a build too); in them nothing is dug (:why :zone). A door or gate beside the enclosure is its way
 ;; out (no escalation), and a cut escalation's holes stay in the :tidy ledger (restore-broken puts them back).
 ;; It notes and puts back only holes in another's zone, claim or plan (owner Q139): the put-back cases dig through
 ;; another's plan with :ignore-zones?; in plain natural ground its holes stay and no put-back event comes.
 ;; Card 8e26161d: with :escalate false a shut-in body ends :shut-in true; open ground never does.
-;; Card d0e7b7df: a fruitless re-plan after an escalation says why (info go-to.retrying), never a silent round: a clear-path wall thicker than 3
+;; Card d0e7b7df: a fruitless re-plan after an escalation says why (info go-to.retrying), never a silent round: a wall thicker than the dig the call may spend
 ;; leaves the body in its own short tunnel and the next rounds name the reason.
 ;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up.
 {:defaults
@@ -45,7 +45,7 @@
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [17 1 16] "coal_ore"] [:block [17 1 15] "coal_ore"] [:body-near [23.5 4 16.5] 2]]}
   {:name "sealed-room-dug-wall-arrives-and-shuts-the-door"
-   ;; the 2-cell door in the east wall is one dig route (the priced choice, cheaper than a :clear-path step over the same cells); the
+   ;; the 2-cell door in the east wall is one dig route (the priced choice); the
    ;; wall is another's plan, so it is put back. A hollow stone room x 12..20, z 12..20, y 0..3 on a stone platform x 8..26 (y -1 is the plot floor), the
    ;; body inside at feet y 1; the goal outside to the east
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
@@ -89,7 +89,6 @@
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
@@ -151,7 +150,6 @@
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}
@@ -180,7 +178,6 @@
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "oak_log"] [:block [20 2 16] "oak_log"]]}
@@ -373,7 +370,7 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}
                                               {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :placed}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :dig-route :pillar :stair :dig-out}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 1 16.5] 2]]}
@@ -394,7 +391,7 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :intent}
                                               {:cell #at [20 2 16] :item "cobblestone" :before "air" :job "j1" :purpose :pillar :state :intent}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :dig-route :pillar :stair :dig-out}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 1 16.5] 2] [:block [20 1 16] "air"] [:block [20 2 16] "air"]]}
@@ -404,7 +401,7 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "dirt" :before "air" :job "j1" :purpose :pillar :state :intent}
                                               {:cell #at [20 2 16] :item "dirt" :before "air" :job "j1" :purpose :pillar :state :intent}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path :pillar :stair :dig-out}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :dig-route :pillar :stair :dig-out}})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}]}

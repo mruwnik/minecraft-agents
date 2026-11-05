@@ -1,6 +1,6 @@
 (ns jobs.lib.escape.way
   "go-to's escalation picks a way for a body that cannot walk to its goal (jobs.lib.escape reads the cells):
-  - wall-spot, door-spot: the cheapest cell beside a wall, or with a door it may dig (priced-spot), to walk to first.
+  - wall-spot: the cheapest cell beside a wall (priced-spot), to walk to first.
   - price: the seconds an escalation's way takes (jobs.lib.cost); way-s: that, the climb left, the walk on and its dangers.
   - choose: the escalation for a body here and a goal; way-spot: where to walk when none can be made here.
   Cells are [x y z]."
@@ -66,20 +66,6 @@
      (or (priced-spot p feet goal steps toward? visited nil)
          (priced-spot p feet goal steps (fn [cell _ _] (escape/walled-side? block-at cell)) visited nil)))))
 
-(defn door-spot
-  "The cheapest cell (priced-spot through standable cells) from which a wall straight toward goal is a door (door)
-  whose every cell is diggable? and whose far side is cheaper to goal from there than from feet, the walk there
-  counted: where to walk when the wall at feet
-  cannot be dug (an iron door or another's build in line). nil when none. Cells in visited (already walked to) do not
-  count."
-  [p feet goal diggable visited]
-  (let [block-at (escape/block-at-of p)
-        unseen? (escape/unseen-of p)
-        take? (fn [cell g rest-s] (when-let [d (escape/heading cell goal)]
-                                    (when-let [gap (escape/door block-at unseen? cell d (escape/drop-limit p))]
-                                      (and (every? diggable (:cells gap)) (< (+ g (rest-s (:through gap))) (rest-s feet))))))]
-    (priced-spot p feet goal (escape/level-steps p feet false) take? visited nil)))
-
 (defn carried-build-n
   "How many blocks of the stair's floor fillers (choose/fillers :build) the body carries."
   [p]
@@ -119,26 +105,6 @@
                 (+ total leg)))
             (transduce (map stack-s) + 0 tops) (partition 3 cuts))))
 
-(defn door-fall-s
-  "Seconds the drop beyond a door ({:fall :on :floor-unseen}, escape/landing) takes: its hp once, by the block landed on
-  (cost/landing-factor: none into water) at cost/hp-cost, plus, for a floor the body has not seen, the chance it is not there
-  (cost/floor-absent-chance) of what cost/unseen-fall-s adds beyond that hp (the fall past it and the climb out), none into water."
-  [p {:keys [fall on floor-unseen]}]
-  (if-not fall
-    0
-    (let [self (.self p)
-          equipment (cost/equipment-of (.-equipment self))
-          kind (if (= 1 fall) :down :drop)
-          hp-s (cost/hp-cost (.-health self) (* (cost/landing-factor on) (cost/fall-damage equipment fall)))]
-      (+ hp-s
-         (if (and floor-unseen (not= "water" on))
-           (* (cost/floor-absent-chance kind nil)
-              (max 0 (- (cost/unseen-fall-s kind fall
-                                            {:health (.-health self) :equipment equipment :max-drop (escape/drop-limit p)
-                                             :carried (:count (escape/carried-pillar-item p) 0) :share (wworld/unseen-share p)})
-                        hp-s)))
-           0)))))
-
 (defn pillar-way-s
   "Seconds a pillar of height blocks up from feet takes, short of them fetched: cost/pillar-s, its knock
   (escape/pillar-knock), and a dig of each cell over it the head climbs into that the body has not seen, at the
@@ -154,9 +120,9 @@
        roof-s)))
 
 (defn price
-  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
-  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair,
-  door or route adds what its cuts destroy (cost/destroyed-fn); with own-s, a cell it prices over 0, the body's own build,
+  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug
+  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span. A stair
+  or route adds what its cuts destroy (cost/destroyed-fn); with own-s, a cell it prices over 0, the body's own build,
   is left out of that: the caller adds its price."
   ([p feet e] (price p feet e nil))
   ([p feet {:keys [step heading] :as e} own-s]
@@ -173,8 +139,6 @@
         :bridge (cw/bridge-cost (:length e) (:short e 0))
         :fill-gap (cw/fill-cost (:count e 1))
         :dig-route (dig-s (map :cell (:cells e)))
-        :clear-path (let [{:keys [cells] :as door} (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)) (escape/drop-limit p))]
-                      (+ (dig-s cells) (door-fall-s p door)))
       0))))
 
 (defn new-stair-step-s
@@ -222,8 +186,7 @@
     0))
 
 (defn way-cells
-  "The cells way e from feet takes the body through, feet first: a pillar's column, a stair's steps, else end (a door's far
-  side)."
+  "The cells way e from feet takes the body through, feet first: a pillar's column, a stair's steps, else end."
   [feet {:keys [step height heading steps]} end]
   (into [feet]
         (case step
@@ -232,15 +195,12 @@
           [end])))
 
 (defn way-s
-  "Seconds way e (choose's) made from feet takes the body to goal (jobs.lib.cost): its price (an approach: its walk, then
-  the door toward goal from its cell when there is one), the climb left from where it leaves the body (rise-left-s, with
+  "Seconds way e (choose's) made from feet takes the body to goal (jobs.lib.cost): its price (an approach: its walk), the climb left from where it leaves the body (rise-left-s, with
   the count of carried climb block item it leaves), the walk on from the top of that climb (rest-s, rest-s-fn), and, with
   risk-s, what the dangers on its cells cost over those seconds ((risk-s cells goal work-s): go-to's :risk-s)."
   [p feet goal e {:keys [rest-s risk-s item count may-dig?] :or {may-dig? (constantly true)}}]
   (let [[walk from e] (if (= :approach (:step e))
-                        (let [pos (:pos e)
-                              door (some->> (escape/heading pos goal) escape/heading-names (hash-map :step :clear-path :heading))]
-                          [(walk-s feet pos) pos (when (and door (way-end p pos goal door)) door)])
+                        [(walk-s feet (:pos e)) (:pos e) nil]
                         [0 feet e])
         end (if e (way-end p from goal e) from)
         left (- (or count 0) (if e (spent-blocks p from item e) 0))
@@ -254,19 +214,17 @@
   12)
 
 (defn way-end
-  "Where way e (choose's) made from cell leaves the body: a pillar's top, a stair's last step, a clear-path's far
-  side; nil for any other step."
+  "Where way e (choose's) made from cell leaves the body: a pillar's top, a stair's last step; nil for any other step."
   [p cell goal {:keys [step height heading steps]}]
   (case step
     :pillar (escape/up cell height)
     :stair (let [[dx dz] (escape/heading-dirs heading)] (escape/add cell [(* steps dx) steps (* steps dz)]))
-    :clear-path (:through (escape/door (escape/block-at-of p) (escape/unseen-of p) cell (escape/heading-dirs heading) (escape/drop-limit p)))
     nil))
 
 (defn way-spot
   "The cheapest cell (priced-spot through standable cells a step up or down included, at most way-spot-cap tried) from
-  which choose makes a way (a pillar, stair or clear-path) toward goal: where to walk when no way can be made from feet
-  itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to. A clear-path, stair or pillar must
+  which choose makes a way (a pillar or stair) toward goal: where to walk when no way can be made from feet
+  itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to. A stair or pillar must
   leave the walk there and on from its end (way-end) cheaper than the walk from feet (a stair or pillar up toward a higher goal); one out of a pit or room counts as it is. nil when none."
   [p feet goal may-dig? opts visited]
   (let [opts (update opts :skip (fnil conj #{}) :approach)
@@ -274,7 +232,6 @@
                 (let [e (choose p cell goal may-dig? opts)
                       end (way-end p cell goal e)]
                   (case (:step e)
-                    :clear-path (boolean (and end (< (+ g (rest-s end)) (rest-s feet))))
                     (:stair :pillar) (or (<= (goal 1) (cell 1)) (< (+ g (rest-s end)) (rest-s feet)))
                     false)))]
     (priced-spot p feet goal (escape/level-steps p feet true) take? visited way-spot-cap)))
@@ -291,10 +248,6 @@
     - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
       depth, whichever is more, at most max-depth (the pit's depth when the longer cut is not all diggable?), every
       cell of its cut diggable?.
-    - {:step :clear-path :heading kw}: a wall straight toward the goal, with floor beyond, every cell diggable?, not
-      skipped (door-key; a bare :clear-path skips every door).
-    - {:step :approach :pos cell}: no door at feet: a wall in line it cannot dig: to door-spot; in the free part of a
-      shut door's cell, step back off the panel (door-back).
     else the first of these:
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first.
   - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
@@ -331,25 +284,12 @@
                               (range (escape/max-depth) 0 -1))))
          ledge (delay (when (and item (not (off :stair)) (pos? rise) (not (escape/walled-side? block-at feet)))
                         (escape/stair-heading block-at feet (remove #(contains? stands (escape/ahead feet % 1)) stair-dirs) rise may-dig? true)))
-         door-failed? (and dir (skip (escape/door-key feet (escape/heading-names dir))))
-         gap (when (and dir (not (skip :clear-path)) (not door-failed?))
-               (escape/door block-at (escape/unseen-of p) feet dir (escape/drop-limit p)))
-         ;; door-spot is for a wall in line that may not be dug; one that was dug and failed is no cause to try its neighbour
-         spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (not door-failed?) (escape/walled-side? block-at feet))
-                       (door-spot p feet goal #(escape/diggable? block-at may-dig? %)
-                                  (into approached (escape/skipped-door-cells skip)))))
          wall (delay (wall-spot p feet goal approached))
-         back (delay (when-not (or (skip :approach) (skip :clear-path)) (escape/door-back p feet approached)))
-         door? (and gap (every? #(escape/diggable? block-at may-dig? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)
          ways (distinct (cond-> []
                           open-above? (conj {:step :pillar :height height :item item})
                           stair (conj {:step :stair :heading stair :steps rise})
-                          rim (conj {:step :pillar :height rim :item item})
-                          door? (conj {:step :clear-path :heading (escape/heading-names dir)})
-                          ;; door-spot and door-back stand for a door at feet that cannot be dug
-                          (and (not door?) @spot) (conj {:step :approach :pos @spot})
-                          (and (not door?) @back) (conj {:step :approach :pos @back})))]
+                          rim (conj {:step :pillar :height rim :item item})))]
      (cond
        (and (seq ways) (not (next ways)))
        (first ways)
@@ -359,7 +299,7 @@
          (second (reduce (fn [[best-s best :as cur] w] (let [s (way-s p feet goal w priced)] (if (< s best-s) [s w] cur)))
                          [##Inf (first ways)] ways)))
 
-       (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (escape/walled-side? block-at feet)) @wall)
+       (and (not (skip :approach)) (not (skip :stair)) (not (escape/walled-side? block-at feet)) @wall)
        {:step :approach :pos @wall}
 
        @ledge

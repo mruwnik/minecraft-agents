@@ -41,7 +41,7 @@
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
   With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any; a gain of :least-items in the inventory since the start counts, so a drop that flew to the body ends the search) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
   to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at; not behind a seen solid block on the way from the anchor, which is rock), and looks again at each, until an item is seen or the cells within :search
-  blocks are tried. With :dig a body shut in a room digs out by go-to's priced escalation (:clear-path :stair :dig-out). A search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
+  blocks are tried. With :dig a body shut in a room digs out by go-to's priced escalation (:dig-route :stair :dig-out). A search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar way (and :stair with :dig), then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
@@ -489,7 +489,7 @@
   "go-to ways of a search walk: with :dig a body shut in (its own seal or shelter, a closed room) may dig out, priced by go-to's escalation."
   [c]
   (cond-> #{:walk :clear-seal}
-    (:dig (:args c)) (into [:clear-path :stair :dig-out])))
+    (:dig (:args c)) (into [:dig-route :stair :dig-out])))
 
 (defn search-worth
   "Seconds the drops a search still looks for are worth (cost/find-worth of the :least-items, else the :items, for the count

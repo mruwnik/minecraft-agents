@@ -362,6 +362,23 @@
           :no-tool :no-tool
           (or (some-> (:primitive data) keyword) (when (not= k (:kind e)) k) :failed))))))
 
+(defn inventory-map [p] (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} (u/inventory p)))
+
+(defn keep-for-put-back!
+  "Hold what a dig picked up (the pack now over before, {name n}) for the put-back of the cut (memory :kept, jobs.lib.reserve
+  entries held by the job :collect names, else this call): its floors, and the holder's until it puts the cut back, do not
+  spend the blocks the cut owes."
+  [c before]
+  (let [gained (into {} (keep (fn [[n k]] (let [d (- k (get before n 0))] (when (pos? d) [n d])))) (inventory-map (:primitives c)))
+        collect (:collect (:args c))]
+    (when (seq gained)
+      (let [kept (merge-with + (:kept (ctx/mem c)) gained)]
+        (ctx/update-mem! c assoc :kept kept)
+        (doseq [[n k] kept]
+          (ctx/remember! c reserve/kind {:id (str (:id c) "-put-back-" n) :item n :count k :strength 1 :by (if (string? collect) collect (:id c))
+                                         :why "the put-back of the cut"}
+                         reserve/policy))))))
+
 (defn ^:async dig-cell-ending!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
   needed, no fetch; the caller picks drops up): :continue (also when the child waits out the world) or the child's ending. :ways #{:carried} does not stop

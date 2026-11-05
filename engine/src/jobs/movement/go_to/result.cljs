@@ -90,7 +90,7 @@
    :gap-sprint "needs a gap jump that takes a sprint and food is too low"
    :gap-width "needs a jump across a gap wider than the body can jump"})
 
-(def step-words {:stair "dig a stair out" :pillar "pillar out" :clear-path "dig through the wall"})
+(def step-words {:stair "dig a stair out" :pillar "pillar out" :dig-route "dig through the wall"})
 
 (def escalation-reason-words
   {:no-tool "no pickaxe" :no-dig "nothing it may dig" :no-headroom "no room above the head"

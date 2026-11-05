@@ -332,16 +332,6 @@
   [block-at unseen? feet dir max-drop]
   (door-from block-at unseen? feet dir 1 max-drop))
 
-(defn door-key
-  "The skip key of the door from feet along heading (a keyword): a door that failed rules out only itself."
-  [feet heading]
-  [:clear-path feet heading])
-
-(defn skipped-door-cells
-  "The cells whose door skip (a set of skip keys) rules out."
-  [skip]
-  (keep (fn [k] (when (and (vector? k) (= :clear-path (first k))) (second k))) skip))
-
 (defn diggable?
   "Whether an escalation may cut cell: it is open (air or a plant), or not protected and may-dig? allows it (go-to: no
   other owner's zone, claim or plan footprint; outside those every block may be broken, a build too, priced like any dig)."
@@ -406,21 +396,6 @@
   (let [[dx _ dz] (map - takeoff landing)]
     (when (and (= 2 (+ (Math/abs dx) (Math/abs dz))) (zero? (* dx dz)))
       (up (add landing [(/ dx 2) 0 (/ dz 2)]) -1))))
-
-(defn door-back
-  "For a body in the free part of a shut door's cell feet: the cell on the free side, to step back to and look round
-  from, unless it is seen and not standable (an unseen cell is walked to and looked at) or already walked to (visited).
-  A door cell the body has not sensed is no known door (nil): the body's own cell is felt, so this is not met live."
-  ([p cell] (door-back p cell #{}))
-  ([p [x y z] visited]
-  (let [kind-at (reach/seen-lookup p)]
-    (when-let [[dx dz] (reach-room/panel-step p kind-at {:x x :y y :z z})]
-      (let [back [(- x dx) y (- z dz)]]
-        (when (let [unseen? (unseen-of p)
-                    ok? (fn [cell good?] (or (unseen? cell) (good? kind-at (cell 0) (cell 1) (cell 2))))]
-                (and (not (visited back)) (ok? back reach/passable?) (ok? (up back 1) reach/passable?)
-                     (ok? (up back -1) #(keyword-identical? :solid (%1 %2 %3 %4)))))
-          back))))))
 
 (defn note-hole!
   "Write cell, where block was dug, to the tidy ledger (jobs.lib.tidy, body memory) as a :dig entry with tag merged,

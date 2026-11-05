@@ -18,7 +18,7 @@
       (fn ^:async t []
         (is (true? (await (worth {:found true} #{:walk}))))
         (is (false? (await (worth {:found false :reason :no-path} #{:walk}))) "a dead end walked is no walk back")
-        (is (true? (await (worth {:found false :reason :no-path :escalating true} #{:walk :clear-seal :clear-path}))) "a dig finds the rest")
+        (is (true? (await (worth {:found false :reason :no-path :escalating true} #{:walk :clear-seal :dig-route}))) "a dig finds the rest")
         (is (= :searching (await (worth {:found false :reason :searching} #{:walk}))))))))
 
 (def open-ground (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))
