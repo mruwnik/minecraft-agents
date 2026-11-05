@@ -21,6 +21,7 @@
             [engine.game :as game]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -194,20 +195,37 @@
   [c]
   (hostile-loss/body-at (:primitives c) (ctx/view c)))
 
+(defn comes?
+  "Whether a creeper at, body-d blocks from the body, comes within its swell start of the body or of the fought mob at
+  t-pos before a fight of seconds ends, at its chase speed."
+  [at body-d t-pos seconds]
+  (<= (/ (max 0 (- (min body-d (u/dist at t-pos)) cost/swell-start)) (cost/chase-speed "creeper")) seconds))
+
 (defn blasting
   "The creepers known within ::price/way-radius of the way to the nearest of near (none of near) that come within their
-  swell start of the body or that mob before a fight of seconds ends, at their chase speed: the fight walks into their blast."
+  swell start of the body or that mob before a fight of seconds ends (comes?): the fight walks into their blast."
   [p near seconds]
   (when-let [t (first near)]
     (let [ids (set (map #(.-id %) near))
-          t-pos (danger-q/mob-pos p t)
-          comes? (fn [cr] (let [at (danger-q/mob-pos p cr)
-                                d (min (danger-q/mob-distance p cr) (u/dist at t-pos))]
-                            (<= (/ (max 0 (- d cost/swell-start)) (cost/chase-speed (cost/mob-kind cr))) seconds)))]
+          t-pos (danger-q/mob-pos p t)]
       (->> (danger-q/hostiles-near-way p t-pos (settings/get price/settings ::price/way-radius) {})
            (filter combat/creeper?)
            (remove #(ids (.-id %)))
-           (filter comes?)))))
+           (filter #(comes? (danger-q/mob-pos p %) (danger-q/mob-distance p %) t-pos seconds))))))
+
+(defn sighted-blasting
+  "blasting's creepers among those the body saw and lost (threats/sightings, {:pos :weight}, weight the chance it is
+  still there): within ::price/way-radius of the way to the nearest of near, coming in time (comes?)."
+  [c near seconds]
+  (when-let [t (first near)]
+    (let [p (:primitives c)
+          me (u/self-pos c)
+          t-pos (danger-q/mob-pos p t)]
+      (filter (fn [{:keys [mob pos]}]
+                (and (= "creeper" mob)
+                     (<= (danger-q/way-distance me t-pos pos) (settings/get price/settings ::price/way-radius))
+                     (comes? pos (u/dist me pos) t-pos seconds)))
+              (threats/sightings c)))))
 
 (def swing-reach "Blocks from its eyes within which a player's swing lands on a mob's box (vanilla)." 3)
 
@@ -259,7 +277,7 @@
   search's caught-chance; nil the prior alone; cost/followed). A lone creeper is
   fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
   not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
-  swell start) is added, in :blasts."
+  swell start) is added, in :blasts; so is that of one seen and lost (sighted-blasting), times the chance it is still there."
   [c near struck-of & [walk-q caught]]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
@@ -274,9 +292,12 @@
             a (cost/fight-answer fight)
             seconds (+ (:seconds a) (/ (danger-q/mob-distance p (first fought)) cost/walk-speed))
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
+            sighted (if lone-creeper? [] (sighted-blasting c near seconds))
             spot (danger-q/mob-pos p (first fought))
-            blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)
-            a (if (seq creepers) (cost/fight-answer (update fight :health #(max 1 (- % (reduce + 0 blasts))))) a)]
+            blast-at #(cost/blast-hurt stats (min cost/swell-start (u/dist % spot)))
+            blasts (concat (map #(blast-at (danger-q/mob-pos p %)) creepers)
+                           (map (fn [{:keys [pos weight]}] (* weight (blast-at pos))) sighted))
+            a (if (seq blasts) (cost/fight-answer (update fight :health #(max 1 (- % (reduce + 0 blasts))))) a)]
         (letfn [(felt [x] (cond-> {:damage (+ (walk-hp walk-q) (max (:damage x) (* rate (:seconds a))) (reduce + 0 blasts))
                                    :hit (max (:hit x) hardest)
                                    :blasts (vec (filter pos? blasts))}

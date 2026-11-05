@@ -13,6 +13,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-fight :as hostile-fight]
+            [jobs.lib.look :as look]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.breath :as breath]
             [jobs.combat.attack :as attack]
@@ -866,18 +867,11 @@
 
 (defn remember! [eng kind data] (mem/write! (:store eng) kind data mem/place-policy))
 
-(deftest retreat-leans-towards-a-bed-or-home-unless-it-is-through-the-hostile
+(deftest retreat-ignores-a-home-beyond-the-hostile
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup-flight {:entities [(zombie 0 5)]})]
-          (remember! eng :bed {:pos {:x -20 :y 64 :z -20}})
-          (core/submit! eng retreat {})
-          (await (core/tick! eng))
-          (let [[x _ z :as end] (:picked (first (filter #(= :retreat.search (:kind %)) @seen)))]
-            (is (and (<= (js/Math.abs (+ x 20)) 1) (<= (js/Math.abs (+ z 20)) 1)) (str "the flight runs to the bed " (pr-str end))))
-          (is (< (:z (first-move eng)) -1) "away from the hostile"))
-        (let [{:keys [eng p]} (setup-flight {:entities [(zombie 0 5)]})]
+        (let [{:keys [eng]} (setup-flight {:entities [(zombie 0 5)]})]
           (remember! eng :home {:pos {:x 0 :y 64 :z 20}})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
@@ -1140,6 +1134,20 @@
     (is (pos? (first blasts)) "the creeper blows beside the fight")
     (is (= (prior (- 20 (first blasts))) (:chance caught)) "the zombie is fought at the health the blast leaves")
     (is (< (prior 20) (:chance caught)))))
+
+;; Card 9bc046bb: a creeper seen 9 blocks off left the body's mob memory (it could have drifted) while it fought a zombie; the fight priced no blast and the creeper blew
+(deftest a-creeper-seen-and-lost-by-the-fight-adds-its-blast-at-the-chance-it-is-still-there
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor flight-floor :self {:health 20} :entities [(zombie 9 4 1)]}))
+        c {:primitives p :engine {:warned (atom nil)} :view (fn [] {:now 1000 :data {}}) :id "j1" :root "j1" :slots []}
+        blasts #(:blasts (hostile-fight/fight-answer c (danger-q/dangers p 16 {:ranged-radius 16} {}) (constantly nil)))
+        lost (fn [x] (aset p "fadedMobs" (fn [] #js [#js {:id 8 :name "creeper" :kind "hostile" :pos #js {:x x :y 64 :z 0} :ageMs 4000}])))]
+    (is (empty? (blasts)) "no creeper known")
+    (with-redefs [look/seen-block (constantly {:name "air" :age-ms 600000})]
+      (lost 6)
+      (let [[b] (blasts)]
+        (is (< 0 b (cost/blast-hurt (cost/armour-stats nil) (js/Math.hypot 2 1))) "it comes to the fight in time; its blast weighs the chance it is still there")
+        (lost 60)
+        (is (empty? (blasts)) "one lost 60 blocks off does not reach the fight before it ends")))))
 
 (deftest a-creeper-with-company-is-never-swung-at-and-a-lone-one-backed-off-from-is-still-fought
   (async done

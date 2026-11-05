@@ -1,0 +1,26 @@
+;; Card 9bc046bb (KitOak92 death): an unarmed body at its bed in the open, a zombie 7 off and a creeper 9 off. The open
+;; bed took a closed room's credit: every flee step went to the cell beside it ("already at the cell", step-speed 0
+;; blocks) while the zombie closed in. The home here is a set-place a block off diagonally, on open ground (no room).
+;; Zombie AI on, helmeted; the creeper NoAI (no blast); resistance 3 so the hits do not kill.
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near}]
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [] :effects [["resistance" 600 3]]}
+  :limit-s 45}
+ :cases
+ [{:name "a-flight-from-an-open-home-moves-off-at-once"
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [13 0 15]}) [:now]]
+         [:summon "creeper" [21.5 0 16.5] "{NoAI:1b}"]
+         [:summon "zombie" [19.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.step-speed :data {:blocks [:>= 2]}} :within-s 10}
+            {:no-event {:source :job :kind :retreat.step-speed :data {:blocks [:< 0.5]}} :for-s 10}
+            {:no-event {:source :body :kind :died} :for-s 20}]}
+  ;; should fail: the fight beside a creeper is not taken, whatever the zombie
+  {:name "a-zombie-with-a-creeper-seen-near-is-not-fought-bare-handed"
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [13 0 15]}) [:now]]
+         [:summon "creeper" [21.5 0 16.5] "{NoAI:1b}"]
+         [:summon "zombie" [19.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 10}
+            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 15}]}]}

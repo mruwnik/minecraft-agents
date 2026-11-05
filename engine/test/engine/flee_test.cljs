@@ -1171,6 +1171,18 @@
               e (choice seen)]
           (is (= [[12 64 0] :past-hostile] [(:home e) (:home-why e)]) (pr-str e)))))))
 
+;; Card 9bc046bb: an open bed a block off took a closed room's credit; each flee step went to the cell the body stood on
+(deftest a-home-that-is-no-closed-room-earns-no-credit-so-the-flight-moves-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              s (setup {:self {:pos [0.5 64 0.5]} :entities [(zombie 7 7 {})]})
+              _ (mem/write! (:store (:eng s)) :home {:pos {:x -1 :y 64 :z -1}} {:cap 1 :ttl :forever})
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {}))
+              [x] (first-target seen)]
+          (is (< x -2) (str "a step that leaves the body where it stands is no flight: " (pr-str (first-target seen)))))))))
+
 (deftest a-flight-spends-no-leg-on-a-goal-straight-above-it
   (async done
     (tu/run-async done

@@ -134,7 +134,7 @@
 (defn choose-opts
   "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
   price of a flight (respond.cover/caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
-  so their cornered verdicts agree. covered? (cell -> bool, a ranged threat's cover) and home (a safe home's pos) when given."
+  so their cornered verdicts agree. covered? (cell -> bool, a ranged threat's cover) and home (a safe home's pos that is a closed room, respond.cover/closed-home) when given."
   [c threats covered? home]
   (let [p (:primitives c)
         from (u/self-pos c)
