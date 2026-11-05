@@ -345,7 +345,7 @@
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up :escalate-failed :route-search) (assoc :cave-ok true)))
           :again)
-      (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation failed}))
+      (and failed (= :detour status) (not= :replans-spent (:reason failed))) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation failed}))
       ;; past the count a dig route is still taken while it ends more than a block nearer the goal than any way before
       (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
       (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
@@ -368,7 +368,7 @@
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
   with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
   :cave-climb) walks that plan after all instead of giving up (memory :cave-ok). A detour's escalation that failed
-  (detour-escalate!) gives the detour up at once. A dig route search that has not ended within the call's slice
+  (detour-escalate!) gives the detour up at once, unless its dig route ran out of replans (:replans-spent): the other ways are then chosen. A dig route search that has not ended within the call's slice
   (route-slice) goes on in the next calls, each only that (routes-searching!), before the way is chosen with it; once
   standing still for them has cost what the way without them costs (search-bound/spent?), they are
   dropped and that way is chosen (memory :spent-routes: none of them is begun again)."
