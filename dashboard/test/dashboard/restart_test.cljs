@@ -16,3 +16,11 @@
     "127.0.0.1.evil.com" false
     "" false
     nil false))
+
+(deftest local-peer
+  (are [remote local expected] (= expected (restart/local-peer? remote local))
+    "127.0.0.1" "127.0.0.1" true
+    "192.168.0.132" "192.168.0.132" true
+    "192.168.0.50" "192.168.0.132" false
+    "192.168.0.50" nil false
+    nil nil false))

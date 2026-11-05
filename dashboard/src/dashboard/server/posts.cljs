@@ -59,8 +59,8 @@
 ;; ---------------------------------------------------------------- restart (POST /api/restart)
 ;; Asks the launcher (start.mjs) to rebuild and replace this server; 202 at once, the build happens there.
 (defn request-restart! [req res]
-  (if-not (restart/loopback-address? (some-> req .-socket .-remoteAddress))
-    (send-json! res 403 {:error "restart is for loopback clients only"})
+  (if-not (restart/local-peer? (some-> req .-socket .-remoteAddress) (some-> req .-socket .-localAddress))
+    (send-json! res 403 {:error "restart is for clients on this machine only"})
     (guarded-post!
      req res guard/max-body-bytes
      (fn [_]

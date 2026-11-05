@@ -1,5 +1,5 @@
 (ns dashboard.restart
-  "POST /api/restart: the launcher (start.mjs) rebuilds and replaces this server. Loopback peers only.
+  "POST /api/restart: the launcher (start.mjs) rebuilds and replaces this server. Same-host peers only.
   The server tells the launcher over the IPC channel it was spawned with (process.send)."
   (:require [clojure.string :as str]))
 
@@ -9,6 +9,11 @@
   (let [v4 (if (str/starts-with? (or addr "") "::ffff:") (subs addr 7) addr)]
     (boolean (or (= "::1" addr)
                  (and v4 (re-matches #"127(?:\.\d{1,3}){3}" v4))))))
+
+(defn local-peer?
+  "A loopback peer, or one that reached the address this server is bound to from that same address (a LAN bind)."
+  [remote local]
+  (boolean (or (loopback-address? remote) (and remote (= remote local)))))
 
 (def build-id
   "Names this server process; the page reloads when /api/state reports another one."

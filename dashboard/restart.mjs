@@ -5,10 +5,10 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { restartVerdict, restartDeadline } from './js/launcher.mjs'
+import { restartVerdict, restartDeadline, restartHost } from './js/launcher.mjs'
 
 const port = Number(process.env.PORT || 3701)
-const base = `http://127.0.0.1:${port}`
+const base = `http://${restartHost(process.env.DASHBOARD_HOST)}:${port}`
 const waitMs = Number(process.env.RESTART_WAIT_MS || 360000)
 const fetchMs = Number(process.env.RESTART_FETCH_MS || 10000)
 const statusFile = join(dirname(fileURLToPath(import.meta.url)), 'out', `launcher-${port}.json`)

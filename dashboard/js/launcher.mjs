@@ -126,3 +126,10 @@ export const restartVerdict = (status, { seq0, old, now }) => {
   if (status.last !== 'ok') return { kind: 'failed', failed: status.failed }
   return now !== null && now !== old ? { kind: 'ok', id: now } : { kind: 'wait' }
 }
+
+// The address `npm run restart` calls: the one the server is bound to; a wildcard bind is reached over loopback.
+export const restartHost = (bound) => {
+  if (!bound || bound === '0.0.0.0') return '127.0.0.1'
+  if (bound === '::') return '[::1]'
+  return bound.includes(':') ? `[${bound}]` : bound
+}

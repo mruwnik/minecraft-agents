@@ -15,7 +15,7 @@ Replacement for `tools/dashboard.mjs`, for ENGINE bodies (agent folders with `en
 `tools/compile dashboard ui --priority`, then `... server --priority` (ui first, so a failed ui build leaves the old `out/server.cjs`; the ui goes to `out/public/js.new` and replaces `out/public/js` only after the server step passes; the build runs in its own process group), then runs `node --max-old-space-size=384 --max-semi-space-size=4
 out/server.cjs` with inherited stdio, so the server's output stays in your terminal. Start it once; you do not restart it by hand.
 
-To pick up new code, run `npm --prefix dashboard run restart` (or `POST /api/restart`, accepted from loopback peers only,
+To pick up new code, run `npm --prefix dashboard run restart` (or `POST /api/restart`, accepted from peers on this machine only (loopback, or the bound `DASHBOARD_HOST` address; `npm run restart` calls the bound address),
 403 otherwise, 202 at once with the current `build-id`; `npm run restart` then polls the launcher's `out/launcher-<port>.json` (idle, build count moved) and `GET /api/build-id`: it reports the new id, exits 2 at once when the launcher reports the build failed or refused, and exits 2 after `RESTART_WAIT_MS` (default 6 min) with no outcome, a wait that restarts while the build is queued on the compile lock (the launcher publishes `queued`, tickets ahead); every request times out after `RESTART_FETCH_MS`, default 10 s; a restart that coalesced into a later build waits for the whole chain). The server tells the launcher over its IPC channel, and the launcher:
 
 - refuses when `MemAvailable` in `/proc/meminfo` is under 3500 MB (message printed, old server kept);

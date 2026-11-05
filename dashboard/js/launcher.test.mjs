@@ -3,7 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   initial, onRestartRequest, onBuildDone, onServerExit, onQuit, buildSteps, buildOutcome, stopsBuild, stepCommand, parseMemAvailableMb, enoughMemory, minMemoryMb,
-  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline, groupPids, uiDir, uiBuildDir, promoteUi,
+  terminateGroup, launcherStatus, restartVerdict, queuePosition, restartDeadline, groupPids, uiDir, uiBuildDir, promoteUi, restartHost,
 } from './launcher.mjs'
 
 test('a request while idle starts a build', () => {
@@ -228,4 +228,12 @@ test('promoteUi without an old ui just moves the new one in', () => {
   const fs = fakeFs([uiBuildDir])
   promoteUi(fs)
   assert.deepEqual(fs.calls, [['rm', `${uiDir}.old`], ['mv', uiBuildDir, uiDir], ['rm', `${uiDir}.old`]])
+})
+
+test('restart calls the bound address; a wildcard bind is reached over loopback', () => {
+  assert.equal(restartHost(undefined), '127.0.0.1')
+  assert.equal(restartHost('0.0.0.0'), '127.0.0.1')
+  assert.equal(restartHost('::'), '[::1]')
+  assert.equal(restartHost('192.168.0.132'), '192.168.0.132')
+  assert.equal(restartHost('fe80::1'), '[fe80::1]')
 })
