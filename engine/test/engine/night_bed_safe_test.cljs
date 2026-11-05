@@ -16,6 +16,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.child :as child]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.shelter :as sh]
@@ -576,3 +577,17 @@
     (doseq [x [4 5 6] z [-1 0 1] y [64 65 66]] (rays/touch! (aget p "perception") [x y z]))
     (is (true? (:in-ground (sh-beds/walk-state p (view) far-bed))))
     (is (= far-bed (use-bed)) "sealed from the sky since: the walk there and back is now work time lost, which the price reads")))
+
+(deftest the-night-asks-a-bed-refused-on-price-once-not-on-every-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (setup on-open-ground)
+              refusals (atom 0)
+              priced (fn [& _] (swap! refusals inc) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (with-redefs [child/call-walk* priced]
+            (core/submit! eng '(jobs.survival.night) {})
+            (await (st/tick-n eng 12)))
+          (is (= 1 @refusals) "the refused bed is asked once, not on every pass")
+          (is (number? (:worth (first (st/entries eng :bed-walk-unsafe)))) "the refusal carries the worth it was priced at"))))))

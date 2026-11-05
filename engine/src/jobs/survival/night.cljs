@@ -611,7 +611,11 @@
   when none is priced; no time limit, a far bed's walk is weighed against staying by bed-walk-safe?), if its walk bed-walk-safe? finds fine, unless a bed-down is already under way; :searching while a quote's search goes on; else nil."
   [c]
   (let [p (:primitives c)
-        beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c) (ctx/worth c))) {:price (sense/fails-to c)}))
+        radius (bed-down/radius c)
+        permit? (bed-down/bed-permit c)
+        first-bed (first (sh-beds/beds-to-use p (ctx/view c) radius permit? ##Inf))
+        worth (if first-bed (await (bed-worth c first-bed :bed)) (ctx/worth c))
+        beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) radius permit? worth)) {:price (sense/fails-to c)}))
         walk #(hash-map :pos % :range 2)
         placed (mem/place (ctx/view c) :bed)
         set-bed (when (= placed (first beds)) placed)

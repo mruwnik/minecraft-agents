@@ -362,10 +362,10 @@
     (cond
       (= :continue s) :continue
       (= :bed-unreachable (contract/cause-key s))
-      (if (= bed (some-> (:bed (:args c)) places/parse-pos :pos))
-        (ctx/end c :nothing-possible :bed-unreachable {:slept false :pos bed :text "the asked-for bed cannot be reached; no other bed to pick"})
-        (do (when (:priced (:data s))
-              (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state p (ctx/view c) bed) :worth (ctx/worth c)} sh-beds/walk-unsafe-policy))
+      (do (when (:priced (:data s))
+            (ctx/remember! c :bed-walk-unsafe {:pos bed :state (sh-beds/walk-state p (ctx/view c) bed) :worth (ctx/worth c)} sh-beds/walk-unsafe-policy))
+          (if (= bed (some-> (:bed (:args c)) places/parse-pos :pos))
+            (ctx/end c :nothing-possible :bed-unreachable {:slept false :pos bed :text "the asked-for bed cannot be reached; no other bed to pick"})
             :continue))
       (= :bed-open (contract/cause-key s))
       (do (ctx/remember! c :bed-open {:pos bed} sh-beds/bed-open-policy)

@@ -497,6 +497,18 @@
           (is (= 1 @refusals) "the refused bed is not walked to again while the world is as priced")
           (is (= 1 (count (entries eng :bed-walk-unsafe)))))))))
 
+(deftest bed-down-remembers-a-named-bed-whose-walk-was-refused-on-price
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:time night :blocks {"6,64,0" "red_bed"}})
+              priced (fn [& _] {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+          (know-bed! eng {:x 6 :y 64 :z 0})
+          (with-redefs [child/call-walk* priced]
+            (core/submit! eng '(jobs.survival.bed-down {:bed {:x 6 :y 64 :z 0} :worth 5}) {})
+            (await (run-until-empty eng 30)))
+          (is (= [[{:x 6 :y 64 :z 0} 5]] (map (juxt :pos :worth) (entries eng :bed-walk-unsafe)))))))))
+
 (deftest a-bed-refused-on-price-is-priced-again-at-a-higher-worth
   (async done
     (tu/run-async done
