@@ -1,5 +1,5 @@
 (ns jobs.lib.shot
-  "Shots from a shooter the body has not seen: where they came from (view-spots) and whether one has a line of fire to the body's feet (open?)."
+  "Shots from a shooter the body has not seen: where they came from with a line of fire to the body's feet (view-spots), and whether there is one (open?)."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.memory :as mem]
@@ -55,22 +55,23 @@
 
 (defn view-spots
   "Where unseen shooters may stand, as {:x :y :z}: shot-spots of the shots within ::window-s of the view's now (as a
-  player feels a hit: its way, not its height), each where a shooter could stand there (stand-spot), one per cell. p:
-  primitives."
+  player feels a hit: its way, not its height), each where a shooter could stand there (stand-spot) with a line of fire
+  to the body's feet over the blocks it has seen (an unseen cell stops no arrow), one per cell. p: primitives."
   [p view]
-  (->> (shot-spots (mem/since view :hurt (- (:now view) (* 1000 (settings/get settings ::window-s))))
-                   (u/pos-of (.-pos (.self p))) (settings/get settings ::reach))
-       (keep #(stand-spot p %))
-       (reduce (fn [[seen out :as acc] s]
-                 (let [cell (mapv js/Math.floor [(:x s) (:y s) (:z s)])]
-                   (if (seen cell) acc [(conj seen cell) (conj out s)])))
-               [#{} []])
-       second))
+  (let [arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))
+        feet (sh-sense/feet p)]
+    (->> (shot-spots (mem/since view :hurt (- (:now view) (* 1000 (settings/get settings ::window-s))))
+                     (u/pos-of (.-pos (.self p))) (settings/get settings ::reach))
+         (keep #(stand-spot p %))
+         (remove #(reach/out-of-fire? arrow-at [%] feet))
+         (reduce (fn [[seen out :as acc] s]
+                   (let [cell (mapv js/Math.floor [(:x s) (:y s) (:z s)])]
+                     (if (seen cell) acc [(conj seen cell) (conj out s)])))
+                 [#{} []])
+         second)))
 
 (defn open?
-  "Whether a shot within ::window-s came from a spot with a line of fire to the body's feet, as the hostile-near
-  trigger and the retreat's dodge step read it. p: primitives, view: the memory view."
+  "Whether a shot within ::window-s came from a spot with a line of fire to the body's feet (view-spots), as the
+  hostile-near trigger and the retreat's dodge step read it. p: primitives, view: the memory view."
   [p view]
-  (let [spots (view-spots p view)
-        arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))]
-    (boolean (and (seq spots) (not (reach/out-of-fire? arrow-at spots (sh-sense/feet p)))))))
+  (boolean (seq (view-spots p view))))

@@ -1686,6 +1686,18 @@
                                  {:x 0 :y 64 :z 0} 12))
         "a melee hit, and a shot with no way known, give no spot")))
 
+(deftest no-unseen-shooter-stands-where-its-arrow-would-pass-the-seen-floor
+  ;; the shot's spots straight down stayed in the unseen rock under a seen floor, and a flight ran from them
+  (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})
+        _ (mem/write! store :hurt {:damageType "minecraft:arrow" :dir {:x 1 :z 0}})
+        under? #(and (= 0.5 (:x %)) (< (:y %) 63))
+        floor (tu/fake-on-floor {:self {:pos [0.5 64 0.5]}})
+        shaft (tu/fake-on-floor {:self {:pos [0.5 64 0.5]} :blocks {"0,63,0" "air"}})]
+    (tu/set-sensed! floor (let [sensed (tu/sensed-by floor)] (fn [pos] (if (< (.-y pos) 63) #js {:unknown true :pos pos} (sensed pos)))))
+    (is (seq (shot/view-spots floor (mem/view store))) "the spots out along the shot's way stay")
+    (is (not-any? under? (shot/view-spots floor (mem/view store))) "the seen floor stops an arrow from under it")
+    (is (some under? (shot/view-spots shaft (mem/view store))) "a seen open shaft under the body lets one up")))
+
 (deftest a-drowned-with-a-trident-is-a-shooter-and-a-bare-one-is-not
   (let [spots #(shot/shot-spots [{:data {:attacker % :dir {:x 1 :z 0}}}] {:x 0.5 :y 64 :z 0.5} 12)]
     (is (seq (spots {:name "drowned" :held "trident"})))
