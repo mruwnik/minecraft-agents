@@ -207,7 +207,7 @@
       (update :policy #(into {} (remove (comp fn? val)) %))
       (dissoc :covers)))
 
-(declare price-all! arrive-at)
+(declare price-all! arrive-at shooter?)
 
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
@@ -279,6 +279,13 @@
                    (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
                    plan-ms)))))))
 
+(defn shooter?
+  "Whether chaser ch shoots rather than strikes: a shot spot (:shooter?, where an unseen shot came from) or a mob whose
+  damage is a projectile (threat/damage-type). It lands no blow, so it runs no race (caught-s, the search's contact
+  deadline): its danger is its line of fire, the flight's mark (respond.goal/choose-opts)."
+  [{:keys [mob] :as ch}]
+  (boolean (or (:shooter? ch) (= :projectile (threat/damage-type mob)))))
+
 (defn way-at
   "The blocks of chaser's way ({:way}: field/way-fn) to pos, nil when not known."
   [{:keys [way]} {:keys [x y z]}]
@@ -321,13 +328,13 @@
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
-  (a shot spot has none) other than a creeper or a shooter (a blast or an arrow passes where it cannot walk: the
+  (a shot spot has none) other than a creeper or a shooter? (a blast or an arrow passes where it cannot walk: the
   straight line stands)."
   [c chasers]
   (let [wet (js/Map.)]
     (mapv (fn [{:keys [mob pos] :as ch}]
             (cond-> (assoc ch :swim (swim-fn c pos wet))
-              (and mob (not= "creeper" mob) (not= :projectile (threat/damage-type mob)))
+              (and mob (not= "creeper" mob) (not (shooter? ch)))
               (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
           chasers)))
 
@@ -339,13 +346,13 @@
 (defn caught-s
   "The most seconds a chaser not :calm? is within its blow on timed cells, past the cells it reaches without moving
   (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place).
-  A :shooter? (where an unseen shot came from) lands no blow: it shoots, and its place is a guess, often in rock."
+  A shooter? lands no blow."
   [chasers cells]
   (reduce max 0 (map (fn [ch]
                        (let [way #(way-at ch %)
                              past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells)]
                          (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %) :speed (:speed ch)})))
-                     (remove (some-fn :calm? :shooter?) chasers))))
+                     (remove (some-fn :calm? shooter?) chasers))))
 
 (defn trap-s
   "What a dead end at the first unseen cell of scored end e costs it when it traps the body: its :trapped, and the

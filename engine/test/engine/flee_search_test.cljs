@@ -319,6 +319,14 @@
           (is (seq ends))
           (is (every? #(js/isFinite (:arrive %)) ends) (pr-str (map :arrive ends))))))))
 
+(deftest a-shooter-under-the-floor-lands-no-blow-on-a-flight-over-it
+  ;; a skeleton was raced as a walker on its straight line through the rock: every way over it was caught
+  (let [under {:x 3.5 :y 60 :z 0.5}
+        over (mapv (fn [x] {:x x :y 64 :z 0 :t (* 2 x)}) (range 7))]
+    (is (pos? (search/caught-s [{:name "zombie" :mob "zombie" :pos under}] over)) "a walker on that line would be")
+    (is (zero? (search/caught-s [{:name "skeleton" :mob "skeleton" :pos under}] over)))
+    (is (zero? (search/caught-s [{:name nil :pos under :shooter? true}] over)) "nor where an unseen shot came from")))
+
 (def cliff
   "A plateau (feet y 64) for x <= 0 over a lowland (feet y 54) east of it, a stair one block wide down the cliff along
   z 0 from x 1 to x 9."
