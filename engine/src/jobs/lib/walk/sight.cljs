@@ -122,12 +122,15 @@
 
 (defn floor-cell [{:keys [x y z]}] [x (dec y) z])
 
+(defn rise-kind
+  "The kind of a step onto its floor by its rise dy in blocks: :level, :up higher, :down one lower, :drop lower still."
+  [dy]
+  (cond (zero? dy) :level (pos? dy) :up (= -1 dy) :down :else :drop))
+
 (defn floor-kind
-  "The kind of steps' step i onto its floor, by its rise from the step before (none before i 0: :level): :level, :up one
-  higher, :down one lower, :drop lower still."
+  "The rise-kind of steps' step i, by its rise from the step before (none before i 0: :level)."
   [steps i]
-  (let [dy (js/Math.round (- (:y (nth steps i)) (:y (get steps (dec i) (nth steps i)))))]
-    (cond (zero? dy) :level (pos? dy) :up (= -1 dy) :down :else :drop)))
+  (rise-kind (js/Math.round (- (:y (nth steps i)) (:y (get steps (dec i) (nth steps i)))))))
 
 (defn mark-steps
   "steps with :unseen-floor on each step after the first that stands on its floor (h 0) where (unknown-floor? x y z) of

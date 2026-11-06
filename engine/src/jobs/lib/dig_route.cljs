@@ -212,7 +212,7 @@
                               (or (nil? max-places) (<= placed max-places)))
                      (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
-                           absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz]) 0)
+                           absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (- (mod ck 1024) 512))) 0)
                            nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s)
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
@@ -420,7 +420,7 @@
   lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
   :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on, and
-  :floor-absent-s (fn [floor-cell]) the seconds a walk onto a floor that is (:unseen? cell) adds, the chance it is none; a
+  :floor-absent-s (fn [floor-cell rise]) the seconds a walk rising rise blocks onto a floor that is (:unseen? cell) adds, the chance it is none; a
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),

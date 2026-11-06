@@ -13,7 +13,6 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
-            [jobs.lib.look :as look]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.dig-route :as dig-route]
@@ -1246,26 +1245,30 @@
             (is (<= (apply max max-ss) (first max-ss)) (pr-str pocket "a search bounded past the straight dig from the start" max-ss))
             (is (<= searched-s (first max-ss)) (pr-str pocket "the searches cost more than the straight dig from the start" searched-s max-ss))))))))
 
+(defn absent-at
+  "f run with ::unseen-floor-counts holding each kind of kinds absent at chance p, every other kind at an even chance."
+  [kinds p f]
+  (settings/with-settings {:jobs.lib.cost.value/unseen-floor-counts
+                           (merge (zipmap [:level :up :down :drop] (repeat {:absent 1 :present 1})) (zipmap kinds (repeat {:absent p :present (- 1 p)})))}
+    f))
+
 (deftest a-goal-over-an-unseen-floor-is-priced-over-the-chance-the-floor-is-none
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (hiding-with-pickaxe world #{[4 63 0]})
-        seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
-                              (:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf}))))]
-    (is (< (seconds 1) (seconds 0.5) (seconds 0.1)) "the likelier the floor is a void, the dearer the way")))
+        seconds (fn [absent] (absent-at [:level] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf}))))]
+    (is (< (seconds 0.01) (seconds 0.5) (seconds 0.9)) "the likelier a level step's floor is a void, the dearer the way")))
 
 (deftest a-walk-over-an-unseen-floor-of-a-loosened-pass-is-priced-over-the-chance-the-floor-is-none
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "1,64,0" "air" "1,65,0" "air" "2,64,0" "air" "2,65,0" "air" "3,64,0" "air" "3,65,0" "air")
         p (hiding-with-pickaxe world #{[1 63 0] [2 63 0]})
-        seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
-                              (:seconds (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) true false {:worth-s ##Inf}))))]
-    (is (< (seconds 1) (seconds 0.5)) "the likelier an unseen floor is a void, the dearer the walk over it")))
+        seconds (fn [absent] (absent-at [:level] absent #(:seconds (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) true false {:worth-s ##Inf}))))]
+    (is (< (seconds 0.01) (seconds 0.5)) "the likelier a level step's unseen floor is a void, the dearer the walk over it")))
 
 (deftest a-route-that-ends-in-range-short-of-the-goal-is-not-priced-over-the-goals-unseen-floor
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (hiding-with-pickaxe world #{[4 63 0]})
-        seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
-                              (:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf :range 2 :near [4 64 0]}))))]
-    (is (= (seconds 1) (seconds 0.1)) "its end stands on a seen floor")))
+        seconds (fn [absent] (absent-at [:level :up :down :drop] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf :range 2 :near [4 64 0]}))))]
+    (is (= (seconds 0.01) (seconds 0.9)) "its end stands on a seen floor")))
 
 (def drop-world
   "A floor at y 63 and a wide stone platform at y 79 under feet [0 80 0], its edge far off: the goal [0 64 0] lies a 16-block drop below."
@@ -1291,9 +1294,8 @@
 (deftest a-landing-part-way-down-the-straight-dig-on-an-unseen-floor-is-priced-over-the-chance-it-is-none
   (let [world (merge (box -2 60 -2 2 80 2 "stone") (zipmap (map #(str "0," % ",0") (range 71 80)) (repeat "air")) {"0,80,0" "air" "0,81,0" "air" "0,65,0" "air" "0,64,0" "air"})
         p (hiding-with-pickaxe world #{[0 70 0]})
-        seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
-                              (:seconds (straight-dig p [0 64 0] true {}))))]
-    (is (< (seconds 1) (seconds 0.1)) "the likelier the floor it lands on is a void, the dearer the way")))
+        seconds (fn [absent] (absent-at [:drop] absent #(:seconds (straight-dig p [0 64 0] true {}))))]
+    (is (< (seconds 0.01) (seconds 0.9)) "the likelier the floor a 9-block fall lands on is a void (a :drop's chance), the dearer the way")))
 
 (deftest water-seen-only-as-the-dig-route-reaches-it-sends-the-route-round-it
   ;; KitOak94 and the live fixture: the plan read the pool beside the shaft's top as unseen rock (it shows once the digging starts); the dig there was refused :fluid-adjacent

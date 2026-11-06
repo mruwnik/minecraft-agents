@@ -27,6 +27,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.movement.go-to.aim :as goal-aim]
@@ -420,7 +421,7 @@
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
-  priced at the chance it is none (look/unseen-solid-at-fn) times cost/unseen-fall-s, in the search and the straight dig. Other route-opts go to the search (:place-s,
+  priced at the chance it is none (cost/floor-absent-chance of the step's kind) times cost/unseen-fall-s, in the search and the straight dig. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
   The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
@@ -456,18 +457,20 @@
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
-        ;; a floor not seen is read as rock where the route may walk on it; the chance it is none is a fall at the measured depths
-        ;; (cost/unseen-fall-s) and the pillar back up, priced onto each walk step that lands on one, in the search and the straight dig
-        solid-at (memoize (look/unseen-solid-at-fn p))
-        fall-s (let [self (.self p)
-                     equipment (cost/equipment-of (.-equipment self))]
-                 (cost/unseen-fall-s :down 1 {:health (.-health self) :equipment equipment :max-drop (:max-fall prices)
-                                              :carried (:count (escape/carried-pillar-item p) 0) :share (wworld/unseen-share p)}))
-        ;; the chance by the cell prior (look/unseen-solid-at-fn), not turn-back's per-step-kind floor-absent-chance: a route here crosses
-        ;; rock-mass cells the same prior prices, and has no walked steps' own counts. Only a floor under a cell seen open: under a guessed cell it is the rock mass the dig prices as a guess
-        floor-absent-s (fn [[x y z :as cell]]
+        ;; a floor not seen is read as rock where the route may walk on it; the chance it is none (cost/floor-absent-chance of
+        ;; the step's kind, the prior turn-back prices it by) is a fall at the measured depths (cost/unseen-fall-s) and the pillar
+        ;; back up, priced onto each walk step that lands on one, in the search and the straight dig. Only a floor under a cell
+        ;; seen open: under a guessed cell it is the rock mass the dig prices as a guess
+        fall (let [self (.self p)]
+               {:health (.-health self) :equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall prices)
+                :carried (:count (escape/carried-pillar-item p) 0) :share (wworld/unseen-share p)})
+        absent-s (memoize (fn [rise]
+                            (let [kind (wsight/rise-kind rise)]
+                              (* (cost/floor-absent-chance kind nil)
+                                 (if (= :drop kind) (cost/unseen-fall-s :drop (- rise) fall) (cost/unseen-fall-s :down 1 fall))))))
+        floor-absent-s (fn [[x y z] rise]
                          (let [a (sensed x (inc y) z)]
-                           (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (* (- 1 (solid-at cell)) fall-s) 0)))
+                           (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig. A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
@@ -514,8 +517,10 @@
                                 (every? some? steps) (every? some? heads))
                        {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
                                     (reduce + 0 (for [[x y z :as cell] cells
-                                                      :when (and (or (not (climb? cell)) (and down? (pos? (get down-steps (- fy y 1) 0)))) (true? (some-> (sensed x (dec y) z) .-unknown)))]
-                                                  (floor-absent-s [x (dec y) z])))
+                                                      :let [i (- fy y 1)]
+                                                      :when (and (or (not (climb? cell)) (and down? (pos? (get down-steps i 0)))) (true? (some-> (sensed x (dec y) z) .-unknown)))]
+                                                  ;; a landing's rise: the open cells fallen through before it and its own
+                                                  (floor-absent-s [x (dec y) z] (if (and down? (= x fx) (= z fz)) (- -1 (count (take-while zero? (rseq (subvec down-steps 0 i))))) 0))))
                                     (* (:node-s route-opts 0) 2 (count cells)))
                         :dig (vec (distinct (for [[x y z] (cons from cells)
                                                   cell (if (= [x y z] from) [[x (inc y) z]] [[x (inc y) z] [x y z]])
@@ -534,7 +539,7 @@
         search (fn [refused]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall-s] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
                            (dig-route/route seen-floor from goal (opts refused m)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
