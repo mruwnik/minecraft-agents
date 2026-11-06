@@ -343,9 +343,9 @@
 
 (defn stood-still?
   "Whether hostile e is where an earlier run of this body (not the c's own) fled a mob of its name within ::return-s: it
-  did not follow the body away, so it will not chase it now. Seen: in the cell the flight saw it in. Heard only: its
-  sound now (direction and band) is what the place the flight took it at (danger/rough-pos) sounds like from here; the
-  body heard from elsewhere when it comes back."
+  did not follow the body away, so it will not chase it now. Seen: in the cell the flight saw it in. Heard only: the
+  mob the flight fled (its id, as perception tracks a heard mob) and its sound now (direction and band) is what the
+  place the flight took it at (danger/rough-pos) sounds like from here; the body heard from elsewhere when it comes back."
   [c e]
   (let [since (- (ctx/now c) (* 1000 (settings/get settings ::return-s)))
         own (:run-at (ctx/mem c))
@@ -357,7 +357,7 @@
         same-place? (fn [data]
                       (if seen?
                         (and (:pos data) (= here (cell (:pos data))))
-                        (when-let [at (danger-q/rough-pos data)] (= heard (obs/rough-hearing (u/self-pos c) at)))))]
+                        (when-let [at (and (= (.-id e) (:id data)) (danger-q/rough-pos data))] (= heard (obs/rough-hearing (u/self-pos c) at)))))]
     (boolean (some (fn [{:keys [t data]}]
                      (and (> t since) (= :flee (:decision data)) (= (.-name e) (:mob data)) (not= own (:run data))
                           (same-place? data)))

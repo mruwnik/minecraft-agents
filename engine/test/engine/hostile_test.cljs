@@ -356,7 +356,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (await (flight-round respond {:inventory sword :entities [(zombie 100 3 0)]}))]
-          (is (= [{:mob "zombie" :pos {:x 3 :y 64 :z 0} :decision :fight}] (hostile-entries eng))
+          (is (= [{:mob "zombie" :id 100 :pos {:x 3 :y 64 :z 0} :decision :fight}] (hostile-entries eng))
               "one entry for the whole fight, every swing in one round")
           (is (= [] (:list (core/state eng))))
           (is (= {:cap 50 :ttl 3600000} (mem/policy (mem/view (:store eng)) :hostile))))))))
@@ -1969,24 +1969,32 @@
             (is (not (:walked r)) "it did not follow the body away: no second flight")
             (is (= [7] (:watched r)) "it is watched")))))))
 
-(deftest a-heard-mob-that-sounds-from-where-an-earlier-flight-heard-it-is-watched-not-fled-from-again
+(deftest a-heard-mob-that-sounds-from-where-an-earlier-flight-heard-it-is-watched-until-its-sound-moves
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [;; heard north and near from 4 south of it: the same place sounds south and near from the body
-              flee-entry {:mob "zombie" :decision :flee :run 1 :direction :north :band :near :from {:x 0.5 :y 64 :z 10.5}}
+              flee-entry {:mob "zombie" :id 7 :decision :flee :run 1 :direction :north :band :near :from {:x 0.5 :y 64 :z 10.5}}
               round (fn ^:async r [entry]
                       (let [{:keys [eng p] :as s} (setup-seeing {:time 14000 :entities [(zombie 0.5 6.5)]} [0 0] 1000)]
                         (perception/pass! (aget p "perception"))
-                        (when entry (mem/write! (:store eng) :hostile entry))
+                        (mem/write! (:store eng) :hostile entry)
                         (core/submit! eng respond {})
                         (await (core/tick! eng))
-                        {:walked (walked? s) :watched (keys (body/watched (mem/view (:store eng))))}))]
-          (is (:walked (await (round nil))) "no flight before: it flees")
+                        (assoc s :walked (walked? s) :watched (body/watched (mem/view (:store eng))))))
+              answered-at (fn [{:keys [eng p raw]} pos]
+                            (swap! (fake/state raw) assoc-in [:entities 0 :pos] pos)
+                            (perception/pass! (aget p "perception"))
+                            (mapv #(.-id %) (danger-q/hostile-dangers p (mem/view (:store eng)) {})))]
+          (is (:walked (await (round (assoc flee-entry :decision :fight)))) "no flight before: it flees")
           (is (:walked (await (round (assoc flee-entry :direction :west)))) "the flight heard it elsewhere")
+          (is (:walked (await (round (assoc flee-entry :id 8)))) "the flight fled another zombie heard there")
           (let [r (await (round flee-entry))]
             (is (not (:walked r)) "the same sound from the same place: no second flight")
-            (is (= [7] (:watched r)) "it is watched")))))))
+            (is (= {7 {:direction :south :band :near}} (:watched r)) "it is watched by its sound")
+            (is (= [] (answered-at r [0.5 64 6.5])) "it sounds the same: still watched")
+            (is (= [7] (answered-at r [6.5 64 0.5])) "it sounds from the east now: answered again")
+            (is (= [7] (answered-at r [0.5 64 2])) "it is heard beside the body: answered again")))))))
 
 (deftest only-seen-melee-mobs-may-be-watched
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(zombie 5 0) (skeleton 9 -4 0)

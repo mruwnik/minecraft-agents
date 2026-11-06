@@ -172,6 +172,20 @@
   [d]
   (min watch-gap (dec d)))
 
+(defn sound-of
+  "What heard-only hostile e of primitives p sounds like from the body: {:direction :band} (obs/rough-hearing)."
+  [p e]
+  (obs/rough-hearing (u/pos-of (.-pos (.self p))) (u/pos-of (.-pos e))))
+
+(defn still-watched?
+  "Whether hostile e stays watched under w, its value in jobs.lib.body/watched: a seen watch (blocks off) while e stays
+  beyond answered-within; a heard watch ({:direction :band}) while e is still heard only, not heard-close?, and sounds
+  just so (sound-of): a sound that moves is judged again."
+  [p e w]
+  (if (map? w)
+    (and (not (seen-only? e)) (not (heard-close? p e)) (= w (sound-of p e)))
+    (> (mob-distance p e) (answered-within w))))
+
 (def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
 
 (def dark-sight "Blocks within which a mob is seen even in the dark (README sensing)." 4)
@@ -240,7 +254,7 @@
   :sight-at (sight-lookup) places a heard mob at open-cell-from's cell, not rock and not in the body's clear sight, where it
   would be seen (none: no danger); without it a heard ranged mob is taken at its rough spot.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
-  :watched ({id blocks-off-when-watched}) leaves out those mobs while they stay beyond answered-within.
+  :watched (jobs.lib.body/watched) leaves out those mobs while still-watched?.
   :any-range? true keeps a ranged mob past its follow range (pricing a walk that may bring the body within it).
   :shooting? true takes a ranged mob only within its fire range: beyond it no arrow can land, so standing still costs nothing.
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
@@ -253,7 +267,7 @@
   ([p kind-at pr e {:keys [sight? arrow-at sight-at ignore-heard? watched way? hit-ids any-range? shooting?] :or {sight? true way? true}}]
    (cond
      (and (contains? hit-ids (.-id e)) (not (combat/ranged? e))) true
-     (and (contains? watched (.-id e)) (> (mob-distance p e) (answered-within (get watched (.-id e))))) false
+     (and (contains? watched (.-id e)) (still-watched? p e (get watched (.-id e)))) false
      (calm-enderman? e) false
      ;; it swells only while it has a line of sight to the body within 7 blocks, so its blast reaches; heard only, its
      ;; rough spot may fall in rock and fail the way test
