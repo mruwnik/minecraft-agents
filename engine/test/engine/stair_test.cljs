@@ -484,11 +484,20 @@
           (is (= :done (:status @out)))
           (is (some :arrived (events-of s :stair.return))))))))
 
-(deftest off-stair-stands-once-the-walks-back-are-used-up-and-says-where-the-body-is
+(deftest a-stair-whose-body-a-reflex-moves-off-five-times-walks-back-each-time-at-the-roots-endless-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (stair! {:blocks ground} east (move-after-digs 100)))]
+        (let [{:keys [out] :as s} (await (stair! {:blocks ground} east (move-after-digs 5)))]
+          (is (= :done (:status @out)))
+          (is (= 5 (count (events-of s :stair.return)))))))))
+
+(deftest off-stair-stands-when-a-walk-back-is-not-worth-its-price-and-says-where-the-body-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (stair! {:blocks ground} (assoc east :worth 0) (move-after-digs 100)))]
+          (is (empty? (events-of s :stair.return)))
           (is (= :off-stair (:reason @out)))
           (is (= [0 65 0] (:origin @out)))
           (is (= [7 0 2] (:offset @out))))))))

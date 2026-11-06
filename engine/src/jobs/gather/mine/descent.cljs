@@ -28,11 +28,8 @@
   {::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
    ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, only a whole way back quoted no longer than cutting a stair down to it again is walked, else it starts a new stair where it stands." :spec (a/int-in 0 nil)}
-   ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}
-   ::max-moves {:default 3 :doc "Times the stair down walks to another spot after all four headings were blocked at its start (water, a plug, a hazard) before the stop stands." :spec (a/int-in 0 nil)}
    ::move-reach {:default 8 :doc "Blocks from the blocked start the stair's next spot lies; it grows by 4 each move." :spec (a/int-in 1 nil)}})
 
-(defn max-restairs [] (settings/get settings ::max-restairs))
 (defn level-slack [] (settings/get settings ::level-slack))
 
 (defn tunnel-level
@@ -267,14 +264,19 @@
 
 (defn ^:async move-stair!
   "All four headings of the stair's start are blocked and it cut nothing: a go-to child (slot :move-n) to another spot, then the stair
-  starts again there with every heading open. :continue while it walks, :again once it did, nil when the moves are spent or there is no spot."
+  starts again there with every heading open, while another move is worth its price (cost/try-again? :walk, the blocked starts so far
+  its failures). :continue while it walks, :again once it did, nil when another move is not worth it, there is no spot, or the
+  body still stands at a start it left blocked (the last walk took it nowhere: the same start again, nothing changed)."
   [c stop]
   (let [m (ctx/mem c)
         n (get-in m [:descent :moves] 0)
-        slot (keyword (str "move-" n))]
-    (when (and (not (get-in m [:descent :move])) (< n (settings/get settings ::max-moves)))
+        slot (keyword (str "move-" n))
+        from (access/cell (cell-of (u/self-pos c)))]
+    (when (and (not (get-in m [:descent :move]))
+               (not (some #{from} (get-in m [:descent :blocked])))
+               (cost/try-again? c :walk {:fails (inc n)}))
       (when-let [to (move-goal c)]
-        (let [from (access/cell (cell-of (u/self-pos c)))]
+        (do
           (ctx/emit! c :mine.moved :info {:from from :to (access/cell to) :stop stop :move (inc n)
                                           :text (str "mine's stair is blocked (" (name stop) ") on every heading at " (str/join "," from) "; it tries another spot near " (str/join "," (access/cell to)))})
           (ctx/update-mem! c update :descent #(-> % (assoc :move to) (update :blocked (fnil conj []) from))))))
@@ -311,9 +313,9 @@
       (= :continue r) :continue
       (= :done (:status res))
       (do (ctx/update-mem! c #(-> % (dissoc :tried-headings) (update :cut add-cut {:down (count (:dug res))})
-                                  (update :descent (fn [d] (assoc d :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))))
+                                  (update :descent (fn [d] (assoc (dissoc d :restairs) :steps (+ (:steps d 0) (or (:steps res) 1)) :bottom-y (js/Math.floor (:y (u/self-pos c))) :at (:at res))))))
           :again)
-      (and (= :off-stair (:reason res)) (< (get-in (ctx/mem c) [:descent :restairs] 0) (max-restairs)))
+      (and (= :off-stair (:reason res)) (cost/try-again? c :dig {:fails (inc (get-in (ctx/mem c) [:descent :restairs] 0))}))
       (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair finds the body off its line (" (:why res) "); it starts a new stair here")})
           (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at) (update :restairs (fnil inc 0)))))))
           :again)

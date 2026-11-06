@@ -76,7 +76,7 @@
   failed attempts (:refills :dig-failed :step-failed :no-support-floor :lava-unsealed :water-unplugged). :ignore-zones? skips all access
   refusals but :not-loaded; a cell of a plan this body made refuses :footprint unless the spare-own-builds setting is false.
   :undercuts-way: a cut cell is the floor of an earlier stair of this body (memory :stair-way, written at every end), or a step floor of air at a step of one.
-  :off-stair: off the line with max-returns walks back used up. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
+  :off-stair: off the line and another walk back not worth its price (cost/try-again? :walk, the times found off the line since the last step its failures) or dearer than cutting the steps again. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
   :base-block names the block in its text; a crafting table is dug (zones and claims guard another's). Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
   A dig with a worn last tool (not a fresh one) first tries a spare once (trip/tool-ready!), whatever the :settings. A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
@@ -100,10 +100,8 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
    ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, only a whole way back quoted no longer than cutting its steps again is walked, else it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}
    ::hidden-fall-share {:default 0.05 :doc "Chance an unseen cell over a stair up's top cut holds a falling block (gravel, sand), weighed in undermine-worth?: a prior, not measured (the logs do not say what an unseen cell over a cut held)." :spec (a/num-in 0 1)}})
-(defn max-returns [] (settings/get settings ::max-returns))
 (defn return-reach [] (settings/get settings ::return-reach))
 
 (declare dir-of)
@@ -299,15 +297,17 @@
 
 (defn ^:async return!
   "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of
-  step at-step, at most max-returns times per call, when within return-reach or go-to quotes a whole way back no longer
+  step at-step, while another walk back is worth its price (cost/try-again? :walk, the returns since the last step taken
+  and this one its failures), when within return-reach or go-to quotes a whole way back no longer
   than cutting the steps done again (jobs.lib.price/walk-back-worth?). :continue while it walks, :again once it ended, nil
-  when the returns are used up or the walk back is dearer."
+  when another return is not worth it, the walk back is dearer, or the last one did not get back and the body stands where it
+  ended (the same walk again, nothing changed)."
   [c]
   (let [{:keys [dir heading]} (:args c)
-        {:keys [origin at-step returns]} (ctx/mem c)
+        {:keys [origin at-step returns missed]} (ctx/mem c)
         cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))
         redo-s (stair-time/steps-s dir (or at-step 0))]
-    (when (< (or returns 0) (max-returns))
+    (when (and (not= missed (reach/standing-vec (:primitives c))) (cost/try-again? c :walk {:fails (inc (or returns 0))}))
      (let [worth (or (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach))
                      (await (price/walk-back-worth? c (child/walk-back-args :return cell) redo-s)))]
       (cond
@@ -316,7 +316,9 @@
       (let [r (await (child/call-walk* c :return (ready/forage-walk c (child/walk-back-args :return cell))))]
         (when-not (= :continue r)
           (ctx/update-mem! c update :returns (fnil inc 0))
-          (let [arrived (= cell (reach/standing-vec (:primitives c)))]
+          (let [feet (reach/standing-vec (:primitives c))
+                arrived (= cell feet)]
+            (ctx/update-mem! c assoc :missed (when-not arrived feet))
             (ctx/emit! c :stair.return :info {:to cell :arrived arrived
                                               :text (str "stair " (if arrived "walked back onto" "could not walk back onto") " its line at " (pr-str cell))})))
         (if (= :continue r) :continue :again)))))))
@@ -425,7 +427,7 @@
                               ", off its line")})
       :else
       (do
-        (ctx/update-mem! c assoc :at-step i)
+        (ctx/update-mem! c #(cond-> (assoc % :at-step i) (> i (or (:at-step %) 0)) (dissoc :returns)))
         (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (drive/way-back c origin)))]
           stop
           (do

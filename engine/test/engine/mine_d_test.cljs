@@ -383,7 +383,7 @@
           (is (= 1 (count (events-of s :mine.moved))))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-stair-blocked-at-every-spot-ends-no-stone-found-after-its-moves
+(deftest a-stair-blocked-at-every-spot-ends-no-stone-found-when-a-move-is-not-worth-its-price
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -391,9 +391,8 @@
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})
               chests {"-1,64,0" "chest" "1,64,0" "chest" "0,64,1" "chest" "0,64,-1" "chest"}]
           (doseq [[k v] chests] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
-          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
-          (await (settings/with-settings {::mine-descent/max-moves 0}
-                   #(run-ticks s 300)))
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4 :worth 0}) {})
+          (await (run-ticks s 300))
           (is (empty? (events-of s :mine.moved)))
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
@@ -439,6 +438,23 @@
           (is (empty? (events-of s :mine.restair)) "the stair walks back onto its line itself")
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
+
+(deftest a-stair-that-keeps-finding-the-body-off-its-line-is-not-started-again-at-a-goal-worth-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})
+              world (.-world (:p s))]
+          (.override world "dig"
+                     (fn ^:async f [token a impl]
+                       (let [r (await (impl token a))]
+                         (swap! (.. world -state) assoc-in [:self :pos] [0.5 64 2.5])
+                         r)))
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :worth 0}) {})
+          (await (run-ticks s 300))
+          (is (finished? s))
+          (is (empty? (events-of s :mine.restair)))
+          (is (clojure.string/includes? (:text (done-event s)) "stair stopped: off-stair")))))))
 
 ;; Rowan j119: mine dug the step-up cells and floors round its pit until the body stood on a one-cell column.
 (deftest mine-leaves-the-block-that-is-the-bodys-last-way-out
