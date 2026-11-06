@@ -159,8 +159,8 @@
           (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried :pillar}} 150))
           (is (= 1 (count (mem/entries (mem/view (:store eng)) trees/need-kind))) "a later need on the column replaces the first"))))))
 
-(defn view [entries]
-  (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000000)})]
+(defn view [entries & [now]]
+  (let [s (mem/open (tu/tmp-dir) {:now (constantly (or now 1000000))})]
     (doseq [[kind data] entries] (mem/write! s kind data {:cap 8 :ttl :forever}))
     (mem/view s)))
 
@@ -185,6 +185,15 @@
         self (.-username (.self (:p (lt/setup {:blocks blocks}))))]
     (is (false? (holds pct/part-cut-tree blocks [] nil (zone "Someone"))) "refused up front, so no walk and no refire")
     (is (true? (holds pct/part-cut-tree blocks [] nil (zone self))) "own zone")))
+
+(deftest the-part-cut-tree-trigger-ignores-a-trunk-in-another-player-s-claim-until-it-runs-out
+  (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
+        claim {:id "c1" :owner "Someone" :status :active :until 100 :min [5 60 -1] :max [7 80 1]}
+        at (fn [now] (let [w (ew/of-data {} {} [])]
+                       (ew/set-area-claims! w [claim])
+                       (pct/part-cut-tree (ray-sight (:p (lt/setup {:blocks blocks}))) (view [] now) {} w nil)))]
+    (is (false? (at 50)) "a live claim refuses the trunk")
+    (is (true? (at 200)) "the claim has run out")))
 
 (deftest the-part-cut-tree-trigger-leaves-a-column-fell-tree-gave-up-on
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))]
