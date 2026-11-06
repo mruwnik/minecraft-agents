@@ -21,6 +21,7 @@
             [jobs.lib.placement :as placement]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.use-block :as use-block]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.world :as world]
@@ -56,13 +57,21 @@
   :ways (default all): a missing item is fetched with jobs.items.obtain (one of it) from the ways but :carried; #{:carried}
   waits :need.")
 
+(defn triple? [v n? ok?] (and (sequential? v) (= 3 (count v)) (every? #(and (n? %) (ok? %)) v)))
+
+(def click-shape
+  (a/pred "nil or {:against [x y z] whole numbers, :cursor [x y z] each within 0..1 (optional)}"
+          (fn [click] (and (map? click)
+                           (triple? (:against click) integer? any?)
+                           (or (nil? (:cursor click)) (triple? (:cursor click) number? #(<= 0 % 1)))))))
+
 (a/defargs args
   {:pos {:doc "the cell to fill, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
    :item {:doc "the block item to place; nil: the first carried of the call's :use {:blocks}" :spec a/item? :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse, and the walk keeps off seen beds and bottom slabs near the cell; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? :shared
    :clear {:doc "dig a plant, flower or snow layer out of the cell first; false places into what a placement overwrites" :spec boolean? :default true}
-   :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click): :against is the block beside the cell that is clicked, :cursor the point on its face (0..1 each; default the middle of the face toward the cell). Clicking a container (chest, furnace, crafting table) opens it instead of placing; nil: plainly" :spec map? :default nil}
+   :click {:doc "how to place it ({:against [x y z] :cursor [x y z] :yaw :pitch :sneak}, jobs.lib.placement/click): :against is the block beside the cell that is clicked, :cursor the point on its face (0..1 each; default the middle of the face toward the cell). A usable block (chest, furnace, crafting table) is clicked sneaking, so the click places; nil: plainly" :spec click-shape :default nil}
    :facing {:doc "north, south, east or west: the way a facing block (bed head, gate, door, stairs) is oriented; the body looks that way as it places (jobs.lib.placement); not with :click; nil: as the body stands" :spec (a/pred "north, south, east or west" #{"north" "south" "east" "west"}) :default nil}
    :through {:doc "false: no block in the way is dug to reach the cell (a mend digs nothing but the plant in its own cell); a cell no stand sees ends :unreachable" :spec boolean? :default true}
    :see {:doc "true: place only from where the eye sees the cell (jobs.lib.aim: nothing seen solid in the way, as a player aims at the face it places against), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough" :spec boolean? :default true}})
@@ -94,16 +103,12 @@
              (choose/default-use c :blocks (get-in defaults [:use :blocks]))))))
 
 (defn click-error
-  "Why :click is unusable at pos (a cell map), or nil: :against must be a block beside the cell, :cursor 3 numbers within 0..1."
+  "Why :click is unusable at pos (a cell map), or nil: its shape (click-shape), then :against beside the cell."
   [click pos]
-  (let [{:keys [against cursor]} click
-        triple? #(and (sequential? %) (= 3 (count %)) (every? number? %))]
-    (cond
-      (nil? click) nil
-      (not (triple? against)) ":click needs :against [x y z], the block beside the cell that is clicked"
-      (not= 1 (reduce + (map #(js/Math.abs (- %1 %2)) against [(:x pos) (:y pos) (:z pos)]))) ":click :against must be the block beside the cell"
-      (and (some? cursor) (not (and (triple? cursor) (every? #(<= 0 % 1) cursor)))) ":click :cursor must be [x y z], each within 0..1"
-      :else nil)))
+  (cond
+    (nil? click) nil
+    (not (a/ok? click-shape click)) (str ":click must be " (:want (meta click-shape)))
+    (not= 1 (reduce + (map #(js/Math.abs (- %1 %2)) (:against click) [(:x pos) (:y pos) (:z pos)]))) ":click :against must be the block beside the cell"))
 
 (defn parse
   "{:pos :items [names]} of the call, or {:error text}."
@@ -301,7 +306,8 @@
         try-facing (fn [f] (select-keys (placement/click {:block item :facing f} cell eye block-at) [:click :refused]))
         bed? (re-find #"_bed$" item)]
     (cond
-      click {:click (update click :cursor #(or % (mapv (fn [a c] (+ 0.5 (* 0.5 (- c a)))) (:against click) cell)))}
+      click {:click (cond-> (update click :cursor #(or % (mapv (fn [a c] (+ 0.5 (* 0.5 (- c a)))) (:against click) cell)))
+                      (some-> (block-at (:against click)) placement/usable?) (assoc :sneak true))}
       facing (try-facing facing)
       bed? (let [tries (map try-facing ["north" "south" "east" "west"])]
              (or (first (remove :refused tries)) (first tries)))
@@ -316,6 +322,7 @@
       (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed
                                   :why (str "no way to place " item (some->> (:facing (:args c)) (str " facing ")) ": " (get refusal-text refused (name refused)))})
       (let [r (await (tidy/place! c pos item false (some-> click placement/js-click)))]
+        (when (= "placed" (.-status r)) (use-block/bucket-spent! c item pos))
         (case (.-status r)
           "placed" (finish! c :done nil (cond-> {:placed true :pos pos :item item :reason :placed}
                                           (.-placed r) (assoc :block {:name (.-name (.-placed r))

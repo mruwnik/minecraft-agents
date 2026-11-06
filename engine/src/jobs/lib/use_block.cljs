@@ -69,6 +69,13 @@
         age (some-> before .-properties .-age)]
     (boolean (and ripe age (>= age ripe)))))
 
+(defn bucket-spent!
+  "The notice that a filled bucket was poured (a scoop spends nothing)."
+  [c item pos]
+  (when (and (bucket? item) (not= "bucket" item))
+    (ctx/emit! c :use.bucket :info {:item item :pos (b/cell pos) :attention :notice
+                                    :text (str "used " item " at " (pr-str (b/cell pos)))})))
+
 (defn ^:async click-block!
   "The click or bucket use at pos once in reach: the act's status keyword and its reply."
   [c {:keys [pos item face]}]
@@ -76,9 +83,7 @@
                    (ctx/act c :place (clj->js {:pos pos :item item}))
                    (ctx/act c :useOn (clj->js (cond-> {:pos pos :face (or face "up")} item (assoc :item item))))))
         status (keyword (.-status r))]
-    (when (and (bucket? item) (= :placed status))
-      (ctx/emit! c :use.bucket :info {:item item :pos (b/cell pos) :attention :notice
-                                      :text (str (if (= "bucket" item) "scooped with the bucket at " (str "used " item " at ")) (pr-str (b/cell pos)))}))
+    (when (= :placed status) (bucket-spent! c item pos))
     [(if (and (bucket? item) (= :placed status)) :used status) r]))
 
 (defn ^:async attempt-block!

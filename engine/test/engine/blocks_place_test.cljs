@@ -338,13 +338,30 @@
   (are [click] (= [:never :bad-args] (tu/kind-reason (place/can-start? {:args {:pos [2 64 0] :item "cobblestone" :click click} :primitives (:p (bd/setup {:self body}))})))
     {:cursor [0.5 0.5 0.5]}
     {:against [2 62 0] :cursor [0.5 1 0.5]}
-    {:against [2 63 0] :cursor [0.5 1.5 0.5]}))
+    {:against [2 63 0] :cursor [0.5 1.5 0.5]}
+    {:against [2 63.5 0] :cursor [0.5 1 0.5]}))
 
 (deftest a-click-without-a-cursor-aims-at-the-middle-of-the-face-toward-the-cell
   (let [env (bd/setup {:self body})
         c {:args {:click {:against [2 63 0]}} :primitives (:p env)}]
     (is (= {:click {:against [2 63 0] :cursor [0.5 1.0 0.5]}} (place/click-for c {:x 2 :y 64 :z 0} "cobblestone")))
     (is (nil? (place/click-error {:against [2 63 0]} {:x 2 :y 64 :z 0})))))
+
+(deftest a-click-on-a-container-sneaks-so-it-places-instead-of-opening
+  (let [env (bd/setup {:self body :blocks {"2,63,0" "chest" "3,64,0" "stone"}})
+        click-of #(:click (place/click-for {:args {:click %} :primitives (:p env)} {:x 2 :y 64 :z 0} "cobblestone"))]
+    (is (true? (:sneak (click-of {:against [2 63 0]}))))
+    (is (nil? (:sneak (click-of {:against [3 64 0]}))))))
+
+(deftest placing-a-filled-bucket-is-a-notice-like-using-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}]})
+              placed (await (tu/child-outcome (:eng env) job {:pos at :item "water_bucket"} 40))]
+          (is (true? (:placed placed)))
+          (is (= [["water_bucket" :notice]]
+                 (->> @(:seen env) (filter #(= :use.bucket (:kind %))) (mapv (juxt :item :attention))))))))))
 
 (deftest a-cell-of-the-bodys-own-plan-is-placed-another-bodys-plan-refuses
   (async done
