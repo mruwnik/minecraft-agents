@@ -320,8 +320,8 @@
           (is (re-find #"could not get to a source of" (get-in e [:cause :why]))))
         (let [s (f/start (-> (f/bare [{:name "wooden_pickaxe" :count 1}]) (update :blocks merge walled-in)) [])
               e (await (ending-of s 'jobs.items.obtain {:item "cobblestone" :count 4 :explore false} 120))]
-          (is (= {:kind :nothing-possible :cause :exposed} (kc e)) "at four cobblestone's worth the mine declines the dark stone")
-          (is (re-find #"could not get to a source of cobblestone: jobs.gather.mine declines to start" (get-in e [:cause :why]))))))))
+          (is (= {:kind :nothing-possible :cause :unreachable} (kc e)) "unseen rock is priced at its measured chance of being open, so the mine goes for the stone and finds no way in")
+          (is (re-find #"could not get to a source of cobblestone: gathering ended :unreachable" (get-in e [:cause :why]))))))))
 
 (deftest a-craft-from-carried-materials-beats-a-walk-to-a-chest-of-unknown-contents
   (async done
