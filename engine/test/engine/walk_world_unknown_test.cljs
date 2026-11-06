@@ -290,6 +290,11 @@
     (doseq [yaw yaws] (swap! (fake/state p) assoc :yaw yaw) (perception/pass! per))
     w))
 
+(deftest the-way-counts-mark-a-body-whose-feet-see-no-sky-light
+  (let [world {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -12 63 -12 12 63 12 "stone")}
+        under? #(:under? (wworld/way-counts (looked-round-body world % [270])))]
+    (is (= [true nil] [(under? [0 0]) (under? [15 0])]) "sky light 0 at the feet: under ground; open sky: not")))
+
 (defn- looked-round
   "rock-guess? of a body in world at light [sky block] after sight passes facing each of yaws."
   [world light yaws]

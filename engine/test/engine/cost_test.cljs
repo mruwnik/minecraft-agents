@@ -507,6 +507,8 @@
         closed {:k 50 :n 100}]
     (is (= 0.5 (cost/way-on-chance {:k 0 :n 0})) "nothing seen: the uniform prior")
     (is (= 0.75 (cost/way-on-chance {:k 2 :n 2})))
+    (is (= 0.6 (cost/way-on-chance {:k 0 :n 0 :under? true})) "under ground: the 6 on, 4 dead prior")
+    (is (= 0.6 (cost/way-on-chance {:k 100 :n 100 :under? true})) "under ground the seen counts are left out: a flat rate")
     (is (> (cost/unseen-share closed kit) (cost/unseen-share open kit) (cost/dark-factor kit))
         "seen dead ends round it make an unseen way dearer, open ground cheaper, never below a dark cell's price")
     (is (< (cost/unseen-share open {:weapon "iron_sword" :equipment iron-set}) (cost/unseen-share open kit)) "an armed, armoured body fears the dark less")

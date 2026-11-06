@@ -195,11 +195,20 @@
 (def gait-costs planner/gait-costs)
 (def unknown-prices planner/unknown-prices)
 
+(def way-on-priors
+  "Beta(on, dead) of a way on through unseen cells: the surface (1 1), calibrated (0.14 dead measured, 0.14 predicted); under
+  ground (sky light 0 at the feet) 6 and 4: 0.37-0.43 of the unseen ways there measured dead, and the seen counts did not
+  predict it better than that rate."
+  {:surface [1 1] :under [6 4]})
+
 (defn way-on-chance
-  "The chance a way on through cells the body has not seen goes on: a uniform Beta(1,1) prior updated by counts {:k :n}
-  of the seen stands near it (jobs.lib.walk.way-on/way-counts: n seen, k of them with a way that leads out), (k+1)/(n+2)."
-  [{:keys [k n]}]
-  (/ (inc (or k 0)) (+ (or n 0) 2)))
+  "The chance a way on through cells the body has not seen goes on: the prior of its context (way-on-priors) updated by counts
+  {:k :n} of the seen stands near it (jobs.lib.walk.way-on/way-counts: n seen, k of them with a way that leads out). With
+  :under? the counts are left out: a flat rate."
+  [{:keys [k n under?]}]
+  (let [[on dead] (way-on-priors (if under? :under :surface))
+        [k n] (if under? [0 0] [(or k 0) (or n 0)])]
+    (/ (+ k on) (+ n on dead))))
 
 (defonce ^:private kit-kept (atom {}))
 

@@ -109,9 +109,13 @@
         (let [v (way-on/scan known start)] (.set counted st {:k k :v v}) v)))))
 
 (defn way-counts
-  "{:k :n} of way-scan, {:k 0 :n 0} without a perception."
+  "{:k :n} of way-scan, {:k 0 :n 0} without a perception; :under? true when the sky light at the feet is 0 (cost/way-on-chance
+  reads caves by their own prior, not by these counts)."
   [p]
-  (if-let [v (way-scan p)] (select-keys v [:k :n]) {:k 0 :n 0}))
+  (let [^js pos (when (aget p "perception") (.-pos (.self p)))
+        sky (when pos (sh-sense/sky-light-at p {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}))]
+    (cond-> (if-let [v (way-scan p)] (select-keys v [:k :n]) {:k 0 :n 0})
+      (and sky (zero? sky)) (assoc :under? true))))
 
 (declare kit-of)
 
