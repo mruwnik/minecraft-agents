@@ -901,15 +901,15 @@
   a threat of found by its index."
   [group view found i nodes]
   (let [k (found i)
-        states (met-states group k (subvec found 0 i))
         pairs (into [] (keep (fn [j] (let [cs (.filter (:on k) #(pos? (aget (:w (found j)) %)))]
                                        (when (pos? (alength cs)) [j (not= (:prior (found j)) (:prior k)) cs]))))
                     (range i))
+        states (met-states group k (mapv (comp found first) pairs))
         lone (:chance (group [(:mob k)] (:caught k)))
         at-nodes (mapv (fn [[r]]
-                         (let [rhos (js/Float64Array. i)]
-                           (doseq [[j cross cs] pairs]
-                             (aset rhos j (* (:c (found j)) (met-with k r (found j) (when cross (view j)) (:dts k) cs))))
+                         (let [rhos (js/Float64Array. (count pairs))]
+                           (doseq [[pi [j cross cs]] (map-indexed vector pairs)]
+                             (aset rhos pi (* (:c (found j)) (met-with k r (found j) (when cross (view j)) (:dts k) cs))))
                            [(* (:c k) (- (js/Math.expm1 (- (* r (:exposure k)))))) (met-chances states rhos)]))
                        nodes)
         n (:n states)
