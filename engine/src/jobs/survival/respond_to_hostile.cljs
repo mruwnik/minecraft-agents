@@ -214,7 +214,9 @@
   [c hs]
   (let [mute-s (/ (body/next-mute-ms (ctx/view c)) 1000)
         entry (threats/place-of (:primitives c) (first hs))
-        mob (.-name (first hs))]
+        mob (.-name (first hs))
+        held? (= :hold-timeout (:declined (ctx/mem c)))
+        heard? (not-every? danger-q/seen-only? hs)]
     (mute-heard! c hs)
     {:left-heard {:mob mob :mute-s mute-s
                   :text (str "the " mob " heard " (name (:band entry)) ", " (name (:direction entry))
@@ -250,15 +252,20 @@
        (every? #(hostile/stood-still? c %) hs)))
 
 (defn leave-watched!
-  "Mutes the mobs hs as watched (jobs.lib.body/watched) and returns {:left-watched ending-data}, so the job the reflex cut goes on."
+  "Mutes the mobs hs as watched (jobs.lib.body/watched) and returns {:left-watched ending-data}, so the job the reflex cut goes on.
+  The text names why: the hold's fight that landed nothing, or the flight the mobs stood still since; a heard mob is answered again when its sound changes or it is heard close."
   [c hs]
   (let [mute-s (/ (body/next-mute-ms (ctx/view c) :watch-mute) 1000)
-        mob (.-name (first hs))]
+        mob (.-name (first hs))
+        held? (= :hold-timeout (:declined (ctx/mem c)))
+        heard? (not-every? danger-q/seen-only? hs)]
     (ctx/remember! c :watch-mute {:mobs (into {} (map (fn [h] [(.-id h) (if (danger-q/seen-only? h) (danger-q/mob-distance (:primitives c) h) (danger-q/sound-of (:primitives c) h))])) hs)
                                   :until (+ (ctx/now c) (* 1000 mute-s))} body/mute-policy)
     {:left-watched {:mob mob :mute-s mute-s
-                    :text (str "the " mob " neither came nor hurt the body in the hold: no flight; it is watched for " mute-s
-                               " s and answered again if it comes nearer or the body is hurt")}}))
+                    :text (str "the " mob (if held? " neither came nor hurt the body in the hold: no flight"
+                                              " stands where the flight left it and did not hurt the body: no second flight")
+                               "; it is watched for " mute-s " s and answered again if the body is hurt or "
+                               (if heard? "its sound changes or it is heard close" "it comes nearer"))}}))
 
 (def cover-ways
   "The covers respond prices, each a way of jobs.survival.shut-in where the body stands (and :door, below)."

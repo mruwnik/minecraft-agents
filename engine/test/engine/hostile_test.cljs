@@ -1994,7 +1994,8 @@
             (is (= {7 {:direction :south :band :near}} (:watched r)) "it is watched by its sound")
             (is (= [] (answered-at r [0.5 64 6.5])) "it sounds the same: still watched")
             (is (= [7] (answered-at r [6.5 64 0.5])) "it sounds from the east now: answered again")
-            (is (= [7] (answered-at r [0.5 64 2])) "it is heard beside the body: answered again")))))))
+            (swap! (fake/state (:raw r)) update :blocks merge {"0,64,1" "stone" "0,65,1" "stone"})
+            (is (= [7] (answered-at r [0.5 64 2])) "it is heard, behind a block, beside the body: answered again")))))))
 
 (deftest only-seen-melee-mobs-may-be-watched
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(zombie 5 0) (skeleton 9 -4 0)
