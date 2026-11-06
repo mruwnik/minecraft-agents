@@ -1240,7 +1240,7 @@
 ;; guessed a dark cave, looks, and is priced by the dark it then sees, on every way the walk could go on past the cut
 ;; unpriced: the look-ahead finding the cells open, a refresh refused (the old plan kept), the plan walked unwatched
 (defn ^:async walk-into-cave
-  "go-to from the tunnel's west end to the cave, a hurt, fed body that, for a goal worth 400 s, may risk 0.2 hp and heals while it waits: {:out :cave :turn} (cave the cells of the cave past the spilled light it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
+  "go-to from the tunnel's west end to the cave, a hurt, fed body that, for a goal worth 400 s, may risk 0.2 hp and heals while it waits (spawn rate pinned at one meet in 200 s: at the measured 0.0012 the 27-block dark walk is cheap enough to take): {:out :cave :turn} (cave the cells of the cave past the spilled light it stood in, turn those at the tunnel's turn, x 20 z 1..2)."
   [& [tunnel]]
   (let [tunnel (or tunnel tunnel-into-cave)
         cells (atom #{})
@@ -1248,7 +1248,7 @@
         track! (fn [{:keys [p] :as s}]
                  (look! s)
                  (add-watch (fake/state p) :track (fn [_ _ _ b] (swap! cells conj (mapv js/Math.floor (:pos (:self b)))))))
-        {:keys [out]} (with-redefs [look/unseen-solid-at-fn (constantly (constantly 0))] (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.05}
+        {:keys [out]} (with-redefs [look/unseen-solid-at-fn (constantly (constantly 0))] (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0.05 :jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
                                #(run-go-to (cond-> {:self {:pos {:x 0.5 :y 64 :z 0.5} :health 4 :food 20} :blocks (:blocks tunnel) :radius 16 :exact-eye true :bodyHitbox true}
                                              (:states tunnel) (assoc :states (:states tunnel)))
                                            {:pos [20 64 32] :range 1 :ways #{:walk} :unknown true :worth 400} track!))))]
