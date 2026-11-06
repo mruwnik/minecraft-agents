@@ -762,7 +762,7 @@ test('entities finds the pose index through the registry', () => {
 
 test('entities does not put lyingDown or username on mobs, and gives no sight fields', () => {
   const [zombie] = rig(world).p.entities({ kind: 'hostile' })
-  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'height', 'held', 'id', 'kind', 'name', 'pos'])
+  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'height', 'id', 'kind', 'name', 'pos'])
 })
 
 test('a hostile mob reports the item in its main hand as held', () => {
@@ -772,11 +772,20 @@ test('a hostile mob reports the item in its main hand as held', () => {
   assert.equal(p.entities({ kind: 'hostile' })[0].held, 'trident')
 })
 
-test('a hostile mob seen with an empty hand reports held none', () => {
+test('a hostile mob whose equipment packet set other slots but not the main hand reports held none', () => {
+  const equipment = new Array(5)
+  equipment[4] = { name: 'iron_helmet' }
   const p = withBot(bot => {
-    bot.entities = { 1: { id: 1, type: 'hostile', name: 'skeleton', position: at(1, 64, 0) } }
+    bot.entities = { 1: { id: 1, type: 'hostile', name: 'skeleton', position: at(1, 64, 0), equipment } }
   })
   assert.equal(p.entities({ kind: 'hostile' })[0].held, 'none')
+})
+
+test('a hostile mob with no equipment packet yet reports no held (unknown, not empty)', () => {
+  const p = withBot(bot => {
+    bot.entities = { 1: { id: 1, type: 'hostile', name: 'skeleton', position: at(1, 64, 0), equipment: new Array(5) } }
+  })
+  assert.equal('held' in p.entities({ kind: 'hostile' })[0], false)
 })
 
 const mobCases = [

@@ -107,8 +107,15 @@ export function createSense (env) {
     }
   }
 
-  // A seen empty hand is a name no item has, so cljs tells it from a hand not seen (no held at all).
+  // A hand known empty is a name no item has, so cljs tells it from a hand not known (no held at all).
+  // The server sends every worn or held slot of a mob in one equipment packet, so a packet that
+  // set some slot but not the main hand means the hand is empty; with no packet yet it is unknown.
   const NOTHING_HELD = 'none'
+  const heldFields = e => {
+    const name = heldName(e)
+    if (name) return { held: name }
+    return e.equipment?.some(() => true) ? { held: NOTHING_HELD } : {}
+  }
   // what a mob holds in its main hand, as a player sees it (a drowned's trident)
   const heldName = e => (e.heldItem ?? e.equipment?.[0])?.name
 
@@ -137,7 +144,7 @@ export function createSense (env) {
         ...(k === 'item' && itemSpawn(env.bot, e.id) && { spawn: itemSpawn(env.bot, e.id) }),
         ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
         ...(e.name === 'creeper' && { creeper: true }),
-        ...(k === 'hostile' && { held: heldName(e) ?? NOTHING_HELD })
+        ...(k === 'hostile' && heldFields(e))
       }))
   }
 
