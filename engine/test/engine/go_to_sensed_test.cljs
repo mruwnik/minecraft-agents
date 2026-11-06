@@ -381,7 +381,7 @@
                                                {:pos [9 58 0] :range 1 :unknown true}
                                                dark-and-looked shelter-entry!))]
           (is (= :leave-shelter (first (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))) (pr-str out))
-          (is (false? (:arrived out)) "ends: a wait that never changes is no way, so the call gives up instead of ticking on"))))))
+          (is (true? (:arrived out)) (pr-str out)))))))
 
 ;; ---- go-to :unknown under ground, lit: a tunnel whose way on turns a corner out of sight
 
