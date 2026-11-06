@@ -13,7 +13,7 @@
  :cases
  [{:name "abundant-target-does-not-hide-a-single-one"
    :blocks [[:fill [1 0 1] [9 0 8] "hay_block"] [:set [28 0 28] "gold_block"]]
-   :act [[:job (jobs.explore.search {:target ["hay_block" "gold_block"] :count 65 :worth 100})]]
+   :act [[:job (jobs.explore.search {:target ["hay_block" "gold_block"] :count 65})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 40 :of-job true :until {:source :job :kind :completed}}]}
   {:name "no-target-in-range-not-found"

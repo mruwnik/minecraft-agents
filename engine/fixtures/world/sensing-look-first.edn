@@ -1,4 +1,4 @@
-;; Cards e30a76c6 (look :useful?), b1b8ded6 + a66e45de (search outward legs, default :max-legs, :distance ending), a5dc9f4a (obtain.exploring notice).
+;; Cards e30a76c6 (look :useful?), b1b8ded6 + a66e45de (search outward legs, :distance ending), a5dc9f4a (obtain.exploring notice).
 ;; Flat grass plot 64 x 32, body at [8.5 0 16.5] facing east (yaw 270). The look cases put a crafting table 3 east and a furnace 5 south-east
 ;; in view: :useful? lists the table first (nearest) and refuses :block-names together with :useful?.
 {:defaults
@@ -15,7 +15,7 @@
    :act [[:job (jobs.explore.look {:useful? true :block-names ["iron_ore"] :radius 16})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]}
-  {:name "search-default-max-legs-reaches-a-far-target"
+  {:name "search-reaches-a-far-target"
    :blocks [[:set [56 0 16] "emerald_block"]]
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :spend {:job-time 150} :settings {:jobs.explore.search/max-distance 60 :jobs.lib.cost.find/leg-spacing 8}})]]

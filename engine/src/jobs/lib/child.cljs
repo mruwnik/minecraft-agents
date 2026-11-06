@@ -123,8 +123,7 @@
   (await (call-walk* c slot (walk-into-args slot cell))))
 
 (defn search-args
-  "The args of a jobs.explore.search call from caller options: with a :worth, :max-distance is the search's :within cap; unpriced, :max-distance is a setting of the search, so it moves into :settings."
+  "The args of a jobs.explore.search call from caller options: :max-distance is the search's :within cap."
   [opts]
   (cond-> (dissoc opts :max-distance)
-    (and (:max-distance opts) (:worth opts)) (assoc :within (:max-distance opts))
-    (and (:max-distance opts) (not (:worth opts))) (update :settings assoc :jobs.explore.search/max-distance (:max-distance opts))))
+    (:max-distance opts) (assoc :within (:max-distance opts))))

@@ -408,6 +408,23 @@
           (is (= :distance (:why e)) "each 16-block walk is under 12 s, so only the distance ends it")
           (is (< 3 (get-in e [:coverage :legs])) "more than the three walks that used to use up 12 s"))))))
 
+(deftest a-search-called-at-a-finite-worth-prices-its-legs-as-a-worth-arg-does
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ending (atom nil)
+              parent {:worth-of (constantly 12)
+                      :round (fn ^:async parent-round [c]
+                               (let [r (await (ctx/call c :kid 'jobs.explore.search {:target "diamond_block"}))]
+                                 (if (= :continue r) r (do (reset! ending (tu/outcome r)) (ctx/end c :done nil)))))}
+              s (with-redefs [registry/jobs (assoc registry/jobs 'worth-parent parent)] (setup {}))
+              _ (core/submit! (:eng s) '(worth-parent) {})
+              _ (await (run-until-done s 400))
+              outcome (juxt :why #(get-in % [:coverage :legs]) :text)
+              arg (outcome (not-found-of (await (search! {:target "diamond_block" :worth 12} {}))))]
+          (is (= :distance (first arg)))
+          (is (= arg (outcome @ending)) "the caller's worth of 12 s binds the legs as a :worth 12 arg does"))))))
+
 (deftest a-priced-animal-search-over-ground-searched-in-vain-stops-at-once
   (async done
     (tu/run-async done
@@ -482,7 +499,7 @@
           (is (not= :price (:why (not-found-of state)))))))))
 
 (deftest the-spiral-legs-nearest-the-body-come-first
-  (let [c {:args {:pattern :spiral} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :worth ##Inf} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}
         order (settings/with-settings {:jobs.explore.search/max-distance 64} #(search/candidates c m))]
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
@@ -705,8 +722,11 @@
               real child/call-walk*
               s (with-redefs [child/call-walk* (fn [c k a] (swap! asked conj a) (real c k a))]
                   (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far)))
-              first-walk (first @asked)]
-          (is (finished? s))
+              first-walk (first @asked)
+              digs (filter #(nil? (:ways %)) @asked)]
+          (is (finished? s) "the dig out is not started again from the same stand (:dug)")
+          (is (= :distance (:why (not-found-of s))) "a walked dig out leaves no leg: the search ends on distance, not no-way-out")
+          (is (= (count digs) (count (distinct digs))) "no dig out toward the same leg twice")
           (is (nil? (:ways first-walk)) "the closed pocket is dug out of with every way go-to has, not the plain walk and clear-seal of a first leg")
           (is (= 80 (get-in first-walk [:pos :y])) "at the feet's height, a column of the sweep, not a step into unseen rock")
           (is (seq (walks s))))))))
@@ -758,7 +778,7 @@
                              e (not-found-of s)]
                          (is (= :stuck (:why e)) (pr-str e))
                          (count (get-in e [:coverage :failed]))))
-              cheap (await (failed 10))
+              cheap (await (failed 40))
               dear (await (failed 1000))]
           (is (< cheap dear) "the next walk is priced against the find, not counted"))))))
 
@@ -768,7 +788,7 @@
       (fn ^:async t []
         (let [refused {:kind :condition-failed :cause {:floor :health :min 10} :data {}}
               s (with-redefs [child/call-walk* (fn [_ _ _] (js/Promise.resolve refused))]
-                  (await (with-redefs [ctx/worth (constantly 10)] (await (search! {:target "diamond_block" :max-distance 23} {:self {:pos {:x 0 :y 64 :z 0} :health 8}})))))
+                  (await (with-redefs [ctx/worth (constantly 40)] (await (search! {:target "diamond_block" :max-distance 23} {:self {:pos {:x 0 :y 64 :z 0} :health 8}})))))
               e (not-found-of s)]
           (is (= :stuck (:why e)))
           (is (re-find #"every walk was refused: the body's health 8 is under the call's floor 10" (:text e)))
@@ -949,8 +969,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "dead" :pos [3 64 3] :by "Fake" :t 1 :until 9e15}]
-              s (await (search! {:target "cow" :max-distance 20 :worth 0} {} 20 #(write-other! % "Other" note)))]
+        (let [note [{:kind :seen :what "cow" :id "dead" :pos [3 64 3] :by "Fake" :t (js/Date.now) :until 9e15}]
+              in-view! (fn [{:keys [p]}] (let [at (.-sensedAt p)] (aset p "sensedAt" (fn [pos] (doto (at pos) (aset "visible" true))))))
+              s (await (search! {:target "cow" :max-distance 20 :worth 0} {} 20 #(do (write-other! % "Other" note) (in-view! %))))]
           (is (nil? (found-of s)) (pr-str (:found (ended-of s)))))))))
 
 (deftest ore-the-body-has-not-seen-is-neither-found-nor-noted
@@ -1001,7 +1022,7 @@
         counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
-        c {:args {:pattern :spiral} :primitives counting}
+        c {:args {:pattern :spiral :worth ##Inf} :primitives counting}
         r (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 128}
             #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
@@ -1057,7 +1078,7 @@
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
         choose (fn [use-notes? ns]
                  (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes?} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
+                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth ##Inf} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
     (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
     (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
     (is (nil? (:leg (choose false [(note 150)]))) "a note this job made still covers")))
@@ -1066,7 +1087,7 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
                              (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                               #(search/choose-leg {:args {:pattern :spiral} :primitives p} {:origin [0 64 0]} names []))))]
+                               #(search/choose-leg {:args {:pattern :spiral :worth ##Inf} :primitives p} {:origin [0 64 0]} names []))))]
     (is (nil? (:leg (choose ["cow" "pig"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))
@@ -1074,7 +1095,7 @@
 (deftest a-leg-for-farm-animals-never-stands-in-a-pit-below-the-feet-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (tu/box -36 45 -36 36 45 36 "grass_block") :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
         choose (fn [names] (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                             #(search/choose-leg {:args {:pattern :spiral} :primitives p} {:origin [0 64 0]} names [])))]
+                             #(search/choose-leg {:args {:pattern :spiral :worth ##Inf} :primitives p} {:origin [0 64 0]} names [])))]
     (is (nil? (:leg (choose ["chicken"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["chicken"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))
