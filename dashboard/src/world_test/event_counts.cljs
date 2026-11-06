@@ -633,6 +633,13 @@
        (map reader/read-string)
        (filter #(>= (:time-ms %) since-ms))))
 
+(defn way-on-report
+  "The way-prior report over the :way-on.* events of every body under agents (a directory of bodies, each with an engine dir)."
+  [agents since-ms]
+  (let [per (for [b (array-seq (fs/readdirSync agents)) :when (fs/existsSync (path/join agents b "engine"))]
+              (way-prior/places (way-events (path/join agents b "engine") since-ms)))]
+    (way-prior/report (mapcat :places per) (reduce + (map :evicted per)))))
+
 (defn read-agent
   "The records of one body's event files since since-ms, sorted by time."
   [dir since-ms]
@@ -894,10 +901,7 @@
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
-       "way-on" (let [per (for [b (array-seq (fs/readdirSync agents)) :when (fs/existsSync (path/join agents b "engine"))]
-                            (way-prior/places (way-events (path/join agents b "engine") since-ms)))]
-                  (println (pr-str (assoc (way-prior/report (mapcat :places per) (reduce + (map :evicted per))) :since-ms since-ms)))
-                  0)
+       "way-on" (do (println (pr-str (assoc (way-on-report agents since-ms) :since-ms since-ms))) 0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "closing-rate" (do (println (pr-str (assoc (closing-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "walk-pace" (do (println (pr-str (assoc (walk-report (since (:walk-steers folded))) :since-ms since-ms))) 0)

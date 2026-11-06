@@ -277,6 +277,29 @@
         (is (= [2000] (map (comp second key) (:gap-jumps counts))) "a probe's fixture jumps are perfect run-ups: left out"))
       (finally (fs/rmSync dir #js {:recursive true :force true})))))
 
+(defn way-line [t kind data] (pr-str {:kind kind :time-ms t :seq t :data data}))
+
+(deftest way-on-reports-the-places-of-every-bodys-logs-by-setting
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "event-counts-"))
+        agents (path/join dir "agents")
+        body (fn [name lines]
+               (fs/mkdirSync (path/join agents name "engine") #js {:recursive true})
+               (fs/writeFileSync (path/join agents name "engine" "events.edn") (str (apply str (interpose "\n" lines)) "\n")))]
+    (try
+      (body "A" [(way-line 1000 :way-on.priced {:set :dark :k 1 :n 3 :ways [[0 64 0 0] [5 64 0 1]]})
+                 (way-line 1500 :way-on.seen {:way [0 64 0 0] :on true})
+                 (pr-str {:kind :other :time-ms 1600 :seq 1600})])
+      (body "B" [(way-line 2000 :way-on.priced {:set :lit :k 3 :n 3 :ways [[9 64 0 2]]})
+                 (way-line 2500 :way-on.seen {:way [9 64 0 2] :on false})])
+      (fs/mkdirSync (path/join agents "NoEngine") #js {:recursive true})
+      (let [r (c/way-on-report agents 0)]
+        (is (= [:dark :lit] (keys (:by-setting r))))
+        (is (= {:places 2 :ways 3 :seen 2 :on-seen 1} (select-keys (:all r) [:places :ways :seen :on-seen])))
+        (is (= 1 (:unread r)) "the dark place's second way was never read")
+        (is (= [3 9] (keys (:calibration r)))))
+      (is (= 1 (get-in (c/way-on-report agents 1800) [:all :places])) "events before since-ms are not counted")
+      (finally (fs/rmSync dir #js {:recursive true :force true})))))
+
 (deftest beta-quantile-inverts-the-beta-cumulative
   (is (< (js/Math.abs (- 0.5 (gm/beta-cdf 2 2 0.5))) 1e-6) "Beta(2,2) is symmetric")
   (is (< (js/Math.abs (- 0.9 (gm/beta-cdf 1 3 (gm/beta-quantile 1 3 0.9)))) 1e-6)))
