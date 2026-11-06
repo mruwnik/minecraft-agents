@@ -10,6 +10,14 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.escape :as escape]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.threat-field :as field]
+            [jobs.lib.threats :as threats]
+            [engine.game :as game]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -204,6 +212,23 @@
     (if-let [{:keys [cells through]} (door-of p h)]
       (conj (vec cells) through)
       [[(+ x dx) y (+ z dz)] [(+ x dx) (inc y) (+ z dz)]])))
+
+(defn opening-price
+  "{:price :hurt} of opening cells ([x y z]): the hurt of cost/route-danger from the hostiles that could reach or shoot the
+  body were they open (jobs.lib.danger/dangers-opened), the mobs met spawning on them (spawn-light/spawns-over), priced by
+  cost/opening-price."
+  [c cells]
+  (let [p (:primitives c)
+        self (.self p)
+        body (assoc (cost/death-body p (ctx/view c)) :health (.-health self))
+        weapon (combat/best-weapon p (combat/weapons c))
+        mobs (map (fn [m] {:name (.-name m) :held (.-held m) :pos (danger/mob-pos p m)})
+                  (danger/dangers-opened p threats/max-follow-range cells))
+        lookups {:kind-at (danger/opened-lookup (reach/mob-lookup p) cells) :arrow-at (danger/opened-lookup (reach/arrow-lookup p) cells)}
+        hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :held (:held %) :pos (:pos %)} lookups))
+                                         (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
+                                         :weapon weapon :health (.-health self)))]
+    {:price (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) cells) nil)} (sh-sense/feet p)) :hurt hurt}))
 
 (defn level-exit
   "{:heading :cells :through} for the first heading of order not yet tried (leave-mem :level-tried) whose wall

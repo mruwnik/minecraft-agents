@@ -20,6 +20,8 @@
             [jobs.lib.swim :as swim]
             [jobs.survival.breathe :as b]
             [jobs.survival.breathe.air :as air]
+            [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.danger :as danger]
             [jobs.survival.breathe.fight :as fight]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
@@ -1220,16 +1222,38 @@
     (is (= (cost/hp-cost 20 16) (air/drown-loss-s (assoc body :absorption 4) 3 death-s 13)) "absorption takes the first hp")))
 
 (defn judge-of
-  "air/judge-fn's verdict on an own-build glass cap (its dig drops nothing: the put-back costs) over the capped column of extra blocks, a body with full breath."
-  [extra]
-  (let [p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 20} :blocks (merge (capped-world "glass") floored extra)}))
-        c {:primitives p :view (fn [] {:now 0 :data {}}) :root "breathe" :slots [] :args {}}]
-    (with-redefs [own-builds/own-build-fn (fn [_] (fn [cell] (when (= [0 68 0] cell) :plan)))]
-      ((air/judge-fn c) {:x 0 :y 68 :z 0} "glass"))))
+  "air/judge-fn's verdict on an own-build glass cap (its dig drops nothing: the put-back costs) over the capped column of extra blocks, a body with full breath; self-extra amends the body, entities are in the world."
+  ([extra] (judge-of extra {} []))
+  ([extra self-extra entities]
+   (let [p (tu/seeing-all (tu/fake {:self (merge {:inWater true :oxygen 20} self-extra) :entities entities :blocks (merge (capped-world "glass") floored extra)}))
+         c {:primitives p :view (fn [] {:now 0 :data {}}) :root "breathe" :slots [] :args {}}]
+     (with-redefs [own-builds/own-build-fn (fn [_] (fn [cell] (when (= [0 68 0] cell) :plan)))]
+       ((air/judge-fn c) {:x 0 :y 68 :z 0} "glass")))))
 
 (deftest an-own-build-cap-is-too-dear-when-air-the-other-way-is-within-the-breath
   (is (= :too-dear (judge-of {"1,67,0" "water"})) "a swim of 4 blocks beside the cap reaches air")
   (is (nil? (judge-of {})) "no other way: the drowning is a death"))
+
+(def sealed-pocket
+  "A stone box round a two-high air pocket (feet y 64) closed by a glass cap at y 66."
+  (-> (tu/box -1 63 -1 1 66 1 "stone")
+      (dissoc "0,64,0" "0,65,0")
+      (assoc "0,66,0" "glass")))
+
+(deftest opening-a-cap-costs-the-hurt-of-the-hostile-that-would-come-through
+  (let [price (fn [health entities]
+                (let [p (tu/seeing-all (tu/fake {:self {:health health} :entities entities :blocks sealed-pocket}))
+                      c {:primitives p :view (fn [] {:now 0 :data {}}) :root "breathe" :slots [] :args {}}]
+                  (:price (dig-leave/opening-price c [[0 66 0] [0 67 0]]))))
+        zombie [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0.5 :y 67 :z 0.5} :health 20}]]
+    (is (zero? (price 20 [])) "no hostile known: the opening costs nothing")
+    (is (pos? (price 20 zombie)) "a zombie over the cap hurts the body once it is open")
+    (is (> (price 6 zombie) (price 20 zombie)) "a weaker body pays more")))
+
+(deftest an-own-build-cap-is-too-dear-when-opening-it-costs-more-than-the-drowning-it-averts
+  (is (nil? (judge-of {})) "no other way, no hostile: dug")
+  (with-redefs [dig-leave/opening-price (fn [_ cells] {:price (if (= [[0 68 0] [0 69 0]] cells) 1e9 0) :hurt 0})]
+    (is (= :too-dear (judge-of {})) "the price of opening the cap and the cell over it counts")))
 
 (deftest a-protected-cap-is-never-dug
   (async done (never-dug! done "chest" :protected)))

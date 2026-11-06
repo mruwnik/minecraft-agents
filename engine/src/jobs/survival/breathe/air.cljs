@@ -8,6 +8,7 @@
             [jobs.lib.clock :as clock]
             [jobs.lib.access :as access]
             [jobs.lib.breath :as breath]
+            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.escape :as escape]
@@ -92,7 +93,7 @@
 
 (defn judge-fn
   "(judge cell block): why cell may not be the cap, else nil. An own build is dug when its price (own-cut-fn: the block
-  put back) and the drowning while it is dug (drown-loss-s over its dig time) are under the drowning it averts, the loss
+  put back), opening it (dig-leave/opening-price: the known hostiles that would come through) and the drowning while it is dug (drown-loss-s over its dig time) are under the drowning it averts, the loss
   of reaching air the other way (other-air-s): else :too-dear. Another owner's zone or claim refuses a non-natural
   block (:not-natural)."
   [c]
@@ -107,7 +108,7 @@
     (fn [cell n]
       (let [v (u/cell-vec cell)]
         (cond
-          (own-build v) (when-not (< (+ (own-cut v) (@loss (/ (.digTime p (clj->js cell)) 1000))) @other) :too-dear)
+          (own-build v) (when-not (< (+ (own-cut v) (:price (dig-leave/opening-price c [v (update v 1 inc)])) (@loss (/ (.digTime p (clj->js cell)) 1000))) @other) :too-dear)
           (and (not (rules/natural? n)) (not (may-dig? v))) :not-natural)))))
 
 (defn cap-above
