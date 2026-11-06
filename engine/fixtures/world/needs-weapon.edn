@@ -33,6 +33,15 @@
             {:no-event {:source :job :kind :obtain.exploring} :for-s 15}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 15}]
    :limit-s 40}
+  ;; Card 2965a12d: a sealed site deep under rock, with cobble and a table carried: the stone sword lacks only a stick, whose log needs the stair up to the sky. That stair costs more than a sword is worth: held :not-worth, no stair cut, the cobble kept.
+  {:name "sealed-deep-site-with-cobble-holds-rather-than-stair-up-for-a-stick"
+   :time :any
+   :blocks [[:fill [8 0 8] [24 4 24] "glowstone" :hollow]]
+   :body {:at [16.5 1 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 64] ["crafting_table" 1]]}
+   :expect [{:event {:source :reflex :kind :held :context {:reflex-id :needs-weapon} :data {:reason :not-worth}} :within-s 20}
+            {:no-event {:source :job :kind :stair.step} :for-s 20}]
+   :after [[:item "cobblestone" 64] [:body-near [16.5 1 16.5] 2]]
+   :limit-s 40}
   ;; Should-stay: a sword put in a chest by name is not taken back by the reflex (it would fetch it from that chest).
   {:name "sword-put-away-by-name-stays-in-the-chest"
    :time :any

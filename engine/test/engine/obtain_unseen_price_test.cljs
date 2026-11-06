@@ -181,16 +181,22 @@
       (is (= [:tunnel :tunnel] (map (comp :way #(plan/search-way c %)) needs)))
       (is (= (- (reduce + (map #(plan/search-cost c %) needs)) 100) (plan/plan-cost c v pl))))))
 
-(defn buried-search
-  "search-s of a call for item by a body in a 2-high pocket of rock at y 40 that has seen no sky, carrying a stone pickaxe."
-  [item & [worth]]
-  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 40 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]
+(defn buried-call
+  "search-s and obtain/not-worth of a root call with args by a body in a 2-high pocket of rock at y 40 that has seen no
+  sky, carrying inv."
+  [args inv]
+  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 40 :z 0.5}} :inventory inv
                                                       :blocks (dissoc (tu/box -3 39 -3 3 43 3 "stone") "0,40,0" "0,41,0")})))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c0 {:primitives p :view (constantly view) :args {:item item :count 1 :ways #{:craft :gather :search} :explore true :ignore-zones? true :worth worth}}
-        c (if worth (rooted c0 worth) (rooted c0))]
+        c0 {:primitives p :view (constantly view) :args (merge {:count 1 :ways #{:craft :gather :search} :explore true :ignore-zones? true} args)}
+        c (if (:worth args) (rooted c0 (:worth args)) (rooted c0))]
     (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])]
-      {:price (price/search-s c [item] 1) :not-worth (obtain/not-worth c)})))
+      {:price (price/search-s c (or (:any-of args) [(:item args)]) 1) :not-worth (obtain/not-worth c)})))
+
+(defn buried-search
+  "buried-call for item, carrying a stone pickaxe."
+  [item & [worth]]
+  (buried-call {:item item :worth worth} [{:name "stone_pickaxe" :count 1}]))
 
 (deftest a-buried-bodys-search-pays-the-stair-up-only-when-the-gather-climbs-first
   (let [ore (:price (buried-search "raw_iron"))
@@ -201,6 +207,14 @@
 (deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-its-usual-cost-and-stair-but-not-its-ore-search
   (is (nil? (:not-worth (buried-search "raw_iron" (+ (cost/worth-to nil ["raw_iron"] nil) 1)))) "the ore is tunnelled to: what it usually costs is within the worth")
   (is (= :not-worth (:reason (:not-worth (buried-search "oak_log" (+ (cost/worth-to nil ["oak_log"] nil) 1))))) "the log search adds the stair up"))
+
+(deftest a-swordless-buried-body-with-cobble-and-a-table-is-refused-the-stair-up-for-a-stick
+  (let [swords {:any-of ["iron_sword" "stone_sword" "wooden_sword"]}
+        pick [{:name "iron_pickaxe" :count 1}]
+        cobble (into pick [{:name "cobblestone" :count 64} {:name "crafting_table" :count 1}])]
+    (is (< (:price (buried-call swords cobble)) (:price (buried-call swords pick))) "the stone sword from the cobble carried lacks only a stick's log")
+    (is (= :not-worth (:reason (:not-worth (buried-call swords cobble))))
+        "with no :worth given (the needs-weapon reflex's call), the stair up for that log still costs more than a sword is worth")))
 
 (deftest the-price-of-a-seen-gather-and-of-a-search-follow-the-ways-the-call-allows
   (let [seen (ctx {:time 6000 :inventory (kit 0) :entities [(spider 5)]})
