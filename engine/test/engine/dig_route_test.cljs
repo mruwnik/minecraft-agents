@@ -22,6 +22,14 @@
   (let [lava (into {} (for [x (range -5 10) z (range -5 5) y [8 9]] [[x y z] "lava"]))]
     (is (= {:problem :no-route} (dr/route (world (assoc lava [3 8 0] "air")) [0 10 0] [3 8 0] {:margin 3})))))
 
+(deftest a-cut-under-or-beside-lava-is-not-dug
+  (let [lava (into {} (for [x (range 3 6) z (range -3 4) y [8 9]] [[x y z] "lava"]))
+        w (world (assoc lava [8 7 0] "air" [8 8 0] "air"))
+        r (dr/route w [0 10 0] [8 7 0] {:margin 6 :max-nodes 100000})
+        next-to-lava? (fn [[x y z]] (some #(= "lava" (w (mapv + [x y z] %))) [[0 1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]))]
+    (is (seq (:dig r)) "the way round or under it is found")
+    (is (not-any? next-to-lava? (:dig r)) "no cell dug has lava over or beside it")))
+
 (deftest a-route-dearer-than-its-bound-is-none
   (let [deep (fn [c] (or ({[30 8 0] "air" [0 20 0] "air" [0 21 0] "air"} c) (if (< (c 1) 20) "stone" "air")))]
     (is (= {:problem :dearer} (dr/route deep [0 20 0] [30 8 0] {:max-s 5 :step-s 0.2 :max-nodes 100000})) "every route left is dearer: the search stops unbounded by any box")

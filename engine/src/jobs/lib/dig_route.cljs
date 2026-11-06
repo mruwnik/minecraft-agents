@@ -252,6 +252,7 @@
                          (nil? s) false
                          (zero? (.-cost ^js (at x y z))) true
                          (.-falling ^js (at x (inc y) z)) false
+                         (some #(= "lava" (.-name ^js (at (+ x (% 0)) (+ y (% 1)) (+ z (% 2))))) [[0 1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) false
                          (.has way-keys (key x y z)) false
                          :else (let [l (when flood (level-at x y z))
                                      s (if-let [[w level under] (when (or l (some? (aget acc 4))) (flood-dig flood (aget acc 4) (aget acc 5) y (.-name ^js (at x y z)) l))]
@@ -540,7 +541,7 @@
   :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on, and
   :floor-absent-s (fn [floor-cell rise]) the seconds a walk rising rise blocks onto a floor that is (:unseen? cell) adds, the chance it is none; a
-  block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in), nor a
+  block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or with lava over or beside it (it would flow in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
