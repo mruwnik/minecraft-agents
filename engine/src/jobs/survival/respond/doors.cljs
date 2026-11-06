@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.click :as click]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [engine.ctx :as ctx]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -60,17 +61,22 @@
       (door-to-shut c (danger-q/mob-pos p t)))))
 
 (defn sealing-doors
-  "{:n :unseen?}: how many open doors the closed room (room-lib/room-doors) the body stands in has, when the door of
-  door-for threats is one of them: shutting them all closes the room; :unseen? when a cell of the room is not seen yet
-  (the worse case: a side may be open). nil when the body is in no closed room (another opening) or that door is none
-  of its room's."
+  "{:n :unseen? :walk-s}: how many open doors the closed room (room-lib/room-doors) the body stands in has, when shutting
+  them all closes the room; :unseen? when a cell of the room is not seen yet (the worse case: a side may be open). The door
+  of door-for threats must be one of them; with none in a hand's reach the flight walks to the nearest open door inside
+  the room (home-door) and :walk-s is that walk's seconds at the flight's pace (0 within reach). nil when the body is in
+  no closed room (another opening) or that door is none of its room's."
   [c threats]
-  (let [p (:primitives c)]
-    (when-let [door (door-for c threats)]
-      (when-let [{:keys [doors unseen?]} (room-lib/room-doors c (sh-sense/feet p))]
-        (let [open (filter #(fill/open-openable p (:cell %)) doors)]
+  (let [p (:primitives c)
+        door (door-for c threats)]
+    (when-let [{:keys [doors unseen?]} (room-lib/room-doors c (sh-sense/feet p))]
+      (let [open (filter #(fill/open-openable p (:cell %)) doors)]
+        (if door
           (when (some #(= (door-key (:cell door)) (door-key (:cell %))) open)
-            {:n (count open) :unseen? unseen?}))))))
+            {:n (count open) :unseen? unseen? :walk-s 0})
+          (when-let [steps (seq (keep #(reach-room/walk-steps p (sh-sense/feet p) (:inside %)) open))]
+            {:n (count open) :unseen? unseen?
+             :walk-s (/ (apply min steps) (cost/flee-walk-speed (.-food (.self p))))}))))))
 
 (defn heading-to
   "The heading [dx dz] from cell {:x :z} nearest the way to cell [x y z]."

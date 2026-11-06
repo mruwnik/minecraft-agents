@@ -283,7 +283,7 @@
       (when-not (:pit cs) (ctx/emit! c :hostile.pit-dropped :debug {:why (dig-pit/why-not c)}))
       (update-vals (cond-> cs
                      pillar (assoc :pillar pillar)
-                     sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing))))
+                     sealing (assoc :door (shut-in/door-cover c (:n sealing) (map #(.-name %) near) (:unseen? sealing) (:walk-s sealing))))
                    #(merge (options/exits-of c) %)))))
 
 (defn cover-answers
@@ -304,7 +304,7 @@
           body (assoc (hostile/body-of c) :meet (mapv #(.-name %) near))
           equipment (cost/equipment-of (.-equipment (.self p)))
           mobs (mapv #(hostile/mob-near p %) near)
-          door-cover (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false)
+          door-cover (shut-in/door-cover c (:n sealing) (map #(.-name %) near) false (:walk-s sealing))
           closed (cost/closed-chance seen unseen)
           answer (cost/look-answer body {:equipment equipment :mobs mobs :looks (* 2 (count headings))
                                          :outcomes [[closed #(assoc (now-of %) :door (cost/cover-answer {:equipment equipment :mobs % :then then} (merge (options/exits-of c) door-cover)))]

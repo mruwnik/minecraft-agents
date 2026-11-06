@@ -172,6 +172,16 @@
         (is (some? (await (door-price {}))) "a closed hut: the shut door is a priced cover")
         (is (nil? (await (door-price {"7,64,0" "air" "7,65,0" "air"}))) "a gap in the wall beside the door: shutting it seals nothing")))))
 
+(deftest an-open-door-beyond-a-hands-reach-is-a-cover-priced-with-the-walk-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:self {:pos {:x 5.5 :y 64 :z -0.5} :health 4.8 :food 13}}
+              near-price (await (door-price {}))
+              far-price (await (settings/with-settings {::doors/door-reach 2} #(door-price {} far)))]
+          (is (some? far-price) "inside the closed hut, the door out of reach: the flight walks to it, so the cover is priced")
+          (is (< near-price far-price) "the walk to the door is in its seconds"))))))
+
 (deftest a-door-a-mob-may-break-holds-only-part-of-the-quiet-by-the-chance
   (let [c {:args {}}
         open-s (fn [difficulty mobs unseen?]
