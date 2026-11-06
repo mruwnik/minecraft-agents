@@ -140,8 +140,11 @@
         [ax ay az] (or near goal)
         ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
         key (fn [x y z] (+ (* (+ (* (+ (- x fx) 131072) 262144) (+ (- z fz) 131072)) 65536) y 32768))
-        ;; a way that let water in is a label of its own, -1 - key: a dearer dry way to a cell is not lost to a flooded one
-        cell-of (fn [k] (let [k (if (neg? k) (- -1 k) k)
+        ;; a way that let water in is a label of its own, a negative id (wet-cell: its cell's key): a dearer dry way to a cell
+        ;; is not lost to a flooded one, nor a flooded one to another unless that is no dearer, its water no higher and its
+        ;; head under no longer (wet-label!)
+        wet-cell (js/Map.)
+        cell-of (fn [k] (let [k (if (neg? k) (.get wet-cell k) k)
                               y (- (mod k 65536) 32768)
                               r (/ (- k y 32768) 65536)
                               z (+ (- (mod r 262144) 131072) fz)
@@ -255,7 +258,7 @@
                                          (do (aset acc 4 level) (aset acc 5 under) (+ s w))
                                          s)]
                                  (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
-        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug pillar-run flood-level under-water-s] of the
+        ;; key (a wet label: its id) -> #js [seconds digs dig-seconds prev-key move blocks-placed dug pillar-run flood-level under-water-s] of the
         ;; cheapest way found to the cell (the flood its digs let in: flood-dig, flood-walk), dug its
         ;; steps' dug cells as a chain #js [keys parent lx hx ly hy lz hz] (nil: none), each link the box of its own and every
         ;; earlier link's cells: links share their tails, where a set a node grew to kilobytes of heap
@@ -273,24 +276,41 @@
         tick (volatile! 1)
         answer (volatile! nil)
         goal-key (key gx gy gz)
-        end-key? (fn [k] (or (== (if (neg? k) (- -1 k) k) goal-key) (and r (end? k))))
+        end-key? (fn [k] (or (== (if (neg? k) (.get wet-cell k) k) goal-key) (and r (end? k))))
         ;; #js [seconds key] of the cheapest end cell any step reached so far: a route in hand before the search proves it cheapest
         incumbent #js [##Inf nil]
+        ;; the wet labels of a cell's key: none another is no worse than on seconds, level and under-water seconds
+        wet-at (js/Map.)
+        wet-n (volatile! 0)
+        ;; wet labels another came to dominate: never expanded
+        dropped (js/Set.)
+        ;; a new wet label of cell key i for a way of s seconds, its water at level, the head under it for under seconds; nil
+        ;; when one the cell holds is no worse on all three
+        wet-label! (fn [i s level under]
+                     (let [^js ids (or (.get wet-at i) #js [])
+                           over? (fn [^js a] (and (<= (aget a 0) s) (<= (aget a 8) level) (<= (aget a 9) under)))
+                           under? (fn [^js a] (and (<= s (aget a 0)) (<= level (aget a 8)) (<= under (aget a 9))))]
+                       (when-not (.some ids #(over? (.get best %)))
+                         (let [id (vswap! wet-n dec)
+                               kept (.filter ids #(or (not (under? (.get best %))) (do (.add dropped %) false)))]
+                           (.push kept id) (.set wet-at i kept) (.set wet-cell id i)
+                           id))))
         relax! (fn [ck ^js from-node ^js acc nx ny nz move stair? face-s]
                  (let [level (aget acc 4)
-                       nk (if (some? level) (- -1 (key nx ny nz)) (key nx ny nz))
+                       i (key nx ny nz)
                        wet-s (if (some? level) (let [[w u] (flood-walk flood level (aget acc 5) ny)] (aset acc 5 u) w) 0)
                        k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
                        placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
-                   (when (and (not (.has done nk))
+                   (when (and (or (some? level) (not (.has done i)))
                               (or (nil? max-dig-s) (<= ds max-dig-s))
                               (or (nil? max-places) (<= placed max-places)))
                      (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
                            absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
-                           nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)
-                           ^js old (.get best nk)]
-                       (when (or (nil? old) (< nd (aget old 0)))
+                           nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)]
+                       (when-let [nk (if (some? level)
+                                       (wet-label! i nd level (aget acc 5))
+                                       (let [^js old (.get best i)] (when (or (nil? old) (< nd (aget old 0))) i)))]
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0) (aget acc 4) (aget acc 5)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
@@ -313,17 +333,15 @@
                         ;; a step's unseen cells are priced once (relax!'s unseen-at): the cell over m's head and a guessed face
                         ;; (unseen-face?) only when n's own cells are seen
                         try! (fn [nx ny nz move s0 head? top bot unseen-face?]
-                               ;; a way under flood stays under it: only a dry one may still reach the dry label
-                               (when (let [k (key nx ny nz)] (not (and (.has done (- -1 k)) (or (some? (aget node 8)) (.has done k)))))
-                                 (let [acc #js [s0 0 0 #js [] (aget node 8) (aget node 9)]
-                                       face-s (if (and unseen? (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz)))) unseen-step-s 0)]
-                                   (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
-                                              (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y)))))
-                                              (or (inside? nx ny nz) (do (vreset! boxed true) false)))
-                                     ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
-                                     (relax! ck node acc nx ny nz move
-                                             (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
-                                             face-s)))))]
+                               (let [acc #js [s0 0 0 #js [] (aget node 8) (aget node 9)]
+                                     face-s (if (and unseen? (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz)))) unseen-step-s 0)]
+                                 (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
+                                            (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y)))))
+                                            (or (inside? nx ny nz) (do (vreset! boxed true) false)))
+                                   ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
+                                   (relax! ck node acc nx ny nz move
+                                           (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
+                                           face-s))))]
                     (when-let [pf (and pillar-s (placeable mx my mz))]
                       (try! mx (inc my) mz :pillar (pillar-at node mx my mz) true 0 1 (= :unseen pf)))
                     (loop [i 0]
@@ -452,7 +470,7 @@
                          (nil? top) (cond-> {:problem :no-route} @boxed (assoc :boxed true :searched-s (spent-s)))
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
-                         (.has done ck) (recur)
+                         (or (.has done ck) (.has dropped ck)) (recur)
                          (end-key? ck) (route-to ck)
                          ;; the popped cell goes back: the next run expands it first
                          (>= (.-size done) limit) (do (heap-push! queue top) nil)

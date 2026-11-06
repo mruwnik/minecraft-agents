@@ -372,6 +372,22 @@
     (is (< (:seconds r) 100) "the stair is dug dry")
     (is (not-any? #{[1 10 0] [1 11 0]} (:dig r)) "the way round the pool is walked, its cut left shut")))
 
+(deftest a-dearer-flooded-way-with-lower-water-is-kept-beside-a-cheaper-one
+  ;; card 4abc7f55: two cuts beside pools reach the cell [2 10 0]: the short one lets water in to 11 and leaves the head
+  ;; under it, the detour's to 9. The cut on at y 10 and 11 is made under the first's water (drowning) and over the
+  ;; second's; one wet label a cell kept only the cheaper
+  (let [open (into #{} (for [[x z] [[0 0] [0 1] [0 2] [2 2] [2 1] [2 0] [4 0]] y [10 11]] [x y z]))
+        stone #{[1 10 0] [1 11 0] [1 10 2] [1 11 2] [3 10 0] [3 11 0]}
+        water #{[1 10 -1] [1 11 -1] [1 10 3] [1 11 3]}
+        w (fn [c] (cond (open c) "air" (stone c) "stone" (water c) "water" :else "bedrock"))
+        flood {:level (fn [[x _ z]] (when (= x 1) ({0 11 2 9} z)))
+               :open (delay [1 0])
+               :dig (fn [under _] [(if (pos? under) ##Inf 1) (+ under 5)])
+               :step (fn [under] [0 under])}
+        r (dr/route w [0 10 0] [4 10 0] {:step-s 1 :flood flood :max-nodes 100000})]
+    (is (< (:seconds r) ##Inf) (str "the cut past the meeting cell is made over the detour's water: " r))
+    (is (some #{[1 10 2]} (:dig r)) "the detour's cut, not the short one's")))
+
 (deftest a-plug-is-priced-as-its-flood-though-the-search-reads-no-water-beside-it
   ;; a plug's unseen neighbour is read as water by body-prices' :level, never by the search's own reads
   (let [flood {:level (fn [c] (when (= c [1 10 0]) 10)) :open (delay [7 0]) :dig (fn [under _] [0 under]) :step (fn [under] [0 under])}
