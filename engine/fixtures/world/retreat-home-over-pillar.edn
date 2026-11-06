@@ -24,7 +24,8 @@
   :limit-s 90}
  :cases
  [{:name "low-body-with-blocks-goes-into-its-house-not-up-a-pillar"
-   :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 40}]
+   :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 40}
+            {:event {:source :job :kind :retreat.home} :within-s 40}]
    :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5]
            [:not-block [15 0 19] "cobblestone"] [:not-block [15 1 19] "cobblestone"]]}
   {:name "low-body-runs-into-its-house-through-an-open-door"

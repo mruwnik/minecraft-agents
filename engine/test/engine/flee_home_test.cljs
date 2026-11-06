@@ -7,6 +7,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hs]
+            [engine.hostile-test :as ht]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.flight-job :as fj]
@@ -121,6 +122,24 @@
               {:keys [p seen]} (await (flee! world))]
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge was built outside"))))))
+
+(deftest a-low-body-that-has-not-seen-into-its-shut-hut-opens-the-door-to-look-and-runs-in
+  ;; the glance stopped at the shut door (a walk cannot stand in it) and saw nothing, or spent itself on the home cell,
+  ;; which has no door beside it: the home stayed unseen and the body fled past its hut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut {:x 5.5 :y 64 :z 5.5} hs/door-states [(zombie 5.5 12.5 nil)])
+                        (assoc :inventory [{:name "cobblestone" :count 16}])
+                        (assoc-in [:self :health] 4))
+              {:keys [eng raw seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)]
+          (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(test.flight) {})
+          (await (tu/run-until-empty eng 6))
+          (is (ran-home? seen))
+          (is (in-room? (body raw)) (str "inside the hut: " (body raw)))
+          (is (not (hs/door-open? raw)) "the door shut behind it")
+          (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge built outside"))))))
 
 (deftest a-creeper-is-never-led-to-the-hut
   (async done

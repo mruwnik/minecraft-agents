@@ -14,6 +14,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
+            [jobs.lib.click :as click]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pillar]
             [jobs.lib.reach :as reach]
@@ -231,8 +232,9 @@
            cell)))
 
 (defn ^:async glance-in!
-  "Once a flight per building: when survey dropped a building only for :unseen cells and the body is within
-  door-glance-radius of its door side, step into the doorway (a go-to child; a wall of a 1-wide door shows a wedge from
+  "Once a flight per building: when survey dropped a door side (a cell beside a seen door or gate; a home cell with
+  none is looked into from its door sides) only for :unseen cells and the body is within door-glance-radius of it,
+  open a shut door with a click (shut again after the looks), step into the doorway (a go-to child; a wall of a 1-wide door shows a wedge from
   outside) and look at the nearest unseen cell beside its room, again for each still unseen, at most ::door-looks looks at each spot; cells a door gap shows only at a graze stay unseen, so
   the body then steps to the far side of the door and looks again (sight passes; the time is part of the flight). True when it looked: the caller surveys again."
   [c survey]
@@ -240,12 +242,14 @@
         me (u/self-pos c)
         glanced (:door-glanced (ctx/mem c) #{})
         at (first (for [{[x y z] :at why :why} (:dropped survey)
-                        :let [k (cell-key {:x x :y y :z z})]
-                        :when (and (= :unseen why) (not (glanced k)) (<= (u/dist me {:x x :y y :z z}) door-glance-radius))]
-                    {:k k :pos {:x x :y y :z z}}))]
+                        :let [k (cell-key {:x x :y y :z z})
+                              pos {:x x :y y :z z}
+                              d (door-cell p pos)]
+                        :when (and (= :unseen why) d (not (glanced k)) (<= (u/dist me pos) door-glance-radius))]
+                    {:k k :pos pos :d d}))]
     (when at
       (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at))
-      (let [d (door-cell p (:pos at))
+      (let [d (:d at)
             walk-to! (fn ^:async w [cell]
                        (when-not (= (cell-key (u/self-pos c)) (cell-key cell))
                          (await (ctx/call c :door-glance 'jobs.movement.go-to {:pos (mid cell) :range 0.7 :ways #{:walk} :spend {:job-time 4 :tries 1}}))))
@@ -260,16 +264,21 @@
                                    (do (await (sense/look-at! c target))
                                        (recur (inc n) (conj looked target)))
                                    [n looked]))))
-            beyond (when d (let [{:keys [x y z]} (:pos at)] {:x (- (* 2 (:x d)) x) :y y :z (- (* 2 (:z d)) z)}))]
-        (when d (await (walk-to! d)))
+            beyond (let [{:keys [x y z]} (:pos at)] {:x (- (* 2 (:x d)) x) :y y :z (- (* 2 (:z d)) z)})
+            door (u/seen-block p d)
+            opened? (and (= :openable (click/kind-of (.-name door))) (click/reached? :closed (click/props-of door))
+                         (= :changed (:outcome (await (click/click! c d :open (.-name door))))))]
+        (await (walk-to! d))
         (let [[n _] (await (look-at-sides! 0 #{}))
-              inner (when (and beyond (reach-room/unseen-room? p (:pos at)))
-                      (if (> (u/dist me beyond) (u/dist me (:pos at))) beyond (:pos at)))]
-          (if-not inner
-            (pos? n)
-            (do (await (walk-to! inner))
-                (await (look-at-sides! 0 #{}))
-                true)))))))
+              inner (when (reach-room/unseen-room? p (:pos at))
+                      (if (> (u/dist me beyond) (u/dist me (:pos at))) beyond (:pos at)))
+              looked? (if-not inner
+                        (pos? n)
+                        (do (await (walk-to! inner))
+                            (await (look-at-sides! 0 #{}))
+                            true))]
+          (when opened? (await (click/click! c d :closed (.-name door))))
+          looked?)))))
 
 (defn inside?
   "Whether the body is in room (jobs.lib.reach.room/room): its feet cell or the cell it stands on (as go-to arrives) is one of
