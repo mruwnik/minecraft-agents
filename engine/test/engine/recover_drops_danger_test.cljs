@@ -196,7 +196,15 @@
         [below n]
         (recur n (* 2 n))))))
 
-(defn near-rel? [a b] (<= (js/Math.abs (- a b)) (+ 0.2 (* 0.1 (js/Math.abs b)))))
+(defn near-rel?
+  ([a b] (near-rel? a b 0.2))
+  ([a b slack] (<= (js/Math.abs (- a b)) (+ slack (* 0.1 (js/Math.abs b))))))
+
+(defn line-gap
+  "How far the survived worth lies above the fetch line (cost + margin), as a share of the line; negative below it."
+  [{:keys [value chance cost]}]
+  (let [line (+ cost (cfg/margin))]
+    (/ (- (cost/survived-worth value chance) line) line)))
 
 (deftest kit-pile-decisions-fall-either-side-of-the-priced-line
   (async done
@@ -206,11 +214,13 @@
               fetched (await (kit-run below))
               left (await (kit-run above))
               numbers (fn [{:keys [eng]}] (decided-numbers eng))]
-          (is (pos? above) "some pack keeps the unarmed body off the kit")
+          (is (> above below) "some pack keeps the unarmed body off the kit")
+          (is (>= (line-gap (:expected fetched)) 0.2) "the fetched pack is well over the line, so field slack cannot flip it")
+          (is (<= (line-gap (:expected left)) -0.2) "the skipped pack is well under it")
           (doseq [{:keys [eng expected] :as run} [fetched left]
                   :let [{:keys [value chance cost parts]} (numbers run)]]
             (is (near-rel? value (:value expected)) "the pile's item price")
-            (is (near-rel? chance (:chance expected)) "the death chance of the straight walk and stay")
+            (is (near-rel? chance (:chance expected) 0.02) "the death chance of the straight walk and stay")
             (is (near-rel? (:danger parts 0) (:danger expected)) "the danger is the walk-risk in seconds")
             (is (near-rel? (:walk parts) (:walk expected)) "the walk is the distance from the body to the pile, back and forth")
             (is (near-rel? cost (:cost expected)) "the cost is fetch-cost of that walk"))
