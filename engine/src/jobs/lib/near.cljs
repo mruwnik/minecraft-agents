@@ -152,7 +152,8 @@
   walks to its frontier, and the result carries :frontier, that node's cell [x y z], when the last plan walked was one,
   and :frontier-known true when that node lay in land earlier searches knew to their end (wsearch/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
-  {:status :searching} (wplan/no-walk), nothing walked; progress false: an unfinished search walks nowhere (plan!).
+  {:status :searching} (wplan/no-walk), nothing walked; a re-plan still searching after the body walked part of the
+  way ends a walk that got where it got: {:status :no-path :reason :budget}, as a plan cut by its budget; progress false: an unfinished search walks nowhere (plan!).
   dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!).
   unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight).
   sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal.
@@ -175,7 +176,7 @@
                          {:status :stair-cheaper :why why}
                        (let [plan (or (:cut why) plan)
                              began (ctx/now c)
-                             {done :done last-plan :plan planned :damage}
+                             {done :done last-plan :plan planned :damage walked :walked}
                              (await (drive/follow! c plan {:plan-fn (fn ^:async replan [cells]
                                                                 (await (walk/settle! c))
                                                                 (let [fresh (await (plan! c to range doors (policy-of) (into walls cells) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown))]
@@ -188,6 +189,9 @@
                              _ (drive/note-mismatch! c planned began nil)]
                          (cond
                            (= :stair-cheaper (:status done)) done
+
+                           (and (= :searching (:status done)) (pos? walked))
+                           {:status :no-path :reason :budget :replans (:replans done)}
 
                            (not= :door-stuck (:status done))
                            (cond-> (with-sight (drive/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)

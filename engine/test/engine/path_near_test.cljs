@@ -7,6 +7,8 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [jobs.lib.near :as near]
+            [jobs.lib.walk.drive :as drive]
+            [engine.fake :as fake]
             [engine.test-util :as tu :refer [box floor]]
             [engine.triggers :as triggers]))
 
@@ -225,3 +227,33 @@
           (is (= ["blocked"] @outs) "no walk to the fence: the round knows at once")
           (is (= {:status :no-path :reason :goal-enclosed} (peek @rounds)))
           (is (< (first (at p)) 10) "the body stayed outside the pen"))))))
+
+;; live (KitOak94): each round walked, then its look-ahead's re-plan was still searching; the round read "searching" (no
+;; walk booked, no try), and go-to gave up :moved-while-searching without ever escalating
+(deftest a-round-that-walked-and-ended-searching-is-a-walk-cut-by-its-budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [follow! drive/follow!
+              round (fn ^:async one-round [blocks]
+                      (let [out (atom nil)
+                            job {:round (fn ^:async r [c]
+                                          (reset! out (await (near/walk-round! c {:x 30 :y 64 :z 0} 0 {:doors :never})))
+                                          (ctx/end c :done nil))}
+                            p (tu/fake {:self {:pos start} :blocks flat})
+                            eng (core/create {:primitives p :jobs (assoc registry/jobs 'searcher job) :triggers triggers/all
+                                              :dir (tu/tmp-dir) :now (constantly 1000000)
+                                              :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})})]
+                        (set! drive/follow! (fn [_ plan _]
+                                              (swap! (fake/state p) assoc-in [:self :pos] [blocks 64 0.5])
+                                              (js/Promise.resolve {:done {:status :searching :replans 1 :fresh true} :plan plan :walked blocks :ms 0 :replans 1 :damage 0})))
+                        (core/submit! eng '(searcher) {})
+                        (loop [i 0]
+                          (when (and (< i 10) (seq (:list (core/state eng))))
+                            (await (core/tick! eng))
+                            (recur (inc i))))
+                        [(:status @out) (select-keys (:result @out) [:status :reason]) (count (moved eng))]))]
+          (try
+            (is (= ["partial" {:status :no-path :reason :budget} 1] (await (round 5))) "walked 5 blocks: a walk, booked, cut by the search's budget")
+            (is (= ["searching" {:status :searching} 0] (await (round 0))) "walked nothing: still searching")
+            (finally (set! drive/follow! follow!))))))))
