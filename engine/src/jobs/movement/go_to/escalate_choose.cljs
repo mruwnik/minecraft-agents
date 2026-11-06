@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.access :as access]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.aim :as aim]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.dig-look :as dig-look]
@@ -695,7 +696,8 @@
   within leg-margin of the line, then, when no end is reached there and none was dearer than the goal is worth, round
   what blocks it (a column of lava, bedrock or another's claim) within the leg's own length of its two ends, that box
   doubled while it alone kept the search from an end (dig-route's :boxed), each sliced as the first; an end but the goal
-  over seen air is the cell over the first floor under it. The wider boxes'
+  over seen air is the cell over the first floor under it, and one no route ends in (lava, bedrock, a claim) the
+  stand nearest it within the leg's length that is nearer the goal than from. The wider boxes'
   searches are bounded by the least of opts :bound-s, :worth-s and the way without a dig route (memory :route-search
   :fallback-s), and each counts the CPU the boxed searches before it spent (:searched-s): the widening ends :past-worth
   once the search has spent what the leg could save;
@@ -706,13 +708,30 @@
   (when-not (skip :dig-route)
     (let [p (:primitives c)
           block-at (escape/block-at-of p)
+          length (fn [end] (js/Math.ceil (js/Math.hypot (- (end 0) (from 0)) (- (end 1) (from 1)) (- (end 2) (from 2)))))
+          ;; feet and head cells a route may end in (each open or diggable, no fluid, bedrock or another's claim, no lava
+          ;; beside to flow in) over a floor
+          stand? (fn [[x y z]] (let [cells [[x y z] [x (inc y) z]]]
+                                 (and (every? #(and (some? (dig-route/cell-cost (block-at %))) (escape/diggable? block-at may-dig? %)) cells)
+                                      (dig-route/floor-ok? (block-at [x (dec y) z]))
+                                      (not-any? (fn [[n]] (= "lava" n)) (mapcat #(rules/fluid-neighbours block-at %) cells)))))
+          gap (fn [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
-          ;; priced by the route; the goal is the call's own
-          ends (map (fn [[x y z :as end]]
-                      (if (or (= end goal) (not (dig-route/open? (block-at [x (dec y) z]))))
-                        end
-                        (or (some #(when-not (dig-route/open? (block-at [x (dec %) z])) [x % z]) (range (dec y) (places/min-y p) -1)) end)))
-                    (leg-ends from goal))
+          ;; priced by the route; one no route can end in (inside lava, bedrock or a claim) is the stand nearest it, within
+          ;; the leg's own length and nearer the goal than the body; the goal is the call's own
+          ends (distinct
+                (map (fn [[x y z :as end]]
+                       (let [end (if (or (= end goal) (not (dig-route/open? (block-at [x (dec y) z]))))
+                                   end
+                                   (or (some #(when-not (dig-route/open? (block-at [x (dec %) z])) [x % z]) (range (dec y) (places/min-y p) -1)) end))
+                             l (length end)
+                             ds (range (- l) (inc l))]
+                         (if (or (= end goal) (stand? end))
+                           end
+                           (or (some #(when (and (< (gap % goal) (gap from goal)) (stand? %)) %)
+                                     (sort-by #(gap % end) (for [dx ds dy ds dz ds] (mapv + end [dx dy dz]))))
+                               end))))
+                     (leg-ends from goal)))
           ;; [cells seconds], :searching, :dearer, or the seconds the boxed searches spent when the box cut every end off
           leg (fn [margin route-opts]
                 (loop [ends ends dear? false boxed-s nil]
@@ -722,7 +741,6 @@
                             (and (sequential? cells) (seq cells)) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
                             :else (recur (rest ends) (or dear? (= :dearer cells)) (if (:boxed cells) (+ (or boxed-s 0) (- (:searched-s cells) (:searched-s route-opts 0))) boxed-s))))
                     (cond boxed-s boxed-s dear? :dearer))))
-          length (fn [end] (js/Math.ceil (js/Math.hypot (- (end 0) (from 0)) (- (end 1) (from 1)) (- (end 2) (from 2)))))
           first-pass (leg (constantly leg-margin) (search-opts opts))
           ;; a box keeps the search's heap to what it holds; a wider one is searched only once this one cut the way off,
           ;; under what the leg could save at most, with what the boxes before it spent counted

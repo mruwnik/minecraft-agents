@@ -1244,6 +1244,18 @@
     (with-redefs [ctx/mem (constantly {:route-search {:fallback-s 60}}) ctx/left (constantly {}) cost/search-cell-s (constantly 0.001)]
       (is (= {:step :none :why :past-worth} (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
 
+;; card 29cd6b4d: lava 5 long on the line and 15 wide holds both leg ends (3 and 6 on): each is moved to the stand nearest
+;; it with no lava beside, and the leg is dug there
+(deftest a-dig-leg-whose-ends-lie-in-lava-digs-to-the-stands-nearest-them
+  (let [p (tu/fake {:blocks (merge (box -2 58 -10 16 72 10 "stone") (box 3 64 -7 7 65 7 "lava")) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1000)}
+        leg #(choose/dig-leg c [0 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-ends-in-lava")})
+        r (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
+            (first (drop-while #{{:step :searching}} (take 300 (repeatedly leg)))))]
+    (is (= :dig-route (:step r)) (str r))
+    (is (= [8 62 0] (:cell (peek (:cells r)))) "the far end's nearest stand: under the lava's edge, its head clear of it")
+    (is (not-any? #(= "lava" (:block %)) (:cells r)))))
+
 ;; the detour leg digs longer than the call has left (memory :dug-s of its worth): out of dig budget, not past its worth
 (deftest a-detour-leg-past-the-calls-dig-time-is-out-of-dig-budget
   (let [p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") (box 4 60 -1 5 70 1 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
