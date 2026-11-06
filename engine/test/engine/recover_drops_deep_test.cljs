@@ -52,6 +52,15 @@
           (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? digs) "nothing is dug for a stair that ends after the pile is gone"))))))
 
+(deftest a-stair-that-fits-the-window-but-not-the-collect-after-it-gives-up-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await ((deep-run 239000)))
+              digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))]
+          (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
+          (is (empty? digs) "the 60 s stair fits the 61 s left, the collect after it does not: fetch-cost's formula"))))))
+
 (deftest a-pile-whose-walk-and-collect-cannot-end-before-the-despawn-is-skipped-up-front
   (async done
     (tu/run-async done

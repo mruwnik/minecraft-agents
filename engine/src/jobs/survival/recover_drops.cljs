@@ -20,6 +20,7 @@
             [jobs.survival.recover-drops.config :as cfg]
             [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.ending :as end]
+            [jobs.lib.cost :as cost]
             [jobs.survival.recover-drops.estimate :as est]
             [jobs.survival.recover-drops.fetch :as fetch]
             [jobs.survival.recover-drops.kit :as kt]
@@ -167,14 +168,17 @@
 
 (defn ^:async dig-down!
   "A stair down to the pile (jobs.access.tunnel): :next once it ended there, else the trip ends :abandoned. Not when
-  the window left cannot hold it (about ::stair-step-s per block): go-to has no way down and would only stand above."
+  the stair (about ::stair-step-s per block, as the distance cost/fetch-cost walks in that time) and the collect would
+  end after the despawn, the walk fetch's own formula: go-to has no way down and would only stand above."
   [c entry pos {:keys [below aside]}]
   (let [need-s (* (cfg/stair-step-s) (max below aside))
         left-s (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000)
+        fetch (cost/fetch-cost {:distance (* need-s (cost/walk-blocks-per-s)) :elapsed-ms (est/pile-age-ms c entry)
+                                :cause (:cause (:data entry)) :stay-s (pl/collect-s c (:data entry))})
         give-up! (fn [reason text]
                    (end/finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
-    (if (> need-s left-s)
-      (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
+    (if (:reason fetch)
+      (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s and the collect " (js/Math.round (pl/collect-s c (:data entry))) " s, " (js/Math.round left-s) " s are left"))
       (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :need-drop true}]
         (loop [n 0]
           (let [danger (dg/threatened? c)
