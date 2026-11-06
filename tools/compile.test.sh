@@ -122,6 +122,11 @@ rm -f "$T/repo/engine/out/test/cljs-runtime/engine.late_test.js"
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n[ "$(wc -l < "%s/npx.log")" -ge 2 ] && { : > "%s/repo/engine/out/test/cljs-runtime/engine.late_test.js"; echo "SHADOW_IMPORT(\\"engine.late_test.js\\");" >> "%s/repo/engine/out/test.cjs"; }\nexit 0\n' "$T" "$T" "$T" "$T" > "$T/bin/npx"
 : > "$T/npx.log"; out=$(timeout 30 "$T/repo/tools/test-engine" engine.late-test 2>&1); check "bundle swapped under the run: recompiled once, rc" "$?" 0
 check "bundle swapped under the run: compiled twice" "$(wc -l < "$T/npx.log")" 2
+# a targeted compile waits for the bundle lock a full-suite part holds for its own compile (else it narrows the bundle that part then stamps as full)
+: > "$T/npx.log"; (flock -x 9; sleep 4) 9>"$T/repo/engine/out/test-bundle.lock" & H=$!; sleep 1
+timeout 30 "$T/repo/tools/test-engine" engine.late-test >/dev/null 2>&1 & TE=$!; sleep 1.5
+check "targeted compile waits for the bundle lock" "$(wc -l < "$T/npx.log")" 0
+wait $TE; wait $H; check "targeted compile runs after the lock is freed" "$(grep -c 'compile test' "$T/npx.log")" 1
 # a failed compile that printed an ERROR / undeclared warning is retried (up to 2x); other failures, usage and busy exits are not
 printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\nn=$(wc -l < "%s/npx.log")\n[ "$n" -ge "$OK_AT" ] && exit 0\necho "------ WARNING #1 - :undeclared-var ---"\n' "$T" "$T" > "$T/bin/npx"
 : > "$T/npx.log"; out=$(OK_AT=3 MC_COMPILE_RETRY_S=0 timeout 30 "$T/repo/tools/test-engine" engine.a-test 2>&1); check "retry: clears on 3rd try rc" "$?" 0

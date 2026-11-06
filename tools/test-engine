@@ -70,16 +70,21 @@ if [ "$1" = "--full" ]; then
   # sharded, machine-wide slot limit, per-test timings in engine/out/test-timings.jsonl (see tools/test-shards.mjs); options after --full: --part i/N (only part i of N, stable by namespace name) --shards N --slots M --slowest K
   shift; exec node "$repo/tools/test-shards.mjs" "$@"
 fi
+# The narrowed bundle replaces the full one: take the bundle lock exclusively (tools/test-shards.mjs holds it for its own compile and stamp), so a narrow compile never lands inside a part's full compile and gets stamped as the full bundle.
+narrow_compile() {
+  mkdir -p "$repo/engine/out"
+  ( flock -x 9 || exit 1; compile_retry engine test --ns-regexp "$rx" ) 9>"$repo/engine/out/test-bundle.lock"
+}
 phase compiling
 # build only the requested namespaces (plus engine.timing-test, which test-run always keeps) and their deps
 rx="^($(printf '%s\n' "$@" | tr ',' '\n' | sed -e 's#/.*##' -e 's#\.#\\.#g' | sort -u | paste -sd'|')|engine\\.timing-test)\$"
-compile_retry engine test --ns-regexp "$rx" || exit $?
+narrow_compile || exit $?
 phase testing
 node "$repo/tools/test-run.mjs" "$@"; rc=$?
 # 3: a requested namespace is missing from the bundle; another targeted run in this checkout may have rebuilt engine/out for other namespaces, so compile once more (a really absent one is still missing)
 if [ "$rc" = 3 ]; then
   phase compiling
-  compile_retry engine test --ns-regexp "$rx" || exit $?
+  narrow_compile || exit $?
   phase testing
   node "$repo/tools/test-run.mjs" "$@"; rc=$?
   [ "$rc" = 3 ] && rc=2
