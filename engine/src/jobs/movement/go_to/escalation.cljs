@@ -343,7 +343,8 @@
                                       (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (= :none (:step e))) l e))
                                     :else (or l (escape-way/choose (:primitives c) feet goal %1 %2))))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
-                     #(or (dig-way (:primitives c) feet goal %1 %2) (escape-way/choose (:primitives c) feet goal %1 %2))
+                     #(let [d (dig-toward c feet goal %1 %2)]
+                        (if (and d (not= :none (:step d))) d (let [e (escape-way/choose (:primitives c) feet goal %1 %2)] (if (and d (= :none (:step e))) d e))))
                      @shut? #(or (climb-route/climb-way (:primitives c) feet goal %1 %2) (dug-or-chosen %1 %2))
                      :else dug-or-chosen)
         ;; a step up over a gap with nothing to fill it: cutting the riser on the far side makes the jump level

@@ -206,6 +206,25 @@
           (is (not-any? (fn [[from to]] (and (= goal (vec to)) (> (u/dist (zipmap [:x :y :z] from) (zipmap [:x :y :z] to)) choose/leg-blocks))) @searches)
               (pr-str @searches)))))))
 
+(deftest a-body-by-a-blocked-door-digs-toward-a-far-goal-leg-by-leg
+  ;; a door with rock behind it (no room to open it into) and a goal 30 off in a pocket of air: no dig search runs to
+  ;; the goal from farther than a leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [goal [30 64 0]
+              blocks (apply dissoc (merge room (box -6 63 -6 40 63 6 "stone") (box 4 64 -3 34 66 3 "stone") (box 26 64 -3 34 66 3 "stone")
+                                          {"3,64,0" "oak_door" "3,65,0" "oak_door"})
+                            ["30,64,0" "30,65,0"])
+              searches (atom []) search dig-route/search
+              {:keys [out]} (with-redefs [dig-route/search (fn [block-at from to opts] (swap! searches conj [from to]) (search block-at from to opts))]
+                              (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks
+                                                :inventory [{:name "stone_pickaxe" :count 1}]}
+                                               {:pos goal :range 0 :unknown false})))]
+          (is (seq @searches) "a dig route was searched")
+          (is (not-any? (fn [[from to]] (and (= goal (vec to)) (> (u/dist (zipmap [:x :y :z] from) (zipmap [:x :y :z] to)) choose/leg-blocks))) @searches)
+              (pr-str @out @searches)))))))
+
 (deftest a-walled-in-goal-is-not-dug-to-in-another-s-zone-or-under-walk-only
   (async done
     (tu/run-async done
