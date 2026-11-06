@@ -205,9 +205,9 @@
   (and (#{:lost :far :gone} why) (not (sensed-now? e))))
 
 (defn chaser-entry
-  "A chaser's flight entry: its id, uuid, name, :held (only of a mob seen: a player cannot see a hand through a wall), :chaser (cost/mob-kind) and place (threats/place-of: exact only when seen)."
+  "A chaser's flight entry: its id, uuid, name, :held, :chaser (cost/mob-kind) and place (threats/place-of: exact only when seen)."
   [p e now]
-  (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :held (when (danger-q/seen-only? e) (.-held e)) :chaser (cost/mob-kind e) :seen-t now :since now} (threats/place-of p e)))
+  (merge {:id (.-id e) :uuid (.-uuid e) :mob (.-name e) :held (.-held e) :chaser (cost/mob-kind e) :seen-t now :since now} (threats/place-of p e)))
 
 (defn look
   "What look! makes of the hostiles from the flight's memory mem, written nowhere: {:on the chasers still on, as JS
