@@ -9,6 +9,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.ways :as cw]
+            [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.reach :as reach]
             [jobs.lib.seen-sections :as seen-sections]
@@ -129,7 +130,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood searched-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood lava-s searched-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -244,6 +245,8 @@
         pillar-at (fn [^js node x y z] (if (fn? pillar-s) (pillar-s (inc (if (keyword-identical? :pillar (aget node 4)) (aget node 7) 0)) x y z) pillar-s))
         ;; seconds to open cell x y z (0 when open), nil when no step opens it
         open-s (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (cond (nil? d) nil (zero? d) 0 :else (dig-at (.-name k) x y z))))
+        ;; lava above or beside cell x y z: the dig seals each such face as it opens the cell (priced by :lava-s; with none, the cell is not dug)
+        lava-faces (fn [x y z] (count (filter #(= "lava" (.-name ^js (at (+ x (% 0)) (+ y (% 1)) (+ z (% 2))))) [[0 1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys flood-level
         ;; under-water-s] (flood-dig); false when it may not be
         open-cell! (fn [^js acc x y z]
@@ -252,9 +255,10 @@
                          (nil? s) false
                          (zero? (.-cost ^js (at x y z))) true
                          (.-falling ^js (at x (inc y) z)) false
-                         (some #(= "lava" (.-name ^js (at (+ x (% 0)) (+ y (% 1)) (+ z (% 2))))) [[0 1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) false
                          (.has way-keys (key x y z)) false
+                         (and (nil? lava-s) (pos? (lava-faces x y z))) false
                          :else (let [l (when flood (level-at x y z))
+                                     s (+ s (if (and lava-s (pos? (lava-faces x y z))) (lava-s (lava-faces x y z)) 0))
                                      s (if-let [[w level under] (when (or l (some? (aget acc 4))) (flood-dig flood (aget acc 4) (aget acc 5) y (.-name ^js (at x y z)) l))]
                                          (do (aset acc 4 level) (aset acc 5 under) (+ s w))
                                          s)]
@@ -517,7 +521,8 @@
       :step-s (cost/walk-step-s)
       :stair-s (cw/stair-cost 1)
       :unseen? unseen?
-      :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))})))
+      :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))
+      :lava-s (fn [faces] (+ (* faces (cw/fill-cost 1)) (* (lava-risk/hp-from [[1 0 0]] [0 0 0]) (cost/walk-hp-seconds))))})))
 
 (defn by-share
   "prices with each cell's dig priced at (share cell) of its price (escape/dig-share-fn: an unseen cell is dug only at the chance it is solid)."
@@ -540,8 +545,9 @@
   lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
   :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on, and
+  :lava-s (fn [faces]) the seconds a cut with that many lava faces over or beside it costs, sealed as it is cut (the blocks and the risk the flow reaches the body) and
   :floor-absent-s (fn [floor-cell rise]) the seconds a walk rising rise blocks onto a floor that is (:unseen? cell) adds, the chance it is none; a
-  block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or with lava over or beside it (it would flow in), nor a
+  block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or, without :lava-s, with lava over or beside it (it would flow in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;

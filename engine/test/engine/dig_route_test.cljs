@@ -30,6 +30,15 @@
     (is (seq (:dig r)) "the way round or under it is found")
     (is (not-any? next-to-lava? (:dig r)) "no cell dug has lava over or beside it")))
 
+(deftest a-cut-beside-lava-is-dug-when-its-seal-costs-less-than-the-way-round
+  (let [wall (merge (into {} (for [z (range -5 6) y [10 11]] [[3 y z] "stone"])) {[3 10 1] "lava" [3 11 1] "lava"})
+        w (world wall)
+        route (fn [lava-s] (:dig (dr/route w [0 10 0] [6 10 0] (cond-> {:margin 8 :step-s 0.3 :max-nodes 100000} lava-s (assoc :lava-s lava-s)))))
+        cut? (fn [dig] (some #(and (= 3 (% 0)) (= 0 (% 2))) dig))]
+    (is (cut? (route (fn [faces] (* faces 0.01)))) "sealed at a small price, the cut at z 0 is taken")
+    (is (not (cut? (route (fn [faces] (* faces 1000))))) "a dear seal sends the route round the wall")
+    (is (not (cut? (route nil))) "with no seal priced the cut is refused")))
+
 (deftest a-route-dearer-than-its-bound-is-none
   (let [deep (fn [c] (or ({[30 8 0] "air" [0 20 0] "air" [0 21 0] "air"} c) (if (< (c 1) 20) "stone" "air")))]
     (is (= {:problem :dearer} (dr/route deep [0 20 0] [30 8 0] {:max-s 5 :step-s 0.2 :max-nodes 100000})) "every route left is dearer: the search stops unbounded by any box")
