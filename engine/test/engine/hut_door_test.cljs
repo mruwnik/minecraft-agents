@@ -182,6 +182,16 @@
           (is (some? far-price) "inside the closed hut, the door out of reach: the flight walks to it, so the cover is priced")
           (is (< near-price far-price) "the walk to the door is in its seconds"))))))
 
+(deftest a-door-beyond-reach-is-no-cover-when-a-chaser-gets-to-it-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (fn [z] {:self {:pos {:x 5.5 :y 64 :z -0.5} :health 4.8 :food 13}
+                           :entities [(zombie-at 9 z)]})
+              price (fn [z] (settings/with-settings {::doors/door-reach 2} #(door-price {} (far z))))]
+          (is (some? (await (price 7.5))) "a chaser far from the door: the walk wins, the door is a cover")
+          (is (nil? (await (price 3.5))) "a chaser beside the door: it is there first, no door cover"))))))
+
 (deftest a-door-a-mob-may-break-holds-only-part-of-the-quiet-by-the-chance
   (let [c {:args {}}
         open-s (fn [difficulty mobs unseen?]

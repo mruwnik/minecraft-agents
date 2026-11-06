@@ -65,7 +65,8 @@
   them all closes the room; :unseen? when a cell of the room is not seen yet (the worse case: a side may be open). The door
   of door-for threats must be one of them; with none in a hand's reach the flight walks to the nearest open door inside
   the room (home-door) and :walk-s is that walk's seconds at the flight's pace (0 within reach). nil when the body is in
-  no closed room (another opening) or that door is none of its room's."
+  no closed room (another opening), that door is none of its room's, or a melee threat gets to a door first
+  (room-lib/reaches-first?): the walk is no cover, the fight and the others are priced as they stand."
   [c threats]
   (let [p (:primitives c)
         door (door-for c threats)]
@@ -75,8 +76,9 @@
           (when (some #(= (door-key (:cell door)) (door-key (:cell %))) open)
             {:n (count open) :unseen? unseen? :walk-s 0})
           (when-let [steps (seq (keep #(reach-room/walk-steps p (sh-sense/feet p) (:inside %)) open))]
-            {:n (count open) :unseen? unseen?
-             :walk-s (/ (apply min steps) (cost/flee-walk-speed (.-food (.self p))))}))))))
+            (when (room-lib/reaches-first? p (apply min steps) (map :cell open) threats)
+              {:n (count open) :unseen? unseen?
+               :walk-s (/ (apply min steps) (cost/flee-walk-speed (.-food (.self p))))})))))))
 
 (defn heading-to
   "The heading [dx dz] from cell {:x :z} nearest the way to cell [x y z]."
