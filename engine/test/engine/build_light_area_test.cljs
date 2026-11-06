@@ -13,12 +13,12 @@
 
 (defn world
   "Stone with the open cells (feet and head levels y 64 and 65, floor y 63) carved in; where lit says, a glowstone ceiling (y 66) lights them, as the body's memory floods it; the light table is what the body sees by: no sky, block light 14 under the glowstone."
-  [open lit inventory]
+  [open lit inventory & [extra]]
   (let [cells (for [[x z] open y [64 65]] [x y z])
         glow (into {} (for [[x z] open :when (lit [x 64 z])] [(key-of [x 66 z]) "glowstone"]))
         env (bd/setup-seeing
              {:self {:pos {:x (+ 0.5 (ffirst open)) :y 64 :z (+ 0.5 (second (first open)))}}
-              :blocks (merge (apply dissoc (tu/box -3 62 -3 70 67 40 "stone") (map key-of cells)) glow)
+              :blocks (merge (apply dissoc (tu/box -3 62 -3 70 67 40 "stone") (map key-of cells)) glow extra)
               :inventory inventory :drops {"torch" "torch"}})]
     (swap! (.. (:p env) -world -state) merge {:light (into {} (for [c cells] [c (if (lit c) [0 14] [0 0])]))})
     env))
@@ -26,8 +26,8 @@
 (def room (for [x (range 0 9) z (range 0 9)] [x z]))
 (def l-corridor (concat (for [x (range 0 21)] [x 0]) (for [z (range 1 21)] [20 z])))
 
-(defn ^:async run [open lit args & [inventory]]
-  (let [env (world open lit (or inventory torches))
+(defn ^:async run [open lit args & [inventory extra]]
+  (let [env (world open lit (or inventory torches) extra)
         r (await (tu/child-outcome (:eng env) job args 400))]
     [env r]))
 
@@ -43,6 +43,15 @@
           (is (= 1 (count (torch-cells p room))))
           (is (every? (fn [[tx _ tz]] (every? (fn [[x z]] (< (+ (abs (- x tx)) (abs (- z tz))) 14)) room)) (torch-cells p room))
               "the torch's light (14 less a step a cell) reaches every cell of the room; a corner torch would leave the far corner unlit"))))))
+
+(deftest powder-snow-lets-light-through-like-air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [snow (into {} (for [z (range 0 9) y [64 65]] [(key-of [4 y z]) "powder_snow"]))
+              [{:keys [p]} r] (await (run room (constantly false) {:boxes [[[0 64 0] [8 64 8]]]} torches snow))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (= 1 (count (torch-cells p room))) "a wall of powder snow is no wall to light: one torch, as in the open room"))))))
 
 (deftest a-body-with-only-soul-torches-hangs-them
   (async done

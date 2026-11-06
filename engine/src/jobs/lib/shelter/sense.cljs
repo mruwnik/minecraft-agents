@@ -237,12 +237,6 @@
         ts (map wait cells)]
     (when (every? some? ts) (apply max 0 ts))))
 
-(defn walkable-at?
-  "Whether the cell at pos is one a body stands or walks in: not solid, or a bed."
-  [p pos]
-  (let [n (u/seen-name p pos)]
-    (and (some? n) (or (solid/room? n) (.endsWith n "_bed")))))
-
 (defn doorway?
   "Whether the cell is a gap in a wall: solid on both sides along one horizontal axis and free on both ends of the other."
   [p {:keys [x y z]}]

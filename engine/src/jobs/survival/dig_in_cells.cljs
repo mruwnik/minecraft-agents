@@ -164,7 +164,7 @@
   (solid/solid? (u/seen-name p cell)))
 
 (defn open-cell?
-  "Whether the body sees cell open: sensed, not solid and dry."
+  "Whether the body sees cell open for a body: sensed, dry, not solid and not a bad floor (powder snow: it sinks in)."
   [p cell]
   (let [n (u/seen-name p cell)]
     (and (solid/room? n) (not (wet? p cell)))))

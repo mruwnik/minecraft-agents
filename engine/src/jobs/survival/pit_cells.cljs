@@ -63,11 +63,6 @@
   (when-let [over (first (filter #(dig-cells/wet? p %) [roof (update roof :y inc)]))]
     (stop :fluid-above (str (u/seen-name p over) " at or above the roof cell; not digging further"))))
 
-(defn- open-air?
-  "A cell to dig that is already open: not solid, and not powder snow, which the body digs out."
-  [name]
-  (and (not (solid/solid? name)) (not= "powder_snow" name)))
-
 (defn cell-stop
   "The stop for a cell to dig that is beside fluid, wet, a hazard or open air, nil when it is solid rock to dig; :unseen when
   the cell is not sensed (rock-name reads no rock there): plan-of! looks before it rules the pit out."
@@ -77,7 +72,7 @@
     (cond
       beside (stop :fluid-adjacent (str beside " beside the cell to dig; not opening the pit"))
       (or (dig-cells/wet? p cell) (dig-cells/hazards name)) (stop :hazard-below (str name " in the cell to dig; not digging"))
-      (open-air? name) (cond-> (stop :no-floor (str (or (u/seen-name p cell) "an unsensed cell") " where the pit would go at " (pr-str (mapv cell [:x :y :z])) "; not digging"))
+      (not (solid/hides-cells? name)) (cond-> (stop :no-floor (str (or (u/seen-name p cell) "an unsensed cell") " where the pit would go at " (pr-str (mapv cell [:x :y :z])) "; not digging"))
                                         (nil? (u/seen-name p cell)) (assoc :unseen true)))))
 
 (defn dug-cells-ok?
@@ -148,7 +143,7 @@
   zigzag, which never digs under the feet onto a floor it has not seen. nil otherwise."
   [p feet {:keys [depth]}]
   (let [shape (dig-cells/pit-steps feet nil depth)
-        bad? (fn [cell] (let [n (u/seen-name p cell)] (and n (or (open-air? n) (dig-cells/wet? p cell)))))]
+        bad? (fn [cell] (let [n (u/seen-name p cell)] (and n (or (not (solid/hides-cells? n)) (dig-cells/wet? p cell)))))]
     (when (some bad? (let [{:keys [dig floor]} (first (:steps shape))] (conj dig floor)))
       shape)))
 
