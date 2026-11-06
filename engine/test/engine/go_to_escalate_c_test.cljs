@@ -876,6 +876,15 @@
           (is (true? (:restore-held (ctx/mem c))) "the route cell ahead is held, not filled")
           (is (contains? (into #{} (map :cell) (tidy/entries c)) [2 64 4]) "it stays in the ledger for the arrival"))))))
 
+(deftest the-dug-routes-of-a-climb-and-of-earlier-ways-are-all-held-ahead
+  (let [{:keys [eng]} (gt/setup {:blocks {}})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        cells (fn [& xs] (mapv (fn [x] {:cell [x 64 0]}) xs))
+        run! (fn [e] (ctx/update-mem! c assoc :escalation e) (esc/escalated! c [20 2 10] e true) (:route-ahead (ctx/mem c)))]
+    (.setOwner (:primitives eng) "tx")
+    (is (= [[1 64 0] [2 64 0]] (run! {:step :stair :then [{:step :dig-route :cells (cells 1 2)}]})) "a later way's route is held")
+    (is (= [[1 64 0] [2 64 0] [3 64 0]] (run! {:step :dig-route :cells (cells 3)})) "a later route adds to the earlier route's unentered cells")))
+
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})

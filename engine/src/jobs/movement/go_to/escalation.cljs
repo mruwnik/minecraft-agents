@@ -445,6 +445,14 @@
       (end/give-up! c pos result (cond (night-refusal? c result) {:escalation {:step :none :why :night-risk}}
                                        (and shut-reason? (escape/walk-enclosed? c)) {:shut-in true})))))
 
+(defn ahead-cells
+  "The cells, in walking order, of way e's dig route (when its step is :dig-route) and of the dig routes of its later
+  ways (:then): the cells still to dig or enter, kept in memory :route-ahead until the walk passes them."
+  [e step]
+  (->> (concat (when (= :dig-route step) (:cells e))
+               (mapcat :cells (filter #(= :dig-route (:step %)) (:then e))))
+       (mapv :cell)))
+
 (defn escalated!
   "The child made a way (or part of one, done false): start a climb's next way at once when it made all of it
   (route-ways/next-way), walk on after its last, else walk again from a fresh count, or escalate again at once after an
@@ -468,7 +476,7 @@
                                             nearer? (update :fruitless (fn [n] (max 0 (dec (or n 0))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
-                          (and (= :dig-route step) (seq (:cells e))) (assoc :route-ahead (mapv :cell (:cells e)))
+                          (seq (ahead-cells e step)) (update :route-ahead (fn [ahead] (vec (distinct (concat ahead (ahead-cells e step))))))
                           nxt (assoc :escalation (cond-> nxt (:own-cut e) (assoc :own-cut true)) :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
                           ;; a cut of its own build (a pen open to the animals): put back at once, the walk on not waited for
                           (and (:own-cut e) (or (not= :dig-route step) (not done?))) (assoc :restore-now true)
