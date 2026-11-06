@@ -1074,16 +1074,11 @@
               (face-clear? ex ey ez [x y z] (remembered-sight-blocks per))))))))
 
 (defn makes-out-fn
-  "(fn [cell]) makes-out? for the body of primitives p, its lit-or-near-fn built once; use it over many cells."
+  "(fn [cell]) whether a look from where the body stands would make out the cell [x y z]: it shows (look-shows?) and is lit enough or
+  near (lit-or-near-fn, built once); a dark cell farther off shows only as dark."
   [p]
   (let [lit? (lit-or-near-fn p)]
     (fn [cell] (and (look-shows? p cell) (lit? cell)))))
-
-(defn makes-out?
-  "Whether a look from where the body stands would make out the cell [x y z]: it shows (look-shows?) and is lit enough or
-  near (lit-or-near?); a dark cell farther off shows only as dark."
-  [p cell]
-  ((makes-out-fn p) cell))
 
 (defn dark-in-sight?
   "Whether a look at the cell {:x :y :z} would show it only dark: it shows (look-shows?) but is neither lit enough to see
