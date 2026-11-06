@@ -15,6 +15,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
             [jobs.lib.seen-sections :as seen-sections]
@@ -100,7 +101,7 @@
         counted (::counted c)
         mined (kinds (:args c))
         least (min-dig-s)]
-    (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))))
+    (-> (dig-route/body-prices p (fn [[x y z]] (nil? (u/seen-name p {:x x :y y :z z}))) {:plugs (smem/plugs-of c)})
         (dig-route/less-yield (fn [name cell] (if (and (contains? mined name) (not (contains? counted cell))) one 0)))
         (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (max least))))))))
 

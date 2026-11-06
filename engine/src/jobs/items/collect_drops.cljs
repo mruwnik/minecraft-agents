@@ -15,6 +15,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
@@ -363,6 +364,12 @@
       (when-not (= :continue o) (ctx/update-mem! c assoc :lit true))
       (if (= :continue o) :continue :lit))))
 
+(defn dig-prices
+  "dig-route's prices for a dig to a drop: go-to's (body-prices, the body's plugs priced as floods), less yield, by dig share."
+  [c seen-name yield]
+  (let [p (:primitives c)]
+    (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %)) {:plugs (smem/plugs-of c)}) yield) (escape/dig-share-fn p))))
+
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
   never seen) is planned again from where the body now stands, at most ::replans times; when every route costs more than the
@@ -376,7 +383,7 @@
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
             yield (fn [n _] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (cost/worth-to nil [i] (u/self-pos c)) 0)))
-            prices (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %))) yield) (escape/dig-share-fn p))
+            prices (dig-prices c seen-name yield)
             worth (- (item-worth c item) spent)
             r (drop-route prices worth (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)

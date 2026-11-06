@@ -17,6 +17,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.loose :as loose]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -879,3 +880,12 @@
           (let [result (await (tu/child-outcome eng job {:radius 8 :items ["porkchop"]} 60))]
             (is (= 1 (:collected result)) (pr-str result))
             (is (not-any? #(= :goal-not-standable (:why %)) @seen))))))))
+
+(deftest a-dig-to-a-drop-prices-the-body-s-plug-with-an-unseen-neighbour-as-a-flood
+  (let [plug [10 64 0]
+        stone (into {} (map (fn [d] [(apply str (interpose "," (map + plug d))) "stone"])) rules/neighbour-deltas)
+        p (tu/seeing-all (tu/fake {:blocks (assoc stone "10,64,0" "stone") :unloaded ["11,64,0"] :inventory [{:name "stone_pickaxe" :count 1}]}))
+        c {:primitives p
+           :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}})}
+        dig-s (:dig-s (job-ns/dig-prices c (constantly nil) (fn [_ _] 0)))]
+    (is (> (dig-s "stone" plug) (dig-s "stone" [20 64 0])) "the plug costs the flood price over a plain dig")))
