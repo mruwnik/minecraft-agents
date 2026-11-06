@@ -138,8 +138,8 @@
   (let [p (:primitives c)
         given-up (when (:part-cut? (:args c)) (into #{} (map (comp :column :data)) (ctx/entries c trees/unreachable-kind)))
         excluded (-> (unreachable-set (ctx/mem c)) (into (map vec) (:avoid (:args c))) (into given-up))
-        logs (delay (into #{} (map :pos) (trees/scan-logs p radius nil)))
-        wanted? (fn [t] (or (not (:part-cut? (:args c))) (part-cut/part-cut? p logs t)))]
+        seen (delay (part-cut/seen-around p radius))
+        wanted? (fn [t] (or (not (:part-cut? (:args c))) (part-cut/part-cut? p seen t)))]
     (if-let [at (:at (:args c))]
       (when-let [t (tree-at p at)]
         (when-not (or (excluded [(:x at) (:z at)]) (not (log/log-allowed? c (:base t))) (not (wanted? t))) [t]))

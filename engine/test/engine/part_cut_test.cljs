@@ -54,7 +54,12 @@
   (is (= [] (trunks-hiding (merge (fm/ground [[6 0] [7 0]]) (branched 7 66)) #{[6 65 0] [6 66 0] [6 67 0]}))
       "the trunk's seen foot goes on up into unseen cells beside the branch")
   (is (= [{:x 6 :y 65 :z 0}] (trunks-hiding (merge (fm/ground [[6 0]]) (part-cut 6)) #{[6 68 0] [7 66 0] [7 65 0]}))
-      "unseen cells in a hanging crown over no seen log join it to nothing"))
+      "unseen cells in a hanging crown over no seen log join it to nothing")
+  (is (= [] (trunks-hiding (merge (fm/ground [[6 0] [7 0] [8 0]]) (branched 7 66) {(fm/k 8 66 0) "oak_log"})
+                           #{[6 65 0] [6 66 0] [6 67 0] [7 66 0]}))
+      "a branch of two logs, its inner log and the trunk over the seen foot unseen: the trunk rises under the same crown")
+  (is (= [] (trunks-hiding (merge (fm/ground [[6 0]]) (part-cut 6)) #{[6 63 0]}))
+      "a trunk over air with the ground under it unseen: no seen evidence of a cut"))
 
 (deftest the-ground-under-a-raised-log-is-the-first-seen-solid-block
   (let [p (:p (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))}))]
