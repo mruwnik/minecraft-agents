@@ -20,8 +20,8 @@
    ::kit-detour {:default 40 :doc "A kit is fetched only from a chest that adds no more than this many blocks to the walk from the body to the pile." :spec (a/num-in 0 nil)}
    ::pause-s {:default 1 :doc "Seconds one wait for the respawn, the settling or a kit fetch pauses (jobs.time.noop) before it looks again." :spec (a/num-in 0 nil)}
    ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger) for that death, then the danger is weighed anew." :spec (a/num-in 0 nil)}
-   ::hold-slack {:default 2 :doc "A skip for danger is held only while the window left still covers this many times the walk to the pile and the flight (the walk is guessed short); with less the pile is fetched under the danger." :spec (a/num-in 1 nil)}
-   ::min-hold-s {:default 15 :doc "Seconds a skip for danger must be held at least to be worth it; a shorter hold fetches under the danger." :spec (a/num-in 0 nil)}
+   ::hold-slack {:default 2 :doc "A skip for danger is held only while the window left still covers this many times the walk to the pile and the flight (the walk is guessed short); with less the pile is left (:skip)." :spec (a/num-in 1 nil)}
+   ::min-hold-s {:default 15 :doc "Seconds a skip for danger must be held at least to be worth it; a shorter hold is no wait: the pile is left (:skip)." :spec (a/num-in 0 nil)}
    ::margin {:default 0 :doc "Added to the fetch cost before comparing it to the value." :spec (a/num-in nil nil)}
    ::leg-s {:default 6 :doc "The walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again." :spec (a/num-in 0.1 120)}
    ::mob-spot-radius {:default 6 :doc "A known hostile of the same kind this near a remembered mob's place is that mob." :spec (a/num-in 0 nil)}
