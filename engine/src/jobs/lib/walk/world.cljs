@@ -354,13 +354,14 @@
   field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, look/dark-fn; over a
   masked pw an unseen cell is priced by the mask, not as dark) and with the steps the walker failed at (jobs.lib.walk.edges).
   Every search that ranks routes by cost plans over this.
-  keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead)."
+  keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead), each still
+  met with those left out."
   [c pw {:keys [dangers? dark? keep?]}]
   (cond-> pw
-    dangers? (as-> pw' (let [ts (filterv (or keep? any?) (threats/known-threats c))]
+    dangers? (as-> pw' (let [all (threats/known-threats c) ts (filterv (or keep? any?) all)]
                          (-> (with-dangers pw' (threats/planner-dangers c))
-                             (with-tolls (threats/shared-tolls c ts))
-                             (with-toll-inputs (threats/toll-inputs c ts)))))
+                             (with-tolls (threats/shared-tolls c all ts))
+                             (with-toll-inputs (threats/toll-inputs c all ts)))))
     dark? (as-> pw' (let [kit (kit-of c)
                           wet (cost/water-factors kit)
                           phantom (cost/unseen-water-factors kit wet)]

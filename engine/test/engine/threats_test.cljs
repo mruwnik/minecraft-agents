@@ -68,6 +68,16 @@
     (is (= #{:flee} (stance-at 30)) "the four met together: fled")
     (is (= #{:fight} (stance-at -25)) "the lone one met alone: fought")))
 
+;; a flight's search tolls all but the chasers it races (keep?): the zombie left beside them is met with them all the same
+(deftest a-zombie-kept-beside-left-out-chasers-is-priced-with-them
+  (let [sword [{:name "diamond_sword" :count 1}]
+        pack (ready-test/ctx-of {:inventory sword :entities (mapv #(zombie % 30 (- % 2)) [1 2 3 4])})
+        lone (ready-test/ctx-of {:inventory sword :entities [(zombie 4 30 2)]})
+        at #(get (into {} (map (juxt (juxt :x :y :z) :factor)) %) [30 64 2])
+        last-only #(= 2 (:z (:pos %)))]
+    (is (> (at (threats/threat-tolls pack last-only)) (at (threats/threat-tolls lone)))
+        "the pack is fled, so the kept one costs a flight's price, not its own fight's")))
+
 (defn cheapest-without-meet [body ms at]
   (let [{:keys [answer prices]} (cost/decide body (answer/threat-answers body ms nil) at)] (get prices answer)))
 

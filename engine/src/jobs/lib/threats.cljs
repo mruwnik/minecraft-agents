@@ -305,12 +305,18 @@
   (let [{:keys [health equipment weapon]} (body-of (:primitives c))]
     [health equipment weapon]))
 
+(defn stances-of
+  "stances of threats ts among known threats all ({:mob :pos}, ts among them): each met with all, so a threat left out of
+  ts still joins those in it."
+  [c all ts]
+  (select-keys (stances c all) (map threat-id ts)))
+
 (defn toll-inputs
-  "What tolls-of reads of threats ({:mob :pos :weight}): a map of their table-key less the weight to the highest weight
-  (round-weight), the body-inputs and the stances' prices (toll-inputs-no-worse?)."
-  [c threats]
+  "What tolls-of reads of threats ({:mob :pos :weight}) of known threats all (stances-of): a map of their table-key less
+  the weight to the highest weight (round-weight), the body-inputs and the stances' prices (toll-inputs-no-worse?)."
+  [c all threats]
   (conj (into [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats))] (body-inputs c))
-        (update-vals (stances c threats) :price)))
+        (update-vals (stances-of c all threats) :price)))
 
 (defn toll-inputs-no-worse?
   "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, none at a higher weight or
@@ -353,12 +359,12 @@
                         (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r)))))))))))))
 
 (defn shared-tolls
-  "tolls-of threats ts of c, read once per check-cache window for the same threats and body-inputs (threat-field/shared:
-  one table, so walk.world/with-tolls merges it once)."
-  [c ts]
+  "tolls-of threats ts of c, each at its stance among known threats all (stances-of), read once per check-cache window for
+  the same threats and body-inputs (threat-field/shared: one table, so walk.world/with-tolls merges it once)."
+  [c all ts]
   (if (empty? ts)
     []
-    (let [st (stances c ts)]
+    (let [st (stances-of c all ts)]
       (field/shared c [::threat-tolls (table-key ts) (body-inputs c) (update-vals st :price)]
                     #(tolls-of c ts st)
                     count))))
@@ -367,4 +373,4 @@
   "shared-tolls of the known-threats of c (those keep? holds of): go-to's price of every known mob (the planner's
   options.tolls)."
   ([c] (threat-tolls c any?))
-  ([c keep?] (shared-tolls c (filterv keep? (known-threats c)))))
+  ([c keep?] (let [all (known-threats c)] (shared-tolls c all (filterv keep? all)))))
