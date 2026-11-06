@@ -268,6 +268,11 @@
       (+ (escape-way/price p feet e) (rest-s (:cell (peek (:cells e)))))
       (escape-way/way-s p feet goal e (assoc (escape/carried-pillar-item p) :rest-s rest-s :may-dig? may-dig?)))))
 
+(defn beats-leg?
+  "Whether way e (a stair or pillar) takes the body to the goal in no more seconds than dig leg l: total maps a way to its way-total."
+  [e l total]
+  (boolean (and e (#{:stair :pillar} (:step e)) (<= (total e) (total l)))))
+
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
@@ -329,7 +334,7 @@
                      rock-dig? #(let [l (dig-leg c feet goal %1 %2)
                                       e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))]
                                   (cond
-                                    (and e (#{:stair :pillar} (:step e)) (<= (way-total (:primitives c) feet goal e %1) (way-total (:primitives c) feet goal l %1))) e
+                                    (beats-leg? e l (fn [w] (way-total (:primitives c) feet goal w %1))) e
                                     (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
                                       (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (and (= :none (:step e)) (not (:why e)))) l e))

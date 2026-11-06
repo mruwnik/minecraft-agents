@@ -1609,15 +1609,13 @@
           (is (some #(= [:dig-route :refused] [(:step %) (:reason %)]) (events-of seen :go-to.escalation-stopped))
               (pr-str (map #(select-keys % [:step :reason]) (events-of seen :go-to.escalation-stopped)))))))))
 
-;; a stair's price counts its own cuts only: a short level stair costs less than the leg that reaches the goal, but leaves
-;; the body the whole walk on through rock that the leg already dug
-(deftest a-way-is-weighed-with-the-walk-it-leaves-to-the-goal
-  (let [p (tu/fake {:blocks (box -2 60 -4 30 70 4 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
-        feet [0 64 0] goal [20 64 0]
-        leg (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
-              (first (remove #{{:step :searching}} (take 300 (repeatedly #(choose/dig-leg c feet goal (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "way-total")}))))))
-        stair {:step :stair :heading :east :steps 1}]
-    (is (= :dig-route (:step leg)) (pr-str leg))
-    (is (< (escape-way/price p feet stair) (escape-way/price p feet leg)) "the stair alone is the cheaper price")
-    (is (> (esc/way-total p feet goal stair (constantly true)) (esc/way-total p feet goal leg (constantly true))) "with the walk on it is the dearer way")))
+;; rock-dig? takes a stair or pillar over the dig leg only when its way-total is no more than the leg's
+(deftest a-stair-or-pillar-beats-the-dig-leg-only-by-its-whole-way
+  (let [leg {:step :dig-route}
+        totals (fn [stair-s leg-s] {{:step :stair} stair-s leg leg-s {:step :pillar} stair-s {:step :approach} 0})
+        beats (fn [e stair-s leg-s] (esc/beats-leg? e leg (totals stair-s leg-s)))]
+    (is (true? (beats {:step :stair} 10 20)) "a stair that is cheaper in all wins")
+    (is (true? (beats {:step :pillar} 20 20)) "a tie goes to the stair or pillar")
+    (is (false? (beats {:step :stair} 21 20)) "a stair whose own cuts are short but whose walk on is long loses")
+    (is (false? (beats {:step :approach} 0 20)) "only a stair or pillar may displace the leg")
+    (is (false? (beats nil 0 20)))))
