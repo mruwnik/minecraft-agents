@@ -444,10 +444,41 @@
                          (assoc "3,68,0" "dirt"))
               env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false} 20))
+              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false :worth 10} 20))
               {:keys [price worth]} (:roof-kept r)]
           (is (= [:unreachable [3 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (< worth price) (pr-str r))
+          (is (empty? (calls (:p env) "dig"))))))))
+
+;; the same room and slab, the caller's goal worth more than the shelter: the holder decides, so the roof is dug through
+(deftest a-roof-whose-shelter-is-worth-less-than-the-goal-is-dug-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (-> (tu/box -2 60 -3 42 70 3 "stone")
+                         (dissoc "3,63,0" "3,64,0")
+                         (as-> m (apply dissoc m (keys (tu/box 3 66 0 40 67 0 "air"))))
+                         (assoc "3,68,0" "dirt"))
+              env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
+              _ (tu/seeing-all (:p env))
+              r (await (tu/child-outcome (:eng env) job {:pos [3 68 0] :pillar false :worth 1e9} 60))]
+          (is (nil? (:roof-kept (:cause (:ending r)))) (pr-str r))
+          (is (seq (calls (:p env) "dig"))))))))
+
+;; a room reaching past the spawn-free radius in the dark is sealed but not safe: its roof hole still lets walkers in
+(deftest a-roof-over-a-sealed-dark-room-is-priced-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [interior (keys (tu/box 0 63 -1 30 64 1 "air"))
+              tunnel (keys (tu/box 0 66 0 40 67 0 "air"))
+              blocks (-> (tu/box -3 62 -3 42 70 3 "stone")
+                         (as-> m (apply dissoc m (concat interior tunnel)))
+                         (assoc "0,68,0" "dirt"))
+              env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
+              _ (tu/seeing-all (:p env))
+              r (await (ending-cause (:eng env) job {:pos [0 68 0] :pillar false :worth 10} 40))]
+          (is (= [:unreachable [0 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 
 ;; the same slab with rock over it: the hole opens onto nothing, the ore over it is worth the dig
@@ -1292,7 +1323,7 @@
                          (assoc "0,68,0" "dirt"))
               env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (ending-cause (:eng env) job {:pos [0 68 0]} 40))]
+              r (await (ending-cause (:eng env) job {:pos [0 68 0] :worth 10} 40))]
           (is (= [:unreachable [0 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (empty? (filter #(<= 65 (.-y (.-pos (.-args %)))) (calls (:p env) "dig"))) "the roof is not dug")
           (is (empty? (calls (:p env) "place")) "nothing is pillared"))))))

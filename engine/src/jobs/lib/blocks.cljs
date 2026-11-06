@@ -13,7 +13,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
-            [jobs.lib.price :as price]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -199,37 +198,31 @@
 
 (defn roof-price
   "Seconds breaking the block at cell costs in shelter lost (Q121): 0 unless it roofs the body's room (roof-over-body?) and
-  that room is safe now (sh-inside/safe-room-at?); else the mobs that come in through the hole while the body stays (its
-  job's stay, price/stay-s, or the night left when longer: a body sheltering stays till morning), spawning at the likeliest
-  cell it opens onto (spawn-light/chance-at of a stay; a cell not seen solid counts as open), priced as an opening
-  (cost/opening-price)."
+  that room is shut now (sh-inside/safe-room-at?, or sealed but for its dark: dark-room-at?), where the hole lets outside
+  walkers in. The hole stays until mended, so the mobs spawning at the likeliest cell it opens onto (a cell not seen solid
+  counts as open) are counted over the day left (spawn-light/spawns-at) and the night through (night-chance, the night
+  left when it is night), priced as an opening (cost/opening-price)."
   [c [x y z :as cell]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)]
-    (if-not (and (roof-over-body? c cell) (sh-inside/safe-room-at? p feet))
+    (if-not (and (roof-over-body? c cell) (or (sh-inside/safe-room-at? p feet) (sh-inside/dark-room-at? p feet)))
       0
-      (let [beyond (remove #(sh-sense/solid-at? p %)
+      (let [self (.self p)
+            t (.-timeOfDay self)
+            day? (.-isDay self)
+            day-s (if day? (sh-clock/ticks->s (max 0 (- sh-clock/dusk-tick t))) 0)
+            night-s (if day? (sh-clock/ticks->s (- sh-clock/morning-tick sh-clock/dusk-tick)) (/ (sh-clock/ms-until-morning t) 1000))
+            beyond (remove #(sh-sense/solid-at? p %)
                            (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
-            chance (apply max 0 (map #(spawn-light/chance-at p % false nil true) beyond))
-            stay-s (max (price/stay-s c) (/ (sh-clock/ms-until-morning (.-timeOfDay (.self p))) 1000))
-            spawns (* chance stay-s)
-            body (assoc (threats/death-body c) :health (.-health (.self p)))]
+            spawns (apply max 0 (map #(+ (spawn-light/spawns-at p % day-s) (* night-s (spawn-light/night-chance p %))) beyond))
+            body (assoc (threats/death-body c) :health (.-health self))]
         (cost/opening-price body (cost/spawns-hurt body spawns feet) {:spawns spawns} feet)))))
 
-(defn goal-worth
-  "Seconds the call's goal is worth: ctx/worth when a caller names one, else what getting one of names is worth (cost/worth-to;
-  none: ctx/worth)."
-  [c names]
-  (let [w (ctx/worth c)]
-    (if (or (js/isFinite w) (empty? names))
-      w
-      (cost/worth-to (threats/death-body c) names (sh-sense/feet (:primitives c))))))
-
 (defn roof-kept
-  "{:cell :price :worth} when breaking cell costs more shelter (roof-price) than (worth-of), else nil."
-  [c cell worth-of]
+  "{:cell :price :worth} when breaking cell costs more shelter (roof-price) than the call's worth (ctx/worth), else nil."
+  [c cell]
   (let [s (roof-price c cell)
-        w (when (pos? s) (worth-of))]
+        w (when (pos? s) (ctx/worth c))]
     (when (and w (> s w)) {:cell cell :price (js/Math.round s) :worth (js/Math.round w)})))
 
 (defn through-cell

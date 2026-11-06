@@ -419,10 +419,9 @@
           b/neighbours)))
 
 (defn roof-kept!
-  "Whether breaking cell would cost more shelter than the dig is worth (b/roof-kept; worth b/goal-worth of the target's
-  drops): noted as :roof-kept in memory for the ending's data."
-  [c cell pos]
-  (when-let [kept (b/roof-kept c cell #(b/goal-worth c (b/drops-of (:primitives c) (b/target-name (:primitives c) pos b/hidden-guess))))]
+  "Whether breaking cell would cost more shelter than the dig is worth (b/roof-kept against ctx/worth): noted as :roof-kept in memory for the ending's data."
+  [c cell]
+  (when-let [kept (b/roof-kept c cell)]
     (ctx/update-mem! c assoc :roof-kept kept)
     true))
 
@@ -430,7 +429,7 @@
   "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does, unless it roofs the body's room at a shelter price over the dig's worth (roof-kept!). :again, :continue, or nil when there is no such block or the child could not dig it."
   [c pos]
   (when-let [hit (when (:through (:args c)) (b/through-cell c pos))]
-    (when-not (roof-kept! c hit pos)
+    (when-not (roof-kept! c hit)
       (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
         (cond
           (= :continue r) :continue
@@ -449,14 +448,13 @@
 (defn ^:async pillar-up!
   "A block overhead that no walk reaches: a player stacks a block or two under the feet. One pillar child per call (carried blocks only); :again when it built, :continue while it waits, else nil."
   [c pos]
-  (when-let [h (and (not (false? (:pillar (:args c)))) (not (:pillared (ctx/mem c))) (pillar-height c pos)
-                    (or (:pillaring (ctx/mem c)) (not (roof-kept! c (update (b/feet-cell c) 1 + 2) pos)))
-                    (pillar-height c pos))]
-    (ctx/update-mem! c assoc :pillaring true)
-    (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-      (when-not (= :continue r) (ctx/update-mem! c assoc :pillared true))
-      (cond (= :continue r) :continue
-            (= :done (:kind r)) :again))))
+  (when-let [h (and (not (false? (:pillar (:args c)))) (not (:pillared (ctx/mem c))) (pillar-height c pos))]
+    (when (or (:pillaring (ctx/mem c)) (not (roof-kept! c (update (b/feet-cell c) 1 + 2))))
+      (ctx/update-mem! c assoc :pillaring true)
+      (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        (when-not (= :continue r) (ctx/update-mem! c assoc :pillared true))
+        (cond (= :continue r) :continue
+              (= :done (:kind r)) :again)))))
 
 (defn ^:async get-tool!
   "Get the tool the block needs (jobs.lib.need): :fetched, :continue while the fetch waits, or the ending when the
