@@ -97,6 +97,18 @@
           (is (true? @ended) "the stop waited until the danger reflex ended")
           (is (= [:stop-waiting] (mapv :kind @raw))))))))
 
+(deftest a-warm-hook-that-throws-or-rejects-emits-warm-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (atom [])
+              eng {:events (events/make {:body "Fake" :sinks [#(swap! raw conj %)] :now #(js/Date.now)})}]
+          (main/run-warm-hook! eng #(throw (js/Error. "sync")))
+          (main/run-warm-hook! eng #(js/Promise.reject (js/Error. "async")))
+          (await (js/Promise. #(js/setTimeout % 20)))
+          (is (= [:warm-failed :warm-failed] (mapv :kind @raw)))
+          (is (= ["warming the tables failed: sync" "warming the tables failed: async"] (mapv :message @raw))))))))
+
 (deftest a-second-signal-does-not-stop-again
   (async done
     (tu/run-async done
