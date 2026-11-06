@@ -817,6 +817,23 @@
           (is (= [] (the-ledger eng)))
           (is (= [] (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "scooped, not dug"))))))
 
+(deftest a-scooped-source-that-flowing-water-refills-is-removed-not-held-for-a-bucket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out]} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"1,64,0" "water"})
+                                          :entries [(entry [1 64 0] :item "water" :purpose :pour)]})]
+          (swap! (fake/state p) update :inventory conj {:name "bucket" :count 1})
+          (.override (.-world p) "place"
+                     (fn ^:async g [tok a impl]
+                       (let [r (await (impl tok a))]
+                         (fake/set-block! p [1 64 0] "water")
+                         r)))
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks {:clock (atom 1000000)} eng 5))
+          (is (= [{:cell [1 64 0] :item "water"}] (:removed @out)) "the full bucket proves the source scooped")
+          (is (= [] (the-ledger eng))))))))
+
 (deftest a-pillar-is-cleaned-up-in-one-run
   (async done
     (tu/run-async done

@@ -426,6 +426,22 @@
           (is (not= "water" (.-name (.blockAt p #js {:x 0 :y 64 :z 0}))))
           (is (some #(= "water_bucket" (:name %)) (u/inventory p))))))))
 
+(deftest a-pour-the-server-reports-landed-elsewhere-is-still-scooped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:onFire true}
+                                      :inventory [{:name "water_bucket" :count 1}]
+                                      :blocks (floor 6)})]
+          (.override (.-world p) "place"
+                     (fn ^:async g [tok a impl]
+                       (await (impl tok a))
+                       (if (= "water_bucket" (.-item a)) #js {:status "failed" :reason "landed-elsewhere" :changed #js []} #js {:status "done"})))
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (is (= ["water_bucket" "bucket"] (mapv :item (map call-args (calls p "place")))) "the bucket emptied by the pour is filled again")
+          (is (= [] (pours eng))))))))
+
 (deftest a-failed-scoop-is-listed-in-the-ending-with-the-cell
   (async done
     (tu/run-async done

@@ -298,7 +298,11 @@
   (let [r (await (child/run!* c :scoop 'jobs.items.use {:on cell :item "bucket" :ignore-zones? true}))]
     (cond
       (= :continue r) :continue
-      (= :done (:kind r)) (do (await (gone-water! c cell)) :again)
+      (= :done (:kind r)) (do (await (gone-water! c cell))
+                              ;; the full bucket proves the source gone; flowing water that refills the cell reads as water and would hold the entry
+                              (ledger/remember! c (ledger/drop-cell (ledger/open-entries (ctx/view c)) cell))
+                              (ctx/update-mem! c update :removed (fnil conj []) {:cell cell :item "water"})
+                              :again)
       :else (do (ctx/update-mem! c count-fail cell {:reason :scoop-failed :scoop (or (get-in r [:data :reason]) :failed)} (give-up))
                 :again))))
 

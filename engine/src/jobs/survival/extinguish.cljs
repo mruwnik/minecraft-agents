@@ -248,14 +248,16 @@
 (defn max-passes [] (settings/get settings ::max-passes))
 
 (defn ^:async pour-water!
-  "Pour a carried water bucket at the feet. True when the water was placed (entered in the ledger as a :pour first, so a cut leaves it to cleanup)."
+  "Pour a carried water bucket at the feet. True when the water was placed or the bucket is emptied (entered in the ledger as a :pour first, so a cut leaves it to cleanup)."
   [c pos]
   ;; the zone choice is made above (trespass-refusal, last resort), and the scoop must undo the pour: the child must not refuse again
   (ctx/hold-still! c nil)
   (let [cell (u/cell-vec pos)
         l (ledger/open-entries (ctx/view c))]
     (ledger/remember! c (ledger/intend l {:cell cell :item "water" :before (or (u/block-name (:primitives c) pos) "air") :job (:id c) :purpose :pour}))
-    (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.items.use {:on pos :item "water_bucket" :ignore-zones? true}))))
+    (let [r (await (child/run!* c :bucket 'jobs.items.use {:on pos :item "water_bucket" :ignore-zones? true}))
+          ;; a use that reports the water landed elsewhere still emptied the bucket: the water is out there, to scoop or to find gone
+          placed (or (= :done (:kind r)) (not-any? #(= "water_bucket" (:name %)) (u/inventory (:primitives c))))
           l (ledger/open-entries (ctx/view c))]
       (ledger/remember! c (if placed (ledger/confirm l cell) (ledger/drop-cell l cell)))
       placed)))
