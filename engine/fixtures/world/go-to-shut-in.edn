@@ -1,6 +1,6 @@
 ;; jobs.movement.go-to when the way is shut: sealed by a hand-diggable block, a soft seal over an own stair mouth, a 1-wide dirt tunnel,
 ;; a goal walled in while the body is free, bare hands. Bedrock is never dug and ends with a reason. Escalation is the default.
-;; Should-succeed: dirt or cobble room with its door onto a 3-deep trench + bare hands; moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
+;; Should-succeed: a closed tunnel over a room digs the wall to the goal, never its floor; dirt or cobble room with its door onto a 3-deep trench + bare hands; moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
 ;; Should-fail: a cobble room whose door opens onto a trench lined with bedrock (no dig-out from the bottom: the body stays in the room); bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, no bedrock dug (the unseen floor reads as rock, so a stone of the ground may be tried).
 {:defaults
  {:tags [:movement :access :go-to]
@@ -57,6 +57,15 @@
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "closed-tunnel-over-a-room-digs-the-wall-not-the-floor"
+   ;; a 1-wide 2-tall tunnel (x 16, z 10..13) closed at both ends; its floor (y -1) roofs a room below (y -4..-2); the goal row lies beyond a wall 2 thick (z 14..15)
+   :blocks [[:fill [10 -5 6] [22 3 26] "stone"] [:fill [13 -4 10] [19 -2 16] "air"] [:fill [16 0 10] [16 1 13] "air"]
+            [:fill [13 0 16] [19 1 18] "air"] [:set [15 1 11] "glowstone"] [:set [16 2 17] "glowstone"]]
+   :body {:at [16.5 0 11.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 17] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [16.5 0 17.5] 1.5]
+           [:block [16 -1 10] "stone"] [:block [16 -1 11] "stone"] [:block [16 -1 12] "stone"] [:block [16 -1 13] "stone"]]}
   {:name "bedrock-room-with-pickaxe-gives-up-and-digs-nothing"
    :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
    :body {:inventory [["stone_pickaxe" 1]]}
