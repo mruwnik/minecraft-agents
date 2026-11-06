@@ -1,15 +1,16 @@
 (ns jobs.lib.part-cut
   "Reading part-cut trunks: a natural tree (logs with leaves near the top, as jobs.lib.trees reads one) whose lowest log
-  is raised, the block under it seen as air, because the logs under it were cut. A raised log joined (side or corner
+  is raised, the block under it seen as air, because the logs under it were cut (or one over the gap above a stump). A raised log joined (side or corner
   touching, through logs) to a log standing on the ground is part of a living tree (an acacia or fancy oak branch, a
-  mangrove root) and is left. Not a job namespace."
+  mangrove root) and is left; so is one beside unseen cells over a seen log, a trunk going on up hidden in the leaves.
+  Not a job namespace."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.trees :as trees :refer [seen-name]]))
 
 (a/defargs settings
-  {::ground-depth {:default 24 :doc "Blocks under a raised log looked down for the ground to replant on." :spec (a/int-in 1 nil)}})
+  {::ground-depth {:default 24 :doc "Blocks looked down under a raised log for the ground to replant on, and under an unseen cell for a trunk hidden in the leaves." :spec (a/int-in 1 nil)}})
 
 (defn raised?
   "Whether the block under pos is seen as air."
@@ -39,22 +40,42 @@
   (let [n (seen-name p (update pos :y dec))]
     (and n (not (contains? bs/air n)) (not (trees/log-name? n)))))
 
+(defn hidden-trunk
+  "The seen log under pos when pos and every cell between are unseen (a trunk going on up into the leaves, as a player
+  takes it), within the ground-depth setting; else nil."
+  [p {:keys [y] :as pos}]
+  (loop [dy 0]
+    (when (<= dy (settings/get settings ::ground-depth))
+      (let [at (assoc pos :y (- y dy))
+            n (seen-name p at)]
+        (cond
+          (nil? n) (recur (inc dy))
+          (and (pos? dy) (trees/log-name? n)) at)))))
+
 (defn living?
   "Whether the log at pos is joined to a log standing on the ground: a flood fill over the seen logs (a set of
-  positions), side or corner touching."
+  positions) and the logs hidden-trunk finds under unseen neighbours, side or corner touching."
   [p logs pos]
   (loop [todo [pos] seen #{pos}]
     (when-let [at (peek todo)]
       (if (grounded? p at)
         true
-        (let [more (remove seen (filter logs (neighbours at)))]
+        (let [more (distinct (remove seen (keep #(if (logs %) % (hidden-trunk p %)) (neighbours at))))]
           (recur (into (pop todo) more) (into seen more)))))))
 
+(defn hanging
+  "The lowest log of base's column (base or one of logs) that hangs over seen air: base, or the log over the gap left
+  where the trunk was cut above a stump; nil when none does."
+  [p logs {:keys [x z] :as base}]
+  (->> (cons base (sort-by :y (filter #(and (= x (:x %)) (= z (:z %))) logs)))
+       (filter #(raised? p %))
+       first))
+
 (defn part-cut?
-  "Whether the tree t (as trees-near gives it) is a part-cut trunk; logs is the lazily read set of seen log positions
-  (a delay)."
+  "Whether the tree t (as trees-near gives it) is a part-cut trunk: a log of its column hangs over air, not joined to a
+  standing tree; logs is the lazily read set of seen log positions (a delay)."
   [p logs t]
-  (and (raised? p (:base t)) (not (living? p @logs (:base t)))))
+  (boolean (when-let [h (hanging p @logs (:base t))] (not (living? p @logs h)))))
 
 (defn part-cut-trees
   "The part-cut trunks within radius of species (any when nil), nearest first. Cheap when no seen log is raised."

@@ -39,6 +39,23 @@
   (is (= [] (trunks (merge (fm/ground [[6 0] [7 0]]) (branched 7 67)))) "a branch of a living acacia")
   (is (= [] (trunks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66)))) "a side branch of a living fancy oak"))
 
+(defn hiding
+  "p seeing every block except those in cells (a set of [x y z]), which stay unseen."
+  [p cells]
+  (let [blocks (.-seenBlocks p) block-at (.-seenBlockAt p)
+        hid? #(contains? cells (mapv (fn [k] (js/Math.floor (aget % k))) ["x" "y" "z"]))]
+    (aset p "seenBlocks" (fn [q] (.filter (blocks q) #(not (hid? (.-pos %))))))
+    (aset p "seenBlockAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (block-at pos))))
+    p))
+
+(defn trunks-hiding [blocks cells] (mapv :base (part-cut/part-cut-trees (hiding (:p (lt/setup {:blocks blocks})) cells) 12 nil)))
+
+(deftest a-branch-beside-a-trunk-hidden-in-the-leaves-is-no-part-cut-trunk
+  (is (= [] (trunks-hiding (merge (fm/ground [[6 0] [7 0]]) (branched 7 66)) #{[6 65 0] [6 66 0] [6 67 0]}))
+      "the trunk's seen foot goes on up into unseen cells beside the branch")
+  (is (= [{:x 6 :y 65 :z 0}] (trunks-hiding (merge (fm/ground [[6 0]]) (part-cut 6)) #{[6 68 0] [7 66 0] [7 65 0]}))
+      "unseen cells in a hanging crown over no seen log join it to nothing"))
+
 (deftest the-ground-under-a-raised-log-is-the-first-seen-solid-block
   (let [p (:p (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))}))]
     (is (= {:x 6 :y 64 :z 0} (part-cut/ground-cell p {:x 6 :y 65 :z 0})))
@@ -64,6 +81,19 @@
           (is (= #{65 66 67} (into #{} (map second) (fm/digs p))) "the three floating logs go")
           (is (<= 3 (get (lt/inv p) "oak_log" 0)) "its own logs are picked up")
           (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts eng)) "the debt is the ground cell, not the hanging log"))))))
+
+(def stumped
+  "An oak of 5 logs at x 6 cut at its second log: the stump on the ground, three logs over the gap, leaves on top."
+  (merge (fm/ground [[6 0]]) (dissoc (lt/tree 6 0 "oak" 5) (fm/k 6 65 0))))
+
+(deftest a-trunk-cut-above-its-stump-is-part-cut-and-fell-tree-takes-stump-and-trunk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [{:x 6 :y 64 :z 0}] (trunks stumped)))
+        (let [{:keys [p eng]} (await (fell {:blocks stumped} [] {}))]
+          (is (= #{64 66 67 68} (into #{} (map second) (fm/digs p))))
+          (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts eng)) "the sapling goes where the stump stood"))))))
 
 (deftest fell-tree-part-cut-leaves-whole-trees-and-refused-ones
   (async done

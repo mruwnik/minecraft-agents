@@ -70,6 +70,27 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 40}]
    :after [[:not-block [20 0 22] "oak_sapling"]]
    :limit-s 50}
+;; Card 6bd1f67e: a standing oak's branch log over air, the trunk cells beside it unseen (here walled in planks; in the
+  ;; wild leaves, sparse rays or the branch itself hide them) over the trunk's seen foot: a branch, not a part-cut trunk. The old
+  ;; reading joined only seen logs, so the branch's column read as part-cut and the trigger fired.
+  {:name "part-cut-tree-trigger-leaves-a-branch-by-a-hidden-trunk"
+   :plot {:height 24 :floor "grass_block" :light :lit}
+   :register [{:trigger :part-cut-tree}]
+   :blocks [[:fill [14 0 14] [18 12 18] "air"] [:fill [16 0 16] [16 10 16] "oak_log"]
+            [:fill [15 4 15] [17 7 17] "oak_planks"] [:fill [16 4 16] [16 7 16] "oak_log"] [:set [17 5 17] "air"] [:set [17 6 17] "oak_log"]
+            [:fill [14 8 14] [18 11 18] "oak_leaves[persistent=true]"] [:fill [16 8 16] [16 10 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
+   :after [[:block [17 6 17] "oak_log"]]
+   :limit-s 40}
+  ;; Card 6bd1f67e: a trunk cut at its second log, the stump left on the ground and the logs over the gap: the old reading took the
+  ;; stump for the base (not over air) and never fired.
+  {:name "part-cut-tree-trigger-fells-a-trunk-cut-above-its-stump"
+   :register [{:trigger :part-cut-tree}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:set [16 0 16] "oak_log"] [:fill [16 2 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
+   :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 6]]]}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
