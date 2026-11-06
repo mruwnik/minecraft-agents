@@ -99,11 +99,11 @@
         r (when (and r (pos? r)) r)
         [ax ay az] (or near goal)
         ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
-        key (fn [x y z] (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512))
-        cell-of (fn [k] (let [y (- (mod k 1024) 512)
-                              r (/ (- k y 512) 1024)
-                              z (+ (- (mod r 2097152) 1048576) fz)
-                              x (+ (- (js/Math.floor (/ r 2097152)) 1048576) fx)]
+        key (fn [x y z] (+ (* (+ (* (+ (- x fx) 131072) 262144) (+ (- z fz) 131072)) 65536) y 32768))
+        cell-of (fn [k] (let [y (- (mod k 65536) 32768)
+                              r (/ (- k y 32768) 65536)
+                              z (+ (- (mod r 262144) 131072) fz)
+                              x (+ (- (js/Math.floor (/ r 262144)) 131072) fx)]
                           [x y z]))
         ;; what a name is to the search, once a name (open? and floor-ok? each run regexes), and so once a cell
         kinds (js/Map.)
@@ -112,8 +112,7 @@
                                          :fluid (boolean (bs/fluids n)) :falling (boolean (falling n))}]
                               (.set kinds n k) k)))
         read (js/Map.)
-        read-at (js/Map.)
-        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))] (.set read i k) (.set read-at i [x y z]) k))))
+        at (fn [x y z] (let [i (key x y z)] (or (.get read i) (let [k (kind-of (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))] (.set read i k) k))))
         priced (js/Map.)
         dig-at (fn [n x y z] (let [i (key x y z)] (if (.has priced i) (.get priced i) (let [s (dig-s n [x y z])] (.set priced i s) s))))
         unseen-cell? (let [m (js/Map.)] (fn [x y z] (let [i (key x y z) u (.get m i)] (if (some? u) u (let [u (or (unboxed? x y z) (boolean (unseen? [x y z])))] (.set m i u) u)))))
@@ -223,7 +222,7 @@
                               (or (nil? max-places) (<= placed max-places)))
                      (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
-                           absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (- (mod ck 1024) 512))) 0)
+                           absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
                            nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s)
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
@@ -372,7 +371,7 @@
              limit (+ start n)
              ;; whether a cell read in an earlier slice reads otherwise now
              stale? (fn [] (let [out (volatile! false)]
-                             (.forEach read (fn [k i] (let [[x y z] (.get read-at i)]
+                             (.forEach read (fn [k i] (let [[x y z] (cell-of i)]
                                                         (when (not= (.-name k) (if (unboxed? x y z) (guess [x y z]) (block-at [x y z])))
                                                           (vreset! out true)))))
                              @out))

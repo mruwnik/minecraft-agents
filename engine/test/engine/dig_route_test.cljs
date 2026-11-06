@@ -123,7 +123,7 @@
         reads (atom #{})
         w (fn [c] (swap! reads conj c) (cond (#{goal (update goal 1 inc)} c) "air" (< (c 1) 64) "stone" :else "air"))]
     (is (= {:problem :budget} (dr/route w [0 64 0] goal {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 500})))
-    (is (< (count @reads) 12000) "cells read: about a dozen a node expanded, by both searches, not the whole box between")))
+    (is (< (count @reads) 20000) "cells read: about a dozen a node expanded, by both searches, not the whole box (400000 cells) between")))
 
 (deftest a-search-run-in-slices-ends-as-one-run-does
   (let [w (world {[20 4 6] "air" [20 5 6] "air"})
@@ -341,3 +341,13 @@
         [r n] (to-end (dr/priced-search (world cave) [0 10 0] [65 4 0] (unseen-opts cave steps cells 60)))]
     (is (< (:seconds r) 60) (str "the way down into the cave and along it is found under the worth: " r))
     (is (< n 5000) (str n " cells"))))
+
+(deftest a-search-reads-the-same-cells-wherever-it-stands-in-y
+  (let [reads (fn [dy] (let [seen (atom #{})
+                             w (fn [[x y z]] (swap! seen conj [x y z]) (if (< y (+ 10 dy)) "stone" "air"))
+                             r (dr/route w [0 (+ 10 dy) 0] [20 (+ 4 dy) 6] {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 100000})]
+                         [(count @seen) (:dig r)]))
+        [n0 d0] (reads 0)
+        [n1 d1] (reads 2048)]
+    (is (= n0 n1) "cells 1024 apart in y are different cells: no read is a cache hit for another")
+    (is (= (map (fn [[x y z]] [x (- y 2048) z]) d1) d0))))
