@@ -115,6 +115,11 @@
   (is (wwatch/same-for-planner? table (sid "wheat" {:age 0}) (sid "wheat" {:age 7})))
   (is (wwatch/same-for-planner? table (sid "stone" {}) (sid "stone" {}))))
 
+(deftest a-bed-with-a-body-in-it-or-a-leaf-distance-is-no-change
+  (is (wwatch/same-for-planner? table (sid "red_bed" {:part "head" :occupied false :facing "north"})
+                                (sid "red_bed" {:part "head" :occupied true :facing "north"})))
+  (is (wwatch/same-for-planner? table (sid "oak_leaves" {:distance 1 :persistent false}) (sid "oak_leaves" {:distance 2 :persistent false}))))
+
 (deftest a-state-change-the-planner-reads-is-a-change
   (is (not (wwatch/same-for-planner? table (sid "air" {}) (sid "stone" {}))))
   (is (not (wwatch/same-for-planner? table (sid "oak_door" {:open true :half "lower" :facing "east"})
@@ -131,6 +136,15 @@
         done (wwatch/watch-stop watch steps 1 {:i 2 :tick 1} pose-on-ground)]
     (is (= :changed (:why done)))
     (is (= [[[1 64 0] "air" "stone"]] (:states done)))))
+
+(deftest a-cell-the-plan-walled-is-no-change-in-the-look-ahead
+  (let [p (tu/fake {:floor tu/walk-floor :blocks {"1,64,0" "red_bed"}})
+        walls [{:x 1 :y 64 :z 0}]
+        plan {:pw (wworld/with-walls (wworld/path-world p) walls) :walls walls :steps [] :status "found" :ms 3}
+        watch (wwatch/watch-of {:primitives p} plan)
+        steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 :walk)]]
+    (is (nil? (wwatch/watch-stop watch steps 1 {:i 2 :tick 1} pose-on-ground))
+        "the base reads the wall, the fresh look reads the wall too (it read the bed: a replan, the same plan, for ever)")))
 
 (deftest a-step-boundary-is-an-advance-on-the-ground-to-a-plain-step-or-a-check-along-a-leg
   (let [steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 :walk) (step 3 64 0 :walk)]]
