@@ -52,7 +52,7 @@
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :dig-route (a route dug through the walls), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
-  - Its safe? is: no hostile near (a walk leading away from every hostile near is not held, unless one catches the walk (ready/melee-catches?) or has hurt the body lately) and the walk's risk acceptable (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of the hostiles near the way that catch it, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). The risk is priced on go-to's plan: its round asks it of the first plan before a step of it, and again mid-walk on a re-plan that knows of a new hostile near the way or a blow by a mob not felt before (jobs.movement.go-to.reprice): when it fails the round ends as a failed can-run? would, the plan kept for the start check to hold on; a plan to where an unfinished search has got to searches on instead. A caller's :checks (an escape job's
+  - Its safe? is: the walk's risk acceptable, no hostile gate (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of the hostiles near the way that catch it, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). The risk is priced on go-to's plan: its round asks it of the first plan before a step of it, and again mid-walk on a re-plan that knows of a new hostile near the way or a blow by a mob not felt before (jobs.movement.go-to.reprice): when it fails the round ends as a failed can-run? would, the plan kept for the start check to hold on; a plan to where an unfinished search has got to searches on instead. A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
   - A body aboard a vehicle when the call starts gets off first (jobs.movement.leave-vehicle child); one that cannot ends nothing-possible :aboard, the child's ending its :because.
   - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
@@ -195,7 +195,7 @@
   (let [t (aim/target c)] (when-not (:reason t) (:pos t))))
 
 (def safe?
-  "Not threatened (a walk leading away from a hostile is not held) and the walk's risk acceptable (risk/status). Always ok
+  "The walk's risk acceptable (risk/status), no hostile gate. Always ok
   with the head under water: the call starts, and swims up for air before any hold of its walk (walk/surface-before-end!)."
   (with-meta (fn [c] (if-let [goal (goal-of c)]
                        (if (breath/head-under? (:primitives c)) (contract/ok :submerged "head under water: air first") (reprice/status c goal))
