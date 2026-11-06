@@ -190,15 +190,20 @@
   ([c dirs effort] (await (glance-until! c dirs (constantly nil) effort)) nil))
 
 (defn want-key
-  "What a look for want searched for, as the key its note is kept under: nil for a full pass, the names, :match,
-  :cells, or :hazards (entities only)."
+  "What a look for want searched for, as the key its note is kept under: nil for a full pass, the names, [:match id]
+  (the want's :id, else the :match fn itself, which only an identical fn shares), [:cells the set], or :hazards
+  (entities only). The radius is kept beside the note, not in the key."
   [want]
   (cond
     (nil? want) nil
     (:names want) (set (:names want))
-    (:match want) :match
-    (:cells want) :cells
+    (:match want) [:match (or (:id want) (:match want))]
+    (:cells want) [:cells (set (:cells want))]
     :else :hazards))
+
+(def default-radius 16)
+
+(defn want-radius [want] (or (:radius want) default-radius))
 
 (defn note-surveyed!
   "Book that the job has looked around from the cell the body stands in, for want (see!; nil: a full pass), which
@@ -207,7 +212,7 @@
   ([c cell] (note-surveyed! c cell nil))
   ([c cell want]
    (let [k (want-key want)]
-     (ctx/update-mem! c #(if k (assoc-in % [::looked-for k] cell) (assoc % ::looked cell))))
+     (ctx/update-mem! c #(if k (assoc-in % [::looked-for k] {:at cell :radius (want-radius want)}) (assoc % ::looked cell))))
    nil))
 
 (defn forget-survey!
@@ -251,7 +256,7 @@
 (defn surveyed?
   "Whether the job has looked around for want (see!; nil: a full pass, which covers every want): this run (per :run,
   the default), from the cell the body stands in (:cell) or from within near-blocks of it (:near). A look for
-  another want (entities only, other block names) does not count."
+  another want (entities only, other block names or cells, a smaller radius) does not count."
   ([c] (surveyed? c :run))
   ([c per] (surveyed? c per nil))
   ([c per want]
@@ -263,7 +268,8 @@
                  :near (boolean (and looked (<= (u/dist looked here) near-blocks)))
                  (some? looked)))]
      (or (at? (::looked m))
-         (and (some? want) (at? (get-in m [::looked-for (want-key want)])))))))
+         (let [noted (and (some? want) (get-in m [::looked-for (want-key want)]))]
+           (and noted (>= (:radius noted) (want-radius want)) (at? (:at noted))))))))
 
 (defn ^:async survey!
   "Look around once before choosing work from what the body has seen, as a player turns before deciding there is

@@ -409,8 +409,25 @@
     (note! crops)
     (is (surveyed? :near crops))
     (is (not (surveyed? :cell nil)) "a narrow look is no full pass")
+    (is (not (surveyed? :cell (assoc crops :radius 40))) "a look 8 blocks out is no look 40 out")
+    (is (surveyed? :cell (assoc crops :radius 4)) "but covers a nearer one")
     (note! nil)
     (is (every? #(surveyed? :cell %) [nil look/hazards-only crops]) "a full pass covers every want")))
+
+(deftest a-look-for-a-match-fn-or-cells-is-shared-only-with-the-same-id-fn-or-cells
+  (let [c {:primitives (seeing {})}
+        mem (atom {})
+        surveyed? (fn [want] (with-redefs [ctx/mem (fn [_] @mem)] (look/surveyed? c :cell want)))
+        note! (fn [want] (with-redefs [ctx/update-mem! (fn [_ f & args] (apply swap! mem f args))]
+                           (look/note-surveyed! c (look/cell-of (u/self-pos c)) want)))
+        trees {:id :trees :match (fn [_] true) :radius 8}]
+    (note! trees)
+    (is (surveyed? (assoc trees :match (fn [_] true))) "the same id is the same look, whatever closure carries it")
+    (is (not (surveyed? {:id :doors :match (fn [_] true) :radius 8})) "another id is another look")
+    (is (not (surveyed? {:match (fn [_] true) :radius 8})) "a match fn with no id is shared only with itself")
+    (note! {:cells [{:x 1 :y 64 :z 1}]})
+    (is (surveyed? {:cells #{{:x 1 :y 64 :z 1}}}))
+    (is (not (surveyed? {:cells [{:x 2 :y 64 :z 1}]})) "other cells are not looked at")))
 
 (deftest see-samples-the-entity-cache-but-not-twice-in-a-row
   (let [n (atom 0)

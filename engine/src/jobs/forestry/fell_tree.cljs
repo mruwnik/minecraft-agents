@@ -349,7 +349,7 @@
 (defn tree-want
   "The look/see! want for a look for trees: logs and leaves within radius."
   [radius]
-  {:match #(or (log-name? %) (trees/leaves-name? %)) :radius radius})
+  {:id :trees :match #(or (log-name? %) (trees/leaves-name? %)) :radius radius})
 
 (defn ^:async step
   "One piece of the felling: :again, :continue (a child waits on the world) or the ending."
