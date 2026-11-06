@@ -6,6 +6,9 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.hut-shelter-test :as hs]
             [engine.hostile-test :as ht]
             [engine.ctx :as ctx]
@@ -30,10 +33,19 @@
 (def open-door
   {"5,64,2" {:open true :half "lower" :facing "south"} "5,65,2" {:open true :half "upper" :facing "south"}})
 
+(defn perceiving
+  "p (seeing every block) with a perception over its world, its memory holding the ground round the hut up to two blocks over
+  head height (what the walk planner reads as seen): room answers are kept as on a live body."
+  [p]
+  (let [per (perception/create (fake-raw/create p) {:now (constantly 1000000)})]
+    (doseq [x (range -25 13) y (range 63 68) z (range -5 17)] (rays/touch! per [x y z]))
+    (doto (js/Object.assign #js {} p) (aset "perception" per))))
+
 (defn setup [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake-on-floor (dissoc world :home)))
+        p (cond-> (tu/seeing-all (tu/fake-on-floor (dissoc world :home :perceive)))
+            (:perceive world) perceiving)
         now (tu/act-clock clock p 1000)
         eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
@@ -453,11 +465,12 @@
                         (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]
               {:keys [p]} (try (await (flee! (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states)
                                                          [(zombie 5.5 13.5 0.4)] lone-doors)
-                                                    :home false)))
+                                                    :home false :perceive true)))
                                (finally (doseq [r restores] (r))))
               {:keys [closed-room room walk-steps steps]} @counts]
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (pos? steps))
+          (is (<= closed-room (* 2 (rooms/max-doors))) (str "each door side flooded once a flight: " @counts))
           (is (<= room (+ closed-room (* steps (inc (rooms/max-rooms))))) (str "rooms rebuilt per step: " @counts))
           (is (<= walk-steps (* steps (rooms/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
 
