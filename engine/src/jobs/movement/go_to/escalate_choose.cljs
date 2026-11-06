@@ -725,8 +725,11 @@
                                   (for [dx in dy in s [(- r) r]] [dx dy s]))))
           gap (fn [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
           ;; the cells one end's stand search may read, priced like a route search's nodes against what the leg could save at most
-          ;; (the call's budget, opts :bound-s and :worth-s); a ring is scanned only when the cells read through it fit
-          scan-cells (/ (min (call-budget-s c) (or (:bound-s opts) ##Inf) (or (:worth-s opts) ##Inf)) (cost/search-cell-s))
+          ;; (the call's budget, opts :bound-s and :worth-s; at ##Inf the straight dig to the goal; with that ##Inf too, as the
+          ;; route search itself, the nodes the call's route slice has left)
+          budget-s (min (call-budget-s c) (or (:bound-s opts) ##Inf) (or (:worth-s opts) ##Inf))
+          budget-s (if (infinite? budget-s) (rest-dig-s c from goal) budget-s)
+          scan-cells (if (infinite? budget-s) (if-let [left (some-> slice :left deref)] left ##Inf) (/ budget-s (cost/search-cell-s)))
           read-cells (fn [r] (js/Math.pow (inc (* 2 r)) 3))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
           ;; priced by the route; one no route can end in (inside lava, bedrock or a claim) is the stand nearest it, within
