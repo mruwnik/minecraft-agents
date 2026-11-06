@@ -426,3 +426,9 @@
   (is (= 8 (danger-q/kind-radius true 8 nil)) "no ranged radius: the radius")
   (is (= (danger-q/hostile-radius) (danger-q/kind-radius false)))
   (is (= (danger-q/ranged-radius) (danger-q/kind-radius true))))
+
+(deftest a-zombie-keeps-its-armour-only-when-seen
+  (let [zombie (fn [id x z] (assoc (mob id "zombie" x z) :equipment {:head {:name "iron_helmet"}}))
+        head-of (fn [spec] (some-> (.-equipment (first (.knownMobs (:p (rig spec))))) .-head .-name))]
+    (is (= "iron_helmet" (head-of {:entities [(zombie 1 0 4)]})) "in front: its armour is seen")
+    (is (nil? (head-of {:entities [(zombie 1 6 -3)] :blocks wall})) "heard through a wall: its armour is not seen")))

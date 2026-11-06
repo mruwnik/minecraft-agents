@@ -135,7 +135,7 @@
               (.set sensed (.-id e) e)
               (.delete (.-faded st) (.-id e))
               (.set mobs (.-id e)
-                    #js {:id (.-id e) :uuid (.-uuid e) :name (.-name e) :kind (.-kind e) :held (if seen? (.-held e) (some-> old .-held)) :equipment (.-equipment e)
+                    #js {:id (.-id e) :uuid (.-uuid e) :name (.-name e) :kind (.-kind e) :held (if seen? (.-held e) (some-> old .-held)) :equipment (if seen? (.-equipment e) (some-> old .-equipment))
                          :pos at
                          :at now
                          :seenAt (if seen? now (some-> old .-seenAt))
@@ -190,6 +190,7 @@
                                      :distance (js/Math.hypot (- (.-x pos) fx) (- (.-y pos) fy) (- (.-z pos) fz))
                                      :visible false})]
                      (aset base "held" (.-held m))
+                     (aset base "equipment" (.-equipment m))
                      (when (= "creeper" (.-name m)) (aset base "creeper" true))
                      (when (some? (.-speed m)) (aset base "speed" (.-speed m)))
                      (js/Object.assign base #js {:seen (some? (.-seenAt m))
