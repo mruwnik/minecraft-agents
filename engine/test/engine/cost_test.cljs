@@ -995,6 +995,7 @@
       "short_grass" "air"  nil false 0
       "dirt"       "air"   nil true  place
       nil          "air"   nil true  place
+      "air"        "air"   nil true  0
       "oak_planks" "air"   nil false place
       "oak_log"    "air"   nil false 0
       "stripped_oak_log" "air" nil false place

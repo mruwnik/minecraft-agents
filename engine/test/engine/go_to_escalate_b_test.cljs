@@ -763,3 +763,27 @@
             (is (= 2 (count own)) "one column of its own wall")
             (is (seq (filter #(= :dig-route (:step %)) (events-of seen :go-to.escalated))) "by a dig route")))))))
 
+
+(def bedrock-room
+  "glow-room's dirt shell in bedrock (never dug) all round: the rock beyond each wall is unseen from inside."
+  (apply dissoc (merge (box 4 60 4 20 69 16 "bedrock") (box 8 61 8 12 65 12 "dirt"))
+         (for [x (range 9 12) y (range 62 65) z (range 9 12)] (str x "," y "," z))))
+
+(deftest go-to-out-of-its-own-room-in-bedrock-cuts-no-own-cell-twice
+  ;; a stopped way's own holes stay open for the next way, their put-back owed once: no cell is cut, put back and cut again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (shape/with-author {:id "room" :parts [{:id "shell" :box [[8 61 8] [12 65 12]] :want "dirt"}]} "Fake")
+              clock (atom 1000000)
+              world {:clock clock :self {:pos {:x 11.5 :y 62 :z 9.5}} :blocks bedrock-room :light [15 0] :sight true
+                     :inventory [{:name "dirt" :count 8} {:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
+              {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
+          (core/submit! eng '(recording-parent) {})
+          (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
+          (let [digs (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))]
+            (is (seq digs) "it cuts its own wall")
+            (is (= (count digs) (count (set digs))) (str "a cell dug twice: " (pr-str (frequencies digs)))))
+          (is (= [false :unreachable] ((juxt :arrived :reason) @out)) "the call ends, a failure, with its reason"))))))

@@ -32,9 +32,10 @@
   - a crop: crop-lost-s;
   - farmland: put back as the dirt its dig drops (ways/put-back-cost) and tilled (farm/step-s :till), with a crop on it lost;
   - own? (the body's own build) or a block that is not natural terrain nor replaceable: put-back-s;
-  - else 0 (nil n: not seen)."
+  - else 0 (nil n: not seen; an open cell, an own one too: its put-back, if owed, is owed once already)."
   [n over crop-age own?]
   (cond
+    (contains? bs/air n) 0
     (contains? crops/ripe-age n) (crop-lost-s n crop-age)
     (= "farmland" n) (+ (ways/put-back-cost 0) (farm/step-s :till 1)
                         (if (contains? crops/ripe-age over) (crop-lost-s over crop-age) 0))
