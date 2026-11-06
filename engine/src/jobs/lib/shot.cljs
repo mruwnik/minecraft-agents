@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -26,21 +27,28 @@
     (or (threat/ranged? attacker)
         (= "arrow" (some-> damageType (str/replace #"^minecraft:" ""))))))
 
+(defn shooter-of
+  "The mob kind shot entry e is priced as: its named attacker's kind (threat/kind) when the trial priors count that kind's
+  group (caught/groups), else shooter (a pillager, blaze, ghast, witch, breeze or trident drowned has no counted prior)."
+  [e]
+  (let [k (some-> (:attacker (:data e)) threat/kind)]
+    (if (and k (some #(contains? % k) (vals caught/groups))) k shooter)))
+
 (defn shot-spots
   "Pure: for each :hurt entry that is a shot (shot?) and carries a :dir, the points reach, 2/3 and 1/3 of reach blocks
   out along it from where the body was hit (the entry's :pos, else from), level and at each of pitches above or below,
-  then the points those depths straight under it (a skeleton down a shaft under the body shoots up it); the first is the
-  level one reach out."
+  then the points those depths straight under it (a skeleton down a shaft under the body shoots up it), each with the
+  :shooter it is priced as (shooter-of); the first is the level one reach out."
   [entries from reach]
   (let [outs [reach (* reach (/ 2 3)) (/ reach 3)]]
     (->> entries
          (filter shot?)
-         (keep (fn [{:keys [data]}] (when-let [dir (:dir data)] [dir (or (:pos data) from)])))
-         (mapcat (fn [[{dx :x dz :z} {:keys [x y z]}]]
+         (keep (fn [{:keys [data] :as e}] (when-let [dir (:dir data)] [dir (or (:pos data) from) (shooter-of e)])))
+         (mapcat (fn [[{dx :x dz :z} {:keys [x y z]} kind]]
                    (concat (for [pitch pitches
                                  h outs]
-                             {:x (+ x (* h dx)) :y (+ y (* h (js/Math.tan (* js/Math.PI (/ pitch 180))))) :z (+ z (* h dz))})
-                           (for [d outs] {:x x :y (- y d) :z z}))))
+                             {:x (+ x (* h dx)) :y (+ y (* h (js/Math.tan (* js/Math.PI (/ pitch 180))))) :z (+ z (* h dz)) :shooter kind})
+                           (for [d outs] {:x x :y (- y d) :z z :shooter kind}))))
          vec)))
 
 (def max-drop "The most blocks a spot in seen open air is lowered to find what a shooter there stands on." 64)
@@ -57,7 +65,7 @@
                        (if (and (< n max-drop) (= :open (kind (dec fy)))) (recur (dec fy) (inc n)) fy))))))
 
 (defn view-spots
-  "Where unseen shooters may stand, as {:x :y :z}: shot-spots of the shots within ::window-s of the view's now (as a
+  "Where unseen shooters may stand, as {:x :y :z :shooter}: shot-spots of the shots within ::window-s of the view's now (as a
   player feels a hit: its way, not its height), each where a shooter could stand there (stand-spot) with a line of fire
   to the body's feet over the blocks it has seen (an unseen cell stops no arrow), one per cell. p: primitives."
   [p view]

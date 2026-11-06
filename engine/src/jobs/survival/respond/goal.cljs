@@ -12,7 +12,6 @@
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.shot :as shot]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.respond.state :as flight]
@@ -142,7 +141,7 @@
   "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
   price of a flight (respond.cover/caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
   so their cornered verdicts agree. covered? (cell -> bool, out of the line of fire of the ranged threats and the shot
-  spots, flight/fire-spots: a step or end not covered pays the shooters' risk, an unseen one priced as shot/shooter) and home (a safe home's pos that is a closed room, closed-home) when given."
+  spots, flight/fire-spots: a step or end not covered pays the shooters' risk, an unseen one priced as its spot's :shooter) and home (a safe home's pos that is a closed room, closed-home) when given."
   [c threats covered? home]
   (let [p (:primitives c)
         from (u/self-pos c)
@@ -159,8 +158,7 @@
         other-mob (risk (:chance (cost/spawn-kill body from)))
         creeper (some #(when (combat/creeper? %) (.-name %)) threats)
         names (distinct (map #(.-name %) threats))
-        shooters (distinct (cond-> (map #(.-name %) (filter combat/ranged? threats))
-                             (seq (flight/fire-spots c)) (conj shot/shooter)))
+        shooters (distinct (concat (map #(.-name %) (filter combat/ranged? threats)) (map :shooter (flight/fire-spots c))))
         chance-of (fn [ns] (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) ns))))
         near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
         mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})

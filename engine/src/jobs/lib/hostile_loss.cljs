@@ -47,12 +47,12 @@
            :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))))
 
 (defn mobs-of
-  "Hostiles hs (JS entities) of p as the answers take them (mob-near) and, while a shot from a shooter not seen has a line
-  of fire (shot/open?) and no shooter of hs is seen, a skeleton where the shot came from."
+  "Hostiles hs (JS entities) of p as the answers take them (mob-near) and, while no shooter of hs is seen, one of each kind
+  (shot/shooter-of) whose shot from a shooter not seen has a line of fire (shot/view-spots), where the shot came from."
   [p view hs]
   (cond-> (mapv #(mob-near p %) hs)
-    (and (not-any? #(and (danger-q/seen-only? %) (threat/ranged? {:name (.-name %) :held (.-held %)})) hs) (shot/open? p view))
-    (conj {:name shot/shooter :distance (settings/get shot/settings ::shot/reach)})))
+    (not-any? #(and (danger-q/seen-only? %) (threat/ranged? {:name (.-name %) :held (.-held %)})) hs)
+    (into (map (fn [k] {:name k :distance (settings/get shot/settings ::shot/reach)})) (distinct (map :shooter (shot/view-spots p view))))))
 
 (defn loss-over
   "Seconds doing nothing about hostiles hs (JS entities) of p for seconds (a number, or a spread as cost/stand-loss

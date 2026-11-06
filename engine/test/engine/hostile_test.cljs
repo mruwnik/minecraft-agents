@@ -1274,6 +1274,12 @@
     (is (pos? (loss quiet)))
     (is (= (loss quiet) (loss shot)) "the seen skeleton is the shooter")))
 
+(deftest a-shot-is-priced-as-its-named-shooter-when-a-prior-counts-that-kind
+  (let [p (tu/fake-on-floor {})
+        shot (fn [attacker] {:data (mem/add-entry mem/empty-data :hurt {:t 1500 :data {:attacker attacker :dir {:x 1 :z 0}}} {:cap 50 :ttl 60000}) :now 2000})]
+    (is (= ["stray"] (mapv :name (hostile-loss/mobs-of p (shot {:name "stray"}) []))) "a stray shares the bow mobs' counted prior")
+    (is (= ["skeleton"] (mapv :name (hostile-loss/mobs-of p (shot {:name "pillager"}) []))) "no prior counts a pillager: the skeleton's stands")))
+
 (defn respond-worth [world]
   (respond-to-hostile/worth-of {:primitives (tu/fake-on-floor world) :view (fn [] {:data mem/empty-data :now 0}) :args {}}))
 
