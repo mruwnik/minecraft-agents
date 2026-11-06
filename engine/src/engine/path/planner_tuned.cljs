@@ -94,6 +94,7 @@
      (walk.search/new-search)."
   (:require [engine.constants :as constants]
             [engine.path.planner.base :as base :refer [OCTILE-SLACK REGIONS TABLE WHOLE next-pow2]]
+            [engine.path.planner.goals :as goal-set]
             [engine.path.planner.search :refer [Search ->Search]]
             [engine.path.planner.world]
             [engine.path.planner.nodes]
@@ -326,12 +327,14 @@
      (.-x goal) (.-y goal) (.-z goal) goal-range (* OCTILE-SLACK goal-range) near goal-unloaded
      ;; the goal set
      n-goals
-     (when multi (goal-array js/Int32Array set-goals (fn [^js g] (.-x g))))
-     (when multi (goal-array js/Int32Array set-goals (fn [^js g] (or-else (.-y g) 0))))
-     (when multi (goal-array js/Int32Array set-goals (fn [^js g] (.-z g))))
-     (when multi (goal-array js/Float64Array set-goals (fn [^js g] (let [r (or-else (.-range g) 0)] (* r r)))))
-     (when multi (goal-array js/Float64Array set-goals (fn [^js g] (* OCTILE-SLACK (or-else (.-range g) 0)))))
-     (when multi (goal-array js/Uint8Array set-goals (fn [^js g] (if (identical? (.-kind g) "near") 1 0))))
+     (when multi
+       (goal-set/index n-goals
+                       (goal-array js/Int32Array set-goals (fn [^js g] (.-x g)))
+                       (goal-array js/Int32Array set-goals (fn [^js g] (or-else (.-y g) 0)))
+                       (goal-array js/Int32Array set-goals (fn [^js g] (.-z g)))
+                       (goal-array js/Float64Array set-goals (fn [^js g] (let [r (or-else (.-range g) 0)] (* r r))))
+                       (goal-array js/Float64Array set-goals (fn [^js g] (* OCTILE-SLACK (or-else (.-range g) 0))))
+                       (goal-array js/Uint8Array set-goals (fn [^js g] (if (identical? (.-kind g) "near") 1 0)))))
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
      (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 256)

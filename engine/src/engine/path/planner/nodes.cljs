@@ -1,6 +1,7 @@
 (ns engine.path.planner.nodes
   "Search methods: the goal test and heuristic, and node storage (hash, heap, recording an arrival, refused moves)."
   (:require [engine.path.planner.base :refer [AIR-STEP AVOID-CLIMB DMG-STEP drowned-hp AVOID-OPEN AVOID-WATER HALF JUMP-UP MOVE-CLIMB-UP MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM REGIONS SPAN SQRT2 cell-key grown next-pow2]]
+            [engine.path.planner.goals :as goal-set]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -26,16 +27,7 @@
           (<= (+ (* dx dx) (* dz dz)) (* (.-goal-range s) (.-goal-range s)))))))
 
   ;; the index of the first goal of the set whose area holds the cell, -1 for none
-  (goalAt [s x y z]
-    (loop [i 0]
-      (if (< i (.-n-goals s))
-        (let [dx (- x (aget ^js (.-g-xs s) i))
-              dy (if (== 1 (aget ^js (.-g-near s) i)) (- y (aget ^js (.-g-ys s) i)) 0)
-              dz (- z (aget ^js (.-g-zs s) i))]
-          (if (<= (+ (* dx dx) (* dy dy) (* dz dz)) (aget ^js (.-g-r2 s) i))
-            i
-            (recur (inc i))))
-        -1)))
+  (goalAt [s x y z] (goal-set/goal-at (.-goal-index s) x y z))
 
   ;; the cell, or the one under it (a head cell), is within the goal: where a portal may be entered
   (inGoal [s x y z]
@@ -49,10 +41,7 @@
   ;; octile x-z distance to the goal; to the nearest goal of a set
   (distanceTo [s x z]
     (if (pos? (.-n-goals s))
-      (loop [i 0 best js/Infinity]
-        (if (< i (.-n-goals s))
-          (recur (inc i) (js/Math.min best (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i))))
-          best))
+      (goal-set/least (.-goal-index s) 1 x 0 z)
       (.octileTo s x z (.-goal-x s) (.-goal-z s))))
 
   ;; the distance progress counts: distanceTo, and for a sphere (near) goal octile again of that and the height gap beyond
@@ -61,12 +50,7 @@
   (progressTo [s x y z]
     (let [tilt (fn [h dy] (+ (js/Math.max h dy) (* (- SQRT2 1) (js/Math.min h dy))))]
       (if (pos? (.-n-goals s))
-        (loop [i 0 best js/Infinity]
-          (if (< i (.-n-goals s))
-            (let [h (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i))
-                  d (if (== 1 (aget ^js (.-g-near s) i)) (tilt h (js/Math.max 0 (- (js/Math.abs (- y (aget ^js (.-g-ys s) i))) (js/Math.sqrt (aget ^js (.-g-r2 s) i))))) h)]
-              (recur (inc i) (js/Math.min best d)))
-            best))
+        (goal-set/least (.-goal-index s) 2 x y z)
         (let [h (.octileTo s x z (.-goal-x s) (.-goal-z s))]
           (if ^boolean (.-near s) (tilt h (js/Math.max 0 (- (js/Math.abs (- y (.-goal-y s))) (.-goal-range s)))) h)))))
 
@@ -78,10 +62,7 @@
     (let [cheapest (js/Math.min (.-c-walk-s s) (.-c-sprint-s s) (.-c-swim-h s))
           per-block (if (neg? (.-unk-id s)) cheapest (+ (* cheapest (+ 1 (.-unk-cell-max s))) (/ (.-aim-s s) SQRT2)))]
       (if (pos? (.-n-goals s))
-        (loop [i 0 best js/Infinity]
-          (if (< i (.-n-goals s))
-            (recur (inc i) (js/Math.min best (js/Math.max 0 (- (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i)) (aget ^js (.-g-slack s) i)))))
-            (* best per-block)))
+        (* (goal-set/least (.-goal-index s) 0 x 0 z) per-block)
         (* (js/Math.max 0 (- (.distanceTo s x z) (.-slack s))) per-block))))
 
   ;; ---- node storage ----

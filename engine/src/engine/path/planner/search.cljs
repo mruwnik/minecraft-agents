@@ -12,9 +12,8 @@
    tbl-attach tbl-farmland tbl-decays min-y
    ;; the query
    from-x from-y from-z from-px from-pz goal-x goal-y goal-z goal-range slack ^boolean near ^boolean goal-unloaded
-   ;; a goal set (query.goals; n-goals 0: the one goal above): each goal's cell, squared range, octile slack, and 1 for a
-   ;; sphere (near) or 0 for an x-z disc
-   n-goals ^js g-xs ^js g-ys ^js g-zs ^js g-r2 ^js g-slack ^js g-near
+   ;; a goal set (query.goals; n-goals 0: the one goal above), indexed (engine.path.planner.goals)
+   n-goals ^js goal-index
    ;; options
    max-nodes max-drop weight risk-weight ^:mutable goal-flood ^:mutable flood-after pre-flood frontier-reach
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
