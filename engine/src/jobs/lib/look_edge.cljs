@@ -99,7 +99,7 @@
         seen-roof? (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz}))
         roofed (set (filter (fn [[cx cy cz :as c]] (or (seen-roof? c) (unseen-roof? p {:x cx :y cy :z cz}))) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
-                                    (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (if (flood n) (not (seen-roof? n)) (and (not (sh-sense/solid-at? p {:x (n 0) :y (n 1) :z (n 2)})) (not (shore/seen-air? p {:x (n 0) :y (dec (n 1)) :z (n 2)})))))) [[1 0] [-1 0] [0 1] [0 -1]])))
+                                    (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (if (flood n) (not (seen-roof? n)) (let [at {:x (n 0) :y (n 1) :z (n 2)}] (and (u/seen-name p at) (not (sh-sense/solid-at? p at)) (not (shore/seen-air? p (update at :y dec)))))))) [[1 0] [-1 0] [0 1] [0 -1]])))
         inside (loop [seen #{} todo (list [(:x region) (:y region) (:z region)])]
                  (if-let [[cx cy cz :as c] (first todo)]
                    (if (or (seen c) (not (flood c)) (exit? c))
@@ -113,7 +113,7 @@
 
 (defn walkable-near
   "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
-  Only dry stand cells with a seen roof (or one too dark to be seen yet), and not a doorway beside a cell without one (a drop is no way out): a player judging a room does not walk out through
+  Only dry stand cells with a seen roof (or one too dark to be seen yet), and not a doorway beside a cell without one (an unseen cell beyond, or a seen drop, is no way out): a player judging a room does not walk out through
   its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
   night could not fill it."
   [p cell]
