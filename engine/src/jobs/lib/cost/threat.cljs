@@ -47,7 +47,7 @@
   {"zombie" 35 "husk" 35 "drowned" 35 "zombie_villager" 35 "zombified_piglin" 35
    "enderman" 64 "pillager" 32 "vindicator" 12 "evoker" 12 "blaze" 48 "ghast" 100})
 
-(defn follow-range [mob-name] (get follow-ranges mob-name (settings/get settings ::default-follow-range)))
+(defn follow-range [mob-name] (get follow-ranges (weapon/base-name mob-name) (settings/get settings ::default-follow-range)))
 
 (def fire-ranges
   "Blocks a ranged mob shoots from (the range argument of its vanilla attack goal: RangedBowAttackGoal 15 for skeleton, stray, bogged and parched; RangedAttackGoal 10 for a witch and a trident drowned; RangedCrossbowAttackGoal 8 for a pillager; a blaze fires within its follow range 48, a ghast within 64)."
@@ -110,10 +110,7 @@
   "Vanilla attack damage at normal difficulty of the melee mobs that add the main-hand weapon's bonus to it."
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "zombified_piglin" 5 "piglin" 5 "vindicator" 5})
 
-(defn base-name
-  "The mob name of kind k: the part before the held item of an armed kind (kind)."
-  [k]
-  (if (string? k) (first (str/split k #"/")) k))
+(def base-name weapon/base-name)
 
 (defn armed-blow
   "Damage one blow of armed kind k (\"zombie/iron_sword\") deals at normal difficulty: the mob's attack plus its item's

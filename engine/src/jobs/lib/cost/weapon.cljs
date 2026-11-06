@@ -101,9 +101,14 @@
   [item-name hp]
   (* (/ (attack-gap-ms item-name) 1000) (js/Math.ceil (/ hp (weapon-damage item-name)))))
 
+(defn base-name
+  "The mob name of kind k: the part before the held item of an armed kind (\"zombie/iron_sword\"); the tables keyed by mob name read it."
+  [k]
+  (if (string? k) (first (str/split k #"/")) k))
+
 (defn remaining-health
   "What is left of a mob: its reported :health, else full health less :hits times :damage (an estimate)."
   [{:keys [name hits damage health]}]
   (if (number? health)
     health
-    (- (get mob-max-health name 20) (* (or hits 0) damage))))
+    (- (get mob-max-health (base-name name) 20) (* (or hits 0) damage))))

@@ -91,3 +91,11 @@
   (is (= 2 (threat/mob-blow (threat/kind {:name "skeleton" :held "none"}))))
   (is (threat/strikes? {:name "skeleton" :held "none"}))
   (is (not (threat/strikes? {:name "skeleton" :held nil}))))
+
+(deftest tables-keyed-by-mob-name-read-an-armed-kind-by-its-mob
+  (is (= (weapon/remaining-health {:name "vindicator"}) (weapon/remaining-health {:name "vindicator/iron_axe"})))
+  (is (= 24 (weapon/remaining-health {:name "vindicator/iron_axe"})))
+  (is (= (threat/follow-range "vindicator") (threat/follow-range "vindicator/iron_axe")))
+  (is (= 12 (threat/follow-range "vindicator/iron_axe")))
+  (is (= (cost/chase-speed "vindicator") (cost/chase-speed "vindicator/iron_axe")))
+  (is (= (cost/chase-speed "zombie") (cost/chase-speed "zombie/iron_sword"))))
