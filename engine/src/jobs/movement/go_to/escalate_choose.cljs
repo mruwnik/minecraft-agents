@@ -532,14 +532,19 @@
                                                 (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm h))))
                          steps (map cell-s cells)
                          heads (map head-s (cons from cells))
-                         dig (vec (distinct (for [[x y z] (cons from cells)
-                                                  cell (if (= [x y z] from) [[x (inc y) z]] [[x (inc y) z] [x y z]])
-                                                  :when (not (let [nm (block-at cell)] (or (nil? nm) (dig-route/open? nm))))]
-                                              cell)))]
+                         ;; each cell's head then its feet dug, then the step into it, as the search adds them
+                         moves (distinct (for [[x y z :as c] (cons from cells)
+                                               m (concat (map #(vector :dig %) (if (= c from) [[x (inc y) z]] [[x (inc y) z] c]))
+                                                         (when-not (= c from) [[:step c]]))
+                                               :when (or (= :step (first m)) (not (let [nm (block-at (m 1))] (or (nil? nm) (dig-route/open? nm)))))]
+                                           m))
+                         dig (vec (keep (fn [[kind cell]] (when (= :dig kind) cell)) moves))]
                      (when (and (not-any? refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells)))
                                 (every? some? steps) (every? some? heads))
                        {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
-                                    (if-let [flood (:flood prices)] (dig-route/flood-s flood (map (juxt identity block-at) dig)) 0)
+                                    (if-let [flood (:flood prices)]
+                                      (dig-route/flood-s flood (map (fn [[kind cell]] [kind cell (block-at cell)]) moves))
+                                      0)
                                     (reduce + 0 (for [[x y z :as cell] cells
                                                       :let [i (- fy y 1)]
                                                       :when (and (or (not (climb? cell)) (and down? (pos? (get down-steps i 0)))) (true? (some-> (sensed x (dec y) z) .-unknown)))]

@@ -907,15 +907,19 @@
   ;; KitOak94: the only way to the ore went beside water; a refused dig there left the ore unreachable
   (let [hp-s (cost/walk-hp-seconds)
         p (tu/fake {:blocks {"0,65,0" "water"} :inventory [{:name "stone_pickaxe" :count 1}]})
-        dig-s (:dig-s (dig-route/body-prices p (constantly false)))
+        flood-s (partial dig-route/flood-s (:flood (dig-route/body-prices p (constantly false))))
+        open-s (cost/flood-dig-s {} 20 hp-s)
         ;; a one-wide row under three water cells, the rock over them too high to dig round: the row is the only way
         world (assoc (box 0 63 0 5 90 0 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air"
                      "1,66,0" "water" "2,66,0" "water" "3,66,0" "water")
         route (choose/route-cells (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]}) [0 64 0] [4 64 0] (constantly true) (constantly false))]
-    (is (< (js/Math.abs (- (dig-s "stone" [0 64 0]) (dig-s "stone" [5 64 0]) (cost/flood-dig-s {} 20 hp-s))) 1e-9)
-        "the cell under the water costs its flood over a dry one")
-    (is (= (dig-s "stone" [0 64 0]) (dig-s "stone" [1 65 0])) "water beside floods it too")
-    (is (= (dig-s "stone" [5 64 0]) (dig-s "stone" [0 66 0])) "water under it does not rise into it")
+    (is (= open-s (flood-s [[:dig [0 64 0] "stone"]])) "the cell under the water costs its flood over a dry one")
+    (is (= open-s (flood-s [[:dig [1 65 0] "stone"]])) "water beside floods it too")
+    (is (zero? (flood-s [[:dig [0 66 0] "stone"]])) "water under it does not rise into it")
+    (is (< (js/Math.abs (- (flood-s [[:dig [0 64 0] "stone"] [:dig [1 65 0] "stone"]])
+                           open-s (cost/wet-dig-s {} 20 hp-s (cost/flood-under-s {}) (cost/dig-cost "stone"))))
+           1e-9)
+        "a second cut beside the pool, once its water is in, is a wet dig: the flood is paid once")
     (is (pos? (cost/flood-dig-s {} 20 hp-s)) "the flood is swum, not walked")
     (is (< (cost/flood-dig-s {} 20 hp-s) (cost/flood-dig-s {:air-used 14.5} 20 hp-s)) "with its air nearly spent the body drowns some hp")
     (is (= ##Inf (cost/flood-dig-s {:air-used 14.5} 2 hp-s)) "a flood the body does not live through")
@@ -929,13 +933,13 @@
   ;; card 9a274838: a pool over the first cut pours down the stair; the flood priced one wet dig after it, the rest dry
   (let [rock (assoc (box 0 59 0 3 70 0 "stone") "0,64,0" "air" "0,65,0" "air")
         route-s (fn [world]
-                  (let [p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})]
-                    [(:seconds (dig-route/route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) [0 64 0] [3 61 0]
-                                                (assoc (dig-route/body-prices p (constantly false)) :margin 0)))
-                     (:dig-s (dig-route/body-prices p (constantly false)))]))
-        [dry-s dry-dig] (route-s rock)
-        [wet-s wet-dig] (route-s (assoc rock "1,66,0" "water"))
-        open (- (wet-dig "stone" [1 65 0]) (dry-dig "stone" [1 65 0]))]
+                  (let [p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})
+                        prices (dig-route/body-prices p (constantly false))]
+                    [(:seconds (dig-route/route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) [0 64 0] [3 61 0] (assoc prices :margin 0)))
+                     (:flood prices)]))
+        [dry-s] (route-s rock)
+        [wet-s flood] (route-s (assoc rock "1,66,0" "water"))
+        open (dig-route/flood-s flood [[:dig [1 65 0] "stone"]])]
     (is (pos? open) "the first cut lets the pool in")
     (is (<= (+ open (* 4 4 (cost/dig-cost "stone"))) (- wet-s dry-s))
         "the stair's next two columns, at least four digs, are dug under water at 5 times their dry seconds")))
@@ -1225,11 +1229,11 @@
         plug [10 64 0]
         stone (into {} (map (fn [d] [(apply str (interpose "," (map + plug d))) "stone"])) rules/neighbour-deltas)
         p (tu/seeing-all (tu/fake {:blocks (assoc stone "10,64,0" "stone") :unloaded ["11,64,0"] :inventory [{:name "stone_pickaxe" :count 1}]}))
-        dry (:dig-s (dig-route/body-prices p (constantly false)))
-        plugged (:dig-s (dig-route/body-prices p (constantly false) {:plugs #{plug}}))]
-    (is (< (js/Math.abs (- (plugged "stone" plug) (dry "stone" plug) (cost/flood-dig-s {} 20 hp-s))) 1e-9) "the flood price over a dry dig")
-    (is (< (plugged "stone" plug) ##Inf) "still dug: a price, not a ban")
-    (is (= (dry "stone" [20 64 0]) (plugged "stone" [20 64 0])) "a cell that is no plug is priced dry")))
+        flood (:flood (dig-route/body-prices p (constantly false) {:plugs #{plug}}))
+        dig-s (:dig-s (dig-route/body-prices p (constantly false) {:plugs #{plug}}))]
+    (is (= (cost/flood-dig-s {} 20 hp-s) (dig-route/flood-s flood [[:dig plug "stone"]])) "the flood price over a dry dig")
+    (is (< (dig-s "stone" plug) ##Inf) "still dug: a price, not a ban")
+    (is (zero? (dig-route/flood-s flood [[:dig [20 64 0] "stone"]])) "a cell that is no plug is priced dry")))
 
 (deftest a-dig-route-and-a-way-price-each-dug-cell-by-what-it-destroys
   ;; another's planks are put back, the stone round them costs nothing; farmland under a growing crop costs its

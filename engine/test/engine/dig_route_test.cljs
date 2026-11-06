@@ -357,3 +357,24 @@
         w (fn [[_ y _]] (swap! top max y) (if (< y 10) "stone" "air"))]
     (dr/route w [0 10 0] [20 4 6] {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 100000})
     (is (< @top 60) "a cell above the start costs a climb each block to reach, so the air over it is read only as far as the route's price allows, not for ever")))
+
+(deftest a-dearer-dry-way-to-a-cell-is-kept-beside-a-cheaper-one-that-let-water-in
+  ;; card 9a274838: one label a cell lost the dry detour to the cut under the pool, and the stair on was dug wet
+  (let [open (into #{} (concat [[0 10 0] [0 11 0] [2 10 0] [2 11 0] [1 10 3] [1 11 3]]
+                               (for [x [0 2] y [10 11] z [1 2 3]] [x y z])))
+        stone (into #{[1 10 0] [1 11 0]} (for [x (range 3 7) y (range 6 12)] [x y 0]))
+        w (fn [c] (cond (open c) "air" (stone c) "stone" (= c [1 10 -1]) "water" :else "bedrock"))
+        flood {:level (fn [c] (when (= c [1 10 0]) 10))
+               :open (delay [1 0])
+               :dig (fn [under _] [100 (inc under)])
+               :step (fn [under] [0 under])}
+        r (dr/route w [0 10 0] [6 7 0] {:step-s 1 :flood flood :max-nodes 100000})]
+    (is (< (:seconds r) 100) "the stair is dug dry")
+    (is (not-any? #{[1 10 0] [1 11 0]} (:dig r)) "the way round the pool is walked, its cut left shut")))
+
+(deftest a-plug-is-priced-as-its-flood-though-the-search-reads-no-water-beside-it
+  ;; a plug's unseen neighbour is read as water by body-prices' :level, never by the search's own reads
+  (let [flood {:level (fn [c] (when (= c [1 10 0]) 10)) :open (delay [7 0]) :dig (fn [under _] [0 under]) :step (fn [under] [0 under])}
+        route-s (fn [plugs] (:seconds (dr/route (world {[1 10 0] "stone" [1 11 0] "stone"}) [0 10 0] [3 10 0]
+                                                {:step-s 1 :margin 0 :flood (assoc flood :plugs plugs)})))]
+    (is (= 7 (- (route-s #{[1 10 0]}) (route-s #{}))))))
