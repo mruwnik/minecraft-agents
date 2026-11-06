@@ -334,19 +334,23 @@
                 (and ia ib (< ia ib) (<= (- gb ga) (+ (- sb sa) 1e-9)))))
             (map vector cells (rest cells)))))
 
+(defn only-route
+  "The planner's result of a search over walled from the query's start to within range of to entering the cells of
+  route ([{:x :y :z}]) only (options.only), every move priced by walled and the policy's limits."
+  [c walled to range weight policy route]
+  (planner/plan (.-snapshot walled) (wplan/plan-query c to range)
+                (js/Object.assign (limited-options c walled weight policy)
+                                  #js {:only (js/Set. (clj->js (map (fn [{:keys [x y z]}] (planner/cell-key x y z)) route))) :goalFlood 0})))
+
 (defn seeded-within
   "plan-within!'s answer for a walk along seeded route seed (go-to's :route) from the plan's start cell on (seed-from) to
-  within range of to: the planner's search over walled entering those cells only (options.only), so every move is priced
+  within range of to: the planner's search over walled entering those cells only (only-route), so every move is priced
   by this walk's own world and limits; nil when the start is off the seed, that search finds no way, or a move of it costs
   more than the seed's search priced it (a threat that came, a toll): the walk plans afresh then."
   [c walled to range weight policy seed]
-  (let [^js q (wplan/plan-query c to range)
-        ^js from (.-from q)
+  (let [^js from (.-from (wplan/plan-query c to range))
         cells (seed-from seed [(.-x from) (.-y from) (.-z from)])
-        ^js r (when cells
-                (planner/plan (.-snapshot walled) q
-                              (js/Object.assign (limited-options c walled weight policy)
-                                                #js {:only (js/Set. (clj->js (map (fn [{:keys [x y z]}] (planner/cell-key x y z)) cells))) :goalFlood 0})))]
+        ^js r (when cells (only-route c walled to range weight policy cells))]
     (when (and r (= "found" (.-status r)) (no-dearer? (.-steps (.-path r)) cells))
       (wplan/within-of walled r))))
 
