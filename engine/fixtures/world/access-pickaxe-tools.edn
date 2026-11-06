@@ -55,7 +55,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:block [17 9 16] "air"] [:item "diamond" 1]]}
   {:name "stair-off-stair-detail"
-   ;; a goal worth less than one walk (60 s) buys no walk back onto the line (it would take the body back and finish the stair), so it stops at once
+   ;; at worth 60 the first walk back is not worth its price (try-again? :walk: 17 s a try over a 23 % chance), so the stair stops at once
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6 :worth 60})]
          [:await {:source :job :kind :stair.step} 30]

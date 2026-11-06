@@ -493,16 +493,18 @@
           (is (= 5 (count (events-of s :stair.return)))))))))
 
 (defn move-at-digs
-  "A prep that puts the body on [7 65 2] after each dig whose number is in ks (a reflex walking it off the stair)."
+  "A prep that puts the body on [7 65 2] after each dig whose number is in ks (a reflex walking it off the stair), or on
+  the pos ks maps the dig's number to."
   [ks]
   (fn [p]
     (let [world (.-world p)
           n (atom 0)]
       (.override world "dig"
                  (fn ^:async f [token a impl]
-                   (let [r (await (impl token a))]
-                     (when (contains? ks (swap! n inc))
-                       (swap! (.. world -state) assoc-in [:self :pos] [7 65 2]))
+                   (let [r (await (impl token a))
+                         pos (if (map? ks) (get ks (swap! n inc)) (when (contains? ks (swap! n inc)) [7 65 2]))]
+                     (when pos
+                       (swap! (.. world -state) assoc-in [:self :pos] pos))
                      r))))))
 
 (deftest off-stair-stands-when-a-walk-back-is-not-worth-its-price-and-says-where-the-body-is
@@ -515,7 +517,10 @@
                           (is (= [0 65 0] (:origin @out)))
                           (is (= [7 0 2] (:offset @out)))
                           (count (events-of s :stair.return))))]
-          (is (< 0 (await (returns 300)) (await (returns 1000))) "a dearer goal pays for more walks back"))))))
+          ;; try-again? :walk: the retry chance after f fails (.031 / (f - 1 + .132)) times the worth beats 17.148 s: f 1 at 300 (70 s), f 2 at 1000 (27 s), not f 3 (14 s).
+          ;; Every dig walks the body off and a new step resets the count; digs: step 1 has one, step 2 two, step 3 three.
+          (is (= 2 (await (returns 300))) "at 300 one return per run of digs: step 1's, then step 2's first; step 2's second is refused")
+          (is (= 5 (await (returns 1000))) "at 1000 two per run: 1 + 2 + 2, step 3's third dig is refused"))))))
 
 (deftest returns-are-counted-since-the-last-step-taken
   (async done
@@ -524,6 +529,17 @@
         (let [{:keys [out] :as s} (await (stair! {:blocks ground} (assoc east :worth 1000) (move-at-digs #{1 3 5})))]
           (is (= 3 (count (events-of s :stair.return))) "three returns, spread over steps, each within the price")
           (is (= :done (:status @out))))))))
+
+;; dig numbers on a 5-step east stair: step 2 is dug at digs 2-3, step 3 at 4-6, step 4 at 7-9 (the body one step behind)
+(deftest returns-reset-only-past-the-furthest-step-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[moves ending returns] [[{4 [7 65 2] 5 [1 64 0] 6 [7 65 2]} :off-stair 1]
+                                        [{4 [7 65 2] 7 [7 65 2]} :done 2]]]
+          (let [{:keys [out] :as s} (await (stair! {:blocks ground} (assoc east :steps 5 :worth 300) (move-at-digs moves)))]
+            (is (= ending (or (:reason @out) (:status @out))) (pr-str moves))
+            (is (= returns (count (events-of s :stair.return))) (pr-str moves))))))))
 
 (deftest three-steps-down-east-in-stone
   (async done
