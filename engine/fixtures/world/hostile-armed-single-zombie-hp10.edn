@@ -1,6 +1,6 @@
 ;; Card dd0f2aad: a fight begun at full health goes on against one zombie when the body drops to 10 hp (a zombie cannot be
 ;; outrun; the Linden trial fled at 10 hp and died on the run). A fresh fight at 10 hp is judged by cost and may flee. Hunger stops
-;; regeneration, then `damage` leaves 10 hp. The zombie is NoAI, helmeted, with 100 hp so the fight outlasts the damage. The zombie may or may not die in the window, so no :after count.
+;; regeneration, then magic `damage` leaves 10 hp (a generic hit of unknown cause would count as a 10-hp mob blow felt, hostile-fight/::felt-s). The zombie is NoAI, helmeted, with 100 hp so the fight outlasts the damage. The zombie may or may not die in the window, so no :after count.
 {:defaults
  {:tags [:hostile :combat]
   :register [{:trigger :hostile-near}]
@@ -10,7 +10,7 @@
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,Health:100f,attributes:[{id:\"minecraft:max_health\",base:100}],equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :child_started :data {:slot :fight}} 20]
          [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 10 minecraft:generic"]]
+         [:rcon "damage $BODY 10 minecraft:magic"]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :fight}} :within-s 20}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :flee}} :for-s 30}]
    :limit-s 60}]}
