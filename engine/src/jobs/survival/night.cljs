@@ -680,7 +680,9 @@
                        (await (shelter! c)))
           :niche (await (niche! c (pit-site/pit-start c) (shut-worth prices :niche)))
           :flee (await (flee/flee! c (assoc t :worth (flee-worth prices t))))
-          (if (next prices) (stay! c prices) (await (exposed! c))))))))
+          (do (when (and (ctx/way? c :shelter) (not (:shelter prices)) (nil? (:no-way-text (ctx/mem c))))
+                (ctx/update-mem! c assoc :no-way-text (:why (await (bed-down/dig-in-quote c)))))
+              (if (next prices) (stay! c prices) (await (exposed! c)))))))))
 
 (defn ^:async answer-pass
   "The rest of a pass (see doc) once pick, night-answer's choice, is known: bed the bed to use, nil for the carried one."

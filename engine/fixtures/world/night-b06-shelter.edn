@@ -257,11 +257,11 @@
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 180}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 180}]
    :limit-s 200}
-  ;; 2383463a: a bed 150 blocks off is too far to walk to tonight (no flight): it digs in here
+  ;; 2383463a: a bed 150 blocks off is too far to walk to tonight (no flight): it walls in here (18 cells with the corners; the 1-thick plot floor holds no pit)
   {:name "bed-150-blocks-away-is-too-far"
    :plot {:length 200 :width 32}
    :blocks [[:set [150 0 16] "red_bed[facing=east,part=foot]"] [:set [151 0 16] "red_bed[facing=east,part=head]"]]
-   :body {:at [4.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :body {:at [4.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [150 0 16]}) [:now]]
          [:job (jobs.survival.night)]]
    :expect [{:event {:source :job :kind :night.bed-too-far} :within-s 60}

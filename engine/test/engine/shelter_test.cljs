@@ -1252,7 +1252,8 @@
             (is (= [] (calls p "dig")) (pr-str blocks))
             (is (= [] (calls p "place")) (pr-str blocks))
             (is (= [] (no-way-stops seen)) (str (pr-str blocks) ": a quote of no way is not run to see it fail"))
-            (is (= 1 (count (emitted seen :shelter.exposed))) (pr-str blocks))))))))
+            (is (= 1 (count (emitted seen :shelter.exposed))) (pr-str blocks))
+            (is (re-find #"walls: .*pit: " (:text (first (emitted seen :shelter.exposed)))) (str (pr-str blocks) ": the warn names what rules each way out, not \"no site tried\""))))))))
 
 (deftest an-unsheltered-hold-sleeps-in-a-bed-given-or-seen-later
   (async done

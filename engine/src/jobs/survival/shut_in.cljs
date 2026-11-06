@@ -160,15 +160,20 @@
               (if (nil? w) acc (recur more (let [[s r m] (await (cost-of c w))] (conj acc [w (price c f w s) r s m])))))
      :barred (vec barred)}))
 
+(declare stop-of)
+
 (defn ^:async quote-of
   "Time: 0 when the body is enclosed, else ::mean-s or the cheapest way's price (way-costs) when that is dearer, ##Inf when
-  none can be done here; of that way, :risk-s its toll,
+  none can be done here, with :why the stops that rule the ways out (stop-of); of that way, :risk-s its toll,
   :exposure-s what its price adds under fire to its quoted seconds, and :morning-s its :morning-s."
   [c]
-  (let [[_ price risk seconds morning] (when-not (way/enclosed? c) (first (sort-by second (:costs (await (way-costs c))))))
+  (let [{:keys [costs barred]} (when-not (way/enclosed? c) (await (way-costs c)))
+        [_ price risk seconds morning] (first (sort-by second costs))
         s (if (way/enclosed? c) 0 (max (night/mean-s) (or price ##Inf)))
-        named? (fn [x] (and (number? x) (pos? x) (js/isFinite s)))]
+        named? (fn [x] (and (number? x) (pos? x) (js/isFinite s)))
+        why (when (infinite? s) (seq (keep #(some->> (:text (stop-of c %)) (str (name %) ": ")) (concat (map first costs) barred))))]
     (cond-> {:uses {:job-time [s s (max (* 3 s) (settings/get settings ::job-time-s))]} :done (if (infinite? s) [0 0 0] [0 1 1])}
+      why (assoc :why (str/join "; " why))
       (named? risk) (assoc :risk-s risk)
       (named? (some-> price (- seconds))) (assoc :exposure-s (- price seconds))
       (named? morning) (assoc :morning-s morning))))
@@ -244,12 +249,18 @@
     :pit (dig-pit/why-not c)
     nil))
 
+(defn stop-of
+  "The stop {:stop :text} that rules way out here: for the night a failure near tonight (:before true), else why-not."
+  [c way]
+  (if-let [before (when (night/night? c) (night/failed-near c way))]
+    {:stop (:reason before) :before true :text (str "the " (name way) " failed here before: " (name (:reason before)))}
+    (why-not c way)))
+
 (defn note-dropped!
   "Nothing is left to try: each way dropped for its quote says why (its stop), and for the night is remembered like a failed one."
   [c]
   (doseq [way (remove (set (:failed-ways (ctx/mem c))) (:dropped (ctx/mem c)))
-          :let [before (when (night/night? c) (night/failed-near c way))
-                {:keys [stop text]} (if before {:stop (:reason before) :text (str "the " (name way) " failed here before: " (name (:reason before)))} (why-not c way))]
+          :let [{:keys [stop text before]} (stop-of c way)]
           :when stop]
     (when-not before (night/fail! c way stop))
     (ctx/update-mem! c #(-> % (assoc-in [:why way] text) (assoc-in [:stops way] {:reason stop})))))
