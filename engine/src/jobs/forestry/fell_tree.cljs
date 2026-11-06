@@ -69,7 +69,7 @@
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
    :leafless? {:doc "when no tree with leaves is in range, fell leafless log columns (a stump, a log pile, a village's frame)" :spec boolean? :default false}
-   :part-cut? {:doc "fell only part-cut trunks (jobs.lib.part-cut: the lowest log raised over air, not joined to a standing tree)" :spec boolean? :default false}
+   :part-cut? {:doc "fell only part-cut trunks (jobs.lib.part-cut: a log of its column over air seen cut to the ground, joined to no standing tree)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (def ways (conj need/fetch-ways :pillar))

@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.forestry.fell-tree :as fell-tree]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.part-cut :as part-cut]
             [jobs.lib.trees :as trees]
             [jobs.forestry.plant-sapling :as plant-sapling]
@@ -30,10 +31,26 @@
 
 (def wall (into {} (for [x (range 4 9)] [(fm/k x 66 0) "oak_log"])))
 
-(defn trunks [blocks] (mapv :base (part-cut/part-cut-trees (:p (lt/setup {:blocks blocks})) 12 nil)))
+(defn ray-sight
+  "p seeing only the blocks a ray from above or the side enters: a block whose top and four sides hold blocks (the
+  ground under a trunk's foot, the block under a stump) stays unseen."
+  [p]
+  (let [blocks (.-seenBlocks p) block-at (.-seenBlockAt p)
+        shut? (fn [x y z] (not (contains? bs/air (.-name (block-at #js {:x x :y y :z z})))))
+        hid? (fn [pos]
+               (let [[x y z] (map #(js/Math.floor (aget pos %)) ["x" "y" "z"])]
+                 (every? (fn [[dx dy dz]] (shut? (+ x dx) (+ y dy) (+ z dz))) [[0 0 0] [0 1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])))]
+    (aset p "seenBlocks" (fn [q] (.filter (blocks q) #(not (hid? (.-pos %))))))
+    (aset p "seenBlockAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (block-at pos))))
+    p))
+
+(defn trunks [blocks] (mapv :base (part-cut/part-cut-trees (ray-sight (:p (lt/setup {:blocks blocks}))) 12 nil)))
 
 (deftest only-a-raised-trunk-not-joined-to-a-standing-tree-is-part-cut
   (is (= [{:x 6 :y 65 :z 0}] (trunks (merge (fm/ground [[6 0]]) (part-cut 6)))))
+  (is (= #{[6 63 0]} (set (filter #(true? (.-unknown (.seenBlockAt (ray-sight (:p (lt/setup {:blocks (merge (fm/ground [[6 0] [7 0]]) (branched 7 66))}))) (clj->js (zipmap [:x :y :z] %)))))
+                                  [[6 63 0] [6 64 0] [5 63 0] [7 63 0] [7 65 0]])))
+      "ray sight leaves only the ground under the trunk's foot unseen")
   (is (= [] (trunks (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))) "a tree on the ground")
   (is (= [] (trunks wall)) "a log wall has no leaves")
   (is (= [] (trunks (merge (fm/ground [[6 0] [7 0]]) (branched 7 67)))) "a branch of a living acacia")
@@ -47,6 +64,12 @@
     (aset p "seenBlocks" (fn [q] (.filter (blocks q) #(not (hid? (.-pos %))))))
     (aset p "seenBlockAt" (fn [pos] (if (hid? pos) #js {:unknown true :pos pos} (block-at pos))))
     p))
+
+(deftest a-standing-neighbour-whose-canopy-joins-a-part-cut-trunk-s-leaves-is-no-standing-trunk-under-it
+  (is (= [{:x 6 :y 65 :z 0}]
+         (trunks (merge (fm/ground [[6 0] [14 0]]) {(fm/k 15 63 0) "air"} (part-cut 6) (lt/tree 14 0 "oak" 4)
+                        (into {} (for [x (range 7 14)] [(fm/k x 68 0) "oak_leaves"])))))
+      "the neighbour's foot is seen from the ledge beside it; its leaves join through a run of leaves past leaf-decay reach"))
 
 (defn trunks-hiding [blocks cells] (mapv :base (part-cut/part-cut-trees (hiding (:p (lt/setup {:blocks blocks})) cells) 12 nil)))
 
@@ -75,7 +98,7 @@
 (defn ^:async fell
   "Run fell-tree :part-cut? over the zones in a world of spec; {:p :eng :out}."
   [spec zones args]
-  (let [{:keys [eng p]} (lt/setup (assoc spec :zones zones))]
+  (let [{:keys [eng p]} (update (lt/setup (assoc spec :zones zones)) :p ray-sight)]
     {:eng eng :p p :out (await (tu/child-outcome eng 'jobs.forestry.fell-tree (merge {:part-cut? true :radius 12 :ways #{:carried}} args) 150))}))
 
 (deftest fell-tree-part-cut-fells-the-hanging-trunk-and-owes-the-sapling-on-the-ground
@@ -136,7 +159,7 @@
     (mem/view s)))
 
 (defn holds [t blocks & [entries inventory zones unloaded]]
-  (let [p (:p (lt/setup (cond-> {:blocks blocks :inventory inventory} unloaded (assoc :unloaded unloaded))))]
+  (let [p (ray-sight (:p (lt/setup (cond-> {:blocks blocks :inventory inventory} unloaded (assoc :unloaded unloaded)))))]
     (t p (view entries) {} (ew/of-data {} {} (or zones [])) nil)))
 
 (deftest the-part-cut-tree-trigger-holds-for-a-hanging-trunk-only
