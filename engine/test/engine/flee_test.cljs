@@ -939,13 +939,22 @@
                           {:round (fn ^:async r [c]
                                     (let [covered? (cover/cover-fn (:primitives c) [] (respond.state/fire-spots c))
                                           marks (:marks (respond.goal/choose-opts c [] covered? nil))
-                                          cost (fn [cell] (transduce (comp (filter #((:holds? %) {:step cell :end cell})) (map :s)) + 0 marks))]
-                                      (reset! costs (mapv cost [in-line behind-wall])))
+                                          cost (fn [e] (transduce (comp (filter #((:holds? %) e)) (map #(let [s (:s %)] (if (fn? s) (s e) s)))) + 0 marks))
+                                          at (fn [cell] {:step cell :end cell})
+                                          cover (fn [x] {:x x :y 64 :z 4})
+                                          route (fn [& xs] (mapv (fn [x t] (assoc (cover x) :t t)) xs (iterate inc 1)))
+                                          via (fn [cells] {:step (first cells) :end (peek cells) :cells cells})]
+                                      (reset! costs (conj (mapv (comp cost at) [in-line behind-wall])
+                                                          (cost (via (route 6 7 8)))
+                                                          ;; covered first step and end, the middle out in the open
+                                                          (cost (via [(assoc (cover 6) :t 1) (assoc in-line :t 6) (assoc in-line :t 7) (assoc (cover 6) :t 8)])))))
                                     (ctx/end c :done nil))})]
           (mem/write! (:store (:eng s)) :hurt {:damageType "minecraft:arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
           (await (run-job! s 'marker {}))
           (is (pos? (first @costs)) (pr-str @costs))
-          (is (zero? (second @costs)) "out of the line behind the wall"))))))
+          (is (zero? (second @costs)) "out of the line behind the wall")
+          (is (zero? (nth @costs 2)) "a route all behind the wall")
+          (is (pos? (nth @costs 3)) "covered first step and end, exposed in the middle: the seconds in fire are priced"))))))
 
 (deftest the-flee-price-runs-from-the-chasers-the-flight-runs-from
   ;; a zombie standing 13 blocks off, beyond the danger radius, chases neither: both step away from it as a bystander

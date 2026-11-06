@@ -162,13 +162,21 @@
         chance-of (fn [ns] (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) ns))))
         near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
         mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})
+        covered-memo (when covered? (memoize (fn [cell] (covered? (select-keys cell [:x :y :z])))))
+        ;; the seconds of e's route in fire (the time spent on each cell not covered) plus those standing at an end in it
+        fire-s (fn [e]
+                 (let [cells (if (seq (:cells e)) (:cells e) (keep e [:step :end]))
+                       on-route (reduce + 0 (map (fn [prev cell] (if (covered-memo cell) 0 (- (:t cell 0) (:t prev 0))))
+                                                 (cons nil cells) cells))]
+                   (+ on-route (if (covered-memo (:end e)) 0 (cost/exposure-s)))))
         marks (concat [(mark near-other? other-mob)]
                       (map #(mark % other-mob) (flight/avoid-ends c))
                       (when creeper
                         [{:holds? (fn [e] (boolean (some door? (:cells e))))
                           :s (risk (:chance (cost/threat-parts body creeper nil from)))}])
                       (when (and covered? (seq shooters))
-                        [{:holds? (search/at-step-or-end (complement covered?)) :s (risk (chance-of shooters))}])
+                        [{:holds? (fn [e] (or (some (complement covered-memo) (:cells e)) ((search/at-step-or-end (complement covered-memo)) e)))
+                          :s (fn [e] (risk (- 1 (Math/pow (- 1 (chance-of shooters)) (/ (fire-s e) (max 1 (cost/exposure-s)))))))}])
                       (when home
                         [{:holds? #(= home (:pos (:target %))) :s (- (risk (chance-of names)))}]))]
     {:refused (:refused (ctx/mem c))

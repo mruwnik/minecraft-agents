@@ -129,6 +129,7 @@
 (def fuse-cancel-range answer/fuse-cancel-range)
 
 (def route-danger danger/route-danger)
+(def exposure-s danger/exposure-s)
 (def mob-of-threat danger/mob-of-threat)
 (def answered-together mob-toll/answered-together)
 (def danger-opts danger/danger-opts)
