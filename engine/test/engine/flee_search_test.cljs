@@ -332,6 +332,15 @@
     (is (pos? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "stone_sword" :pos under}] over)) "one holding a sword strikes")
     (is (pos? (search/caught-s [{:name "blaze" :mob "blaze" :pos under}] over)) "a blaze strikes within 2 blocks")))
 
+(deftest a-sword-skeleton-gets-a-walking-way-and-a-bow-skeleton-and-a-blaze-do-not
+  (let [at {:x 0.5 :y 64 :z 0.5}
+        c (ctx-of (tu/fake {:blocks field :self {:pos at}}))
+        way-of (fn [chaser] (:way (first (search/with-ways c [(assoc chaser :pos {:x 5.5 :y 64 :z 0.5})]))))]
+    (is (some? (way-of {:name "skeleton" :mob "skeleton" :held "stone_sword"})) "it strikes in melee: it walks")
+    (is (nil? (way-of {:name "skeleton" :mob "skeleton" :held "bow"})) "a bow shoots through rock")
+    (is (nil? (way-of {:name "blaze" :mob "blaze"})) "a blaze flies")
+    (is (some? (way-of {:name "zombie" :mob "zombie"})))))
+
 (deftest a-dead-end-is-timed-by-the-walkers-alone
   ;; trap-s took the end's arrival over every chaser: a skeleton behind the body set what the dead end cost
   (let [behind {:x -19.5 :y 64 :z 0.5}

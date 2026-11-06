@@ -328,13 +328,13 @@
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
-  (a shot spot has none) other than a creeper or a ranged one (threat/ranged?: a blast or an arrow passes where it cannot
-  walk, a blaze flies: the straight line stands)."
+  (a shot spot has none) that walks to strike (threat/strikes?, a bow mob seen holding a sword included) other than a
+  creeper or a blaze: a blast, an arrow or a flyer passes where it cannot walk, the straight line stands."
   [c chasers]
   (let [wet (js/Map.)]
     (mapv (fn [{:keys [mob pos] :as ch}]
             (cond-> (assoc ch :swim (swim-fn c pos wet))
-              (and mob (not= "creeper" mob) (not (threat/ranged? {:name mob :held (:held ch)})))
+              (and mob (not (#{"creeper" "blaze"} mob)) (threat/strikes? {:name mob :held (:held ch)}))
               (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
           chasers)))
 
