@@ -415,7 +415,7 @@
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
   priced at the chance it is none (look/unseen-solid-at-fn) times cost/unseen-fall-s, in the search and the straight dig. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
-  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -463,7 +463,7 @@
         ;; plus its dig. A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
         straight (fn [refused] (let [leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
-                         up (if (< fy gy) (max (:step-s prices) (:stair-s prices)) (+ (:step-s prices) ((:fall-s prices) 1)))
+                         up (max (:step-s prices) (:stair-s prices))
                          down? (< gy fy)
                          ly (if down? gy fy)
                          cells (concat (when down? (map (fn [y] [fx y fz]) (leg fy gy)))
@@ -476,13 +476,26 @@
                                                     (not (dig-route/open? (.-name f)))
                                                     (or floors-unseen-ok? (= [x y z] goal) (nil? here) (true? (.-unknown here)) (not (dig-route/open? (.-name here)))))))
                          climb? (fn [[x y z]] (and (not= y ly) (if down? (and (= x fx) (= z fz)) (and (= x gx) (= z gz)))))
+                         open-at? (fn [cell] (let [nm (seen-floor cell)] (or (nil? nm) (dig-route/open? nm))))
+                         ;; down, a cell dug drops the body through every open cell under it at once: one fall, landing
+                         ;; on the first floor (as the search reads floors), none past :max-fall or below the goal's height
+                         down-steps (when down?
+                                      (loop [ys (leg fy gy) n 1 out []]
+                                        (if-let [y (first ys)]
+                                          (cond
+                                            (open-at? [fx (dec y) fz]) (if (= y gy) (conj out nil) (recur (rest ys) (inc n) (conj out 0)))
+                                            (> n (:max-fall prices)) (conj out nil)
+                                            :else (recur (rest ys) 1 (conj out (+ (:step-s prices) ((:fall-s prices) n)))))
+                                          out)))
                          cell-s (fn [[x y z :as cell]]
                                   (let [unseen? (true? (some-> (sensed x y z) .-unknown))
                                         nm (block-at cell)
                                         climb? (climb? cell)
+                                        fall? (and down? (= x fx) (= z fz))
+                                        step (cond fall? (get down-steps (- fy y 1)) climb? up :else (:step-s prices))
                                         dig (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm cell))]
-                                    (when (and dig (or climb? (floored? cell)))
-                                      [dig (+ (if climb? up (:step-s prices)) (if unseen? (:unseen-step-s prices) 0))])))
+                                    (when (and dig step (or climb? fall? (floored? cell)))
+                                      [dig (+ step (if unseen? (:unseen-step-s prices) 0))])))
                          head-s (fn [[x y z]] (let [h [x (inc y) z]
                                                     nm (block-at h)]
                                                 (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm h))))
