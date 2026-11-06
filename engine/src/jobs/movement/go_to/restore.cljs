@@ -64,13 +64,23 @@
     (boolean (and goal (#{[gx gy gz] [gx (inc gy) gz]} (vec cell))
                   (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))))))
 
+(defn ahead-cell?
+  "Whether cell is held for the walk: the goal's feet or head cell, or a cell nearer the goal than the feet (the rest of a
+  dug route), while the body is outside the call's range of it. A refill would send the walk back to dig it again."
+  [c pos cell]
+  (let [feet (end/feet-cell c)
+        at #(u/dist (zipmap [:x :y :z] (mapv + [0.5 0.5 0.5] %)) pos)]
+    (boolean (or (goal-cell? c pos cell)
+                 (and (:y pos) (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))
+                      (< (at cell) (at feet)))))))
+
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes, each in another's zone, claim or plan: undoing the
   trespass, so the place ignores zones), lowest first, with jobs.blocks.place (the dug block or what it drops), one
   child call each (ctx/call). It runs once the body got on past the escalation (restore-next!). A hole skip-why
   refuses, or the place child ends without placing (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A hole the body stands in is stepped off once (jobs.lib.step-off) before it is tried again.
-  A placed one is forgotten. The goal's own cells are held until the body is within range of it (:restore-held)."
+  A placed one is forgotten. A hole nearer the goal than the feet is held until the body is within range of the goal (:restore-held)."
   [c pos]
   (let [p (:primitives c)
         seen (:restore-seen (ctx/mem c) #{})
@@ -86,7 +96,7 @@
                     (if (#{:changed :kept} why)
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
                       (done! :skipped {:cell cell :block was :why why})))]
-        (if (goal-cell? c pos cell)
+        (if (ahead-cell? c pos cell)
           (do (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (assoc :restore-held true))) :again)
         (if-let [why (skip-why c e)]
           (if (and (= :occupied why) (not (contains? (:restore-stepped (ctx/mem c)) cell)))

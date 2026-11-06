@@ -27,6 +27,8 @@
             [plan.shape :as shape]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.restore :as restore]
+            [jobs.lib.tidy :as tidy]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]
@@ -852,6 +854,25 @@
     (is (= {:restore-pending true} (run! {:step :dig-route :own-cut true})) "walk through first")
     (is (= {:restore-now true :restore-pending true} (run! {:step :dig-route :own-cut true} false)) "a route stopped in a dead end is closed behind at once")
     (is (= {:restore-now true :restore-pending true} (run! {:step :stair :own-cut true})) "a stair's cut is closed behind at once")))
+
+(deftest the-put-back-holds-dug-route-cells-the-walk-has-still-to-enter
+  ;; a leg that dug several cells ahead of the body, then a progress round: refilling them would send the walk back to dig
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (gt/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -2 60 -2 12 70 2 "stone")})
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:range 0} :round 1})
+              goal {:x 10 :y 64 :z 0}
+              hole (fn [x] {:cell [x 64 0] :action :dig :was "stone" :zone "vault" :escalation true :go-to "j9"})]
+          (.setOwner (:primitives eng) "tx")
+          (tidy/record! c (hole 3) 0)
+          (tidy/record! c (hole -1) 0)
+          (is (true? (restore/ahead-cell? c goal [3 64 0])) "a route cell nearer the goal than the feet is held")
+          (is (false? (restore/ahead-cell? c goal [-1 64 0])) "a cell behind the body is put back")
+          (ctx/update-mem! c assoc :restore-now true :restore-seen #{[-1 64 0]})
+          (is (= :again (await (restore/restore-round! c goal))))
+          (is (true? (:restore-held (ctx/mem c))) "the route cell ahead is held, not filled")
+          (is (contains? (into #{} (map :cell) (tidy/entries c)) [3 64 0]) "it stays in the ledger for the arrival"))))))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
