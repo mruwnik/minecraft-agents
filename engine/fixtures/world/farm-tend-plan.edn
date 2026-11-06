@@ -42,4 +42,19 @@
    :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
    :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field" :part "row"} :irrigate false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tend {:field {:crops 4 :untilled 0}}}}} :within-s 110 :of-job true}]
-   :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}]}
+   :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}
+  ;; Card ebfb053a: a plan of melon and pumpkin stems inside a foreign "common" zone (allows harvest/take/put, no :place) is tilled and sown
+  ;; by maintain without :ignore-zones?; the plan's own cells beat the zone. Maintain reads stem crops (4 crop cells, none untilled).
+  ;; Should-fail control: none; the old code answered "no crop cells" and sowed nothing.
+  {:name "maintain-tills-and-sows-plan-stems-inside-a-foreign-common-zone"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:set [10 0 16] "air"]]
+   :zones [{:name "common" :min [5 -3 10] :max [20 5 22] :owner "common" :allow #{:harvest :take :put}}]
+   :plans [{:id "field" :metadata {:by "$body"}
+            :parts [{:id "melons" :box [#at [10 0 16] #at [11 0 16]] :want {:crop "melon_stem"}}
+                    {:id "pumpkins" :box [#at [12 0 16] #at [13 0 16]] :want {:crop "pumpkin_stem"}}]}]
+   :body {:inventory [["melon_seeds" 4] ["pumpkin_seeds" 4] ["stone_hoe" 1]]}
+   :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field"} :irrigate false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tend {:field {:crops 4 :untilled 0}}}}} :within-s 110 :of-job true}]
+   :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "melon_stem[age=0]"] [:block [11 0 16] "melon_stem[age=0]"]
+           [:block [12 0 16] "pumpkin_stem[age=0]"] [:block [13 0 16] "pumpkin_stem[age=0]"]]}]}
