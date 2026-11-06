@@ -340,6 +340,22 @@
                        :else (max 0 (- t (/ (- gap r) (- gain)))))]
     {:in-reach in-reach :gap (max 0 (+ gap (* gain t))) :seconds t :away? (boolean (and out (= t out)))}))
 
+(defn swim-reach
+  "The blocks of a swim that flee-mob prices: a swim past this length is cut where each mob's gap reaches its follow (swim-leg's
+  :away?), so the same flight is priced however much farther the shore lies. ##Inf when a mob keeps up through the swim or is a
+  creeper (no swim leg) or has no follow range."
+  [{:keys [food equipment]} mobs]
+  (let [v (danger/flee-walk-speed (or food 20))
+        sv (* (planner/swim-speed equipment) (/ v (danger/body-speed (or food 20))))]
+    (reduce max 0
+            (for [{:keys [name distance follow] :as m} mobs
+                  :let [d (or distance 0) gain (- sv (danger/swim-chase-speed name))]]
+              (cond (= "creeper" name) ##Inf
+                    (nil? follow) ##Inf
+                    (>= d follow) 0
+                    (pos? gain) (* sv (/ (- follow d) gain))
+                    :else ##Inf)))))
+
 (defn reach-rate
   "Blows a second mob m lands while the body is within its hit-range: a melee mob's every melee-gap-s, else its
   measured lone-fight rate (threat/lone-hit-rate)."

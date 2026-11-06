@@ -651,3 +651,13 @@
         sword (met "stone_sword")]
     (is (= ["skeleton" "skeleton/stone_sword"] [(:mob bow) (:mob sword)]))
     (is (not= (:prior bow) (:prior sword)) "a shooter's notice rate is the ranged class's, a striker's the other")))
+
+(deftest a-swim-is-priced-only-out-to-where-the-mob-is-left-behind
+  (let [drowned {:name "drowned" :distance 2 :follow 35}
+        reach (fn [mobs] (cost/swim-reach {:food 20} mobs))]
+    (is (< 0 (reach [drowned]) ##Inf) "a drowned slower than the swim loses the body at its follow range")
+    (is (= ##Inf (reach [{:name "creeper" :distance 5 :follow 20}])) "a creeper has no swim leg: nothing cuts the swim")
+    (is (= 0 (reach [(assoc drowned :distance 40)])) "a mob already past its follow range")
+    (is (= (:seconds (cost/flee-answer {:food 20 :mobs [drowned] :swim (reach [drowned]) :land 0 :caught 0}))
+           (:seconds (cost/flee-answer {:food 20 :mobs [drowned] :swim 1000 :land 0 :caught 0})))
+        "the flight past that length is priced the same")))

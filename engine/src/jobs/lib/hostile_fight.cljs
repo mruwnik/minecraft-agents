@@ -318,11 +318,13 @@
   (let [p (:primitives c)]
     (when (breath/in-water? p)
       (let [me (assoc (u/self-pos c) :y (breath/start-y p))
-            reach (reduce max 0 (map cost/hit-range mobs))]
+            reach (reduce max 0 (map cost/hit-range mobs))
+            self (.self p)
+            limit (cost/swim-reach {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))} mobs)]
         (check-cache/cached
-         c [:swim-out (u/cell-vec me) reach]
+         c [:swim-out (u/cell-vec me) reach limit]
          (fn []
-           (let [{:keys [stand land] :as found} (shore/swim-to-land p me reach)]
+           (let [{:keys [stand land] :as found} (shore/swim-to-land p me reach limit)]
              (if (or (nil? stand) (zero? land))
                (assoc (select-keys found [:swim :land :chance]) :stand? (some? stand))
                (let [{:keys [run chance]} (check-cache/cached c [:land-run (u/cell-vec stand)] #(shore/land-run p stand ##Inf))]

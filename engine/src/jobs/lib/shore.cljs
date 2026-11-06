@@ -133,8 +133,9 @@
   the nearest of them is the answer when the flood ends with none, and with no stand at all {:swim the farthest it reached :land 0}; with :chance (land-run's) the chance that land goes on past the :land seen. Water never seen beside the flood leaves a shore unfound, no shore assumed: :chance (stands + 1) / (stands + walls seen beside the flood + 2) (rule of succession) with the swim a lower bound. A body
   swims up through water but not through air: it leaves an air cell sideways or down only, and an air cell is a cell of the
   way only over water (or a stand). The flood reads at most
-  ::swim-cells cells; with no stand found by then {:swim blocks :land 0 :chance c}: the shore is at least that far."
-  [p self-pos need]
+  ::swim-cells cells, or to limit blocks of swim (default none: the length the caller prices); with no stand found by then {:swim blocks :land 0 :chance c}: the shore is at least that far."
+  ([p self-pos need] (swim-to-land p self-pos need ##Inf))
+  ([p self-pos need limit]
   (let [work (settings/get settings ::swim-cells)
         fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
         names (js/Map.)
@@ -169,7 +170,8 @@
             ledge (or ledge (first found))]
         (cond
           good good
-          (<= work (.-size visited)) {:swim (reduce min ##Inf (map #(nth % 3) layer)) :land 0 :chance (shore-chance 0)}
+          (or (<= work (.-size visited)) (and (seq layer) (< limit (reduce min ##Inf (map #(nth % 3) layer)))))
+          {:swim (reduce min ##Inf (map #(nth % 3) layer)) :land 0 :chance (shore-chance 0)}
           (empty? layer) (cond (and @unseen ledge) (update ledge :chance #(max (or % 0) (shore-chance 1)))
                               ledge ledge
                               @unseen {:swim far :land 0 :chance (shore-chance 0)}
@@ -186,4 +188,4 @@
                             :let [_ (.add visited k)]]
                         [nx ny nz (+ g len)]))
                  ledge
-                 (reduce max far (map #(nth % 3) layer))))))))
+                 (reduce max far (map #(nth % 3) layer)))))))))

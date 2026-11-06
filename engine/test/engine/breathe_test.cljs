@@ -2066,6 +2066,14 @@
     (is (= {:x 46 :y 66 :z 0} (select-keys (:stand (swim 45)) [:x :y :z])))
     (is (= 33 (:swim (swim 30))))))
 
+(deftest the-flood-stops-where-the-caller-says-a-longer-swim-prices-the-same
+  (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (ledge-lake 45)}))
+        at {:x 0.5 :y 64 :z 0.5}]
+    (is (= 48 (:swim (shore/swim-to-land p at 3 ##Inf))))
+    (is (< 20 (:swim (shore/swim-to-land p at 3 20)) 48) "no stand within the 20 blocks: the shore is at least that far")
+    (is (zero? (:land (shore/swim-to-land p at 3 20))))
+    (is (nil? (:stand (shore/swim-to-land p at 3 20))))))
+
 (deftest the-flood-to-a-shore-reads-each-cell-at-most-twice
   (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (ledge-lake 30)}))
         at (.-sensedAt p)
