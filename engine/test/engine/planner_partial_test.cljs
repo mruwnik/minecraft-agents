@@ -284,3 +284,18 @@
         r (run pool {:x 6 :y 56 :z 2} (near 0 70 2))]
     (is (= "partial" (:status r)))
     (is (= 63 (nth (last-cell r) 1)))))
+
+;; A field (feet 64) runs east toward a goal plot 10 blocks past its end; the way on is a causeway round from the field's
+;; south-east corner. Stairs by the start climb to a walkway (feet 71, too high to drop off) that runs east past the
+;; field's end to a dead end by the goal plot, nearer the goal than any of the field.
+(def walkway-dead-end
+  (into [(stone -60 -20 19 40 64) (stone 30 -2 40 6 64) (stone 20 40 31 40 64) (stone 30 7 31 39 64)
+         (stone 0 -9 34 -9 71 70) (stone 34 -8 34 -3 71 70)]
+        (for [k (range 6)] (stone 0 (- -3 k) 0 (- -3 k) (+ 65 k)))))
+
+(deftest a-search-out-of-nodes-ends-on-the-way-it-could-go-on-not-in-a-dead-end-nearer-the-goal
+  (let [r (run walkway-dead-end {:x 0 :y 64 :z 0} (near 35 64 2 1) {:maxNodes 2000})
+        [_ y z] (last-cell r)]
+    (is (= ["partial" "budget"] [(:status r) (:reason r)]))
+    (is (= 64 y) "on the field, not the walkway")
+    (is (> z 2) "toward the causeway")))

@@ -258,7 +258,7 @@
   ;; ends the search if it is not over; an exhausted search that turned a ladder away at a gap, or a swim move for lack of air,
   ;; says so
   (settle [s]
-    (when-not ^boolean (.-finished s) (.finish s "budget"))
+    (when-not ^boolean (.-finished s) (.budgetEnd s -1) (.finish s "budget"))
     (cond
       (and (identical? (.-reason s) "exhausted") ^boolean (.-gap-seen s)) (set! (.-reason s) "ladder-gap")
       (and (identical? (.-reason s) "exhausted") ^boolean (.-lethal-seen s)) (set! (.-reason s) "air-lethal")
