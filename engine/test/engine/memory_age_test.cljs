@@ -43,6 +43,14 @@
       (swap! clock + 3600000)
       (is (= k (memory-age/epoch st)) "an hour on, nothing that changes by itself: the same key"))))
 
+(deftest the-epoch-moves-when-a-new-block-is-seen
+  (let [{:keys [p per st]} (rig {"0,65,4" "gold_block"})]
+    (perception/pass! per)
+    (let [k (memory-age/epoch st)]
+      (swap! (fake/state p) assoc-in [:blocks [2 65 4]] "gold_block")
+      (perception/pass! per)
+      (is (not= k (memory-age/epoch st)) "a block seen for the first time: moved"))))
+
 (deftest the-epoch-moves-only-when-a-doors-chance-moves-a-level-or-it-is-seen-again
   (let [{:keys [per st clock]} (rig {"0,65,4" "oak_door"})
         due #(memory-age/due-age-ms memory-age/DOOR %)]

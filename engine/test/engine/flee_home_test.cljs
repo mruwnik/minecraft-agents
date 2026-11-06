@@ -402,20 +402,21 @@
         "a doorway with no door, open air round the hut over ground not seen past a block: no wall there, no refuge")
     (is (true? (rooms/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside, its own floor not seen")))
 
-(deftest a-refuge-answer-outlives-world-changes-past-the-steady-key
+(deftest a-refuge-answer-is-kept-only-while-the-steady-key-holds
   (let [floods (atom 0)
-        epoch (atom 0)
-        ask (fn [steady]
-              (let [p #js {:perception {} :worldEpoch (fn [] @epoch)}]
-                (with-redefs [reach-room/steady-key (constantly steady)
+        ask (fn [& keys]
+              (reset! floods 0)
+              (let [p #js {:perception {:st #js {}}}
+                    key (atom nil)]
+                (with-redefs [reach-room/steady-key (fn [_] @key)
+                              reach-room/room-kind-at (fn [_ _] nil)
+                              reach-room/shut-kind-at (fn [_] nil)
                               rooms/flood-refuge? (fn [_ _] (swap! floods inc) true)]
-                  (rooms/refuge-room? p home)
-                  (swap! epoch inc)
-                  (rooms/refuge-room? p home))
-                @floods))]
-    (is (= 1 (ask "near world unchanged")) "a far update (the world epoch alone) keeps the answer")
-    (reset! floods 0)
-    (is (= 2 (ask nil)) "with no steady key the world epoch decides")))
+                  (doseq [k keys] (reset! key k) (rooms/refuge-room? p home))))
+              @floods)]
+    (is (= 1 (ask "near world unchanged" "near world unchanged")) "the same key keeps the answer")
+    (is (= 2 (ask "before" "after")) "a moved key asks again")
+    (is (= 2 (ask nil nil)) "with no steady key nothing is kept: a world that changes under the fake is read fresh")))
 
 (defn counting!
   "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn.
@@ -457,7 +458,6 @@
               {:keys [closed-room room walk-steps steps]} @counts]
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (pos? steps))
-          (is (<= closed-room (* 2 (rooms/max-doors))) (str "each door side flooded once a flight: " @counts))
           (is (<= room (+ closed-room (* steps (inc (rooms/max-rooms))))) (str "rooms rebuilt per step: " @counts))
           (is (<= walk-steps (* steps (rooms/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
 

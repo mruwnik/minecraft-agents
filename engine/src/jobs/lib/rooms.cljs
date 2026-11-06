@@ -93,24 +93,11 @@
   [p pos]
   (boolean (some->> (reach-room/room p pos) (closed-past-sight? p))))
 
-(defonce refuge-kept (js/WeakMap.))
-
 (defn refuge-room?
-  "flood-refuge? of cell pos, kept per body while the world near it stays the same (reach-room/steady-key; the body's world
-  epoch, which also moves on far updates, only without one): a flight asks for each door side from its price, its survey and
-  every enter-room quote."
-  [p pos]
-  (let [key (or (some-> (aget p "perception") reach-room/steady-key) (some-> (aget p "worldEpoch") (.call p)))
-        kept (let [h (.get refuge-kept p)]
-               (if (and h (= key (:key h)))
-                 h
-                 (let [h {:key key :m (js/Map.)}] (.set refuge-kept p h) h)))
-        k (pr-str (select-keys pos [:x :y :z]))]
-    (if (.has (:m kept) k)
-      (.get (:m kept) k)
-      (let [v (flood-refuge? p pos)]
-        (.set (:m kept) k v)
-        v))))
+  "flood-refuge? of cell pos, kept per body while the world near it stays the same (reach-room/kept-with: a flight asks for
+  each door side from its price, its survey and every enter-room quote); not kept without a perception."
+  [p {:keys [x y z] :as pos}]
+  (reach-room/kept p (str "refuge|" x "|" y "|" z) (fn [_] (flood-refuge? p pos))))
 
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
