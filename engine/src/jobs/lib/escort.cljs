@@ -1,5 +1,5 @@
 (ns jobs.lib.escort
-  "Walking a led or lured animal along: the legs of the walk, the looks at the animal after each, the wait for it, and shutting the gates left open. Each leg is planned here (leg-plan) to choose where it ends and to keep the animal within the lead; the go-to child of the leg plans its walk again, as it must for doors and danger. State lives in the caller's job memory."
+  "Walking a led or lured animal along: the legs of the walk, the looks at the animal after each, the wait for it, keeping the gates its legs left open open while it runs (keep-open!) and shutting them after. Each leg is planned here (leg-plan) to choose where it ends and to keep the animal within the lead; the go-to child of the leg plans its walk again, as it must for doors and danger. State lives in the caller's job memory."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -10,6 +10,7 @@
             [jobs.lib.bait :as bait]
             [jobs.lib.child :as child]
             [jobs.lib.doors :as doors]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.look :as look]
             [jobs.lib.pass :as pass]
             [jobs.lib.places :as places]
@@ -24,6 +25,17 @@
   "The :opened entries written by this job's go-to legs."
   [c]
   (filterv #(str/starts-with? (str (:by %)) (str (:id c) "/")) (map :data (mem/entries (ctx/view c) :opened))))
+
+(defn keep-open!
+  "Stamp anew (expiry/stamp) the gates this job's legs left open on purpose whose time runs out within half
+  pass/leave-open-ms: a running escort keeps them open however long its call's :spend; the time only bounds a gate
+  whose escort stopped renewing it. A gate whose time already ran out is the door-left trigger's."
+  [c]
+  (let [now (ctx/now c) ttl (pass/leave-open-ms)]
+    (doseq [e (walk-entries c)
+            :when (and (doors/on-purpose? {:now now} e) (expiry/due? now ttl e))]
+      (ctx/forget-where! c :opened #(= (:cell e) (:cell %)))
+      (ctx/remember! c :opened (expiry/stamp e now ttl) pass/opened-policy))))
 
 (defn shut-radius
   "Blocks from the body at self that cover every entry's cell (the floor is the :walked radius)."
@@ -283,6 +295,7 @@
   arrive is not tried again until the animal is near (:no-turn) and the wait is held. Else :again."
   ([c] (wait-for-animal! c :leave-open))
   ([c doors]
+  (keep-open! c)
   (let [to (:back-to (ctx/mem c))
         r (when to
             (await (child/call-walk* c :back {:pos to :range 2 :doors doors :ways #{:walk :clear-seal}
@@ -322,6 +335,7 @@
   going on (nothing was walked; the caller calls again), at most max-search-rounds calls in a row; with no leg planned
   then, a leg to the ring cell go-to's quote prices best toward target (quoted-leg!), else go-to walks the whole way."
   [c slot target range gap]
+  (keep-open! c)
   (let [pre (when (:catching-up (ctx/mem c)) (escort-problem c gap))]
     (cond
       (= :wait pre) :catching-up

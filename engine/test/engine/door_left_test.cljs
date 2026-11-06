@@ -10,6 +10,7 @@
             [engine.hut-door-test :as hd]
             [engine.memory :as mem]
             [jobs.lib.doors :as doors]
+            [jobs.lib.escort :as escort]
             [jobs.lib.near :as near]
             [jobs.lib.pass :as pass]
             [engine.registry :as registry]
@@ -82,6 +83,23 @@
     (is (true? (holds? (view-with 60000 0 {:shut? false :until 60000}))) "its time is out: the gate is a leftover")
     (is (true? (holds? (view-with 60000 0 {:shut? false}))) "no time: a leftover")
     (is (true? (holds? (view-with 60000 0 {:until 70000}))) "an entry the walk meant to shut")))
+
+(deftest a-running-escort-keeps-its-gates-open-past-the-leave-open-time
+  (let [clock (atom 1000000)
+        s (mem/open (tu/tmp-dir) {:now #(deref clock)})
+        c {:id "j1" :view #(mem/view s) :remember (fn [k d p] (mem/write! s k d p)) :forget (fn [k pred] (mem/forget-where! s k pred))}
+        ttl (pass/leave-open-ms)
+        on-purpose? #(doors/on-purpose? (mem/view s) (first (filter (comp #{gate-cell} :cell) (map :data (mem/entries (mem/view s) :opened)))))]
+    (mem/write! s :opened {:cell gate-cell :by "j1/walk" :t @clock :shut? false :until (+ @clock ttl)} pass/opened-policy)
+    (mem/write! s :opened {:cell (update gate-cell :z inc) :by "j9/walk" :t @clock :shut? false :until (+ @clock ttl)} pass/opened-policy)
+    (reset! clock (+ 1000000 (* 0.75 ttl)))
+    (escort/keep-open! c)
+    (reset! clock (+ 1000000 (* 1.5 ttl)))
+    (is (true? (on-purpose?)) "renewed by the escort whose leg opened it")
+    (is (= 1 (count (filter #(doors/on-purpose? (mem/view s) (:data %)) (mem/entries (mem/view s) :opened))))
+        "another job's gate is not renewed")
+    (reset! clock (+ 1000000 (* 3 ttl)))
+    (is (false? (on-purpose?)) "the time is the backstop once nobody renews it")))
 
 (deftest the-trigger-is-registered-with-the-job-that-shuts-doors
   (is (= dl/door-left (:when (:door-left triggers/all))))

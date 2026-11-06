@@ -37,7 +37,7 @@
 (a/defargs settings
   {::shut-waits {:default 4 :doc "Tries to shut a block with an animal in its cell, after the first." :spec (a/int-in 0 nil)}
    ::shut-wait-ms {:default 500 :doc "Wait between those tries, in ms." :spec (a/int-in 0 nil)}
-   ::leave-open-s {:default 600 :doc "Seconds a block a :leave-open walk opened stays open on purpose; then the door-left trigger may shut it. Twice the longest escort call's job time (lure-to's 300 s), its cuts allowed for." :spec (a/num-in 0 nil)}
+   ::leave-open-s {:default 600 :doc "Seconds a block a :leave-open walk opened stays open on purpose once nobody renews it; then the door-left trigger may shut it. The escort renews its gates every round (jobs.lib.escort/keep-open!), so this bounds a stretch with no round of it (a reflex cut) and the life of a gate whose escort ended without shutting it. Twice lure-to's 300 s default job time." :spec (a/num-in 0 nil)}
    ::leftover-reach {:default 4 :doc "A leftover :opened entry is shut when the body is this near." :spec (a/int-in 0 nil)}
    ::await-polls {:default 6 :doc "Reads of a door a button or plate was to open." :spec (a/int-in 1 nil)}
    ::await-poll-ms {:default 100 :doc "Wait between those reads, in ms." :spec (a/int-in 0 nil)}
@@ -48,6 +48,7 @@
 (defn shut-waits [] (settings/get settings ::shut-waits))
 (defn shut-wait-ms [] (settings/get settings ::shut-wait-ms))
 (defn leftover-reach [] (settings/get settings ::leftover-reach))
+(defn leave-open-ms [] (* 1000 (settings/get settings ::leave-open-s)))
 (defn step-out-budget [] (settings/get settings ::step-out-budget))
 
 ;; ---------------------------------------------------------------- pure
@@ -147,7 +148,7 @@
       (click/reached? :open props) {:result :was-open}
       :else
       (do (ctx/remember! c :opened (cond-> {:cell cell :by (:id c) :t (ctx/now c) :shut? shut?}
-                                     (not shut?) (expiry/stamp (ctx/now c) (* 1000 (settings/get settings ::leave-open-s))))
+                                     (not shut?) (expiry/stamp (ctx/now c) (leave-open-ms)))
                          opened-policy)
           (let [{:keys [outcome]} (await (click/click! c cell :open name))]
             (if (= :changed outcome)
