@@ -533,6 +533,7 @@
         c (cond-> c0
             (and own-way-top (not cave-ok)) (assoc :own-floor (- own-way-top (climb/cave-dip)))
             (:over-budget (ctx/mem c0)) (assoc :over-budget true)
+            (:route (:args c0)) (assoc :seed (:route (:args c0)))
             (surface-descent c0 pos) (assoc :descent-s (surface-descent c0 pos))
             floor (assoc :dive-floor floor :dive-stair (climb-stair))
             (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))

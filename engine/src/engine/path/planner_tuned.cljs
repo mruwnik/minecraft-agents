@@ -26,6 +26,7 @@
    - options.goalSeen (fn x y z): a cell in the goal's area is the goal only when it answers true (go-to's :see: the
      eye there sees the goal block). The goal flood and goal-not-standable still judge the whole area.
    - options.avoid {kinds, cells, factor}: a search for another path (see avoidCost).
+   - options.only: a Set of cell-key; the search enters no other cell (a given route re-priced along its own cells).
    - options.limits {kinds, gap, corner}: what the walker can do. Without it the search is unrestricted.
        kinds: bits of the move kinds never planned.
        gap(x, y, z, h, move, lx, ly, lz, lh): false refuses a gap jump from the takeoff node (feet cell x,y,z, stand h
@@ -341,6 +342,7 @@
      (reach-of options from goal)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
+     (.-only options)
      ;; limits
      (if (some? limits) (or-else (.-kinds limits) 0) 0) (if (some? limits) (.-gap limits) nil) (if (some? limits) (.-corner limits) nil)
      ;; costs

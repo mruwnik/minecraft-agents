@@ -84,10 +84,10 @@
          vec)))
 
 (defn timed-cells
-  "The cells {:x :y :z :t} of planner steps, :t the seconds into the route: its seconds spread over its length, plus
-  cost/flee-stop-s for each ::step-s walked before (a flight stops to choose its next step)."
+  "The cells {:x :y :z :t :g} of planner steps, :t the seconds into the route: its seconds spread over its length, plus
+  cost/flee-stop-s for each ::step-s walked before (a flight stops to choose its next step); :g the planner's price to the cell."
   [steps seconds]
-  (let [cells (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s)}) steps)
+  (let [cells (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s) :g (.-g s)}) steps)
         legs (map u/dist cells (rest cells))
         total (reduce + 0 legs)
         at (reductions + 0 legs)
@@ -492,20 +492,28 @@
   (let [r (settings/get settings ::hazard-clearance)]
     (boolean (some (fn [cell] (some #(< (u/dist % cell) r) hazards)) cells))))
 
+(defn with-route
+  "Step cell step with its route's cells from the start to it, [{:x :y :z :g}], as its :route meta (go-to's :route; none
+  when cells do not reach it)."
+  [step cells]
+  (let [[before [at]] (split-with #(not= (cell-of step) (cell-of %)) cells)]
+    (cond-> step at (with-meta {:route (mapv #(select-keys % [:x :y :z :g]) (concat before [at]))}))))
+
 (defn step-of
   "The cell a flee step walks to of a picked end entry: of its route's seen part (:seen-n cells, at least the first past
   the start: a step into the dark is one cell), the first cell ::step-s or more in that is not in refused ([x y z]
   cells go-to refused) nor where the route starts, else the part's last; a cover end whole; nil when they are all
-  refused."
+  refused. Its route to it rides as meta (with-route)."
   ([e] (step-of e #{}))
   ([{:keys [end cells cover? seen-n]} refused]
    (let [s (settings/get settings ::step-s)
          start (some-> (first cells) cell-of)
          walk (subvec cells 0 (min (count cells) (max 2 (or seen-n (count cells)))))
          ok #(when-not (or (contains? refused (cell-of %)) (= start (cell-of %))) (select-keys % [:x :y :z]))]
-     (if cover?
-       (ok end)
-       (or (some #(when (>= (:t %) s) (ok %)) walk) (ok (peek walk)))))))
+     (some-> (if cover?
+               (ok end)
+               (or (some #(when (>= (:t %) s) (ok %)) walk) (ok (peek walk))))
+             (with-route cells)))))
 
 (defn gets-away?
   "Whether a flight on scored end e outruns its chasers by the end: an open ring way that gains on them and whose end

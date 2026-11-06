@@ -15,6 +15,12 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
             {:no-event {:source :job :kind :holding :data {:reason "cornered"}} :for-s 12}
             {:no-event {:source :job :kind :planned :data {:why "goal-not-standable"}} :for-s 12}]}
+  ;; Card 8dd23380: a flee step hands go-to the route its search priced; go-to walks it with no search of its own when
+  ;; its prices agree (planned :seeded true)
+  {:name "flat-sand-flee-step-walks-its-searched-route"
+   :act [[:summon "zombie" [46.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:event {:source :job :kind :planned :data {:seeded true}} :within-s 30}]}
   {:name "pit-on-sand-flees-a-zombie"
    :blocks [[:set [40 -1 32] "air"]]
    :body {:at [40.5 -1 32.5]}

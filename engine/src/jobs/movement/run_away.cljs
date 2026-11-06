@@ -21,6 +21,7 @@
   {:pos {:doc "the cell to run to" :spec ::a/pos :default nil}
    :range {:doc "how close counts as there, in blocks" :spec (a/num-in 0 nil) :default 1}
    :leg-s {:doc "seconds the step may take" :spec (a/num-in 0.1 120) :default nil}
+   :route {:doc "the flee search's route to :pos with its prices, go-to's :route: walked without a new search when go-to's own prices agree" :spec (a/coll-of map?) :default nil}
    :y-margin {:doc "blocks past body and target, up and down, the route may plan; nil: the walk setting" :spec (a/num-in 0 nil) :default nil}
    :ignore-zones? :shared})
 
@@ -47,11 +48,12 @@
 
 (defn ^:async round
   [c]
-  (let [{:keys [pos range leg-s y-margin]} (:args c)
+  (let [{:keys [pos range leg-s y-margin route]} (:args c)
         e (await (child/call-chase* c :run
                                     {:pos pos :range range :leg-s leg-s
-                                     :walk {:ways #{:walk :clear-seal}
-                                            :settings (cond-> {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.drive/look-over-edge false}
-                                                        y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
-                                            :floor cost-health/spend-down}}))]
+                                     :walk (cond-> {:ways #{:walk :clear-seal}
+                                                    :settings (cond-> {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.drive/look-over-edge false}
+                                                                y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
+                                                    :floor cost-health/spend-down}
+                                             route (assoc :route route))}))]
     (if (= :continue e) :continue (chase/forward c e))))

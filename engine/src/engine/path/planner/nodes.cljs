@@ -258,6 +258,7 @@
       (cond
         (or (neg? rx) (>= rx SPAN) (neg? rz) (>= rz SPAN)) (set! (.-boxed s) true)
         (or (< x (.-bx0 s)) (> x (.-bx1 s)) (< z (.-bz0 s)) (> z (.-bz1 s)) (< y (.-by0 s)) (> y (.-by1 s))) (set! (.-boxed s) true)
+        (and (some? (.-only-cells s)) (not ^boolean (.has ^js (.-only-cells s) (cell-key x y z)))) nil
         ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
         ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)) nil

@@ -71,7 +71,7 @@
                 tight (== (bit-and (bit-shift-right shape 4) 1) 1)
                 x (aget (.-xs s) i)
                 z (aget (.-zs s) i)
-                step #js {:x x :y (aget (.-ys s) i) :z z :h (aget (.-hs s) i) :move (aget (.-moves s) i) :corner (== (aget (.-corners s) i) 1)
+                step #js {:x x :y (aget (.-ys s) i) :z z :h (aget (.-hs s) i) :move (aget (.-moves s) i) :corner (== (aget (.-corners s) i) 1) :g (aget (.-gs s) i)
                           :px (+ x (if tight (/ (bit-and (bit-shift-right shape 5) 31) 16) 0.5))
                           :pz (+ z (if tight (/ (bit-and (bit-shift-right shape 10) 31) 16) 0.5))}]
             (when ^boolean (.isWater s x (aget (.-ys s) i) z) (unchecked-set step "swim" true))

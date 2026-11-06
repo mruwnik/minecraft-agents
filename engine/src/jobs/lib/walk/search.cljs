@@ -190,6 +190,11 @@
   [^js snapshot [x y z]]
   (== planner/UNLOADED (.stateAt snapshot x y z)))
 
+(defn limited-options
+  "The planner options of a walk's search over walled within the policy's limits."
+  [c walled weight policy]
+  (wplan/with-drops (wplan/plan-options walled weight (executor/planner-limits policy (wworld/solid-fn walled)) (wplan/box-of policy)) policy (wworld/landing-seen (:primitives c))))
+
 (defn new-search
   "A budgeted search from the body's cell over walled: its limited search begun (wide-box, the policy's limits, known
   land {:cells :edges} as the planner's options.knownCells and knownEdges when not nil); :goal-unloaded whether its
@@ -201,7 +206,7 @@
    :goal-unloaded (goal-unloaded? (.-snapshot walled) to)
    :edge-stop (some? known)
    :limited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
-                                 (cond-> (wplan/with-drops (wplan/plan-options walled weight (executor/planner-limits policy (wworld/solid-fn walled)) (wplan/box-of policy)) policy (wworld/landing-seen (:primitives c)))
+                                 (cond-> (limited-options c walled weight policy)
                                    flood (doto (unchecked-set "goalFloodMemo" flood))
                                    known (doto (unchecked-set "knownCells" (:cells known))
                                                (unchecked-set "knownEdges" (:edges known))
@@ -311,13 +316,48 @@
                          (or quoted (threats/toll-inputs-no-worse? (nth k 10 nil) (nth (:key %) 10 nil))))
                    (vals (get @searches who))))))
 
+(defn seed-from
+  "The cells of seeded route seed ([{:x :y :z :g}], :g the price its search gave the route to that cell) from cell [x y z]
+  on, nil when cell is none of them or no cell is left past it."
+  [seed [x y z]]
+  (let [rest (drop-while #(not= [x y z] [(:x %) (:y %) (:z %)]) seed)]
+    (when (next rest) (vec rest))))
+
+(defn no-dearer?
+  "Whether every move of planner steps (each with its :g) costs no more than the seed priced the stretch between the
+  same two cells (seed cells, the first a step enters before the second's)."
+  [^js steps seed]
+  (let [at (into {} (map-indexed (fn [i {:keys [x y z g]}] [[x y z] [i g]])) seed)
+        cells (mapv (fn [^js st] [[(.-x st) (.-y st) (.-z st)] (.-g st)]) (array-seq steps))]
+    (every? (fn [[[a ga] [b gb]]]
+              (let [[ia sa] (at a) [ib sb] (at b)]
+                (and ia ib (< ia ib) (<= (- gb ga) (+ (- sb sa) 1e-9)))))
+            (map vector cells (rest cells)))))
+
+(defn seeded-within
+  "plan-within!'s answer for a walk along seeded route seed (go-to's :route) from the plan's start cell on (seed-from) to
+  within range of to: the planner's search over walled entering those cells only (options.only), so every move is priced
+  by this walk's own world and limits; nil when the start is off the seed, that search finds no way, or a move of it costs
+  more than the seed's search priced it (a threat that came, a toll): the walk plans afresh then."
+  [c walled to range weight policy seed]
+  (let [^js q (wplan/plan-query c to range)
+        ^js from (.-from q)
+        cells (seed-from seed [(.-x from) (.-y from) (.-z from)])
+        ^js r (when cells
+                (planner/plan (.-snapshot walled) q
+                              (js/Object.assign (limited-options c walled weight policy)
+                                                #js {:only (js/Set. (clj->js (map (fn [{:keys [x y z]}] (planner/cell-key x y z)) cells))) :goalFlood 0})))]
+    (when (and r (= "found" (.-status r)) (no-dearer? (.-steps (.-path r)) cells))
+      (wplan/within-of walled r))))
+
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
   (searches) when it plans the same walk from the same cell (unfinished-like). A search that ends is plan-walk!'s answer; one that does not
   is unfinished-plan's (progress, default true: whether it may walk to where the search has got to); a partial one drops
   the search, which its :search-on (fn []) keeps to go on with instead (a walk held before its first step). With frontier, the
   searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
-  knew to its end is walked to only when there is no other (:frontier-taken :known)."
+  knew to its end is walked to only when there is no other (:frontier-taken :known). A fresh walk plan with a seeded route
+  (c's :seed, go-to's :route) the walk's own prices agree with walks that (seeded-within), with no search: :seeded true."
   [c pw to range weight {:keys [policy walls one-way frontier budget progress quoted] :or {progress true}}]
   (let [t (clock/now)
         who (:primitives c)
@@ -329,16 +369,20 @@
         on? (and (go-on? c kept k pw to policy) (or quoted (not (:quote-only kept))))
         done (when (and on? (:within kept) (not (route-changed? kept pw walls))) (:within kept))
         fresh? (not (and on? (or done (not (:within kept)))))
-        search (if-not fresh?
-                 kept
-                 (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))
-        [search within] (if done [search done] (await (run-search! c search budget policy to range weight)))
+        seeded (when (and fresh? (not quoted) (:seed c)) (seeded-within c (wworld/with-walls pw walls) to range weight policy (:seed c)))
+        search (cond
+                 seeded {:walled (wworld/with-walls pw walls)}
+                 (not fresh?) kept
+                 :else (new-search c (wworld/with-walls pw walls) to range weight policy k known (goal-flood! c to range weight policy walls (wworld/unknown-key pw))))
+        [search within] (cond seeded [search seeded]
+                              done [search done]
+                              :else (await (run-search! c search budget policy to range weight)))
         ms (- (clock/now) t)]
     (if within
       (do (keep-search! c k (when (and quoted (not done))
                               (assoc (finished search within) :quote-only (not= "found" (.-status ^js (:r within))))))
-          (when known (learn-known! known (:r within)))
-          (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
+          (when (and known (not seeded)) (learn-known! known (:r within)))
+          (cond-> (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms) seeded (assoc :seeded true)))
       (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to)) :fresh fresh?)
             partial? (= "partial" (:status plan))]
         (keep-search! c k (when-not partial? search))

@@ -140,3 +140,48 @@
     (is (threats/toll-inputs-no-worse? (inputs-of armed) (inputs-of hurt)) "health regained only cheapens")
     (is (not (threats/toll-inputs-no-worse? (inputs-of hurt) (inputs-of armed))) "a hit taken")
     (is (not (threats/toll-inputs-no-worse? (inputs-of (dissoc armed :inventory)) (inputs-of armed))) "the sword lost")))
+
+(defn ^:async budgeted-plan
+  "go-to's budgeted plan (near/plan! with a round's budget) from [0 64 0] to [40 64 0] for a body with world spec
+  (merged), along seeded route seed (go-to's :route) when given."
+  [world seed]
+  (let [clock (atom 1000000)
+        [_ sink] (tu/legacy-capture-sink)
+        p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
+        out (atom nil)
+        parent {:round (fn ^:async planning-round [c]
+                         (reset! out (await (near/plan! (cond-> (assoc c :args {}) seed (assoc :seed seed)) [40 64 0] 0 :never (wworld/body-policy c) [] false nil wsearch/round-budget true true)))
+                         (ctx/end c :done nil))}
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
+                          :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    (core/submit! eng '(planning-parent) {})
+    (await (tu/tick-until-idle! eng 20))
+    @out))
+
+(defn route-of
+  "A found plan's route as go-to's :route: each planner step's cell and its price."
+  [plan]
+  (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s) :g (.-g s)}) (array-seq (.-steps (.-path (:r plan))))))
+
+;; a flee step hands go-to the route its search priced (8dd23380): walked as is when go-to's own prices agree, no search
+(deftest a-seeded-route-go-to-prices-the-same-is-walked-without-a-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seed (route-of (await (budgeted-plan {} nil)))
+              plan (await (budgeted-plan {} seed))]
+          (is (:seeded plan))
+          (is (<= (.-expanded ^js (:r plan)) (count seed)) "only the seed's cells were searched")
+          (is (= (mapv (juxt :x :y :z) (rest seed)) (mapv (juxt :x :y :z) (rest (route-of plan))))))))))
+
+(deftest a-seeded-route-a-new-threat-made-dearer-is-planned-afresh
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seed (route-of (await (budgeted-plan {} nil)))
+              off-line (assoc zombie :pos {:x 20.5 :y 64 :z 5.5})
+              plan (await (budgeted-plan {:entities [off-line]} seed))
+              nearest (apply min (map (fn [{:keys [px pz]}] (js/Math.hypot (- px 20.5) (- pz 5.5))) (:steps plan)))]
+          (is (not (:seeded plan)))
+          (is (> nearest 5.5) (str "the fresh plan keeps further from the zombie than the seed's 5 blocks: " nearest)))))))

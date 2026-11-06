@@ -316,7 +316,9 @@
         t0 (ctx/now c)
         health0 (.-health (.self (:primitives c)))
         r (await (ctx/call c slot 'jobs.movement.run-away
-                           (cond-> {:pos target :range range :leg-s leg-s} y-margin (assoc :y-margin y-margin))))
+                           (cond-> {:pos target :range range :leg-s leg-s}
+                             y-margin (assoc :y-margin y-margin)
+                             (:route (meta target)) (assoc :route (:route (meta target))))))
         res (when (contract/ending? r) (:data r))
         _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)

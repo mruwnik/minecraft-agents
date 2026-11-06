@@ -18,6 +18,8 @@
    max-nodes max-drop weight risk-weight ^:mutable goal-flood ^:mutable flood-after pre-flood frontier-reach
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
    ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
+   ;; options.only (nil: none): a Set of cell-key, the only cells the search enters (a route re-priced along its own cells)
+   ^js only-cells
    ;; what the walker can do (options.limits): kinds of move never planned, a test of each gap jump and of each corner
    ;; slide jump (nil: every one)
    limit-kinds ^js limit-gap ^js limit-corner
