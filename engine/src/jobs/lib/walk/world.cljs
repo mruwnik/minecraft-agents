@@ -84,7 +84,7 @@
       (fn [cx sy cz]
         (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
 
-(defn- memory-epoch-fn
+(defn memory-epoch-fn
   "(fn []) memory-age/epoch of the body's memory, which moves whenever a cell is seen or changed or a remembered cell's
   change chance moves a level (a masked view kept for a while re-reads memory only then)."
   [p]

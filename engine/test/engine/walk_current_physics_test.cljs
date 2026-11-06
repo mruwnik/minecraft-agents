@@ -61,3 +61,31 @@
     (is (= [0 0 1] (vec f)))
     (is (nil? (flow-at 5 65 3)))
     (is (< (js/Math.abs (- current/PUSH (aget (walk/pull flow-at {:x 5.5 :y 64 :z 3.5}) 1))) 1e-9))))
+
+;; A 4 x 4 field whose level rises with x + z (water lower toward +x +z), beside a stone wall at x -1 on its west row: the
+;; flows differ in direction cell by cell, diagonal and against a wall.
+(def slope
+  (into [[-2 63 -2 8 63 8 "stone" {}] [-1 64 0 -1 65 3 "stone" {}]]
+        (for [x (range 4) z (range 4)] [x 64 z x 64 z "water" {:level (inc (+ x z))}])))
+
+(def idle {:forward false :back false :left false :right false :jump false :sprint false :sneak false})
+
+(defn pull-by-physics
+  "The unit horizontal direction a body at rest in the cell x z of fills is pushed in over one physics tick."
+  [fills x z]
+  (let [{:keys [physics]} @sp/lib
+        world (sp/world-of fills)
+        phys ((.-Physics physics) (:mc @sp/lib) world)
+        bot (sp/bot-at [x 64 z])]
+    (set! (.-playerHalfWidth phys) (sp/body-half))
+    (.apply (.simulatePlayer phys (new (.-PlayerState physics) bot (clj->js idle)) world) bot)
+    (let [v (.-velocity (.-entity bot)) n (js/Math.hypot (.-x v) (.-z v))]
+      [(/ (.-x v) n) (/ (.-z v) n)])))
+
+(deftest the-ported-flow-points-where-the-physics-pushes
+  (let [flow-at (walk/flow-fn (sp/path-world slope))]
+    (doseq [[x z] [[0 0] [1 1] [2 1] [1 2] [3 3] [0 2] [2 0]]
+            :let [f (flow-at x 64 z)
+                  n (js/Math.hypot (aget f 0) (aget f 2))
+                  [px pz] (pull-by-physics slope x z)]]
+      (is (> (+ (* px (/ (aget f 0) n)) (* pz (/ (aget f 2) n))) 0.999) (str [x z] " " (vec f) " vs " [px pz])))))

@@ -54,8 +54,9 @@
         (let [h (.octileTo s x z (.-goal-x s) (.-goal-z s))]
           (if ^boolean (.-near s) (tilt h (js/Math.max 0 (- (js/Math.abs (- y (.-goal-y s))) (.-goal-range s)))) h)))))
 
-  ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too); a block costs
-  ;; at least the cheapest of a walk, a sprint and a swim (a sneaking walk is dearer than a swim). With options.unknown it
+  ;; a goal set's heuristic is the least of its goals'; a block costs
+  ;; at least the cheapest of a walk, a sprint and a swim in still water (a sneaking walk is dearer than a swim; a swim
+  ;; down a current is cheaper, so there it overestimates). With options.unknown it
   ;; also costs the prices of a stand on unseen land (the dearest a cell costs, options.unknown.cellMax, when cells are priced one by one; an overestimate): without them the search floods the land round the way (weight 1.2
   ;; cannot make up a 1.5 times dearer step), the more so as the unseen land is most of what lies between a far goal and the body.
   (heuristic [s x z]

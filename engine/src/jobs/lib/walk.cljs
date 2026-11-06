@@ -283,6 +283,19 @@
         state-at (fn [x y z] (.stateAt ^js snapshot x y z))]
     (fn [x y z] (current/flow table state-at x y z))))
 
+(defn live-flow-at
+  "flow-at over the body's pathWorld, made again when there was none or the memory it read has changed (its epoch moved)."
+  [c]
+  (let [p (:primitives c)
+        epoch (wworld/memory-epoch-fn p)
+        cache (volatile! nil)]
+    (fn [x y z]
+      (let [e (when epoch (epoch))
+            {:keys [at f]} @cache
+            fresh (and f (= at e))
+            {:keys [f]} (if fresh @cache (vreset! cache {:at e :f (some-> (wworld/path-world p) flow-fn)}))]
+        (when f (f x y z))))))
+
 (defn decide-tick
   "One tick of a walk, pure: [state' out] for the pose, out {:done map} or {:controls :yaw :pitch} (with :warn, a gate
   breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate :felt? :flow-at}: felt?, over a mask, ends the walk at a floor or roof the body felt (felt-solid);
@@ -335,7 +348,7 @@
   (let [gate (gate-env (:primitives c) steps)
         watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
         env {:policy (wworld/body-policy c) :steps steps :gate gate :felt? (boolean (:unknown c)) :air-c c
-             :flow-at (let [f (delay (some-> (wworld/path-world (:primitives c)) flow-fn))] (fn [x y z] (some-> @f (apply [x y z]))))
+             :flow-at (live-flow-at c)
              :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
         _ (when gate
             (ctx/emit! c :walk.gates :debug {:steps (into [] (comp (take 60) (map (juxt :x :y :z :move #(boolean (:unseen-floor %))))) steps)}))
