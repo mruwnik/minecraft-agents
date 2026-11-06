@@ -255,3 +255,20 @@
         unspawned (with-redefs [spawn-light/spawns-over (constantly 0)] (prices))]
     (is (= 4 (count priced)))
     (is (every? #(> (priced %) (unspawned %)) (keys priced)) (str "each way out under the night sky costs its spawns " (pr-str priced unspawned)))))
+
+;; the digs-out-away fixture: a pocket sealed east by glass, a zombie 5 east in a stone room whose far end is unseen
+(def seal-room-blocks
+  (merge (into {} (for [x (range 15 22) y (range 63 68) z (range 15 18)] [(str x "," y "," z) "stone"]))
+         (into {} (for [y [64 65]] [(str "16," y ",16") "air"]))
+         (into {} (for [x (range 18 22) y [64 65]] [(str x "," y ",16") "air"]))
+         {"17,64,16" "glass" "17,65,16" "glass" "20,66,16" "glowstone"}))
+
+(deftest a-fragile-body-whose-every-way-is-priced-at-its-health-leaves-by-the-way-the-zombie-is-least-likely-to-reach
+  (let [p (tu/fake {:floor [15 15 21 17] :time st/noon :blocks seal-room-blocks :self {:pos {:x 16.5 :y 64 :z 16.5} :health 1.5}
+                    :inventory h/sword
+                    :entities [{:id 7 :name "zombie" :kind "hostile" :visible true :pos {:x 21.5 :y 64 :z 16.5}}]})
+        c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
+        exits (leave-shelter/exits c)]
+    (is (apply = (map :price exits)) "every way a mob could reach costs the body's health in hp: the prices tie")
+    (is (= :west (:heading (first exits))) "so the way the zombie reaches least often goes first, not the first listed")
+    (is (= :east (:heading (last exits))) "and the glass toward it last")))
