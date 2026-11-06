@@ -1,7 +1,7 @@
 // Why JavaScript: wraps Mineflayer's equip, whose result depends on its client-side view of the inventory window.
 // Puts a named item in a hand or armour slot and checks the outcome. Mineflayer's equip swaps by slot numbers from the
 // client's view of the window; when that view is stale the server refuses the swap and the hand holds something else,
-// so a swap is followed by a resync and a check, and a miss gets one more try.
+// so a swap is followed by a resync and a check, and a miss gets one more try. An item just picked up may be missing from the view: a miss resyncs once before it is called no-item.
 
 import { syncWindow } from './craft.mjs'
 
@@ -13,7 +13,11 @@ const at = (bot, dest) => (dest === 'hand' ? bot.heldItem : bot.inventory.slots[
 // { status: 'equipped' } | { status: 'no-item' } | { held } (no status: the caller words the failure) (held: the name the hand or slot has instead)
 export async function hold (bot, name, dest, timeScale = 1) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const item = bot.inventory.items().find(i => i.name === name)
+    let item = bot.inventory.items().find(i => i.name === name)
+    if (!item && attempt === 0) {
+      await syncWindow(bot, timeScale)
+      item = bot.inventory.items().find(i => i.name === name)
+    }
     if (!item) return { status: 'no-item' }
     const swaps = dest !== 'hand' || !inHotbar(item.slot)
     await bot.equip(item, dest)

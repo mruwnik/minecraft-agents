@@ -167,6 +167,17 @@
           (is (= #{"dirt"} (carried p)))
           (is (= 5 (count (:worn @out)))))))))
 
+(deftest a-piece-the-server-refuses-does-not-stop-the-rest-of-the-set
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [real fake/equip
+              {:keys [p out]} (with-redefs [fake/equip (fn [w a] (if (= "iron_chestplate" (:item a)) [w {:status "no-item"}] (real w a)))]
+                                (await (equip (stacks "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots") {})))]
+          (is (= {"head" "iron_helmet" "legs" "iron_leggings" "feet" "iron_boots"} (worn p)))
+          (is (= [:nothing-possible :failed] [(:kind (:ending @out)) (:reason @out)]))
+          (is (= 3 (count (:worn @out)))))))))
+
 (deftest the-best-piece-is-chosen
   (async done
     (tu/run-async done

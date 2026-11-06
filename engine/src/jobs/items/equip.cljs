@@ -123,18 +123,19 @@
   (ctx/end c kind reason (assoc data :text text)))
 
 (defn ^:async put-on!
-  "Equip (or, with :off, unequip) each step in turn, booking the ones the server took in mem :worn (:off); the failed step's primitive result, or nil."
+  "Equip (or, with :off, unequip) each step in turn, booking the ones the server took in mem :worn (:off); a failed step does not stop the rest; the first failed step's primitive result, or nil."
   [c todo]
-  (loop [todo todo]
-    (when-let [{:keys [item slot] :as step} (first todo)]
+  (loop [todo todo failed nil]
+    (if-let [{:keys [item slot] :as step} (first todo)]
       (let [off (:off (:args c))
             r (await (if off
                        (ctx/act c :unequip (clj->js {:dest slot}))
                        (ctx/act c :equip (clj->js {:item item :dest slot}))))]
         (if (contains? #{"equipped" "ok" "empty"} (.-status r))
           (do (ctx/update-mem! c update (if off :off :worn) (fnil conj []) step)
-              (recur (rest todo)))
-          (assoc step :status (.-status r)))))))
+              (recur (rest todo) failed))
+          (recur (rest todo) (or failed (assoc step :status (.-status r))))))
+      failed)))
 
 (defn ^:async round
   [c]

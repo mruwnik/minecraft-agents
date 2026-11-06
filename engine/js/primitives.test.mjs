@@ -3336,6 +3336,15 @@ test('equip of an item outside the hotbar resyncs the window and retries when th
   assert.equal(bot.heldItem.name, 'glowstone')
 })
 
+test('equip of an item missing from the stale inventory view resyncs the window before calling it no-item', async () => {
+  const { bot, p } = rig(world)
+  const items = bot.inventory.items
+  let synced = false
+  bot.inventory.items = () => (synced ? items.call(bot.inventory) : [])
+  bot._syncWindow = async () => { synced = true }
+  assert.deepEqual(await p.equip('t1', { item: 'bread' }), { status: 'equipped' })
+})
+
 test('equip fails naming what the hand holds when the item never reaches it', async () => {
   const { p } = rig(staleWorld(() => false))
   assert.deepEqual(await p.equip('t1', { item: 'glowstone' }), { status: 'failed', reason: 'cannot hold glowstone: hand has iron_pickaxe' })
