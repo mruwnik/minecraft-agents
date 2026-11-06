@@ -299,3 +299,15 @@
     (is (= ["partial" "budget"] [(:status r) (:reason r)]))
     (is (= 64 y) "on the field, not the walkway")
     (is (> z 2) "toward the causeway")))
+
+;; A goal walled in by a ring of stone at the end of a walled 3-wide lane; the rest of the seen land is a big field behind the start.
+(def peninsula-walled-goal
+  [(stone -30 -10 10 10 64) (stone 10 -1 42 1 64) (stone 43 -3 49 3 64)
+   [43 64 -3 49 66 -3 "stone"] [43 64 3 49 66 3 "stone"] [43 64 -2 43 66 2 "stone"] [49 64 -2 49 66 2 "stone"]
+   [10 64 -2 42 66 -2 "stone"] [10 64 2 42 66 2 "stone"]])
+
+(deftest a-search-out-of-nodes-ends-at-the-wall-of-a-walled-in-goal-not-at-the-rim-of-the-flood
+  (doseq [n [150 250 350 450]]
+    (let [r (run peninsula-walled-goal {:x 0 :y 64 :z 0} (near 46 64 0 1) {:maxNodes n})]
+      (is (= ["partial" "budget"] [(:status r) (:reason r)]))
+      (is (= [42 64 0] (last-cell r)) "the peninsula's end by the ring, a dead end with solid walls"))))

@@ -18,7 +18,8 @@
 
   ;; Out of nodes, the partial end is the expanded node nearest the goal that the search could still have gone on from:
   ;; an open node descends from it or stands a move beside it (a step, a jump up or a drop), or it stands by land not
-  ;; loaded or not seen (oneWayOpen). A dead end whose every way on the search has tried is no place to walk to and plan
+  ;; loaded or not seen (oneWayOpen), or no cliff or gap is beside it (walled in by solid ground: a way to dig on, as the
+  ;; walk to a goal behind a wall ends). A dead end whose every way on the search has tried is no place to walk to and plan
   ;; again (it was often reached the long way round); with no such node the end is the nearest one. cut: the node whose
   ;; expansion the budget cut short (-1: none), so live.
   (budgetEnd [s cut]
@@ -44,7 +45,8 @@
         (when (>= (aget (.-heap-pos s) i) 0)
           (up! (aget (.-parents s) i))
           (.add open (.keyOf s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i) 0))))
-      (when-not (or (<= (.-best-node s) 0) ^boolean (on? (.-best-node s)))
+      (when-not (or (<= (.-best-node s) 0) ^boolean (on? (.-best-node s))
+                    (not ^boolean (.cliffBeside s (aget (.-xs s) (.-best-node s)) (aget (.-ys s) (.-best-node s)) (aget (.-zs s) (.-best-node s)) (aget (.-hs s) (.-best-node s)))))
         (loop [i 1 best -1 best-d (.-start-distance s)]
           (if (< i n)
             (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)
