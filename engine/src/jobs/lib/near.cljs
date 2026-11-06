@@ -214,6 +214,12 @@
     (< left (dec d)) "partial"
     :else "blocked"))
 
+(defn search-goes-on?
+  "Whether walk-round!'s answer r is of a search not ended yet: nothing walked (\"searching\"), or a walk whose re-plan was
+  still searching (:reason :budget), whatever its status: the way is not known yet, which is no failure."
+  [{:keys [status result]}]
+  (or (= "searching" status) (= :budget (:reason result))))
+
 (defn ^:async walk-round!
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the
   primitives have a pathWorld), with its :moved entry {:from :to :status :target} written and the round booked for the

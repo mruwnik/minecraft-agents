@@ -96,11 +96,11 @@
   (let [level (assoc c :dive-floor (min (:floor way) (js/Math.floor (:y (u/self-pos c)))))
         cell (dissoc way :floor)
         _ (stair-mem/use-way! c [(:x way) (:y way) (:z way)])
-        {:keys [status result from to]} (await (near/walk-round! level cell 0 (dissoc opts :progress)))
+        {:keys [status result from to] :as r} (await (near/walk-round! level cell 0 (dissoc opts :progress)))
         n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)
         nearer? (< (u/dist to cell) (dec (u/dist from cell)))]
     (ctx/update-mem! c assoc :own-way-on true :searching n)
-    (when-not (or (= "arrived" status) (and (= "searching" status) (< n (max-searching))) nearer? (esc/own-recut! c))
+    (when-not (or (= "arrived" status) (and (near/search-goes-on? r) (< n (max-searching))) nearer? (esc/own-recut! c))
       (ctx/update-mem! c assoc :own-way-done true))
     :again))
 

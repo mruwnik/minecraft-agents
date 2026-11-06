@@ -146,10 +146,10 @@
         (counted)
         (ctx/emit! c :go-to.surfacing :info {:at target :text (str why ": swimming up to " [(:x target) (:y target) (:z target)] " first")})
         (loop [n 0]
-          (let [{:keys [status]} (await (near/walk-round! (assoc c :to-air true) target 0 walk-opts))]
-            (if (and (= "searching" status) (< n max-search-rounds) (breath/head-under? p))
+          (let [r (await (near/walk-round! (assoc c :to-air true) target 0 walk-opts))]
+            (if (and (near/search-goes-on? r) (< n max-search-rounds) (breath/head-under? p))
               (recur (inc n))
-              (contains? #{"arrived" "partial" "searching"} status))))))))
+              (or (near/search-goes-on? r) (contains? #{"arrived" "partial"} (:status r))))))))))
 
 (def max-breath-waits "Pauses of breathe-back! at most: vanilla refills 4 of 300 air a tick, a full breath in under 4 s." 20)
 

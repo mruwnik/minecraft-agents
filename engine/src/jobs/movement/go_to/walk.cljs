@@ -102,9 +102,9 @@
   [c pos way opts]
   (let [across #(js/Math.hypot (- (:x pos) (:x %)) (- (:z pos) (:z %)))
         before (across (u/self-pos c))
-        {:keys [result status]} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) way 1 (dissoc opts :progress)))
+        {:keys [result status] :as r} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) way 1 (dissoc opts :progress)))
         left (u/dist (u/self-pos c) pos)
-        why (when-not (#{"arrived" "partial" "searching"} status) (:why (end/give-up-fields result)))]
+        why (when-not (or (#{"arrived" "partial"} status) (near/search-goes-on? r)) (:why (end/give-up-fields result)))]
     (when-not (jumped? c)
       (ctx/update-mem! c #(cond-> (-> % (dissoc :way-looks) (assoc :last-dist left :closest (min left (:closest % left))))
                             (and why (not= :no-progress why)) (assoc :waypoint-why why)
@@ -258,8 +258,8 @@
   [c dry]
   (let [opts (walk-opts c (some-> (:doors (:args c)) keyword))]
     (loop [i 1]
-      (let [{:keys [status]} (await (near/walk-round! c dry 0 opts))]
-        (if (and (#{"searching" "partial"} status) (< i (dry-walk-rounds)))
+      (let [{:keys [status] :as r} (await (near/walk-round! c dry 0 opts))]
+        (if (and (or (= "partial" status) (near/search-goes-on? r)) (< i (dry-walk-rounds)))
           (do (await (pace/pace! c)) (recur (inc i)))
           status)))))
 
@@ -425,8 +425,8 @@
   "One walk round to via (route-via), priced and turn-back-checked like the walk to the goal; the route is forgotten when the round brought the body no nearer it."
   [c via doors]
   (let [before (u/dist (u/self-pos c) via)
-        {:keys [status]} (await (near/walk-round! c via 1 (assoc (walk-opts c doors) :stair-check (turn-back-check c (reprice/check c via nil)))))]
-    (when (and (not= "searching" status) (> (u/dist (u/self-pos c) via) (- before 2)))
+        r (await (near/walk-round! c via 1 (assoc (walk-opts c doors) :stair-check (turn-back-check c (reprice/check c via nil)))))]
+    (when (and (not (near/search-goes-on? r)) (> (u/dist (u/self-pos c) via) (- before 2)))
       (ctx/update-mem! c dissoc :route))
     :again))
 
