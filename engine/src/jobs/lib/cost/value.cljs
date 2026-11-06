@@ -63,6 +63,12 @@
                :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
    ::spawn-chance-per-s {:default {:k 161 :n-s 133715} :spec (a/map-with {:k (a/num-in 0 nil) :n-s (a/num-in 0.1 nil)})
                          :doc "Counts {:k :n-s} behind the chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance reads (k + 1) / n-s, 0.0012): k hostile meets (the first respond decision about a spawnable mob) in n-s seconds the body stood on a cell not lit-light? at the record's time of day (recorded block and sky light, sky less the darkening of the clock the bodies' memory entries stamp, clear sky), trial logs to 2026-11-06; per band under y 40 0.0022, y 40-55 0.0006, surface 0.0011. Recount: tools/event-counts.mjs dark-meets."}
+   ::loose-over-loose-counts {:default {:h1 {:loose 38.8 :other 5.2} :h2 {:loose 31.1 :other 12.9} :h3 {:loose 29.6 :other 14.4}
+                                        :h4 {:loose 10.2 :other 33.8} :h5 {:loose 4 :other 40}}
+                              :spec (a/pred "a map of :h1 to :h5 to {:loose n :other n} pseudo-counts >= 0"
+                                            (fn [m] (and (map? m) (every? (fn [k] (let [c (get m k)] (and (map? c) (every? #(and (number? (get c %)) (<= 0 (get c %))) [:loose :other]))))
+                                                                          [:h1 :h2 :h3 :h4 :h5]))))
+                              :doc "The Beta prior per height h (:h1 to :h5, the run of sand, red sand or gravel cells under the cell, capped) of the cell above a loose cell, when it is not air or a fluid (an unseen cell), being loose ground too (jobs.lib.cost.value/loose-over-loose-chance): 2.31M pairs in 4038 recorded chunk columns (every 20th, the fixture grid left out, 2026-11-07), 0.881, 0.707, 0.672, 0.232, 0.092 of 734k, 612k, 401k, 122k, 25k pairs. Spread fitted by moments over columns, as a call digs in one place (effective n about 44; h4 and h5 scaled to it). One world: layers of loose ground here stop at 3-4 cells. Recount: node tools/event-counts.mjs loose-stack --stride 20."}
    ::detour-factor {:default 1.27 :spec (a/num-in 1 nil)
                     :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s: 30255 blocks of steers over 23766 of straight line in 1235 walks (go-to walk jobs of 4 blocks or more), trial logs to 2026-10-28; a lower bound (steer chords). Recount: tools/event-counts.mjs walk-detour (:ratio)."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
@@ -415,6 +421,14 @@
   "The chance per second a mob spawns at place and reaches a body standing there: (k + 1) / n-s of ::spawn-chance-per-s x spawn-share."
   ([place] (spawn-chance place nil))
   ([place opts] (let [{:keys [k n-s]} (settings/get settings ::spawn-chance-per-s)] (* (/ (inc k) n-s) (spawn-share place opts)))))
+
+(def loose-stack-cap "The tallest run of loose cells ::loose-over-loose-counts tells apart." 5)
+
+(defn loose-over-loose-chance
+  "The chance the unseen cell above a run of h loose cells (sand, red sand, gravel) is loose too: ::loose-over-loose-counts of height h (capped at loose-stack-cap), loose over loose plus other."
+  [h]
+  (let [{:keys [loose other]} (get (settings/get settings ::loose-over-loose-counts) (keyword (str "h" (max 1 (min h loose-stack-cap)))))]
+    (/ loose (max 1e-9 (+ loose other)))))
 
 (defn dark-factor
   "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block

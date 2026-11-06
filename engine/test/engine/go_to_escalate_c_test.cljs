@@ -468,6 +468,16 @@
       50 0
       2.9 1)))
 
+(deftest a-pillar-roof-over-seen-loose-ground-is-priced-as-the-measured-mix-of-loose-block-and-stone
+  (let [inv [{:name "iron_pickaxe" :count 1}]
+        p (tu/seeing-within (tu/fake {:blocks (assoc stone-mass "0,65,0" "gravel" "0,66,0" "gravel") :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) 2.9)
+        price-at (fn [share] (settings/with-settings {:jobs.lib.cost.value/loose-over-loose-counts (zipmap [:h1 :h2 :h3 :h4 :h5] (repeat {:loose share :other (- 100 share)}))}
+                               #(escape-way/price p [0 64 0] {:step :pillar :height 2})))
+        gravel-s (/ (tools/clear-ms p "gravel") 1000)
+        stone-s (* ((escape/dig-share-fn p) [0 67 0]) (/ (tools/clear-ms p "stone") 1000))]
+    (is (< (js/Math.abs (- (- (price-at 100) (price-at 0)) (- gravel-s stone-s))) 1e-6) "an unseen cell over the gravel is gravel at the chance, else the stone guess")
+    (is (not= (price-at 100) (price-at 0)))))
+
 (def open-ground
   "Air x -1..12, y 64..80, z -2..2 over a stone floor at y 63."
   (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))

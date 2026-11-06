@@ -417,12 +417,14 @@
         price #(escape-way/price (tu/fake (merge in-pit {:blocks % :inventory [{:name "stone_pickaxe" :count 1}]})) [0 61 0] {:step :stair :heading :east :steps 3})]
     (is (< (price shaft) (price (merge shaft (box 1 65 0 1 68 0 "gravel")))) "each gravel stacked over the cut falls in and is dug")))
 
-(deftest stair-price-digs-the-unseen-loose-ground-over-a-cut-at-the-chance-it-is-solid
+(defn all-loose [share] (zipmap [:h1 :h2 :h3 :h4 :h5] (repeat {:loose share :other (- 100 share)})))
+
+(deftest stair-price-digs-the-unseen-cells-over-a-cut-in-loose-ground-at-the-chance-they-are-loose-too
   (let [shaft (-> (apply dissoc (box -6 60 -6 6 63 6 "stone") pit-cells) (assoc "1,64,0" "gravel"))
         p (tu/seeing-within (tu/fake (merge in-pit {:blocks shaft :inventory [{:name "stone_pickaxe" :count 1}]})) 3.5)
-        price-at (fn [chance] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))]
-                                (escape-way/price p [0 61 0] {:step :stair :heading :east :steps 3})))]
-    (is (< (price-at 0) (price-at 0.5)) "the cells over the seen gravel read as gravel, priced at the chance they are there")))
+        price-at (fn [share] (settings/with-settings {:jobs.lib.cost.value/loose-over-loose-counts (all-loose share)}
+                               #(escape-way/price p [0 61 0] {:step :stair :heading :east :steps 3})))]
+    (is (< (price-at 0) (price-at 50) (price-at 100)) "the cells over the seen gravel are priced at the measured chance (value/loose-over-loose-chance) they are gravel too")))
 
 (deftest go-to-with-no-pickaxe-clears-a-door-by-hand
   (async done

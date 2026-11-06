@@ -8,7 +8,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
-            [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach :as reach]
@@ -71,17 +71,36 @@
   (let [names (set (choose/fillers :build))]
     (transduce (comp (filter #(names (:name %))) (map :count)) + 0 (u/inventory p))))
 
+(defn loose-run
+  "Lazy seq of [cell w name] for the cells up base's column (base is [x y z], the top of what the body has seen there):
+  w the chance the cell is loose ground (falling: sand, gravel) and name the block it is. A seen cell is whole or not
+  (w 1 or 0, its own name); an unseen cell over a run of h loose cells is loose at value/loose-over-loose-chance of h,
+  times the chance of the cells under it, as the block under it. The run ends at a seen cell that is not loose and at an
+  unseen one with no loose cell under it (w 0 from there: no prior to read, the caller's own guess prices it)."
+  [p base]
+  (let [block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
+        under (fn [] (loop [h 0 cell base] (if (and (< h 64) (not (unseen? cell)) (rules/falling? (block-at cell))) (recur (inc h) (escape/add cell [0 -1 0])) h)))
+        step (fn step [cell h w name]
+               (when (< h 64)
+                 (let [cell (escape/add cell [0 1 0])]
+                   (cond (not (unseen? cell)) (let [n (block-at cell)]
+                                                (when (rules/falling? n) (cons [cell 1 n] (lazy-seq (step cell (inc h) 1 n)))))
+                         (nil? name) nil
+                         :else (let [w (* w (value/loose-over-loose-chance h))]
+                                 (cons [cell w name] (lazy-seq (step cell (inc h) w name))))))))
+        h0 (under)]
+    (step base h0 1 (when (pos? h0) (block-at base)))))
+
 (defn stair-route-s
   "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
   of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
   its unseen step in the price (cw/step-price), as the route's search does. A falling block (gravel, sand) is dug like any
   cut (jobs.access.stair digs it again as it falls), and each one stacked over a column's top cut is one dig more: a seen
-  one whole, an unseen one read as loose ground (dig-look/rock-name) at the chance it and those under it are solid
-  (escape/dig-share-fn)."
+  one whole, an unseen one over loose ground at the chance it and those under it are loose too (loose-run)."
   [p feet {:keys [heading steps]}]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
-        solid-share (escape/dig-share-fn p)
         leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
         fill-s (cw/fill-cost (carried-build-n p))
         cut-s (fn [cell] (let [n (block-at cell)]
@@ -90,14 +109,7 @@
                                  :else (or (cost/dig-cost (or n "stone")) ##Inf))))
         cuts (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)
         tops (vals (reduce (fn [m [x y z]] (update m [x z] #(if (and % (> (% 1) y)) % [x y z]))) {} cuts))
-        stack-s (fn [top]
-                  (loop [k 1 w 1 s 0]
-                    (let [cell (escape/add top [0 k 0])
-                          n (if (unseen? cell) (dig-look/rock-name p (zipmap [:x :y :z] cell)) (block-at cell))
-                          w (* w (if (unseen? cell) (solid-share cell) 1))]
-                      (if (and (< k 64) (pos? w) (rules/falling? n))
-                        (recur (inc k) w (+ s (* w (or (cost/dig-cost n) ##Inf))))
-                        s))))]
+        stack-s (fn [top] (transduce (map (fn [[_ w n]] (* w (or (cost/dig-cost n) ##Inf)))) + 0 (loose-run p top)))]
     (reduce (fn [total cuts]
               (let [floor (escape/add (nth cuts 2) [0 -1 0])
                     leg (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (boolean (some unseen? (cons floor cuts))))]
@@ -107,12 +119,16 @@
 (defn pillar-way-s
   "Seconds a pillar of height blocks up from feet takes, short of them fetched: cost/pillar-s, its knock
   (escape/pillar-knock), and a dig of each cell over it the head climbs into that the body has not seen, at the
-  chance it is solid (escape/dig-share-fn)."
+  chance it is loose ground over a seen loose cell (loose-run) else solid (escape/dig-share-fn)."
   [p feet height short]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
         solid-share (escape/dig-share-fn p)
-        roof-s (transduce (comp (map #(escape/up feet %)) (filter unseen?) (map #(* (solid-share %) (/ (tools/clear-ms p (block-at %)) 1000))))
+        loose (into {} (map (fn [[cell w n]] [cell [w n]])) (loose-run p (escape/up feet 1)))
+        roof-s (transduce (comp (map #(escape/up feet %)) (filter unseen?)
+                                (map (fn [cell] (let [[w n] (get loose cell [0])]
+                                                  (+ (if n (* w (/ (tools/clear-ms p n) 1000)) 0)
+                                                     (* (- 1 w) (solid-share cell) (/ (tools/clear-ms p (block-at cell)) 1000)))))))
                           + 0 (range 2 (+ height 2)))]
     (+ (cost/pillar-s (wworld/unseen-share p) height (escape/unseen-pillar-blocks p feet height) short)
        (escape/pillar-knock p feet height)
