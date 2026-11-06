@@ -31,4 +31,14 @@
    ;; glowstone, with ways into cells it has not seen yet (the counts k and n hold for any scan, so are not pinned)
    :expect [{:event {:source :job :kind :way-on.priced :data {:set :lit :ways [:any]}} :within-s 10}
             {:no-event {:source :body :kind :died} :for-s 10}]
-   :limit-s 30}]}
+   :limit-s 30}
+  {:name "a-priced-way-is-read-by-the-sight-pass-that-sees-its-cells"
+   :body {:at [60.5 3 16.5] :yaw -90}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "creeper" [68.5 3 16.5]]
+         [:wait-s 3]]
+   ;; the flight turns the body: a sight pass that sees a priced way's cells reads it (the :perception/pass hook, :system)
+   :expect [{:event {:source :job :kind :way-on.priced :data {:ways [:any]}} :within-s 10}
+            {:event {:source :system :kind :way-on.seen} :within-s 20}]
+   :limit-s 40}]}
