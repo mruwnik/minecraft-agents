@@ -1295,7 +1295,13 @@
   (let [world (merge (box -2 60 -2 2 80 2 "stone") (zipmap (map #(str "0," % ",0") (range 71 80)) (repeat "air")) {"0,80,0" "air" "0,81,0" "air" "0,65,0" "air" "0,64,0" "air"})
         p (hiding-with-pickaxe world #{[0 70 0]})
         seconds (fn [absent] (absent-at [:drop] absent #(:seconds (straight-dig p [0 64 0] true {}))))]
-    (is (< (seconds 0.01) (seconds 0.9)) "the likelier the floor a 9-block fall lands on is a void (a :drop's chance), the dearer the way")))
+    (is (< (seconds 0.01) (seconds 0.9)) "the likelier the floor a 9-block fall lands on is a void (a :drop's chance), the dearer the way")
+    (let [self (.self p)
+          fall {:health (.-health self) :equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall (dig-route/body-prices p (constantly false))) :carried 0 :share (wworld/unseen-share p)}
+          beyond (- (cost/unseen-fall-s :drop 9 fall) ((:fall-s (dig-route/body-prices p (constantly false))) 9))]
+      (is (< 0 beyond) "a void under the 9-block drop falls on")
+      (is (< (Math/abs (- (- (seconds 0.9) (seconds 0.01)) (* 0.89 beyond))) 1e-6)
+          "the toll is the chance times the fall the void adds past the 9 blocks the step already falls"))))
 
 (deftest water-seen-only-as-the-dig-route-reaches-it-sends-the-route-round-it
   ;; KitOak94 and the live fixture: the plan read the pool beside the shaft's top as unseen rock (it shows once the digging starts); the dig there was refused :fluid-adjacent

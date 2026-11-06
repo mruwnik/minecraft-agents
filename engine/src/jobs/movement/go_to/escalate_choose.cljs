@@ -421,7 +421,7 @@
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
-  priced at the chance it is none (cost/floor-absent-chance of the step's kind) times cost/unseen-fall-s, in the search and the straight dig. Other route-opts go to the search (:place-s,
+  priced at the chance it is none (cost/floor-absent-chance of the step's kind) times the fall it adds past the step's own (cost/unseen-fall-s less its :fall-s), in the search and the straight dig. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
   The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
@@ -458,16 +458,17 @@
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
         ;; a floor not seen is read as rock where the route may walk on it; the chance it is none (cost/floor-absent-chance of
-        ;; the step's kind, the prior turn-back prices it by) is a fall at the measured depths (cost/unseen-fall-s) and the pillar
+        ;; the step's kind, the prior turn-back prices it by) is the fall at the measured depths past the step's own (cost/unseen-fall-s less its :fall-s) and the pillar
         ;; back up, priced onto each walk step that lands on one, in the search and the straight dig. Only a floor under a cell
         ;; seen open: under a guessed cell it is the rock mass the dig prices as a guess
         fall (let [self (.self p)]
                {:health (.-health self) :equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall prices)
                 :carried (:count (escape/carried-pillar-item p) 0) :share (wworld/unseen-share p)})
         absent-s (memoize (fn [rise]
-                            (let [kind (wsight/rise-kind rise)]
+                            (let [kind (wsight/rise-kind rise)
+                                  n (if (= :drop kind) (- rise) 1)]
                               (* (cost/floor-absent-chance kind nil)
-                                 (if (= :drop kind) (cost/unseen-fall-s :drop (- rise) fall) (cost/unseen-fall-s :down 1 fall))))))
+                                 (max 0 (- (cost/unseen-fall-s (if (= :drop kind) :drop :down) n fall) ((:fall-s prices) n)))))))
         floor-absent-s (fn [[x y z] rise]
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
