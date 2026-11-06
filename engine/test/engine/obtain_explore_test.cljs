@@ -55,7 +55,7 @@
 (deftest a-root-search-is-worth-what-the-find-is-and-no-count-binds-it
   (let [o (search-at bed)]
     (is (< 0 (:worth (search-at {:item "stone_axe"})) (:worth o)) "an axe is worth a shorter search than a bed")
-    (is (not-any? o [:max-legs :max-distance]) "the walks' price binds it, not a count or a radius")))
+    (is (not-any? o [:max-distance]) "the walks' price binds it, not a radius")))
 
 (deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
   (async done

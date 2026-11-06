@@ -11,10 +11,10 @@
    :body {:at [24.5 0 24.5] :effects [["hunger" 120 255]]}
    :act [[:rcon "damage $BODY 19 minecraft:generic"]
          [:wait-s 3] ; hunger must have emptied the food bar: a fed body heals, so it would search
-         [:job (jobs.explore.search {:target ["oak_log"] :settings {:jobs.explore.search/max-legs 4}})]]
+         [:job (jobs.explore.search {:target ["oak_log"] :worth 100})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :planned} :of-job true :for-s 15 :until {:source :job :kind :waiting :data {:reason :low-health}}}]}
   {:name "healthy-body-searches-for-wood"
-   :act [[:job (jobs.explore.search {:target ["oak_log"] :settings {:jobs.explore.search/max-legs 4}})]]
+   :act [[:job (jobs.explore.search {:target ["oak_log"] :worth 100})]]
    :expect [{:event {:source :job :kind :planned} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 10 :of-job true}]}]}
