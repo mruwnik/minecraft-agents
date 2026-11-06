@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
             [jobs.lib.stair-cells :as cells]
             [jobs.lib.util :as u]
@@ -10,9 +11,11 @@
 
 (a/defargs settings
   {::max-ways {:default 200 :doc "Stair ways the body remembers (memory :stair-way). Past it the one used least recently goes, unless it lies within ::home-keep of home." :spec (a/int-in 1 nil)}
-   ::home-keep {:default 64 :doc "Blocks from its :home or :bed place within which a remembered stair way is never dropped for room." :spec (a/num-in 0 nil)}})
+   ::home-keep {:default 64 :doc "Blocks from its :home or :bed place within which a remembered stair way is never dropped for room." :spec (a/num-in 0 nil)}
+   ::dig-plugs? {:default false :doc "A cell this body plugged against water may be dug while the water is still behind it (kept-plugs)." :spec boolean?}})
 (defn max-ways [] (settings/get settings ::max-ways))
 (defn home-keep [] (settings/get settings ::home-keep))
+(defn dig-plugs? [] (settings/get settings ::dig-plugs?))
 
 (def plug-policy {:cap 60 :ttl :forever})
 
@@ -21,6 +24,17 @@
   [c]
   (let [dim (.-dimension (.self (:primitives c)))]
     (set (keep #(when (= dim (:dim (:data %))) (:cell (:data %))) (ctx/entries c :stair-plug)))))
+
+(defn kept-plugs
+  "The cells this body plugged against water (plugs-of) that its digs leave shut: those the body sees or remembers
+  (within its memory age, jobs.lib.util/seen-name) water beside; none under dig-plugs?. A plug with no water left
+  behind it is an ordinary block."
+  [c]
+  (if (dig-plugs?)
+    #{}
+    (let [p (:primitives c)
+          seen (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))]
+      (into #{} (filter #(seq (rules/fluid-neighbours seen %))) (plugs-of c)))))
 
 (defn plug!
   "Remember cell as filled against water, so a later stair keeps it shut."

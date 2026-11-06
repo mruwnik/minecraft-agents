@@ -707,29 +707,36 @@
           (is (= [1 64 0] (:plugged @out)))
           (is (= "cobblestone" (block-at p [1 64 0])) "the opened cell is shut again"))))))
 
-(deftest a-later-stair-never-digs-the-plug-an-earlier-one-set-against-water
+(defn ^:async later-stair-at-plug!
+  "A stair plugs [1 64 0] against water found at [1 64 1]; that cell then holds behind, and a later stair runs the same
+  way: the plug's block, the digs of it, and the later stair's stops."
+  [behind]
+  (let [flood? (atom true)
+        prep (fn [p]
+               (let [world (.-world p)]
+                 (.override world "dig"
+                            (fn ^:async f [token a impl]
+                              (let [r (await (impl token a))]
+                                (when @flood? (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "water"))
+                                r)))))
+        {:keys [out p eng] :as first-run} (await (stair! {:blocks ground :inventory (conj pick {:name "cobblestone" :count 8})} east prep))
+        _ (is (= [1 64 0] (:plugged @out)))
+        stops (count (events-of first-run :stopped))
+        _ (reset! flood? false)
+        _ (swap! (.. (.-world p) -state) assoc-in [:blocks [1 64 1]] behind)
+        _ (core/submit! eng '(jobs.access.stair {:dir :down :heading :east :steps 3 :here true}) {})
+        _ (await (tick-out! first-run))]
+    {:plug (block-at p [1 64 0])
+     :plug-digs (count (filter #{{:x 1 :y 64 :z 0}} (digs p)))
+     :stops (map :reason (drop stops (events-of first-run :stopped)))}))
+
+(deftest a-later-stair-digs-the-plug-an-earlier-one-set-against-water-only-once-the-water-is-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [prep (fn [p]
-                     (let [world (.-world p)]
-                       (.override world "dig"
-                                  (fn ^:async f [token a impl]
-                                    (let [r (await (impl token a))]
-                                      (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "water")
-                                      r)))))
-              {:keys [out p eng clock] :as first-run} (await (stair! {:blocks ground :inventory (conj pick {:name "cobblestone" :count 8})} east prep))
-              _ (is (= [1 64 0] (:plugged @out)))
-              _ (swap! (.. (.-world p) -state) assoc-in [:blocks [1 64 1]] "stone")
-              digs-before (count (digs p))
-              out2 (atom :not-done)
-              id (core/submit! eng '(jobs.access.stair {:dir :down :heading :east :steps 3 :here true}) {})
-              _ (await (tick-out! (assoc first-run :out out2 :id id)))
-              stopped (last (events-of first-run :stopped))]
-          (is (= "cobblestone" (block-at p [1 64 0])) "the plug stays shut")
-          (is (= digs-before (count (digs p))) "nothing was dug")
-          (is (= [1 64 0] (:cell stopped)))
-          (is (= :plugged (:reason stopped))))))))
+        (is (= {:plug "cobblestone" :plug-digs 1 :stops [:plugged]} (await (later-stair-at-plug! "water"))) "the plug stays shut")
+        ;; card 37b7baf9: with the water seen gone the plug is an ordinary block
+        (is (= {:plug "air" :plug-digs 2 :stops []} (await (later-stair-at-plug! "stone"))))))))
 
 (deftest water-beside-a-dug-cell-with-no-block-to-plug-it-says-so
   (async done

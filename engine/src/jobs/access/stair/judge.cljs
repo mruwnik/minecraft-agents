@@ -7,11 +7,11 @@
             [engine.ctx :as ctx]
             [jobs.lib.stair-cells :as geo]
             [jobs.access.stair.step :as sstep]
-            [jobs.access.stair.limits :as limits]
             [jobs.lib.dig-look :refer [unknown?]]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.reach :as reach]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.tools :as tools]
             [plan.shape :as shape]))
 
@@ -27,7 +27,7 @@
   [c feet]
   (merge {:floor-at (access/seen-at (:primitives c)) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :column-at (access/sensed-at (:primitives c) "air")
           :feet feet :ledger #{} :ways (ledger/ways-of c) :keep-base? true :dig-tables? true
-          :plugs (limits/kept-plugs c)}
+          :plugs (smem/kept-plugs c)}
          (access-world c)))
 
 (defn fetch?

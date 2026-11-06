@@ -292,14 +292,18 @@
     (is (true? (esc/own-may-beat? p feet pillar)))
     (is (false? (esc/own-may-beat? p feet {:step :dig-route :cells []})) "a way that costs nothing is never beaten")))
 
-(deftest a-dig-never-opens-the-body-s-own-plug-against-water
+(deftest a-dig-never-opens-the-body-s-own-plug-while-water-is-behind-it
   ;; KitOak94: a dig route priced its stair plug [738 62 -177] as a flood of a few seconds and dug it; the water behind it runs down the stair
   (let [plug [738 62 -177]
-        c (assoc (rt/ctx-of {:blocks {}}) :args {}
-                 :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}}))]
-    (is (false? ((own-builds/may-dig-fn c) plug)))
-    (is (false? ((own-builds/may-dig-fn c true) plug)) "not even where the body may cut its own builds")
-    (is (true? ((own-builds/may-dig-fn c) [738 61 -177])))))
+        c-of (fn [blocks] (assoc (rt/ctx-of {:blocks (assoc blocks "738,62,-177" "cobblestone")}) :args {}
+                                 :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}})))
+        wet (c-of {"739,62,-177" "water"})
+        drained (c-of {"739,62,-177" "air"})]
+    (is (false? ((own-builds/may-dig-fn wet) plug)))
+    (is (false? ((own-builds/may-dig-fn wet true) plug)) "not even where the body may cut its own builds")
+    (is (true? ((own-builds/may-dig-fn wet) [738 61 -177])))
+    ;; card 37b7baf9: a plug kept for ever shut a body in once its pool was gone
+    (is (true? ((own-builds/may-dig-fn drained) plug)) "with the water seen gone the plug is an ordinary block")))
 
 (deftest an-own-stocked-pen-wall-cut-costs-its-put-back-and-the-herd-s-loss-and-the-pen-is-read-once
   ;; card dbd43651: the herd-loss branch of the put-back price; the may-dig, own and price fns of one escalation share one pen read

@@ -58,7 +58,7 @@
   (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column (a stair up's top cell; also an unseen cell there when the cut from
   beside is cheaper than the hp it risks, undermine-worth?: under 9.4 hp by default) would land on the body once the cell under it is cut: the body steps out of the column (the step behind, the cell behind, a side), cuts the column and what drops into it
   from there, and walks back. With no cell to step to it is cut in place, and one that lands on the body is dug out at
-  once (at most 2 landings, then :hazard). The body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),
+  once (at most 2 landings, then :hazard). The body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged with water still beside it (stair-memory/kept-plugs),
   a crop, or a base block.
 
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
