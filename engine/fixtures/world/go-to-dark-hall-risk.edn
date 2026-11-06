@@ -1,10 +1,9 @@
 ;; Card 7e68c68b (Q345/Q388): go-to's route risk prices the spawns of a roofed dark cell only where dark spawnable floor beyond the 24-block spawn-free radius is
-;; reachable on foot. Stone mass x 0..120, z 2..30; a torch-lit room x 1..3 and a dark 1x2 tunnel from x 4 on; the risk share is set to 0.01 so any priced spawn is over it.
+;; reachable on foot. Stone mass x 0..120, z 2..30; a torch-lit room x 1..3 and a dark 1x2 tunnel from x 4 on; the hurt case sets the risk share to 0.01, so its heal wait runs to full health (a full-health body has none).
 ;; Should-succeed: a short tunnel (x 4..20) is crossed. Should-fail: the same walk through a long tunnel (x 4..110) by a body hurt to 4 hp (bread carried) waits :risky to heal, the spawns of its dark floor priced (at full health waiting lowers nothing, so it would walk). Each case walks out to the end and back first (dark cells count as seen only near), so the last walk starts in the lit room with the tunnel seen.
 {:defaults
  {:tags [:movement :dark] :time :any
   :plot {:light :dark :height 12 :length 130 :width 34}
-  :settings {:jobs.lib.cost.risk/risk-share 0.01}
   :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
   :limit-s 200}
  :cases
@@ -19,6 +18,7 @@
             {:no-event {:source :job :data {:reason :risky}} :for-s 1}]}
   {:name "a-long-dark-tunnel-waits-risky-for-its-spawns"
    :body {:inventory [["bread" 3]]}
+   :settings {:jobs.lib.cost.risk/risk-share 0.01}
    :blocks [[:fill [0 0 0] [120 6 31] "stone"] [:fill [1 0 15] [3 1 17] "air"] [:fill [4 0 16] [110 1 16] "air"] [:set [2 1 15] "torch"]]
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 0})]
          [:until-pos {:x-min 98} 60]
