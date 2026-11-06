@@ -187,6 +187,25 @@
           (is (= [:dig-route] (map :step (events-of seen :go-to.escalated))) "the goal is a dig away: no wall is walked to")
           (is (empty? (events-of seen :go-to.wall-walk)) "no wall is walked to"))))))
 
+(deftest a-body-on-a-plateau-digs-toward-a-far-walled-in-goal-leg-by-leg
+  ;; the plateau of the test above, the goal sealed in a block 30 off on the floor below: no dig search runs to the
+  ;; goal from farther than a leg (a whole-way search to a far goal searches a ball of rock round the body)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [goal [30 58 0]
+              blocks (apply dissoc (merge (box -40 57 -40 40 57 40 "stone") (box -14 58 -14 14 63 14 "stone") (box 26 58 -3 34 62 3 "stone"))
+                            ["30,58,0" "30,59,0"])
+              searches (atom []) search dig-route/search
+              {:keys [out p]} (with-redefs [dig-route/search (fn [block-at from to opts] (swap! searches conj [from to]) (search block-at from to opts))]
+                                (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks
+                                                  :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                 {:pos goal :range 0})))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= goal (feet p)))
+          (is (not-any? (fn [[from to]] (and (= goal (vec to)) (> (u/dist (zipmap [:x :y :z] from) (zipmap [:x :y :z] to)) choose/leg-blocks))) @searches)
+              (pr-str @searches)))))))
+
 (deftest a-walled-in-goal-is-not-dug-to-in-another-s-zone-or-under-walk-only
   (async done
     (tu/run-async done
@@ -1509,11 +1528,13 @@
 
 (defn ^:async priced-search-run!
   "run-job! with every dig-route search counted: {:out :seen :searched-s (nodes expanded at each search's :node-s) :max-ss
-  (each search's bound, in order)}."
+  (each search's bound, in order) :start-s (the bound of a search from the start to the goal before the run: the
+  straight dig)}."
   [spec args]
   (let [search dig-route/search
         spent (atom 0)
-        max-ss (atom [])]
+        max-ss (atom [])
+        from (mapv #(js/Math.floor (get-in spec [:self :pos %])) [:x :y :z])]
     (set! dig-route/search (fn [block-at from goal opts]
                              (swap! max-ss conj (:max-s opts))
                              (let [run (search block-at from goal opts)]
@@ -1521,8 +1542,12 @@
                                  (let [[_ used :as r] (run n m)]
                                    (swap! spent + (* used (:node-s opts)))
                                    r)))))
-    (try (let [{:keys [out seen]} (await (run-job! spec args))]
-           {:out @out :seen seen :searched-s @spent :max-ss @max-ss})
+    (try (let [_ (choose/route-answer (:p (setup spec)) from (:pos args) (constantly true) (constantly false) false false {})
+               start-s (first @max-ss)
+               _ (reset! max-ss [])
+               _ (reset! spent 0)
+               {:keys [out seen]} (await (run-job! spec args))]
+           {:out @out :seen seen :searched-s @spent :max-ss @max-ss :start-s start-s})
          (finally (set! dig-route/search search)))))
 
 (deftest a-search-toward-a-pocket-seen-through-rock-costs-no-more-than-the-straight-dig-from-the-start
@@ -1532,11 +1557,12 @@
         (doseq [[sight mass [x y z :as pocket]] [[20 (merge (box 0 50 0 49 54 39 "stone") (box 0 55 0 20 60 20 "stone")) [40 51 30]]
                                                  [20 (merge (box 0 50 0 49 54 39 "stone") (box 0 55 0 20 60 20 "stone")) [40 52 30]]]]
           (let [blocks (merge mass {(str x "," y "," z) "air" (str x "," (inc y) "," z) "air"})
-                {:keys [out searched-s max-ss]} (await (priced-search-run! {:self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}] :sight sight}
-                                                                           {:pos pocket :range 0}))]
+                {:keys [out searched-s max-ss start-s]} (await (priced-search-run! {:self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}] :sight sight}
+                                                                                   {:pos pocket :range 0}))]
             (is (true? (:arrived out)) (pr-str pocket (select-keys out [:why :text :escalation])))
-            (is (<= (apply max max-ss) (first max-ss)) (pr-str pocket "a search bounded past the straight dig from the start" max-ss))
-            (is (<= searched-s (first max-ss)) (pr-str pocket "the searches cost more than the straight dig from the start" searched-s max-ss))))))))
+            (is (js/Number.isFinite start-s) "the straight dig from the start has a price")
+            (is (<= (apply max max-ss) start-s) (pr-str pocket "a search bounded past the straight dig from the start" start-s max-ss))
+            (is (<= searched-s start-s) (pr-str pocket "the searches cost more than the straight dig from the start" searched-s start-s))))))))
 
 (defn absent-at
   "f run with ::unseen-floor-counts holding each kind of kinds absent at chance p, every other kind at an even chance."

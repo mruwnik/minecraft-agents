@@ -4,6 +4,8 @@
   (:require [cljs.test :refer [deftest is are async]]
             [jobs.lib.aim :as aim]
             [jobs.lib.cost :as cost]
+            [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.util :as u]
             [jobs.lib.ledger :as ledger]
             [jobs.movement.go-to.search-bound :as search-bound]
             [engine.core :as core]
@@ -17,6 +19,7 @@
             [jobs.lib.near :as near]
             [engine.go-to-column-test :as gcol]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.own-way :as own-way]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.detour :as detour]
@@ -717,6 +720,23 @@
           (is (seq digs) "a leg was dug before the budget ran out")
           (is (< (js/Math.abs (- (* (count digs) cell-s) (:dug-s (:escalation @out)))) 1e-6)
               (pr-str [(count digs) cell-s (:escalation @out)])))))))
+
+(deftest a-dig-leg-that-meets-a-hollow-it-guessed-rock-chooses-its-next-leg
+  ;; the hollow at x 4 shows the first leg its guess was wrong: the next leg is chosen, no route planned whole to the
+  ;; goal 25 off (a search of the ball of guessed rock round the body)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [goal [26 48 0]
+              searches (atom []) search dig-route/search
+              replans (atom 0) replan esc/replan-route!
+              {:keys [out]} (with-redefs [dig-route/search (fn [block-at from to opts] (swap! searches conj [from to]) (search block-at from to opts))
+                                          esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))]
+                              (await (climb! (assoc in-phantom :blocks (dissoc phantom "4,60,0" "4,61,0")) {:pos goal})))]
+          (is (pos? @replans) "the hollow sent the leg to be planned again")
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (not-any? (fn [[from to]] (and (= goal (vec to)) (> (u/dist (zipmap [:x :y :z] from) (zipmap [:x :y :z] to)) choose/leg-blocks))) @searches)
+              (pr-str @searches)))))))
 
 ;; A pocket goal (3 64 6) sealed by seen stone on every side, 6 blocks from the body; the only walk is 40 blocks round the
 ;; loop, under the old 48-block floor but dearer than digging the 6 blocks. The body stands in the open.
