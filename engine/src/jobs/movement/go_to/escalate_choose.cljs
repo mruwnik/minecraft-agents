@@ -489,7 +489,7 @@
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
-        ;; plus its dig. A route dearer is no cheaper than it, so the
+        ;; plus its dig, and the digs inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
         straight (fn [refused] (let [leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
                          up (max (:step-s prices) (:stair-s prices))
@@ -529,20 +529,22 @@
                                                     nm (block-at h)]
                                                 (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm h))))
                          steps (map cell-s cells)
-                         heads (map head-s (cons from cells))]
+                         heads (map head-s (cons from cells))
+                         dig (vec (distinct (for [[x y z] (cons from cells)
+                                                  cell (if (= [x y z] from) [[x (inc y) z]] [[x (inc y) z] [x y z]])
+                                                  :when (not (let [nm (block-at cell)] (or (nil? nm) (dig-route/open? nm))))]
+                                              cell)))]
                      (when (and (not-any? refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells)))
                                 (every? some? steps) (every? some? heads))
                        {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
+                                    (if-let [flood (:flood prices)] (dig-route/flood-s flood (map (juxt identity block-at) dig)) 0)
                                     (reduce + 0 (for [[x y z :as cell] cells
                                                       :let [i (- fy y 1)]
                                                       :when (and (or (not (climb? cell)) (and down? (pos? (get down-steps i 0)))) (true? (some-> (sensed x (dec y) z) .-unknown)))]
                                                   ;; a landing's rise: the open cells fallen through before it and its own
                                                   (floor-absent-s [x (dec y) z] (if (and down? (= x fx) (= z fz)) (- -1 (count (take-while zero? (rseq (subvec down-steps 0 i))))) 0))))
                                     (* (:node-s route-opts 0) 2 (count cells)))
-                        :dig (vec (distinct (for [[x y z] (cons from cells)
-                                                  cell (if (= [x y z] from) [[x (inc y) z]] [[x (inc y) z] [x y z]])
-                                                  :when (not (let [nm (block-at cell)] (or (nil? nm) (dig-route/open? nm))))]
-                                              cell)))})))
+                        :dig dig})))
         straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))

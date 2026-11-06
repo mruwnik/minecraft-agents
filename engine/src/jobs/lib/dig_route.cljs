@@ -85,11 +85,27 @@
 
 (def back-pace "Steps of the search back from the goal (its lower bound) to each cell the search proper expands: one is cheaper." 4)
 
+(defn flood-step
+  "A dig of cell (block name) on a way under flood (body-prices :flood): [seconds over its :dig-s, the flood's level after,
+  seconds under water after] from the level (nil: no water let in yet) and seconds under water before. A dig at or under
+  the level is made inside the flood; a dig that lets water in raises the level, the first starting its time under water."
+  [flood level under [_ y _ :as cell] name]
+  (let [[w under] (if (and level (<= y level)) ((:dig flood) under name) [0 under])
+        l ((:level flood) cell)]
+    [w (if (and l (or (nil? level) (< level l))) l level) (if (and l (nil? level)) ((:start-s flood)) under)]))
+
+(defn flood-s
+  "Seconds over their :dig-s the digs of a way cost under flood (flood-step), cells [[cell name] ..] in digging order."
+  [flood cells]
+  (first (reduce (fn [[s level under] [cell name]]
+                   (let [[w level under] (flood-step flood level under cell name)] [(+ s w) level under]))
+                 [0 nil 0] cells)))
+
 (defn search
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil)} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil)} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -185,7 +201,8 @@
         pillar-at (fn [^js node x y z] (if (fn? pillar-s) (pillar-s (inc (if (keyword-identical? :pillar (aget node 4)) (aget node 7) 0)) x y z) pillar-s))
         ;; seconds to open cell x y z (0 when open), nil when no step opens it
         open-s (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (cond (nil? d) nil (zero? d) 0 :else (dig-at (.-name k) x y z))))
-        ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys]; false when it may not be
+        ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys flood-level
+        ;; under-water-s] (flood-step); false when it may not be
         open-cell! (fn [^js acc x y z]
                      (let [s (open-s x y z)]
                        (cond
@@ -193,8 +210,13 @@
                          (zero? (.-cost ^js (at x y z))) true
                          (.-falling ^js (at x (inc y) z)) false
                          (.has way-keys (key x y z)) false
-                         :else (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
-        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug] of the cheapest way found to the cell, dug its
+                         :else (let [s (if flood
+                                                 (let [[w level under] (flood-step flood (aget acc 4) (aget acc 5) [x y z] (.-name ^js (at x y z)))]
+                                                   (aset acc 4 level) (aset acc 5 under) (+ s w))
+                                                 s)]
+                                 (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
+        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug pillar-run flood-level under-water-s] of the
+        ;; cheapest way found to the cell (the flood its digs let in: flood-step), dug its
         ;; steps' dug cells as a chain #js [keys parent lx hx ly hy lz hz] (nil: none), each link the box of its own and every
         ;; earlier link's cells: links share their tails, where a set a node grew to kilobytes of heap
         dug-link (fn [^js ks ^js parent]
@@ -226,7 +248,7 @@
                            nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s)
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
-                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0)])
+                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0) (aget acc 4) (aget acc 5)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
                          (heap-push! queue #js [(+ nd (heuristic nx ny nz)) (if prior? (- nd) @tick) nk])
@@ -249,7 +271,7 @@
                         ;; (unseen-face?) only when n's own cells are seen
                         try! (fn [nx ny nz move s0 head? top bot unseen-face?]
                                (when (and (inside? nx ny nz) (not (.has done (key nx ny nz))))
-                                 (let [acc #js [s0 0 0 #js []]
+                                 (let [acc #js [s0 0 0 #js [] (aget node 8) (aget node 9)]
                                        face-s (if (and unseen? (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz)))) unseen-step-s 0)]
                                    (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
                                               (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
@@ -353,7 +375,7 @@
                                    (if (.has back-done k)
                                      (.get back-best k)
                                      (if-let [^js t (aget back-queue 0)] (max 0 (- (aget t 0) (to-start x y z))) 0)))))
-    (.set best start-key #js [0 0 0 nil nil 0 nil 0])
+    (.set best start-key #js [0 0 0 nil nil 0 nil 0 nil 0])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
     (vreset! seeds (sort-by (fn [[x y z]] (to-start x y z))
                             (cons goal (when r
@@ -397,7 +419,8 @@
   hp-cost, at most the falls it survives), a block's dig-cost (nil: never dug; a nameless cell
   has none) with what the dig destroys (cost/destroyed-fn over opts :sensed, (fn [cell]) a sensed block, default the
   body's; a cell (opts :own-s cell) prices over 0, the body's own build, at that instead) and, beside seen water that
-  flows into it (rules/fluid-neighbours, beside or above), cost/flood-dig-s of its dig, a stair's step at least its
+  flows into it (rules/fluid-neighbours, beside or above), cost/flood-dig-s, and as :flood that water's level, the time
+  the flood is crossed under water and a later dig's cost/wet-dig-s (route's :flood), a stair's step at least its
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps and
   :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
@@ -412,13 +435,17 @@
          seen-name (fn [cell] (when-let [b (sensed cell)] (when-not (true? (.-unknown b)) (.-name b))))
          wet (delay (merge (cost/air-profile (.-equipment self) (some-> (.-effects self) array-seq)) (cost/swim-profile (.-equipment self))
                            {:dig-pace (cost/wet-dig-pace (.-equipment self))}))
-         flood-s (memoize (fn [dig-s] (cost/flood-dig-s @wet (.-health self) (cost/walk-hp-seconds) dig-s)))
-         water-s (fn [[_ y _ :as cell] dig-s] (if (some (fn [[n [_ ny _]]] (and (not= "lava" n) (>= ny y))) (rules/fluid-neighbours seen-name cell)) (flood-s dig-s) 0))]
+         flood-s (delay (cost/flood-dig-s @wet (.-health self) (cost/walk-hp-seconds)))
+         level (memoize (fn [[_ y _ :as cell]] (some->> (rules/fluid-neighbours seen-name cell) (keep (fn [[n [_ ny _]]] (when (and (not= "lava" n) (>= ny y)) ny))) seq (apply max))))]
      {:max-fall max-fall
       :seen-steps (seen-sections/steps-fn p max-fall)
       :seen-cells (seen-sections/steps-fn p 1)
       :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
-      :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell) (water-s cell d))))
+      :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell) (if (level cell) @flood-s 0))))
+      :flood {:level level
+              :start-s (fn [] (cost/flood-under-s @wet))
+              :dig (fn [under-s name] (let [d (or (dig-cost name) 0)]
+                                        [(cost/wet-dig-s @wet (.-health self) (cost/walk-hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))}
       :step-s (cost/walk-step-s)
       :stair-s (cw/stair-cost 1)
       :unseen? unseen?
@@ -440,7 +467,8 @@
   cell goal, falls of at most :max-fall blocks (default: those a body with no hp to spend takes, cost.armour/fall-profile),
   each priced :fall-s (blocks -> seconds) on top of its step; each step's floor must be a seen solid block, unless the step is up and
   :place-s prices laying one (against a face, the stair job's floor). A* with the walked steps' price as the lower bound.
-  Priced :step-s a step, (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs), a step up that digs or
+  Priced :step-s a step, (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs; with :flood, body-prices', a dig
+  inside water the way's earlier digs let in on top: flood-step), a step up that digs or
   lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
   :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on, and

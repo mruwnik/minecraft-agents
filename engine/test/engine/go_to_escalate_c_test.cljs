@@ -18,6 +18,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.util :as u]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.tools :as tools]
@@ -910,18 +911,33 @@
         world (assoc (box 0 63 0 5 90 0 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air"
                      "1,66,0" "water" "2,66,0" "water" "3,66,0" "water")
         route (choose/route-cells (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]}) [0 64 0] [4 64 0] (constantly true) (constantly false))]
-    (is (< (js/Math.abs (- (dig-s "stone" [0 64 0]) (dig-s "stone" [5 64 0]) (cost/flood-dig-s {} 20 hp-s (cost/dig-cost "stone")))) 1e-9)
+    (is (< (js/Math.abs (- (dig-s "stone" [0 64 0]) (dig-s "stone" [5 64 0]) (cost/flood-dig-s {} 20 hp-s))) 1e-9)
         "the cell under the water costs its flood over a dry one")
     (is (= (dig-s "stone" [0 64 0]) (dig-s "stone" [1 65 0])) "water beside floods it too")
     (is (= (dig-s "stone" [5 64 0]) (dig-s "stone" [0 66 0])) "water under it does not rise into it")
-    (is (pos? (cost/flood-dig-s {} 20 hp-s 0)) "the flood is swum, not walked")
-    (is (< (cost/flood-dig-s {} 20 hp-s 0) (cost/flood-dig-s {:air-used 14.5} 20 hp-s 0)) "with its air nearly spent the body drowns some hp")
-    (is (= ##Inf (cost/flood-dig-s {:air-used 14.5} 2 hp-s 0)) "a flood the body does not live through")
-    (is (< (js/Math.abs (- (cost/flood-dig-s {} 20 hp-s 1) (cost/flood-dig-s {} 20 hp-s 0) 4)) 1e-9) "the dig on from the flood is made under water, 5 times as long")
-    (is (= (cost/flood-dig-s {:dig-pace 1} 20 hp-s 0) (cost/flood-dig-s {:dig-pace 1} 20 hp-s 1)) "Aqua Affinity digs under water as fast as dry, with air to spare")
-    (is (< (+ 4 (cost/flood-dig-s {:air-used 10} 20 hp-s 0)) (cost/flood-dig-s {:air-used 10} 20 hp-s 1)) "a slow dig under water outlasts the air left and drowns")
+    (is (pos? (cost/flood-dig-s {} 20 hp-s)) "the flood is swum, not walked")
+    (is (< (cost/flood-dig-s {} 20 hp-s) (cost/flood-dig-s {:air-used 14.5} 20 hp-s)) "with its air nearly spent the body drowns some hp")
+    (is (= ##Inf (cost/flood-dig-s {:air-used 14.5} 2 hp-s)) "a flood the body does not live through")
+    (is (< (js/Math.abs (- (cost/wet-dig-s {} 20 hp-s 0 1) 4)) 1e-9) "a dig inside the flood is made under water, 5 times as long")
+    (is (zero? (cost/wet-dig-s {:dig-pace 1} 20 hp-s 0 1)) "Aqua Affinity digs under water as fast as dry, with air to spare")
+    (is (< 8 (cost/wet-dig-s {:air-used 10} 20 hp-s 0 2)) "a slow dig under water outlasts the air left and drowns")
     (is (= [5 1] [(cost/wet-dig-pace nil) (cost/wet-dig-pace {:head {:name "iron_helmet" :enchants [{:name "aqua_affinity" :level 1}]}})]))
     (is (some #{[2 65 0]} (map :cell route)) "the goal is dug to under the water")))
+
+(deftest every-dig-of-a-stair-down-inside-the-water-it-let-in-is-priced-wet
+  ;; card 9a274838: a pool over the first cut pours down the stair; the flood priced one wet dig after it, the rest dry
+  (let [rock (assoc (box 0 59 0 3 70 0 "stone") "0,64,0" "air" "0,65,0" "air")
+        route-s (fn [world]
+                  (let [p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})]
+                    [(:seconds (dig-route/route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) [0 64 0] [3 61 0]
+                                                (assoc (dig-route/body-prices p (constantly false)) :margin 0)))
+                     (:dig-s (dig-route/body-prices p (constantly false)))]))
+        [dry-s dry-dig] (route-s rock)
+        [wet-s wet-dig] (route-s (assoc rock "1,66,0" "water"))
+        open (- (wet-dig "stone" [1 65 0]) (dry-dig "stone" [1 65 0]))]
+    (is (pos? open) "the first cut lets the pool in")
+    (is (<= (+ open (* 4 4 (cost/dig-cost "stone"))) (- wet-s dry-s))
+        "the stair's next two columns, at least four digs, are dug under water at 5 times their dry seconds")))
 
 (deftest a-dig-route-dearer-than-its-worth-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
