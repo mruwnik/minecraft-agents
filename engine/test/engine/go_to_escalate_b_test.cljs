@@ -2,6 +2,7 @@
   "jobs.movement.go-to escalation (pillar, stair, dig route, a walk to a wall) and jobs.lib.escape, against the fake
   world."
   (:require [engine.contract :as contract]
+            [jobs.lib.access.rules :as rules]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -298,12 +299,14 @@
         c-of (fn [blocks] (assoc (rt/ctx-of {:blocks (assoc blocks "738,62,-177" "cobblestone")}) :args {}
                                  :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}})))
         wet (c-of {"739,62,-177" "water"})
-        drained (c-of {"739,62,-177" "air"})]
+        drained (c-of (into {} (map (fn [d] [(apply str (interpose "," (map + [738 62 -177] d))) "air"])) rules/neighbour-deltas))
+        unseen (assoc (c-of {"739,62,-177" "air"}) :primitives (tu/seeing-all (tu/fake {:blocks {"738,62,-177" "cobblestone"} :unloaded ["739,62,-177"]})))]
     (is (false? ((own-builds/may-dig-fn wet) plug)))
     (is (false? ((own-builds/may-dig-fn wet true) plug)) "not even where the body may cut its own builds")
     (is (true? ((own-builds/may-dig-fn wet) [738 61 -177])))
     ;; card 37b7baf9: a plug kept for ever shut a body in once its pool was gone
-    (is (true? ((own-builds/may-dig-fn drained) plug)) "with the water seen gone the plug is an ordinary block")))
+    (is (true? ((own-builds/may-dig-fn drained) plug)) "with the water seen gone the plug is an ordinary block")
+    (is (false? ((own-builds/may-dig-fn unseen) plug)) "a neighbour in an unloaded chunk may be the pool: the plug stays")))
 
 (deftest an-own-stocked-pen-wall-cut-costs-its-put-back-and-the-herd-s-loss-and-the-pen-is-read-once
   ;; card dbd43651: the herd-loss branch of the put-back price; the may-dig, own and price fns of one escalation share one pen read

@@ -27,14 +27,16 @@
 
 (defn kept-plugs
   "The cells this body plugged against water (plugs-of) that its digs leave shut: those the body sees or remembers
-  (within its memory age, jobs.lib.util/seen-name) water beside; none under dig-plugs?. A plug with no water left
-  behind it is an ordinary block."
+  (within its memory age, jobs.lib.util/seen-name) water beside, or a neighbour it has not seen (unknown is no cheaper
+  than water: it may be the pool); none under dig-plugs?. A plug seen dry all round is an ordinary block."
   [c]
   (if (dig-plugs?)
     #{}
     (let [p (:primitives c)
           seen (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))]
-      (into #{} (filter #(seq (rules/fluid-neighbours seen %))) (plugs-of c)))))
+      (into #{} (filter #(or (seq (rules/fluid-neighbours seen %))
+                                  (some (fn [d] (nil? (seen (apply rules/offset % d)))) rules/neighbour-deltas)))
+                    (plugs-of c)))))
 
 (defn plug!
   "Remember cell as filled against water, so a later stair keeps it shut."
