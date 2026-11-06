@@ -202,8 +202,8 @@
     (is (empty? (:setting (c/closing-report (c/flee-steps [(step 1000 "j1" 20 [["zombie" 7 3]]) (rec 2200 :step :job "j1" :slot :back-off :s 1 :blocks 1)
                                                             (step 3500 "j1" 20 [["zombie" 7 4]])]))))
         "a stop in which the flight ended (another answer's step) is no part of a flight")
-    (is (= [4 1] (map :blocks (c/closing-pieces (c/flee-steps [(step 1000 "j4" 20 [["skeleton" 11 12] ["zombie" 12 7]]) (step 2000 "j4" 20 [])]))))
-        "a shooter lost counts as at least its ranged radius away (16), a melee mob its hostile radius (8)")))
+    (is (= [3 1] (map :blocks (c/closing-pieces (c/flee-steps [(step 1000 "j4" 20 [["skeleton" 11 12] ["zombie" 12 7]]) (step 2000 "j4" 20 [])]))))
+        "a shooter lost counts as at least its kind's fire range away (skeleton 15), a melee mob its hostile radius (8)")))
 
 (deftest a-gap-in-which-the-flight-ended-is-no-stop
   (let [step (fn [t slot] (rec t :step :job "j1" :slot slot :s 1 :blocks 4))

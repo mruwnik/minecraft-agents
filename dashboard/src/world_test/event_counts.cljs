@@ -411,7 +411,7 @@
                     :let [s (/ (- (start b) (start a)) 1000)
                           gaps (into {} (map (fn [[_ id g]] [id g])) (:chasers b))]
                     :when (pos? s)
-                    [mob id g] (:chasers a) :let [g1 (or (gaps id) (max g (danger-q/kind-radius (threat/ranged? {:name mob}))))]]
+                    [mob id g] (:chasers a) :let [g1 (or (gaps id) (max g (danger-q/kind-radius {:name mob} (danger-q/hostile-radius) :fire-range)))]]
                 {:mob mob :sprint (danger/sprints? (:food a)) :blocks (- g1 g) :s s}))
             (vals (group-by :flight (filter #(and (:food %) (:chasers %)) rows))))))
 
