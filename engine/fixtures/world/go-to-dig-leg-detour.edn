@@ -34,6 +34,19 @@
             {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}
             {:no-event {:source :job :kind :go-to.escalated :data {:step :pillar}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [14.5 20 12.5] 1]]}
+  ;; card 29cd6b4d: bedrock x 6..10 across the line, 15 wide (z 5..19), holds both leg ends (x 7 and x 10): each moves to
+  ;; the stand nearest it, the far one just past the bedrock, and the leg goes round
+  {:name "both-leg-ends-in-bedrock-move-to-the-nearest-stands"
+   :blocks [[:fill [2 0 4] [24 30 20] "stone"]
+            [:fill [6 0 5] [10 30 19] "bedrock"]
+            [:fill [4 20 12] [5 21 12] "air"]
+            [:fill [14 20 12] [14 21 12] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 20 12] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :pillar}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [14.5 20 12.5] 1]]}
   {:name "a-goal-sealed-in-bedrock-is-given-up"
    :blocks [[:fill [2 0 4] [24 30 20] "stone"]
             [:fill [13 19 11] [15 22 13] "bedrock"]
