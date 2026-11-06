@@ -258,6 +258,12 @@
   [weight]
   (/ (js/Math.round (* 20 weight)) 20))
 
+(defn table-key
+  "What a tolls-of table of threats is a function of: per threat its field-key, the :held and :key tolls-of reads
+  (cost/mob-of-threat, the one-mob sum) and the weight to 1/20."
+  [threats]
+  (mapv (fn [t] [(field/field-key t) (select-keys t [:held :key]) (round-weight (:weight t))]) threats))
+
 (defn tolls-of
   "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
   cost/threat-factor (the mob, its weight to 1/20 x the cell's) more a second; the dearest of one mob where it is known twice (a
@@ -293,6 +299,6 @@
    (let [ts (filterv keep? (known-threats c))]
      (if (empty? ts)
        []
-       (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (round-weight (:weight t))]) ts)]
+       (field/shared c [::threat-tolls (table-key ts)]
                      #(tolls-of c ts)
                      count)))))

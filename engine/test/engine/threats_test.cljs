@@ -164,6 +164,12 @@
     (is (= (table 0.5) (table 0.52)) "weights in one 1/20 step give one table")
     (is (not= (table 0.5) (table 0.6)))))
 
+(deftest threats-differing-only-in-what-they-hold-or-their-key-are-different-tables
+  (let [t {:mob "skeleton" :pos {:x 10 :y 64 :z 0} :weight 1}]
+    (are [a b] (not= (threats/table-key [a]) (threats/table-key [b]))
+      (assoc t :held "bow") (assoc t :held "stone_sword")
+      (assoc t :key "a") (assoc t :key "b"))))
+
 (deftest a-helmet-saves-a-mob-from-the-sun-and-unsensed-equipment-counts-as-worn
   (let [mob #(clj->js (cond-> {} % (assoc :equipment %)))]
     (is (death-spot/bare-headed? (mob [nil nil nil nil nil nil])) "sensed, nothing on the head: it burns")
