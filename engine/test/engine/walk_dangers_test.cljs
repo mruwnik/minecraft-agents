@@ -6,12 +6,14 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.path.executor :as executor]
             [engine.ready-test :as ready-test]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]))
 
 (def zombie {:id 9 :uuid "u9" :name "zombie" :kind "hostile" :pos {:x 20.5 :y 64 :z 0.5}})
@@ -122,3 +124,19 @@
     (is (= unarmed (key-of {:entities [zombie]})) "same body, same key")
     (is (not= unarmed armed) "a weapon picked up: a new search")
     (is (not= armed hurt) "health lost: a new search")))
+
+(defn inputs-of
+  "The toll inputs a walk's search key holds (part 10) over the costed world of a body with world spec (merged)."
+  [world]
+  (let [c (ready-test/ctx-of (merge {:floor [-5 -20 45 20]} world))]
+    (nth (wsearch/search-key c [40 64 0] 1 1 executor/policy nil (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true})) 10)))
+
+;; the tolls of a sensed mob reach the search key only through its weight-free inputs: a walk's kept search must not go
+;; on priced for a body that has since been hurt or disarmed
+(deftest a-walk-s-search-key-holds-what-its-tolls-are-priced-by
+  (let [armed {:entities [zombie] :inventory [{:name "diamond_sword" :count 1}]}
+        hurt (assoc armed :self {:health 6})]
+    (is (threats/toll-inputs-no-worse? (inputs-of armed) (inputs-of armed)) "same body, same threats")
+    (is (threats/toll-inputs-no-worse? (inputs-of armed) (inputs-of hurt)) "health regained only cheapens")
+    (is (not (threats/toll-inputs-no-worse? (inputs-of hurt) (inputs-of armed))) "a hit taken")
+    (is (not (threats/toll-inputs-no-worse? (inputs-of (dissoc armed :inventory)) (inputs-of armed))) "the sword lost")))

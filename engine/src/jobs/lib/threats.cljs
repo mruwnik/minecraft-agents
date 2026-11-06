@@ -264,6 +264,21 @@
   [threats]
   (mapv (fn [t] [(field/field-key t) (select-keys t [:held :key]) (round-weight (:weight t))]) threats))
 
+(defn toll-inputs
+  "What tolls-of reads of threats ({:mob :pos :weight}) besides their weights: their table-key less the weight and the
+  body's health, armour and weapon (toll-inputs-no-worse?)."
+  [c threats]
+  (let [{:keys [health equipment weapon]} (body-of (:primitives c))]
+    [(set (map pop (table-key threats))) health equipment weapon]))
+
+(defn toll-inputs-no-worse?
+  "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, armour and weapon, health no
+  lower. A walk's kept search goes on only then; a weight that fades only cheapens, and health regained only cheapens."
+  [now was]
+  (or (= now was)
+      (let [[ts h eq w] now [ts0 h0 eq0 w0] was]
+        (and (= [ts eq w] [ts0 eq0 w0]) (number? h) (number? h0) (>= h h0)))))
+
 (defn tolls-of
   "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
   cost/threat-factor (the mob, its weight to 1/20 x the cell's) more a second; the dearest of one mob where it is known twice (a
@@ -290,15 +305,18 @@
                         (aset xs i (.-x r)) (aset ys i (.-y r)) (aset zs i (.-z r))
                         (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r))))))))))))
 
+(defn shared-tolls
+  "tolls-of threats ts of c, read once per check-cache window for the same threats (threat-field/shared: one table, so
+  walk.world/with-tolls merges it once)."
+  [c ts]
+  (if (empty? ts)
+    []
+    (field/shared c [::threat-tolls (table-key ts)]
+                  #(tolls-of c ts)
+                  count)))
+
 (defn threat-tolls
-  "tolls-of the known-threats of c (those keep? holds of): go-to's price of every known mob (the planner's options.tolls).
-  Read once per check-cache window for the same threats (threat-field/shared: one table, so walk.world/with-tolls merges
-  it once)."
+  "shared-tolls of the known-threats of c (those keep? holds of): go-to's price of every known mob (the planner's
+  options.tolls)."
   ([c] (threat-tolls c any?))
-  ([c keep?]
-   (let [ts (filterv keep? (known-threats c))]
-     (if (empty? ts)
-       []
-       (field/shared c [::threat-tolls (table-key ts)]
-                     #(tolls-of c ts)
-                     count)))))
+  ([c keep?] (shared-tolls c (filterv keep? (known-threats c)))))

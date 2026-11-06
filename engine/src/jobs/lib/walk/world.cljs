@@ -280,14 +280,14 @@
           wall? (wall-cells snapshot (.-table pw) walls)
           walled (js/Object.create snapshot)]
       (set! (.-stateAt walled) (fn [x y z] (if (contains? wall? [x y z]) id (.stateAt snapshot x y z))))
-      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)})))
+      #js {:snapshot walled :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw) :tollInputs (.-tollInputs pw)})))
 
 (defn with-dangers
   "pw with dangers (the planner's options.dangers, a JS array; nil for none) for plan-options to pass on."
   [pw dangers]
   (if (nil? dangers)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw)}))
+    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers dangers :avoid (.-avoid pw) :dark (.-dark pw) :tolls (.-tolls pw) :tollInputs (.-tollInputs pw)}))
 
 (def ^:private dark-steps
   "The planner's classes of a chance of dark (dark-fn's :chance) between none and certain: the chance rounds to the
@@ -312,7 +312,7 @@
           land (fn [x y z]
                  (let [r (js/Math.round (* dark-steps (chance x y z)))]
                    (cond (<= r 0) 0 (>= r dark-steps) 1 :else (+ first-step r -1))))]
-      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw)
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :avoid (.-avoid pw) :tolls (.-tolls pw) :tollInputs (.-tollInputs pw)
            :dark #js {:at (if (and kit water)
                             (fn [x y z] (let [w (water x y z)]
                                           (cond (>= w look/lag-class) w
@@ -335,7 +335,7 @@
       :respawn (cost/respawn-of p view)
       :at (update-vals (u/self-pos {:primitives p}) #(* 16 (js/Math.floor (/ % 16))))})))
 
-(declare with-tolls with-edges water-read-fn phantom-read-fn)
+(declare with-tolls with-edges with-toll-inputs water-read-fn phantom-read-fn)
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
@@ -345,8 +345,10 @@
   keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead)."
   [c pw {:keys [dangers? dark? keep?]}]
   (cond-> pw
-    dangers? (-> (with-dangers (threats/planner-dangers c))
-                 (with-tolls (threats/threat-tolls c (or keep? any?))))
+    dangers? (as-> pw' (let [ts (filterv (or keep? any?) (threats/known-threats c))]
+                         (-> (with-dangers pw' (threats/planner-dangers c))
+                             (with-tolls (threats/shared-tolls c ts))
+                             (with-toll-inputs (threats/toll-inputs c ts)))))
     dark? (as-> pw' (let [kit (kit-of c)
                           wet (cost/water-factors kit)
                           phantom (cost/unseen-water-factors kit wet)]
@@ -365,7 +367,7 @@
   (if (empty? cells)
     pw
     (let [sorted (vec (sort cells))]
-      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :tolls (.-tolls pw)
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :tolls (.-tolls pw) :tollInputs (.-tollInputs pw)
            :avoid #js {:kinds 0 :factor avoid-factor :list sorted
                        :cells (js/Set. (clj->js (mapv (fn [[x y z]] (planner/cell-key x y z)) sorted)))}})))
 
@@ -448,7 +450,7 @@
           ^js merged (if (and kept (identical? base (:base kept)))
                        (:v kept)
                        (let [v (merged-tolls t tolls)] (.set toll-merges tolls {:base base :v v}) v))]
-      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw) :tollInputs (.-tollInputs pw)
            :tolls (if t
                     #js {:cells (.-cells merged) :trample (.-trample merged) :key (.-key merged) :edges (.-edges t) :edgeRows (.-edgeRows t)}
                     merged)})))
@@ -460,8 +462,18 @@
   (if (nil? edges)
     pw
     (let [^js t (.-tolls pw)]
-      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw) :tollInputs (.-tollInputs pw)
            :tolls #js {:cells (some-> t .-cells) :trample (some-> t .-trample) :key (some-> t .-key) :edges edges :edgeRows rows}})))
+
+(defn with-toll-inputs
+  "pw with inputs (threats/toll-inputs: what its threat tolls were priced from) for a kept search's key (toll-inputs-key)."
+  [pw inputs]
+  (doto (js/Object.assign #js {} pw) (unchecked-set "tollInputs" inputs)))
+
+(defn toll-inputs-key
+  "What a kept search's key holds of what pw's threat tolls were priced from (with-toll-inputs), nil for none."
+  [pw]
+  (.-tollInputs pw))
 
 (defn tolls-key
   "What a kept search's key holds of pw's tolls (with-tolls, with-edges): the cells' fingerprint (merged-tolls) and the
@@ -477,7 +489,7 @@
 
 (defn danger-key
   "What a kept search's key holds of pw's dangers: the mob, place (rounded to 4 blocks) and rate (to 0.1 hp/s) of each (a
-  mob that moved on, died or came along, or a weapon picked up or health lost, is a new search)."
+  mob that moved on, died or came along is a new search)."
   [pw]
   (some->> (.-dangers pw) array-seq
            (mapv (fn [^js d] [(.-mob d) (js/Math.round (/ (.-x d) 4)) (js/Math.round (/ (.-y d) 4)) (js/Math.round (/ (.-z d) 4))

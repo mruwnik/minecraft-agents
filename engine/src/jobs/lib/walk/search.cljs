@@ -7,6 +7,7 @@
             [engine.path.planner-tuned :as planner]
             [jobs.lib.clock :as clock]
             [jobs.lib.per-body :as per-body]
+            [jobs.lib.threats :as threats]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
 
@@ -182,7 +183,7 @@
 (defn search-key [c to range weight policy walls & [pw]]
   (let [{:keys [x y z]} (wworld/body-cell c)]
     (cond-> [[x y z] to range weight (policy-key policy) walls]
-      pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw) (wworld/unknown-key pw)))))
+      pw (conj (wworld/danger-key pw) (wworld/avoid-key pw) (wworld/tolls-key pw) (wworld/unknown-key pw) (wworld/toll-inputs-key pw)))))
 
 (defn goal-unloaded?
   "Whether the snapshot reads the goal cell to [x y z] as unloaded (the planner's goal-unloaded: no goal flood runs)."
@@ -300,12 +301,15 @@
   "The body's unfinished search that plans the same walk as key k from the same cell, whatever its tolls and avoided cells
   (a search that needs several rounds is priced by the world as it began, not restarted by every toll that drifts, which
   would never end it). A quote's (quoted) also whatever its dangers and mask: it prices and is not walked. A walk's needs
-  the same dangers and mask, so a mob that came along or a floor learned missing begins a new search priced with it (the
-  walk's watch takes every mob sensed at the plan as known)."
+  the same dangers and mask and toll inputs no worse (threats/toll-inputs-no-worse?), so a mob that came along, a hit
+  taken or a floor learned missing begins a new search priced with it (the walk's watch takes every mob sensed at the
+  plan as known)."
   [who k quoted]
   (let [same #(mapv (fn [i] (nth % i nil)) (if quoted (range 6) [0 1 2 3 4 5 6 9]))
         want (same k)]
-    (first (filter #(and (not (:within %)) (= want (same (:key %)))) (vals (get @searches who))))))
+    (first (filter #(and (not (:within %)) (= want (same (:key %)))
+                         (or quoted (threats/toll-inputs-no-worse? (nth k 10 nil) (nth (:key %) 10 nil))))
+                   (vals (get @searches who))))))
 
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search

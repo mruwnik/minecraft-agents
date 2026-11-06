@@ -115,14 +115,18 @@
 ;; a quote prices and is not walked, so it goes on whatever its dangers and mask; a walk's search goes on only over the
 ;; same dangers and mask (a floor learned missing must not be walked on a plan that thought it there)
 (deftest which-unfinished-search-goes-on
-  (let [key-with (fn [dangers tolls mask] [[2 64 2] [45 64 45] 0 1 :policy nil dangers nil tolls mask])
-        kept (key-with nil 2 [0 0 2])]
+  (let [key-with (fn [dangers tolls mask inputs] [[2 64 2] [45 64 45] 0 1 :policy nil dangers nil tolls mask inputs])
+        creeper ["creeper" {:x 4 :y 64 :z 2} nil]
+        kept (key-with nil 2 [0 0 2] [#{creeper} 18 {} nil])]
     (reset! wsearch/searches {:who {kept {:key kept}}})
     (are [k quoted found?] (= found? (some? (wsearch/unfinished-like :who k quoted)))
-      (key-with nil 3 [0 0 2]) false true
-      (key-with [["zombie" 5 16 5 4]] 2 [0 0 2]) false false
-      (key-with nil 2 [1 0 2]) false false
-      (key-with [["zombie" 5 16 5 4]] 3 [1 0 2]) true true)
+      (key-with nil 3 [0 0 2] [#{creeper} 18 {} nil]) false true
+      (key-with nil 3 [0 0 2] [#{creeper} 20 {} nil]) false true
+      (key-with [["zombie" 5 16 5 4]] 2 [0 0 2] [#{creeper} 18 {} nil]) false false
+      (key-with nil 2 [1 0 2] [#{creeper} 18 {} nil]) false false
+      (key-with nil 3 [0 0 2] [#{creeper} 6 {} nil]) false false
+      (key-with nil 3 [0 0 2] [#{creeper ["drowned" {:x 3 :y 60 :z 1} nil]} 18 {} nil]) false false
+      (key-with [["zombie" 5 16 5 4]] 3 [1 0 2] [#{} 6 {} nil]) true true)
     (reset! wsearch/searches {})))
 
 ;; the goal stays unloaded far past the loaded floor's east edge (card 7a031d15): no node of the loaded land is 8 blocks
