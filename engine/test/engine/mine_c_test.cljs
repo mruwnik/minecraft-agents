@@ -899,5 +899,5 @@
         p (tu/seeing-all (tu/fake {:blocks (assoc stone "10,64,0" "stone") :unloaded ["11,64,0"] :inventory [{:name "stone_pickaxe" :count 1}]}))
         c {:primitives p :args {:item "raw_iron"}
            :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}})}
-        dig-s (:dig-s (drops/cut-prices c))]
-    (is (> (dig-s "stone" plug) (dig-s "stone" [20 64 0])) "the plug costs the flood price over a plain dig")))
+        flood-s (partial dig-route/flood-s (:flood (drops/cut-prices c)))]
+    (is (> (flood-s [[:dig plug "stone"]]) (flood-s [[:dig [20 64 0] "stone"]])) "the plug costs the flood price over a plain dig")))
