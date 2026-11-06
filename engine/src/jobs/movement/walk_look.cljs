@@ -47,19 +47,26 @@
 
 (defn cell-of [{:keys [x y z]}] [x y z])
 
+(defn stand-of [to] (if (vector? to) (zipmap [:x :y :z] to) (select-keys to [:x :y :z])))
+
+(defn arrived?
+  "Whether this leg's walk was taken and the body stands at its stand `to`: a walk cut off short looked from nowhere new."
+  [c to]
+  (boolean (and (:edge-walked (ctx/mem c)) (u/within? (sh-sense/feet (:primitives c)) (stand-of to) 1))))
+
 (defn finish-leg!
-  "Writes the leg to the :walk-looked entry: a side still unseen after a walk (or a look from where a walk shows no more) with the
-  stand it was looked from, so every side within sight of that stand is one judgment; an unseen side whose walk was not bought,
-  kept until a leg walks; and the seconds the leg spent, kept per hall `at`. The entry belongs to the root job that wrote it: another root's write starts it afresh, so it lives as long as one decision."
+  "Writes the leg to the :walk-looked entry: a side still unseen after a walk that reached its stand (arrived?), or a look from where a walk shows no more, with the
+  stand it was looked from, so every side within sight of that stand is one judgment; an unseen side whose walk was not bought
+  or did not reach the stand (cut off: nothing was looked at from there), kept until a leg walks; and the seconds the leg spent, kept per hall `at`. The entry belongs to the root job that wrote it: another root's write starts it afresh, so it lives as long as one decision."
   [c side to at]
   (let [m (ctx/mem c)
         unseen? (look/unseen? (:primitives c) [side])
-        looked? (or (:edge-walked m) (:edge-close m))
+        stand (stand-of to)
+        looked? (or (:edge-close m) (arrived? c to))
         spent (- (:edge-spent m 0) (:booked m 0))
         before (ready/walked-data c)
         cell (cell-of side)
-        hall (ready/hall-key at)
-        stand (let [[x y z] (if (vector? to) to [(:x to) (:y to) (:z to)])] {:x x :y y :z z})]
+        hall (ready/hall-key at)]
     (when (or unseen? (pos? spent))
       (ctx/update-mem! c assoc :booked (:edge-spent m 0))
       (ctx/remember! c :walk-looked
@@ -93,7 +100,7 @@
       (await (look-edge/look! c [cell] to))
       (let [_ (finish-leg! c side to (:at (:args c)))
             _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
-            _ (when (:edge-walked (ctx/mem c)) (ctx/update-mem! c update :stands (fnil conj #{}) (if (vector? to) (let [[x y z] to] {:x x :y y :z z}) (select-keys to [:x :y :z]))))
+            _ (when (arrived? c to) (ctx/update-mem! c update :stands (fnil conj #{}) (stand-of to)))
             next-leg (when (and (judged? c) (not (look/unseen? (:primitives c) [side]))) (ready/next-leg c from (:tried (ctx/mem c))
                                     {:stands (:stands (ctx/mem c)) :route-from from :route-to (:at (:args c))}))]
         (if next-leg

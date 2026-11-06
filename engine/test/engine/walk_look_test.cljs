@@ -18,14 +18,15 @@
 
 (defn ^:async walk-look
   "Runs walk-look for the side [8 64 0] from {:x 6}; the side shows once the body has stood within `sight` blocks of it
-  (nil: never). [farthest x the body reached, the cell it ended in, the :walk-looked cells, its ending kinds]."
+  (nil: never), over `jobs` (default registry/jobs). [farthest x the body reached, the cell it ended in, the :walk-looked cells, its ending kinds, the :walk-looked declined sides]."
   ([sight] (walk-look sight ##Inf))
-  ([sight worth]
+  ([sight worth] (walk-look sight worth registry/jobs))
+  ([sight worth jobs]
   (let [reached (atom 0)
         [seen sink] (tu/capture-sink)
         clock (atom 1000000)
         p (tu/seeing-all (tu/fake-on-floor tunnel))
-        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs registry/jobs
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs jobs
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (with-redefs [ctx/worth (constantly worth)
                   look/unseen? (fn [p _]
@@ -36,18 +37,27 @@
     [(js/Math.floor @reached)
      (mapv js/Math.floor ((juxt #(.-x %) #(.-y %) #(.-z %)) (.-pos (.self p))))
      (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked)))
-     (into [] (comp (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %)) (= "jobs.movement.walk-look" (:name (:data %))))) (map :kind)) @seen)])))
+     (into [] (comp (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %)) (= "jobs.movement.walk-look" (:name (:data %))))) (map :kind)) @seen)
+     (:declined (:data (mem/latest (mem/view (:store eng)) :walk-looked)))])))
 
 (deftest a-walk-to-look-walks-the-leg-it-was-priced-for-then-back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [6 [0 64 0] nil [:completed]] (await (walk-look 2)))
+        (is (= [6 [0 64 0] nil [:completed] nil] (await (walk-look 2)))
             "it walks to its :to, no farther, sees the side there and comes back; a side that shows is not remembered")
-        (is (= [6 [0 64 0] [[8 64 0]] [:completed]] (await (walk-look nil)))
+        (is (= [6 [0 64 0] [[8 64 0]] [:completed] nil] (await (walk-look nil)))
             "a side still unseen from close by is remembered, so no walk is offered for it again")
-        (is (= [0 [0 64 0] nil [:completed]] (await (walk-look nil 0)))
+        (is (= [0 [0 64 0] nil [:completed] [[8 64 0]]] (await (walk-look nil 0)))
             "a walk the worth does not buy is not walked, and the side is not remembered as looked at from close by")))))
+
+(deftest a-leg-whose-walk-ends-short-of-its-stand-looked-from-nowhere-and-is-declined-not-looked-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [short {:ways [:walk] :round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable}))}]
+          (is (= [0 [0 64 0] nil [:completed] [[8 64 0]]] (await (walk-look nil ##Inf (assoc registry/jobs 'jobs.movement.go-to short))))
+              "the walk was bought but never left the start: no stand was reached, so the side is not looked at from close by (its neighbours keep their legs), only declined for this decision"))))))
 
 (deftest the-walk-looked-entry-is-one-and-belongs-to-the-latest-root-job
   (async done
