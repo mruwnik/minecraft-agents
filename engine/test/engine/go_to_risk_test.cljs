@@ -989,3 +989,8 @@
     (doseq [t (range 0.5 2.5 0.05)
             :let [at (fn [dx] (risk/live-catchers (chaser dx 8.5) (assoc-in (route dx) [1 :t] t)))]]
       (is (= (count (at 1)) (count (at -1))) (str "t " t)))))
+
+(deftest a-sword-skeleton-the-quick-walk-leaves-behind-is-no-catcher-a-bow-one-in-range-is
+  (let [route [{:x 0 :y 64 :z 0 :t 0} {:x 4 :y 64 :z 0 :t 0.8}]
+        catchers (fn [held] (risk/live-catchers [{:mob "skeleton" :held held :pos {:x 40 :y 64 :z 0.5}}] route))]
+    (is (= [1 0] [(count (catchers "bow")) (count (catchers "stone_sword"))]))))

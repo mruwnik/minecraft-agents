@@ -775,14 +775,15 @@
 
 (defn met-threats
   "The known threats of route {:cells :threats} (death-chance's) that may get to the body, [{:mob :caught :c :prior
-  :exposure :before :w :on}]: c its weight (a provoked-only one's times threat/provoked-share), prior and exposure its
+  :exposure :before :w :on}] (:mob a threat/kind): c its weight (a provoked-only one's times threat/provoked-share), prior and exposure its
   death/met-stretch over the cells' seconds dts, before (Float64Array) its weighted seconds before each cell, w its
   weight there, on (Int32Array) the cells it weighs."
   [{:keys [cells threats]} dts]
   (into []
-        (keep (fn [{:keys [mob weight reach caught pos]}]
-                (let [{:keys [met xs prior exposure]} (death/met-stretch mob reach cells dts pos)
-                      c (min 1 (* (or weight 1) (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)))
+        (keep (fn [{:keys [weight reach caught pos] mob-name :mob :as t}]
+                (let [mob (threat/kind {:name mob-name :held (:held t)})
+                      {:keys [met xs prior exposure]} (death/met-stretch mob reach cells dts pos)
+                      c (min 1 (* (or weight 1) (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)))
                       n (count xs)
                       before (js/Float64Array. n)
                       w (js/Float64Array. n)]

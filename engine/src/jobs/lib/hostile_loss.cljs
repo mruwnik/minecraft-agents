@@ -35,7 +35,7 @@
    :distance (danger-q/mob-distance p e (when (and (breath/swimming? p) (not (breath/head-under? p)) (danger-q/seen-only? e))
                                         (assoc (u/pos-of (.-pos (.self p))) :y (breath/start-y p))))
    :burns (let [at (update-vals (danger-q/mob-pos p e) js/Math.floor)]
-            (when (and (contains? threat/burns-in-sun (.-name e)) (not (threat/ranged? {:name (.-name e)})) (sh-sense/sky-state p) (sh-sense/sky-light-at p at))
+            (when (and (contains? threat/burns-in-sun (.-name e)) (not (threat/ranged? {:name (.-name e) :held (.-held e)})) (sh-sense/sky-state p) (sh-sense/sky-light-at p at))
               (boolean (and (death-spot/bare-headed? e) (death-spot/burns-by-day? p (.-name e) at)))))
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 

@@ -35,6 +35,8 @@
             [engine.perception :as perception]
             [engine.fake.raw-world :as fake-raw]
             [engine.test-util :as tu]
+            [engine.ready-test :as ready-test]
+            [engine.shelter-support :as st]
             [engine.triggers :as triggers]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.world-files :as ew]))
@@ -2202,3 +2204,10 @@
           (looked-round! p)
           (is (empty? (danger-q/hostile-dangers p {:data mem/empty-data :now 0} {:radius 16}))
               "the heard zombie behind the wall: its rough spot in the seen room is no place for it"))))))
+
+(deftest a-sword-skeleton-burns-in-the-sun-like-a-melee-mob-a-bow-one-does-not
+  (let [burns (fn [held]
+                (let [p (:primitives (ready-test/ctx-of {:time st/noon :light {[5 64 0] [15 0]} :self {:pos {:x 0 :y 64 :z 0}}
+                                                         :entities [(assoc (skeleton 1 5 0) :visible true :held held)]}))]
+                  (:burns (hostile-loss/mob-near p (first (danger-q/dangers p 16 {:ranged-radius 16} {}))))))]
+    (is (= [nil true] [(burns "bow") (burns "stone_sword")]))))

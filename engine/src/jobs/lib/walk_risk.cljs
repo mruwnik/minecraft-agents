@@ -70,9 +70,9 @@
   "The known threats (threats/known-threats of c) sensed now (neither :fled nor :remembered) that catch the walk over
   timed cells route ([{:x :y :z :t}]): a ranged one, or a melee one cost/caught-on? (one the walk leaves behind is no cost)."
   [known route]
-  (filterv (fn [{:keys [mob chaser pos fled remembered]}]
+  (filterv (fn [{:keys [mob held chaser pos fled remembered]}]
              (and (not (or fled remembered))
-                  (or (= :projectile (threat/damage-type mob))
+                  (or (= :projectile (threat/damage-type (threat/kind {:name mob :held held})))
                       (cost/caught-on? {:chaser (or chaser mob) :pos pos :route (mapv cost/centred route)}))))
            known))
 

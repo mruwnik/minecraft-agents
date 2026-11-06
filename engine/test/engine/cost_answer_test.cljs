@@ -642,3 +642,12 @@
 (deftest a-hide-in-a-refuge-keeps-the-measured-stay-chance-whatever-the-mob-burns
   (let [price #(cost/answer-price (body 4) (cost/refuge-answer {:mobs [(assoc (mob "zombie" 7) :burns %)] :later (cost/fight-answer (assoc (fight nil (mob "zombie" 7)) :health 4))} {:door-s 4 :hide-s 30}) here)]
     (is (= (price nil) (price false)) "the refuge hides counted (hide-stays) are of refuges, a house is lived in; only a cover (pillar, walls, pit) is a delay a non-burner outlasts")))
+
+(deftest a-sword-skeleton-on-a-route-is-met-as-a-melee-mob-of-its-weapon-a-bow-one-as-a-shooter
+  (let [cells (for [x (range 20)] {:x x :y 64 :z 0})
+        met (fn [held] (first (answer/met-threats {:cells cells :threats [{:mob "skeleton" :held held :weight 1 :reach (fn [_ _ _] 1)}]}
+                                                  (death/cell-seconds cells))))
+        bow (met "bow")
+        sword (met "stone_sword")]
+    (is (= ["skeleton" "skeleton_melee/stone_sword"] [(:mob bow) (:mob sword)]))
+    (is (not= (:prior bow) (:prior sword)) "a shooter's notice rate is the ranged class's, a striker's the other")))
