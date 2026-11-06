@@ -147,9 +147,15 @@
   "spawn-region's flood from [x y z], depth first and farthest from the start first (a far dark cell in the open is met in
   some 30 cells, not after the whole 24-block disc): ends at an unseen edge (:open?) or at the first dark cell farther
   than spawn-free-radius (:partial?: its :dark are those met so far), and puts the region for every cell x y z walks to
-  within it. :edge, when open: an unseen cell [x y z] beside the cell it ended at."
+  within it. A cell stood on a floor the body has not seen (reach-room/room-kind-at's guess) holds a walker only at the
+  chance that floor is solid (look/unseen-solid-at-fn): a cell's chance is the least of those on its likeliest way from
+  the start (the ground past a wall is one ground, so its guesses go together). An edge or far dark cell met at a chance
+  under 1 does not end the flood; :edge-chance is the likeliest such way out (1 when one is certain, 0 when none: the
+  region is :open? when above 0). :edge, when open: an unseen cell [x y z] beside the likeliest edge."
   [p [x y z] subtract kind-at put!]
   (let [unseen? (reach-room/memo-kind-at (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z}))))
+        solid-at (delay (look/unseen-solid-at-fn p))
+        floor-chance (fn [cx cy cz] (if (unseen? cx (dec cy) cz) (@solid-at [cx (dec cy) cz]) 1))
         ;; a flooded cell is standable: spawnable where its feet and head were seen and it is not under water; seen, so
         ;; lit-here?'s light read without its sight check
         dark-at? (fn [cx cy cz]
@@ -160,28 +166,45 @@
                                  (look/lit-light? block (or (sh-sense/sky-light-at p cell) 0) subtract)
                                  (look/unseen-lit? p cell subtract))))))
         key (reach/keyer x z)
-        seen (js/Set.)
-        cells #js []
-        stack #js [#js [x y z]]
+        best (js/Map.)
+        certain #js []
+        stack #js [#js [x y z 1]]
         dark #js []
+        way (volatile! 0)
+        way-cell (volatile! nil)
+        maybe! (fn [c chance] (when (> chance @way) (vreset! way chance) (vreset! way-cell c)))
         far2 (fn [c] (+ (js/Math.pow (- (aget c 0) x) 2) (js/Math.pow (- (aget c 2) z) 2)))
-        _ (.add seen (key x y z))
+        _ (.set best (key x y z) 1)
         end (loop []
               (if (zero? (.-length stack))
                 :closed
                 (let [c (.pop stack)
-                      cx (aget c 0) cy (aget c 1) cz (aget c 2)]
-                  (.push cells c)
-                  (cond
-                    (reach-room/unseen-edge? p kind-at c unseen?) :open
-                    (and (dark-at? cx cy cz) (do (.push dark cx cy cz) (far-dark? c x y z))) :far
-                    :else (let [ns (.sort (reach/backward kind-at cx cy cz) (fn [a b] (- (far2 a) (far2 b))))]
-                            (.forEach ns (fn [n] (let [k (key (aget n 0) (aget n 1) (aget n 2))]
-                                                   (when-not (.has seen k) (.add seen k) (.push stack n)))))
-                            (recur))))))
-        region {:open? (= :open end) :dark dark :partial? (= :far end)
-                :edge (when (= :open end) (unseen-beside unseen? (aget cells (dec (.-length cells)))))}]
-    (.forEach (reach-room/walker-sources kind-at cells [x y z] reach/forward)
+                      cx (aget c 0) cy (aget c 1) cz (aget c 2) chance (aget c 3)]
+                  (if (< chance (.get best (key cx cy cz)))
+                    (recur)
+                    (let [sure? (== 1 chance)
+                          edge? (reach-room/unseen-edge? p kind-at c unseen?)
+                          dark? (and (not edge?) (dark-at? cx cy cz))
+                          far? (and dark? (far-dark? #js [cx cy cz] x y z))]
+                      (when sure? (.push certain c))
+                      (when (and dark? sure?) (.push dark cx cy cz))
+                      (cond
+                        (and edge? sure?) (do (vreset! way-cell c) :open)
+                        (and far? sure?) :far
+                        :else (do (cond edge? (maybe! c chance)
+                                        far? (maybe! nil chance))
+                                  (let [ns (.sort (reach/backward kind-at cx cy cz) (fn [a b] (- (far2 a) (far2 b))))]
+                                    (.forEach ns (fn [n] (let [nx (aget n 0) ny (aget n 1) nz (aget n 2)
+                                                               k (key nx ny nz)
+                                                               nc (min chance (floor-chance nx ny nz))]
+                                                           (when (and (pos? nc) (> nc (or (.get best k) 0)))
+                                                             (.set best k nc)
+                                                             (.push stack #js [nx ny nz nc]))))))
+                                  (recur))))))))
+        chance (if (= :open end) 1 @way)
+        region {:open? (pos? chance) :edge-chance chance :dark dark :partial? (= :far end)
+                :edge (some->> @way-cell (unseen-beside unseen?))}]
+    (.forEach (reach-room/walker-sources kind-at certain [x y z] reach/forward)
               (fn [c] (put! (str "spawn|" subtract "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region)))
     region))
 
@@ -190,8 +213,8 @@
   [p [x y z] subtract kind-at put! drop-region]
   (if (zero? (.-length (reach/backward kind-at x y z)))
     (let [drops (mapv #(drop-region p {:x (aget % 0) :y (aget % 1) :z (aget % 2)} subtract) (reach/forward kind-at x y z))]
-      {:open? (boolean (some :open? drops)) :dark (reduce (fn [^js a d] (.concat a (:dark d))) #js [] drops)
-       :partial? (boolean (some :partial? drops))})
+      {:open? (boolean (some :open? drops)) :edge-chance (reduce max 0 (map :edge-chance drops))
+       :dark (reduce (fn [^js a d] (.concat a (:dark d))) #js [] drops) :partial? (boolean (some :partial? drops))})
     (region-flood p [x y z] subtract kind-at put!)))
 
 (defn spawn-region
@@ -234,14 +257,28 @@
     (when-not (sh-sense/lit-here? p at subtract)
       (hall-of p at (spawn-region p at subtract)))))
 
+(defn edge-of
+  "{:hall :edge}: a verdict `hall` on region and, for an unseen edge (:sky or :roofed), the chance a walker comes through
+  it (the region's :edge-chance); :edge 1 otherwise."
+  [hall region]
+  {:hall hall :edge (if (and (#{:sky :roofed} hall) (:open? region)) (:edge-chance region 1) 1)})
+
+(defn dark-hall-edge
+  "edge-of dark-hall's verdict on the spawn-region round `at`."
+  [p at subtract]
+  (let [subtract (or subtract (sh-sense/sky-subtract-now p))
+        hall (dark-hall p at subtract)]
+    (edge-of hall (when hall (spawn-region p at subtract)))))
+
 (defn stay-hall
-  "dark-hall of a stay at `at`, lit or dark, its walkers coming through the doors as they stand: an open door lets them
-  in, a shut one does not (the body shuts it as another way through the night). Not kept: a stay prices a few cells."
+  "dark-hall-edge of a stay at `at`, lit or dark, its walkers coming through the doors as they stand: an open door lets
+  them in, a shut one does not (the body shuts it as another way through the night). Not kept: a stay prices a few cells."
   [p at subtract]
   (let [subtract (or subtract (sh-sense/sky-subtract-now p))
         kind-at (reach-room/room-kind-at p (reach-room/door-kind-at p))
-        region (fn region [p {:keys [x y z]} subtract] (region-at p [x y z] subtract kind-at (fn [_ _]) region))]
-    (hall-of p at (region p at subtract))))
+        region (fn region [p {:keys [x y z]} subtract] (region-at p [x y z] subtract kind-at (fn [_ _]) region))
+        r (region p at subtract)]
+    (edge-of (hall-of p at r) r)))
 
 (defn safe-room-at?
   "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? under a roof (sh-sense/room-roofed?).

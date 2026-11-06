@@ -28,7 +28,7 @@
   "The chance a mob spawned farther than 24 blocks walks to the dark place `to` (cost/hall-chance of its
   sh-inside/dark-hall, by the sky's darkening subtract), judged from its hall-cell."
   [p to subtract]
-  (cost/hall-chance (sh-inside/dark-hall p (hall-cell p to) subtract)))
+  (let [{:keys [hall edge]} (sh-inside/dark-hall-edge p (hall-cell p to) subtract)] (cost/hall-chance hall edge)))
 
 (defn seen-light
   "The block light of cell, nil when the body does not know it (sh-sense/known-cell?)."
@@ -56,7 +56,7 @@
        known (let [at-sky #(cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block %1 :sky %2})})
                    lit? (or (look/lit-light? 0 (or sky-light 0) darkening) (>= block (look/dark-light)))]
                (cond
-                 stay? (let [hall (cost/hall-chance (sh-inside/stay-hall p (hall-cell p cell) darkening))]
+                 stay? (let [hall (let [{:keys [hall edge]} (sh-inside/stay-hall p (hall-cell p cell) darkening)] (cost/hall-chance hall edge))]
                          (+ (* hall (at-sky 0 0)) (* (- 1 hall) (at-sky block 15))))
                  lit? (at-sky block 15)
                  :else (let [hall (hall-chance p cell darkening)]

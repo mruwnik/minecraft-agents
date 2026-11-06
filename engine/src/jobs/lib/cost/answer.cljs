@@ -606,13 +606,15 @@
 (defn hall-chance
   "The chance a mob spawned farther than 24 blocks walks to a dark place, by its sh-inside/dark-hall: 1 when the body has
   seen such floor that walks there (:far), 0 when it has seen there is none (nil), else (:sky or :roofed, past an unseen
-  edge) counted-chance of value/::unseen-edge-dark-counts' pseudo-counts of that kind."
-  [hall]
-  (case hall
-    :far 1
-    nil 0
-    (let [{:keys [far near]} (get (settings/get value/settings ::value/unseen-edge-dark-counts) hall)]
-      (counted-chance {:k 0 :n 0 :prior [far near]}))))
+  edge) counted-chance of value/::unseen-edge-dark-counts' pseudo-counts of that kind, times edge: the chance a walker
+  comes through that edge (sh-inside/dark-hall-edge's :edge; default 1)."
+  ([hall] (hall-chance hall 1))
+  ([hall edge]
+   (case hall
+     :far 1
+     nil 0
+     (let [{:keys [far near]} (get (settings/get value/settings ::value/unseen-edge-dark-counts) hall)]
+       (* edge (counted-chance {:k 0 :n 0 :prior [far near]}))))))
 
 (defn spot-plantable-chance
   "The chance a replant spot of which the body has not seen the soil, room or light can be planted: counted-chance of

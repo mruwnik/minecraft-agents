@@ -14,6 +14,8 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.shelter.inside :as sh-inside]
             [clojure.string :as str]))
 
 (defn seeing
@@ -466,3 +468,50 @@
     (let [f (seen-light/light-fn #js {:perception {:st st}})]
       (is (= 0 (bit-and (f 0 0 0) 15)) "behind an unseen cell")
       (is (= 13 (bit-and (f 3 0 0) 15)) "beside the torch's neighbour on the seen side: 14 less a cell"))))
+
+(defn lit-yard
+  "A body in a yard walled 3 high (x and z -5..5, feet y 64) by night, a shut door west, four torches lighting its inside
+  12, ground blocks more, after looking round from where it stands: every 30 degrees, up, level and down. From the wall
+  top first when over? (it sees the ground past the wall)."
+  [ground over?]
+  (let [inside (for [x (range -4 5) y [64 65 66] z (range -4 5)] [x y z])
+        ring (into {} (for [x (range -5 6) z (range -5 6) y [64 65 66]
+                            :when (or (= 5 (js/Math.abs x)) (= 5 (js/Math.abs z)))]
+                        [(str x "," y "," z) "cobblestone"]))
+        p (seeing {:time midnight :light-default [15 0] :light (zipmap inside (repeat [15 12]))
+                   :blocks (merge (tu/box -12 63 -12 12 63 12 "stone") ground ring
+                                  {"-5,64,0" "oak_door" "-5,65,0" "oak_door"
+                                   "2,64,2" "torch" "-2,64,2" "torch" "2,64,-2" "torch" "-2,64,-2" "torch"})
+                   :states {"-5,64,0" {:open false} "-5,65,0" {:open false}}})
+        look! #(doseq [yaw (range 0 360 30) pitch [-80 -45 -20 0 20 45 80]]
+                 (swap! (fake/state p) assoc :yaw yaw :pitch pitch)
+                 (perception/pass! (aget p "perception")))
+        feet (get-in @(fake/state p) [:self :pos])]
+    (when over?
+      (swap! (fake/state p) assoc-in [:self :pos] [0.5 67 -4.5])
+      (look!)
+      (swap! (fake/state p) assoc-in [:self :pos] feet))
+    (look!)
+    p))
+
+(defn stay
+  "[stay-hall's verdict, night-chance] of the lit yard's centre."
+  [p]
+  (let [at {:x 0 :y 64 :z 0}]
+    [(sh-inside/stay-hall p at (look/sky-subtract-at 18000 0 0)) (spawn-light/night-chance p at)]))
+
+(deftest a-lit-yard-walled-3-high-is-entered-over-the-rim-only-at-the-chance-the-unseen-ground-outside-is-that-high
+  ;; a walker may drop 3 from the wall's rim into the yard, so the rim is in the flood, and a cell past it stands on
+  ;; ground the body has not seen: the old flood took that ground as solid and the yard open to a dark hall for sure
+  (let [p (lit-yard {} false)
+        [{:keys [hall edge]} night] (stay p)]
+    (is (= :sky hall) "the rim is open to the unseen night beyond")
+    (is (< 0 edge 0.5) "ground three over the yard's floor is likelier air than not")
+    (is (= (* (cost/hall-chance :sky edge) (cost/spawn-chance [0 64 0])) night) "priced at that chance, the torches' light kept")))
+
+(deftest a-lit-yard-whose-seen-ground-outside-is-level-with-its-rim-is-open-to-the-dark
+  (let [ground (into {} (remove (fn [[k _]] (let [[x _ z] (map js/parseInt (.split k ","))] (and (< (js/Math.abs x) 5) (< (js/Math.abs z) 5)))))
+                     (tu/box -12 64 -12 12 66 12 "stone"))
+        [{:keys [hall edge]} night] (stay (lit-yard ground true))]
+    (is (= [:sky 1] [hall edge]) "a walker on the seen ground steps onto the rim and drops in")
+    (is (= (* (cost/hall-chance :sky) (cost/spawn-chance [0 64 0])) night))))
