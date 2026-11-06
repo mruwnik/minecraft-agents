@@ -47,6 +47,19 @@
 
 (defn tolls [world] (into {} (map (juxt (juxt :x :y :z) :factor)) (threats/threat-tolls (ready-test/ctx-of world))))
 
+(deftest a-pack-met-together-is-fled-though-each-of-it-is-fought-alone
+  (let [body (assoc armed :carried 1000 :respawn {:x 5000 :y 64 :z 0})
+        together (cost/answered-together body (repeat 4 "zombie"))]
+    (is (= :fight (:stance (cost/answered body "zombie"))) "one zombie: a fight")
+    (is (= :flee (:stance together)) "four met together: the reflex flees them, none is tolled as a fight")))
+
+(deftest threats-whose-fields-overlap-are-one-group-and-one-with-no-field-is-its-own
+  (let [drowned {:id 4 :name "drowned" :kind "hostile" :pos {:x 7 :y 64 :z 1}}
+        c (ready-test/ctx-of {:entities [(zombie 1 6 0) (zombie 2 8 2) drowned]})
+        ts (threats/known-threats c)]
+    (is (= #{["zombie" "zombie"] ["drowned"]}
+           (set (map #(vec (sort (map (fn [i] (:mob (nth ts i))) %))) (threats/overlap-groups c ts)))))))
+
 (deftest a-sensed-zombie-tolls-its-way-dear-to-flee-cheap-to-fight
   (let [bare (tolls {:entities [(zombie 1 6 0)]})
         armed (tolls {:entities [(zombie 1 6 0)] :inventory [{:name "diamond_sword" :count 1}]})]

@@ -2,25 +2,31 @@
   "What a second within a known mob's reach costs go-to's planner (jobs.lib.threats/threat-tolls), by the answer the reflex
   would take to the mob met beside the body (answer/decide), so the planner and the reflex price a mob by one price:
   a mob the body would flee costs its hurt over 1 s x the :flee factor (danger/danger-opts); one it would fight costs the
-  fight's own price less its seconds (its blows and hunger, a death free: answer/answer-price*) over the exposure seconds (danger/exposure-s). Both at
+  fight's blows at their hp cost (its :damage, at most the body's health) over the exposure seconds (danger/exposure-s). Both at
   most max-rate hp at the hp price of the body's health (threat-factor)."
   (:require [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.health :as health]))
 
-(defn answered
-  "{:stance :rate} for mob m (a name, or {:name :held}) alone for body {:health :food :equipment :weapon :pos} and its
-  death (death/death-cost's :level :carried :respawn): :stance :fight when a fight is the cheapest answer to it met beside
-  the body (answer/decide over answer/threat-answers), else :flee; :rate the seconds a fight costs beyond itself (its price,
-  a death free, less its seconds) a second of the ::exposure-s a body is exposed to a mob, 0 for a flight."
-  [body m]
-  (let [answers (answer/threat-answers body [m] nil)
+(defn answered-together
+  "{:stance :rate} for mobs ms (names, or {:name :held}) met together by body {:health :food :equipment :weapon :pos} and its
+  death (death/death-cost's :level :carried :respawn): :stance :fight when a fight is the cheapest answer to them met beside
+  the body (answer/decide over answer/threat-answers), else :flee; :rate each mob's share of the seconds the fight's blows
+  cost (hp-cost, at most the body's health) over the ::exposure-s a body is exposed to a mob; 0 for a flight."
+  [body ms]
+  (let [answers (answer/threat-answers body ms nil)
         {:keys [answer]} (answer/decide body answers (:pos body))
         fight (:fight answers)]
     (if (= :fight answer)
       {:stance :fight
-       :rate (max 0 (/ (- (answer/answer-price* body fight (:pos body) 0) (:seconds fight)) (max 1 (danger/exposure-s))))}
+       :rate (let [h (if (number? (:health body)) (:health body) 20)]
+               (/ (health/hp-cost h (min h (:damage fight))) (max 1 (danger/exposure-s)) (count ms)))}
       {:stance :flee :rate 0})))
+
+(defn answered
+  "answered-together for mob m alone."
+  [body m]
+  (answered-together body [m]))
 
 (defn stance
   "How the planner prices mob m for body: :fight or :flee (answered)."

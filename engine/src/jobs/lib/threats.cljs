@@ -212,12 +212,31 @@
   [c]
   (let [p (:primitives c)] (merge (cost/death-body p (ctx/view c)) (body-of p))))
 
-(defn stances
-  "{mob {:stance :rate}} of threats ts (cost/mob-of-threat each) for c's body: cost/answered, the answer its reflex would
-  take to the mob met beside it, priced with what a death would cost it (death-body)."
+(defn overlap-groups
+  "Threats ts split into the groups whose fields (threat-field/field-of) share a cell, directly or through another: the
+  mobs the body would meet together."
   [c ts]
-  (let [body (death-body c)]
-    (into {} (map (fn [m] [m (cost/answered body m)])) (distinct (map cost/mob-of-threat ts)))))
+  (let [ws (mapv #(or (:weights (field/field-of c %)) (js/Map.)) ts)
+        n (count ts)
+        parent (int-array (range n))
+        root (fn root [i] (if (= i (aget parent i)) i (root (aget parent i))))
+        touch? (fn [a b] (let [[s l] (if (< (.-size a) (.-size b)) [a b] [b a])] (some #(.has l %) (es6-iterator-seq (.keys s)))))]
+    (doseq [i (range n) j (range i) :when (and (not= (root i) (root j)) (touch? (ws i) (ws j)))]
+      (aset parent (root i) (root j)))
+    (vals (group-by root (range n)))))
+
+(defn stances
+  "{mob {:stance :rate}} of threats ts (cost/mob-of-threat each) for c's body: cost/answered-together, the answer its reflex
+  would take to the mobs whose fields overlap (overlap-groups) met beside it, priced with what a death would cost it
+  (death-body). A mob in several groups has the dearest: a flight, else the greatest rate."
+  [c ts]
+  (let [body (death-body c)
+        dearer (fn [a b] (cond (nil? a) b (= :flee (:stance a)) a (= :flee (:stance b)) b :else (max-key :rate a b)))]
+    (reduce (fn [acc idx]
+              (let [ms (mapv #(cost/mob-of-threat (nth ts %)) idx)
+                    a (cost/answered-together body ms)]
+                (reduce (fn [acc m] (update acc m dearer a)) acc ms)))
+            {} (overlap-groups c ts))))
 
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
@@ -299,9 +318,9 @@
   "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
   cost/threat-factor (the mob, its weight to 1/20 x the cell's) more a second; the dearest of one mob where it is known twice (a
   kind with no :key counts as one mob), mobs of one :key each summed, at most cost/threat-factor-cap."
-  [c threats]
+  ([c threats] (tolls-of c threats (stances c threats)))
+  ([c threats st]
   (let [body (death-body c)
-        st (stances c threats)
         cap (cost/threat-factor-cap body)
         by-cell (js/Map.)]
     (doseq [{:keys [mob weight key] :as t} threats
@@ -320,7 +339,7 @@
                     (fn [i xs ys zs factors]
                       (let [^js r (aget rows i)]
                         (aset xs i (.-x r)) (aset ys i (.-y r)) (aset zs i (.-z r))
-                        (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r))))))))))))
+                        (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r)))))))))))))
 
 (defn shared-tolls
   "tolls-of threats ts of c, read once per check-cache window for the same threats and body-inputs (threat-field/shared:
@@ -328,9 +347,10 @@
   [c ts]
   (if (empty? ts)
     []
-    (field/shared c [::threat-tolls (table-key ts) (body-inputs c) (stances c ts)]
-                  #(tolls-of c ts)
-                  count)))
+    (let [st (stances c ts)]
+      (field/shared c [::threat-tolls (table-key ts) (body-inputs c) st]
+                    #(tolls-of c ts st)
+                    count))))
 
 (defn threat-tolls
   "shared-tolls of the known-threats of c (those keep? holds of): go-to's price of every known mob (the planner's
