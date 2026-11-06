@@ -86,10 +86,8 @@
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
-  ;; Card 7647c987: unarmed, a fist loses to the helmeted zombie and the body has only its 3 dirt: the flight digs down (a pit regains
-  ;; its blocks) instead of pillaring with the last dirt, so the night's dig-in still seals.
-  ;; The NoAI zombie never catches the body: the flight ends keeps-off, far from the plot's edge (a pit at the edge opens onto air), and the night
-  ;; digs in there: the whole plot is dirt.
+  ;; Unarmed with no blocks, a fist loses to the helmeted zombie and a walk away costs more than a pit dug by hand where the body
+  ;; stands: the flight digs in (respond's cover) and that pit is the night's shelter, so the night ends roofed and digs no pit of its own.
   {:name "reflex-cut-night-unarmed-few-blocks-seals"
    :plot {:length 64 :width 64 :height 6}
    :body {:at [32.5 0 32.5]}
@@ -97,10 +95,12 @@
    :register [{:trigger :hostile-near}]
    :act [[:summon "zombie" [38.5 0 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
-         [:await {:source :job :kind :shut-in.sealed} 120]]
+         [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 200]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
-            {:event {:source :job :kind :shut-in.sealed} :within-s 120}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
+            {:event {:source :job :kind :hostile.decided :data {:cover #{:pit :pocket :walls}}} :within-s 30}
+            {:event {:source :job :kind :retreat_sealed} :within-s 60}
+            {:no-event {:source :job :kind :shelter.exposed} :for-s 200}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :within-s 200 :of-job true}]
    :limit-s 230}
   ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: dig-in refuses at once
   ;; ("cannot harvest stone", no pit dug) and the night ends exposed; the same pad with a stone pickaxe is dug in.
