@@ -612,3 +612,15 @@
         r (pt/scan-rows p {:w 3 :h 3 :range 4 :depth 4 :limit 3 :worth 25} {:x 3 :y 64 :z 1} {:next-ring 0 :found []} ##Inf)]
     (is (= 1 (:fill (first (:found r)))) "the one water cell is filled, not refused")
     (is (pos? (-> r :found first :costs :earthwork)))))
+
+(deftest a-mostly-unseen-patch-is-priced-between-a-barren-one-and-a-seen-good-one
+  (let [capped (fn [x z] {(str x ",63," z) "stone" (str x ",64," z) "stone"})
+        unseen-world (apply merge (patch 2 0 3 1 63 "dirt") (for [x (range 2 5) z [1 2]] (capped x z)))
+        score (fn [world] (:score (first (:found (pt/scan-rows (tu/seeing-all (tu/fake {:blocks world :light-default [15 0]}))
+                                                              {:w 3 :h 3 :range 4 :depth 4 :limit 3} {:x 3 :y 64 :z 1}
+                                                              {:next-ring 0 :found []} ##Inf)))))
+        good (score (patch 2 0 3 3 63 "dirt"))
+        barren (score (patch 2 0 3 3 63 "cobblestone"))
+        mixed (score unseen-world)]
+    (is (< (or barren 0) (or mixed 0)) "six unseen cells weighed by their chances beat seen untillable stone")
+    (is (< mixed good))))
