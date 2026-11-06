@@ -197,6 +197,18 @@
           (is (re-find #"hp" text)))
         (finally (set! look/unseen-solid-at-fn solid))))))))
 
+(deftest the-rest-of-the-night-at-a-dark-open-goal-costs-seconds-by-night-and-none-by-day
+  (let [solid look/unseen-solid-at-fn
+        rest-of (fn [world]
+                  (let [c (ready-test/ctx-of (assoc world :self {:pos inside :health 20 :food 20 :worldSpawn [0 64 0]} :inventory []))
+                        goal {:x 190 :y 64 :z 0} plan (straight-plan c goal)]
+                    (risk/night-rest-s c goal plan (risk/estimate-inputs c goal {:plan plan}) 0 0)))]
+    (set! look/unseen-solid-at-fn (open-ground))
+    (try
+      (is (pos? (rest-of night-hut)) "the goal is dark open ground and the night is far from over")
+      (is (zero? (rest-of (assoc night-hut :time st/noon))))
+      (finally (set! look/unseen-solid-at-fn solid)))))
+
 (deftest standing-hostiles-that-burn-at-sunrise-are-gone-from-the-dawn-walk-but-shaded-ones-stay
   (let [zombies (for [[i x] (map-indexed vector [48 52 56])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ x 0.5) :y 64 :z 3.5}})
         goal {:x 195 :y 64 :z 0}
@@ -205,7 +217,7 @@
                     (select-keys (nth (risk/status c goal (straight-plan c goal)) 2) [:wait :wait-s]))))
         roofs (into {} (for [x [48 52 56]] [(str x ",66,3") "stone"]))]
     (is (= :dawn (:wait (wait-of {}))) "zombies on open ground burn at sunrise: waiting for dawn beats walking past them")
-    (is (nil? (:wait (wait-of roofs))) "zombies under a roof stay by day: no wait makes the walk past them cheaper")))
+    (is (> (:wait-s (wait-of roofs)) (:wait-s (wait-of {}))) "zombies under a roof stay by day: the dawn walk still meets them (it is only the night at the goal that dawn saves)")))
 
 (def hut-bed {"4,64,-1" "red_bed"})
 

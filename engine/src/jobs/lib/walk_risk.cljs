@@ -37,7 +37,8 @@
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.survival.shut-in-night :as sin]))
 
 (a/defargs settings
   {::exit-blocks {:default 8 :spec (a/num-in 0 nil)
@@ -323,12 +324,12 @@
        (+ (risk-s c way) (:secs way))))))
 
 (defn cheapest-affordable
-  "The way of ways with the least :s whose hp the call's worth buys at the way's health (buys-hp) and whose
+  "The way of ways with the least :s plus :rest-s (the night left at the goal, night-rest-s) whose hp the call's worth buys at the way's health (buys-hp) and whose
   seconds it affords, or nil."
   [c ways]
   (let [food (.-food (.self (:primitives c)))
         worth (ctx/worth c)]
-    (first (sort-by :s (filter #(and (<= (:hp %) (buys-hp (:health %) food worth)) (cost/affords? (:s %) worth)) ways)))))
+    (first (sort-by #(+ (:s %) (:rest-s % 0)) (filter #(and (<= (:hp %) (buys-hp (:health %) food worth)) (cost/affords? (:s %) worth)) ways)))))
 
 (defn wait-ways
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
@@ -361,6 +362,22 @@
       sleep (conj (merge (way :sleep (sh-beds/sleep-s c (:bed sleep)) true) sleep))
       (and heals? (< health 20)) (conj (let [secs (* per-hp (- 20 health))] (way :heal secs (and dawn? (>= secs night-s))))))))
 
+(defn night-rest-s
+  "Seconds the rest of the night costs a body that walks to goal on plan after `elapsed-s` (0: now; a wait's seconds) and spends it there, over `walk-s`, the walk's own price
+  (a wait for dawn or a sleep ends the night, so owes none): the least of staying out in the open at the goal for what is left of the night
+  (:stay-s of estimate-inputs: a lit goal prices little, dark open ground the spawns) and sealing in there (cost/night-way-s: the night's
+  work it loses, shut-in's guessed seconds, exposed while it is done). 0 by day."
+  [c goal plan in walk-s elapsed-s]
+  (let [p (:primitives c)
+        night-s (second (get-in (sh-clock/night-left-quote c) [:uses :job-time]))
+        left (- night-s elapsed-s (/ (peek (along (:cells in))) cost/walk-speed))]
+    (if-not (pos? left)
+      0
+      (let [stay-s (fn [s] (max 0 (- (risk-s c (estimate-of c (estimate-inputs c goal {:plan plan :stay-s s}))) walk-s)))
+            seal-s (min left (sin/mean-s))]
+        (min (stay-s left)
+             (cost/night-way-s (sh-beds/in-ground? p (ctx/view c)) left {:busy-s seal-s :open-s (stay-s seal-s)}))))))
+
 (defn status
   "Ok while walking to `goal` on plan (go-to's, else the one its round held on, planned) now is the cheapest affordable way
   there, by cost alone whatever the worth: its risk (risk-s) against each of wait-ways (wait, then walk). A way is affordable
@@ -382,7 +399,8 @@
            stay (check-cache/keyed c ::stay stay-in #(stay-estimate c stay-in))
            now-s (risk-s c est)
            now? (<= hp allowed)
-           best (when (pos? hp) (cheapest-affordable c (wait-ways c goal plan in stay-in)))
+           rested (fn [w] (cond-> w (= :heal (:wait w)) (assoc :rest-s (night-rest-s c goal plan in now-s (:secs w)))))
+           best (when (pos? hp) (cheapest-affordable c (mapv rested (wait-ways c goal plan in stay-in))))
            parts (str (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                       hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")
            over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: " parts)
@@ -391,7 +409,7 @@
                                               "; waiting " (price/round1 secs) " s " (case (:wait w) :dawn "for dawn" :sleep "to sleep the night away" "to heal") " and walking then costs " (price/round1 s) " s")
                                   :risk hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
        (cond
-         (and best (< (:s best) now-s)) (wait best)
+         (and best (< (+ (:s best) (:rest-s best 0)) (+ now-s (night-rest-s c goal plan in now-s 0)))) (wait best)
          now? (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
          (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
          best (wait best)
