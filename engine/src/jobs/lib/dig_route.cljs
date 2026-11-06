@@ -195,8 +195,19 @@
                          (.-falling ^js (at x (inc y) z)) false
                          (.has way-keys (key x y z)) false
                          :else (do (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
-        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug] of the cheapest way found to the cell, dug the set
-        ;; of the keys of every cell its steps dug
+        ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug] of the cheapest way found to the cell, dug its
+        ;; steps' dug cells as a chain #js [keys parent lx hx ly hy lz hz] (nil: none), each link the box of its own and every
+        ;; earlier link's cells: links share their tails, where a set a node grew to kilobytes of heap
+        dug-link (fn [^js ks ^js parent]
+                   (let [l (if parent
+                             #js [ks parent (aget parent 2) (aget parent 3) (aget parent 4) (aget parent 5) (aget parent 6) (aget parent 7)]
+                             #js [ks nil ##Inf ##-Inf ##Inf ##-Inf ##Inf ##-Inf])]
+                     (dotimes [i (alength ks)]
+                       (let [[x y z] (cell-of (aget ks i))]
+                         (aset l 2 (min x (aget l 2))) (aset l 3 (max x (aget l 3)))
+                         (aset l 4 (min y (aget l 4))) (aset l 5 (max y (aget l 5)))
+                         (aset l 6 (min z (aget l 6))) (aset l 7 (max z (aget l 7)))))
+                     l))
         best (js/Map.) done (js/Set.) queue #js []
         tick (volatile! 1)
         answer (volatile! nil)
@@ -216,14 +227,24 @@
                            nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s)
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
-                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (into dug (array-seq ks)))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0)])
+                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
                          (heap-push! queue #js [(+ nd (heuristic nx ny nz)) (if prior? (- nd) @tick) nk])
                          (vswap! tick inc))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
         ;; stair that turns back over its own cut)
-        dug-behind? (fn [k x y z] (contains? (aget (.get best k) 6) (key x y z)))
+        ;; a link's box holds every cell before it: a cell outside it is dug by none of them. Boxes hold cells as cell-of reads
+        ;; their keys back, so a cell whose key reads back otherwise (y past the key's range) is looked up as it reads back
+        dug-behind? (fn dug-behind? [k x y z]
+                      (let [c (key x y z)]
+                        (if-not (< -513 y 512)
+                          (let [[x y z] (cell-of c)] (dug-behind? k x y z))
+                          (loop [^js l (aget (.get best k) 6)]
+                            (cond
+                              (or (nil? l) (< x (aget l 2)) (> x (aget l 3)) (< y (aget l 4)) (> y (aget l 5)) (< z (aget l 6)) (> z (aget l 7))) false
+                              (.includes (aget l 0) c) true
+                              :else (recur (aget l 1)))))))
         expand! (fn [ck]
                   (let [[mx my mz] (cell-of ck)
                         node (.get best ck)
@@ -336,7 +357,7 @@
                                    (if (.has back-done k)
                                      (.get back-best k)
                                      (if-let [^js t (aget back-queue 0)] (max 0 (- (aget t 0) (to-start x z))) 0)))))
-    (.set best start-key #js [0 0 0 nil nil 0 #{} 0])
+    (.set best start-key #js [0 0 0 nil nil 0 nil 0])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
     (vreset! seeds (sort-by (fn [[x _ z]] (to-start x z))
                             (cons goal (when r
