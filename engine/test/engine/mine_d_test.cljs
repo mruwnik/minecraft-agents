@@ -387,14 +387,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :yaw 90
-                                :inventory [{:name "stone_pickaxe" :count 1}]}})
-              chests {"-1,64,0" "chest" "1,64,0" "chest" "0,64,1" "chest" "0,64,-1" "chest"}]
-          (doseq [[k v] chests] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
-          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4 :worth 0}) {})
-          (await (run-ticks s 300))
-          (is (empty? (events-of s :mine.moved)))
-          (is (= :no-stone-found (:reason (done-event s)))))))))
+        (doseq [[worth moved? reason] [[60 false :no-stone-found] [300 true :gave-up]]]
+          (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :yaw 90
+                                  :inventory [{:name "stone_pickaxe" :count 1}]}})
+                chests {"-1,64,0" "chest" "1,64,0" "chest" "0,64,1" "chest" "0,64,-1" "chest"}]
+            (doseq [[k v] chests] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
+            (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4 :worth worth}) {})
+            (await (run-ticks s 300))
+            (is (= moved? (boolean (seq (events-of s :mine.moved)))) (str "worth " worth))
+            (is (= reason (:reason (done-event s))) (str "worth " worth))))))))
 
 (deftest a-given-heading-is-not-turned
   (async done
@@ -439,22 +440,45 @@
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-stair-that-keeps-finding-the-body-off-its-line-is-not-started-again-at-a-goal-worth-nothing
+(defn off-line-after-digs
+  "A prep that puts the body on [0.5 64 2.5] after each dig whose number is in ks (a reflex walking it off the stair's line)."
+  [world ks]
+  (let [n (atom 0)]
+    (.override world "dig"
+               (fn ^:async f [token a impl]
+                 (let [r (await (impl token a))]
+                   (when (contains? ks (swap! n inc))
+                     (swap! (.. world -state) assoc-in [:self :pos] [0.5 64 2.5]))
+                   r)))))
+
+(defn off-line-run
+  "A stair mine that finds the body off its line after the digs in ks, at root worth `worth`: the run's scenario."
+  [ks worth]
+  (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})]
+    (off-line-after-digs (.-world (:p s)) ks)
+    (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :worth worth}) {})
+    s))
+
+(def every-dig (set (range 1 100)))
+
+(deftest a-stair-that-finds-the-body-off-its-line-is-started-again-only-while-that-is-worth-its-price
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})
-              world (.-world (:p s))]
-          (.override world "dig"
-                     (fn ^:async f [token a impl]
-                       (let [r (await (impl token a))]
-                         (swap! (.. world -state) assoc-in [:self :pos] [0.5 64 2.5])
-                         r)))
-          (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :worth 0}) {})
+        (doseq [[worth restarted?] [[60 false] [300 true]]]
+          (let [s (off-line-run every-dig worth)]
+            (await (run-ticks s 300))
+            (is (finished? s))
+            (is (= restarted? (boolean (seq (events-of s :mine.restair)))) (str "worth " worth))))))))
+
+(deftest new-stairs-are-counted-since-the-last-step-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (off-line-run every-dig 1000)]
           (await (run-ticks s 300))
-          (is (finished? s))
-          (is (empty? (events-of s :mine.restair)))
-          (is (clojure.string/includes? (:text (done-event s)) "stair stopped: off-stair")))))))
+          (is (< 2 (count (events-of s :mine.restair))) "more new stairs than a third try's price allows in a row, spread over steps")
+          (is (= :count (:reason (done-event s)))))))))
 
 ;; Rowan j119: mine dug the step-up cells and floors round its pit until the body stood on a one-cell column.
 (deftest mine-leaves-the-block-that-is-the-bodys-last-way-out

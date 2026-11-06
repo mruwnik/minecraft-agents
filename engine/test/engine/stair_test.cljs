@@ -492,15 +492,38 @@
           (is (= :done (:status @out)))
           (is (= 5 (count (events-of s :stair.return)))))))))
 
+(defn move-at-digs
+  "A prep that puts the body on [7 65 2] after each dig whose number is in ks (a reflex walking it off the stair)."
+  [ks]
+  (fn [p]
+    (let [world (.-world p)
+          n (atom 0)]
+      (.override world "dig"
+                 (fn ^:async f [token a impl]
+                   (let [r (await (impl token a))]
+                     (when (contains? ks (swap! n inc))
+                       (swap! (.. world -state) assoc-in [:self :pos] [7 65 2]))
+                     r))))))
+
 (deftest off-stair-stands-when-a-walk-back-is-not-worth-its-price-and-says-where-the-body-is
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (stair! {:blocks ground} (assoc east :worth 0) (move-after-digs 100)))]
-          (is (empty? (events-of s :stair.return)))
-          (is (= :off-stair (:reason @out)))
-          (is (= [0 65 0] (:origin @out)))
-          (is (= [7 0 2] (:offset @out))))))))
+        (let [returns (fn ^:async returns* [worth]
+                        (let [{:keys [out] :as s} (await (stair! {:blocks ground} (assoc east :worth worth) (move-after-digs 100)))]
+                          (is (= :off-stair (:reason @out)))
+                          (is (= [0 65 0] (:origin @out)))
+                          (is (= [7 0 2] (:offset @out)))
+                          (count (events-of s :stair.return))))]
+          (is (< 0 (await (returns 300)) (await (returns 1000))) "a dearer goal pays for more walks back"))))))
+
+(deftest returns-are-counted-since-the-last-step-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (stair! {:blocks ground} (assoc east :worth 1000) (move-at-digs #{1 3 5})))]
+          (is (= 3 (count (events-of s :stair.return))) "three returns, spread over steps, each within the price")
+          (is (= :done (:status @out))))))))
 
 (deftest three-steps-down-east-in-stone
   (async done

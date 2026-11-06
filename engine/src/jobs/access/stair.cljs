@@ -427,7 +427,7 @@
                               ", off its line")})
       :else
       (do
-        (ctx/update-mem! c #(cond-> (assoc % :at-step i) (> i (or (:at-step %) 0)) (dissoc :returns)))
+        (ctx/update-mem! c (fn [m] (cond-> (assoc m :at-step i :furthest (max i (or (:furthest m) 0))) (> i (or (:furthest m) 0)) (dissoc :returns))))
         (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (drive/way-back c origin)))]
           stop
           (do
