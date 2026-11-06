@@ -1,0 +1,20 @@
+;; Card bb0c5a2e: a zombie sealed in a pod (rock all round, glass on the far side), 4 up and 5 north of the body, is
+;; heard, never seen, and has no way to the body: digging a block by hand is not held by it ("a hostile is near: zombie
+;; heard"). Should-fail: ready-checks/l4-keeps-waiting-while-the-hostile-stays (a seen zombie holds).
+{:defaults
+ {:tags [:blocks :hostile :sensing]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [15 3 13] [17 6 17] "stone"] [:fill [16 4 15] [16 5 15] "air"] [:fill [16 4 14] [16 5 14] "glass"]
+           [:set [16 0 22] "stone"]]
+  :body {:at [16.5 0 20.5] :yaw 0 :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :act [[:summon "zombie" [16.5 4 15.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+        [:until-seen {:entity "zombie"} 10]
+        [:job (jobs.blocks.dig {:pos #at [16 0 22]})]]
+  :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 40 :of-job true}
+           {:no-event {:source :job :kind :waiting :data {:reason :hostile-near}} :for-s 40 :until {:source :job :kind :completed}}]
+  :after [[:block [16 0 22] "air"] [:entities "type=zombie,tag=wt" [[16 4 15] [16 5 15]] 1]]
+  :limit-s 60}
+ :cases
+ [{:name "a-zombie-sealed-in-a-lit-pod-holds-no-dig"}]}
