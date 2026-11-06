@@ -15,9 +15,17 @@
   :body {:at [14.5 0 22.5] :yaw 270 :settle-s 2 :inventory [["shears" 1] ["iron_pickaxe" 1]] :effects [["resistance" 900 4]]}
   :limit-s 60}
  :cases
- [{:name "search-waits-in-the-room-instead-of-roaming-out"
+ [;; three zombies seen through the window in the dark beyond the torch (no helmet: they burn at sunrise) stand on the way east, and the body carries a kit its death
+  ;; far from the world spawn would lose: the walk's death costs more than the dawn wait, even at the default worth
+  {:name "search-waits-in-the-room-instead-of-roaming-out"
+   :mobs :keep
+   :body {:inventory [["shears" 1] ["iron_pickaxe" 1] ["diamond" 20]]}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.explore.search {:target "oak_log" :worth 30})]]
+         [:summon "zombie" [22.5 0 21.5] "{NoAI:1b}"]
+         [:summon "zombie" [28.5 0 23.5] "{NoAI:1b}"]
+         [:summon "zombie" [34.5 0 21.5] "{NoAI:1b}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.explore.search {:target "oak_log" :pattern :outward :heading :east})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.explore.search"}} :for-s 15}]
    :after [[:body-near [14.5 0 22.5] 2]]}
