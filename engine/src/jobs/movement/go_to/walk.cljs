@@ -20,7 +20,7 @@
     a frontier walk, or at a re-plan or cut of a walk short of the goal (drive/follow!'s :walk-spent?), once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
     ever in the call) passes what the goal is worth (jobs.lib.cost/tour-worth of the goal's straight
     blocks at the call's start and ctx/worth): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
-    A search cut by its budget whose nearest node is no nearer than the body has been tours the edge of what it has seen instead (known-end-check).
+    A search cut by its budget whose nearest node, or the cut of its plan walked up to a dark step, is no nearer than the body is or has been tours the edge of what it has seen instead (known-end-check, asked inside and outside go-to.reprice).
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck)."
@@ -158,18 +158,22 @@
           {:lookout true}))))
 
 (defn known-end-check
-  "near/walk-round!'s :stair-check: check's why, else {:known-end true} for a plan over a mask (c's :unknown) to where a
-  search cut by its budget got nearest (not a frontier) that ends no block nearer pos than the body has been in the call
-  (approaches :closest): the budget left the search short of anywhere new, and walking there swings between ends it
-  knows. Not while the round tours the edge of what the body has seen (mem :edge-mode), which it turns to instead."
+  "near/walk-round!'s :stair-check: {:known-end true} for the plan the round would walk (check's {:cut plan'} when it cuts
+  one, else the plan) over a mask (c's :unknown) to where a search cut by its budget got nearest (not a frontier) that
+  ends no block nearer pos than the body is or has been in the call (approaches :closest): the budget left the search
+  short of anywhere new, and walking there swings between ends it knows; a cut short of a dark step does so too, each
+  look there planning anew from farther off. Else check's why. Not while the round tours the edge of what the body has
+  seen (mem :edge-mode), which it turns to instead."
   [c pos check]
-  (fn [{:keys [status steps r] :as plan} first?]
-    (or (when check (check plan first?))
-        (let [closest (:closest (record c))]
-          (when (and (:unknown c) closest (not (:edge-mode (ctx/mem c))) (= "partial" status) (seq steps)
-                     (= "budget" (some-> ^js r .-reason)) (not (:frontier-taken plan))
-                     (>= (u/dist (peek steps) pos) (dec closest)))
-            {:known-end true})))))
+  (fn [plan first?]
+    (let [why (when check (check plan first?))
+          {:keys [status steps r] :as walked} (or (:cut why) plan)
+          closest (min (:closest (record c) ##Inf) (u/dist (u/self-pos c) pos))]
+      (if (and (or (nil? why) (:cut why)) (:unknown c) (not (:edge-mode (ctx/mem c))) (= "partial" status) (seq steps)
+               (= "budget" (some-> ^js r .-reason)) (not (:frontier-taken walked))
+               (>= (u/dist (peek steps) pos) (dec closest)))
+        {:known-end true}
+        why))))
 
 (def route-min-steps
   "Steps a plan toward a loaded goal needs for its way to be remembered (note-route)."
@@ -556,7 +560,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (turn-back-check c (reprice/check c pos (route-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))))))
+            stair-check (turn-back-check c (known-end-check c pos (reprice/check c pos (route-check c (known-end-check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))))))
             round (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos) :closest #(:closest (cut/record c)) :on-floor #(count-floor! c %1 %2) :walk-spent? #(tour-spent? c)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))]
         (if (jumped? c)
           :again

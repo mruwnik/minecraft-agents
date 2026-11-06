@@ -459,6 +459,21 @@
     (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
     (swap! gcut/approaches dissoc (:id c))))
 
+;; live: KitOak94 (8c28a4a4). With no torch carried each budget-cut plan was walked only up to its first dark step
+;; (reprice's cut): the whole plan ended nearer the ore, the cut farther than the body had been, and the body drifted off
+(deftest a-plan-cut-at-a-dark-step-is-judged-where-the-cut-ends
+  (let [mem* (atom {})
+        c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 60.5 :y 0 :z 3.5}}}) mem* {:unknown true}))
+        pos {:x 60 :y 0 :z 16}
+        r #js {:reason "budget"}
+        plan (fn [z] {:status "partial" :r r :steps [{:x 60 :y 0 :z 3} {:x 60 :y 0 :z z}]})
+        cut-at (fn [z] (fn [_ _] {:cut (plan z)}))]
+    (gcut/fresh-record! c)
+    (is (= {:known-end true} ((gwalk/known-end-check c pos (cut-at 2)) (plan 14) false)) "the cut ends farther than the body stands")
+    (is (= {:cut (plan 8)} ((gwalk/known-end-check c pos (cut-at 8)) (plan 14) false)) "a cut that gets nearer is walked")
+    (is (= {:known-end true} ((gwalk/known-end-check c pos nil) (plan 2) true)) "the call's first plan, before any walk: judged by where the body stands")
+    (swap! gcut/approaches dissoc (:id c))))
+
 (deftest a-route-seen-to-lead-to-the-goal-is-walked-on-while-the-goal-is-unloaded
   (let [mem* (atom {})
         c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 30.5 :y 64 :z 0.5}}}) mem* {}))
