@@ -455,15 +455,16 @@
   "priced (price!) scored against chasers [{:name (mob-kind) :pos}] from where the body stands (from): :arrive (the
   seconds the first chaser takes to the end, ##Inf with none), :gain (arrive less the chasers' arrival at from: what
   the walk buys over standing still; 0 where no chaser can get to the body already), :caught-s (caught-s of its route),
-  :caught? (one lands a blow: caught-s over 0), :dead-end (dead-end, the ways out those of pool, default the ends
+  :caught? (one lands a blow: caught-s over 0), :caught-seen? (caught on its seen cells alone: no look past them frees it), :dead-end (dead-end, the ways out those of pool, default the ends
   scored), on :price, and :score (see the ns doc)."
   ([chasers from priced] (scored chasers from priced nil))
   ([chasers from priced pool]
    (let [here (arrive-at chasers from)
-         raced (mapv (fn [{:keys [end cells] :as e}]
+         raced (mapv (fn [{:keys [end cells seen-n] :as e}]
                        (let [arrive (arrive-at chasers (cost/centred end))
                              {c-s :caught-s d :blast-d} (caught-blast chasers cells)]
-                         (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :blast-d d :caught? (pos? c-s))))
+                         (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :blast-d d :caught? (pos? c-s)
+                                :caught-seen? (and (pos? c-s) (pos? (caught-s chasers (subvec cells 0 (min (count cells) (or seen-n (count cells))))))))))
                      priced)]
      (mapv (fn [e]
              (let [race (dead-end-race chasers e (or pool raced))
@@ -579,9 +580,10 @@
 
 (defn unseen-ahead
   "The first unseen cells ([x y z], nearest first) of ends' routes but those in glanced (looked at this flight already:
-  each once a flight): where the flight looks before it counts itself cornered; nil when none is left."
+  each once a flight) and those of routes caught before them (:caught-seen?): where the flight looks before it counts
+  itself cornered; nil when none is left."
   [ends glanced]
-  (->> ends (sort-by :s) (keep :unseen) distinct (remove (set glanced)) seq))
+  (->> ends (remove :caught-seen?) (sort-by :s) (keep :unseen) distinct (remove (set glanced)) seq))
 
 (defn door-s
   "The seconds of end e's route up to its first cell door? (cell -> bool) holds of, else the whole route: a shut door ends the exposure."

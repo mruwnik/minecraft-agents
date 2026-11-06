@@ -496,7 +496,8 @@
               (end-of 0 2 1 :found? false :s 0.4)]]
     (is (= [[2 64 -1] [5 64 0]] (search/unseen-ahead ends nil)))
     (is (= [[5 64 0]] (search/unseen-ahead ends [[2 64 -1]])) "a cell looked at this flight is not looked at again")
-    (is (nil? (search/unseen-ahead ends [[2 64 -1] [5 64 0]])))))
+    (is (nil? (search/unseen-ahead ends [[2 64 -1] [5 64 0]])))
+    (is (= [[5 64 0]] (search/unseen-ahead (assoc-in ends [1 :caught-seen?] true) nil)) "a route caught before its unseen cells is no reason to look")))
 
 (def lake
   "A lake 7 deep: water at x -4..4, y 57..63, z -4..4 over stone; its shore the floor at y 63."

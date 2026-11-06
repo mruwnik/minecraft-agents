@@ -291,6 +291,21 @@
           (is (seq prices))
           (is (not (contains? prices :flee)) (str "what would run is the cornered step, not a walk away: " (pr-str prices))))))))
 
+(deftest a-body-in-a-hole-with-a-zombie-on-its-rim-prices-no-walk-away
+  ;; the price read the hole's walls unseen as open ground (a free way), or looked on past a way caught on its seen
+  ;; climb: the flight then found every way caught and took the pillar late, the zombie at its side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (first-round-seeing respond {:self {:health 20 :food 20 :pos {:x 0.5 :y 63 :z 0.5}}
+                                                                 :inventory [{:name "dirt" :count 12}]
+                                                                 :blocks {"0,63,0" "air" "0,62,0" "stone"}
+                                                                 :entities [(assoc (zombie 1.5 1.5) :pos {:x 1.5 :y 64 :z 1.5})]}
+                                                        1000))
+              prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
+          (is (seq prices))
+          (is (not (contains? prices :flee)) (str "every way out climbs past the zombie: the cornered step runs, not a walk away " (pr-str prices))))))))
+
 (defn spider [x] {:id 5 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0}})
 
 (deftest on-open-ground-walls-against-a-zombie-five-off-cost-a-hurt-body-more-than-walking-away
