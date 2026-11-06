@@ -73,11 +73,11 @@
 
 (defn ^:async kept-quote!
   "go-to's quote of the walk args, kept per body (threat-field/shared) while its world epoch, walk-risk/body-inputs,
-  health and carried items hold, so a later pass asks no unchanged walk again. A search still going on (:estimate) or a
+  health, carried items and the walk's worth (the args', else the caller's) hold, so a later pass asks no unchanged walk again. A search still going on (:estimate) or a
   quote past its deadline is not kept: asked again, it goes on."
   [c args]
   (let [p (:primitives c)
-        box (field/shared c [::quote args (hash (walk-risk/body-inputs c)) (.-health (.self p)) (mapv (juxt :name :count) (u/inventory p))]
+        box (field/shared c [::quote args (or (:worth args) (ctx/worth c)) (hash (walk-risk/body-inputs c)) (.-health (.self p)) (mapv (juxt :name :count) (u/inventory p))]
                           #(volatile! nil) (constantly 1))]
     (or @box
         (let [q (await (quote! c args))]

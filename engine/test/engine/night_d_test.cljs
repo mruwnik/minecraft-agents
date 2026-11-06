@@ -283,6 +283,30 @@
     (swap! (fake/state p) assoc-in [:self :pos] [1090 64 -10])
     (is (< (count (flee/sites w 64)) (count sites)) "moved off: the far side is out of the flee radius")))
 
+(deftest a-kept-quote-is-shared-only-by-calls-of-the-same-worth
+  ;; card 68e09bb4: the key lacked the worth go-to prices the walk at; a call at another worth got the first's quote
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])
+              quote! pick/quote!
+              {:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})
+              args {:place :home :range 0}
+              probe (tu/job (fn ^:async probe-round [c]
+                              (let [at-worth (fn [w] (assoc c :worth (constantly w)))]
+                                (await (pick/kept-quote! (at-worth 50) args))
+                                (await (pick/kept-quote! (at-worth 50) args))
+                                (await (pick/kept-quote! (at-worth ##Inf) args))
+                                (ctx/end c :done nil))))
+              eng (assoc eng :jobs (assoc registry/jobs 'worth-probe probe))]
+          (tu/seeing-all p)
+          (set! pick/quote! (fn [_ a] (swap! asked conj a) (js/Promise.resolve {:uses {:job-time [0 1 1]}})))
+          (try
+            (core/submit! eng '(worth-probe) {})
+            (await (tu/run-until-empty eng 20))
+            (finally (set! pick/quote! quote!)))
+          (is (= 2 (count @asked)) "worth 50 twice: one ask; worth ##Inf: another"))))))
+
 (deftest a-later-pass-asks-no-quote-of-a-flee-walk-while-the-body-and-its-world-hold
   ;; card 68e09bb4: each pass of a night asked go-to again for every flee site's walk, though nothing had changed
   (async done
