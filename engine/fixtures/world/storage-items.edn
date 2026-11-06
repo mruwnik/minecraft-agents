@@ -92,6 +92,14 @@
    :expect [{:event {:source :job :kind #{:stopped :failed} :message [:contains "took bread 5; no more bread"]} :within-s 40 :of-job true}]
    :after [[:item "bread" 5]]
    :limit-s 60}
+  ;; card a5541e2f: the :items count is "carry at least": with 3 carried, asking 8 takes 5 and the ending text says so
+  {:name "withdraw-count-is-carry-at-least-and-says-took-and-had"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:9}]}"]]
+   :body {:inventory [["bread" 3]]}
+   :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 8}})]]
+   :expect [{:event {:source :job :kind :completed :message [:contains "took 5, had 3"]} :within-s 40 :of-job true}]
+   :after [[:item "bread" 8]]
+   :limit-s 60}
   {:name "pick-up-loose-out-of-radius-names-the-radius"
    :act [[:summon "item" [16.5 0 28.5] "{Item:{id:\"minecraft:wheat_seeds\",count:16}}"]
          [:job (jobs.items.pick-up-loose {:settings {:jobs.lib.loose/radius 8}})]]
