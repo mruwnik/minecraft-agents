@@ -3,7 +3,8 @@
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
   A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 at normal difficulty (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits for its mob-hit (3 if unknown, scaled by the server difficulty) one a second (:melee). Endermen and zombified piglins only fight when provoked."
-  (:require [engine.args :as a]
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.game-facts :as facts]
@@ -91,11 +92,27 @@
 
 (def bow-mobs #{"skeleton" "stray" "parched" "bogged"})
 
+(def melee-bow-kind
+  "The kind prefix of a bow mob seen holding something other than a bow, \"skeleton_melee/<item>\": it strikes
+  (AbstractSkeleton.reassessWeaponGoal gives it the melee goal) rather than shoots, with that item's bonus; a hand not
+  seen is the bow it spawns with."
+  "skeleton_melee")
+
+(defn melee-bow? [kind-name] (and (string? kind-name) (str/starts-with? kind-name melee-bow-kind)))
+
+(defn melee-bow-blow
+  "Damage one blow of melee-bow kind k deals at normal difficulty: the mob's attack of 2 plus the bonus of the item it
+  holds (weapon-damage less the 1 of a fist: vanilla stone sword 6, iron 7, diamond 8)."
+  [k]
+  (inc (weapon/weapon-damage (subs k (inc (count melee-bow-kind))))))
+
 (defn mob-blow
   "Damage one hit of mob-name deals before the difficulty's scaling: a bow mob's or a pillager's arrow (arrow-blow: vanilla
   Pillager.performRangedAttack shoots the crossbow at velocity 1.6, a skeleton's arrow speed), else its mob-hit."
   [mob-name]
-  (if (or (contains? bow-mobs mob-name) (= "pillager" mob-name)) (arrow-blow (difficulty)) (get mob-hit mob-name 3)))
+  (cond (or (contains? bow-mobs mob-name) (= "pillager" mob-name)) (arrow-blow (difficulty))
+        (melee-bow? mob-name) (melee-bow-blow mob-name)
+        :else (get mob-hit mob-name 3)))
 
 (def door-breakers
   "Mobs that break a wooden door down, with the difficulty from which they do (vanilla BreakDoorGoal): a vindicator
@@ -276,17 +293,12 @@
 
 (def trident-kind "The kind of a drowned holding a trident: it throws (vanilla: 8 hp a throw, every 2 s) rather than strikes." "drowned_trident")
 
-(def melee-bow-kind
-  "The kind of a bow mob seen holding something other than a bow: it strikes (AbstractSkeleton.reassessWeaponGoal gives it
-  the melee goal) rather than shoots; a hand not seen is the bow it spawns with."
-  "skeleton_melee")
-
 (defn kind
   "The name the tables here are keyed by for mob {:name :held}: a drowned holding a trident and a bow mob holding no bow
-  are their own kinds."
+  (one kind a held item) are their own kinds."
   [{:keys [name held]}]
   (cond (and (= "drowned" name) (= "trident" held)) trident-kind
-        (and (contains? bow-mobs name) (some? held) (not= "bow" held)) melee-bow-kind
+        (and (contains? bow-mobs name) (some? held) (not= "bow" held)) (str melee-bow-kind "/" held)
         :else name))
 
 (defn ranged?

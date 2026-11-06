@@ -66,3 +66,7 @@
   (is (= [0 1 2 3 4 5] (mapv weapon/weapon-rank ["wooden_sword" "golden_sword" "copper_sword" "iron_sword" "diamond_sword" "netherite_sword"])))
   (is (= 0 (weapon/weapon-rank "stick")))
   (is (= ["wooden" "stone" "copper" "iron" "diamond" "netherite" "golden"] weapon/cheapness)))
+
+(deftest a-bow-mob-holding-a-weapon-blows-two-plus-the-weapons-bonus
+  (doseq [[item hp] [["stone_sword" 6] ["iron_sword" 7] ["diamond_sword" 8]]]
+    (is (= hp (threat/mob-blow (threat/kind {:name "skeleton" :held item}))) item)))
