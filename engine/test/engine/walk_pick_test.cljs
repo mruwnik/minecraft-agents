@@ -15,11 +15,11 @@
             [jobs.movement.go-to.preview :as pv]))
 
 (defn ^:async picked
-  "[best! of candidates {:id :bound :s} with go-to's quote stubbed to {:s s} (its :on-quote called first), the ids quoted in order]."
+  "[best! of candidates {:id :bound :s :nodes} with go-to's quote stubbed to {:s s :route {:nodes nodes}} (its :on-quote called first), the ids quoted in order]."
   [candidates]
   (let [quote! pick/quote!
         asked (atom [])]
-    (set! pick/quote! (fn [_ x] (some-> (:on-quote x) (apply [])) (swap! asked conj (:id x)) (js/Promise.resolve {:s (:s x) :estimate (:estimate x)})))
+    (set! pick/quote! (fn [_ x] (some-> (:on-quote x) (apply [])) (swap! asked conj (:id x)) (js/Promise.resolve {:s (:s x) :estimate (:estimate x) :route {:nodes (:nodes x)}})))
     (try [(await (pick/best! nil candidates {:bound :bound :args identity :like :kind :price (fn [_ q] (:s q))})) @asked]
          (finally (set! pick/quote! quote!)))))
 
@@ -60,6 +60,8 @@
                                 (finally (set! clock/now stopped)))]
           (is (= 1 (:id (:pick best))))
           (is (= 18 (count asked)) "with each quote 0.15 s, the 19th's saving, (6.6 - 3.8) / 19 s, is less")
+          (is (= 18 (count (second (await (picked (map #(assoc % :nodes (/ 0.15 (cost/search-cell-s))) cands))))))
+              "with the clock standing still, each quote's route search 0.15 s of CPU by its expansions: the same")
           (is (= 32 (count (second (await (picked cands))))) "a quote that costs nothing goes on to the bound"))))))
 
 (deftest a-quote-still-searching-gives-no-price-ratio-to-its-kind

@@ -283,6 +283,39 @@
     (swap! (fake/state p) assoc-in [:self :pos] [1090 64 -10])
     (is (< (count (flee/sites w 64)) (count sites)) "moved off: the far side is out of the flee radius")))
 
+(deftest a-later-pass-asks-no-quote-of-a-flee-walk-while-the-body-and-its-world-hold
+  ;; card 68e09bb4: each pass of a night asked go-to again for every flee site's walk, though nothing had changed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom 0)
+              quote! pick/quote!
+              out (atom nil)
+              {:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})
+              pass! (fn ^:async pass [c]
+                      (let [before @asked
+                            target (await (flee/flee-target (assoc c ::pick/pass (atom {})) false))]
+                        [(:pos target) (- @asked before)]))
+              probe (tu/job (fn ^:async probe-round [c]
+                              (let [first-pass (await (pass! c))
+                                    second-pass (await (pass! c))
+                                    _ (swap! (fake/state p) assoc-in [:self :pos] [1 64 0])
+                                    moved (await (pass! c))]
+                                (reset! out [first-pass second-pass moved])
+                                (ctx/end c :done nil))))
+              eng (assoc eng :jobs (assoc registry/jobs 'flee-probe probe))]
+          (tu/seeing-all p)
+          (set! pick/quote! (fn [c args] (swap! asked inc) (quote! c args)))
+          (try
+            (core/submit! eng '(flee-probe) {})
+            (await (tu/run-until-empty eng 20))
+            (finally (set! pick/quote! quote!)))
+          (let [[[at n] [again m] [_ k]] @out]
+            (is (pos? n) "the first pass quotes the flee walks")
+            (is (= at again) "the same flee target")
+            (is (zero? m) "nothing changed: the second pass asks none again")
+            (is (pos? k) "the body moved: its walks are asked again")))))))
+
 (deftest with-nothing-seen-the-night-looks-around-and-then-flees-to-the-ground-it-saw
   (async done
     (tu/run-async done

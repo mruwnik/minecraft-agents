@@ -10,6 +10,7 @@
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.targets :as targets]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk-risk :as walk-risk]
@@ -70,10 +71,23 @@
       (let [pending (or (get @memo k) (let [pr (f)] (swap! memo assoc k pr) pr))]
         (await pending)))))
 
-(defn ^:async quote-once!
-  "go-to's quote of the walk args, asked once in this pass (once!)."
+(defn ^:async kept-quote!
+  "go-to's quote of the walk args, kept per body (threat-field/shared) while its world epoch, walk-risk/body-inputs,
+  health and carried items hold, so a later pass asks no unchanged walk again. A search still going on (:estimate) or a
+  quote past its deadline is not kept: asked again, it goes on."
   [c args]
-  (await (once! c [:quote args] #(quote! c args))))
+  (let [p (:primitives c)
+        box (field/shared c [::quote args (hash (walk-risk/body-inputs c)) (.-health (.self p)) (mapv (juxt :name :count) (u/inventory p))]
+                          #(volatile! nil) (constantly 1))]
+    (or @box
+        (let [q (await (quote! c args))]
+          (when-not (or (:estimate q) (= contract/too-expensive q)) (vreset! box q))
+          q))))
+
+(defn ^:async quote-once!
+  "go-to's quote of the walk args, asked once in this pass (once!) and kept across passes (kept-quote!)."
+  [c args]
+  (await (once! c [:quote args] #(kept-quote! c args))))
 
 (defn by-bound
   "xs as (sort-by bound xs) orders them, each bound asked once: a sort asks its key at every comparison."
@@ -89,14 +103,17 @@
   candidates reached; quote (fn [c args], default quote!) asks go-to, so a caller can reuse one quote. Quoted best-first
   by bound until the best quoted is no dearer than the next bound, each one whose quote-gain over the ratios of the
   quoted ones it is like (like (fn [x]), default all alike: the same answer) is more than a quote costs (the seconds
-  on the clock the quotes so far took each, their ok? tests included); the others are passed over.
+  on the clock the quotes so far took each, their ok? tests included, or, when more, their route searches' expansions
+  at cost/search-cell-s); the others are passed over.
   rebound (fn [x q left]), asked after each quote until it answers non-nil: a fn is a tighter bound of the candidates left, ranked by it from then on."
   [c candidates {:keys [bound args price ok? quote rebound like]}]
   (let [like (or like (constantly nil))
         t0 (clock/now)
         ratios (volatile! {})
         quoted (volatile! 0)
-        quote-s #(if (zero? @quoted) 0 (/ (- (clock/now) t0) 1000 @quoted))]
+        searched (volatile! 0)
+        ;; a search's CPU by its expansions too: the :test build's clock stands still
+        quote-s #(if (zero? @quoted) 0 (/ (max (/ (- (clock/now) t0) 1000) (* @searched (cost/search-cell-s))) @quoted))]
     (loop [[x & more :as left] (by-bound bound candidates) best nil bound bound rebound rebound]
       (cond
         (or (empty? left) (not (js/isFinite (bound x))) (and best (<= (:price best) (bound x)))) best
@@ -106,6 +123,7 @@
                     q (await ((or quote quote!) c (args x)))
                     s (price x q)
                     _ (vswap! quoted inc)
+                    _ (vswap! searched + (or (get-in q [:route :nodes]) 0))
                     _ (when (and (pos? b) (not (:estimate q))) (vswap! ratios update (like x) conj (/ s b)))
                     best (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best)
                     r (when rebound (await (rebound x q more)))]

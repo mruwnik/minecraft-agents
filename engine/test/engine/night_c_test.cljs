@@ -627,25 +627,6 @@
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (is (some #(= 'jobs.survival.log-out (second %)) log) "the owner's fallback: no shelter, so log out"))))))
 
-(deftest a-quote-is-asked-once-per-pass-and-again-in-the-next
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [quote! pick/quote!
-              asked (atom 0)
-              places (mapv #(hash-map :pos {:x (* 10 %) :y 64 :z 0} :range 0) (range 1 6))
-              opts {:target identity :walk identity}
-              c {:primitives (tu/fake {}) ::pick/pass (atom {})}]
-          (set! pick/quote! (fn [_ _] (swap! asked inc) (js/Promise.resolve {:uses {:job-time [0 ##Inf ##Inf]}})))
-          (try
-            (is (nil? (await (night/cheapest-walk! c places opts))) "none of them reachable: no pick")
-            (is (= 5 @asked))
-            (await (night/cheapest-walk! c places opts))
-            (is (= 5 @asked) "a second sweep of the same pass asks no quote again")
-            (await (night/cheapest-walk! (assoc c ::pick/pass (atom {})) places opts))
-            (is (= 10 @asked) "the next pass asks again: the world may have changed")
-            (finally (set! pick/quote! quote!))))))))
-
 (deftest a-place-whose-walk-costs-more-than-digging-in-is-not-walked-to-and-the-body-digs-in
   (async done
     (tu/run-async done
