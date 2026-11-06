@@ -129,11 +129,16 @@
   {:uses {:job-time [1 5 30]}})
 
 (defn unseen-leak
-  "The nearest-listed leak cell that is unseen and not more than two layers below the start cell at (the floor of a pocket dug one under the pen floor), as {:x :y :z}: an
-  animal cannot leave through ground further under the pen floor, and those cells can never be seen."
-  [checked at]
-  (let [floor-y (- (if (map? at) (:y at) (second at)) 2)]
-    (:pos (first (filter #(and (= :unloaded (:why %)) (>= (:y (:pos %)) floor-y)) (:leaks checked))))))
+  "The unseen leak cell nearest the body at from, not more than two layers below the start cell at (the floor of a pocket dug one under the pen floor), as {:x :y :z}: an
+  animal cannot leave through ground further under the pen floor, and those cells can never be seen. The nearest, since a fill spilling out of an open gate lists cells far across open ground."
+  [checked at from]
+  (let [floor-y (- (if (map? at) (:y at) (second at)) 2)
+        d2 (fn [{:keys [x y z]}] (+ (* (- x (:x from)) (- x (:x from))) (* (- y (:y from)) (- y (:y from))) (* (- z (:z from)) (- z (:z from)))))]
+    (->> (:leaks checked)
+         (filter #(and (= :unloaded (:why %)) (>= (:y (:pos %)) floor-y)))
+         (map :pos)
+         (sort-by d2)
+         first)))
 
 (defn side-cells
   "The four cells beside [x y z]: a :gap whose sides are unseen may be a stretch of a way out the fill took through cells it never saw."
@@ -261,7 +266,7 @@
         checked (await (pen-read/read! c (assoc opts :early? true) #(not (answered? p opts % at))))
         final (when (= :unloaded (:reason checked))
                 (pen-read/read p (assoc opts :final? true)))
-        unseen (when-not (seen-leak? p (or final checked) at) (unseen-leak checked at))
+        unseen (when-not (seen-leak? p (or final checked) at) (unseen-leak checked at (u/self-pos c)))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck (settings/get settings ::max-walks)))

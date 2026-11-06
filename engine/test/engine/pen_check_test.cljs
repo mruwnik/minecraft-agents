@@ -316,11 +316,15 @@
 
 (deftest unseen-cells-under-the-pen-floor-are-never-walked-to
   (let [leak (fn [y] {:pos {:x 1 :y y :z 1} :why :unloaded})]
-    (are [ys want] (= want (pen-check/unseen-leak {:leaks (mapv leak ys)} [2 64 2]))
+    (are [ys want] (= want (pen-check/unseen-leak {:leaks (mapv leak ys)} [2 64 2] {:x 1 :y 64 :z 1}))
       [60 61] nil
       [60 62] {:x 1 :y 62 :z 1}
       [60 63] {:x 1 :y 63 :z 1}
       [64 60] {:x 1 :y 64 :z 1})))
+
+(deftest the-unseen-cell-walked-to-is-the-nearest-the-body-not-the-first-listed
+  (let [leak (fn [x] {:pos {:x x :y 64 :z 1} :why :unloaded})]
+    (is (= {:x 3 :y 64 :z 1} (pen-check/unseen-leak {:leaks [(leak 40) (leak 3) (leak 20)]} [2 64 2] {:x 0 :y 64 :z 1})))))
 
 (deftest a-plan-alone-is-read-by-a-body-that-has-not-looked-at-the-pen
   (async done
