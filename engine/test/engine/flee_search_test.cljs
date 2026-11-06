@@ -332,14 +332,18 @@
     (is (pos? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "stone_sword" :pos under}] over)) "one holding a sword strikes")
     (is (pos? (search/caught-s [{:name "blaze" :mob "blaze" :pos under}] over)) "a blaze strikes within 2 blocks")))
 
-(deftest a-creeper-catches-only-a-body-that-stays-in-its-fuse-range-for-the-fuse
-  ;; the walk-by was caught on every second the creeper was within a zombie's reach, though it blows only after 1.5 s within 3 blocks
-  (let [route (fn [dt] (mapv (fn [x] {:x x :y 64 :z 0 :t (* dt x)}) (range 7)))
-        at {:x 3.5 :y 64 :z 0.5}
-        caught (fn [k dt] (search/caught-s [{:name k :mob k :pos at}] (route dt)))]
-    (is (pos? (caught "zombie" 0.15)) "a zombie lands blows on the quick walk by")
-    (is (zero? (caught "creeper" 0.15)) "a creeper's fuse has no time to run")
-    (is (>= (caught "creeper" 0.5) 1.5) "a slow walk by keeps the body in range for the fuse")))
+(deftest a-creeper-blows-when-its-fuse-lit-within-3-burns-out-with-the-body-within-7-and-hurts-within-6
+  (let [at {:x 3.5 :y 64 :z 0.5}
+        caught (fn [k pts] (search/caught-s [{:name k :mob k :pos at}] (mapv (fn [[x t]] {:x x :y 64 :z 0 :t t}) pts)))
+        walk-by (fn [dt] (map (fn [x] [x (* dt x)]) (range 20)))]
+    (is (pos? (caught "zombie" (walk-by 0.15))) "a zombie lands blows on the quick walk by")
+    (is (zero? (caught "creeper" (walk-by 0.15))) "past 6 blocks when the fuse ends")
+    (is (>= (caught "creeper" (walk-by 0.5)) 1.5) "a slow walk by is within the blast when the fuse ends")
+    (is (>= (caught "creeper" [[0 0] [1 0.5] [2 1] [8 1.5] [9 2] [9.5 2.5]]) 1.5)
+        "lit within 3, the body is 4-6 away when the fuse ends")
+    (is (zero? (caught "creeper" [[0 0] [1 0.5] [50 0.6] [100 3]])) "out of range before the fuse ends")
+    (is (zero? (caught "creeper" [[1 0] [-2.7 1.02] [-6.4 2.04] [-10 3]])) "a flight at the flee pace is past 7 blocks of the spot it lit at before the fuse ends")
+    (is (zero? (caught "creeper" [[1 0] [2 0.5] [3 1]])) "a route that ends before the fuse does shows no blast")))
 
 (deftest a-sword-skeleton-gets-a-walking-way-and-a-bow-skeleton-and-a-blaze-do-not
   (let [at {:x 0.5 :y 64 :z 0.5}

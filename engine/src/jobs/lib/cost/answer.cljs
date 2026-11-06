@@ -61,6 +61,7 @@
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
 (def fuse-s "Seconds from a creeper's first swell to its blast (vanilla: 30 ticks)." 1.5)
+(def fuse-cancel-range "Blocks beyond which a lit fuse stops burning (vanilla: SwellGoal, distance squared over 49)." 7)
 (def melee-gap-s "Seconds between a melee mob's blows while the body is within its reach (vanilla MeleeAttackGoal: 20 ticks)." 1)
 (def bow-range "Blocks within which a skeleton shoots (vanilla)." 15)
 (def trident-range "Blocks within which a drowned holding a trident throws it (vanilla)." 10)

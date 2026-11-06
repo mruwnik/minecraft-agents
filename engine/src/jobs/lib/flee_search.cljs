@@ -343,19 +343,52 @@
   themselves by price."
   1e6)
 
+(defn at-time
+  "The point of timed route ([{:x :y :z :t}]) at second t: linear between its points, its last one past the end."
+  [route t]
+  (let [[before after] (split-with #(< (:t %) t) route)
+        p (last before) q (first after)]
+    (cond (nil? q) (last route)
+          (nil? p) q
+          :else (let [k (/ (- t (:t p)) (- (:t q) (:t p)))]
+                  (merge-with (fn [a b] (+ a (* k (- b a)))) (select-keys p [:x :y :z]) (select-keys q [:x :y :z]))))))
+
+(defn fuse-caught-s
+  "cost/fuse-s when a creeper's blast hurts a body walking timed route (centred cells the creeper does not already touch), else 0:
+  the creeper lights at the first point it reaches within cost/swell-start of the body, stands still where it lit (vanilla's
+  SwellGoal stops its walk), the fuse burns while the body stays within cost/fuse-cancel-range of that spot, and the blast hurts
+  where the body is then (cost/blast-damage). A route that ends before the fuse does shows no blast."
+  [ch route]
+  (let [starts (cost/swim-arrivals (:name ch) (:pos ch) route #(way-at ch %) #(swim-at ch %) (:speed ch) cost/swell-start)
+        lit (map first (drop-while (fn [[p a]] (< (:t p) a)) (map vector route starts)))
+        p0 (first lit)]
+    (if-not p0
+      0
+      (let [gap (u/dist (:pos ch) p0)
+            k (/ cost/swell-start gap)
+            spot (if (<= gap cost/swell-start)
+                   (:pos ch)
+                   (merge-with (fn [at from] (+ at (* k (- from at)))) (select-keys p0 [:x :y :z]) (select-keys (:pos ch) [:x :y :z])))
+            end (+ (:t p0) cost/fuse-s)
+            burning (take-while #(<= (:t %) end) lit)]
+        (if (and (<= end (:t (last lit)))
+                 (every? #(<= (u/dist % spot) cost/fuse-cancel-range) burning)
+                 (pos? (cost/blast-damage (u/dist (at-time lit end) spot))))
+          cost/fuse-s
+          0)))))
+
 (defn caught-s
   "The most seconds a chaser not :calm? is within its blow on timed cells, past the cells it reaches without moving
   (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place).
-  A shooter? lands no blow. A creeper blows only when it is within threat/creeper-fuse-range of the body for threat/creeper-fuse-s
-  of the route, else 0."
+  A shooter? lands no blow. A creeper blows only when its fuse runs its length (fuse-caught-s)."
   [chasers cells]
   (reduce max 0 (map (fn [ch]
                        (let [way #(way-at ch %)
-                             creeper? (= "creeper" (:name ch))
-                             reach (when creeper? threat/creeper-fuse-range)
                              past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells)
-                             s (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %) :speed (:speed ch) :reach reach})]
-                         (if (and creeper? (< s threat/creeper-fuse-s)) 0 s)))
+                             route (mapv cost/centred past)]
+                         (if (= "creeper" (:name ch))
+                           (fuse-caught-s ch route)
+                           (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route route :way way :swim #(swim-at ch %) :speed (:speed ch)}))))
                      (remove (some-fn :calm? shooter?) chasers))))
 
 (defn trap-s
