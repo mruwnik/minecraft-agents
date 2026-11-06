@@ -383,10 +383,10 @@
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps and
   :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
-  ([p unseen? {:keys [sensed own-s]}]
+  ([p unseen? {:keys [sensed own-s max-damage]}]
    (let [self (.self p)
          equipment (cost/equipment-of (.-equipment self))
-         max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {}))
+         max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {:args (when max-damage {:max-damage max-damage})}))
          dig-cost (memoize cost/dig-cost)
          destroyed (cost/destroyed-fn (or sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z}))))
          cut-s (fn [name cell] (let [own (if own-s (own-s cell) 0)] (if (pos? own) own (destroyed name cell false))))]

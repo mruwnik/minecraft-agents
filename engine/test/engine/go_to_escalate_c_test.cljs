@@ -1228,3 +1228,17 @@
         seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
                               (:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf :range 2 :near [4 64 0]}))))]
     (is (= (seconds 1) (seconds 0.1)) "its end stands on a seen floor")))
+
+(def drop-world
+  "A floor at y 63 and a wide stone platform at y 79 under feet [0 80 0], its edge far off: the goal [0 64 0] lies a 16-block drop below."
+  (merge (box -3 63 -3 3 63 3 "stone") (box -30 79 -30 30 79 30 "stone")))
+
+(defn straight-dig
+  "route-answer's route when the straight dig is the answer (a :node-s that prices every search past it) and what the body-prices say of the fall."
+  [p goal floors-unseen-ok? route-opts]
+  (choose/route-answer p [0 80 0] goal (constantly true) (constantly false) floors-unseen-ok? false (merge {:node-s 1 :worth-s ##Inf} route-opts)))
+
+(deftest the-straight-dig-takes-no-fall-the-calls-health-spend-refuses
+  (let [p (tu/fake {:blocks drop-world :self {:pos {:x 0.5 :y 80 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})]
+    (is (some? (straight-dig p [0 64 0] false {})) "the body's own limit allows the drop")
+    (is (nil? (straight-dig p [0 64 0] false {:max-damage 7})) "a call that spends 7 hp takes no 16-block drop")))

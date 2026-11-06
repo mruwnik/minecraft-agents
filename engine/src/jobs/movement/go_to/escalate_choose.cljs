@@ -425,7 +425,8 @@
         guess-risk (:guess-risk route-opts)
         worth-s (:worth-s route-opts)
         dearer? (:dearer? route-opts)
-        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s :dearer?)
+        max-damage (:max-damage route-opts)
+        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s :dearer? :max-damage)
         [fx fy fz] from
         [gx gy gz] goal
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
@@ -441,7 +442,7 @@
                          (let [a (when-not (or floors-unseen-ok? (and (== x gx) (== (inc y) gy) (== z gz))) (sensed x (inc y) z))]
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
-        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s})
+        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s :max-damage max-damage})
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
@@ -587,8 +588,8 @@
   "route-answer's route-opts for a choice's opts: its :slice, its :spent searches, its :own-s and :own-cut
   (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed?]}]
-  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :node-s (cost/search-cell-s)}
+  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage]}]
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :node-s (cost/search-cell-s) :max-damage max-damage}
     closed? (assoc :max-fall 1)
     slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
@@ -788,6 +789,7 @@
   {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
    :guess-risk (guess-risk c) :worth-s (when (:escalation (ctx/mem c)) (:fallback-s (:replan-budget (ctx/mem c)))) :bound-s (call-budget-s c)
+   :max-damage (:max-damage (wworld/walk-settings c))
    :risk-s (fn [cells goal work-s] (walk-risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn detour-way
