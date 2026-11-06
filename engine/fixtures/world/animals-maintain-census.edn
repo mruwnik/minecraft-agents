@@ -20,7 +20,8 @@
                     {:id "cows" :box [#at [10 0 10] #at [14 0 14]] :want "air" :herd {:mob "cow" :target 0}}]}]
    :blocks [[:fill [9 0 9] [15 0 15] "oak_fence" :outline] [:set [9 0 12] "air"]]
    :body {:at [7.5 0 12.5] :inventory [["oak_fence" 4]] :yaw 270 :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.animals.maintain {:plan "$plan:pen" :part "cows"})]]
+   :act [[:summon "cow" [11.5 0 11.5] "{NoAI:1b}"] [:summon "cow" [13.5 0 13.5] "{NoAI:1b}"] ; a mend is worth the herd it keeps in (gap-loss), none for an empty pen
+         [:job (jobs.animals.maintain {:plan "$plan:pen" :part "cows"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 90 :of-job true}]
    :after [[:block [9 0 12] "oak_fence"]]}
   ;; a ring with no gate: herd refuses :no-gate, and maintain ends with that cause instead of "done: 0 adults".

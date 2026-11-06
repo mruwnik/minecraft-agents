@@ -23,7 +23,8 @@
   {:name "cow-stuck-in-gate-no-immediate-refire"
    ;; card 268296ab: the stopped run writes a 30 s :gate-gave-up entry, so the trigger does not refire at once
    :act [[:summon "cow" [16.5 0 12.5] "{NoAI:1b}"]]
-   :expect [{:event {:source :job :kind :stopped} :within-s 40}
-            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :from-event {:source :job :kind :stopped} :for-s 25}]
+   ;; the first stop is the grace of the gate the setup just opened (:gate-grace): the 30 s entry is written by the cow's stop (:shut 0)
+   :expect [{:event {:source :job :kind :stopped :data {:shut 0}} :within-s 40}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :from-event {:source :job :kind :stopped :data {:shut 0}} :for-s 25}]
    :after [[:block [16 0 12] "oak_fence_gate[open=true]"]]
    :limit-s 90}]}

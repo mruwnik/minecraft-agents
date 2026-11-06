@@ -52,5 +52,5 @@
          [:job (jobs.survival.respond-to-hostile {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
-   :after [[:body-far [10.5 0 16.5] 18]]
+   :after [[:body-far [10.5 0 16.5] 8]] ; east like the twin: the flight stops once the NoAI zombie stands still
    :limit-s 60}]}

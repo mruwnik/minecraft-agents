@@ -19,4 +19,5 @@
             {:no-event {:source :job :kind :shut-in.trespass-last-resort} :for-s 30}]
    :after [[:body-near [10.5 8 16.5] 3]]}
   {:name "no-footprint-digs-down"
+   :body {:inventory [["iron_pickaxe" 1]]} ; no blocks to pillar with (a pillar is priced under the pit when 4 are carried)
    :expect [{:event {:source :job :kind :child_ended :data {:slot :plug-dig}} :within-s 60}]}]}
