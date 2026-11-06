@@ -210,14 +210,14 @@
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason #{:risky :exposed}}} :for-s 20 :of-job true}]
    :limit-s 50}
-  ;; 87aee1d1: a bed in a hut with no door cannot be reached (bedrock walls: go-to digs through any other wall); sleep says why (no walk leads there), without a claim that the body is shut in
+  ;; 87aee1d1: a bed in a hut with no door cannot be reached (bedrock walls: go-to digs through any other wall); sleep says why (the walk's own text when its search ran out, or no walk leads there), without a claim that the body is shut in; the hut's inside is unseen from outside, so enclosure is not proven
   {:name "sleep-to-a-walled-in-bed-says-why"
    :blocks [[:fill [8 -1 8] [16 3 16] "bedrock" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.sleep {:bed #at [11 0 12]})]]
-   :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed on foot"]} :within-s 240 :of-job true}
+   :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed"]} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :bed_unreachable :message [:contains "shut in"]} :for-s 5 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 30}]
    :after [[:body-far [11.5 0 12.5] 3]]
