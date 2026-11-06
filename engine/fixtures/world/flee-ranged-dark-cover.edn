@@ -1,0 +1,23 @@
+;; Card 645e6abc: a cover end of the flee search past the seen part of its way pays its dead end (flee-search/covers scores
+;; it against the full ends). Stone x 0..63, z 0..31, y 0..6 (roofed, unlit: a flight in the dark sees about a cell ahead);
+;; a corridor along z 16 from x 4 to x 60, at x 22 a branch north to z 6. A skeleton (NoAI, helmeted; light 3 at it so the
+;; body sees it) 6 west of the body: the corridor is its line of fire, so the only cover lies off it, in the branch or past
+;; the seen walls, all unseen. Should-succeed: retreat.search lists a cover end with a dead end over 0.
+;; The code before fb723184e (04f38daf0) dropped :dead-end from every cover end: each cover end there logged 0.
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :plot {:length 64 :width 32 :height 8}
+  :blocks [[:fill [0 0 0] [63 6 31] "stone"]
+           [:fill [4 3 16] [60 5 16] "air"]
+           [:fill [22 3 6] [22 5 15] "air"]
+           [:set [6 4 16] "minecraft:light[level=3]"]]
+  :body {:at [12.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "cover-past-the-seen-part-pays-its-dead-end"
+   :act [[:summon "skeleton" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.respond-to-hostile {})]]
+   :expect [{:event {:source :job :kind :retreat.search :data {:ends [:has {:cover? true :dead-end [:> 0]}]}} :within-s 25 :of-job true}
+            {:no-event {:source :body :kind :died} :for-s 1}]}]}
