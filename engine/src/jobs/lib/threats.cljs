@@ -266,19 +266,20 @@
   (mapv (fn [t] [(field/field-key t) (select-keys t [:held :key]) (round-weight (:weight t))]) threats))
 
 (defn toll-inputs
-  "What tolls-of reads of threats ({:mob :pos :weight}) besides their weights: their table-key less the weight and the
-  body's health, armour and weapon (toll-inputs-no-worse?)."
+  "What tolls-of reads of threats ({:mob :pos :weight}): a map of their table-key less the weight to the highest weight
+  (round-weight), and the body's health, armour and weapon (toll-inputs-no-worse?)."
   [c threats]
   (let [{:keys [health equipment weapon]} (body-of (:primitives c))]
-    [(set (map pop (table-key threats))) health equipment weapon]))
+    [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats)) health equipment weapon]))
 
 (defn toll-inputs-no-worse?
-  "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, armour and weapon, health no
+  "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, none at a higher weight, the same armour and weapon, health no
   lower. A walk's kept search goes on only then; a weight that fades only cheapens, and health regained only cheapens."
   [now was]
   (or (= now was)
       (let [[ts h eq w] now [ts0 h0 eq0 w0] was]
-        (and (= [ts eq w] [ts0 eq0 w0]) (number? h) (number? h0) (>= h h0)))))
+        (and (= [eq w] [eq0 w0]) (= (set (keys ts)) (set (keys ts0))) (every? (fn [[k wt]] (<= wt (ts0 k))) ts)
+           (number? h) (number? h0) (>= h h0)))))
 
 (defn tolls-of
   "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
