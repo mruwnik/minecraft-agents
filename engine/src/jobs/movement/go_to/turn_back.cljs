@@ -12,8 +12,9 @@
 (defn turn-back
   "{:cost :worth :p :cells} of a plan's floors the body has not seen (steps with :unseen-floor; nil when none): each
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
-  from the plan's start to its takeoff (a step down goes on down to what lies under it first and climbs back out:
-  cost/unseen-fall-s, whatever the call's :ways), its chance of not being there cost/floor-absent-chance of its kind
+  from the plan's start to its takeoff (a step down whose peek sees a floor further under it, wworld/peek-depth-fn, may
+  take that fall and climb back out instead, the cheaper: cost/unseen-fall-s with that walk back as :else-s, whatever the
+  call's :ways), its chance of not being there cost/floor-absent-chance of its kind
   (wsight/prior-kind) over the call's floors of each kind found there or not (cut/floor-counts). :worth is cost/tour-worth
   of the goal's straight blocks at the call's start and the call's worth (ctx/worth). No second way is known when the plan is
   made: a floor not there costs, when no lower step has one either (cost/floor-dead-end-chance), the worse case of
@@ -26,6 +27,7 @@
           counts (cut/floor-counts c)
           {:keys [peek-s aim-s]} (cost/walk-unknown-prices)
           p (:primitives c)
+          peek-depth (wworld/peek-depth-fn p)
           self (.self p)
           equipment (cost/equipment-of (.-equipment self))
           fall {:health (.-health self) :equipment equipment :carried (:count (escape/carried-pillar-item p) 0)
@@ -38,11 +40,15 @@
                                  (when (:unseen-floor s)
                                    (let [kind (wsight/floor-kind steps i)
                                          prior-kind (wsight/prior-kind (wsight/step-rise steps i))
-                                         drop-by (js/Math.round (- (:y (steps (dec i))) (:y s)))]
-                                     {:fall-s (when (#{:down :drop} kind) (cost/unseen-fall-s prior-kind drop-by fall))
-                                      :look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
+                                         drop-by (js/Math.round (- (:y (steps (dec i))) (:y s)))
+                                         back (get backs (max 0 (dec i)))
+                                         extra-s (cost/chance-times (cost/floor-dead-end-chance kind counts) left)]
+                                     {:absent-s (when (#{:down :drop} kind)
+                                                  (cost/unseen-fall-s prior-kind drop-by (assoc fall :see-depth (peek-depth (js/Math.floor (:x s)) (js/Math.floor (:y s)) (js/Math.floor (:z s)))
+                                                                                                :else-s (+ (:cost (cost/walk-cost {:distance back})) extra-s))))
+                                      :look (if (#{:down :drop} kind) peek-s aim-s) :back back
                                       :p (cost/floor-absent-chance prior-kind (get counts prior-kind))
-                                      :extra-s (cost/chance-times (cost/floor-dead-end-chance kind counts) left)
+                                      :extra-s extra-s
                                       :cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]})))
                                steps)]
       {:cost (:cost (cost/turn-back-cost floors))

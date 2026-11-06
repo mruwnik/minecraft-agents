@@ -138,6 +138,15 @@
   [p]
   (wsight/see-depth (or (look/near-of p) 0)))
 
+(defn peek-depth-fn
+  "(fn [x y z]) the deepest drop whose landing floor the body sees from a peek at the edge over landing cell x y z, as the
+  planner's seeable does: see-depth-now, or :see-lit-depth where look/see-lit-fn calls the cell lit."
+  [p]
+  (let [dark (see-depth-now p)
+        lit (:see-lit-depth (cost/walk-unknown-prices))
+        lit? (or (look/see-lit-fn p) (constantly 0))]
+    (fn [x y z] (if (== 1 (lit? x y z)) (max dark lit) dark))))
+
 (def ^:private unloaded-id 0xFFFF)
 
 (defn- under-of

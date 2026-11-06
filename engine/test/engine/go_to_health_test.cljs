@@ -141,6 +141,22 @@
           (is (= 60 (y-of p)))
           (is (empty? (g/events-of r :go-to.over-budget))))))))
 
+;; a 3-block ledge: the plateau (feet 64) ends at x 10, the ground below (feet 61) has been seen but by the cliff's
+;; foot (x 11, 12), which the plateau hides
+(def ledge3 {:blocks (merge (floor -2 -3 10 3) (floor 60 11 -3 30 3)) :light [15 0]
+             :seen [[-5 55 -6 10 70 6] [13 55 -6 33 70 6] [11 62 -6 12 70 6]]})
+
+(deftest a-hurt-body-looks-over-a-ledge-whose-landing-it-has-not-seen-rather-than-refusing-the-drop
+  ;; old: a floor not there under the drop was priced as the blind fall to whatever lies under it and the climb back
+  ;; out (53 s at 7 hp), more than the goal is worth: :unseen-floors before a step. The walk stops at the edge and looks
+  ;; first, so a floor not there costs at most turning back.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (go-heal! (assoc ledge3 :self {:pos g/start :health 7 :food 20}) {:pos [20 61 0] :range 1 :worth 14.4} false))]
+          (is (= {:arrived true} (select-keys @out [:arrived])) (pr-str @out))
+          (is (= 61 (y-of p)) "down the ledge"))))))
+
 (deftest the-walk-price-settings-refuse-bad-values
   (doseq [[k bad] [[:jobs.lib.cost.health/hp-seconds [0 -1 "x" js/Infinity]]
                    [:jobs.lib.cost.danger/max-rate [0 -1 "x" js/Infinity]]]

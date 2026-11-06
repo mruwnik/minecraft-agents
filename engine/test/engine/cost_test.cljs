@@ -359,7 +359,7 @@
   (let [walk #(:cost (cost/walk-cost {:distance %}))]
     (is (= (+ 0.7 (* 0.5 (walk 10))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5}]))))
     (is (= (+ 0.7 (* 0.5 (+ (walk 10) 4))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5 :extra-s 4}]))) "the next-best way's extra seconds on top")
-    (is (= (+ 0.7 (* 0.5 (+ (walk 10) 4.5))) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5 :fall-s 4.5}]))) "a step down that falls further climbs out first")
+    (is (= (+ 0.7 (* 0.5 4.5)) (:cost (cost/turn-back-cost [{:look 0.7 :back 10 :p 0.5 :extra-s 4 :absent-s 4.5}]))) "what the look shows instead, in all")
     (is (< (:cost (cost/turn-back-cost [{:look 0.1 :back 2 :p 0.5}])) (:cost (cost/turn-back-cost [{:look 0.1 :back 40 :p 0.5}])))
         "the farther the walk back, the dearer")
     (is (< (:cost (cost/turn-back-cost [{:look 0.1 :back 10 :p 0.1}])) (:cost (cost/turn-back-cost [{:look 0.1 :back 10 :p 0.9}])))
@@ -380,7 +380,13 @@
         (is (= (out 10) (cost/unseen-fall-s :drop-8 8 (assoc body :max-drop 20))) "so does an 8-block one")
         (is (< 0 (cost/unseen-fall-s :down 1 body) (cost/unseen-fall-s :down 1 (assoc body :carried 0)) ##Inf)
             "finite, and dearer with the pillar's blocks to fetch")
-        (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")))))
+        (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")
+        (let [looked (assoc body :see-depth 10 :else-s 5)]
+          (is (= (+ (* 0.25 (min 5 (out 1))) (* 0.25 (min 5 (out 6))) (* 0.5 5)) (cost/unseen-fall-s :down 1 looked))
+              "peeked first: each depth the cheaper of its fall and turning back, the one past max-drop turning back")
+          (is (= 5 (cost/unseen-fall-s :drop-8 8 (assoc looked :max-drop 20 :see-depth 9))) "a landing deeper than the peek sees is turned back from")
+          (is (< (cost/unseen-fall-s :drop-4 4 (assoc looked :health 7 :else-s 2)) (cost/unseen-fall-s :drop-4 4 (assoc body :health 7)))
+              "a hurt body's look over a drop costs at most turning back, not the blind fall"))))))
 
 (deftest a-fall-deeper-than-sixteen-blocks-is-priced-at-its-depth-and-its-death
   (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1} :drop {0 1} :drop-4 {0 1} :drop-8 {9 1 30 1}}}
