@@ -249,7 +249,8 @@
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
                            s (score-patch {:tops tops :cells cells :sky sky :torches torches :worth worth :bucket-s bucket-s :away (away-of x z) :fetch-s (when farmland? (fetch-s x z))})
                            step (max-step tops h)]
-                       (when (or (nil? limit-step) (<= step limit-step))
+                       (if (and limit-step (> step limit-step))
+                         (miss {:short (count (remove #(= (:y s) %) tops)) :over-step step})
                          (case (:why s)
                            nil (assoc s :step step :w w :h h :pos {:x x :y (:y s) :z z})
                            :far (miss {:short 0 :far (:away s)})
@@ -289,12 +290,13 @@
 
 (defn lacks-text
   "What a miss of lacks lacks, e.g. \"40 of 256 cells short: 30 unseen, 6 water/lava/ice, 4 another's plan, zone or claim\"."
-  [{:keys [w h short unseen no-floor dark unfarmable foreign steep far]}]
+  [{:keys [w h short unseen no-floor dark unfarmable foreign steep over-step far]}]
   (if far
     (str "the best patch lies " far " blocks off: its crops do not pay for the walk")
     (str short " of " (* w h) " cells short: "
          (str/join ", " (keep (fn [[n what]] (when (pos? n) (str n " " what)))
                               [[unseen "unseen"] [no-floor "water/lava/ice"] [foreign "another's plan, zone or claim"]
+                               [(if over-step short 0) (str "off the patch's height, with a step of " over-step " over the most allowed")]
                                [steep "off the patch's height, dearer to level than the crops are worth"]
                                [dark "too dark, dearer to light than the crops are worth"]
                                [unfarmable "untillable, dearer to replace than the crops are worth"]])))))

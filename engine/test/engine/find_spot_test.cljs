@@ -570,6 +570,13 @@
   (is (re-find #"18 of 36 cells short: 18 off the patch's height" (pt/lacks-text {:w 6 :h 6 :short 18 :steep 18}))))
 
 
+(deftest a-patch-over-max-step-is-a-miss-not-nothing
+  (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 2 0 3 3 63 "dirt") {"3,64,1" "dirt"})}))
+        r (pt/scan-rows p {:w 3 :h 3 :range 4 :depth 4 :limit 3 :max-step 0 :worth 25} {:x 3 :y 64 :z 1} {:next-ring 0 :found []} ##Inf)]
+    (is (empty? (:found r)))
+    (is (= 1 (:over-step (:miss r))) "the one-block step is named, so the search ends with a :best")
+    (is (re-find #"with a step of 1 over the most allowed" (pt/lacks-text (assoc (:miss r) :w 3 :h 3))))))
+
 (deftest a-far-flat-patch-is-a-far-miss-not-a-steep-one
   (let [p (tu/seeing-all (tu/fake {:blocks (patch 43 0 5 5 63 "grass_block") :self {:pos {:x 45 :y 64 :z 2}}}))
         r (pt/scan-rows p {:w 5 :h 5 :range 48 :depth 4 :limit 3 :worth 25} {:x 0 :y 64 :z 2} {:next-ring 0 :found []} ##Inf)]

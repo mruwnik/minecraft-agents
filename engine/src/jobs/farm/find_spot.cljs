@@ -28,8 +28,8 @@
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible with cause and :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
   missing or unreadable), the search's :text and :best, the patch fewest cells short of a spot
-  {:pos :w :h :short :unseen :no-floor :foreign :steep :dark :unfarmable :far :away} (cells with no seen ground, water/lava/ice on top,
-  another's; off height, too dark or untillable where the crops do not pay for the fix; :far, short 0, a patch whose crops pay for
+  {:pos :w :h :short :unseen :no-floor :foreign :steep :over-step :dark :unfarmable :far :away} (cells with no seen ground, water/lava/ice on top,
+  another's; off height, a step over :max-step, too dark or untillable where the crops do not pay for the fix; :far, short 0, a patch whose crops pay for
   all but the walk). A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
   :spots best first up to ::limit, each {:pos :w :h :score :worth :costs :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
@@ -43,7 +43,7 @@
   is no spot. :level is the % of cells at y; open sky is reported in :sky, not scored. :farmable is the % of its cells whose
   ground is farmland or a hoe makes farmland of (dirt, grass, path, coarse or rooted dirt).
   A patch is left out when a column of it is unseen, lies under another plan's footprint, or in a zone or claim of another owner (the body's
-  own zones are fine); :max-step drops patches with a bigger step.
+  own zones are fine); :max-step makes a patch with a bigger step a miss (:over-step), not a spot.
   Needs nothing; it reads only what the body has seen and looks around at each place it scans.")
 
 (a/defargs args
