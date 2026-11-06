@@ -40,6 +40,17 @@
         (.set extents s e)
         (when (<= (aget e 1) (aget e 4)) e)))))
 
+(defn seen-box
+  "[x0 y0 z0 x1 y1 z1]: the box of every cell the body of primitives p remembers; nil without a memory or with none."
+  [p]
+  (when-let [st (st-of p)]
+    (let [b #js [##Inf ##Inf ##Inf ##-Inf ##-Inf ##-Inf]]
+      (.forEach (sections st) (fn [^js s] (when-let [e (extent s)]
+                                            (dotimes [j 3]
+                                              (aset b j (js/Math.min (aget b j) (aget e (inc j))))
+                                              (aset b (+ j 3) (js/Math.max (aget b (+ j 3)) (aget e (+ j 4))))))))
+      (when (<= (aget b 0) (aget b 3)) (vec b)))))
+
 (defn steps-fn
   "A fn [x y z] of the fewest steps (each at most one cell across, one up or max-fall down) between the cell and any cell
   the body remembers, by the box of each section's remembered cells (##Inf with none): within one of a neighbour cell's,

@@ -74,3 +74,14 @@
     (is (nil? (seen/toward w [0 64 0] [-28 64 8] 3 0.3 1 5)) "no way through it under max-s, were the unseen open")
     (is (nil? (seen/toward w [0 64 0] [0 64 0] 3 0.3 1 100)) "none nearer a goal the body stands at")))
 
+
+(deftest the-seen-box-holds-every-remembered-cell-and-no-more
+  (let [w (seeing (tu/fake-on-floor {}))
+        cells (atom [])]
+    (.forEach (store/store-of (st w) (.-dim (st w)))
+              (fn [^js s] (let [o [(* 16 (.-cx s)) (* 16 (.-sy s)) (* 16 (.-cz s))]]
+                            (doseq [dx (range 16) dy (range 16) dz (range 16) :let [c (mapv + o [dx dy dz])] :when (remembered? w c)]
+                              (swap! cells conj c)))))
+    (is (seq @cells))
+    (is (= (into (apply mapv min @cells) (apply mapv max @cells)) (seen/seen-box w)))
+    (is (nil? (seen/seen-box (tu/fake {}))) "no memory, no box")))

@@ -23,6 +23,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threat-field :as threat-field]
@@ -700,7 +701,8 @@
   stand nearest it within the leg's length that is nearer the goal than from. The wider boxes'
   searches are bounded by the least of opts :bound-s, :worth-s and the way without a dig route (memory :route-search
   :fallback-s), and each counts the CPU the boxed searches before it spent (:searched-s): the widening ends :past-worth
-  once the search has spent what the leg could save;
+  once the search has spent what the leg could save, and with no end reached once the box holds every cell the body
+  remembers (seen-sections/seen-box) and the cells a step reads past them;
   nil when none does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
   longer than the call has left (dig-left-s); {:step :none :why :past-worth} when no end is reached because every
   route to them costs more than the goal is worth (the search stopped at that bound, not at the end of the rock)."
@@ -745,10 +747,22 @@
           ;; a box keeps the search's heap to what it holds; a wider one is searched only once this one cut the way off,
           ;; under what the leg could save at most, with what the boxes before it spent counted
           wide-opts (update (search-opts opts) :bound-s #(min (or % ##Inf) (:fallback-s (:route-search (ctx/mem c)) ##Inf)))
+          ;; whether the boxes of k hold every cell the body remembers and the cells a step reads past them (the cell over
+          ;; its head and the water over that: 3): past them is only guessed rock, where a way is no cheaper than one along
+          ;; the box's side, so a wider box finds none these did not
+          seen (delay (seen-sections/seen-box p))
+          covers? (fn [k] (when-let [[x0 y0 z0 x1 y1 z1] @seen]
+                            (every? (fn [end] (let [m (* k (length end))]
+                                                (and (<= (- (min (from 0) (end 0)) m) (- x0 3)) (>= (+ (max (from 0) (end 0)) m) (+ x1 3))
+                                                     (<= (- (min (from 1) (end 1)) m) (max (places/min-y p) (- y0 3))) (>= (+ (max (from 1) (end 1)) m) (+ y1 3))
+                                                     (<= (- (min (from 2) (end 2)) m) (- z0 3)) (>= (+ (max (from 2) (end 2)) m) (+ z1 3)))))
+                                    ends)))
           found (if (or (nil? first-pass) (number? first-pass))
                   (loop [k 1 spent-s (or first-pass 0)]
                     (let [r (leg #(* k (length %)) (assoc wide-opts :searched-s spent-s))]
-                      (if (number? r) (recur (* 2 k) (+ spent-s r)) r)))
+                      (cond (not (number? r)) r
+                            (covers? k) nil
+                            :else (recur (* 2 k) (+ spent-s r)))))
                   first-pass)]
       (cond
         (= :searching found) {:step :searching}

@@ -19,6 +19,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.util :as u]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
@@ -1255,6 +1256,19 @@
     (is (= :dig-route (:step r)) (str r))
     (is (= [8 62 0] (:cell (peek (:cells r)))) "the far end's nearest stand: under the lava's edge, its head clear of it")
     (is (not-any? #(= "lava" (:block %)) (:cells r)))))
+
+;; card e252d55b: the goal floats in seen air with no fallback way and no bound but ##Inf; the body remembers only the
+;; cells round it. Once a box holds them and what a step reads past them, a wider one adds only guessed rock: no leg
+(deftest a-dig-leg-widening-at-no-price-ends-once-its-box-holds-all-the-body-remembers
+  (let [p (tu/fake {:blocks (box 0 60 -3 5 68 3 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
+        seen [0 60 -3 8 68 3]
+        _ (tu/set-sensed! p (fn [pos] (if (every? true? (map #(<= %1 (js/Math.floor (aget pos %2)) %3) (take 3 seen) ["x" "y" "z"] (drop 3 seen)))
+                                        (.blockAt (tu/oracle p) pos)
+                                        #js {:unknown true :pos pos})))
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        leg #(choose/dig-leg c [2 64 0] [7 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-widens-past-memory")})]
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {}) seen-sections/seen-box (constantly seen)]
+      (is (= [nil] (take 1 (drop-while #{{:step :searching}} (take 300 (repeatedly leg)))))))))
 
 ;; the detour leg digs longer than the call has left (memory :dug-s of its worth): out of dig budget, not past its worth
 (deftest a-detour-leg-past-the-calls-dig-time-is-out-of-dig-budget
