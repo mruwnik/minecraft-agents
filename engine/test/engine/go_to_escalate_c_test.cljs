@@ -639,18 +639,23 @@
 (deftest a-stair-through-its-own-pen-picks-up-its-drops
   (is (= [true false] (map #(:collect (second (esc/escalation-job {:step :stair :heading :east :steps 2 :own-cut %} nil false false false))) [true nil]))))
 
-(deftest a-dig-route-s-digs-fetch-a-pickaxe-as-fetch-tool-says
+(deftest a-dig-route-s-digs-fetch-a-pickaxe-only-when-its-price-chose-one
+  ;; the route's three stones cost ~22 s by hand, ~4 s with a wooden pickaxe: got in 5 s it pays, in 600 s it does not
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pick {:name "stone_pickaxe" :count 1}
-              one (await (dig-route-run! below-pocket [pick] nil))
-              two (await (dig-route-run! below-pocket [pick pick] nil))]
-          (is (= [true true] (map (comp :arrived deref :out) [one two])))
-          (is (= #{true} (set (map (comp boolean :chest :ways) @(:digs one)))) "one pickaxe: its breaking is no stop")
-          (is (= #{false} (set (map (comp boolean :chest :ways) @(:digs two)))) "a spare pickaxe: no fetch")
-          (is (= #{true} (set (map :need-drop @(:digs one)))) "a fetching dig needs a tool, else it punches the rock by hand and the route was priced for a tool it never gets")
-          (is (= #{false} (set (map :need-drop @(:digs two)))))
+              priced (fn ^:async priced-run [s inventory] (with-redefs [choose/pickaxe-fetch (fn [_ fetch?] (when fetch? (delay s)))]
+                                                 (await (dig-route-run! below-pocket inventory nil))))
+              one (await (priced 5 [pick]))
+              two (await (priced 5 [pick pick]))
+              dear (await (priced 600 []))
+              cheap (await (priced 5 []))
+              fetching (fn [run] (-> (first @(:digs run)) (update :ways (comp boolean :chest)) (select-keys [:ways :need-drop])))]
+          (is (= [true true true] (map (comp :arrived deref :out) [one two dear])))
+          (is (= [{:ways false :need-drop false} {:ways false :need-drop false} {:ways false :need-drop false} {:ways true :need-drop true}]
+                 (map fetching [one two dear cheap]))
+              "a carried pickaxe digs quicker than a wooden one got; a pickaxe dear to get is not fetched, the rock dug by hand; a cheap one is fetched and needed")
           (is (= #{false} (set (map :collect @(:digs one)))) "rock nobody else owns is left as dug: nothing is put back")
           (is (= #{#{:lava-adjacent :fluid-adjacent}} (set (map :accept @(:digs one)))) "seen lava beside a route cell is sealed by the dig, water beside was priced as its flood: neither is a refusal that ends the route"))))))
 

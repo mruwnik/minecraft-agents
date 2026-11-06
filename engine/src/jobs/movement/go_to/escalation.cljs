@@ -49,7 +49,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.route-ways :as route-ways]
-            [jobs.movement.go-to.escalate-choose :refer [way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch gap-fill
+            [jobs.movement.go-to.escalate-choose :refer [way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch route-tool gap-fill
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
@@ -626,9 +626,11 @@
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left; a cell whose floor is unseen is dug
   on top only after the dig found no side stand to step aside to and look from; beside lava, which it seals, or water, which
   the route priced as its flood, dig-route/body-prices), noting it as a hole once dug.
+  It fetches a pickaxe only when the route's cells left (todo, this one first) dig quicker with it got first
+  (route-tool); else the cell is dug with what is carried, the drop not needed.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
   was planned over rock that is not there), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
-  [c {:keys [cell guess block beside looked] :as planned}]
+  [c {:keys [cell guess block beside looked] :as planned} todo]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
@@ -641,10 +643,12 @@
         undiggable? :not-diggable
         :else
         (let [by-hand? (boolean (:by-hand (ctx/mem c)))
-              fetch? (and (fetch-tool? c) (not by-hand?))
+              may-fetch? (and (fetch-tool? c) (not by-hand?))
+              fetch? (and may-fetch? (:fetch? (route-tool p (map :cell todo) (own-placed-fn c) (pickaxe-fetch c true))))
               no-pickaxe? (not-any? #(re-find #"_pickaxe$" (str (:name %))) (u/inventory p))
               before (b/inventory-map p)
-              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (if fetch? (ways-for true) #{:carried :craft}) :need-drop (and (not by-hand?) (or fetch? no-pickaxe?)) :accept #{:lava-adjacent :fluid-adjacent} :not-protected? true
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (if fetch? (ways-for true) #{:carried :craft})
+                    :need-drop (if may-fetch? fetch? (and (not by-hand?) no-pickaxe?)) :accept #{:lava-adjacent :fluid-adjacent} :not-protected? true
                     :collect (and (or (own-cut? c) (some? (tidy/refusal c :dig pos))) (b/room-for-drop? p n))}
               args (cond-> args (own-cut? c) (assoc :settings {:jobs.lib.access/spare-own-builds false}))
               e (await (b/dig-cell-ending! c pos args))
@@ -755,7 +759,7 @@
   (let [{:keys [cells] :as e} (:escalation (ctx/mem c))]
     (loop [todo cells]
       (if-let [{:keys [cell] :as planned} (first todo)]
-        (let [o (await (route-cell! c planned))]
+        (let [o (await (route-cell! c planned todo))]
           (when (= :dug o)
             (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :guess false)))))
           (cond

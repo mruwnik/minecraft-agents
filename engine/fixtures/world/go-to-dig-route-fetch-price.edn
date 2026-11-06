@@ -1,0 +1,21 @@
+;; Cards 22e9298c, 5090c8ce: a dig route's pickaxe fetch follows its price. At night a body with no pickaxe is 2 blocks of
+;; stone (4 cells, ~30 s by hand) from a sealed pocket; the only pickaxe it knows of is in a chest 115 blocks off over dark
+;; ground. The walk there and back at night costs more than the hand digs save, so the route is dug by hand.
+;; Should-succeed: arrives, no fetch child, no pickaxe carried. Should-fail (old code): the dig fetches the pickaxe anyway.
+{:defaults
+ {:tags [:movement :go-to :dig-route :night]
+  :time :night :time-why :night-light
+  :plot {:height 8 :length 128 :floor "stone"}
+  :blocks [[:fill [8 0 14] [11 2 18] "stone"] [:fill [10 0 16] [10 1 16] "air"]
+           [:set [120 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_pickaxe\",count:1}]}"]]
+  :memory [{:kind :chest :data {:pos #xyz [120 0 16]} :policy {:cap 1 :ttl :forever}}]
+  :body {:at [5.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["bread" 8]]}
+  :limit-s 200}
+ :cases
+ [{:name "a-far-pickaxe-at-night-is-not-fetched"
+   :act [[:job (jobs.movement.go-to {:pos #at [10 0 16] :range 0 :unknown false :worth 60})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 180 :of-job true
+             :until {:source :job :kind :completed :context {:chain [[:any]]}}}]
+   :after [[:body-near [10.5 0 16.5] 1.5] [:item "wooden_pickaxe" 0]]}]}

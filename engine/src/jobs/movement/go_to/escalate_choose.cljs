@@ -289,20 +289,24 @@
   [c fetch?]
   (when fetch? (delay (need/item-price c "wooden_pickaxe" 1 {:how need/sources} nil))))
 
-(defn route-s
-  "Seconds digging cells ([x y z]) takes with the quickest tool carried, or with a wooden pickaxe got first at
-  @fetch (pickaxe-fetch) when that is quicker; blocks own? calls the body's own not counted; block-at reads them
-  (default escape/block-at-of). shares (optional) weighs each cell's dig."
-  ([p cells own? fetch] (route-s p (escape/block-at-of p) cells own? fetch))
-  ([p block-at cells own? fetch] (route-s p block-at cells own? fetch (constantly 1)))
+(defn route-tool
+  "{:s :fetch?}: the seconds digging cells ([x y z]) takes with the quickest tool carried, or with a wooden pickaxe got
+  first at @fetch (pickaxe-fetch) when that is quicker (:fetch? true); blocks own? calls the body's own not counted;
+  block-at reads them (default escape/block-at-of). shares (optional) weighs each cell's dig."
+  ([p cells own? fetch] (route-tool p (escape/block-at-of p) cells own? fetch (constantly 1)))
   ([p block-at cells own? fetch shares]
    (let [cells (remove #(and own? (own? % (block-at %))) cells)
          sum (fn [ms] (transduce (map #(* (shares %) (/ (ms (block-at %)) 1000))) + 0 cells))
-         carried (sum #(tools/clear-ms p %))]
-     (if-not fetch
-       carried
-       (let [fetched (sum #(min (tools/clear-ms p %) (js/Number (.clearTime p % "wooden_pickaxe"))))]
-         (if (< fetched carried) (min carried (+ @fetch fetched)) carried))))))
+         carried (sum #(tools/clear-ms p %))
+         fetched (when fetch (sum #(min (tools/clear-ms p %) (js/Number (.clearTime p % "wooden_pickaxe")))))]
+     (if (and fetched (< fetched carried) (< (+ @fetch fetched) carried))
+       {:s (+ @fetch fetched) :fetch? true}
+       {:s carried :fetch? false}))))
+
+(defn route-s
+  "The seconds of route-tool."
+  ([p cells own? fetch] (:s (route-tool p cells own? fetch)))
+  ([p block-at cells own? fetch shares] (:s (route-tool p block-at cells own? fetch shares))))
 
 (defn rest-dig-s
   "Seconds an unfinished dig search's rest is expected to cost (dig-price's :searching or :budget, so a quote does not
