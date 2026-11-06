@@ -548,4 +548,10 @@
             (and (:collect (:args c)) (seq (:ids (:dug m)))) (await (collect! c pos))
             :else (done)))))))
 
+(defn worth-of
+  "A root dig's worth: what one of the target's drops is to the body (b/worth-of-items)."
+  [c]
+  (let [p (:primitives c)]
+    (b/worth-of-items c (b/drops-of p (b/target-name p (:pos (:args c)) b/hidden-guess)))))
+
 (def meta {:tags [:dig]})

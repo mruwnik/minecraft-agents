@@ -1,5 +1,5 @@
 ;; Q121: breaking the roof over the body's room is priced, the shelter lost (jobs.lib.blocks/roof-price: the mobs the
-;; hole lets in while the body stays), against what the dig is worth (:worth; none: never kept). A body shut in a stone
+;; hole lets in while the body stays), against what the dig is worth (a root call's worth-of: the drops'). A body shut in a stone
 ;; room (air x 14..18, z 14..18, y 0..1, roof y 2, rock to y 5, unseen over the roof: open dark at the worse case) is
 ;; asked for dirt over the roof: the shelter costs more than the dirt, so the roof is neither tunnelled through
 ;; (:pillar false) nor pillared into (default); the dig ends :unreachable with :roof-kept. Old code had no :roof-kept.
@@ -14,13 +14,13 @@
  :cases
  [{:name "a-roof-whose-shelter-is-worth-more-than-the-dirt-over-it-is-not-tunnelled"
    :blocks [[:set [16 3 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false :worth 10})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:block [16 2 16] "stone"] [:block [16 3 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
   {:name "a-pillar-does-not-start-under-a-roof-whose-shelter-is-worth-more-than-the-dirt"
    :blocks [[:set [16 4 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 4 16] :worth 10})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 4 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:block [16 2 16] "stone"] [:block [16 4 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}

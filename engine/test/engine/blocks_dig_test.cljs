@@ -444,7 +444,7 @@
                          (assoc "3,68,0" "dirt"))
               env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false :worth 10} 20))
+              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false} 20))
               {:keys [price worth]} (:roof-kept r)]
           (is (= [:unreachable [3 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (< worth price) (pr-str r))
@@ -480,6 +480,25 @@
               r (await (ending-cause (:eng env) job {:pos [0 68 0] :pillar false :worth 10} 40))]
           (is (= [:unreachable [0 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
+
+;; the hole stays till mended, so the stay spans the night and the day whatever the hour: just after the sky turns day (tick 23700) the price is that of midday, not halved by a day counted as 0 s
+(deftest a-roof-hole-is-priced-alike-at-midday-and-just-after-dawn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [interior (keys (tu/box 0 63 -1 30 64 1 "air"))
+              tunnel (keys (tu/box 0 66 0 40 67 0 "air"))
+              blocks (-> (tu/box -3 62 -3 42 70 3 "stone")
+                         (as-> m (apply dissoc m (concat interior tunnel)))
+                         (assoc "0,68,0" "dirt"))
+              price-at (fn ^:async pa [time]
+                         (let [env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time time :light {} :light-default [0 0]})
+                               _ (tu/seeing-all (:p env))
+                               r (await (ending-cause (:eng env) job {:pos [0 68 0] :pillar false :worth 10} 40))]
+                           (:price (:roof-kept r))))
+              midday (await (price-at 6000))
+              dawn (await (price-at 23700))]
+          (is (< 0.8 (/ dawn midday) 1.25) (pr-str [midday dawn])))))))
 
 ;; the same slab with rock over it: the hole opens onto nothing, the ore over it is worth the dig
 (deftest a-cave-ceiling-that-shelters-nothing-is-dug-through-to-an-ore-above
@@ -1006,7 +1025,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-seeing {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava" "2,63,1" "stone" "-2,64,3" "chest"}
                                              :containers {"-2,64,3" [{:name "cobblestone" :count 5}]}})
-              result (await (tu/child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :ways #{:carried}} 60))]
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :ways #{:carried} :worth 100} 60))]
           (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
           (is (= "cobblestone" (block-at p {:x 2 :y 64 :z 1})) "the lava is sealed with a fetched block"))))))
 
@@ -1323,7 +1342,7 @@
                          (assoc "0,68,0" "dirt"))
               env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (ending-cause (:eng env) job {:pos [0 68 0] :worth 10} 40))]
+              r (await (ending-cause (:eng env) job {:pos [0 68 0]} 40))]
           (is (= [:unreachable [0 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (empty? (filter #(<= 65 (.-y (.-pos (.-args %)))) (calls (:p env) "dig"))) "the roof is not dug")
           (is (empty? (calls (:p env) "place")) "nothing is pillared"))))))

@@ -81,6 +81,11 @@
 (def fit? ready/ok)
 
 (def target [:pos])
+(defn worth-of
+  "A root place's worth: what the :item is to the body (b/worth-of-items)."
+  [c]
+  (b/worth-of-items c (keep identity [(:item (:args c))])))
+
 (def defaults {:use {:blocks :build} :spend {:job-time ::job-time-s}})
 
 (defn wanted
