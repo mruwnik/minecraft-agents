@@ -34,6 +34,15 @@
     (is (< (share 0.75) (share 0.25) (share 0)) "the likelier rock, the less")
     (is (< (share 0) (stay 0)) "and an unseen edge's hall is a prior under 1")))
 
+(deftest a-share-asks-the-rock-chance-of-all-its-unseen-cells-from-one-fn
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
+        built (atom 0)
+        make look/unseen-solid-at-fn
+        walk (spawn-light/walked {:x 0 :y 64 :z 0} (map (fn [x] {:x x :y 64 :z 0}) (range 1 25)))]
+    (with-redefs [look/unseen-solid-at-fn (fn [p] (swap! built inc) (make p))]
+      (spawn-light/spawns-over p walk (spawn-light/share-of p false nil)))
+    (is (= 1 @built) "built once for the walk, not once per cell")))
+
 (deftest exposure-of-a-walk-out-of-shelter-judges-a-cell-by-its-light-only-once-seen
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
         exposure (fn [seen? to] (with-redefs [sh-sense/seen-cell? (constantly seen?) sh-sense/block-light-at (constantly 14)]

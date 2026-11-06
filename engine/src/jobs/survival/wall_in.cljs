@@ -73,12 +73,15 @@
 
 (def door-cells "Wall cells dug again to step out by day (jobs.lib.dig-in-leave/leave!: the door at the feet and the head)." 2)
 
-(defn quote-of [c]
-  (let [cells (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
-        open (count cells)]
-    (way/quote-of c (if (why-not c) ##Inf (+ (* open (way/place-s c)) (way/zone-penalty c {:place cells}) (half-built-s c open)))
-                  (settings/get settings ::job-time-s)
-                  {:morning-s (way/morning-s c (min open door-cells) (max 0 (- open door-cells)))})))
+(declare open-cells arrivals)
+
+(defn quote-of
+  ([c] (quote-of c (open-cells c) (arrivals c)))
+  ([c cells arrivals]
+   (let [open (count cells)]
+     (way/quote-of c (if (why-not c) ##Inf (+ (* open (way/place-s c)) (way/zone-penalty c {:place cells}) (half-built-s c open arrivals)))
+                   (settings/get settings ::job-time-s)
+                   {:morning-s (way/morning-s c (min open door-cells) (max 0 (- open door-cells)))}))))
 
 (defn beside?
   "Whether a melee hostile the body knows (not a shooter, a creeper or an enderman) stands within across cells and 1 up or
@@ -113,47 +116,57 @@
 
 (defn arrive-s
   "Seconds before the nearest melee hostile the body knows within the hostile radius (not a shooter, a creeper or an
-  enderman) can strike it (cost-danger/arrival-s); nil with none."
-  [c]
-  (some->> (seq (arrivals c)) (map first) (reduce min)))
+  enderman) can strike it (cost-danger/arrival-s); nil with none. Given arrivals (arrivals), read from them."
+  ([c] (arrive-s c (arrivals c)))
+  ([_ arrivals] (some->> (seq arrivals) (map first) (reduce min))))
 
-(defn open-count [c] (count (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))
+(defn open-cells [c] (fill/open-cells (:primitives c) (sh-sense/feet (:primitives c))))
+
+(defn open-count [c] (count (open-cells c)))
 
 (defn half-built-s
   "Seconds a wall left half built (fewer carried blocks than open cells, so a gap stays open for the whole stay,
   ::job-time-s) costs: the nearest melee hostile known that arrives (arrive-s) within the stay gets in by a cell left open,
   at the hp-cost of its blow (answer/blow, at the body's health and armour), and a mob unseen spawns at the chance a second
   at the feet by their light (spawn-light/chance-at; price/stay-hp); 0 with the blocks for every cell."
-  [c open]
+  ([c open] (half-built-s c open (arrivals c)))
+  ([c open arrivals]
   (let [have (reduce + (map :count (lb/carried c (flight/blocks c))))
         p (:primitives c)
         self (.self p)
         health (let [h (.-health self)] (if (number? h) h 20))
         stats (cost/armour-stats (cost/equipment-of (.-equipment self)))
         stay (settings/get settings ::job-time-s)
-        nearest (some->> (seq (filter #(< (first %) stay) (arrivals c))) (apply min-key first) second)
+        nearest (some->> (seq (filter #(< (first %) stay) arrivals)) (apply min-key first) second)
         known (if nearest (answer/blow stats {:name (.-name nearest)}) 0)
         unseen (price/stay-hp c (spawn-light/chance-at p (sh-sense/feet p) false) stay)]
     (if (>= have open)
       0
-      (health/hp-cost health (+ known unseen)))))
+      (health/hp-cost health (+ known unseen))))))
 
 (defn fails
   "The chance the walls cannot be closed for a mob in a cell: cost/counted-chance of ::mob-fails of the class the body
   stands in (:reached when a melee hostile can strike before every open cell is placed, arrive-s); 0 with :for :night (a
   mob in a cell is waited out)."
-  [c]
-  (if (= :night (:for (:args c)))
-    0
-    (let [s (arrive-s c)]
-      (cost/counted-chance (get (settings/get settings ::mob-fails) (if (and s (< s (* (way/place-s c) (open-count c)))) :reached :clear))))))
+  ([c] (fails c (open-count c) (arrivals c)))
+  ([c open arrivals]
+   (if (= :night (:for (:args c)))
+     0
+     (let [s (arrive-s c arrivals)]
+       (cost/counted-chance (get (settings/get settings ::mob-fails) (if (and s (< s (* (way/place-s c) open))) :reached :clear)))))))
 
 (defn exposed-s
   "Seconds the body stays open: to a melee hostile, every open cell's placement (it walks to the side still open); to a
   shooter only, the first side's (feet and head), which goes up first (wall-placer/facing-first)."
+  ([c] (exposed-s c (open-count c) (arrivals c)))
+  ([c open arrivals]
+   (* (way/place-s c) (if (arrive-s c arrivals) open (min 2 open)))))
+
+(defn cover
+  "[quote exposed-s fails] from one look at the open cells and the hostiles' arrivals."
   [c]
-  (let [open (open-count c)]
-    (* (way/place-s c) (if (arrive-s c) open (min 2 open)))))
+  (let [cells (open-cells c) open (count cells) arr (arrivals c)]
+    [(quote-of c cells arr) (exposed-s c open arr) (fails c open arr)]))
 
 (def safe? ready/ok)
 (def fit? ready/ok)

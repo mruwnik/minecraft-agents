@@ -726,3 +726,11 @@
           (is (< 20 (count (set @asks))) "the ring routes priced unseen cells")
           (is (= (count @reads) (count (set @reads))) (str "each cell is read once: " (count @reads) " reads of " (count (set @reads))))
           (is (<= @lights 1) (str "the light reads are built once, not per cell: " @lights " for " (count (set @asks)) " cells")))))))
+
+(deftest a-swim-sample-is-kept-by-a-number-not-a-string-per-cell
+  (let [p (tu/fake {:blocks (box -3 63 -3 3 63 3 "water") :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        wet (js/Map.)
+        swim (search/swim-fn (ctx-of p) {:x 0.5 :y 64 :z 0.5} wet)]
+    (swim {:x 3.5 :y 64 :z 0.5})
+    (is (pos? (.-size wet)))
+    (is (every? number? (js/Array.from (.keys wet))))))

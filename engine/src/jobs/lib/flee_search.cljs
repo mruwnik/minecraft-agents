@@ -303,7 +303,7 @@
   [c from wet]
   (let [p (:primitives c)
         wet-cell? (fn [x y z]
-                    (let [k (str x "," y "," z)]
+                    (let [k (base/cell-key x y z)]
                       (if (.has wet k)
                         (.get wet k)
                         (let [at (fn [dy] (contains? breath/swimmable (u/seen-name p {:x x :y (+ dy y) :z z})))

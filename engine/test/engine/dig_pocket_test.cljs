@@ -74,6 +74,11 @@
     (is (< (reads c #(shut-in/covers % [:pit])) (* 2 (reads c dig-pit/assess)))
         "one look at the pit serves its quote, its seconds in the open and its chance to fail (their prices read the dug cells)")))
 
+(deftest the-walls-cover-reads-its-site-once
+  (let [c (assoc (world {} [{:name "cobblestone" :count 20}]) :args {:for :danger})]
+    (is (< (reads c #(shut-in/covers % [:walls])) (* 1.2 (reads c wall-in/quote-of)))
+        "its quote, its seconds in the open and its chance to fail share one look at the open cells")))
+
 (defn fits? [extra]
   (boolean (pit/pocket-cells (world (merge (blocks "stone" [4 8] [64 66] [-3 3]) extra) iron) {:x 3 :y 64 :z 0} [1 0])))
 

@@ -92,13 +92,14 @@
 (defn- unseen-walk-weight
   "The share of a walked unseen cell that is open ground in a dark hall: 1 minus the chance it is rock (look/unseen-solid-at-fn;
   the body digs rock, and a tunnel of its own is no hall) times the hall prior of an unseen edge (cost/hall-chance, by sky or roof),
-  as a seen dark cell is weighted by its hall (Q345). 1 for a seen cell."
-  [p cell]
+  as a seen dark cell is weighted by its hall (Q345). 1 for a seen cell. solid-at: the look/unseen-solid-at-fn to ask (one
+  built per walk of cells, not per cell)."
+  [p cell solid-at]
   (let [cell (if (sh-sense/solid-at? p cell) (update cell :y inc) cell)
         sky? (pos? (or (sh-sense/sky-light-at p cell) 0))]
     (if (seen-light p cell)
       1
-      (* (- 1 ((look/unseen-solid-at-fn p) [(:x cell) (:y cell) (:z cell)]))
+      (* (- 1 (solid-at [(:x cell) (:y cell) (:z cell)]))
          (cost/hall-chance (if sky? :sky :roofed))))))
 
 (defn dark-share
@@ -109,20 +110,21 @@
 
 (defn walk-dark-share
   "dark-share of a cell the body walks over: an unseen one counts at its unseen-walk-weight. A place the body stays at or aims for must be open: dark-share."
-  [p cell caves-free? & [subtract]]
-  (* (unseen-walk-weight p cell) (dark-share p cell caves-free? subtract)))
+  [p cell caves-free? & [subtract solid-at]]
+  (* (unseen-walk-weight p cell (or solid-at (look/unseen-solid-at-fn p))) (dark-share p cell caves-free? subtract)))
 
 (defn share-of
   "walk-dark-share of cells {:x :y :z} (caves-free?, subtract as there), each cell read once and their spawn-regions
   flooded once (sh-inside/*regions*, the caller's when bound): for the walks of one decision."
   [p caves-free? subtract]
   (let [kept (js/Map.)
-        regions (or sh-inside/*regions* (js/Map.))]
+        regions (or sh-inside/*regions* (js/Map.))
+        solid-at (let [f (delay (look/unseen-solid-at-fn p))] (fn [cell] (@f cell)))]
     (fn [{:keys [x y z] :as cell}]
       (let [k (str x "," y "," z)]
         (if (.has kept k)
           (.get kept k)
-          (let [v (binding [sh-inside/*regions* regions] (walk-dark-share p (select-keys cell [:x :y :z]) caves-free? subtract))] (.set kept k v) v))))))
+          (let [v (binding [sh-inside/*regions* regions] (walk-dark-share p (select-keys cell [:x :y :z]) caves-free? subtract solid-at))] (.set kept k v) v))))))
 
 (defn dark-seconds
   "Seconds of the walk where a mob could spawn, times (seconds from the start at each cell): every k-th cell and the

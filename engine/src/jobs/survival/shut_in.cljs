@@ -116,7 +116,7 @@
 
 (def covers-of
   "The ways whose quote, seconds in the open and chance to fail come from one look at the site: way -> c -> [quote exposed-s fails]."
-  {:pit dig-pit/cover :pocket dig-pocket/cover})
+  {:walls wall-in/cover :pit dig-pit/cover :pocket dig-pocket/cover})
 
 (def fails
   "Each way's chance it cannot shut the body in where it stands."
