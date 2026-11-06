@@ -20,7 +20,9 @@
             [engine.scenario :as scenario]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
+            [jobs.lib.clock :as clock]
             [jobs.lib.price :as price]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.sense :as sense]
             [engine.sense-test :as sense-t]
             [jobs.survival.night.hold :as hold]
@@ -149,6 +151,38 @@
                                               ground))]
           (is (= [far] (map #(:pos (nth % 2)) (filter #(= :flee (first %)) log))) "the farthest ground site, the only one go-to reaches, is walked to")
           (is (< 16 (count (filter :floor calls))) "quoted past the nearest 16"))))))
+
+(deftest a-night-flee-stops-quoting-once-another-quote-costs-more-than-it-may-save
+  ;; KitOak94: at night each walk's quote is about three times its straight bound, so hundreds of ground sites under
+  ;; the best price were quoted in one stretch (331 quotes, 29.8 s)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground (into-array (for [x (range -2 -41 -1) z (range -6 7)] #js {:name "dirt" :pos #js {:x x :y 63 :z z}}))
+              price #(+ 6 (* 3 (pick/walk-s {:x 0 :y 64 :z 0} %)))
+              ;; each pick that quoted: [its quotes, its price]
+              picks (fn ^:async ps [quote-ms]
+                      (let [stopped clock/now
+                            best! pick/best!
+                            ms (atom 0)
+                            quotes (atom 0)
+                            picks (atom [])]
+                        (set! clock/now #(deref ms))
+                        (set! pick/best! (fn ^:async b [c xs opts]
+                                           (let [n @quotes
+                                                 r (await (best! c xs opts))]
+                                             (when (< n @quotes) (swap! picks conj [(- @quotes n) (:price r)]))
+                                             r)))
+                        (try (await (flee-with (fn [args] (swap! ms + quote-ms) (swap! quotes inc) {:uses {:job-time [0 (price args) 0]}}) ground))
+                             @picks
+                             (finally (set! clock/now stopped) (set! pick/best! best!)))))
+              free (await (picks 0))
+              priced (await (picks 150))]
+          (is (seq priced))
+          (is (= (map second free) (map second priced)) "the same targets at the same prices")
+          (is (every? true? (map (fn [[n] [m]] (< m n)) free priced)) "with quotes free each goes on to the bound")
+          (is (every? (fn [[n s]] (<= n (inc (/ s 0.15)))) priced)
+              "a site after n of the ground quoted is worth quoting at most (price - bound) / (n + 1) s: past price / 0.15 quotes, never"))))))
 
 (deftest flee-ground-sites-skip-powder-snow-and-keep-other-seen-ground
   (let [p (tu/fake {})

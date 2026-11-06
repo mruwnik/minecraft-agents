@@ -133,7 +133,7 @@
                     true))
             walk #(assoc (flee-args %) :floor cost-health/spend-down :worth ##Inf)
             best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
-                                                 :walk walk :ok? ok? :quote pick/quote-once!}))]
+                                                 :walk walk :ok? ok? :quote pick/quote-once! :like :kind}))]
         (cond
           (map? best) (let [{:keys [kind pos] :as t} (:pick best)]
                         (cond-> (assoc t :distance (u/dist here pos) :cost (:price best) :route (get-in best [:quote :route]))

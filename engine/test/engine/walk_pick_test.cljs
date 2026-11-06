@@ -6,17 +6,18 @@
             [engine.ctx :as ctx]
             [engine.library-test :as lib]
             [engine.test-util :as tu]
+            [jobs.lib.clock :as clock]
             [jobs.lib.rooms :as rooms]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
             [jobs.movement.go-to.preview :as pv]))
 
 (defn ^:async picked
-  "[best! of candidates {:id :bound :s} with go-to's quote stubbed to {:s s}, the ids quoted in order]."
+  "[best! of candidates {:id :bound :s} with go-to's quote stubbed to {:s s} (its :on-quote called first), the ids quoted in order]."
   [candidates]
   (let [quote! pick/quote!
         asked (atom [])]
-    (set! pick/quote! (fn [_ x] (swap! asked conj (:id x)) (js/Promise.resolve {:s (:s x)})))
+    (set! pick/quote! (fn [_ x] (some-> (:on-quote x) (apply [])) (swap! asked conj (:id x)) (js/Promise.resolve {:s (:s x)})))
     (try [(await (pick/best! nil candidates {:bound :bound :args identity :price (fn [_ q] (:s q))})) @asked]
          (finally (set! pick/quote! quote!)))))
 
@@ -42,6 +43,22 @@
         (let [[best asked] (await (picked [{:id :a :bound 1 :s ##Inf} {:id :b :bound 2 :s ##Inf}]))]
           (is (nil? best) "no candidate with a finite price")
           (is (= [:a :b] asked)))))))
+
+(deftest quotes-go-on-only-while-the-saving-they-promise-beats-what-a-quote-costs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a night flee's way: each walk's price is three times its bound and a fixed 6 s to leave, so the nearest stays
+        ;; the best and every bound under its 6.6 s could still beat it
+        (let [cands (mapv (fn [i] (let [b (* 0.2 i)] {:id i :bound b :s (+ 6 (* 3 b))})) (range 1 101))
+              stopped clock/now
+              ms (atom 0)
+              [best asked] (try (set! clock/now #(deref ms))
+                                (await (picked (map #(assoc % :on-quote (fn [] (swap! ms + 150))) cands)))
+                                (finally (set! clock/now stopped)))]
+          (is (= 1 (:id (:pick best))))
+          (is (= 18 (count asked)) "with each quote 0.15 s, the 19th's saving, (6.6 - 3.8) / 19 s, is less")
+          (is (= 32 (count (second (await (picked cands))))) "a quote that costs nothing goes on to the bound"))))))
 
 (deftest pick-walk-takes-the-place-whose-quoted-walk-is-cheapest-not-the-nearest
   (async done

@@ -5,6 +5,7 @@
   left. Danger has no straight-line bound: it comes from the quote alone."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.clock :as clock]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.ledger :as ledger]
@@ -81,25 +82,44 @@
     (.sort a (fn [^js l ^js r] (let [x (aget l 0) y (aget r 0)] (cond (< x y) -1 (< y x) 1 :else 0))))
     (map #(aget ^js % 1) a)))
 
+(defn quote-gain
+  "Seconds quoting a candidate of bound b is expected to save on the best price so far: its price is b times one of
+  the ratios (quoted price over bound, ##Inf for no price) of the quotes of its like so far or, as often as each of
+  them, b itself (a candidate unlike them all)."
+  [best b ratios]
+  (/ (reduce (fn [s r] (let [p (* b r)] (if (< p best) (+ s (- best p)) s))) (max 0 (- best b)) ratios) (inc (count ratios))))
+
 (defn ^:async best!
   "{:pick :price :quote} the cheapest of candidates, nil when none has a finite price. bound (fn [x]) seconds no more
   than x's price; args (fn [x]) the go-to args of the walk to x; price (fn [x q]) x's seconds with q, go-to's quote of
   that walk; ok? (fn [x], default all) is asked of a candidate only when its turn comes, so a costly test is paid for just the
-  candidates reached; quote (fn [c args], default quote!) asks go-to, so a caller can reuse one quote. Quoted best-first by bound, until the best quoted is no dearer than the next bound.
+  candidates reached; quote (fn [c args], default quote!) asks go-to, so a caller can reuse one quote. Quoted best-first
+  by bound until the best quoted is no dearer than the next bound, each one whose quote-gain over the ratios of the
+  quoted ones it is like (like (fn [x]), default all alike: the same answer) is more than a quote costs (the seconds
+  on the clock the quotes so far took each, their ok? tests included); the others are passed over.
   rebound (fn [x q left]), asked after each quote until it answers non-nil: a fn is a tighter bound of the candidates left, ranked by it from then on."
-  [c candidates {:keys [bound args price ok? quote rebound]}]
-  (loop [[x & more :as left] (by-bound bound candidates) best nil bound bound rebound rebound]
-    (cond
-      (or (empty? left) (not (js/isFinite (bound x))) (and best (<= (:price best) (bound x)))) best
-      (and ok? (not (ok? x))) (recur more best bound rebound)
-      :else (let [q (await ((or quote quote!) c (args x)))
-                  s (price x q)
-                  best (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best)
-                  r (when rebound (await (rebound x q more)))]
-              (cond
-                (fn? r) (recur (by-bound r more) best r nil)
-                (some? r) (recur more best bound nil)
-                :else (recur more best bound rebound))))))
+  [c candidates {:keys [bound args price ok? quote rebound like]}]
+  (let [like (or like (constantly nil))
+        t0 (clock/now)
+        ratios (volatile! {})
+        quoted (volatile! 0)
+        quote-s #(if (zero? @quoted) 0 (/ (- (clock/now) t0) 1000 @quoted))]
+    (loop [[x & more :as left] (by-bound bound candidates) best nil bound bound rebound rebound]
+      (cond
+        (or (empty? left) (not (js/isFinite (bound x))) (and best (<= (:price best) (bound x)))) best
+        (or (and best (<= (quote-gain (:price best) (bound x) (get @ratios (like x))) (quote-s)))
+            (and ok? (not (ok? x)))) (recur more best bound rebound)
+        :else (let [b (bound x)
+                    q (await ((or quote quote!) c (args x)))
+                    s (price x q)
+                    _ (vswap! quoted inc)
+                    _ (when (pos? b) (vswap! ratios update (like x) conj (/ s b)))
+                    best (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best)
+                    r (when rebound (await (rebound x q more)))]
+                (cond
+                  (fn? r) (recur (by-bound r more) best r nil)
+                  (some? r) (recur more best bound nil)
+                  :else (recur more best bound rebound)))))))
 
 (defn ^:async pick!
   "The candidate best! picks, else the one of least bound: a quote that cannot price the walk (its plan cannot start where
@@ -148,14 +168,14 @@
 (defn ^:async cheapest!
   "{:pick x :price seconds :quote q} of the one of xs whose walk go-to quotes cheapest, within limit-s seconds (those whose
   straight walk alone is over it are left out, the rest quoted best-first, best!). target (fn [x]) {:pos :range} bounds the
-  straight walk, walk (fn [x]) are the go-to args; ok? and quote as best!. A quote whose search still goes on prices nothing
+  straight walk, walk (fn [x]) are the go-to args; ok?, quote and like as best!. A quote whose search still goes on prices nothing
   (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later).
   Nil when no walk is priced. price (fn [x s]), default s, adds to a walk's seconds s what x costs besides.
   The first quote that finds no way (no-way?) asks once whether the others (cells with a y, walks over what the body has
   seen) are out of reach too (none-reachable!): then each
   of their quotes would be go-to's guess with no route, ##Inf, or with a way that changes the world (the quote's mean is finite)
   quote-of-route's rest-s of its straight blocks, so that is their bound; :searching while that search goes on."
-  [c xs {:keys [target walk limit-s ok? quote price] :or {price (fn [_ s] s) limit-s ##Inf}}]
+  [c xs {:keys [target walk limit-s ok? quote price like] :or {price (fn [_ s] s) limit-s ##Inf}}]
   (let [feet (u/self-pos c)
         cell #(update-vals (select-keys % [:x :z]) js/Math.floor)
         bound #(walk-s feet (target %))
@@ -174,7 +194,7 @@
                         (and (number? mean) (js/isFinite mean)) (fn [x] (max (bound x) (guess-s x)))
                         :else (constantly ##Inf)))))
         best (await (best! c (cond->> xs (js/isFinite limit-s) (filter #(<= (bound %) limit-s)))
-                           {:bound bound :args walk :ok? ok? :quote quote :rebound rebound
+                           {:bound bound :args walk :ok? ok? :quote quote :rebound rebound :like like
                             :price (fn [x q] (if (:estimate q)
                                                (do (reset! searching true) ##Inf)
                                                (price x (quoted-s c q))))}))]
