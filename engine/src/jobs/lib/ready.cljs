@@ -643,7 +643,8 @@
 (defn sheltered-dark
   "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) or in its own night shelter and a way
   out of its room (sh-inside/way-out-cells) is dark till dawn lights it (sh-sense/light-in): a walk that has no place (a
-  search, a roam) leaves the room that way. A room in rock has no way out the day lights, so it holds nothing."
+  search, a roam) leaves the room that way. A room in rock has no way out the day lights, so it holds nothing. Where no
+  way out holds it, the walls of the room round the body not looked at yet are looked at first when that pays (room-look)."
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -653,7 +654,9 @@
     (if (seq waits)
       (contract/later :dark "sheltered for the night, a walk with no place leaves the room into ground dark till dawn"
                       :recheck-after-ms (* 1000 (apply min waits)) :wait-ms (* 1000 (apply min waits)))
-      (contract/ok :lit "no way out of the room that dawn lights"))))
+      (or (when (and (not (sh-sense/sleeping? p)) (sh-sense/dark-outside? p))
+            (room-look c "dark night, walls of the room round the body not all seen: a way out may be open" nil (spawn-light/chance-at p feet false)))
+          (contract/ok :lit "no way out of the room that dawn lights")))))
 
 (def safe-roaming
   "The checker of a job that roams and may leave a room: safe-if-lit, and not sheltered under a dark sky (sheltered-dark)."

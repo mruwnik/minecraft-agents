@@ -1141,6 +1141,13 @@
     lit-hut-with-window nil :later
     (assoc night-hut :time st/noon) nil :ok))
 
+(deftest a-night-room-with-unseen-walls-is-looked-round-before-a-roam-is-judged-free-to-leave
+  (let [check #(with-redefs [look-edge/pending (fn ([_] %) ([_ _] %))
+                             ready/stay-look-price (constantly {:gap 0 :delta ##Inf})]
+                 (first (ready/sheltered-dark (ctx-of mine-room))))]
+    (is (= :look (check [[1 64 0]])) "an unseen wall may be an open side")
+    (is (= :ok (check nil)) "every wall seen closed")))
+
 (deftest mine-and-dig-for-given-only-an-item-wait-in-a-night-hut
   (doseq [safe? [mine/safe? dig-for/safe?]]
     (is (= :later (first (safe? (assoc (ctx-of lit-hut-with-window) :args {:item "coal" :count 1})))))))
