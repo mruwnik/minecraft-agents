@@ -388,7 +388,7 @@
                     (:estimate q) (do (vreset! searching true) ##Inf)
                     (< s worth) (/ s (points n))
                     :else (do (when-not @out (vreset! out {:pos (:pos n) :why (quote-why q s worth)})) ##Inf))))
-        res (await (pick/best! c (animals/noted-targets c done (hunt-radius c))
+        res (await (pick/best! c (animals/noted-targets c done (partial hunt-reach c))
                                {:bound #(animals/noted-price me %)
                                 :args #(noted-walk-args c (:pos %) (animals/noted-benefit c %) false)
                                 :price price}))
@@ -500,9 +500,9 @@
                     (do
                       (ctx/update-mem! c assoc :explored
                                        (report/explored-text res))
-                      (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter #(and (:id %) (not (spare/gone? c % (hunt-radius c)))) (:found res))))]
+                      (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter #(and (:id %) (animals/noted-here? c % (partial hunt-reach c))) (:found res))))]
                         (ctx/update-mem! c assoc :walk-to (:pos noted)))
-                      (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))) (hunt-radius c))) :again))))))))))))
+                      (when (or (= :done (:kind e)) (animals/noted-target c (set (:noted-walked (ctx/mem c))) (partial hunt-reach c))) :again))))))))))))
 
 (defn rod-carried?
   "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within its ::bank-radius."

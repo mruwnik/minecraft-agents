@@ -87,20 +87,25 @@
         short (max 0 (- (carry c) (foods/stock-points (u/inventory p))))]
     (max (cost/food-worth (.-food (.self p)) (.-health (.self p))) (cost/food-search-worth short))))
 
+(defn noted-here?
+  "Whether the note n is not proven gone: its cell in view within the scan its kind's reach covers (reach: kind -> blocks)."
+  [c n reach]
+  (not (spare/gone? c n (reach (:what n)))))
+
 (defn noted-targets
   "The food animals a :seen note (any body's) places anywhere whose meat may be worth the walk (noted-benefit over
-  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies, the animals tried and those proven gone (spare/gone? within the scan `radius`); not cut at a radius."
-  [c done radius]
+  noted-cost), as the notes, cheapest first by noted-price, skipping the ids in `done`, babies, the animals tried, those proven gone (spare/gone? within the walk `reach` of its kind, kind -> blocks); not cut at a distance."
+  [c done reach]
   (let [c (assoc-in c [:args :carry] (carry c))
         me (u/self-pos c)
         skipped (set (:skipped-animals (ctx/mem c)))]
     (->> (notes/notes c)
          (filter #(and (= :seen (:kind %)) (contains? food-animals (:what %)) (:id %) (:pos %) (not (:baby %))
-                       (not (done (:id %))) (not (skipped (:id %))) (not (spare/gone? c % radius))
+                       (not (done (:id %))) (not (skipped (:id %))) (noted-here? c % reach)
                        (> (noted-benefit c %) (noted-cost me %))))
          (sort-by #(noted-price me %)))))
 
-(defn noted-target "The first of noted-targets, nil when none." [c done radius] (first (noted-targets c done radius)))
+(defn noted-target "The first of noted-targets, nil when none." [c done reach] (first (noted-targets c done reach)))
 
 (defn note-seen!
   "Write the adults and babies of food animals in sight as :seen notes, so a later look at one of a pair counts the other."
@@ -118,13 +123,12 @@
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone, claim or plan), or what jobs.lib.animal-spare/why
   says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last ::keep-adults of a kind are lifted only at
   lift food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt.
-  reach (kind -> blocks), when given, drops the animals of a kind farther than it.
+  reach (kind -> blocks), when given, drops the animals of a kind farther than it after the adults of each kind in sight are counted (a pair in view past its reach is still a pair); animals in a zone or plan of the body's own under own? are kept.
   own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
   [c {:keys [radius reach lift own?]}]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         me (u/self-pos c)
-        seen (cond->> (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
-               reach (filter #(<= (u/dist me (u/pos-of (.-pos %))) (reach (.-name %)))))
+        seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
         adult-es (remove #(true? (.-baby %)) seen)
         seen-uuids (set (map #(.-uuid %) seen))
         adults (into {} (map (fn [k] [k (spare/adults-of-kind c k adult-es seen-uuids radius)])) (distinct (map #(.-name %) adult-es)))
@@ -132,6 +136,8 @@
         pens (atom [])
         starved? (and (<= (.-food self) lift) (not (meal/carries-food? self)))]
     (->> seen
+         (filter (fn [e] (or (nil? reach) (and own? (access/in-own-area? c (u/pos-of (.-pos e))))
+                             (<= (u/dist me (u/pos-of (.-pos e))) (reach (.-name e))))))
          (mapv (fn [e]
                  (let [n (adults (.-name e))
                        mine? (and own? (access/in-own-area? c (u/pos-of (.-pos e))))

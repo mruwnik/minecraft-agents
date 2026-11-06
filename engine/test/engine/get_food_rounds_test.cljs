@@ -1536,3 +1536,44 @@
       (is (= ["chicken" "cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach reach}))))
       (is (= ["cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach (assoc reach "chicken" 20)})))
           "a chicken past what its own meat pays is left, as a cow of that distance is not"))))
+
+(deftest a-pair-in-view-past-its-reach-is-still-a-kept-pair
+  (let [p (tu/fake-on-floor {})
+        at (fn [id x] #js {:name "chicken" :uuid (str "u" id) :id id :baby false :pos #js {:x x :y 64 :z 0}})
+        seen #js [(at 1 10) (at 2 30)]]
+    (with-redefs [look/seen-objs (fn [_ _] seen)
+                  access/trespass-refusal (constantly nil)
+                  spare/penned? (fn [& _] false)
+                  notes/notes (constantly [])
+                  ctx/mem (constantly {})]
+      (let [r (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach {"chicken" 20}})]
+        (is (= 1 (count r)) "only the near chicken is within reach")
+        (is (= [2 :kept] [(:adults (first r)) (:why (first r))]) "the far chicken in view still makes the pair, so the near one is kept")))))
+
+(deftest the-pen-way-keeps-an-own-animal-past-the-reach
+  (let [p (tu/fake-on-floor {})
+        at (fn [id x] #js {:name "chicken" :uuid (str "u" id) :id id :baby false :pos #js {:x x :y 64 :z 0}})]
+    (with-redefs [look/seen-objs (fn [_ _] #js [(at 1 30)])
+                  access/trespass-refusal (constantly nil)
+                  access/in-own-area? (constantly true)
+                  spare/penned? (fn [& _] false)
+                  notes/notes (constantly [])
+                  ctx/mem (constantly {})]
+      (let [opts {:radius 100 :lift 0 :reach {"chicken" 20} :own? true}]
+        (is (= [:own-pen] (map :rule (animals/in-sight {:primitives p :args {}} opts))) "an own-pen animal is walked to whatever its kill pays")
+        (is (empty? (animals/in-sight {:primitives p :args {}} (assoc opts :own? false))))))))
+
+(deftest a-noted-animal-is-proven-gone-within-the-reach-of-its-own-kind
+  (let [c {:primitives (tu/fake-on-floor {}) :args {}}
+        note (fn [what] {:kind :seen :what what :id 1 :pos [30 64 0]})
+        radii (atom [])]
+    (with-redefs [spare/gone? (fn ([_ _ r] (swap! radii conj r) false) ([_ _ r _] (swap! radii conj r) false))]
+      (animals/noted-here? c (note "chicken") {"chicken" 20 "cow" 100})
+      (animals/noted-here? c (note "cow") {"chicken" 20 "cow" 100})
+      (is (= [20 100] @radii) "each kind is checked at its own reach, not the best kind's"))))
+
+(deftest the-hunt-child-gets-the-reach-of-the-animal-hunted
+  (let [animal #js {:name "chicken" :uuid "u" :id 1 :baby false :pos #js {:x 5 :y 64 :z 0}}]
+    (with-redefs [get-food/hunt-reach (fn [_ kind] ({"chicken" 7 "cow" 50} kind))
+                  get-food/keep-for (constantly 0)]
+      (is (= 7 (:radius (second (get-food/kill-job {:primitives (tu/fake-on-floor {})} false {:entity animal}))))))))
