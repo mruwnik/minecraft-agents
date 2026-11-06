@@ -9,6 +9,7 @@
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -213,13 +214,17 @@
           (is (some? (:because e)) "the fetch's own ending says why"))))))
 
 (deftest bed-down-beside-an-open-bed-is-condition-failed-bed-open
+  ;; at a spawn rate of one meet in 200 s: at the measured one (0.0012) an open bed is the cheapest night and is slept in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (call! (spawn-world {:blocks {"2,64,0" "red_bed"} :players ["Alex"] :inventory st/wall-stack}) 'jobs.survival.bed-down {}
-                         (fn [eng] (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 3} nil))))]
-          (is (= [:condition-failed :bed-open] (ending-of e)))
-          (is (true? (:bed-open (:data e)))))))))
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+           (fn ^:async inner []
+             (let [e (await (call! (spawn-world {:blocks {"2,64,0" "red_bed"} :players ["Alex"] :inventory st/wall-stack}) 'jobs.survival.bed-down {}
+                                   (fn [eng] (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 3} nil))))]
+               (is (= [:condition-failed :bed-open] (ending-of e)))
+               (is (true? (:bed-open (:data e))))))))))))
 
 (deftest bed-down-putting-a-carried-bed-down-ends-done-slept
   (async done
