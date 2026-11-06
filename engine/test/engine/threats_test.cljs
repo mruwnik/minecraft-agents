@@ -3,6 +3,9 @@
   reflex would do (flee: dear, fight: cheap)."
   (:require [cljs.test :refer [deftest is are use-fixtures]]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.ready-test :as ready-test]
@@ -195,9 +198,20 @@
     (is (= (table 0.5) (table 0.52)) "weights in one 1/20 step give one table")
     (is (not= (table 0.5) (table 0.6)))))
 
+(defn remembering-ctx
+  "ctx-of world over a real perception that has looked all round, so the blocks of world are in the body's memory (a threat field reads memory only)."
+  [world]
+  (let [c (ready-test/ctx-of world)
+        raw (:primitives c)
+        per (perception/create (fake-raw/create raw) {:now (constantly 1000000)})
+        p (perception/wrap raw per)]
+    (doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))
+    (game/select! p)
+    (assoc c :primitives p)))
+
 (deftest one-ctx-prices-mobs-differing-only-in-what-they-hold-or-in-their-key-each-its-own-way
   (let [pool (into {} (for [x (range 8 11) z (range -1 2)] [(str x ",63," z) "water"]))
-        c (ready-test/ctx-of {:blocks pool :inventory [{:name "diamond_sword" :count 1}]})
+        c (remembering-ctx {:blocks pool :inventory [{:name "diamond_sword" :count 1}]})
         p (:primitives c)
         _ (aset p "worldEpoch" (constantly 0))
         tolls-with (fn [entities]
@@ -211,7 +225,7 @@
         "two mobs add their tolls, one mob known twice counts its dearest")))
 
 (deftest a-skeleton-is-priced-by-what-it-holds-a-bow-shoots-where-it-sees-a-sword-strikes-along-its-way
-  (let [c (ready-test/ctx-of {:blocks (merge (tu/box 8 64 1 8 66 4 "stone") (tu/box 16 64 0 16 66 0 "stone"))
+  (let [c (remembering-ctx {:blocks (merge (tu/box 8 64 1 8 66 4 "stone") (tu/box 16 64 0 16 66 0 "stone"))
                               :inventory [{:name "diamond_sword" :count 1}]})
         p (:primitives c)
         _ (aset p "worldEpoch" (constantly 0))
