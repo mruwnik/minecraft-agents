@@ -392,7 +392,7 @@
         ended (fn [] (if (<= (aget incumbent 0) @max-s) (priced (route-to (aget incumbent 1))) {:problem :dearer}))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
-        ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
+        ;; over the head too; down: the cell entered; a pillar: the cell over the head), falls and refusals left out, a step across or up only from a cell over a floor. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
         back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
         stands? (fn [x y z] (and (some? (back-s x y z)) (some? (back-s x (inc y) z)) (or (inside? x y z) (do (vreset! back-boxed true) false))))
         to-start (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y (from 1)))))
@@ -409,6 +409,9 @@
                           (heap-push! back-queue #js [(+ g (to-start x y z)) (vswap! back-tick inc) k]))))
         back-into! (fn [g x y z s]
                      (when (and (some? s) (stands? x y z)) (back-relax! (+ g s) x y z)))
+        ;; a step across or up leaves a node, which stands on a floor (or on a block laid, when blocks may be): a fall's
+        ;; cells over air are entered only from above or from such a node beside the fall's top
+        floored? (fn [x y z] (or place-s pillar-s (== (key x y z) start-key) (.-floor ^js (at x (dec y) z))))
         seed-due! (fn []
                     (loop []
                       (when-let [[x y z :as cell] (first @seeds)]
@@ -433,9 +436,9 @@
                            (loop [i 0]
                              (when (< i 8)
                                (let [mx (- x (aget dirs i)) mz (- z (aget dirs (inc i)))]
-                                 (back-into! g mx y mz (+ (base-s :walk) feet head))
+                                 (when (floored? mx y mz) (back-into! g mx y mz (+ (base-s :walk) feet head)))
                                  (let [over (back-s mx (inc y) mz)]
-                                   (back-into! g mx (dec y) mz (some-> over (+ (base-s :walk) feet head))))
+                                   (when (floored? mx (dec y) mz) (back-into! g mx (dec y) mz (some-> over (+ (base-s :walk) feet head)))))
                                  (recur (+ i 2)))))
                            (back-into! g x (inc y) z feet)
                            (when pillar-s (back-into! g x (dec y) z (+ (base-s :pillar) head)))

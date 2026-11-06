@@ -62,6 +62,13 @@
     (is (= [[8 11 0] [8 10 0]] (:dig (dr/route (open-land (assoc (shell 2 "bedrock") [8 10 0] "stone" [8 11 0] "stone")) [0 10 0] [10 10 0] opts)))
         "stone in the wall is dug through")))
 
+;; every node of a route stands on a floor: with no block to lay, the goal's only way in is a fall down the open air over
+;; it, which no floor beside leads into; the rock and air round it are endless (bedrock is the sky's limit), so only
+;; that proof ends the search
+(deftest a-goal-on-a-block-hung-in-open-air-is-no-route-without-a-block-to-lay
+  (let [w (fn [[_ y _ :as c]] (cond (= c [10 20 0]) "stone" (> y 40) "bedrock" (< y 10) "stone" :else "air"))]
+    (is (= {:problem :no-route} (dr/route w [0 10 0] [10 21 0] {:max-s 1000 :step-s 0.3 :max-nodes 20000})))))
+
 (deftest a-step-down-does-not-dig-above-the-head
   (let [low (fn [c] (or ({[1 9 0] "air" [1 8 0] "air"} c) (if (or (< (c 1) 10) (>= (c 1) 12)) "stone" "air")))]
     (is (= [] (:dig (dr/route low [0 10 0] [1 8 0] {}))))))
