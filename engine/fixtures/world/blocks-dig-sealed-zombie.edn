@@ -9,12 +9,23 @@
   :blocks [[:fill [15 3 13] [17 6 17] "stone"] [:fill [16 4 15] [16 5 15] "air"] [:fill [16 4 14] [16 5 14] "glass"]
            [:set [16 0 22] "stone"]]
   :body {:at [16.5 0 20.5] :yaw 0 :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
-  :act [[:summon "zombie" [16.5 4 15.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-        [:until-seen {:entity "zombie"} 10]
-        [:job (jobs.blocks.dig {:pos #at [16 0 22]})]]
-  :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 40 :of-job true}
-           {:no-event {:source :job :kind :waiting :data {:reason :hostile-near}} :for-s 40 :until {:source :job :kind :completed}}]
+  :expect [{:no-event {:source :job :kind :waiting :data {:reason :hostile-near}} :for-s 40 :until {:source :job :kind :completed}}]
   :after [[:block [16 0 22] "air"] [:entities "type=zombie,tag=wt" [[16 4 15] [16 5 15]] 1]]
   :limit-s 60}
  :cases
- [{:name "a-zombie-sealed-in-a-lit-pod-holds-no-dig"}]}
+ [{:name "a-zombie-sealed-in-a-lit-pod-holds-no-dig"
+   :act [[:summon "zombie" [16.5 4 15.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.blocks.dig {:pos #at [16 0 22]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 40 :of-job true}]}
+  ;; Card ce0ec266: in the dark the heard zombie may stand on the open floor under the pod, so the reflex flees once; back
+  ;; at the dig it sounds from where the flight heard it and is watched, not fled from again.
+  {:name "a-zombie-sealed-in-a-dark-pod-is-fled-once-then-watched"
+   :plot {:light :dark}
+   :act [[:summon "zombie" [16.5 4 15.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:wait-s 2]
+         [:job (jobs.blocks.dig {:pos #at [16 0 22]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true}} :within-s 70 :of-job true}
+            {:count-event {:source :job :kind :hostile.decided :data {:decision :flee}} :for-s 70 :at-most 1}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 70 :at-most 2}]
+   :limit-s 90}]}

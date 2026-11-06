@@ -221,11 +221,15 @@
                              " is not in sight and the body can afford the fight: no flight; heard mobs are left alone for "
                              mute-s " s, one that comes into sight is fought")}}))
 
-(defn watchable?
-  "Pure: whether the dangers hs may be watched instead of answered: every one seen, none a creeper, shooter or fusing mob."
+(defn melee-only?
+  "Pure: whether none of the dangers hs is a creeper, shooter or fusing mob."
   [hs]
-  (and (every? danger-q/seen-only? hs)
-       (not-any? #(or (combat/creeper? %) (combat/ranged? %) (true? (.-fusing %))) hs)))
+  (not-any? #(or (combat/creeper? %) (combat/ranged? %) (true? (.-fusing %))) hs))
+
+(defn watchable?
+  "Pure: whether the dangers hs may be watched instead of answered: every one seen, melee-only?."
+  [hs]
+  (and (every? danger-q/seen-only? hs) (melee-only? hs)))
 
 (defn leave-watched?
   "Whether a fight that held for a mob to come and gave up (:hold-timeout) leaves the dangers hs watched instead of fleeing:
@@ -237,10 +241,10 @@
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
 
 (defn still-since-flight?
-  "Whether the dangers hs may be watched (watchable?) and each stands where an earlier flight left it (hostile/stood-still?),
+  "Whether the dangers hs, seen or heard, are melee-only? and each stands where an earlier flight left it (hostile/stood-still?),
   the body unhurt within hit-window-ms: a mob that did not follow the body away is not chasing it."
   [c hs]
-  (and (watchable? hs)
+  (and (melee-only? hs)
        (empty? (:hits (ctx/mem c)))
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))
        (every? #(hostile/stood-still? c %) hs)))

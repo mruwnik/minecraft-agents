@@ -2,6 +2,7 @@
   "The hostile mode of combat.attack (:targets :hostiles): which dangers near it fights, and when a held or leashed fight stops."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.entity-observations :as obs]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -341,16 +342,25 @@
          count)))
 
 (defn stood-still?
-  "Whether seen hostile e is in the cell where an earlier run of this body (not the c's own) fled a mob of its name within
-  ::return-s: it did not follow the body away, so it will not chase it now."
+  "Whether hostile e is where an earlier run of this body (not the c's own) fled a mob of its name within ::return-s: it
+  did not follow the body away, so it will not chase it now. Seen: in the cell the flight saw it in. Heard only: its
+  sound now (direction and band) is what the place the flight took it at (danger/rough-pos) sounds like from here; the
+  body heard from elsewhere when it comes back."
   [c e]
   (let [since (- (ctx/now c) (* 1000 (settings/get settings ::return-s)))
         own (:run-at (ctx/mem c))
+        p (:primitives c)
         cell #(mapv (fn [k] (js/Math.floor (k %))) [:x :y :z])
-        here (cell (danger-q/mob-pos (:primitives c) e))]
+        seen? (danger-q/seen-only? e)
+        here (when seen? (cell (danger-q/mob-pos p e)))
+        heard (when-not seen? (select-keys (threats/place-of p e) [:direction :band]))
+        same-place? (fn [data]
+                      (if seen?
+                        (and (:pos data) (= here (cell (:pos data))))
+                        (when-let [at (danger-q/rough-pos data)] (= heard (obs/rough-hearing (u/self-pos c) at)))))]
     (boolean (some (fn [{:keys [t data]}]
                      (and (> t since) (= :flee (:decision data)) (= (.-name e) (:mob data)) (not= own (:run data))
-                          (:pos data) (= here (cell (:pos data)))))
+                          (same-place? data)))
                    (ctx/entries c :hostile)))))
 
 (defn met-again
