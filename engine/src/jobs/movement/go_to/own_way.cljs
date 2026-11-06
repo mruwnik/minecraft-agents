@@ -90,7 +90,7 @@
 (defn ^:async walk-own-way!
   "Walk onto way (own-way), planning nowhere below the feet and the way's own cells (:floor): a way round through the
   caves is not it; only way's own cell is there (under a floor that is gone is not). A walk that does not get there
-  nor a block nearer, or max-searching searches begun afresh (memory :searching), cuts the stair again from where the
+  nor a block nearer, or max-searching rounds of a search begun afresh or walked and still searching (memory :searching), cuts the stair again from where the
   body stands on it (esc/own-recut!), else ends the call's use of its own stairs (memory :own-way-done). :again."
   [c way opts]
   (let [level (assoc c :dive-floor (min (:floor way) (js/Math.floor (:y (u/self-pos c)))))
