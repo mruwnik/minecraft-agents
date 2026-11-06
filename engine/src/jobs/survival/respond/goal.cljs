@@ -63,7 +63,7 @@
                          (some? (.-speed e)) (assoc :speed (.-speed e))
                          (and (combat/enderman? e) (not (true? (.-angry e)))) (assoc :calm? true))) known)
         (into (comp (map :data) (remove #(ids (:id %)))
-                    (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (:mob %) :mob (:mob %) :pos pos})))
+                    (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (or (:chaser %) (:mob %)) :mob (:mob %) :held (:held %) :pos pos})))
               (threats/listed-threats p (threats/fresh-threats (ctx/view c))))
         (into (map (fn [pos] {:name nil :pos pos :shooter? true})) (flight/fire-spots c)))))
 

@@ -153,8 +153,8 @@
           (is (= :done (:status out)))
           (is (= :far (:ended out)))
           (is (> (fake/dist (body-pos p) (mob-pos p 7)) 35) "beyond the zombie's follow range")
-          (is (= [{:mob "zombie" :id 7 :uuid "u7" :ended :far}]
-                 (mapv #(select-keys % [:mob :id :uuid :ended]) (threat-entries eng))) "one :threat entry")
+          (is (= [{:mob "zombie" :id 7 :uuid "u7" :ended :far :chaser "zombie"}]
+                 (mapv #(select-keys % [:mob :id :uuid :ended :chaser]) (threat-entries eng))) "one :threat entry, with its cost/mob-kind")
           (is (= {:cap 20 :ttl 300000} (mem/policy (mem/view (:store eng)) :threat))))))))
 
 (deftest flight-steps-walk-through-a-go-to-child-that-never-escalates

@@ -65,6 +65,12 @@
   (is (= (threats/max-threats)
          (count (threats/known-threats (ready-test/ctx-of {:entities (for [i (range 12)] (zombie i (* 2 i) 0))}))))))
 
+(deftest a-remembered-flight-keeps-what-the-body-saw-the-mob-hold
+  (let [c (assoc (ready-test/ctx-of {:entities [(assoc (zombie 1 6 0) :uuid "a")]}) :view
+                 (fn [] {:now 0 :data {:entries {:threat [{:t 0 :data {:mob "skeleton" :held "stone_sword" :chaser "skeleton" :id 1 :uuid "b" :key "b" :pos {:x 30 :y 64 :z 0}}}]}}}))
+        fled (first (filter :fled (threats/known-threats c)))]
+    (is (= ["skeleton" "stone_sword" "skeleton"] ((juxt :mob :held :chaser) fled)))))
+
 (deftest danger-terms-are-options-and-the-defaults-keep-the-price
   (let [rate #(cost/danger-rate unarmed "zombie" %)]
     (is (= (rate nil) (rate {})) "no options: today's rate")

@@ -83,12 +83,13 @@
   (count (filter #(= k (:key (:data %))) (ctx/entries c :threat))))
 
 (defn remember!
-  "Write the :threat entry for a mob fled ({:mob :id :uuid :ended and :pos, or :direction :band :from}); at the chased-flights-th from it, warn
-  hostile.chased."
-  [c {:keys [mob id uuid ended] :as t}]
+  "Write the :threat entry for a mob fled ({:mob :id :uuid :ended, :held and :chaser (cost/mob-kind) as seen, and :pos, or
+  :direction :band :from}); at the chased-flights-th from it, warn hostile.chased."
+  [c {:keys [mob id uuid ended held chaser] :as t}]
   (let [k (or uuid id)
         place (select-keys t [:pos :direction :band :from])]
-    (ctx/remember! c :threat (merge {:mob mob :id id :uuid uuid :key k :ended ended} place) threat-policy)
+    (ctx/remember! c :threat (merge (cond-> {:mob mob :id id :uuid uuid :key k :ended ended}
+                                              (some? held) (assoc :held held) (some? chaser) (assoc :chaser chaser)) place) threat-policy)
     (let [n (flights c k)]
       (when (= (chased-flights) n)
         (ctx/emit! c :hostile.chased :warn
@@ -167,7 +168,7 @@
         known-keys (into now-keys (map :key) fled)
         here (u/pos-of (.-pos (.self p)))]
     (->> (concat (for [{:keys [key name held chaser pos]} sensed] {:mob name :held held :pos pos :weight 1 :key key :chaser chaser})
-                 (for [{:keys [mob pos key]} fled] {:mob mob :pos pos :weight 1 :key key :fled true})
+                 (for [{:keys [mob held chaser pos key]} fled] {:mob mob :held held :chaser chaser :pos pos :weight 1 :key key :fled true})
                  (remove #(contains? known-keys (:key %)) (sightings c))
                  (for [{:keys [cause pos weight mob?] :as d} (death-spot/recent c)
                        :when (and mob? (or (field/water-mobs cause) (not (death-spot/seen-clear? c d))))]
