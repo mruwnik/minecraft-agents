@@ -235,7 +235,7 @@
                   (> (- (second feet) (js/Math.floor (:y pos))) limit)))))
 
 (defn goal-walled?
-  "Whether a give-up with result is a free body's (not escape/walk-enclosed?) whose goal the planner proved walled in, or whose
+  "Whether a give-up with result is a free body's (not escape/walk-enclosed?) whose goal the planner proved walled in or cut off by a drop (a column top), or whose
   search spent its node budget (:budget) with the body within budget-near of the goal (:goal-left): a goal that close
   with no whole way found is walled off, whatever the flood could not prove, or one out-of-sight?. The ways
   that change the world run toward the goal (goal-way). shut?: a delay of escape/walk-enclosed?, when the caller has one."
@@ -243,7 +243,7 @@
   ([c result shut?]
    (let [reason (some-> (:reason result) keyword)]
      (boolean
-      (and (or (= :goal-enclosed reason)
+      (and (or (contains? #{:goal-enclosed :goal-cut-off} reason)
                (and (= :budget reason) (some-> (:goal-left result) (<= (budget-near))))
                (out-of-sight? c result))
            (not @shut?))))))

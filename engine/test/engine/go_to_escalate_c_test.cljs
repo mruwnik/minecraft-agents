@@ -1118,6 +1118,11 @@
     (is (false? (walled? {:status :no-path :reason :budget :goal-left 40})) "far off: the unseen land is the problem")
     (is (false? (walled? {:status :no-path :reason :budget})) "no distance known")))
 
+(deftest a-goal-cut-off-by-a-drop-reads-as-walled-in-for-a-free-body
+  (let [c {:primitives (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -20 63 -20 20 63 20 "stone")})}]
+    (is (true? (choose/goal-walled? c {:status :no-path :reason :goal-cut-off})))
+    (is (false? (choose/goal-walled? c {:status :no-path :reason :one-way})))))
+
 (def trench-room
   "The sealed room opened at its east door (x 3, z 0) onto a 3-deep trench across the whole dirt yard (x 4, z -6..6, feet y 61); the yard beyond is level with the room floor."
   (let [trench (for [z (range -6 7) y [61 62 63]] (str "4," y "," z))]

@@ -3,7 +3,7 @@
   dig route or a walk to the wall), note the holes it dug, put them back once the walk is on past them.
 
   Rules of go-to:
-  - A goal that is lava, stands over lava or has lava on all four sides (escalate-choose/goal-lava?) is refused at once when the walk finds it walled in: no way is made, in or out; the dig rules below are for an acceptable goal that is walled in.
+  - A goal that is lava, stands over lava or has lava on all four sides (escalate-choose/goal-lava?) is refused at once when the walk finds it walled in or cut off: no way is made, in or out; the dig rules below are for an acceptable goal that is walled in.
   - A goal cut off by a drop (:goal-cut-off, or :goal-enclosed with a drop edge in its region) is bridged: a carried block fills the floor beyond the drop edge nearest the body that it can step onto (escalate-choose/drop-fill, gap-fill; a go-to.escalated {:step :fill-gap}) when that is no dearer than the stair, pillar or dig the escape would make (jobs.lib.cost.ways/fill-cost: placing, the block spent, a fetch when the pack runs low), then it walks again.
   - :dig-out: a body sealed in its own shelter (a :shelter entry) when the walk finds no way, leaves it first at any hour (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); the way out is priced before it is cut (start-hold: a dearer-than-waiting cut holds :risky for dawn). At a dark sky while the body is :dug-in (sh-inside/night-sheltered) only when the call's worth buys the walk's priced night risk (walk-risk/buys-hp; ##Inf worth: always): else it waits for light, as the readiness checks do.
   - A free body whose walk ends :one-way at a drop it refuses (escalate-choose/refused-drop?) digs toward the goal below as for an out-of-sight goal (dig-way), not stopping when the stair's last cell brings the goal into sight. A search that ran out of land (:exhausted) with the goal below the body by more than a fall survives within the call's max-damage (escalate-choose/drop-stranded?) digs down the same way, goal seen or not, when a dig route exists.
@@ -273,7 +273,7 @@
         into? (or (goal-walled? c result shut?) (and gap? (not @shut?)))
         spare (may-dig-fn c)
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
-        lava-goal? (and (= :goal-enclosed (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
+        lava-goal? (and (#{:goal-enclosed :goal-cut-off} (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in (or out of sight) digs straight into it when it can
         dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword)) (out-of-sight? c result) (and (refused-drop? result) (not @shut?)) (and (drop-stranded? c feet pos result) (dig-way (:primitives c) feet goal spare opts))))
         ;; a buried body whose plan ran out of land read the rock round it as rock: to a goal no higher than it is

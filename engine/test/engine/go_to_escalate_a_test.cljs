@@ -444,17 +444,16 @@
           (is (empty? (events-of seen :go-to.by-hand)))
           (is (seq (calls p "craft"))))))))
 
-(deftest go-to-on-open-ground-never-escalates
+(deftest a-free-body-climbs-to-a-column-top-cut-off-by-its-drop
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [tower (merge (box -20 63 -20 20 63 20 "stone") (box 8 64 0 8 68 0 "stone"))
-              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower
+              {:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower
                                                  :inventory [{:name "dirt" :count 9}]}
                                                 {:pos [8 69 0] :range 0}))]
-          (is (= false (:arrived @out)) "the top of a 5-high stone column cannot be walked to")
-          (is (empty? (events-of seen :go-to.escalated)) "not shut in: go-to does not change the world")
-          (is (empty? (calls p "jumpPlace"))))))))
+          (is (true? (:arrived @out)) "the top of a 5-high stone column is reached by the cheapest way the call allows")
+          (is (= [:goal-cut-off] (distinct (map :why (events-of seen :go-to.escalated))))))))))
 
 (deftest a-shut-in-body-that-may-not-escalate-says-it-is-shut-in
   (async done
