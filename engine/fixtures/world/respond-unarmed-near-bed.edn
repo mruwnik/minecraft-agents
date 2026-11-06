@@ -2,6 +2,8 @@
 ;; pays the meet that may follow it by the measured chance its mob is met again (cost.answer ::flee-meets), not for certain, so the fist fight
 ;; under a skeleton's arrows is not the cheapest; with that chance set to 1 (the old price) it is, the meet after a death set to none
 ;; (cost.answer ::respawn-meets: by the measured chance the fight's death would also pay the skeleton met again from the bed). A zombie in the dark is answered without a death.
+;; Card bf562873: a bed 40 blocks off is past a zombie's follow range, so the walk back after a death does not meet it again and the fist fight's death
+;; is priced as that walk alone (the cheaper answer); should-succeed: the fight is decided. Should-fail: none.
 ;; Plot 48 wide (dark for the zombie; lit for the skeleton cases, which must see it: one only heard is another decision), mobs helmeted (no sun burn), AI on; body at [24.5 0 24.5], its spawn bed at [20 0 24] (a death there costs a short walk).
 {:defaults
  {:tags [:hostile :survival :flee]
@@ -27,4 +29,10 @@
   {:name "unarmed-body-answers-a-zombie-in-the-dark-and-lives"
    :act [[:summon "zombie" [24.5 0 30.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "zombie"}} :within-s 20}
-            {:no-event {:source :body :kind :died} :for-s 40}]}]}
+            {:no-event {:source :body :kind :died} :for-s 40}]}
+  {:name "unarmed-body-with-a-bed-past-the-zombies-follow-range-fights-it"
+   :blocks [[:set [44 0 24] "red_bed[facing=east,part=foot]"] [:set [45 0 24] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [44 0 24]} :policy {:cap 1 :ttl :forever}}]
+   :body {:at [4.5 0 24.5] :yaw 0 :inventory [] :spawnpoint [44 0 24]}
+   :act [[:summon "zombie" [6.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "zombie" :decision :fight}} :within-s 20}]}]}
