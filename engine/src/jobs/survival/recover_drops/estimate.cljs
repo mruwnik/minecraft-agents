@@ -78,6 +78,11 @@
         depth (if (= :unseen (nth kinds wet nil)) (inc wet) wet)]
     (/ (* 2 depth (breath/swim-ms)) 1000)))
 
+(defn dive-hp
+  "Hp the dive down the pile's column and up drowns the body of: dive-s past the air it has (breath/drown-hp)."
+  [p kind-at pos]
+  (breath/drown-hp (- (dive-s kind-at pos) (breath/air-left-s (.self p)))))
+
 (defn no-air-way
   "The text that names why a pile under water is not gone for, else nil: the trip there and back does not fit one breath (the quoted
   route drowns, or the dive down the pile's column and up is longer than the air less ::breath/margin-s) and no block is carried to
@@ -139,7 +144,7 @@
         drown-hp (get-in quoted [:route :drown] 0)
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
               {:name (if (= "drowning" cause) "drowning" "water")
-               :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? wet-at pos)) (cfg/wet-danger) 0))})
+               :danger (max drown-hp (if (wet-pile? wet-at pos) (dive-hp p wet-at pos) 0))})
         ;; the quote (go-to :back) is the round trip; fetch-cost walks the distance back itself
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) (/ mean 2)))
         danger-s (pick/risk-s c quoted (:danger wet 0))
@@ -174,21 +179,28 @@
   [e]
   (cost/survived-worth (:value e) (:chance e)))
 
+(defn surplus-s
+  "Seconds the pile of estimate e is worth over its trip with the danger left out and the margin (0 when the cost is not a number): what a wait or a detour may cost before the trip is not worth it."
+  [e margin]
+  (if (number? (:cost e))
+    (max 0 (- (:value e) (+ (- (:cost e) (get-in e [:parts :danger] 0)) margin)))
+    0))
+
 (defn danger-only?
   "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."
   [e margin]
   (and (number? (:cost e))
        (pos? (get-in e [:parts :danger] 0))
-       (> (:value e) (+ (- (:cost e) (get-in e [:parts :danger])) margin))))
+       (pos? (surplus-s e margin))))
 
 (defn deep-pile
-  "{:below n :aside d} when the pile lies ::deep-drop or more under the body and within ::deep-reach aside of it, else nil.
+  "{:below n :aside d} when the pile lies ::deep-drop or more under the body, else nil (dig-down! asks the window whether the stair fits).
   A walk that did not arrive comes first: the stair is for a pile no walk reaches."
   [c pos]
   (let [here (u/self-pos c)
         below (- (js/Math.floor (:y here)) (js/Math.floor (:y pos)))
         aside (u/dist (assoc here :y 0) (assoc pos :y 0))]
-    (when (and (>= below (cfg/deep-drop)) (<= aside (cfg/deep-reach)))
+    (when (>= below (cfg/deep-drop))
       {:below below :aside aside})))
 
 (defn unreachable-detail

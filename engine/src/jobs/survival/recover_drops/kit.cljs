@@ -18,17 +18,17 @@
             [jobs.survival.recover-drops.pile :as pl]))
 
 (defn on-the-way?
-  "Whether a chest at cell costs at most ::kit-detour blocks more than the walk from the body to the pile: the pile
-  despawns, so a kit is not worth a trip away from it."
-  [c pile cell]
+  "Whether the walk through a chest at cell adds at most budget-s seconds (cost/walk-blocks-per-s) to the walk from the body to
+  the pile: the pile's surplus (est/surplus-s) is what a detour may cost before the trip is not worth it."
+  [c pile cell budget-s]
   (let [here (u/self-pos c)
         at (zipmap [:x :y :z] cell)]
-    (<= (- (+ (u/dist here at) (u/dist at pile)) (u/dist here pile)) (cfg/kit-detour))))
+    (<= (/ (- (+ (u/dist here at) (u/dist at pile)) (u/dist here pile)) (cost/walk-blocks-per-s)) budget-s)))
 
 (defn stock-names
-  "The item names the known chests on the way to the pile hold (:fetch/stock)."
-  [c pile]
-  (into #{} (comp (filter #(on-the-way? c pile (key %))) (mapcat (comp keys val))) (stock/stock-of (ctx/view c))))
+  "The item names the known chests on the way to the pile (a detour of at most budget-s seconds) hold (:fetch/stock)."
+  [c pile budget-s]
+  (into #{} (comp (filter #(on-the-way? c pile (key %) budget-s)) (mapcat (comp keys val))) (stock/stock-of (ctx/view c))))
 
 (defn piece-points
   "Armour points of one piece (jobs.lib.cost/armour-stats), 0 for nil."
@@ -37,11 +37,11 @@
 
 (defn kit-problem
   "From the chests on the way to the pile, the need wait of the best weapon, else of the best piece for an empty or weaker armour slot, that a known chest holds
-  and the body does not carry (ranked by jobs.lib.cost: damage per attack gap, armour points); nil when none."
-  [c pile]
+  and the body does not carry (ranked by jobs.lib.cost: damage per attack gap, armour points); nil when none. budget-s: see on-the-way?."
+  [c pile budget-s]
   (let [p (:primitives c)
         have (set (map :name (u/inventory p)))
-        stock (remove have (stock-names c pile))
+        stock (remove have (stock-names c pile budget-s))
         worn (armour/worn-of (.-equipment (.self p)))
         weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by #(/ (cost/weapon-damage %) (cost/attack-gap-ms %)) >))
         pieces (fn [slot] (->> stock
@@ -51,16 +51,21 @@
     (or (when-not (combat/best-weapon p combat/default-weapons) (need weapons))
         (some #(need (pieces %)) armour/slots))))
 
-(defn ^:async kit-called-for?
-  "Whether the pile is worth the trip were the route safe (its value against the fetch cost without danger and the margin)
-  and the walk to it is dangerous: go-to's quote of it names the mobs it risks (est/estimate)."
+(defn window-s
+  "Seconds left before the drops of death entry despawn."
+  [c entry]
+  (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 1000))
+
+(defn ^:async kit-surplus-s
+  "Seconds the pile is worth over the fetch cost without danger and the margin, at most the window left over that cost (0: not worth it), when the walk to it is
+  dangerous (go-to's quote of it names the mobs it risks, est/estimate); else 0. A kit is called for when it is positive."
   [c entry]
   (let [{:keys [pos cause]} (:data entry)
         elapsed (est/pile-age-ms c entry)
         e (est/estimate c (:data entry) elapsed (await (est/quote-trip c entry)))
         safe (cost/fetch-cost {:distance (when pos (u/dist (u/self-pos c) pos)) :elapsed-ms elapsed :cause cause :back? true :stay-s (pl/collect-s c (:data entry))})
         safe-cost (if (js/isFinite (:cost safe)) (:cost safe) js/Infinity)]
-    (boolean (and (seq (:seen-mobs e)) (> (:value e) (+ safe-cost (cfg/margin)))))))
+    (if (seq (:seen-mobs e)) (max 0 (min (- (:value e) (+ safe-cost (cfg/margin))) (- (window-s c entry) safe-cost))) 0)))
 
 (defn ^:async wear-kit!
   "Put on what the kit fetch brought (jobs.items.equip), once its child has ended."
@@ -81,11 +86,13 @@
   :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn with its ending) or
   nothing to do, else :continue for a cut."
   [c entry]
-  (let [limits (need/fetch-opts c)]
-    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c (:pos (:data entry)))) (not (await (kit-called-for? c entry))))
+  (let [limits (need/fetch-opts c)
+        pile (:pos (:data entry))
+        surplus (when (and limits (not (:kit-done (ctx/mem c))) (kit-problem c pile ##Inf)) (await (kit-surplus-s c entry)))]
+    (if-not (and surplus (pos? surplus) (kit-problem c pile surplus))
       (do (ctx/update-mem! c assoc :kit-done true) nil)
       (loop []
-        (let [wanted (kit-problem c (:pos (:data entry)))
+        (let [wanted (kit-problem c pile surplus)
               r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc limits :minutes (kit-minutes c entry)))) :done)]
           (cond
             (nil? wanted)

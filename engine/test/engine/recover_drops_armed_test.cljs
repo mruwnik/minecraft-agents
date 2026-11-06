@@ -10,6 +10,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.contract :as contract]
             [jobs.lib.stock :as stock]
+            [jobs.survival.recover-drops.kit :as kit]
             [jobs.lib.need :as need]
             [engine.memory :as mem]))
 
@@ -171,12 +172,20 @@
       (fn ^:async t []
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng seen p]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
-          (mem/write! (:store eng) stock/stock-kind {:pos [-300 64 3] :items {"iron_sword" 1}} stock/stock-policy)
+          (mem/write! (:store eng) stock/stock-kind {:pos [-1000 64 3] :items {"iron_sword" 1}} stock/stock-policy)
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 5000)
           (core/submit! eng job {})
           (await (run-until-empty eng 60))
           (is (empty? (filter #(= :obtain.chest (:kind %)) @seen)))
           (is (nil? (get (inv p) "iron_sword"))))))))
+
+(deftest a-chest-is-a-kit-source-only-when-its-detour-costs-less-than-the-budget
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        _ (mem/write! (:store eng) stock/stock-kind {:pos [-100 64 3] :items {"iron_sword" 1}} stock/stock-policy)
+        detour-s (/ (- (+ 100 (+ 100 (:x dt/death-pos))) (:x dt/death-pos)) (cost/walk-blocks-per-s))]
+    (is (nil? (kit/kit-problem c dt/death-pos (/ detour-s 2))) "half the detour's seconds do not buy it")
+    (is (= ["iron_sword"] (:any-of (kit/kit-problem c dt/death-pos (* 2 detour-s)))))))
 
 (def armour-pile
   [{:name "iron_helmet" :count 1} {:name "iron_chestplate" :count 1} {:name "iron_leggings" :count 1} {:name "iron_boots" :count 1}

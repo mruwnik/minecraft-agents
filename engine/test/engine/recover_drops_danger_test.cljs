@@ -315,20 +315,20 @@
         (let [{:keys [eng]} (await ((resume-run {:cuts 0} hostile-cut!)))]
           (is (= :collected (:decision (recovered eng)))))))))
 
-(deftest a-pile-lost-to-drowning-is-priced-as-water
+(deftest a-pile-lost-to-drowning-is-named-water-and-adds-no-hp-a-dive-that-fits-the-air-does-not-drown
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await ((fetch-run "drowning")))]
-          (is (re-find #"danger [1-9][0-9.]*,.*: drowning" (decided-text (:eng r)))))))))
+          (is (re-find #"danger 0,.*: drowning" (decided-text (:eng r)))))))))
 
-(deftest a-pile-under-water-is-priced-as-water-whatever-the-cause
+(deftest a-pile-under-shallow-water-is-named-water-and-adds-no-hp
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [wet (into {} (for [y [64 65]] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
               r (await ((fetch-run "fall" {:blocks wet})))]
-          (is (re-find #"danger [1-9][0-9.]*,.*: water" (decided-text (:eng r)))))))))
+          (is (re-find #"danger 0,.*: water" (decided-text (:eng r)))))))))
 
 (deftest an-agent-retry-weighs-a-remembered-danger-anew
   (async done
@@ -401,6 +401,13 @@
     (is (= [:infinite :no-air-way] ((juxt :cost :reason) (update bare :cost estimate/finite))) "25 cells down and up is more than the air, and no block")
     (is (not= js/Infinity (:cost (est [{:name "cobblestone" :count 8}] nil))) "a carried block can make air")
     (is (= :no-air-way (:reason (est [] {:uses {:job-time [5 5 5]} :route {:drown 4}}))) "a quoted route that drowns")))
+
+(deftest a-dive-past-the-air-adds-the-hp-it-drowns
+  (let [wet (into {} (for [y (range 17 65)] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
+        death {:pos {:x (:x dt/death-pos) :y 17 :z (:z dt/death-pos)} :inventory dt/death-pile-of-the-field-report}
+        {:keys [eng p]} (setup {:floor tu/walk-floor :entities [] :blocks wet :inventory [{:name "cobblestone" :count 8}]})
+        e (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000 nil)]
+    (is (pos? (get-in e [:parts :danger])) "47 cells down and up outlast the air: the hp drowned is the danger, with a block carried to make air")))
 
 (deftest a-later-death-by-a-mob-near-an-older-pile-guards-that-pile-too
   (async done

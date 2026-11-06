@@ -35,6 +35,10 @@
   "recover-drops :value-overrides that price the field-report pile at a few hundred seconds, so the trip's danger and cost decide it."
   {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 14})
 
+(def held-values
+  "pile-values with the diamonds worth 80 s: over the 29 s of the safe trip by more than a hold of the zombie's flight costs, under the 133 s of the trip with the zombie."
+  (assoc pile-values "diamond_pickaxe" 50 "diamond_sword" 30))
+
 (def death-pile-of-the-field-report
   [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}
    {:name "cobblestone" :count 64} {:name "cobblestone" :count 36}
@@ -538,7 +542,7 @@
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
           (die! eng {:pos death-pos :inventory diamonds})
           (appear-after-first-leg! p clock zombie)
-          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides pile-values}) {})
+          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides held-values}) {})
           (await (run-until-empty eng 3))
           (is (re-find #"zombie" (:text (danger-remembered eng))) "a mob that turned up on the way makes the trip dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open")

@@ -29,7 +29,7 @@
   "After a death, go back for the drops when they are worth it. Serves the :died entry no :recovered covers (the keyed one, else the open pile best net of the walk); one run is the whole trip and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex or a restart goes on with the same trip (:recover-trip).
   Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). The children run under :checks {:safe? (always)}: the trip prices its own danger.
   Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, its danger the walk risk of go-to's quote, ::margin); infinite for lava, fire, the void or a walk ending after the despawn.
-  Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, its walk risk naming the mobs priced, the air the route spends); a hold that would leave under ::hold-slack times the walk of the despawn window, or under ::min-hold-s, is no wait: the pile is left (:skip).
+  Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, its walk risk naming the mobs priced, the air the route spends); a hold is no longer than the pile's gain over its safe trip (est/surplus-s: a wait costs its seconds), the window left less the walk, the flight and the collect, and ::danger-memory-ms, and no shorter than the flight (seconds a chaser needs to give up); with no mob seen, or less, no hold: the pile is left (:skip).
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
   Fetch: legs of ::leg-s (weighed again after each), then up to 3 collect passes (jobs.items.collect-drops; armour picked up is put on at the end, jobs.items.equip), a look and a walk round the pile; own seal blocks near it are taken back (jobs.access.cleanup), a deep pile is reached by a stair (jobs.access.tunnel).
   Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left; endings carry :next (jobs.lib.next-call): :danger the call with :retry true then the call again, :unreachable only what unblocks the walk, :gone and :not-worth none, others the call again. A walk that did not arrive leaves the death open.
@@ -150,17 +150,18 @@
 
 (defn ^:async retry-later!
   "A skip for danger backs off while the trip can still come back: report it, forget the estimate, remember the danger
-  (:recover-danger, for ::danger-memory-ms; at most until ::hold-slack
-  times the walk back from the flight's end (est/flight-s) and the collect (arrive-s), would end at the despawn)
+  (:recover-danger, for ::danger-memory-ms; at most the pile's surplus seconds (est/surplus-s), and until the walk back from
+  the flight's end (est/flight-s) and the collect (arrive-s) would end at the despawn)
   and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
-  death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait, and neither is a second hold
+  death meanwhile, then the danger is weighed anew. A hold shorter than the flight, with no mob seen, is no wait, and neither is a second hold
   for the same mobs where a finished hold saw them: the pile is left (its worth is under the full cost, danger in; Q367 rules out
   waiting, not leaving)."
   [c entry decided]
-  (let [need-ms (* 1000 (cfg/hold-slack) (+ (await (arrive-s c entry)) (:flight-s decided 0)))
+  (let [flight-ms (* 1000 (:flight-s decided 0))
+        need-ms (+ (* 1000 (await (arrive-s c entry))) flight-ms)
         room (- (window-ms c entry) need-ms)
-        hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))]
-    (if (and (>= hold-ms (cfg/min-hold-ms)) (not (est/unchanged-after-hold? c decided)))
+        hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)) (* 1000 (est/surplus-s decided (cfg/margin))))]
+    (if (and (pos? hold-ms) (>= hold-ms flight-ms) (seq (:seen-mobs decided)) (not (est/unchanged-after-hold? c decided)))
       (retreat! c entry decided hold-ms)
       (end/finish! c :skip decided))))
 

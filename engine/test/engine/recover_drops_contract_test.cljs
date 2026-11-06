@@ -56,7 +56,7 @@
         {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
     (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
     {:eng eng :seen seen :clock clock
-     :id (core/submit! eng (list 'jobs.survival.recover-drops (merge {:value-overrides dt/pile-values} extra)) {})}))
+     :id (core/submit! eng (list 'jobs.survival.recover-drops (merge {:value-overrides dt/held-values} extra)) {})}))
 
 (deftest a-danger-that-makes-the-pile-dear-waits-the-listed-job
   (async done
@@ -68,6 +68,16 @@
           (js/clearInterval timer)
           (is (= :danger (:reason (core/waiting eng id))))
           (is (nil? (recovered eng)) "the death stays open"))))))
+
+(deftest a-pile-worth-less-over-its-safe-trip-than-a-hold-costs-is-left-not-held
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (dear-zombie-run {:value-overrides dt/pile-values})
+              timer (js/setInterval #(swap! clock + 500) 5)]
+          (await (run-until-empty eng 12))
+          (js/clearInterval timer)
+          (is (= :skip (:decision (recovered eng))) "5 s over the safe trip pay for no wait of the zombie's flight"))))))
 
 (deftest a-danger-that-makes-the-pile-dear-ends-a-retry-condition-failed-danger
   (async done
@@ -97,7 +107,7 @@
               timer (js/setInterval #(swap! clock + 500) 5)]
           (await (run-until-empty eng 12))
           (js/clearInterval timer)
-          (is (= [{:job "jobs.survival.recover-drops" :args {:value-overrides dt/pile-values :retry true}}] (next-of seen))
+          (is (= [{:job "jobs.survival.recover-drops" :args {:value-overrides dt/held-values :retry true}}] (next-of seen))
               "retry is given already: the call again is the retry"))
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/junk})
