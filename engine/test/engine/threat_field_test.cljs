@@ -166,6 +166,20 @@
     (is (= field/max-fields (apply max sizes)))
     (is (= 199 (field/shared c [:place 199] (constantly :read-again))) "the latest is still kept")))
 
+;; a toll table holds up to max-threats fields' cells: the cache bounds the cells it holds, not its entries
+(deftest shared-keeps-values-up-to-max-fields-fields-of-cells
+  (let [p #js {:worldEpoch (fn [] 0)}
+        c {:primitives p :view (fn [] {:now 0 :data {}})}
+        half (inc (/ (* field/max-fields (field/max-cells)) 2))
+        reads (atom 0)
+        ask (fn [k cells] (field/shared c k #(do (swap! reads inc) k) (constantly cells)))]
+    (ask [:big 1] half)
+    (ask [:big 2] half)
+    (ask [:big 1] half)
+    (is (= 3 @reads) "two tables past the budget: the older one was dropped")
+    (doseq [i (range 40)] (ask [:small i] 1))
+    (is (= 41 (.-size ^js (.get field/bodies p))) "40 small tables beside the big one: not capped at max-fields entries")))
+
 (deftest a-shared-value-is-read-again-when-the-memory-changes
   (let [mem (atom 0)
         p #js {:worldEpoch (fn [] 0) :perception {:st #js {}}}

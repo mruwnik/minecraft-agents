@@ -289,4 +289,5 @@
      (if (empty? ts)
        []
        (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (/ (js/Math.round (* 20 (:weight t))) 20)]) ts)]
-                     #(tolls-of c ts))))))
+                     #(tolls-of c ts)
+                     count)))))

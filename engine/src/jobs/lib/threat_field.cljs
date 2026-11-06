@@ -306,27 +306,33 @@
 (defn shared
   "The value of (thunk) for key k, kept per body (the primitives of c) for every job of it while the world has not changed
   (world-epoch; a body without one keeps nothing), never under check-cache/fresh: what the world shows a field does not
-  depend on the job asking. At most max-fields values, the least recently used dropped first."
-  [c k thunk]
-  (let [p (:primitives c)
-        epoch (world-epoch p)]
-    (if (nil? epoch)
-      (thunk)
-      (let [^js kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
-            ks (pr-str k)
-            hit (.get kept ks)]
-        (if (and hit (= epoch (:epoch hit)) (not (::check-cache/fresh c)))
-          (do (doto kept (.delete ks) (.set ks hit))
-              (set! (.-hits shared-asks) (inc (.-hits shared-asks)))
-              (:v hit))
-          (let [v (thunk)]
-            (set! (.-misses shared-asks) (inc (.-misses shared-asks)))
-            ;; an entry of another epoch is never hit again; each holds a whole toll vector (MBs of cells)
-            (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (= epoch (:epoch e)) (.delete kept key)))
-            (.delete kept ks)
-            (while (>= (.-size kept) max-fields) (.delete kept (.-value (.next (.keys kept)))))
-            (.set kept ks {:epoch epoch :v v})
-            v))))))
+  depend on the job asking. The values kept hold at most the cells of max-fields fields of ::max-cells, the least recently
+  used dropped first; (cells-of v) counts a value's cells (default: one field's)."
+  ([c k thunk] (shared c k thunk (fn [_] (max-cells))))
+  ([c k thunk cells-of]
+   (let [p (:primitives c)
+         epoch (world-epoch p)]
+     (if (nil? epoch)
+       (thunk)
+       (let [^js kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
+             ks (pr-str k)
+             hit (.get kept ks)]
+         (if (and hit (= epoch (:epoch hit)) (not (::check-cache/fresh c)))
+           (do (doto kept (.delete ks) (.set ks hit))
+               (set! (.-hits shared-asks) (inc (.-hits shared-asks)))
+               (:v hit))
+           (let [v (thunk)
+                 n (cells-of v)
+                 budget (* max-fields (max-cells))]
+             (set! (.-misses shared-asks) (inc (.-misses shared-asks)))
+             ;; an entry of another epoch is never hit again; each holds a whole toll table
+             (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (= epoch (:epoch e)) (.delete kept key)))
+             (.delete kept ks)
+             (while (and (pos? (.-size kept))
+                         (< budget (+ n (reduce + 0 (map :cells (es6-iterator-seq (.values kept)))))))
+               (.delete kept (.-value (.next (.keys kept)))))
+             (.set kept ks {:epoch epoch :v v :cells n})
+             v)))))))
 
 ;; ---------------------------------------------------------------- reads kept across checks
 
