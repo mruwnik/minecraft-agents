@@ -1257,6 +1257,17 @@
     (is (= [8 62 0] (:cell (peek (:cells r)))) "the far end's nearest stand: under the lava's edge, its head clear of it")
     (is (not-any? #(= "lava" (:block %)) (:cells r)))))
 
+;; card 7771243f: a bedrock slab 38 long, 17 wide and 13 high holds both leg ends (at most 6 on) with its edge beyond the leg's
+;; length from them: the stand nearest an end lies 7 or more off, so a cube of the leg's length found none
+(deftest a-dig-leg-whose-ends-lie-in-a-slab-wider-than-the-leg-moves-them-to-the-stands-beyond-it
+  (let [p (tu/fake {:blocks (merge (box -2 50 -15 50 80 15 "stone") (box 3 58 -8 40 70 8 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1000)}
+        leg #(choose/dig-leg c [2 64 0] [44 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-ends-in-wide-slab")})
+        r (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
+            (first (drop-while #{{:step :searching}} (take 300 (repeatedly leg)))))]
+    (is (= :dig-route (:step r)) (str r))
+    (is (not-any? #(= "bedrock" (:block %)) (:cells r)))))
+
 ;; card e252d55b: the goal floats in seen air with no fallback way and no bound but ##Inf; the body remembers only the
 ;; cells round it. Once a box holds them and what a step reads past them, a wider one adds only guessed rock: no leg
 (deftest a-dig-leg-widening-at-no-price-ends-once-its-box-holds-all-the-body-remembers

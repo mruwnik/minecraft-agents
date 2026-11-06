@@ -698,7 +698,7 @@
   what blocks it (a column of lava, bedrock or another's claim) within the leg's own length of its two ends, that box
   doubled while it alone kept the search from an end (dig-route's :boxed), each sliced as the first; an end but the goal
   over seen air is the cell over the first floor under it, and one no route ends in (lava, bedrock, a claim) the
-  stand nearest it within the leg's length that is nearer the goal than from. The wider boxes'
+  stand nearest it (searched outward ring by ring) that is nearer the goal than from. The wider boxes'
   searches are bounded by the least of opts :bound-s, :worth-s and the way without a dig route (memory :route-search
   :fallback-s), and each counts the CPU the boxed searches before it spent (:searched-s): the widening ends :past-worth
   once the search has spent what the leg could save, and with no end reached once the box holds every cell the body
@@ -717,21 +717,28 @@
                                  (and (every? #(and (some? (dig-route/cell-cost (block-at %))) (escape/diggable? block-at may-dig? %)) cells)
                                       (dig-route/floor-ok? (block-at [x (dec y) z]))
                                       (not-any? (fn [[n]] (= "lava" n)) (mapcat #(rules/fluid-neighbours block-at %) cells)))))
+          ;; offsets at Chebyshev distance r: the stand nearest an end is looked for outward, ring by ring
+          shell (fn [r] (let [rs (range (- r) (inc r)) in (range (- 1 r) r)]
+                          (concat (for [dy rs dz rs s [(- r) r]] [s dy dz])
+                                  (for [dx in dz rs s [(- r) r]] [dx s dz])
+                                  (for [dx in dy in s [(- r) r]] [dx dy s]))))
           gap (fn [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
           ;; priced by the route; one no route can end in (inside lava, bedrock or a claim) is the stand nearest it, within
-          ;; the leg's own length and nearer the goal than the body; the goal is the call's own
+          ;; nearer the goal than the body, searched outward (no stand nearer the goal lies beyond the two distances' sum); the goal is the call's own
           ends (distinct
                 (map (fn [[x y z :as end]]
                        (let [end (if (or (= end goal) (not (dig-route/open? (block-at [x (dec y) z]))))
                                    end
                                    (or (some #(when-not (dig-route/open? (block-at [x (dec %) z])) [x % z]) (range (dec y) (places/min-y p) -1)) end))
-                             l (length end)
-                             ds (range (- l) (inc l))]
+                             reach (js/Math.ceil (+ (gap end goal) (gap from goal)))]
                          (if (or (= end goal) (stand? end))
                            end
-                           (or (some #(when (and (< (gap % goal) (gap from goal)) (stand? %)) %)
-                                     (sort-by #(gap % end) (for [dx ds dy ds dz ds] (mapv + end [dx dy dz]))))
+                           (or (some (fn [r] (->> (shell r)
+                                                  (keep #(let [c (mapv + end %)] (when (and (< (gap c goal) (gap from goal)) (stand? c)) c)))
+                                                  (sort-by #(gap % end))
+                                                  first))
+                                     (range 1 (inc reach)))
                                end))))
                      (leg-ends from goal)))
           ;; [cells seconds], :searching, :dearer, or the seconds the boxed searches spent when the box cut every end off
