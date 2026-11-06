@@ -6,11 +6,13 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
+            [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.near :as near]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
+            [jobs.lib.walk.world :as wworld]
             [engine.test-util :as tu :refer [box]]))
 
 ;; a stone floor x 0..47, z 0..47 (only those columns are loaded); the body near its east edge, so no cell of the loaded
@@ -75,6 +77,23 @@
             (is (not= :goal-enclosed (:why @out)))
             (is (pos? (count @plans)) "the stub saw the searches")
             (is (< (count @plans) 10) "one search kept over its rounds, not one a round")))))))
+
+;; tolls that drift between rounds (live KitOak94: a lost creeper's fading weight rebuilt its threat tolls) keep the
+;; unfinished search: before, the new tolls key began a new search each round, which never ended (:moved-while-searching)
+(deftest a-search-goes-on-while-its-tolls-drift
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! wsearch/searches {})
+        (let [p (tu/fake {:floor [0 0 47 47] :self {:pos [2.5 64 2.5]}})
+              c {:primitives p}
+              plan (fn [factor]
+                     (wsearch/plan-walk-budgeted! c (wworld/with-tolls (wworld/path-world p) [{:x 9 :y 64 :z 9 :factor factor}])
+                                                  [45 64 45] 0 1 {:policy executor/policy :budget 16 :progress false}))
+              [first-plan second-plan] (await (tu/with-expansion-budget 16 (fn ^:async both [] [(await (plan 2)) (await (plan 3))])))]
+          (reset! wsearch/searches {})
+          (is (= ["searching" true] [(:status first-plan) (:fresh first-plan)]))
+          (is (false? (:fresh second-plan)) "the second round goes on with the first round's search"))))))
 
 ;; the goal stays unloaded far past the loaded floor's east edge (card 7a031d15): no node of the loaded land is 8 blocks
 ;; nearer than the start, so only an ended search walks; ending only once all loaded land is searched took more rounds

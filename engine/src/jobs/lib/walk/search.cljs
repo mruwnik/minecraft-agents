@@ -297,16 +297,16 @@
         (< (js/Math.hypot (- px gx 0.5) (- py gy) (- pz gz 0.5)) closest)))))
 
 (defn unfinished-like
-  "The body's unfinished search that plans the same walk as key k from the same cell, whatever its dangers, tolls and avoided
-  cells (the last four parts of a key): a quote that waits on its search for rounds is priced by the world as it began, not
-  restarted by every mob that moves or toll that drifts, which would never end it."
+  "The body's unfinished search that plans the same walk as key k from the same cell, whatever its dangers, tolls, avoided
+  cells and mask (the last four parts of a key): a search that needs several rounds is priced by the world as it began, not
+  restarted by every mob that moves or toll that drifts, which would never end it (the walk's watch replans on what changed)."
   [who k]
   (let [same (vec (take 6 k))]
     (first (filter #(and (not (:within %)) (= same (vec (take 6 (:key %))))) (vals (get @searches who))))))
 
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
-  (searches) when it plans the same thing from the same cell. A search that ends is plan-walk!'s answer; one that does not
+  (searches) when it plans the same walk from the same cell (unfinished-like). A search that ends is plan-walk!'s answer; one that does not
   is unfinished-plan's (progress, default true: whether it may walk to where the search has got to); a partial one drops
   the search, which its :search-on (fn []) keeps to go on with instead (a walk held before its first step). With frontier, the
   searches read and add to the body's known land toward the goal (known-land): a frontier in land an earlier search
@@ -315,7 +315,7 @@
   (let [t (clock/now)
         who (:primitives c)
         k0 (search-key c to range weight policy walls pw)
-        near-kept (when quoted (unfinished-like who k0))
+        near-kept (unfinished-like who k0)
         k (if (and near-kept (nil? (get-in @searches [who k0]))) (:key near-kept) k0)
         kept (get-in @searches [who k])
         known (when frontier (known-cells! c to range))
