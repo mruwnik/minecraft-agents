@@ -6,7 +6,8 @@
 ;; torch is back (4 in the inventory); a cancelled call's off-hand torch is back after the next call.
 ;; Should-fail: a zone over the takeoff cells refuses the torch (none placed): the dark drop is refused, the call ends :unseen-floor-dark. The first case's result also carries :spent (card 99785eb0: the torch placed).
 ;; The :carried cases put a pickaxe in the main hand and a shield in the off hand: a torch in either hand lets the body see 7 blocks in the dark,
-;; and a drop of 5 is then sometimes seen without a placed torch.
+;; and a drop of 5 is then sometimes seen without a placed torch. The cases that need the aid to fire (off hand empty, no torch in either hand) also put the pickaxe in the main hand:
+;; the selected hotbar slot survives from the case before, and a torch given into it is held.
 {:defaults
  {:tags [:movement :go-to :torch]
   :time :any
@@ -32,14 +33,16 @@
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}]
    :after [[:item "torch" 3] [:body-near [24.5 -2 16.5] 3]]}
   {:name "unknown-without-torches-returns-the-off-hand-torch"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :never :ignore-zones? true})]]
+   :act [[:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "clear $BODY minecraft:torch"] [:rcon "give $BODY minecraft:torch 4"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:mainHand {:name "stone_pickaxe"}}}] 10]
+         [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :never :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :go-to.off-hand-torch} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 110 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "torch" 4]]}
   {:name "torch-left-by-a-cancelled-call-is-returned-at-the-next-call"
    ;; the first call is cancelled while it runs, once the torch is in the off hand: the await and the cancel fail the case if the call ended first
-   :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :never :ignore-zones? true})]
+   :act [[:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "clear $BODY minecraft:torch"] [:rcon "give $BODY minecraft:torch 4"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:mainHand {:name "stone_pickaxe"}}}] 10]
+         [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :never :ignore-zones? true})]
          [:await {:source :job :kind :go-to.off-hand-torch} 100]
          [:http :cancel "$event-job" {:ok true}]
          [:await {:source :job :kind :cancelled} 10]
