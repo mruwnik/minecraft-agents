@@ -138,6 +138,17 @@
     (is (= [:pass-hook-failed] (mapv :kind @raw)) "the second throw within every-ms is not emitted again, and none is thrown")
     (is (= ["the perception pass hook failed: boom"] (mapv :message @raw)))))
 
+(deftest a-pass-hook-whose-promise-rejects-emits-pass-hook-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (atom [])
+              eng {:events (events/make {:body "Fake" :sinks [#(swap! raw conj %)] :now #(js/Date.now)})}
+              run (main/pass-hook (atom eng) (fn [_] (js/Promise.reject (js/Error. "late"))) 60000)]
+          (run)
+          (await (js/Promise. (fn [resolve _] (js/setTimeout resolve 0))))
+          (is (= ["the perception pass hook failed: late"] (mapv :message @raw))))))))
+
 (deftest a-second-signal-does-not-stop-again
   (async done
     (tu/run-async done

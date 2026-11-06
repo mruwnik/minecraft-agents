@@ -178,19 +178,22 @@
          (catch :default e (failed e)))))
 
 (defn pass-hook
-  "(fn []) that runs hook on core/hook-ctx of the engine in eng-ref (nothing before it exists). A throw is emitted as
-  :pass-hook-failed at most once per every-ms, never thrown: it runs inside perception's own steps and looks."
+  "(fn []) that runs hook on core/hook-ctx of the engine in eng-ref (nothing before it exists). A throw or a rejected
+  promise from hook is emitted as :pass-hook-failed at most once per every-ms, never thrown: it runs inside perception's
+  own steps and looks."
   [eng-ref hook every-ms]
-  (let [last-failed (atom (- js/Infinity))]
+  (let [last-failed (atom (- js/Infinity))
+        failed (fn [eng e]
+                 (let [t (js/Date.now)]
+                   (when (>= (- t @last-failed) every-ms)
+                     (reset! last-failed t)
+                     (core/emit! eng {:source :system :kind :pass-hook-failed :level :warn
+                                      :text (str "the perception pass hook failed: " (or (ex-message e) e))}))))]
     (fn []
       (when-let [eng @eng-ref]
-        (try (hook (core/hook-ctx eng))
-             (catch :default e
-               (let [t (js/Date.now)]
-                 (when (>= (- t @last-failed) every-ms)
-                   (reset! last-failed t)
-                   (core/emit! eng {:source :system :kind :pass-hook-failed :level :warn
-                                    :text (str "the perception pass hook failed: " (or (ex-message e) e))})))))))))
+        (try (let [r (hook (core/hook-ctx eng))]
+               (when (instance? js/Promise r) (.catch r #(failed eng %))))
+             (catch :default e (failed eng e)))))))
 
 (defn ^:async wait-out-danger!
   "Before a stop, give a running danger reflex up to danger-wait-ms to end (a body stopped mid-escape suffocates while the
