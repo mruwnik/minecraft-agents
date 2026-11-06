@@ -9,6 +9,8 @@
             [engine.core :as core]
             [engine.cornered-test :as ct]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
             [engine.hut-shelter-test :as hs]
             [engine.test-util :as tu :refer [box]]
             [engine.settings :as settings]
@@ -146,25 +148,22 @@
       (fn ^:async t []
         (is (some? (await (door-price {} {:unloaded #{"5,63,-2" "5,64,-2" "5,65,-2"}}))) "a room cell not seen: the door cover is priced, not dropped")))))
 
-(def world-key rooms/world-key)
-
 (deftest a-wall-broken-between-rounds-drops-the-room-doors
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (ct/setup (merge-with merge (open-hut {:self {:pos {:x 5.5 :y 64 :z 1.5}}}) {:blocks (box 3 63 -2 7 63 2 "stone")}))
-              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
-              feet {:x 5 :y 64 :z 1}
-              epoch (atom 0)]
+              per (perception/create (fake-raw/create p) {:radius 10 :ray-deg 2 :now (constantly 1000000) :rand (constantly 0.5)})
+              w (perception/wrap p per)
+              c (assoc (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1}) :primitives w)
+              feet {:x 5 :y 64 :z 1}]
           (.setOwner p "tx")
-          (try
-            (set! rooms/world-key (fn [_] @epoch))
-            (is (seq (:doors (rooms/room-doors c feet))) "the sealed hut: its door is known")
-            (doseq [y [64 65]] (fake/remove-block! p [7 y 0]))
-            (is (seq (:doors (rooms/room-doors c feet))) "nothing changed in the body's picture: the kept doors")
-            (swap! epoch inc)
-            (is (nil? (rooms/room-doors c feet)) "a wall broken since: no closed room")
-            (finally (set! rooms/world-key world-key))))))))
+          (perception/pass! per)
+          (is (seq (:doors (rooms/room-doors c feet))) "the sealed hut: its door is known")
+          (doseq [y [64 65]] (fake/remove-block! p [7 y 0]))
+          (is (seq (:doors (rooms/room-doors c feet))) "the break not yet seen: the kept doors")
+          (perception/pass! per)
+          (is (not= false (some-> (rooms/room-doors c feet) :unseen?)) "a wall broken since, seen: the kept closed room is gone (none, or one not known closed)"))))))
 
 (deftest the-door-is-a-cover-only-where-the-room-has-no-other-opening
   (async done
