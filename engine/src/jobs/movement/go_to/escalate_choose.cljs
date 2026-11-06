@@ -332,7 +332,7 @@
     (route-s p rock-at cells own? (pickaxe-fetch c (fetch-tool? c)) share)))
 
 (def route-searches
-  "The most route searches route-cells makes round cells may-dig? refuses."
+  "The most stands frontier-way tries a route to."
   3)
 
 (defonce ^{:doc "Per go-to call (route-owner): {key search-fn} of the dig-route searches its last escalate! left unfinished
@@ -557,32 +557,33 @@
         straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
-        opts (fn [refused m] (merge prices
-                                  {:max-s m :back-h? true :floor-absent-s floor-absent-s}
+        opts (fn [refused m spent] (merge prices
+                                  {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent}
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
-        search (fn [refused]
+        search (fn [refused spent]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall] #(dig-route/search seen-floor from goal (assoc (opts refused m) :full? dig-route/heap-full?)) m)
-                           (dig-route/route seen-floor from goal (opts refused m)))]
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m)
+                           (dig-route/route seen-floor from goal (opts refused m spent)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
-        ;; about half a search's time; a refused cell is searched round, at most route-searches times
+        ;; about half a search's time; a refused cell is searched round, each search counting the CPU the ones before it spent
+        ;; (:searched-s), so the rounds end on the route's price (dearer than the best in hand or max-s)
         a (when-not (contains? spent [from goal])
             ;; with a :range the goal is worked from a stand within it, never dug away
-            (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) n 1]
-            (let [a (search refused)
+            (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) spent (:searched-s route-opts 0)]
+            (let [a (search refused spent)
                   ;; the straight dig needs no search: when the search prices its own expansions past it, it is the route
                   a (if-let [st (when (= :dearer (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
                   bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) (when dearer? (cond (= :dearer (:problem a)) :dearer (:boxed a) a))
                     (empty? bad) a
-                    (< n route-searches) (recur (into refused bad) (inc n))))))]
+                    (map? a) (recur (into refused bad) (:searched-s a spent))))))]
     (cond
       (or (nil? a) (#{:searching :dearer} a) (:boxed a)) a
       (not (cost/affords? (route-s p (:dig a) own? fetch?) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil

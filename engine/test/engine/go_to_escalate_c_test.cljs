@@ -872,6 +872,15 @@
     (is (= {:restore-now true :restore-pending true} (run! {:step :dig-route :own-cut true} false)) "a route stopped in a dead end is closed behind at once")
     (is (= {:restore-now true :restore-pending true} (run! {:step :stair :own-cut true})) "a stair's cut is closed behind at once")))
 
+;; card 22c43e75: a claim 17 wide across the line is searched round, each re-search refusing the cells the last route dug in it; a
+;; count of three gave up there
+(deftest a-claim-wider-than-three-searches-is-dug-round
+  (let [p (tu/fake {:blocks (assoc (box -2 62 -7 12 67 7 "stone") "0,64,0" "air" "0,65,0" "air" "10,64,0" "air" "10,65,0" "air") :inventory [{:name "stone_pickaxe" :count 1}]})
+        claim? (fn [[x y z]] (and (<= 4 x 5) (<= -3 z 3)))
+        cells (choose/route-cells p [0 64 0] [10 64 0] #(not (claim? %)) (constantly false) false false {:bound-s 200})]
+    (is (seq cells))
+    (is (not-any? (comp claim? :cell) cells))))
+
 (deftest the-put-back-holds-dug-route-cells-the-walk-has-still-to-enter
   ;; a U-shaped dug route: the body, part way along, has a cell still to enter that lies farther from the goal than the feet
   (async done

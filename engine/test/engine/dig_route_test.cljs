@@ -141,7 +141,7 @@
         asks (loop [rs []] (let [r (dr/route-resumed [:t 1] w [0 10 0] [20 4 6] opts)] (if (and (= {:problem :searching} r) (< (count rs) 300)) (recur (conj rs r)) (conj rs r))))
         done (peek asks)]
     (is (< 3 (count asks)) "each call is one slice")
-    (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) done))))
+    (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) (dissoc done :searched-s)) "the same route; the resumed search also reports its CPU")))
 
 (deftest a-resumed-search-whose-read-cell-changed-meanwhile-begins-again
   (let [changes (atom {})

@@ -382,8 +382,9 @@
         ;; hand (its cheapest end reached) or max-s; :searched-s, what earlier searches of the same question spent, counts too
         spent-s (fn [] (+ searched-s (if node-s (* node-s (.-size done)) 0)))
         max-s (volatile! (or max-s ##Inf))
+        priced (fn [r] (cond-> r node-s (assoc :searched-s (spent-s))))
         bound-s (fn [] (min @max-s (aget incumbent 0)))
-        ended (fn [] (if (<= (aget incumbent 0) @max-s) (route-to (aget incumbent 1)) {:problem :dearer}))
+        ended (fn [] (if (<= (aget incumbent 0) @max-s) (priced (route-to (aget incumbent 1))) {:problem :dearer}))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
@@ -471,7 +472,7 @@
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                          (or (.has done ck) (.has dropped ck)) (recur)
-                         (end-key? ck) (route-to ck)
+                         (end-key? ck) (priced (route-to ck))
                          ;; the popped cell goes back: the next run expands it first
                          (>= (.-size done) limit) (do (heap-push! queue top) nil)
                          :else (do (.add done ck) (expand! ck) (recur)))))))]
@@ -548,7 +549,7 @@
   is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
-  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route} (:boxed true when the
+  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :node-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
   :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
