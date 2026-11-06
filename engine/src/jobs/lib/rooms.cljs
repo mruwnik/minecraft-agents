@@ -16,6 +16,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.click :as click]
             [jobs.lib.look :as look]
+            [jobs.lib.pass :as pass]
             [jobs.lib.pillar :as pillar]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -219,6 +220,16 @@
                   (take (max-rooms))
                   vec)})))
 
+(defn reaches-first?
+  "Whether the body walks steps blocks before any melee threat (ranged ones shoot, they do not race), each at its own
+  speed, gets to the nearest of cells (straight line): cost/reach-first?."
+  [p steps cells threats]
+  (let [racers (remove combat/ranged? threats)]
+    (cost/reach-first? steps
+                       (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid %)) cells))) racers)
+                       (food p)
+                       (map cost/mob-kind racers))))
+
 (def door-glance-radius
   "Blocks from a building's door side within which a flight looks in once when the building was dropped :unseen."
   6)
@@ -236,8 +247,10 @@
   none is looked into from its door sides) only for :unseen cells and the body is within door-glance-radius of it,
   open a shut door with a click (shut again after the looks), step into the doorway (a go-to child; a wall of a 1-wide door shows a wedge from
   outside) and look at the nearest unseen cell beside its room, again for each still unseen, at most ::door-looks looks at each spot; cells a door gap shows only at a graze stay unseen, so
-  the body then steps to the far side of the door and looks again (sight passes; the time is part of the flight). True when it looked: the caller surveys again."
-  [c survey]
+  the body then steps to the far side of the door and looks again (sight passes; the time is part of the flight). The door's :opened entry
+  expires, so a cut flight's door is shut by the door-left trigger. Not when a melee threat reaches the door first (reaches-first?).
+  True when it looked: the caller surveys again."
+  [c survey threats]
   (let [p (:primitives c)
         me (u/self-pos c)
         glanced (:door-glanced (ctx/mem c) #{})
@@ -245,7 +258,8 @@
                         :let [k (cell-key {:x x :y y :z z})
                               pos {:x x :y y :z z}
                               d (door-cell p pos)]
-                        :when (and (= :unseen why) d (not (glanced k)) (<= (u/dist me pos) door-glance-radius))]
+                        :when (and (= :unseen why) d (not (glanced k)) (<= (u/dist me pos) door-glance-radius)
+                              (reaches-first? p (u/dist me (mid d)) [d] threats))]
                     {:k k :pos pos :d d}))]
     (when at
       (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at))
@@ -266,8 +280,9 @@
                                    [n looked]))))
             beyond (let [{:keys [x y z]} (:pos at)] {:x (- (* 2 (:x d)) x) :y y :z (- (* 2 (:z d)) z)})
             door (u/seen-block p d)
-            opened? (and (= :openable (click/kind-of (.-name door))) (click/reached? :closed (click/props-of door))
-                         (= :changed (:outcome (await (click/click! c d :open (.-name door))))))]
+            opened (when (and (= :openable (click/kind-of (.-name door))) (click/reached? :closed (click/props-of door)))
+                     (let [r (await (pass/open-block! c d false))]
+                       (when (= :opened (:result r)) (:column r))))]
         (await (walk-to! d))
         (let [[n _] (await (look-at-sides! 0 #{}))
               inner (when (reach-room/unseen-room? p (:pos at))
@@ -277,7 +292,7 @@
                         (do (await (walk-to! inner))
                             (await (look-at-sides! 0 #{}))
                             true))]
-          (when opened? (await (click/click! c d :closed (.-name door))))
+          (when opened (await (pass/shut-column! c opened)))
           looked?)))))
 
 (defn inside?
@@ -303,14 +318,10 @@
        first))
 
 (defn race-won?
-  "Whether the body, at its own speed (food), walks way-in's steps before any melee threat (ranged ones shoot, they do
-  not race), each at its own speed, gets to a door of room (straight line, the nearest door): cost/reach-first?."
+  "Whether the body, at its own speed (food), walks way-in's steps before any melee threat gets to a door of room:
+  reaches-first?."
   [p room {:keys [steps]} threats]
-  (let [racers (remove combat/ranged? threats)]
-    (cost/reach-first? steps
-                       (map (fn [t] (apply min (map #(u/dist (danger-q/mob-pos p t) (mid (:cell %))) (:doors room)))) racers)
-                       (food p)
-                       (map cost/mob-kind racers))))
+  (reaches-first? p steps (map :cell (:doors room)) threats))
 
 (defn verdicts
   "What the flight makes of each of rooms (rooms): [{:room r :inside? true}] alone for the room the body is in, else

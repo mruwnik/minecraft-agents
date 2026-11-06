@@ -8,7 +8,9 @@
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hs]
             [engine.hostile-test :as ht]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.pass :as pass]
             [engine.registry :as registry]
             [engine.flight-job :as fj]
             [engine.test-util :as tu]
@@ -140,6 +142,40 @@
           (is (in-room? (body raw)) (str "inside the hut: " (body raw)))
           (is (not (hs/door-open? raw)) "the door shut behind it")
           (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge built outside"))))))
+
+(deftest the-door-a-glance-opens-is-recorded-with-an-expiry
+  ;; the glance clicked the door by hand and wrote no :opened entry: a cut flight left it open and unrecorded
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut {:x 5.5 :y 64 :z 5.5} hs/door-states [(zombie 5.5 12.5 nil)])
+                        (assoc :inventory [{:name "cobblestone" :count 16}])
+                        (assoc-in [:self :health] 4))
+              {:keys [eng raw]} (ht/setup-seeing (dissoc world :floor) nil 1000)
+              snap (atom nil)
+              shut pass/shut-column!]
+          (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
+          (with-redefs [pass/shut-column! (fn ^:async s [c col]
+                                            (reset! snap (mapv :data (mem/entries (ctx/view c) :opened)))
+                                            (await (shut c col)))]
+            (core/submit! eng '(test.flight) {})
+            (await (tu/run-until-empty eng 6)))
+          (is (= [{:x 5 :y 64 :z 2}] (map :cell @snap)) "the open door was recorded while open")
+          (is (every? :until @snap) "with an expiry"))))))
+
+(deftest a-chaser-that-beats-the-body-to-the-door-gets-no-glance-and-no-home
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut {:x 5.5 :y 64 :z 5.5} hs/door-states [(zombie 7.5 3.5 nil)])
+                        (assoc :inventory [{:name "cobblestone" :count 16}])
+                        (assoc-in [:self :health] 4))
+              {:keys [eng raw seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)]
+          (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(test.flight) {})
+          (await (tu/run-until-empty eng 6))
+          (is (not (ran-home? seen)))
+          (is (not (hs/door-open? raw)) "the door was never opened for a look"))))))
 
 (deftest a-creeper-is-never-led-to-the-hut
   (async done
