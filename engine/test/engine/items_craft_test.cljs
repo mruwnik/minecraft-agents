@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.contract :as contract]
+            [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.craft :as craft]
@@ -927,3 +928,10 @@
           (let [[_ p] (await (craft {:plans pen-plan :blocks (into {} (map (fn [[x y z]] [(str x "," y "," z) "oak_fence"])) ring-cells)
                                      :inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]} args))]
             (is (empty? (placed-at p)) (pr-str args))))))))
+
+(deftest ingredient-fetches-are-worth-the-calls-own-worth-when-it-is-more
+  (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}}) :args {:item "wooden_pickaxe" :count 1})
+        own (craft/goal-worth (assoc c :worth (constantly 0)))]
+    (is (pos? own) "the item's own worth bounds a call worth less")
+    (is (= ##Inf (craft/goal-worth c)) "a craft ordered at the root, worth any price: its sticks are crafted in the dark too")
+    (is (= (+ own 100) (craft/goal-worth (assoc c :worth (constantly (+ own 100))))))))
