@@ -715,8 +715,11 @@
                                            (throw (js/Error. (str "the call's route searches expanded " @nodes " cells, past one slice"))))
                                          r)))))
           (try
-            (let [{:keys [out]} (await (run-job! {:self {:pos {:x 40.5 :y 64 :z 2.5}} :seeing-all true
+            (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 40.5 :y 64 :z 2.5}} :seeing-all true
                                                        :floor [-5 -5 40 10] :blocks (box 150 63 0 154 63 4 "stone")}
                                                       {:pos [152 64 2] :range 0}))]
-              (is (<= @nodes slice) (pr-str @nodes (select-keys @out [:why :text]))))
+              (is (<= @nodes slice) (pr-str @nodes (select-keys @out [:why :text])))
+              ;; the void past the floor's edge holds no way a body without blocks can make: it gives up, not hangs
+              (is (= [:stair :dig-route] (mapv :step (events-of seen :go-to.escalated))) (pr-str @out))
+              (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out)))
             (finally (set! dig-route/search search))))))))

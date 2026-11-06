@@ -1080,6 +1080,18 @@
            (is (= {:step :searching} first-leg))
            (is (= :dig-route (:step legs)) (pr-str (:step legs))))))))
 
+;; a bedrock slab three wide across the line between the body and both leg ends: no route within leg-margin of the
+;; line reaches them; the leg goes round it
+(deftest a-dig-leg-goes-round-a-slab-wider-than-its-margin-across-the-line
+  (let [slab (box 4 60 -1 5 70 1 "bedrock")
+        p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") slab) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}]
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
+      (let [e (choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-slab")})
+            cells (set (map #(str/join "," (:cell %)) (:cells e)))]
+        (is (= :dig-route (:step e)) (pr-str e))
+        (is (not-any? (set (keys slab)) cells) "no slab cell is dug")))))
+
 (deftest a-flood-is-charged-to-the-slice-at-its-measured-cpu-against-a-search-node
   (let [p (tu/fake {:blocks (box -20 63 -20 20 63 20 "stone")})
         slice (choose/route-slice "nearest-flood")

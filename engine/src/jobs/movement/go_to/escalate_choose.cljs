@@ -630,8 +630,8 @@
   6)
 
 (def leg-margin
-  "Blocks round its two ends a leg's route (dig-leg) may stray: a leg runs along the line, and every cell the route
-  search weighs is a zone and tool check."
+  "Blocks round its two ends a leg's route (dig-leg) first strays: a leg runs along the line, and a search past the
+  straight dig's price (refused or undiggable cells on the line) under the call's worth alone grows a ball of guessed rock."
   1)
 
 (defn leg-ends
@@ -665,20 +665,28 @@
 
 (defn dig-leg
   "A buried body's next leg of a dig toward a goal: {:step
-  :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
-  does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
+  :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds, searched
+  within leg-margin of the line, then, when no end is reached there and none was dearer than the goal is worth, round
+  what blocks it (a column of lava, bedrock or another's claim) under the seconds the call has left to dig (dig-left-s), in
+  one search's nodes;
+  nil when none does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
   longer than the call has left (dig-left-s); {:step :none :why :past-worth} when no end is reached because every
   route to them costs more than the goal is worth (the search stopped at that bound, not at the end of the rock)."
   [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
-          found (loop [ends (leg-ends from goal) dear? false]
+          ends (leg-ends from goal)
+          leg (fn [route-opts]
+                (loop [ends ends dear? false]
                   (if-let [end (first ends)]
-                    (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin leg-margin :dearer? true))]
+                    (let [cells (route-cells p from end may-dig? own? false fetch? (assoc route-opts :dearer? true))]
                       (cond (= :searching cells) :searching
                             (seq (if (= :dearer cells) nil cells)) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
                             :else (recur (rest ends) (or dear? (= :dearer cells)))))
-                    (when dear? :dearer)))]
+                    (when dear? :dearer))))
+          found (or (leg (assoc (search-opts opts) :margin leg-margin))
+                    ;; unsliced: past one search's nodes (dig-route ::max-nodes) a ball of guessed rock outgrows the heap
+                    (leg (-> (search-opts opts) (dissoc :slice) (update :bound-s #(min (or % ##Inf) (dig-left-s c))))))]
       (cond
         (= :searching found) {:step :searching}
         (= :dearer found) {:step :none :why :past-worth}

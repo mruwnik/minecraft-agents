@@ -1,0 +1,30 @@
+;; Card 9d2e656a: a buried body digs toward a goal leg by leg (escalate-choose/dig-leg), each leg searched within a block of the
+;; straight line first. A bedrock slab three wide (z 11..13) and as high as the rock (y 0..30) at x 8..9 stands across the line from
+;; the body's pocket (feet [4 20 12]) to the goal's ([14 20 12]), so no leg end is reached within that block: the leg goes round
+;; it. Should-succeed: the first escalation is a dig route, never a stair or pillar, and the body arrives. Should-fail: the goal's
+;; pocket walled in bedrock on every side, it stops unarrived.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 31 :length 26 :light :dark}
+  :blocks [[:fill [2 0 4] [24 30 20] "stone"]
+           [:fill [8 0 11] [9 30 13] "bedrock"]
+           [:fill [4 20 12] [5 21 12] "air"]
+           [:fill [14 20 12] [14 21 12] "air"]]
+  :body {:at [4.5 20 12.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 300}
+ :cases
+ [{:name "a-leg-goes-round-a-bedrock-slab-across-the-line"
+   :act [[:job (jobs.movement.go-to {:pos #at [14 20 12] :range 0})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}
+            {:no-event {:source :job :kind :go-to.escalated :data {:step :pillar}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [14.5 20 12.5] 1]]}
+  {:name "a-goal-sealed-in-bedrock-is-given-up"
+   :blocks [[:fill [2 0 4] [24 30 20] "stone"]
+            [:fill [13 19 11] [15 22 13] "bedrock"]
+            [:fill [4 20 12] [5 21 12] "air"]
+            [:fill [14 20 12] [14 21 12] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 20 12] :range 0})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 280 :of-job true}]}]}
