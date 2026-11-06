@@ -275,11 +275,13 @@
           (es6-iterator-seq (.values by-cell)))))
 
 (defn threat-tolls
-  "tolls-of the known-threats of c: go-to's price of every known mob (the planner's options.tolls). Read once per
-  check-cache window for the same threats (threat-field/shared: one vector, so walk.world/with-tolls merges it once)."
-  [c]
-  (let [ts (known-threats c)]
-    (if (empty? ts)
-      []
-      (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (/ (js/Math.round (* 20 (:weight t))) 20)]) ts)]
-                    #(tolls-of c ts)))))
+  "tolls-of the known-threats of c (those keep? holds of): go-to's price of every known mob (the planner's options.tolls).
+  Read once per check-cache window for the same threats (threat-field/shared: one vector, so walk.world/with-tolls merges
+  it once)."
+  ([c] (threat-tolls c any?))
+  ([c keep?]
+   (let [ts (filterv keep? (known-threats c))]
+     (if (empty? ts)
+       []
+       (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (/ (js/Math.round (* 20 (:weight t))) 20)]) ts)]
+                     #(tolls-of c ts))))))

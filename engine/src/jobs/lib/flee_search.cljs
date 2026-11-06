@@ -213,8 +213,8 @@
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
-  left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted} the nodes
-  expanded, the targets planned (the search ends with the best so far once the seconds it has taken on the clock reach the first chaser's time to contact (a cold search costs 50 times the measured cost/search-cell-s a node): a decision made after contact is no escape) and why the ones with no route had none (the planner's reason: count). opts {:y-margin :chasers :covers :covers-key}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
+  left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted :plan-ms} the nodes
+  expanded, the targets planned (the search ends with the best so far once the seconds it has taken on the clock reach the first chaser's time to contact (a cold search costs 50 times the measured cost/search-cell-s a node): a decision made after contact is no escape) and why the ones with no route had none (the planner's reason: count), plan-ms the milliseconds in its plans. opts {:y-margin :chasers :covers :covers-key}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
   unseen dead end, they corner the body: :trapped, the cheapest cornered answer to them (cost/cornered-answers: the fight,
   or a cover of (:covers) {way {:open-s :seconds :fails}}, a fn called at the first dead end only, those the cornered step
   would take where the body stands; :covers-key what they depend on past the body and its kit), with no mob known the death of
@@ -252,14 +252,16 @@
         named-n (count (filter :pos targets))]
     (if (nil? ring-world)
       []
-      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {}]
+      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {} plan-ms 0]
         (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0))
                 (and (> planned named-n) (<= contact-s (/ (- (clock/now) t0) 1000))))
-          (with-meta out {:nodes nodes :planned planned :unrouted unrouted})
+          (with-meta out {:nodes nodes :planned planned :unrouted unrouted :plan-ms (js/Math.round plan-ms)})
           (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
+                t1 (clock/now)
                 ^js res (await (plan-to! c pw policy (query c t)
                                          (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))
                                          landings))
+                plan-ms (+ plan-ms (- (clock/now) t1))
                 spent (or (.-expanded res) 0)
                 r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
@@ -274,7 +276,8 @@
                    (+ nodes spent)
                    (cond-> ring-left (nil? (:pos t)) (- spent))
                    (inc planned)
-                   (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0))))))))))
+                   (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
+                   plan-ms)))))))
 
 (defn way-at
   "The blocks of chaser's way ({:way}: field/way-fn) to pos, nil when not known."

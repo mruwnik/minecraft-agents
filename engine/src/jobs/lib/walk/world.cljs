@@ -181,13 +181,26 @@
   [^js unknown]
   (doto unknown (unchecked-set "noRock" true)))
 
+(defn- kept-by-cell
+  "f (fn [x y z]) with each cell's answer kept."
+  [f]
+  (let [kept (js/Map.)]
+    (fn [x y z]
+      (let [k (base/cell-key x y z)
+            v (.get kept k)]
+        (if (undefined? v)
+          (let [v (f x y z)] (.set kept k v) v)
+          v)))))
+
 (defn shut-cell-fn
   "(fn [x y z]) the planner's options.unknown.cellAt: cost/unseen-cell-share of kit at the chance the feet and head cells
-  at x y z are not both open, an unseen one solid at look/unseen-solid-at-fn beside a seen solid cell or not."
+  at x y z are not both open, an unseen one solid at look/unseen-solid-at-fn beside a seen solid cell or not. Each cell's
+  reads are kept: every plan over one pathWorld asks the cells round the body again."
   [p kit]
   (let [solid-at (look/unseen-solid-at-fn p)
-        open (fn [x y z] (if (u/seen-block p {:x x :y y :z z}) 1 (- 1 (solid-at [x y z] (look/beside-seen-solid? p [x y z])))))]
-    (fn [x y z] (cost/unseen-cell-share (- 1 (* (open x y z) (open x (inc y) z))) kit))))
+        seen (kept-by-cell (fn [x y z] (or (u/seen-block p {:x x :y y :z z}) false)))
+        open (kept-by-cell (fn [x y z] (if (seen x y z) 1 (- 1 (solid-at [x y z] (look/beside-seen-solid? seen [x y z]))))))]
+    (kept-by-cell (fn [x y z] (cost/unseen-cell-share (- 1 (* (open x y z) (open x (inc y) z))) kit)))))
 
 (defn with-seeds
   "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil) and own (feet cells the
@@ -332,7 +345,7 @@
   [c pw {:keys [dangers? dark? keep?]}]
   (cond-> pw
     dangers? (-> (with-dangers (threats/planner-dangers c))
-                 (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
+                 (with-tolls (threats/threat-tolls c (or keep? any?))))
     dark? (as-> pw' (let [kit (kit-of c)
                           wet (cost/water-factors kit)
                           phantom (cost/unseen-water-factors kit wet)]

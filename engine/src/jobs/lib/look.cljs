@@ -514,23 +514,24 @@
 
 (declare remembered-light-fn)
 
-(defn frontier-value
-  "frontier/field-value for p: 2 * the cell's distance to the nearest frontier plus 1 when that frontier cell is lit by
-  perception's seeing rule (its remembered light, remembered-light-fn); nil without a perception's memory."
-  [p cell]
+(defn frontier-value-fn
+  "(fn [cell]) frontier/field-value for p: 2 * the cell's distance to the nearest frontier plus 1 when that frontier cell
+  is lit by perception's seeing rule (its remembered light, remembered-light-fn, and the light table read once: a search
+  prices many cells); nil without a perception's memory."
+  [p]
   (when-let [per (aget p "perception")]
     (when-let [^js raw (:raw per)]
       (let [^js table (light/table-now raw (:seeing-min (:opts per)))
-            light-at (remembered-light-fn p raw)]
-        (frontier/field-value p cell
-                              (fn [x y z] (let [l (light-at x y z)] (and (<= 0 l) (== 1 (aget table l)))))
-                              (light/darken-now raw))))))
+            light-at (remembered-light-fn p raw)
+            lit? (fn [x y z] (let [l (light-at x y z)] (and (<= 0 l) (== 1 (aget table l)))))
+            darken (light/darken-now raw)]
+        (fn [cell] (frontier/field-value p cell lit? darken))))))
 
 (defn- frontier-lit?
-  "Whether the nearest frontier cell to the cell is lit (v: its frontier-value); the feet's light (feet-lit?) when none
-  lies within base-rates/unseen-d-max."
-  [p v d]
-  (if (and v (< d base-rates/unseen-d-max)) (== 1 (bit-and v 1)) (feet-lit? p)))
+  "Whether the nearest frontier cell to the cell is lit (v: its frontier-value-fn's); the feet's light (feet-lit, a delay of
+  feet-lit?) when none lies within base-rates/unseen-d-max."
+  [feet-lit v d]
+  (if (and v (< d base-rates/unseen-d-max)) (== 1 (bit-and v 1)) @feet-lit))
 
 (defn unseen-solid-fn
   "(fn [cell-y d]) base-rates/unseen-solid for the body of primitives p: the chance an unseen cell at height cell-y, d from
@@ -545,22 +546,25 @@
         ([cell-y d lit? beside-solid?] (base-rates/unseen-solid y (- cell-y y) d lit? q beside-solid?))))))
 
 (defn unseen-solid-at-fn
-  "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-value's distance (1, the likeliest
+  "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-value-fn's distance (1, the likeliest
   open, without a memory), at its own height as the feet's, in the dark, without a perception. Given beside-solid? (a
   second argument) the cell is asked as beside a seen solid cell or not, else pooled."
   [p]
-  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit? & [adj]] (base-rates/unseen-solid y 0 d lit? nil adj)))]
+  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit? & [adj]] (base-rates/unseen-solid y 0 d lit? nil adj)))
+        value (or (frontier-value-fn p) (constantly nil))
+        feet-lit (delay (feet-lit? p))]
     (fn
-      ([cell] (let [[_ y _] cell v (frontier-value p cell) d (or (some-> v (bit-shift-right 1)) 1)]
-                (solid-at y d (frontier-lit? p v d))))
+      ([cell] (let [[_ y _] cell v (value cell) d (or (some-> v (bit-shift-right 1)) 1)]
+                (solid-at y d (frontier-lit? feet-lit v d))))
       ([[_ y _ :as cell] beside-solid?]
-       (let [v (frontier-value p cell) d (or (some-> v (bit-shift-right 1)) 1)]
-         (solid-at y d (frontier-lit? p v d) beside-solid?))))))
+       (let [v (value cell) d (or (some-> v (bit-shift-right 1)) 1)]
+         (solid-at y d (frontier-lit? feet-lit v d) beside-solid?))))))
 
 (defn beside-seen-solid?
-  "Whether a face neighbour of cell [x y z] is a cell the body has seen solid (unseen-solid-at-fn's beside-solid?)."
-  [p [x y z]]
-  (boolean (some (fn [[dx dy dz]] (when-let [b (u/seen-block p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})] (keyword-identical? :solid (reach/kind-of b))))
+  "Whether a face neighbour of cell [x y z] is a cell the body has seen solid (unseen-solid-at-fn's beside-solid?): seen,
+  (fn [x y z]), the seen block there (u/seen-block)."
+  [seen [x y z]]
+  (boolean (some (fn [[dx dy dz]] (when-let [b (seen (+ x dx) (+ y dy) (+ z dz))] (keyword-identical? :solid (reach/kind-of b))))
                  [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
 
 (defn unseen-solid?-fn

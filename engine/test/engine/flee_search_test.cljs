@@ -13,6 +13,7 @@
             [engine.test-util :as tu]
             [jobs.lib.clock :as clock]
             [jobs.lib.flee-search :as search]
+            [jobs.lib.look :as look]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.util :as u]
@@ -700,3 +701,28 @@
           (is (nil? (u/seen-block p {:x 7 :y 64 :z 3})) "the arm runs on unseen")
           (is (< arm-on behind-wall) (str "arm " arm-on ", behind the wall " behind-wall))
           (is (<= behind-wall (.-cellMax unk))))))))
+
+(deftest a-flee-search-reads-each-unseen-cell-once-for-all-its-plans
+  ;; card 93dbf586: each plan of a search repriced the cells round the body, and each cell built the body's light reads
+  ;; anew (460 ms a search live at 0-32 nodes)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks dark-t :light-default [0 0] :self {:pos {:x -2.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              pricing? (atom false)
+              reads (atom [])
+              asks (atom [])
+              lights (atom 0)
+              [seen-block shut-cell light-fn] [u/seen-block wworld/shut-cell-fn look/remembered-light-fn]]
+          (set! u/seen-block (fn [p pos] (when @pricing? (swap! reads conj pos)) (seen-block p pos)))
+          (set! wworld/shut-cell-fn (fn [p kit]
+                                      (let [f (shut-cell p kit)]
+                                        (fn [x y z] (swap! asks conj [x y z]) (reset! pricing? true) (try (f x y z) (finally (reset! pricing? false)))))))
+          (set! look/remembered-light-fn (fn [p raw] (when @pricing? (swap! lights inc)) (light-fn p raw)))
+          (try (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos {:x -6.5 :y 64 :z 0.5}}] [] {}))
+               (finally (set! u/seen-block seen-block) (set! wworld/shut-cell-fn shut-cell) (set! look/remembered-light-fn light-fn)))
+          (is (< 20 (count (set @asks))) "the ring routes priced unseen cells")
+          (is (= (count @reads) (count (set @reads))) (str "each cell is read once: " (count @reads) " reads of " (count (set @reads))))
+          (is (<= @lights 1) (str "the light reads are built once, not per cell: " @lights " for " (count (set @asks)) " cells")))))))
