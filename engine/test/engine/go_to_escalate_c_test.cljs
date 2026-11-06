@@ -1277,6 +1277,17 @@
     (is (= :dig-route (:step r)) (str r))
     (is (not-any? #(= "bedrock" (:block %)) (:cells r)))))
 
+;; card ee78bde4: an end's stand search reads cells at the price of a route search's nodes against what the leg is worth, whatever
+;; the rock round the end: with the worth at 20 cells' time not one ring (27 cells) is read, where the geometric reach alone read hundreds of thousands
+(deftest a-dig-leg-end-in-rock-with-no-stand-reads-cells-only-as-far-as-the-leg-is-worth
+  (let [p (tu/fake {:blocks (box -2 50 -15 50 80 15 "bedrock") :inventory [{:name "stone_pickaxe" :count 1}]})
+        reads (atom 0)
+        real-block-at (escape/block-at-of p)
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly (* 20 (cost/search-cell-s)))}]
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {}) escape/block-at-of (constantly (fn [pos] (swap! reads inc) (real-block-at pos)))]
+      (choose/dig-leg c [2 64 0] [44 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-end-scan-priced")}))
+    (is (<= @reads 100) "the ends are looked at, no ring of cells round them")))
+
 ;; card e252d55b: the goal floats in seen air with no fallback way and no bound but ##Inf; the body remembers only the
 ;; cells round it. Once a box holds them and what a step reads past them, a wider one adds only guessed rock: no leg
 (deftest a-dig-leg-widening-at-no-price-ends-once-its-box-holds-all-the-body-remembers

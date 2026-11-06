@@ -699,7 +699,7 @@
   what blocks it (a column of lava, bedrock or another's claim) within the leg's own length of its two ends, that box
   doubled while it alone kept the search from an end (dig-route's :boxed), each sliced as the first; an end but the goal
   over seen air is the cell over the first floor under it, and one no route ends in (lava, bedrock, a claim) the
-  stand nearest it (searched outward ring by ring) that is nearer the goal than from. The wider boxes'
+  stand nearest it (searched outward ring by ring, as many cells as the call's budget buys at cost/search-cell-s) that is nearer the goal than from. The wider boxes'
   searches are bounded by the least of opts :bound-s, :worth-s and the way without a dig route (memory :route-search
   :fallback-s), and each counts the CPU the boxed searches before it spent (:searched-s): the widening ends :past-worth
   once the search has spent what the leg could save, and with no end reached once the box holds every cell the body
@@ -724,6 +724,10 @@
                                   (for [dx in dz rs s [(- r) r]] [dx s dz])
                                   (for [dx in dy in s [(- r) r]] [dx dy s]))))
           gap (fn [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
+          ;; the cells one end's stand search may read, priced like a route search's nodes against what the leg could save at most
+          ;; (the call's budget, opts :bound-s and :worth-s); a ring is scanned only when the cells read through it fit
+          scan-cells (/ (min (call-budget-s c) (or (:bound-s opts) ##Inf) (or (:worth-s opts) ##Inf)) (cost/search-cell-s))
+          read-cells (fn [r] (js/Math.pow (inc (* 2 r)) 3))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
           ;; priced by the route; one no route can end in (inside lava, bedrock or a claim) is the stand nearest it, within
           ;; nearer the goal than the body, searched outward (no stand nearer the goal lies beyond the two distances' sum); the goal is the call's own
@@ -739,7 +743,7 @@
                                                   (keep #(let [c (mapv + end %)] (when (and (< (gap c goal) (gap from goal)) (stand? c)) c)))
                                                   (sort-by #(gap % end))
                                                   first))
-                                     (range 1 (inc reach)))
+                                     (take-while #(<= (read-cells %) scan-cells) (range 1 (inc reach))))
                                end))))
                      (leg-ends from goal)))
           ;; [cells seconds], :searching, :dearer, or the seconds the boxed searches spent when the box cut every end off
