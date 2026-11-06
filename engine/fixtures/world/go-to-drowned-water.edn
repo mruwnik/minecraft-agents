@@ -1,5 +1,6 @@
 ;; Card 2a37782c: go-to's plan prices the whole body of water a drowned was met in (jobs.lib.threats/water-tolls), not a sphere round the spot.
-;; Roofed stone block, a lit hall x 1..30, z 1..30 (feet y 0) cut by a wading channel x 14..16, z 1..26 (water y 0 over stone), dry past its end at z 27..30.
+;; Roofed stone block, a lit hall x 1..30, z 1..30 (feet y 0) cut by a wading channel x 14..16, z 1..26 (water y 0 over stone), dry past its end at z 28..30.
+;; A one-block stone kerb (x 13 and 17, z 1..27; z 27) keeps the sources from flowing out into a 17-wide shallow.
 ;; The quote reports the planned route's :length and walks nowhere: across the channel (24 long) with nothing met, round its end (about 45)
 ;; with a drowned's hit remembered at the channel's far end, 13 blocks up it from the crossing; a zombie's hit there tolls no water.
 {:defaults
@@ -8,6 +9,7 @@
   :plot {:light :lit :height 8}
   :blocks [[:fill [0 -1 0] [31 3 31] "stone"]
            [:fill [1 0 1] [30 2 30] "air"]
+           [:fill [13 0 1] [17 0 27] "stone"]
            [:fill [14 0 1] [16 0 26] "water"]]
   :body {:at [3.5 0 15.5] :yaw 270 :settle-s 4}
   :limit-s 40}
