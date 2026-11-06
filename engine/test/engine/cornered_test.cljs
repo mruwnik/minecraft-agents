@@ -1360,10 +1360,6 @@
 
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
-(deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:water :roof :plug :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
-      "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
-
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
   (async done
     (tu/run-async done
@@ -1471,9 +1467,6 @@
     (is (= [east west support roof] (wall-placer/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
     (is (= cells (wall-placer/nearest-first feet [] cells)) "no chaser: as given")))
 
-(deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
-  (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true})))))
-
 (deftest a-calm-enderman-is-walked-away-from-not-sealed-against
   (async done
     (tu/run-async done
@@ -1503,31 +1496,24 @@
           (is (<= 60 @calls) "kept trying until the zombie was gone")
           (is (not-any? #(re-find #"cannot-escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
-(deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
+(deftest escape-order-by-situation
+  (is (= [:water :roof :plug :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
+      "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds")
+  (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true}))))
   (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (choose/escape-order {:swim? true})))
   (is (= [:fight] (choose/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
-  (is (= :back-off (first (choose/escape-order {:swim? true :creeper? true})))))
-
-(deftest no-pillar-against-a-climber
+  (is (= :back-off (first (choose/escape-order {:swim? true :creeper? true}))))
   (is (= [:plug :back-off :plug-dig :fight] (choose/escape-order {:climber? true}))
-      "a spider climbs the pillar's side to the body on top"))
-
-(deftest a-pillar-comes-first-against-a-mob-in-a-corner-cell-when-it-fits
+      "a spider climbs the pillar's side to the body on top")
   (is (= [:pillar :plug :back-off :plug-dig :fight] (choose/escape-order {:pillar-first? true :pressed? true}))
-      "no fist fight first, and the fight stays the last resort"))
-
-(deftest a-pillar-that-leaves-too-few-blocks-comes-after-the-dig-down
+      "no fist fight first, and the fight stays the last resort")
   (is (= [:plug :plug-dig :pillar :back-off :fight] (choose/escape-order {:lean? true}))
       "the pillar top cannot be roofed in without blocks; a pit regains them")
   (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:lean? true :home? true})) "no dig-down at home")
-  (is (= [:plug :plug-dig :fight] (choose/escape-order {:lean? true :climber? true :faster? true}))))
-
-(deftest no-step-back-from-a-mob-that-outruns-the-body
+  (is (= [:plug :plug-dig :fight] (choose/escape-order {:lean? true :climber? true :faster? true})))
   (is (= [:plug :plug-dig :fight] (choose/escape-order {:climber? true :faster? true})))
   (is (= [:plug :pillar :plug-dig :fight] (choose/escape-order {:faster? true})) "one that cannot climb is pillared against")
-  (is (= [:fight] (choose/escape-order {:faster? true :win? true}))))
-
-(deftest an-armed-body-with-a-hitter-at-it-fights-before-it-builds
+  (is (= [:fight] (choose/escape-order {:faster? true :win? true})))
   (is (= [:fight :plug :pillar :back-off :plug-dig] (choose/escape-order {:pressed? true}))
       "four dirt placed beside a zombie that keeps hitting cost three hits")
   (is (= [:fight :plug :pillar :plug-dig] (choose/escape-order {:pressed? true :faster? true})))
