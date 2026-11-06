@@ -12,12 +12,14 @@
   {:collected [:done nil]
    :skip [:condition-failed :not-worth]
    [:abandoned :window-closed] [:condition-failed :gone]
+   [:abandoned :too-far] [:condition-failed :gone]
+   [:abandoned :lethal-cause] [:condition-failed :gone]
    [:abandoned :danger] [:condition-failed :danger]
    [:abandoned :nothing-found] [:condition-failed :nothing-found]})
 
 (defn ending-for
   "The ending of a trip that wrote decision with fields: collected is done, a skip condition-failed :not-worth, an abandoned
-  pile by its reason (:window-closed and :danger and :nothing-found condition-failed), the rest nothing-possible
+  pile by its reason (:window-closed, :too-far, :lethal-cause and :danger and :nothing-found condition-failed), the rest nothing-possible
   with the reason (:unreachable, or for a partial :unreachable / :not-visible)."
   [c decision fields text pos]
   (let [[kind cause] (or (endings decision) (endings [decision (:reason fields)]) [:nothing-possible (:reason fields)])]

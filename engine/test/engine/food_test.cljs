@@ -14,6 +14,7 @@
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]
+            [jobs.lib.home-food :as home-food]
             [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [engine.memory :as mem]
@@ -667,6 +668,12 @@
               {:keys [eng p]} (hunt-world (into three-cows wild) own-farm)]
           (await (run-until-empty eng 40))
           (is (= [7] (distinct (call-args p "attack" "id"))) "a pen kill needs no search: priced cheaper than the wild cow"))))))
+
+(deftest a-pen-kill-is-priced-with-the-best-carried-weapon
+  (let [sword (fn [n i] {:name n :count 1 :slot i})
+        price (fn [inv] (home-food/pen-point-s (:p (setup {:inventory inv})) "cow"))]
+    (is (< (price [(sword "stone_sword" 0)]) (price [(sword "wooden_sword" 0)]) (price [])) "a cow takes 2 stone hits, 3 wooden, 10 fist")
+    (is (= (price [(sword "stone_sword" 0)]) (price [(sword "wooden_sword" 0) (sword "stone_sword" 1)])))))
 
 (deftest get-food-walks-to-its-own-pen-out-of-sight
   (async done

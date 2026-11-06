@@ -23,14 +23,15 @@
 
 (defn deep-run
   "A body at the surface and the pile 14 below, 20 aside; died ago-ms ago."
-  [ago-ms]
+  ([ago-ms] (deep-run ago-ms pile))
+  ([ago-ms dropped]
   (fn ^:async t []
     (let [{:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
                                        :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
-      (die! eng {:pos pile-pos :inventory pile} ago-ms)
+      (die! eng {:pos pile-pos :inventory dropped} ago-ms)
       (core/submit! eng job {})
       (await (run-until-empty eng 120))
-      {:eng eng :p p :seen seen})))
+      {:eng eng :p p :seen seen}))))
 
 (deftest a-pile-fourteen-below-is-reached-by-a-stair-down
   (async done
@@ -48,18 +49,22 @@
               decided (dt/ending-event seen)]
           (is (= :warn (:level decided)) "an abandoned pile is said to the owner, not logged quietly")
           (is (re-find #"20 50 0" (:text decided)) (str "the text names the pile: " (:text decided)))
-          (is (re-find #"window-closed" (:text decided)) (:text decided))
-          (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
+          (is (re-find #"too-far" (:text decided)) (:text decided))
+          (is (= {:decision :abandoned :reason :too-far} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? digs) "nothing is dug for a stair that ends after the pile is gone"))))))
+
+(def scattered-pile
+  "Nine stacks, only one in sight: the others are collected over the pickup radius, seconds of standing there."
+  (mapv (fn [i n] {:name n :count 1 :slot i}) (range) ["diamond" "gold_ingot" "iron_ingot" "emerald" "coal" "bread" "apple" "arrow" "stick"]))
 
 (deftest a-stair-that-fits-the-window-but-not-the-collect-after-it-gives-up-at-once
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await ((deep-run 239000)))
+        (let [{:keys [eng p]} (await ((deep-run 239900 scattered-pile)))
               digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))]
-          (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
-          (is (empty? digs) "the 60 s stair fits the 61 s left, the collect after it does not: fetch-cost's formula"))))))
+          (is (= {:decision :abandoned :reason :too-far} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
+          (is (empty? digs) "the 60 s stair fits the 60.1 s left, the collect of eight unseen stacks does not: fetch-cost's formula"))))))
 
 (deftest a-pile-whose-walk-and-collect-cannot-end-before-the-despawn-is-skipped-up-front
   (async done

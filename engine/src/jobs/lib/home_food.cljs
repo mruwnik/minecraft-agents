@@ -11,6 +11,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.animal-spare :as spare]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.cost.weapon :as weapon]
@@ -113,11 +114,11 @@
     (concat crops (pen-sources c))))
 
 (defn pen-point-s
-  "Seconds a food point of a kill of `kind` in the body's own pen takes: the kill (the stone sword's hits on the kind's
+  "Seconds a food point of a kill of `kind` in the body's own pen takes: the kill (the best carried weapon's hits, a fist's with none, on the kind's
   full health) over the kill's points; no search, the animal is known. A pen source is the surplus over the breeding
   pair, so the kill leaves the pair and nothing is bought back."
   [p kind]
-  (/ (weapon/kill-seconds "stone_sword" (get weapon/passive-max-health kind)) (kill-points p kind)))
+  (/ (weapon/kill-seconds (combat/best-weapon p combat/default-weapons) (get weapon/passive-max-health kind)) (kill-points p kind)))
 
 (defn sources
   "See the ns doc, the ripe crops of a 16-block column as one field (its :box of cells and their :crops): each with :blocks and the seconds (:walk-s) of the
