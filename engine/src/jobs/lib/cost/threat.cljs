@@ -92,23 +92,10 @@
 
 (def bow-mobs #{"skeleton" "stray" "parched" "bogged"})
 
-(def melee-bow-kind
-  "The kind prefix of a bow mob seen holding something other than a bow, \"skeleton_melee/<item>\": it strikes
-  (AbstractSkeleton.reassessWeaponGoal gives it the melee goal) rather than shoots, with that item's bonus; a hand not
-  seen is the bow it spawns with."
-  "skeleton_melee")
-
-(defn melee-bow? [kind-name] (and (string? kind-name) (str/starts-with? kind-name melee-bow-kind)))
-
-(defn melee-bow-blow
-  "Damage one blow of melee-bow kind k deals at normal difficulty: the mob's attack of 2 plus the bonus of the item it
-  holds (weapon-damage less the 1 of a fist: vanilla stone sword 6, iron 7, diamond 8)."
-  [k]
-  (inc (weapon/weapon-damage (subs k (inc (count melee-bow-kind))))))
-
 (def armed-base
-  "Vanilla attack damage at normal difficulty of the melee mobs that add the main-hand weapon's bonus to it."
-  {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "zombified_piglin" 5 "piglin" 5 "vindicator" 5})
+  "Vanilla attack damage at normal difficulty of the melee mobs that add the main-hand weapon's bonus to it; a bow mob
+  holding no bow strikes (AbstractSkeleton.reassessWeaponGoal gives it the melee goal) for 2."
+  {"skeleton" 2 "stray" 2 "parched" 2 "bogged" 2 "zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "zombified_piglin" 5 "piglin" 5 "vindicator" 5})
 
 (def base-name weapon/base-name)
 
@@ -125,7 +112,6 @@
   Pillager.performRangedAttack shoots the crossbow at velocity 1.6, a skeleton's arrow speed), else its mob-hit."
   [mob-name]
   (cond (or (contains? bow-mobs mob-name) (= "pillager" mob-name)) (arrow-blow (difficulty))
-        (melee-bow? mob-name) (melee-bow-blow mob-name)
         (armed-blow mob-name) (armed-blow mob-name)
         :else (get mob-hit mob-name 3)))
 
@@ -316,15 +302,16 @@
   A seen empty hand is held \"none\" (prim-sense), a hand not seen nil."
   [{:keys [name held]}]
   (cond (and (= "drowned" name) (= "trident" held)) trident-kind
-        (and (contains? bow-mobs name) (some? held) (not= "bow" held)) (str melee-bow-kind "/" held)
+        (and (contains? bow-mobs name) (some? held) (not= "bow" held)) (str name "/" held)
         (and (contains? armed-base name) (> (weapon/weapon-damage held) 1)) (str name "/" held)
         :else name))
 
 (defn ranged?
   "Whether mob {:name :held} shoots or throws."
-  [m]
-  (let [k (kind m)]
-    (or (= trident-kind k) (contains? weapon/ranged-mobs k))))
+  [{:keys [name held]}]
+  (or (= trident-kind name)
+      (and (= "drowned" name) (= "trident" held))
+      (if (contains? bow-mobs name) (or (nil? held) (= "bow" held)) (contains? weapon/ranged-mobs name))))
 
 (defn strikes?
   "Whether mob {:name :held} lands blows within reach: one that does not shoot (ranged?: a bow mob holding no bow, kind)

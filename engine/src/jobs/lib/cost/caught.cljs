@@ -55,7 +55,7 @@
   "The group of mob-name whose counts (which: ::flights or ::fights) are counted, nil when its own is not."
   [which mob-name]
   (let [counted (settings/get settings which)]
-    (some (fn [[g kinds]] (when (and (contains? kinds (threat/base-name mob-name)) (contains? counted g)) g)) groups)))
+    (some (fn [[g kinds]] (when (and (contains? kinds (if (= :bow g) mob-name (threat/base-name mob-name))) (contains? counted g)) g)) groups)))
 
 (defn group-of
   "The group whose counts (which: ::flights or ::fights) price mob-name's: its own when counted, else the zombie family's."

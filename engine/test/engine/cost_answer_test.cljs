@@ -649,5 +649,5 @@
                                                   (death/cell-seconds cells))))
         bow (met "bow")
         sword (met "stone_sword")]
-    (is (= ["skeleton" "skeleton_melee/stone_sword"] [(:mob bow) (:mob sword)]))
+    (is (= ["skeleton" "skeleton/stone_sword"] [(:mob bow) (:mob sword)]))
     (is (not= (:prior bow) (:prior sword)) "a shooter's notice rate is the ranged class's, a striker's the other")))

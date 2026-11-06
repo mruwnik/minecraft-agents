@@ -87,10 +87,19 @@
   (is (= 3 (threat/mob-blow (threat/kind {:name "zombie" :held "dirt"})))))
 
 (deftest a-bow-mob-seen-with-an-empty-hand-is-a-melee-kind-blowing-two
-  (is (= "skeleton_melee/none" (threat/kind {:name "skeleton" :held "none"})))
+  (is (= "skeleton/none" (threat/kind {:name "skeleton" :held "none"})))
   (is (= 2 (threat/mob-blow (threat/kind {:name "skeleton" :held "none"}))))
   (is (threat/strikes? {:name "skeleton" :held "none"}))
   (is (not (threat/strikes? {:name "skeleton" :held nil}))))
+
+(deftest a-melee-bow-kind-reads-its-mob-in-the-name-keyed-tables
+  (let [k (threat/kind {:name "bogged" :held "stone_sword"})]
+    (is (= "bogged/stone_sword" k))
+    (is (= (cost/chase-speed "bogged") (cost/chase-speed k)))
+    (is (= 16 (weapon/remaining-health {:name k})))
+    (is (= 6 (threat/mob-blow k)))
+    (is (not (threat/ranged? {:name "bogged" :held "stone_sword"})))
+    (is (threat/ranged? {:name "bogged" :held "bow"}))))
 
 (deftest tables-keyed-by-mob-name-read-an-armed-kind-by-its-mob
   (is (= (weapon/remaining-health {:name "vindicator"}) (weapon/remaining-health {:name "vindicator/iron_axe"})))
