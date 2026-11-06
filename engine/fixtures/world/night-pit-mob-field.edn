@@ -1,5 +1,5 @@
-;; Card 8320d746: the night prices a pit across a known mob's field against its other answers. A stone pad the body cannot dig
-;; (no pickaxe), lit by four torches round the start and walled 3 high round them, a shut door west (a lit spot open to the dark
+;; Card 8320d746: the night prices a pit across a known mob's field against its other answers. A deepslate pad the body cannot dig
+;; (no pickaxe: by hand 15 s a block, past the night hand limit), lit by four torches round the start and walled 3 high round them, a shut door west (a lit spot open to the dark
 ;; is priced by its dark hall); the only pit ground is a dirt patch 14-22 blocks west. Three dirt carried: the pit's
 ;; roof, too few to wall in. With two zombie deaths remembered on the patch the pit's toll makes it dearer than the night at the lit start
 ;; (a priced stay: the round ends :exposed, no shelter.exposed warn, priced again at the next firing). The control has no deaths, no torches and no wall: the dark start costs more than the walk to the patch, where the pit is dug.
@@ -9,7 +9,7 @@
   :time :night
   :time-why :night-light
   :plot {:height 10 :length 40 :width 24}
-  :blocks [[:fill [0 -4 0] [39 -1 23] "stone"] [:fill [4 -4 6] [12 -1 18] "dirt"]
+  :blocks [[:fill [0 -4 0] [39 -1 23] "deepslate"] [:fill [4 -4 6] [12 -1 18] "dirt"]
            [:set [24 0 10] "torch"] [:set [28 0 10] "torch"] [:set [24 0 14] "torch"] [:set [28 0 14] "torch"]
            [:fill [21 0 7] [31 2 7] "cobblestone"] [:fill [21 0 17] [31 2 17] "cobblestone"] [:fill [21 0 7] [21 2 17] "cobblestone"] [:fill [31 0 7] [31 2 17] "cobblestone"]
            [:set [21 0 12] "oak_door[facing=west,half=lower,hinge=left,open=false]"] [:set [21 1 12] "oak_door[facing=west,half=upper,hinge=left,open=false]"]]
