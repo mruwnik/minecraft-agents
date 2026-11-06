@@ -1,0 +1,43 @@
+;; The planner prices each known mob by one meeting with the mobs that join it, answered the way the reflex would (fight or flight), so the walk's route
+;; bends by the body's kit and by who is near, not by the kind alone. Quotes only (the body walks nowhere): the planned route's :length on open ground.
+;; Cases pin direction (detour vs pass), not distances: a NoAI zombie 2 off a 40-block straight walk, the straight length being about 40.
+;; Sword, no armour: a meeting still costs it some 3 hp, so the route keeps out of the close field (length over 42). Sword and diamond armour: passes near (under 41.5).
+;; A pack of 4 by the west walk and a lone zombie 50 blocks off by the east walk (a sword, no armour): the pack's walk detours, and the lone one keeps its own fight toll, the case 1 detour, not the pack's flight.
+{:defaults
+ {:tags [:movement :planner :danger]
+  :time :any
+  :mobs :keep
+  :plot {:height 12 :length 80 :width 48}
+  :body {:at [2.5 0 24.5] :yaw 270 :settle-s 3 :effects [["resistance" 900 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "a-sword-without-armour-keeps-out-of-a-zombie-s-close-field"
+   :body {:inventory [["diamond_sword" 1]]}
+   :act [[:summon "zombie" [22.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 42]}}}] 30]]
+   :after [[:body-near [2.5 0 24.5] 2]]}
+  {:name "a-sword-and-diamond-armour-pass-a-zombie-near"
+   :body {:inventory [["diamond_sword" 1]]}
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:diamond_helmet"]
+         [:rcon "item replace entity $BODY armor.chest with minecraft:diamond_chestplate"]
+         [:rcon "item replace entity $BODY armor.legs with minecraft:diamond_leggings"]
+         [:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"]
+         [:summon "zombie" [22.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 41.5]}}}] 30]]
+   :after [[:body-near [2.5 0 24.5] 2]]}
+  {:name "a-lone-zombie-far-from-a-pack-keeps-its-own-detour"
+   :plot {:length 130}
+   :body {:at [65.5 0 24.5] :inventory [["diamond_sword" 1]]}
+   :act [[:summon "zombie" [40.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [41.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [40.5 0 27.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [41.5 0 27.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [90.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"]
+         [:until-seen {:entity "zombie" :min 5} 10]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [20 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 50]}}}] 30]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [110 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 50]}}}] 30]]
+   :after [[:body-near [65.5 0 24.5] 2]]}]}
