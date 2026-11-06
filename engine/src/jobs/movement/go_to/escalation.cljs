@@ -61,8 +61,8 @@
             [jobs.movement.go-to.tuning :as tuning]
             [jobs.movement.go-to.way-steps :as ways]))
 
-(defn ways-for "The :ways of an access child that may fetch a pickaxe when fetch? is true." [fetch?]
-  (if fetch? #{:carried :chest :craft :gather} #{:carried}))
+(defn ways-for "The :ways of an access child: crafting from carried goods always, fetching a pickaxe only when fetch? is true." [fetch?]
+  (if fetch? #{:carried :chest :craft :gather} #{:carried :craft}))
 
 (defn escalation-job
   "[job args] of the child that carries out escalation e (jobs.lib.escape.way/choose); tag marks the holes it digs;
@@ -647,7 +647,7 @@
               fetch? (and may-fetch? (:fetch? (route-tool p (map :cell todo) (own-placed-fn c) (pickaxe-fetch c true))))
               no-pickaxe? (not-any? #(re-find #"_pickaxe$" (str (:name %))) (u/inventory p))
               before (b/inventory-map p)
-              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (if fetch? (ways-for true) #{:carried :craft})
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?)
                     :need-drop (if may-fetch? fetch? (and (not by-hand?) no-pickaxe?)) :accept #{:lava-adjacent :fluid-adjacent} :not-protected? true
                     :collect (and (or (own-cut? c) (some? (tidy/refusal c :dig pos))) (b/room-for-drop? p n))}
               args (cond-> args (own-cut? c) (assoc :settings {:jobs.lib.access/spare-own-builds false}))

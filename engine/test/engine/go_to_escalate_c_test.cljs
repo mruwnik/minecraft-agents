@@ -635,7 +635,7 @@
         picks #(vec (repeat % {:name "stone_pickaxe" :count 1}))]
     (is (= [true true false] (map #(fetch? (assoc flat :inventory (picks %))) [0 1 2])))
     (is (false? (fetch? (merge {:blocks room :inventory (picks 1)} in-room))) "shut in: no walk to a tool")
-    (is (= [(esc/ways-for true) #{:carried}] (map #(:ways (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false %))) [true false])))))
+    (is (= [#{:carried :chest :craft :gather} #{:carried :craft}] (map #(:ways (second (esc/escalation-job {:step :stair :heading :east :steps 2} nil false false %))) [true false])))))
 
 (deftest a-stair-through-its-own-pen-picks-up-its-drops
   (is (= [true false] (map #(:collect (second (esc/escalation-job {:step :stair :heading :east :steps 2 :own-cut %} nil false false false))) [true nil]))))
