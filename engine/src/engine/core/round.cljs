@@ -182,7 +182,9 @@
      :call (fn [slot def child-args] (call eng base child-ending slot def child-args))
      :quote (fn [def quote-args deadline self?]
               (when (and owner (not (owner? eng owner))) (throw (cut-error)))
-              (quote/quote! eng base def quote-args deadline self? #(quote-ctx eng base def quote-args % self?)))
+              ;; checked after, as a call is: an awaited quote yields the event loop, so the spin guard never sees a quote loop
+              (.then (quote/quote! eng base def quote-args deadline self? #(quote-ctx eng base def quote-args % self?))
+                     (fn [q] (when (and token (owner? eng token)) (limits/check! eng base)) q)))
      :next-way quote/next-way
      :child-ending child-ending
      :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))

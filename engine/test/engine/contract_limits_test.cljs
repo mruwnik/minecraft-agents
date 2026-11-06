@@ -86,6 +86,32 @@
           (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
           (is (<= 50 (:steps @world) 52) "it ends once its steps' 100 ms of CPU each spent the 5 s"))))))
 
+(def priced
+  {:round (constantly :continue)
+   :quote-of (fn [_] (swap! clock + 100) {:uses {:job-time [1 1 1]}})})
+
+(def quote-loop
+  {:defaults {:spend {:job-time 5}}
+   :round (fn ^:async quote-loop-round [c]
+            ;; bounded only so the old code, which never stopped it, fails rather than hangs
+            (loop [n 0]
+              (when (< n 1000)
+                (await (ctx/quote c priced {}))
+                (swap! world update :quotes (fnil inc 0))
+                (recur (inc n))))
+            :continue)})
+
+(deftest a-loop-of-awaited-quotes-ends-on-its-budget
+  ;; each awaited quote yields the event loop, so the spin guard never sees the loop; the quotes' time must end it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'quote-loop quote-loop})]
+          (core/submit! eng '(quote-loop) {})
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
+          (is (<= 50 (:quotes @world) 51) "it ends once its quotes' 100 ms each spent the 5 s"))))))
+
 (defn ^:async spends-larger-of [clock-ms cpu-ms]
   (reset! world {})
   (let [[seen sink] (tu/capture-sink)

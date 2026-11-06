@@ -227,7 +227,7 @@ A job is a namespace under `src/jobs/` exporting `round` (and `can-start?`, `can
   (ctx/end c :done nil))
 ```
 
-**Args.** `engine.args/defargs` declares args as cljs.spec: every arg has a `:spec`, a predicate of `engine.args` (`int-in`, `num-in`, `pos-num?`, `item?`, `name?`, `position?`, `box?`, `coll-of`, `set-of`, `map-of`, `map-with`, `or-of`, `valid-by`), a set of the allowed values, a core predicate (`boolean?`, `string?`, `keyword?`, `map?` ...) or `::a/pos` (`[x y z]` or `{:x :y :z}`, conformed to `{:x :y :z}`). A group `{:doc :keys {k entry}}` is a nested map of args; a caller's group merges over its defaults key by key. nil = unset. At submit undeclared keys are refused at every level, then the args are conformed; a misfit is refused as one line naming job, key path, what the spec wants and the value (`jobs.x :risk :min-health must be a whole number from 1 to 20, got 30`). A child call (`ctx/call-child`) and a restore conform the same way. A predicate built with `a/pred` carries its want text; the catalog shows each `:spec` as that text. `(a/declare! sym data)` registers a hand-built job's args (tests).
+**Args.** `engine.args/defargs` declares args as cljs.spec: every arg has a `:spec`, a predicate of `engine.args` (`int-in`, `num-in`, `pos-num?`, `item?`, `name?`, `position?`, `box?`, `coll-of`, `set-of`, `map-of`, `map-with`, `or-of`, `valid-by`), a set of the allowed values, a core predicate (`boolean?`, `string?`, `keyword?`, `map?` ...) or `::a/pos` (`[x y z]` or `{:x :y :z}`, conformed to `{:x :y :z}`). A group `{:doc :keys {k entry}}` is a nested map of args; a caller's group merges over its defaults key by key. nil = unset. At submit undeclared keys are refused at every level, then the args are conformed; a misfit is refused as one line naming job, key path, what the spec wants and the value (`jobs.x :risk :min-health must be a whole number from 1 to 20, got 30`). A child call (`ctx/call`) and a restore conform the same way. A predicate built with `a/pred` carries its want text; the catalog shows each `:spec` as that text. `(a/declare! sym data)` registers a hand-built job's args (tests).
 
 There is no catalog to edit: adding the file adds the job. `engine.registry/jobs` is `{ns-symbol {:can-start? :round :doc :args}}`,
 built at compile time. The build hook `engine.build-hooks/add-job-namespaces` lists every file under `jobs`
@@ -273,7 +273,7 @@ The one argument of a check and a round. Helpers are in `engine.ctx`:
 | `(ctx/view ctx)`, `latest`, `entries`, `since`, `count-in` | body-memory reads (time-filtered) |
 | `(ctx/remember! ctx kind data policy?)`, `forget-where!`, `forget-until!` | body-memory writes |
 | `(await (ctx/act ctx :moveTo #js {...}))` | call an acting primitive |
-| `(await (jobs.lib.child/call-walk* ctx slot go-to-args))` | a go-to round through `ctx/call`: `:continue`, or go-to's ending; when go-to's `safe?` says later (`:risky`, `:hostile-near`); go-to's ending for such a wait is passed through `waits/waiting-out`: the caller waits with that reason. `child/run!*` does the same. Old `call-walk` is its `ctx/call-child` form |
+| `(await (jobs.lib.child/call-walk* ctx slot go-to-args))` | a go-to round through `ctx/call`: `:continue`, or go-to's ending; when go-to's `safe?` says later (`:risky`, `:hostile-near`); go-to's ending for such a wait is passed through `waits/waiting-out`: the caller waits with that reason. `child/run!*` does the same |
 | `(await (ctx/call ctx slot job args))` | one round of a child, settled after an event-loop turn like `ctx/quote`, so a loop of calls or quotes never starves timers (a job symbol with an arg key the job does not declare throws, as at submit): `:continue` or its ending (Contract jobs); a call of the same job on the same target args (`:target`) as a frame on its chain ends `:condition-failed` `{:reason :duplicate-call :of frame-id}`, with no round and no `:job-report` entry; a call nested more than `:engine.core.ending/max-call-depth` (12) frames deep ends `:condition-failed` `{:reason :too-deep}` the same way |
 | `(ctx/end ctx kind cause data?)` | a contract job's ending, returned by its round |
 | `(ctx/way? ctx k)`, `(ctx/use ctx purpose)` | whether the call allows way `k`; the list the call gives for `purpose` |
@@ -330,7 +330,7 @@ called child ends `:condition-failed`; from `can-run?`, `safe?` or `fit?` a list
 than 1 above the quote's most `:done` ends `:nothing-possible` `{:reason :least}`. `ctx/next-way` drops a way whose
 least crosses a remainder.
 
-**Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts, call boundaries and each step's pace (`jobs.lib.pace/pace!`) check the chain.
+**Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts, call boundaries, each answered quote and each step's pace (`jobs.lib.pace/pace!`) check the chain.
 The outermost crossed frame ends `:limit-reached`, and `job.limit_reached` tells its line, amount (`:used`, `:health`,
 `:food`, `:now`, or an act's `:most`/`:left`), call and report; catch-alls rethrow on `contract/passes-through?`.
 Before an act, its most (`engine.primitive` table: args, target, quote-of, ending per primitive) is checked against what each frame
@@ -527,7 +527,7 @@ the token so the in-flight round is never booked; the job stays listed.
 - `body.idle` (info, once per stretch; wakes `observe --wait`; memory `:body-idle`): no act but `:wait` from a job not
   `idle-ok` (stay-near, wait-for-light/-dusk) for `:engine.core.activity/body-idle-s` (10); lists each job with
   its `:waiting`/`:holding` reason. A useful act or a list change re-arms it. Under `--watch` (and `jobs submit --wait`) the wake lists only the watched jobs.
-- Spin guard: a job that makes more than `:engine.core.round/spin-calls` (100000) engine calls (checks, writes, acts, `alive?`) inside one event-loop turn is failed with `spinning: job <id> ...` (it never awaited a timer, so nothing else ran).
+- Spin guard: a job that makes more than `:engine.core.round/spin-calls` (100000) engine calls (checks, writes, acts, `alive?`) inside one event-loop turn is failed with `spinning: job <id> ...` (it never awaited a timer, so nothing else ran). A loop that yields (awaited calls and quotes) ends on its `:job-time` instead.
 - Stuck act: an act (primitive call) in flight longer than `:engine.core.round/act-max-s` (300 s; `:offline` plus its own time) is aborted: `action.stuck` (warn, names the act), the job fails with `act-stuck: <act>` and the body is free.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
   ends the job does not count; a round with no act neither counts nor resets); resolved by a round with progress. It only flags.
