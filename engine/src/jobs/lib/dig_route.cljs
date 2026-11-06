@@ -180,6 +180,9 @@
         [lx ly lz] (when margin (mapv #(- (min %1 %2) margin) from goal))
         [hx hy hz] (when margin (mapv #(+ (max %1 %2) margin) from goal))
         inside? (fn [x y z] (or (nil? margin) (and (<= lx x hx) (<= ly y hy) (<= lz z hz))))
+        ;; a cell the search (or the back search) would have entered but for the box: its :no-route is then the box's
+        boxed (volatile! false)
+        back-boxed (volatile! false)
         to-goal (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
         ;; a cell within range of near is at most 2 range across and below it
         step-h (if r
@@ -310,13 +313,13 @@
                         ;; a step's unseen cells are priced once (relax!'s unseen-at): the cell over m's head and a guessed face
                         ;; (unseen-face?) only when n's own cells are seen
                         try! (fn [nx ny nz move s0 head? top bot unseen-face?]
-                               (when (and (inside? nx ny nz)
-                                          ;; a way under flood stays under it: only a dry one may still reach the dry label
-                                          (let [k (key nx ny nz)] (not (and (.has done (- -1 k)) (or (some? (aget node 8)) (.has done k))))))
+                               ;; a way under flood stays under it: only a dry one may still reach the dry label
+                               (when (let [k (key nx ny nz)] (not (and (.has done (- -1 k)) (or (some? (aget node 8)) (.has done k)))))
                                  (let [acc #js [s0 0 0 #js [] (aget node 8) (aget node 9)]
                                        face-s (if (and unseen? (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz)))) unseen-step-s 0)]
                                    (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
-                                              (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y))))))
+                                              (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y)))))
+                                              (or (inside? nx ny nz) (do (vreset! boxed true) false)))
                                      ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
                                      (relax! ck node acc nx ny nz move
                                              (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
@@ -367,7 +370,7 @@
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
         back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
-        stands? (fn [x y z] (and (inside? x y z) (some? (back-s x y z)) (some? (back-s x (inc y) z))))
+        stands? (fn [x y z] (and (some? (back-s x y z)) (some? (back-s x (inc y) z)) (or (inside? x y z) (do (vreset! back-boxed true) false))))
         to-start (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y (from 1)))))
         back-best (js/Map.) back-done (js/Set.) back-queue #js []
         back-tick (volatile! 0)
@@ -394,7 +397,7 @@
                      (let [top (heap-pop! back-queue)
                            k (some-> top (aget 2))]
                        (cond
-                         (nil? top) {:problem :no-route}
+                         (nil? top) (cond-> {:problem :no-route} @back-boxed (assoc :boxed true))
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                          (.has back-done k) nil
                          (== k start-key) (do (vreset! back-over true) nil)
@@ -446,7 +449,7 @@
                       (let [top (heap-pop! queue)
                            ck (some-> top (aget 2))]
                        (cond
-                         (nil? top) {:problem :no-route}
+                         (nil? top) (cond-> {:problem :no-route} @boxed (assoc :boxed true))
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                          (.has done ck) (recur)
@@ -527,7 +530,8 @@
   is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
-  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route},
+  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route} (:boxed true when the
+  :margin box kept it from a cell),
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))

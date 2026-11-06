@@ -578,18 +578,19 @@
                   a (if-let [st (when (= :dearer (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
                   bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
               (cond (= :searching a) a
-                    (nil? (:dig a)) (when (and dearer? (= :dearer (:problem a))) :dearer)
+                    (nil? (:dig a)) (when dearer? (cond (= :dearer (:problem a)) :dearer (:boxed a) :boxed))
                     (empty? bad) a
                     (< n route-searches) (recur (into refused bad) (inc n))))))]
     (cond
-      (or (nil? a) (#{:searching :dearer} a)) a
+      (or (nil? a) (#{:searching :dearer :boxed} a)) a
       (not (cost/affords? (route-s p (:dig a) own? fetch?) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil
       (cost/affords? (:seconds a) (or worth-s ##Inf)) a
       dearer? :dearer)))
 
 (defn route-cells
   "[{:cell :block :guess :class}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
-  rock), :class its guess-class; [] when nothing is left to dig; :searching or nil as route-answer; :dearer under route-opts :dearer?."
+  rock), :class its guess-class; [] when nothing is left to dig; :searching or nil as route-answer; :dearer, or :boxed (no route
+  in the :margin box: dig-route's :boxed), under route-opts :dearer?."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
   ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
@@ -597,7 +598,7 @@
    (let [a (route-answer p from goal may-dig? own? floors-unseen-ok? fetch? route-opts)
          block-at (escape/block-at-of p)]
      (cond
-       (#{:searching :dearer} a) a
+       (#{:searching :dearer :boxed} a) a
        a (let [sensed #(u/sensed p (zipmap [:x :y :z] %))]
            (mapv (fn [cell] (let [guess (dig-look/unknown? p cell)]
                               (cond-> {:cell cell :block (block-at cell) :guess guess}
@@ -692,25 +693,34 @@
   "A buried body's next leg of a dig toward a goal: {:step
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds, searched
   within leg-margin of the line, then, when no end is reached there and none was dearer than the goal is worth, round
-  what blocks it (a column of lava, bedrock or another's claim) within the leg's own length of its two ends, sliced as the first;
+  what blocks it (a column of lava, bedrock or another's claim) within the leg's own length of its two ends, that box
+  doubled while it alone kept the search from an end (dig-route's :boxed), each sliced as the first; an end over seen
+  air (but a goal under :range) is left out;
   nil when none does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
   longer than the call has left (dig-left-s); {:step :none :why :past-worth} when no end is reached because every
   route to them costs more than the goal is worth (the search stopped at that bound, not at the end of the rock)."
   [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
-          ends (leg-ends from goal)
+          block-at (escape/block-at-of p)
+          ;; an end over seen air is no stand: no box round it holds a way there, so none would end its search (a goal
+          ;; under :range ends on a stand near it)
+          ends (filter (fn [[x y z :as end]] (or (and (= end goal) (>= (:range opts 0) 1)) (not (dig-route/open? (block-at [x (dec y) z])))))
+                       (leg-ends from goal))
           leg (fn [margin]
-                (loop [ends ends dear? false]
+                (loop [ends ends dear? false boxed? false]
                   (if-let [end (first ends)]
                     (let [cells (route-cells p from end may-dig? own? false fetch? (assoc (search-opts opts) :margin (margin end) :dearer? true))]
                       (cond (= :searching cells) :searching
-                            (seq (if (= :dearer cells) nil cells)) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
-                            :else (recur (rest ends) (or dear? (= :dearer cells)))))
-                    (when dear? :dearer))))
-          found (or (leg (constantly leg-margin))
-                    ;; a leg strays off the line no farther than it goes along it: past that it is no step toward the goal
-                    (leg (fn [end] (js/Math.ceil (js/Math.hypot (- (end 0) (from 0)) (- (end 1) (from 1)) (- (end 2) (from 2)))))))]
+                            (and (sequential? cells) (seq cells)) [(vec cells) (route-s p (map :cell cells) own? fetch?)]
+                            :else (recur (rest ends) (or dear? (= :dearer cells)) (or boxed? (= :boxed cells)))))
+                    (cond boxed? :boxed dear? :dearer))))
+          length (fn [end] (js/Math.ceil (js/Math.hypot (- (end 0) (from 0)) (- (end 1) (from 1)) (- (end 2) (from 2)))))
+          first-pass (leg (constantly leg-margin))
+          ;; a box keeps the search's heap to what it holds; a wider one is searched only once this one cut the way off
+          found (if (#{:boxed nil} first-pass)
+                  (loop [k 1] (let [r (leg #(* k (length %)))] (if (= :boxed r) (recur (* 2 k)) r)))
+                  first-pass)]
       (cond
         (= :searching found) {:step :searching}
         (= :dearer found) {:step :none :why :past-worth}
