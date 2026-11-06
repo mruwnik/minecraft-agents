@@ -361,8 +361,9 @@
           (let [foot (st/arg-pos (first (st/calls p "place")))]
             (is (some? foot) "put down beside the body, no roof needed")
             (is (= [foot] (:sleeps @mid)))
-            (is (= [{:pos foot :own-zone false}] (mapv #(select-keys % [:pos :own-zone]) (st/emitted seen :night.bed-placed)))
+            (is (= [{:pos foot :own-zone false :item "red_bed"}] (mapv #(select-keys % [:pos :own-zone :item]) (st/emitted seen :night.bed-placed)))
                 "says where the bed went")
+            (is (= [:notice] (mapv :attention (filter #(= :night.bed-placed (:kind %)) @seen))) "a spent kit bed is a notice")
             (is (= [] (:placed @mid)) "sleeping made it the respawn bed: no scaffold left in the ledger")
             (is (empty? (st/calls p "dig")) "the bed it slept in is its respawn bed: leave-shelter leaves it")
             (is (= [] (ledger/open-entries (mem/view (:store eng)))) "not scaffold any more")

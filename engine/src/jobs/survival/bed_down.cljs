@@ -442,7 +442,7 @@
               (when-not own?
                 (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell (u/cell-vec foot) :item item :before "air" :job (:id c) :purpose :bed})
                                         (ledger/confirm (u/cell-vec foot)))))
-              (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
+              (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own? :item item :attention :notice
                                                     :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))})
               foot)))
         (let [w (await (child/call-walk* c :bed-walk {:pos stand :range 0}))]

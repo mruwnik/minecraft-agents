@@ -587,6 +587,9 @@
               poured (await (tu/child-outcome (:eng env) use-on {:on at :item "water_bucket"} 40))]
           (is (= [true :used] ((juxt :used :reason) poured)))
           (is (= "water" (.-name (.blockAt (:p env) (clj->js at)))))
+          (is (= [["water_bucket" :notice]]
+                 (->> @(:seen env) (filter #(= :use.bucket (:kind %))) (mapv (juxt :item :attention))))
+              "a spent bucket is a notice the agent's wait shows")
           (let [scooped (await (tu/child-outcome (:eng env) use-on {:on at :item "bucket"} 40))]
             (is (= [true "water_bucket"] [(:used scooped) (some #(when (= "water_bucket" (:name %)) (:name %)) (u/inventory (:p env)))]))
             (is (not= "water" (.-name (.blockAt (:p env) (clj->js at)))))))))))

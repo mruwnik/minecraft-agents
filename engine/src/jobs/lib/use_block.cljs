@@ -76,6 +76,9 @@
                    (ctx/act c :place (clj->js {:pos pos :item item}))
                    (ctx/act c :useOn (clj->js (cond-> {:pos pos :face (or face "up")} item (assoc :item item))))))
         status (keyword (.-status r))]
+    (when (and (bucket? item) (= :placed status))
+      (ctx/emit! c :use.bucket :info {:item item :pos (b/cell pos) :attention :notice
+                                      :text (str (if (= "bucket" item) "scooped with the bucket at " (str "used " item " at ")) (pr-str (b/cell pos)))}))
     [(if (and (bucket? item) (= :placed status)) :used status) r]))
 
 (defn ^:async attempt-block!
