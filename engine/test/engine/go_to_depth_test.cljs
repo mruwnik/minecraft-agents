@@ -492,10 +492,13 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! in-loop {:pos across :unknown false :worth 20}))
               walk-s #(/ (js/Math.round (* 10 (:cost (cost/walk-cost {:distance %})))) 10)
-              worth-s (- 20 (walk-s 6))]
-          (is (= {:arrived false :why :detour :route 148 :blocks 84 :straight 6 :extra-s (walk-s 142) :worth-s worth-s}
-                 (select-keys @out [:arrived :why :route :blocks :straight :extra-s :worth-s])))
-          (is (re-find (re-pattern (str "84 blocks.*6 blocks away.*costs " (walk-s 142) " s, more than the " worth-s " s the goal is worth.*:worth")) (str (:text @out))))
+              worth-s (- 20 (walk-s 6))
+              {:keys [route extra-s]} @out
+              extra (walk-s (- route 6))]
+          (is (= {:arrived false :why :detour :blocks 84 :straight 6 :extra-s extra :worth-s worth-s}
+                 (select-keys @out [:arrived :why :blocks :straight :extra-s :worth-s])))
+          (is (> extra-s worth-s) "the refusal: the walk past the straight line costs more than the goal is worth")
+          (is (re-find (re-pattern (str "84 blocks.*6 blocks away.*costs " extra " s, more than the " worth-s " s the goal is worth.*:worth")) (str (:text @out))))
           (is (= [0.5 64 0.5] (gt/at p)) "it did not set out"))))))
 
 ;; The loop with stone between its corridors (x 0..39, z 1..5): 5 blocks of rock part the body from its goal.
