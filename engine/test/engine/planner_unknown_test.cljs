@@ -179,6 +179,15 @@
       (is (not (found? r)))
       (is (true? (:unseenRefused r))))))
 
+(deftest an-exit-from-water-onto-unseen-feet-or-head-cells-is-refused
+  ;; a seen pool whose bank is unseen air over a seen floor: a swimmer cannot stop to look, so the exit is no plan
+  (let [pool (fn [bank] (pf/snapshot {:fill [[0 60 2 6 60 2 "stone"] [0 61 2 3 63 2 "water"] [4 61 2 6 63 2 bank]]}))
+        start {:x 1 :y 62 :z 2}]
+    (is (found? (run (pool "air") (pf/near 5 61 2) (unk {}) start)) "a seen bank")
+    (let [r (run (pool U) (pf/near 5 61 2) (unk {}) start)]
+      (is (not (found? r)))
+      (is (true? (:unseenRefused r))))))
+
 (deftest a-phantom-after-a-climb-is-refused
   ;; a ladder at x 1 (on a wall at z 3) up to y 67; the step off it east onto (2 67), whose floor (2 66) is the
   ;; top of a stone column

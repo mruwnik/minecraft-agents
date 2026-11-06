@@ -2,7 +2,7 @@
   "Search methods: cells the body has not seen (options.unknown, see engine.path.planner-tuned). Such a cell reads as
   void_air, air to the body. A stand on an unseen floor (a phantom floor, standPlain reads it as unk-floor-id) is allowed
   only where the walk can stop on the takeoff to check it first and can see it from there, and it is priced."
-  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-OPEN MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WATER WHOLE cell-key]]
+  (:require [engine.path.planner.base :refer [FREE-FALL MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-EXIT MOVE-GAP MOVE-JUMP MOVE-OPEN MOVE-SWIM MOVE-WALK OPEN TABLE UNLOADED WATER WHOLE cell-key]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -147,8 +147,10 @@
   (unseenRefuses [s x y z move p dsec]
     (set! (.-move-light s) 0)
     (if-not ^boolean (.phantomAt s x y z)
-      (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.unkCellOf s x y z)) (* dsec (.-unk-cell s) (.changedNear s x y z))))
-          false)
+      (if (and (== move MOVE-EXIT) (pos? (.unknownCells s x y z)))
+        (do (set! (.-unseen-refused s) true) true)
+        (do (set! (.-move-unk s) (if (pos? (.unknownCells s x y z)) (* dsec (.unkCellOf s x y z)) (* dsec (.-unk-cell s) (.changedNear s x y z))))
+            false))
       (let [d (js/Math.max 0 (- (aget (.-ys s) p) y))
             priced (+ (* dsec (if (pos? (.unknownCells s x y z)) (.unkCellOf s x y z) (.-unk-cell s))) (if (pos? d) (.-peek-s s) (.-aim-s s)))]
         (cond
