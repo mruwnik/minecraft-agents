@@ -190,7 +190,7 @@
         limit (settings/get settings ::risk-limit)
         where (str "unseen " (place-text to) ", which no look from here shows")]
     (cond
-      (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit"))
+      (<= chance limit) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit, or rock"))
       (> left limit) (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)
                          (air-look c (str "dark at " where ", the air round the body not seen sealed") chance)
                          (-> (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-share p to false 0))) "% dark even by full day, so dawn does not light it") :lowered-by #{:torch} :chance chance)

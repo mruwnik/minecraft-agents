@@ -235,7 +235,7 @@
               shelter (fn ^:async s [light]
                         (let [ev (await (asleep-until-answers (cond-> world (seq light) (assoc :light light)) (fn [_])))]
                           (get-in (first ev) [:prices :shelter])))
-              dark (await (shelter {}))
+              dark (await (shelter {[9 64 9] [0 0]}))
               one-lit (await (shelter {[2 64 1] [15 15]}))
               all-lit (await (shelter (into {} (for [x (range -1 6) z (range -2 3)] [[x 64 z] [15 15]]))))]
           (is (number? dark))

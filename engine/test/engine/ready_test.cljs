@@ -908,10 +908,14 @@
     (is (= #{:light} (:lowered-by (nth s 2))) "dawn lifts it")
     (is (re-find #"no look from here shows" (second s))))
   (is (= :ok (kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))) "lit by day")
-  (let [cave (fn [f] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)]
-                       ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (f (ctx-of open-night))))))]
-    (is (= [:ok :look-first] (cave identity)) "a cave guess deep below: the walk there to look is affordable, the stay is judged there")
-    (is (= [:later :exposed] (cave worthless)) "a goal worth nothing buys no walk to look: refused on price, not impossible on a guess")))
+  (let [cave (fn [f solid-at lit] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)
+                                                lib-look/unseen-solid-at-fn solid-at lib-look/unseen-lit-chance lit]
+                                    ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (f (ctx-of open-night))))))
+        open-cave (constantly (constantly 0))]
+    (is (= [:ok :look-first] (cave identity open-cave lib-look/unseen-lit-chance)) "an open cave guessed deep below: the walk there to look is affordable, the stay is judged there")
+    (is (= [:later :exposed] (cave worthless open-cave lib-look/unseen-lit-chance)) "a goal worth nothing buys no walk to look: refused on price, not impossible on a guess")
+    (is (= [:ok :unexposed] (cave identity lib-look/unseen-solid-at-fn (fn ([_ _] 0) ([_ _ _] 0))))
+        "dark even by day at the measured rock prior: likely rock the body digs, a cave only at the chance it is one")))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])

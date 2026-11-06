@@ -21,18 +21,23 @@
 (deftest exposure-of-a-walk-out-of-shelter-is-the-open-sky-night-figure-lowered-by-dawn
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))]
     (let [e (spawn-light/exposure p {:x 15 :y 64 :z 0})]
-      (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
+      (is (= #{:light} (:lowered-by e)))
+      (is (< (* 0.5 open-night-chance) (:chance e) open-night-chance)
+          "the open-sky figure, but for the chance full day leaves the unseen cell dark: then likely rock")
       (is (pos? (:light-in e)) "and the seconds till light"))))
 
-(deftest a-walked-unseen-cell-counts-at-the-chance-it-is-open-ground-in-a-hall-not-rock-the-body-digs
+(deftest an-unseen-cell-dark-even-by-day-counts-at-the-chance-it-is-open-ground-in-a-hall-walked-stayed-at-or-aimed-for
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))
         cell {:x 15 :y 64 :z 0}
-        share #(with-redefs [look/unseen-solid-at-fn (constantly (constantly %))] (spawn-light/walk-dark-share p cell false))
-        stay #(with-redefs [look/unseen-solid-at-fn (constantly (constantly %))] (spawn-light/dark-share p cell false))]
-    (is (= (stay 0) (stay 1) (/ (spawn-light/chance-at p cell false) open-night-chance)) "a stay or goal cell is open ground whatever the rock prior says")
-    (is (zero? (share 1)) "certain rock is the body's own tunnel")
-    (is (< (share 0.75) (share 0.25) (share 0)) "the likelier rock, the less")
-    (is (< (share 0) (stay 0)) "and an unseen edge's hall is a prior under 1")))
+        share (fn [solid lit-day] (with-redefs [look/unseen-solid-at-fn (constantly (constantly solid))
+                                                look/unseen-lit-chance (fn ([_ _] 0) ([_ _ subtract] ({0 lit-day} subtract 0)))]
+                                    (spawn-light/dark-share p cell false)))]
+    (are [solid lit-day expected] (> 1e-9 (js/Math.abs (- expected (share solid lit-day))))
+      1 0 0
+      0.75 0 (* 0.25 (cost/hall-chance :roofed))
+      0 0 (cost/hall-chance :roofed)
+      1 1 1)
+    (is (< (share 0 0) 1) "an unseen edge's hall is a prior under 1")))
 
 (deftest a-share-asks-the-rock-chance-of-all-its-unseen-cells-from-one-fn
   (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))

@@ -851,7 +851,7 @@
 (defn- lit-chance-fn
   "unseen-lit-chance-fn of p by subtract, kept while what the body has seen, the sky's darkening, the body's cell and its
   light hold (made anew each call without a perception's memory); (constantly 1) without a raw world (nothing is known,
-  so nothing is dark). One kept per needs."
+  so nothing is dark). One kept per needs and subtract (spawn-light/chance-at asks by day and now in turn)."
   ([p subtract] (lit-chance-fn p subtract nil))
   ([p subtract needs]
    (let [^js raw (raw-of p)
@@ -860,11 +860,12 @@
          k (when (and st (.-stores st))
              (let [[x y z :as feet] (feet-cell p)]
                [(.-dim st) (memory-age/epoch st) subtract feet (when feet (.lightAt raw x y z))]))
-         hit (when k (get (.get guesses st) needs))]
+         slot [needs subtract]
+         hit (when k (get (.get guesses st) slot))]
      (cond (nil? raw) (constantly 1)
            (and k (= k (:k hit))) (:f hit)
            :else (let [f (unseen-lit-chance-fn p subtract needs)]
-                   (when k (.set guesses st (assoc (.get guesses st) needs {:k k :f f})))
+                   (when k (.set guesses st (assoc (.get guesses st) slot {:k k :f f})))
                    f)))))
 
 (defn unseen-lit-chance

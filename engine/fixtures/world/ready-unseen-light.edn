@@ -5,6 +5,9 @@
 ;; lit-hall-at-night (should-succeed): a sealed glowstone-lit hall at night; the :at cell [23 0 15] lies round a corner of a
 ;; passage, unseen, one step from the seen passage end (light 13, glowstone in the end wall), so it is guessed lit and
 ;; the probe starts. The old guess read every unseen cell dark at night by the clock, lit by day: it waited :exposed for dawn.
+;; rock-cell-at-night (should-succeed, card f2c75755): the body in a dark 1x2 pocket of the stone mass at night; the :at cell
+;; [22 0 16] lies 14 into unseen rock. Dark even by day, it counts only at the measured chance it is open cave, not rock:
+;; the probe starts :unexposed. The old price took it for open dark floor (:exposed, or :ok only on the walk there to look).
 {:defaults
  {:tags [:readiness :light]
   :plot {:light :sky :floor "grass_block" :height 8}
@@ -25,4 +28,11 @@
    :body {:at [6.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 900 4]]}
    :act [[:job (jobs.debug.ready-probe {:at #at [23 0 15] :stay-s 120})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 1 :of-job true}]}
+  {:name "rock-cell-at-night-guessed-rock-starts"
+   :time :night :time-why :night-light
+   :blocks [[:fill [8 0 16] [8 1 16] "air"]]
+   :body {:at [8.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.debug.ready-probe {:at #at [22 0 16] :stay-s 120})]]
+   :expect [{:event {:source :job :kind :job.ready-probe :data {:status [:has {:reason :unexposed}]}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 1 :of-job true}]}]}
