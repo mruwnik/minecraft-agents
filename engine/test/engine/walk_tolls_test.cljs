@@ -73,7 +73,10 @@
     (is (= (wworld/tolls-key tolled) (wworld/tolls-key (wworld/with-dangers tolled nil))) "other costs keep the tolls")
     (is (= {(base/cell-key 5 64 0) 12 (base/cell-key 6 64 1) 10}
            (into {} (map vec) (es6-iterator-seq (.entries (.-cells (.-tolls (wworld/with-tolls tolled [{:x 5 :y 64 :z 0 :factor 2}])))))))
-        "tolls added later add to the cells already tolled")))
+        "tolls added later add to the cells already tolled")
+    (let [^js merged (.-tolls (wplan/plan-options (wworld/with-tolls tolled [{:x 7 :y 64 :z 0 :factor 3 :trample true}]) 1 nil nil))]
+      (is (= {(base/cell-key 7 64 0) 3} (into {} (map vec) (es6-iterator-seq (.entries (.-trample merged))))) "a trample row reaches the planner's trample Map")
+      (is (= 2 (.-size (.-cells merged))) "and is not a plain cell toll"))))
 
 (deftest a-failed-step-is-priced-by-its-tries-until-a-cell-round-it-changes
   (let [p (tu/fake-on-floor {:floor [-5 -5 5 5]})

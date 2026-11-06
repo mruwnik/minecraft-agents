@@ -386,16 +386,21 @@
 (def ^:private fp-double (js/Float64Array. 1))
 (def ^:private fp-words (js/Int32Array. (.-buffer fp-double)))
 
+(defn- fmix32 [h]
+  (let [h (js/Math.imul (bit-xor h (unsigned-bit-shift-right h 16)) 0x85ebca6b)
+        h (js/Math.imul (bit-xor h (unsigned-bit-shift-right h 13)) 0xc2b2ae35)]
+    (bit-xor h (unsigned-bit-shift-right h 16))))
+
 (defn- fingerprint
   "[n h1 h2] of the rows (cell-key -> #js [factor trample-factor]) in key order ks: two 32-bit hashes of every key and
-  factor, so a kept search's key holds three numbers, not the tolls (equal tolls, equal key; a collision is a 2^-64 chance)."
+  factor, so a kept search's key holds three numbers, not the tolls (equal tolls, equal key; a collision is possible but vanishingly unlikely)."
   [ks ^js rows]
   (let [h1 (volatile! 0x811c9dc5) h2 (volatile! 0x9747b28c)
         mix! (fn [v]
                (aset fp-double 0 v)
                (dotimes [w 2]
                  (let [x (aget fp-words w)]
-                   (vreset! h1 (js/Math.imul (bit-xor @h1 x) 16777619))
+                   (vreset! h1 (fmix32 (bit-xor @h1 x)))
                    (vreset! h2 (js/Math.imul (bit-xor @h2 x (unsigned-bit-shift-right @h2 15)) 0x5bd1e995)))))]
     (doseq [k ks]
       (let [^js r (.get rows k)] (mix! k) (mix! (aget r 0)) (mix! (aget r 1))))
