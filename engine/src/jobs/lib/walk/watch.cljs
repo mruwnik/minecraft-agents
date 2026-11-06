@@ -116,6 +116,11 @@
              (every? (fn [k] (let [arr (unchecked-get table k)] (== (aget arr a) (aget arr b)))) (state-keys-of table))
              (same-boxes? table a b)))))
 
+(defn state-name
+  "The block name of state id in table (an id outside it: the id itself), for what a look-ahead says differed."
+  [^js table id]
+  (or (some (fn [[nm ^js r]] (when (<= (aget r 0) id (aget r 1)) nm)) (es6-iterator-seq (.entries ^js (.-nameIds table)))) id))
+
 (defn boundary?
   "Whether a walk may stop here to plan again: the body stands on the ground (not in the air, water or on a climbable), the
   step it heads for (i2, i before this tick) and the one it left are none of no-stop-moves, and it has just reached a step
@@ -257,7 +262,9 @@
           dstop (when quiet? (danger-stop watch all i2 at))
           hstop (when (and quiet? (not dstop)) (health-stop watch all i2 at))]
       (cond
-        (seq changed) {:status :replan :why :changed :cells changed :at at :step i2}
+        (seq changed) {:status :replan :why :changed :cells changed :at at :step i2
+                       :states (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
+                                 (vec (for [[x y z :as cell] (take 6 changed)] [cell (state-name table (.stateAt bs x y z)) (state-name table (.stateAt ns x y z))])))}
         (seq still) {:status :replan :why :mob :cells still :at at :step i2}
         dstop dstop
         hstop hstop

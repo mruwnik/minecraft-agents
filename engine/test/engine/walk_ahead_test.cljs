@@ -123,6 +123,15 @@
 
 (def pose-on-ground {:x 1.5 :y 64 :z 0.5 :on-ground true :on-climbable false :in-water false})
 
+(deftest a-changed-stop-names-the-blocks-that-differed
+  (let [air (sid "air" {}) stone (sid "stone" {})
+        snap (fn [id] #js {:snapshot #js {:stateAt (fn [x y z] (if (= [x y z] [1 64 0]) id air))} :table table})
+        watch {:base (snap air) :fresh (constantly (snap stone)) :ahead [] :skip #{}}
+        steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 :walk)]
+        done (wwatch/watch-stop watch steps 1 {:i 2 :tick 1} pose-on-ground)]
+    (is (= :changed (:why done)))
+    (is (= [[[1 64 0] "air" "stone"]] (:states done)))))
+
 (deftest a-step-boundary-is-an-advance-on-the-ground-to-a-plain-step-or-a-check-along-a-leg
   (let [steps [(step 0 64 0 :start) (step 1 64 0 :walk) (step 2 64 0 :walk) (step 3 64 0 :walk)]]
     (is (wwatch/boundary? steps 1 2 1 pose-on-ground))
