@@ -343,7 +343,8 @@
         "lit within 3, the body is 4-6 away when the fuse ends")
     (is (zero? (caught "creeper" [[0 0] [1 0.5] [50 0.6] [100 3]])) "out of range before the fuse ends")
     (is (zero? (caught "creeper" [[1 0] [-2.7 1.02] [-6.4 2.04] [-10 3]])) "a flight at the flee pace is past 7 blocks of the spot it lit at before the fuse ends")
-    (is (zero? (caught "creeper" [[1 0] [2 0.5] [3 1]])) "a route that ends before the fuse does shows no blast")))
+    (is (>= (caught "creeper" [[1 0] [0 0.4] [-1 0.8]]) 1.5) "a route that ends 4 from the spot it lit at before the fuse does: the body stands in the blast")
+    (is (zero? (caught "creeper" [[1 0] [-3 0.5] [-6 1]])) "a route that ends 9 off before the fuse does: past 7, the fuse stops")))
 
 (deftest a-sword-skeleton-gets-a-walking-way-and-a-bow-skeleton-and-a-blaze-do-not
   (let [at {:x 0.5 :y 64 :z 0.5}

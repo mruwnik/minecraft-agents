@@ -917,7 +917,9 @@
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."
   (wall-cells (concat (for [x (range -2 10)] [x -2]) (for [x (range -2 10)] [x 2]) (for [z (range -1 2)] [-2 z]))))
 
-(deftest a-body-cornered-by-a-creeper-backs-off-instead-of-swinging
+;; the one step back ends 3.5 from the lit creeper, inside its blast (flee-search/fuse-caught-s): no back-off, no blocks to wall
+;; or pillar with, so the hit that knocks it back and the step after it are the answer a player takes
+(deftest a-body-cornered-by-a-creeper-with-no-step-out-of-its-blast-hits-it-back-and-steps-away
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -926,9 +928,8 @@
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (zero? (count (calls p "attack"))) "no melee with a creeper")
-          (is (= 1 (count (tu/walked-to eng))) "one step back, into the last cell of the room (then the creeper leaves)")
-          (is (= -1 (:x (first-move eng)))))))))
+          (is (= 1 (count (calls p "attack"))) "one hit to knock it back")
+          (is (= -1 (:x (first-move eng))) "then the step back into the last cell of the room"))))))
 
 (deftest the-fight-is-reach-only-when-the-nearest-hostile-is-a-creeper-or-the-body-is-blind
   (let [zombie #js {:name "zombie" :d 2 :o #js [2 0]}

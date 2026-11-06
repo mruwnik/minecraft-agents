@@ -357,7 +357,7 @@
   "cost/fuse-s when a creeper's blast hurts a body walking timed route (centred cells the creeper does not already touch), else 0:
   the creeper lights at the first point it reaches within cost/swell-start of the body, stands still where it lit (vanilla's
   SwellGoal stops its walk), the fuse burns while the body stays within cost/fuse-cancel-range of that spot, and the blast hurts
-  where the body is then (cost/blast-damage). A route that ends before the fuse does shows no blast."
+  where the body is then (cost/blast-damage); a body whose route ends first stands at its end."
   [ch route]
   (let [starts (cost/swim-arrivals (:name ch) (:pos ch) route #(way-at ch %) #(swim-at ch %) (:speed ch) cost/swell-start)
         lit (map first (drop-while (fn [[p a]] (< (:t p) a)) (map vector route starts)))
@@ -371,8 +371,7 @@
                    (merge-with (fn [at from] (+ at (* k (- from at)))) (select-keys p0 [:x :y :z]) (select-keys (:pos ch) [:x :y :z])))
             end (+ (:t p0) cost/fuse-s)
             burning (take-while #(<= (:t %) end) lit)]
-        (if (and (<= end (:t (last lit)))
-                 (every? #(<= (u/dist % spot) cost/fuse-cancel-range) burning)
+        (if (and (every? #(<= (u/dist % spot) cost/fuse-cancel-range) burning)
                  (pos? (cost/blast-damage (u/dist (at-time lit end) spot))))
           cost/fuse-s
           0)))))
