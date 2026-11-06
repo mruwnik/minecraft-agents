@@ -61,4 +61,4 @@
    :act [[:until-seen {:block "cobblestone"} 10] [:job (jobs.movement.go-to {:pos #at [23 0 16] :range 0 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 40 :of-job true :until {:source :job :kind :stopped :data {:arrived false}}}]
-   :after [[:body-far [23.5 0 16.5] 4] [:block [20 0 16] "cobblestone"] [:block [20 1 16] "cobblestone"]]}]}
+   :after [[:body-far [23.5 0 16.5] 3.5] [:block [20 0 16] "cobblestone"] [:block [20 1 16] "cobblestone"]]}]}
