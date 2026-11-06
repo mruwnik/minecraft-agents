@@ -141,17 +141,18 @@
           (is (< 20 (:x (st/pos-of p))) "in the far hut, the near one is walled off from the body"))))))
 
 (defn ^:async night-at-hut-seen-outside
-  "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet. The body starts z blocks south of the hut."
-  [inventory z]
+  "night-at-seen-hut with the inside of the hut never seen from outside (its door shut): a room not seen inside yet. The body starts z blocks south of the hut; home? true sets the hut as its remembered home."
+  ([inventory z] (night-at-hut-seen-outside inventory z false))
+  ([inventory z home?]
   (let [world (-> (hut/hut-world {:x 5 :y 64 :z z} {}) (assoc :time night :inventory inventory))
-        {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? false}))
+        {:keys [eng p] :as r} (await (night-at-home world {:x 5 :y 64 :z 0} {} {:home? home?}))
         at (.-sensedAt p)]
     (aset p "seenBlockAt" (fn [pos] (let [b (.blockAt p pos)] #js {:name (.-name b) :pos pos :age-ms 0 :properties (.-properties b)})))
     (aset p "sensedAt" (fn [pos] (if (and (<= 4 (.-x pos) 6) (<= -1 (.-z pos) 1) (<= 64 (.-y pos) 66) (< 2 (:z (st/pos-of p))))
                                    #js {:unknown true :pos pos}
                                    (.call at p pos))))
     (await (tu/run-until-empty eng 80))
-    r))
+    r)))
 
 (deftest a-hut-not-seen-inside-is-walked-to-when-the-walk-and-its-chance-of-being-open-cost-less-than-digging-in
   (async done
@@ -220,6 +221,13 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack 40))]
           (is (< 2 (:z (st/pos-of p))) "a walk dearer than digging in, with the room maybe open, is not made: the body digs in where it stands"))))))
+
+(deftest a-remembered-home-not-seen-inside-is-priced-by-its-chance-of-being-open-like-a-room-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (night-at-hut-seen-outside st/dirt-stack 40 true))]
+          (is (< 2 (:z (st/pos-of p))) "the home's walk plus its chance of being open costs more than digging in: dug in where the body is"))))))
 
 (deftest a-carried-bed-goes-down-inside-the-hut-seen-not-outside-it
   (async done
