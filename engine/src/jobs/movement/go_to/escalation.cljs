@@ -337,7 +337,7 @@
                                     (beats-leg? e l (fn [w] (way-total (:primitives c) feet goal w %1))) e
                                     (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
-                                      (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (and (= :none (:step e)) (not (:why e)))) l e))
+                                      (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (= :none (:step e))) l e))
                                     :else (or l (escape-way/choose (:primitives c) feet goal %1 %2))))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
                      #(or (dig-way (:primitives c) feet goal %1 %2) (escape-way/choose (:primitives c) feet goal %1 %2))
