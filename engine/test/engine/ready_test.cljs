@@ -202,8 +202,10 @@
     night-hut {:x 6 :y 64 :z 0} :ok
     night-hut outside :later
     (assoc night-hut :blocks (merge (:blocks night-hut) barn-roof)) outside :later
-    tunnel {:x 4 :y 64 :z 0} :ok
-    (assoc open-night :time st/noon) {:x 4 :y 64 :z 0} :ok))
+    tunnel {:x 4 :y 64 :z 0} :ok)
+  (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly {:x 4 :y 64 :z 0})) (assoc open-night :time st/noon)))) "open ground in the noon sky's light")
+  (is (= :ok (showing #(with-redefs [sense/unknown? (constantly true)] (first ((ready/safe-at (constantly {:x 4 :y 64 :z 0})) (for-a-log (dissoc (ctx-of (assoc open-night :time st/noon)) ::price/stay-s)))))))
+      "light unknown at noon: a click's stay at the cave chance pays no look round"))
 
 (deftest a-body-in-a-hut-with-a-wall-never-seen-looks-at-it-before-it-judges-a-walk-out
   (let [seen-block u/seen-block
@@ -308,7 +310,7 @@
     1e6 :later))
 
 (deftest a-long-stay-in-the-dark-open-is-refused-where-a-click-is-accepted
-  (let [bare (fn [] (for-iron (dissoc (ctx-of open-night) ::price/stay-s)))
+  (let [bare (fn [] (under (dissoc (ctx-of open-night) ::price/stay-s) 'jobs.items.obtain {:item "oak_log" :count 3}))
         status (fn [category] (lit 0 15 #(first ((price/staying category (ready/safe-at (constantly outside))) (bare)))))]
     (is (= [:ok :later :later] (mapv status [:click :work :long])))))
 
@@ -333,9 +335,9 @@
   (are [check args caller] (= :later (lit 0 15 #(first (check (assoc (caller (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"}))) :args args)))))
     smelt/safe? {:furnace outside} #(under % 'jobs.items.obtain {:item "iron_ingot" :count 1})
     pick-up-loose/safe? {} for-a-log)
-  (testing "a kitchen's stay at a furnace 40 blocks off in the open night is weighed against the pass it serves (its root worth-of): 64 loaves' worth goes ahead, a loaf's waits"
+  (testing "a kitchen's stay at a furnace 100 blocks off in the open night is weighed against the pass it serves (its root worth-of): 64 loaves' worth goes ahead, a loaf's waits"
     (let [world (assoc open-night :blocks {"1,64,0" "red_bed"})
-          check (fn [bread] (let [args {:furnace {:x 40 :y 64 :z 0} :stock {"bread" bread} :reserve {"wheat" 2}}]
+          check (fn [bread] (let [args {:furnace {:x 100 :y 64 :z 0} :stock {"bread" bread} :reserve {"wheat" 2}}]
                               (lit 0 15 #(kitchen/safe? (assoc (under (ctx-of world) 'jobs.items.kitchen args) :args args)))))]
       (is (= [:ok :later] (mapv (comp first check) [64 1]))))))
 
@@ -350,7 +352,7 @@
 (deftest a-smelt-puts-its-own-furnace-down-instead-of-walking-to-a-chosen-dark-one
   (let [world (assoc night-hut :inventory [{:name "cobblestone" :count 8}])
         chosen {:furnace outside}
-        verdict (fn [world mem] (with-redefs [ctx/mem (constantly mem)] (first (smelt/safe? (ctx-of world)))))]
+        verdict (fn [world mem] (with-redefs [ctx/mem (constantly mem)] (first (smelt/safe? (under (ctx-of world) 'jobs.items.obtain {:item "iron_ingot" :count 4})))))]
     (is (= :ok (lit 0 15 #(verdict world chosen))) "an unloaded choice 10 blocks out in the dark is dropped")
     (is (= :later (lit 0 15 #(verdict world (assoc chosen :owed {:count 4})))) "a load in it still calls for the walk")
     (is (= :later (lit 0 15 #(verdict (assoc night-hut :inventory []) chosen))) "no cobblestone to make one: the walk stays")))
@@ -929,11 +931,13 @@
     {:x 15 :y 64 :z 0} :look))
 
 (deftest an-unseen-cell-below-the-feet-with-no-seen-roof-is-a-valley-and-asks-a-look
-  (are [y] (= :look (with-redefs [sh-sense/seen-cell? (constantly false)
-                                  sh-sense/solid-at? (constantly false)
-                                  lib-look/look-shows? (constantly true)]
-                      (kind (ready/safe-at (constantly {:x 15 :y y :z 0})) open-night)))
-    62 40))
+  ;; both within the fake's sight radius (16): a look round only asks for cells it can reach
+  (are [x y] (= :look (with-redefs [sh-sense/seen-cell? (constantly false)
+                                    sh-sense/solid-at? (constantly false)
+                                    lib-look/look-shows? (constantly true)]
+                        (kind (ready/safe-at (constantly {:x x :y y :z 0})) open-night)))
+    15 62
+    6 52))
 
 (deftest an-unseen-cell-no-look-from-here-shows-is-priced-as-unseen
   (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
@@ -947,8 +951,8 @@
         open-cave (constantly (constantly 0))]
     (is (= [:ok :look-first] (cave identity open-cave lib-look/unseen-lit-chance)) "an open cave guessed deep below: the walk there to look is affordable, the stay is judged there")
     (is (= [:later :exposed] (cave worthless open-cave lib-look/unseen-lit-chance)) "a goal worth nothing buys no walk to look: refused on price, not impossible on a guess")
-    (is (= [:ok :unexposed] (cave identity lib-look/unseen-solid-at-fn (fn ([_ _] 0) ([_ _ _] 0))))
-        "dark even by day at the measured rock prior: likely rock the body digs, a cave only at the chance it is one")))
+    (is (= [:later :exposed] (cave worthless lib-look/unseen-solid-at-fn (fn ([_ _] 0) ([_ _ _] 0))))
+        "dark even by day at the measured rock prior: the small chance it is a cave is still priced, and a goal worth nothing does not take it")))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
@@ -1430,4 +1434,3 @@
                                                         :spoil {"cobblestone" [0 128 128]}}))]
     (is (= 3 (count worths)) "two stacks of stone and one of ore")
     (is (< (first worths) (last worths)) "a stone slot is the cheapest: a food stack pushes it out first")))
-
