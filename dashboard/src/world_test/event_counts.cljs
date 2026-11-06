@@ -55,6 +55,7 @@
             [world-test.caught-flights :as caught-flights]
             [world-test.censored :as censored]
             [world-test.drowned-meets :as drowned]
+            [world-test.dark-meets :as dark-meets]
             [world-test.field-passes :as field-passes]
             [world-test.gap-miss :as gap-miss]
             [world-test.fresh-drop :as fresh-drop]
@@ -652,7 +653,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | look-seconds | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | guess-rock | unseen-sky | dark-reach | tree-spots | resight | wall-sides | wall-chunks | pen-escapes | wall-places | hide-ends | flee-meets | respond-calls | respawn-distance | respawn-meets | retry-wins | craft-steps | tree-logs | pillar-knocks | food-gets | swim-times | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | dark-meets | flee-pace | closing-rate | walk-pace | walk-detour | gap-miss | way-on | guess-looks | look-seconds | unseen-floors | spot-returns | field-passes | arrow-shots | caught-flights | work-hurt | vein-seen | water-lags | surface-heights | floor-neighbours | unseen-solid | guess-rock | unseen-sky | dark-reach | tree-spots | resight | wall-sides | wall-chunks | pen-escapes | wall-places | hide-ends | flee-meets | respond-calls | respawn-distance | respawn-meets | retry-wins | craft-steps | tree-logs | pillar-knocks | food-gets | swim-times | item-costs [--run ID --animals N --secs S --escaped E] [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N] [--difficulty D]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -905,6 +906,12 @@
                                                        (filter #(fs/existsSync (path/join agents % "engine")) (array-seq (fs/readdirSync agents)))))))
                        0)
        "way-on" (do (println (pr-str (assoc (way-on-report agents since-ms) :since-ms since-ms))) 0)
+       "dark-meets" (let [at (cell-reader open-chunks (path/join agents ".." "chunks"))
+                          per (for [b (array-seq (fs/readdirSync agents)) :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))]
+                                (let [rs (read-agent (path/join agents b "engine") since-ms)]
+                                  [(dark-meets/exposure at rs) (dark-meets/meets at rs) (dark-meets/hurt at rs)]))]
+                      (println (pr-str (assoc (dark-meets/report (map first per) (map second per) (map #(nth % 2) per)) :since-ms since-ms)))
+                      0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "closing-rate" (do (println (pr-str (assoc (closing-report (since (:flight-steps folded))) :since-ms since-ms))) 0)
        "walk-pace" (do (println (pr-str (assoc (walk-report (since (:walk-steers folded))) :since-ms since-ms))) 0)
