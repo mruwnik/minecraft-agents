@@ -371,10 +371,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [walled (into {} (for [y (range 58 68)] [(str "2," y ",0") "bedrock"]))
-              s (await (shafted via-shaft (merge ore-east walled) [] 400))
+              s (await (shafted (assoc via-shaft :tunnel-length 3) (merge ore-east walled) [] 400))
               _ (set-pos! s 0.5 64 0.5)
-              _ (core/submit! (:eng s) (spec via-shaft) {})
-              _ (await (run-ticks s 400))
+              _ (core/submit! (:eng s) (spec (assoc via-shaft :tunnel-length 3)) {})
+              _ (await (run-until s 400 #(<= 2 (count (events-of % :mine.no-shaft)))))
               [first-no second-no] (events-of s :mine.no-shaft)]
           (is (= "s" (:shaft first-no)))
           (is (re-find #"shaft s" (:text first-no)) "the text names the shaft")

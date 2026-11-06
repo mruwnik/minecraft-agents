@@ -128,8 +128,11 @@
     (mem/write! (:store eng) :spawn-bed {:pos old-bed} {:cap 1 :ttl :forever})
     {:eng eng :p p :calls calls :results results :seen seen :furnaces furnaces :clock clock}))
 
-(defn start-job! [{:keys [eng]} sym a] (tu/child-outcome eng sym a 600))
+(defn start-job!
+  ([env sym a] (start-job! env sym a 600))
+  ([{:keys [eng]} sym a ticks] (tu/child-outcome eng sym a ticks)))
 (defn start! [env a] (start-job! env job a))
+(defn wait! "A job that never ends while it waits: a few ticks show it yields." [env a] (start-job! env job a 30))
 (defn names [{:keys [calls]}] (mapv (comp name first) @calls))
 (defn called [{:keys [calls]} sym] (mapv second (filter #(= sym (first %)) @calls)))
 
@@ -401,7 +404,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup :ending-jobs {'jobs.strip.corridor (ending-job 'jobs.strip.corridor :condition-failed {:reason :hostile-near})})
-              rounds (loop [n 0 acc []] (if (= n 5) acc (recur (inc n) (conj acc (await (start! env args))))))]
+              rounds (loop [n 0 acc []] (if (= n 5) acc (recur (inc n) (conj acc (await (wait! env args))))))]
           (is (every? #(= :not-done %) rounds) "yields every round: no stop is counted, so no segment reaches the stop limit and the run never ends"))))))
 
 (deftest a-call-without-site-or-at-for-a-new-site-is-impossible
@@ -418,7 +421,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup :triggers {} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}])
-              r (await (start! env args))]
+              r (await (wait! env args))]
           (is (= :not-done r) "the job yields every round")
           (is (= :hostile-near (:reason (first (filter #(= :waiting (:kind %)) @(:seen env))))) "waiting with its reason")
           (is (empty? (names env)) "no phase ran"))))))
@@ -438,7 +441,7 @@
           (core/submit! (:eng env) (list job args) {})
           (await (tu/run-until-empty (:eng env) 600))
           (is (= 1 (count (called env 'jobs.strip.corridor))) "cut after the first corridor")
-          (is (= :not-done (await (start! env (dissoc args :at)))) "the resume yields every round")
+          (is (= :not-done (await (wait! env (dissoc args :at)))) "the resume yields every round")
           (is (= 1 (count (called env 'jobs.strip.corridor))) "no corridor ran with the hostile near")
           (is (= :hostile-near (:reason (last (filter #(= :waiting (:kind %)) @(:seen env)))))))))))
 

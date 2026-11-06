@@ -10,6 +10,7 @@
 
 (def all 'jobs.strip.all)
 (defn start! [env a] (start-job! env all a))
+(defn wait! "A job that never ends while it waits: a few ticks show it yields." [env a] (start-job! env all a 30))
 (defn short-names [env] (mapv #(last (re-find #"\.([a-z-]+)$" %)) (names env)))
 (def ore-bag [{:name "torch" :count 32} {:name "iron_pickaxe" :count 1} {:name "raw_iron" :count 16} {:name "coal" :count 4}])
 
@@ -86,7 +87,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup :ending-jobs {'jobs.survival.set-spawn (ending-job 'jobs.survival.set-spawn :condition-failed {:reason :night})})]
-          (is (= :not-done (await (start! env args))) "the base phase yields while it is night")
+          (is (= :not-done (await (wait! env args))) "the base phase yields while it is night")
           (is (empty? (called env 'jobs.strip.corridor))))))))
 
 (deftest a-haul-that-waits-for-light-is-waited-out-not-a-child-failure
@@ -94,7 +95,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup :ending-jobs {'jobs.storage.haul (ending-job 'jobs.storage.haul :condition-failed {:reason :exposed})})]
-          (is (= :not-done (await (start! env args))) "the haul phase yields while the chest is in the dark"))))))
+          (is (= :not-done (await (wait! env args))) "the haul phase yields while the chest is in the dark"))))))
 
 (deftest a-cut-run-puts-home-and-spawn-back-in-its-cleanup
   (async done
