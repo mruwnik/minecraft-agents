@@ -156,18 +156,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks wide-ground})]
-          (st/refuse-cell! p [0 63 0])
-          (st/dawn-after! p 3)
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (core/tick! eng))
-          (let [roofs (filterv #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place")))]
-            (is (= {:x 0 :y 63 :z 0} (first roofs)) "the first pit's roof was refused")
-            (is (<= 9 (js/Math.hypot (:x (last roofs)) (:z (last roofs))))
-                "a second pit 9+ blocks away was roofed (8.06 away, dig-in's futile check from the body declines it)"))
-          (is (= 1 (count (st/emitted seen :shut-in.relocated))) "moved once, after the failed site")
-          (is (= [] (st/entries eng :shut-in-failed)) "failed sites are forgotten at morning: the next night digs there again")
-          (is (empty? (st/emitted seen :shelter.exposed))))))))
+        ;; at the measured spawn rate (0.0012) digging on down from the failed pit and sealing it there is cheaper than the walk to another site
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+           (fn ^:async inner []
+             (let [{:keys [eng p seen]} (st/setup {:time night :blocks wide-ground})]
+               (st/refuse-cell! p [0 63 0])
+               (st/dawn-after! p 3)
+               (core/submit! eng '(jobs.survival.night) {})
+               (await (core/tick! eng))
+               (let [roofs (filterv #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place")))]
+                 (is (= {:x 0 :y 63 :z 0} (first roofs)) "the first pit's roof was refused")
+                 (is (<= 9 (js/Math.hypot (:x (last roofs)) (:z (last roofs))))
+                     "a second pit 9+ blocks away was roofed (8.06 away, dig-in's futile check from the body declines it)"))
+               (is (= 1 (count (st/emitted seen :shut-in.relocated))) "moved once, after the failed site")
+               (is (= [] (st/entries eng :shut-in-failed)) "failed sites are forgotten at morning: the next night digs there again")
+               (is (empty? (st/emitted seen :shelter.exposed)))))))))))
 
 (deftest the-dig-in-call-carries-the-worth-of-the-shelter-answer
   (async done
