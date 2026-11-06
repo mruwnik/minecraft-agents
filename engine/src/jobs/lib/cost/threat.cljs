@@ -292,6 +292,8 @@
         life (+ idle (/ (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- seconds idle-despawn-s)))))) idle-despawn-per-s))]
     (- 1 (js/Math.pow (- 1 held) (/ life (+ idle-despawn-s (/ 1 idle-despawn-per-s)))))))
 
+(def creeper-fuse-range "Blocks within which a creeper lights its fuse (vanilla)." 3)
+(def creeper-fuse-s "Seconds a creeper's fuse burns before it blows (vanilla: 30 ticks); it goes out when the target is past 7 blocks." 1.5)
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (defn creeper-exchange
   "hp from creepers per swing: the mean of the Gamma-Poisson posterior under the Jeffreys prior, (k + 0.5) / n of the two settings, so a small n is pulled toward an even half hp per swing."

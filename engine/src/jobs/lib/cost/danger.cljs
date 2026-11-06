@@ -273,9 +273,10 @@
   (-> c (update :x + 0.5) (update :z + 0.5)))
 
 (defn way-blocks
-  "Blocks a chaser at pos covers to within ::melee-reach of `at`: way when known, else the straight line less the reach."
-  [pos at way]
-  (or way (max 0 (- (u/dist pos at) (melee-reach)))))
+  "Blocks a chaser at pos covers to within ::melee-reach (or reach) of `at`: way when known, else the straight line less the reach."
+  ([pos at way] (way-blocks pos at way nil))
+  ([pos at way reach]
+   (or way (max 0 (- (u/dist pos at) (or reach (melee-reach)))))))
 
 (defn leg-s
   "Seconds a chaser (mob-kind name) takes over blocks of way of which swim-blocks (clamped to it) are water: those at its
@@ -301,9 +302,10 @@
   "Seconds a melee chaser (mob-kind name) at pos takes to within its blow of each point of route ([{:x :y :z}]), way as
   caught-on?'s; swim, a fn of a route point to the blocks of its way the chaser swims (nil: none shown, all land);
   speed its observed one (arrival-s)."
-  ([chaser pos route way swim] (swim-arrivals chaser pos route way swim nil))
-  ([chaser pos route way swim speed]
-   (mapv (fn [p] (leg-s chaser (way-blocks pos p (way p)) (when swim (swim p)) speed)) route)))
+  ([chaser pos route way swim] (swim-arrivals chaser pos route way swim nil nil))
+  ([chaser pos route way swim speed] (swim-arrivals chaser pos route way swim speed nil))
+  ([chaser pos route way swim speed reach]
+   (mapv (fn [p] (leg-s chaser (way-blocks pos p (way p) reach) (when swim (swim p)) speed)) route)))
 
 (defn caught-on?
   "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
@@ -318,9 +320,9 @@
 (defn reach-s
   "Seconds a melee chaser (caught-on?'s) is within its blow of a body walking route ([{:x :y :z :t}] from where
   it starts): at each point the chaser gets to (swim-arrivals) before the body, from its arrival to the body's, at most
-  the body's walk there from the point before."
-  [{:keys [chaser pos route way swim speed]}]
-  (let [arrivals (swim-arrivals chaser pos route (or way (constantly nil)) swim speed)]
+  the body's walk there from the point before. reach: blocks within which it counts (default ::melee-reach)."
+  [{:keys [chaser pos route way swim speed reach]}]
+  (let [arrivals (swim-arrivals chaser pos route (or way (constantly nil)) swim speed reach)]
     (reduce + 0 (map (fn [prev p a] (min (max 0 (- (:t p) a)) (- (:t p) (:t prev))))
                      route (rest route) (rest arrivals)))))
 

@@ -346,12 +346,16 @@
 (defn caught-s
   "The most seconds a chaser not :calm? is within its blow on timed cells, past the cells it reaches without moving
   (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place).
-  A shooter? lands no blow."
+  A shooter? lands no blow. A creeper blows only when it is within threat/creeper-fuse-range of the body for threat/creeper-fuse-s
+  of the route, else 0."
   [chasers cells]
   (reduce max 0 (map (fn [ch]
                        (let [way #(way-at ch %)
-                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells)]
-                         (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %) :speed (:speed ch)})))
+                             creeper? (= "creeper" (:name ch))
+                             reach (when creeper? threat/creeper-fuse-range)
+                             past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells)
+                             s (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %) :speed (:speed ch) :reach reach})]
+                         (if (and creeper? (< s threat/creeper-fuse-s)) 0 s)))
                      (remove (some-fn :calm? shooter?) chasers))))
 
 (defn trap-s

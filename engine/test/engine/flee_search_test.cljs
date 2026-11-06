@@ -222,7 +222,7 @@
 
 (defn way
   "A priced end along cells [[x z] ...] from the body at [0 0], a second a cell, its first seen-n seen: the rest unseen,
-  trapped 100 at a dead end there (nothing seen near: way-on-chance 1/2)."
+  trapped 100 at a dead end there (nothing seen near: way-on-chance 0.5)."
   [cells seen-n price]
   (let [cs (vec (map-indexed (fn [i [x z]] {:x x :y 64 :z z :t i}) cells))]
     (cond-> {:target {:x 9 :z 9} :found? true :open? true :end (select-keys (peek cs) [:x :y :z]) :s (:t (peek cs))
@@ -331,6 +331,15 @@
     (is (zero? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "bow" :pos under}] over)) "nor one seen holding its bow")
     (is (pos? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "stone_sword" :pos under}] over)) "one holding a sword strikes")
     (is (pos? (search/caught-s [{:name "blaze" :mob "blaze" :pos under}] over)) "a blaze strikes within 2 blocks")))
+
+(deftest a-creeper-catches-only-a-body-that-stays-in-its-fuse-range-for-the-fuse
+  ;; the walk-by was caught on every second the creeper was within a zombie's reach, though it blows only after 1.5 s within 3 blocks
+  (let [route (fn [dt] (mapv (fn [x] {:x x :y 64 :z 0 :t (* dt x)}) (range 7)))
+        at {:x 3.5 :y 64 :z 0.5}
+        caught (fn [k dt] (search/caught-s [{:name k :mob k :pos at}] (route dt)))]
+    (is (pos? (caught "zombie" 0.15)) "a zombie lands blows on the quick walk by")
+    (is (zero? (caught "creeper" 0.15)) "a creeper's fuse has no time to run")
+    (is (>= (caught "creeper" 0.5) 1.5) "a slow walk by keeps the body in range for the fuse")))
 
 (deftest a-sword-skeleton-gets-a-walking-way-and-a-bow-skeleton-and-a-blaze-do-not
   (let [at {:x 0.5 :y 64 :z 0.5}
