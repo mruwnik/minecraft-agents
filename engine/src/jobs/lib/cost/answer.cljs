@@ -804,6 +804,16 @@
                      :on (js/Int32Array.from (filter #(pos? (aget w %)) (range n)))}))))
         (when (seq cells) threats)))
 
+(defn notice-hazard
+  "The Gamma notice prior's cumulative hazard H(x) = shape ln(1 + x/rate), x the weighted seconds."
+  [{:keys [shape rate]} x]
+  (* shape (js/Math.log1p (/ x rate))))
+
+(defn notice-hazard-gain
+  "H(b + x) - H(b) of the notice prior."
+  [{:keys [shape rate]} b x]
+  (* shape (js/Math.log1p (/ x (+ rate b)))))
+
 (defn notice-view
   "How threat t ({:before :w :on :prior :exposure :dts}, met-threats') gets to the body over its prior (its notice rate
   unknown), as one of a known rate in the prior's cumulative hazard H(x) = shape ln(1 + x/rate), x the weighted seconds:
@@ -811,11 +821,11 @@
   [{:keys [before w on prior exposure dts]}]
   (let [n (alength w) h0 (js/Float64Array. n) y (js/Float64Array. n)
         {:keys [shape rate]} prior
-        hz #(* shape (js/Math.log1p (/ % rate)))]
+        hz (partial notice-hazard prior)]
     (dotimes [i (alength on)]
       (let [a (aget on i) b (aget before a)]
         (aset h0 a (hz b))
-        (aset y a (/ (* shape (js/Math.log1p (/ (* (aget w a) (aget dts a)) (+ rate b)))) (aget dts a)))))
+        (aset y a (/ (notice-hazard-gain prior b (* (aget w a) (aget dts a))) (aget dts a)))))
     {:h0 h0 :y y :total (hz exposure) :prior prior}))
 
 (defn met-in-cell
@@ -840,7 +850,7 @@
   (let [{bk :before wk :w sk :near ek :exposure} k
         {bj :before wj :w sj :near ej :exposure} j
         got (- (js/Math.expm1 (- (* r ek))))
-        {:keys [shape rate]} (:prior jv)]
+        prior (:prior jv)]
     (if (pos? got)
       (loop [i 0 acc 0]
         (if (< i (alength cells))
@@ -849,7 +859,7 @@
                 h0k (* r (aget bk a))
                 y (if jv (aget (:y jv) a) (* r (aget wj a)))
                 h0j (if jv (aget (:h0 jv) a) (* r (aget bj a)))
-                aj (if jv (* shape (js/Math.log1p (/ (* (aget wj a) sk) (+ rate (aget bj a))))) (* y sk))
+                aj (if jv (notice-hazard-gain prior (aget bj a) (* (aget wj a) sk)) (* y sk))
                 rj (- (if jv (:total jv) (* r ej)) h0j)
                 d (aget dts a)]
             (recur (inc i) (+ acc (* (js/Math.exp (- (+ h0k h0j)))
