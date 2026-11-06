@@ -24,7 +24,9 @@
          [:job (jobs.combat.attack {:targets "cow" :radius 16})]]
    :expect [{:no-event {:kind :memory_written :data {:memory :watched}} :for-s 12}]
    :after [[:entities "type=cow" [[8 -1 8] [24 6 24]] 0]]}
+  ;; A small dark room: its walls lie within the 4 blocks a body sees in the dark, so attack's readiness finds it sealed (a wall past that is an unseen open side).
   {:name "attack-zombie-dark-scans-between-swings"
-   :act [[:summon "zombie" [12.5 0 17.5] "{NoAI:1b,Health:200f,attributes:[{id:\"minecraft:max_health\",base:200}]}"]
+   :blocks [[:fill [8 -1 8] [24 6 24] "air"] [:fill [10 -1 10] [16 3 16] "stone" :hollow]]
+   :act [[:summon "zombie" [14.5 0 14.5] "{NoAI:1b,Health:200f,attributes:[{id:\"minecraft:max_health\",base:200}]}"]
          [:job (jobs.combat.attack {:targets "zombie" :radius 16})]]
    :expect [{:event {:source :job :kind :memory_written :data {:memory :watched}} :within-s 12 :of-job true}]}]}

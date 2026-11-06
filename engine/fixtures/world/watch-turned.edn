@@ -1,6 +1,7 @@
 ;; jobs.lib.watch :watch.turned (card 55fede30): the body turns once toward a hostile it hears and does not see
 ;; and emits {:name :band :direction} (no pos or distance). Hearing is distance only (16), no line needed; the turn memory is 5 s per mob, so
 ;; one mob gives one event per 5 s. Mobs are NoAI (they never move or attack). The stone box is sealed: nothing is seen. The tunnel case plugs the tunnel so the zombie is only heard.
+;; The tunnel case wears the iron kit: an unarmed body is outmatched by a zombie heard 4 off and the mine waits (ready/outmatched) before it digs or watches.
 ;; go-to watches on arrival (body at 20.5 20.5), so mobs sit within 16 of the arrival cell, not of the start.
 ;; The two no-turn cases go to the plot middle: hearing ignores walls, so a hostile in a neighbouring plot (they run at once) within 16 of the arrival cell
 ;; would turn the body; from the middle every neighbour plot is 16 or more away.
@@ -22,8 +23,12 @@
    :after [[:body-near [20.5 0 20.5] 1.5]]}
   {:name "zombie-heard-in-tunnel-turns"
    :blocks [[:fill [10 0 4] [22 5 31] "stone"] [:fill [16 0 20] [16 1 29] "air"] [:fill [16 0 28] [16 1 28] "stone"]]
-   :body {:at [16.5 0 23.5] :inventory [["diamond_pickaxe" 1]]}
-   :act [[:summon "zombie" [16.5 0 29.5] "{NoAI:1b}"]
+   :body {:at [16.5 0 23.5] :inventory [["diamond_pickaxe" 1] ["iron_sword" 1]]}
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"]
+         [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
+         [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
+         [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+         [:summon "zombie" [16.5 0 29.5] "{NoAI:1b}"]
          [:job (jobs.gather.mine {:torches false :block "diamond_ore" :level false :direction :n :tunnel-length 12 :count 1 :radius 8})]]
    :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 15}
             {:no-event {:kind :watch.turned :data {:distance [:any]}} :for-s 15}]
