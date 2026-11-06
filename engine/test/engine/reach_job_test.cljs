@@ -103,13 +103,14 @@
           (is (some #(= :climb-on (:why %)) (events-of seen :go-to.escalated)) "one route, its ways run back to back"))))))
 
 (deftest a-climb-whose-guessed-rock-keeps-showing-open-ends-once-its-replans-are-spent
-  ;; a body shut in a pocket in stone under a goal 12 across and 3 up; shafts of air along the way read as rock till the
-  ;; body is near: each one seen sends the climb to be searched again, a replan, and once the replans have taken as long as the way
+  ;; a body shut in a pocket in stone under a goal 12 across and 3 up; shafts of air along the way, floor to the goal's
+  ;; head (the climb digs across them at the bottom: a stair over one has no floor), read as rock till the body is near:
+  ;; each one seen sends the climb to be searched again, a replan, and once the replans have taken as long as the way
   ;; without a dig route costs its dig routes fail :replans-spent instead of the climb being chosen again for every guess the looks undo
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [shafts (for [x [5 7 9] y [64 65 67 68]] [x y 0])
+        (let [shafts (for [x [3 6 9] y (range 64 69)] [x y 0])
               blocks (reduce #(assoc %1 (str (%2 0) "," (%2 1) "," (%2 2)) "air")
                              (box -4 58 -4 16 72 4 "stone") (concat [[0 64 0] [0 65 0] [12 67 0] [12 68 0]] shafts))
               {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
