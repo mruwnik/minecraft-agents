@@ -214,9 +214,7 @@
   [c hs]
   (let [mute-s (/ (body/next-mute-ms (ctx/view c)) 1000)
         entry (threats/place-of (:primitives c) (first hs))
-        mob (.-name (first hs))
-        held? (= :hold-timeout (:declined (ctx/mem c)))
-        heard? (not-every? danger-q/seen-only? hs)]
+        mob (.-name (first hs))]
     (mute-heard! c hs)
     {:left-heard {:mob mob :mute-s mute-s
                   :text (str "the " mob " heard " (name (:band entry)) ", " (name (:direction entry))
