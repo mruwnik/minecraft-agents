@@ -3,7 +3,6 @@
             [jobs.lib.bridge :as bridge]
             [engine.args :as a]
             [jobs.lib.waits :as waits]
-            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -124,7 +123,7 @@
   (let [t (target-of c)]
     (* (if t (cells-estimate (reach/standing-vec (:primitives c)) t) 0) (stair-time/cell-s))))
 
-(def safe? (price/with-stay (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c))))) work-s true))
+(def safe? (ready/safe-at-build (fn [c] (a/cell (:target (:args c)))) work-s))
 
 (declare quote-of)
 

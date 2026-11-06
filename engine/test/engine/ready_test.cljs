@@ -1029,6 +1029,16 @@
     {:x 6 :y 57 :z 0}
     {:x 6 :y 70 :z 0}))
 
+(deftest the-dig-jobs-price-an-unseen-place-no-higher-than-an-unburied-body-at-night
+  (let [check (fn [safe args] (with-redefs [sh-sense/seen-cell? (constantly false)
+                                            ready/roof-over? (constantly false)]
+                                (first (safe (assoc (for-iron (ctx-of open-night)) :args args)))))]
+    (are [safe args] (= :later (check safe args))
+      tunnel-job/safe? {:target [40 63 0]}
+      mine/safe? {:at {:x 40 :y 63 :z 0} :block "iron_ore" :count 1 :torches false :tunnel-length 20}
+      dig-for/safe? {:at {:x 40 :y 63 :z 0} :block "iron_ore" :count 1 :torches false :tunnel-length 20})
+    (is (= :ok (check tunnel-job/safe? {:target [6 63 0]})) "within the radius no mob spawns in: dug in the dark")))
+
 (defn kind-in-shelter [check world shelter]
   (let [c (assoc (ctx-of world) :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data shelter}]}}}))]
     (first (check c))))
@@ -1371,3 +1381,4 @@
                                                         :spoil {"cobblestone" [0 128 128]}}))]
     (is (= 3 (count worths)) "two stacks of stone and one of ore")
     (is (< (first worths) (last worths)) "a stone slot is the cheapest: a food stack pushes it out first")))
+
