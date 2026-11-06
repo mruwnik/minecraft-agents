@@ -407,19 +407,28 @@
 
 ;; ------------------------------------------------------------------ the body
 
-(defn ensure-body!
-  "A probe body's config (created when missing) and its whitelist entry."
-  [{:keys [body] :as opts}]
-  (let [dir (body-dir opts)
-        config (path/join dir "config.json")]
-    (when-not (fs/existsSync config)
+(defn readable-json? [file]
+  (try (js/JSON.parse (fs/readFileSync file "utf8")) true
+       (catch :default _ false)))
+
+(defn write-config!
+  "Writes the probe body's config.json unless a readable one is there: an emptied file (an interrupted write) stops
+  every start of the body (load-agent cannot parse it)."
+  [dir body]
+  (let [config (path/join dir "config.json")]
+    (when-not (and (fs/existsSync config) (readable-json? config))
       (fs/mkdirSync dir #js {:recursive true})
       (fs/writeFileSync config (js/JSON.stringify
                                 (clj->js {:username body :harness "claude-code" :auth "offline"
                                           :character {:name body :source "the world-fixture runner's test body"
                                                       :note "temporary test body"}})
-                                nil 1)))
-    (rcon! [(str "whitelist add " body)])))
+                                nil 1)))))
+
+(defn ensure-body!
+  "A probe body's config and its whitelist entry."
+  [{:keys [body] :as opts}]
+  (write-config! (body-dir opts) body)
+  (rcon! [(str "whitelist add " body)]))
 
 (defn src-state
   "[hash commit] of the engine sources under dir (tools/engine-src-hash)."

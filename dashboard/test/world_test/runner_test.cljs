@@ -1828,3 +1828,17 @@
     {:ticks 6000 :ms 0} 0 6000
     {:ticks 6000 :ms 0} 50000 7000
     {:ticks 23500 :ms 1000} 26000 0))
+
+(deftest an-emptied-probe-config-is-written-again-and-a-readable-one-kept
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-config-"))
+        emptied (path/join dir "A")
+        kept (path/join dir "B")
+        username #(.-username (js/JSON.parse (fs/readFileSync (path/join % "config.json") "utf8")))]
+    (fs/mkdirSync emptied)
+    (fs/writeFileSync (path/join emptied "config.json") "")
+    (fs/mkdirSync kept)
+    (fs/writeFileSync (path/join kept "config.json") "{\"username\": \"Own\"}")
+    (r/write-config! emptied "A")
+    (r/write-config! kept "B")
+    (is (= ["A" "Own"] [(username emptied) (username kept)]))
+    (fs/rmSync dir #js {:recursive true})))
