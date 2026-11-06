@@ -12,6 +12,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.mob-toll :as mob-toll]
             [jobs.lib.cost.death]
             [jobs.lib.cost.health]
@@ -67,14 +68,24 @@
     (is (= #{:flee} (stance-at 30)) "the four met together: fled")
     (is (= #{:fight} (stance-at -25)) "the lone one met alone: fought")))
 
+(defn cheapest-without-meet [body ms at]
+  (let [{:keys [answer prices]} (cost/decide body (answer/threat-answers body ms nil) at)] (get prices answer)))
+
 (deftest the-planner-answers-a-mob-with-the-reflex-s-body-and-chase-speed
-  (let [at (:pos unarmed)
+  (let [body #(threats/death-body (ready-test/ctx-of {:self (merge {:pos [0 64 0]} %) :inventory [{:name "diamond_sword" :count 1}]}))
+        at {:x 0 :y 64 :z 0}
         adult (mob-toll/answer-mob {:mob "zombie"})
-        baby (mob-toll/answer-mob {:mob "zombie" :chaser "baby"})]
+        baby (mob-toll/answer-mob {:mob "zombie" :chaser "baby"})
+        near (body {:worldSpawn [0 64 8]})
+        far (body {})]
     (is (= :flee (:stance (cost/answered-together unarmed [adult] at))))
     (is (= :fight (:stance (cost/answered-together unarmed [baby] at))) "a baby zombie keeps up: no flight, so a fight")
-    (is (< (:price (cost/answered-together (assoc armed :absorption 8) [adult] at)) (:price (cost/answered-together armed [adult] at)))
-        "absorption hearts take blows")))
+    (is (= 8 (:absorption (body {:absorption 8}))) "the planner's body is respond's: its absorption")
+    (is (< (:price (cost/answered-together (body {:absorption 8}) [adult] at)) (:price (cost/answered-together far [adult] at)))
+        "absorption hearts take blows")
+    (is (> (:price (cost/answered-together near [adult] at)) (cheapest-without-meet near [adult] at))
+        "a death beside a near respawn meets the zombie again")
+    (is (= (:price (cost/answered-together far [adult] at)) (cheapest-without-meet far [adult] at)) "a far respawn meets it no more")))
 
 (deftest a-mob-tolls-its-meet-rate-times-its-meeting-s-price
   (let [a (answered armed "zombie")
