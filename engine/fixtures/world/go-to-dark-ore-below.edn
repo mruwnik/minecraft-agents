@@ -1,16 +1,18 @@
 ;; Cards a9e67187, 8c28a4a4, 1b4a6833: a body with no torch on a ledge (feet y 30) of a dark cave; the goal, by an iron ore, lies on
-;; the cave floor 30 below and 32 east, down a stair of stone columns (x 13..41) it has never seen (about 4 blocks of sight
-;; in the dark). Its plans to the goal search unseen dark cells: cut by the budget, and repriced cuts at their first dark step.
+;; the cave floor 30 below and 94 east, down a stair of stone columns (x 13..41) and along 60 blocks of floor it has never
+;; seen (about 4 blocks of sight in the dark). Its plans to the goal search unseen dark cells, far more of them than a
+;; round's budget: cut by the budget, and repriced cuts at their first dark step.
 ;; Should-succeed: no walk round drifts and gives up :moved-while-searching; a round that walks and ends in a still-searching
-;; re-plan counts as a try, and a cut no nearer than the body has been turns to the edge tour (go-to.edge-tour); the call
-;; arrives or ends with a named reason. Should-fail: the same goal sealed in stone with walking only gives up with a named
-;; reason, never :moved-while-searching.
+;; re-plan counts as a try, and a budget cut no nearer than the body has been turns to the edge tour (go-to.edge-tour whose
+;; text says the search ran out of nodes, not the rock-guess one); the call arrives or ends with a named reason.
+;; Should-fail: the same goal walled in stone round it with walking only gives up with a named reason, never
+;; :moved-while-searching.
 ;; A frontier plan cut at a dark step has no fixture: a frontier comes only from a search that ran out of loaded land
 ;; (unloaded land stays in the go-to soak), and its reason is never "budget", so known-end-check never judges it.
 {:defaults
  {:tags [:movement :go-to :dark]
   :time :any
-  :plot {:height 40 :length 48 :light :dark}
+  :plot {:height 40 :length 112 :light :dark}
   :blocks [[:fill [0 -1 0] [12 29 31] "stone"]
            [:fill [13 -1 12] [13 28 20] "stone"]
            [:fill [14 -1 12] [14 27 20] "stone"]
@@ -41,17 +43,17 @@
            [:fill [39 -1 12] [39 2 20] "stone"]
            [:fill [40 -1 12] [40 1 20] "stone"]
            [:fill [41 -1 12] [41 0 20] "stone"]
-           [:set [46 0 16] "iron_ore"]]
+           [:set [101 0 16] "iron_ore"]]
   :body {:at [6.5 30 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["bread" 8]]}
   :limit-s 400}
  :cases
  [{:name "no-torch-ore-below-tours-the-edge-not-drifting"
-   :act [[:job (jobs.movement.go-to {:pos #at [45 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :go-to.edge-tour} :within-s 300 :of-job true}
+   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.edge-tour :data {:text [:contains "ran out of nodes"]}} :within-s 300 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :context {:chain [[:any]]}} :within-s 380 :of-job true}
             {:no-event {:source :job :data {:why :moved-while-searching}} :for-s 380 :until {:source :job :kind #{:completed :stopped} :context {:chain [[:any]]}} :of-job true}]}
   {:name "no-torch-sealed-ore-below-gives-up-named"
-   :blocks [[:fill [44 0 15] [47 2 17] "stone"] [:set [46 0 16] "iron_ore"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [45 0 16] :range 1 :ways #{:walk}})]]
+   :blocks [[:fill [98 0 14] [103 2 18] "stone"] [:fill [100 0 16] [100 1 16] "air"] [:set [101 0 16] "iron_ore"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :why [:not :moved-while-searching]}} :within-s 380 :of-job true}
             {:no-event {:source :job :data {:why :moved-while-searching}} :for-s 380 :until {:source :job :kind :stopped :context {:chain [[:any]]}} :of-job true}]}]}
