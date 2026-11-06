@@ -1,6 +1,6 @@
 (ns engine.test-util
   "Helpers shared by the cljs tests: temp dirs, the fake world, async tests."
-  (:require [cljs.test :refer [is]]
+  (:require [cljs.test :as test :refer [is]]
             ["fs" :as fs]
             ["os" :as os]
             ["path" :as path]
@@ -285,6 +285,20 @@
   (swap! tracked-engines conj eng)
   eng)
 
+(defn turns
+  "Promise resolved after n event-loop turns."
+  [n]
+  (if (zero? n)
+    (js/Promise.resolve nil)
+    (.then (js/Promise. (fn [r] (js/setImmediate r))) #(turns (dec n)))))
+
+(defn pace-leak-turns
+  "Promise of the ms a pace loop adds over some event-loop turns once the cut round has had turns to wind down: nonzero after a test's engines are shut down means a loop outlives its test, and moves every later test's act-clock."
+  []
+  (-> (turns 20)
+      (.then (fn [] (let [before @fast-pace/paced-ms]
+                      (-> (turns 20) (.then #(- @fast-pace/paced-ms before))))))))
+
 (defn run-async
   "Run the promise-returning thunk f inside a cljs.test async block; the engines it tracked are shut down after."
   [done f]
@@ -293,7 +307,11 @@
       (.catch (fn [e] (is (nil? e) (str "async test threw: " e "\n" (.-stack e)))))
       (.finally (fn []
                   (run! core/shutdown! (first (reset-vals! tracked-engines [])))
-                  (done)))))
+                  (-> (pace-leak-turns)
+                      (.then (fn [grown]
+                               (when (pos? grown)
+                                 (js/console.warn (str "PACE-LEAK: a pace loop still runs after " (pr-str (map #(:name (meta %)) (:testing-vars (test/get-current-env)))) ", +" grown " ms")))
+                               (done))))))))
 
 (defn read-json [file]
   (js->clj (js/JSON.parse (fs/readFileSync file "utf8")) :keywordize-keys true))

@@ -56,8 +56,7 @@
   (let [[seen sink] (tu/legacy-capture-sink)
         clock (atom 1000000)
         p (tu/fake-on-floor world)
-        ;; no pace term (act-clock's): fast-pace/paced-ms is process-wide, so a stray loop elsewhere would move this clock and end legs by time
-        now #(+ @clock (* 1000 (.-length (.-calls (.-world p)))))
+        now (tu/act-clock clock p 1000)
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (.override (.-world p) "steer"
