@@ -302,3 +302,17 @@
             (is (every? :within kept))
             (is (not-any? (fn [s] (some #(contains? s %) [:limited :unlimited :r])) kept) "the planner's cell maps are freed once the search is over"))
           (reset! wsearch/searches {}))))))
+
+;; a quote outside a go-to call is not released when the call ends: an old search must not stay held until the next release!
+(deftest a-kept-search-past-its-age-is-dropped-at-the-next-keep
+  (let [p #js {}
+        t (atom 0)
+        c {:primitives p :view (fn [] {:now @t})}]
+    (reset! wsearch/searches {})
+    (wsearch/keep-search! c :old {:key :old :t 0})
+    (reset! t 1)
+    (wsearch/keep-search! c :young {:key :young :t 1})
+    (reset! t wsearch/search-max-age-ms)
+    (wsearch/keep-search! c :new {:key :new :t @t})
+    (is (= #{:young :new} (set (keys (get @wsearch/searches p)))) "the search at search-max-age-ms is dropped, the one under it kept")
+    (reset! wsearch/searches {})))

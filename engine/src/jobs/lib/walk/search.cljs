@@ -79,16 +79,6 @@
 (heap/gauge! :searches #(transduce (map count) + 0 (vals @searches)))
 (per-body/store! ::walk #(do (reset! searches {}) (reset! known-land {}) (reset! goal-floods {})))
 
-(defn keep-search!
-  "Keep unfinished search s of the body, or forget its key when s is nil."
-  [who k s]
-  (swap! searches
-         (fn [m]
-           (let [kept (if s
-                        (->> (dissoc (get m who) k) (sort-by (comp :t val) >) (take (dec kept-max)) (into {k s}))
-                        (dissoc (get m who) k))]
-             (if (empty? kept) (dissoc m who) (assoc m who kept))))))
-
 (defn finished
   "Search s over with answer within, as kept: what go-on? and route-changed? read, not the planner phases (their cell maps and open sets)."
   [s within]
@@ -161,6 +151,20 @@
   "The engine clock of ctx c (ms); the job clock for a bare ctx without a memory view."
   [c]
   (if (:view c) (ctx/now c) (clock/now)))
+
+(defn keep-search!
+  "Keep unfinished search s of the body of c, or forget its key when s is nil; its kept searches past search-max-age-ms,
+  which no call goes on with (go-on?), are dropped."
+  [c k s]
+  (let [who (:primitives c)
+        t (now c)]
+    (swap! searches
+           (fn [m]
+             (let [young (into {} (filter #(< (- t (:t (val %))) search-max-age-ms)) (dissoc (get m who) k))
+                   kept (if s
+                          (->> young (sort-by (comp :t val) >) (take (dec kept-max)) (into {k s}))
+                          young)]
+               (if (empty? kept) (dissoc m who) (assoc m who kept)))))))
 
 (defn goal-flood!
   "The body's kept goal flood memo for searches of to within range (goal-floods), a new one when it held another goal or
@@ -324,11 +328,11 @@
         [search within] (if done [search done] (await (run-search! c search budget policy to range weight)))
         ms (- (clock/now) t)]
     (if within
-      (do (keep-search! who k (when (and quoted (not done))
+      (do (keep-search! c k (when (and quoted (not done))
                               (assoc (finished search within) :quote-only (not= "found" (.-status ^js (:r within))))))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
       (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to)) :fresh fresh?)
             partial? (= "partial" (:status plan))]
-        (keep-search! who k (when-not partial? search))
-        (cond-> plan partial? (assoc :search-on #(keep-search! who k search)))))))
+        (keep-search! c k (when-not partial? search))
+        (cond-> plan partial? (assoc :search-on #(keep-search! c k search)))))))
