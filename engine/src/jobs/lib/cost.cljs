@@ -318,10 +318,10 @@
 
 (defn wet-s
   "Seconds wet-s seconds with the head under water, after under-s already under it, cost over dry-s seconds dry: the time
-  they add and the drowning (drown-s); ##Inf when it kills."
+  they add and the drowning (drown-s), never under 0; ##Inf when it kills."
   [policy health hp-s under-s dry-s wet-s]
   (let [after (drown-s policy health hp-s (+ under-s wet-s))]
-    (if (= ##Inf after) ##Inf (+ (- wet-s dry-s) (- after (drown-s policy health hp-s under-s))))))
+    (if (= ##Inf after) ##Inf (max 0 (+ (- wet-s dry-s) (- after (drown-s policy health hp-s under-s)))))))
 
 (defn flood-dig-s
   "Seconds a dig that opens a cell to water beside it costs over a dry one: the water flows into the cell and on along the

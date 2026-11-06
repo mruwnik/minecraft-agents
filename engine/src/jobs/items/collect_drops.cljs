@@ -392,7 +392,7 @@
           :dearer {:reason :past-worth :worth-s worth}
           :too-big :too-big
           nil
-          (let [priced (mapv (fn [cell] ((:dig-s prices) (or (seen-name cell) blocks/hidden-guess) cell)) (:dig r))
+          (let [priced (dig-route/cells-s prices #(or (seen-name %) blocks/hidden-guess) (:dig r))
                 start (cost/leg-start c)
                 d (await (dig-cells! c (:dig r)))
                 ;; the failing cell's attempt is paid for too; the plan's price is the least the dig leg cost

@@ -959,6 +959,25 @@
     (is (= ##Inf (flood-s (cons open (repeat n swum)))) "a way that never surfaces drowns")
     (is (< (flood-s (concat [open] half [[:step [1 66 0]]] half)) ##Inf) "a step with the head over the water breathes")))
 
+(deftest a-fast-swimmer-pays-no-negative-price-for-time-under-water
+  ;; wet-s lost its floor: swimming faster than the dry walk it replaces priced the flood below nothing
+  (let [hp-s (cost/walk-hp-seconds)]
+    (is (zero? (cost/wet-s {} 20 hp-s 0 10 1)) "a wet leg quicker than the dry one adds nothing")
+    (is (not (neg? (cost/flood-dig-s {} 20 hp-s))))))
+
+(deftest a-dug-legs-cells-are-priced-with-the-flood-the-first-lets-in
+  ;; the dig leg is booked from these prices: the opening's seconds and each later dig inside the water count, not :dig-s alone
+  (let [p (tu/fake {:blocks {"1,66,0" "water"} :inventory [{:name "stone_pickaxe" :count 1}]})
+        prices (dig-route/body-prices p (constantly false))
+        cells [[1 65 0] [1 64 0] [1 63 0]]
+        priced (dig-route/cells-s prices (constantly "stone") cells)
+        dry (map #((:dig-s prices) "stone" %) cells)]
+    (is (< (apply + dry) (apply + priced)))
+    (is (< (js/Math.abs (- (first priced) (first dry) (dig-route/flood-s (:flood prices) [[:dig (first cells) "stone"]]))) 1e-9)
+        "the first cell carries the opening")
+    (is (< (js/Math.abs (- (apply + priced) (apply + dry) (dig-route/flood-s (:flood prices) (map #(vector :dig % "stone") cells)))) 1e-9)
+        "the sum over the cells is the route's flood")))
+
 (deftest a-dig-route-dearer-than-its-worth-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
         route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false false {:worth-s 30}))]

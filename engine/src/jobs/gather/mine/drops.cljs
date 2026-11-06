@@ -152,14 +152,15 @@
   once: it did not stay open)."
   [c {:keys [drop-cut dig-cell! look-at! mem frontier walk-to!]} dug max-s]
   (let [p (:primitives c)
-        {:keys [dig-s step-s]} (cut-prices c)
+        {:keys [step-s] :as prices} (cut-prices c)
         name-at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
-        price (fn [cell] (or (dig-s (name-at cell) cell) 0))
+        prices-of (fn [cells] (dig-route/cells-s prices name-at cells))
+        price (fn [cell] (first (prices-of [cell])))
         walk seen-sections/walk-steps
         ;; what the search priced round the way: its cells, the ones touching them (a falling block over one, a liquid, an
         ;; opening beside it) and the cell dug, as the body saw them when it planned
         around (fn [cells] (set (for [[x y z] cells dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)])))
-        plan-s (fn [cells] (+ (* step-s (count cells)) (reduce + (map price cells))))
+        plan-s (fn [cells] (+ (* step-s (count cells)) (reduce + (prices-of cells))))
         ;; a way through an opening is at least its steps to it and on: an opening outside the box of the cells whose walk from
         ;; me and on to dug is under the plan's price (each axis's two legs at most the walk's) cannot cost less
         region (fn [me cells] (let [l (/ (plan-s cells) step-s)]

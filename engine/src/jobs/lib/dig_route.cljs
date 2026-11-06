@@ -113,6 +113,18 @@
                      (if level (let [[w under] (flood-walk flood level under y)] [(+ s w) level under]) acc)))
                  [0 nil 0] moves)))
 
+(defn cells-s
+  "Seconds each of a dug route's cells costs, in order: its :dig-s (name-at cell; 0 when never dug) and, under prices' :flood,
+  the water its dig lets in and the dig inside it (flood-dig); the one place a dig leg is booked or compared at the price the
+  search paid."
+  [prices name-at cells]
+  (let [{:keys [dig-s flood]} prices]
+    (second (reduce (fn [[[level under] out] [_ y _ :as cell]]
+                      (let [name (name-at cell)
+                            [w level' under'] (or (when flood (flood-dig flood level under y name ((:level flood) cell))) [0 level under])]
+                        [[level' under'] (conj out (+ (or (dig-s name cell) 0) w))]))
+                    [[nil 0] []] cells))))
+
 (defn search
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
