@@ -59,7 +59,7 @@
         dead (set (flight/dead-ids c))
         known (remove #(dead (.-id %)) (flight/known-chasers p))
         ids (set (map #(.-id %) known))]
-    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :held (.-held e) :pos (danger-q/mob-pos p e) :burns (:burns (hostile-loss/mob-near p e))}
+    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :held (when (danger-q/seen-only? e) (.-held e)) :pos (danger-q/mob-pos p e) :burns (:burns (hostile-loss/mob-near p e))}
                          (some? (.-speed e)) (assoc :speed (.-speed e))
                          (and (combat/enderman? e) (not (true? (.-angry e)))) (assoc :calm? true))) known)
         (into (comp (map :data) (remove #(ids (:id %)))

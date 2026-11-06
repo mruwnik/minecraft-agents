@@ -704,6 +704,13 @@
     (is (= [7] (mapv #(.-id %) (respond.state/known-chasers p))) "no perception: every tracked mob")
     (is (= [] (mapv #(.-id %) (respond.state/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
 
+(deftest a-chaser-only-heard-keeps-no-held-item-in-its-entry
+  (let [p (tu/fake-on-floor {:floor big-floor})
+        skeleton (fn [seen] #js {:id 1 :uuid "u1" :name "skeleton" :kind "hostile" :held "stone_sword" :seen seen :pos #js {:x 5 :y 64 :z 0}})
+        held (fn [seen] (:held (respond.state/chaser-entry p (skeleton seen) 0)))]
+    (is (= "stone_sword" (held true)))
+    (is (nil? (held false)) "heard through a wall: its hand is not seen")))
+
 (deftest the-cornered-body-weighs-only-the-hostiles-it-knows
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})

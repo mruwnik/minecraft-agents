@@ -341,6 +341,17 @@
     (is (nil? (way-of {:name "blaze" :mob "blaze"})) "a blaze flies")
     (is (some? (way-of {:name "zombie" :mob "zombie"})))))
 
+(deftest a-remembered-sword-skeleton-out-of-range-is-chased-by-a-walking-way
+  ;; the skeleton stands past the follow range, so only its :threat entry (what the body saw it hold) makes it a chaser
+  (let [view (fn [] {:now 0 :data {:entries {:threat [{:t 0 :data {:mob "skeleton" :held "stone_sword" :chaser "skeleton" :id 1 :uuid "u1" :pos {:x 5.5 :y 64 :z 0.5}}}]}}})
+        c (assoc (ctx-of (tu/fake {:blocks field :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                   :entities [{:id 1 :uuid "u1" :name "skeleton" :kind "hostile" :pos {:x 500.5 :y 64 :z 0.5}}]}))
+                 :view view)
+        chasers (respond.goal/chasers c)
+        [ch] (search/with-ways c chasers)]
+    (is (= [["skeleton" "stone_sword"]] (mapv (juxt :name :held) chasers)) "from the entry, not the live mob")
+    (is (some? (:way ch)) "a sword skeleton walks to strike")))
+
 (deftest a-dead-end-is-timed-by-the-walkers-alone
   ;; trap-s took the end's arrival over every chaser: a skeleton behind the body set what the dead end cost
   (let [behind {:x -19.5 :y 64 :z 0.5}
