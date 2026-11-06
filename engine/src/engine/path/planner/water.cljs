@@ -1,6 +1,7 @@
 (ns engine.path.planner.water
   "Search methods: swimming, diving, currents and leaving the water."
   (:require [engine.path.planner.base :refer [AIR-REFILL BODY CORNER-S DAMAGE-STAND DAMAGE-TOUCH DROWN-HP drowned-hp EXIT-SLACK HAZARD-AVOID JUMP-S JUMP-UP LAVA-ADJACENT MOVE-CORNER MOVE-EXIT MOVE-JUMP MOVE-SWIM MOVE-SWIM-DOWN MOVE-SWIM-UP MOVE-WALK NARROW NONE OPEN SNAP SQRT2 STEP UNLOADED WATER WATER-TABLE WHOLE breathable?]]
+            [engine.path.planner.current :as current]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -188,6 +189,17 @@
   (currentAt [s x y z]
     (if (pos? (aget (.-tbl-flowing s) (.stateAt s x y z))) (.-c-current s) 0))
 
+  ;; a sideways move by dx dz into the flowing cell x y z takes this many times its still-water seconds
+  ;; (current/crossing-factor of the cell's flow); Infinity when the body cannot hold its way across
+  (currentFactor [s x y z dx dz]
+    (if (pos? (aget (.-tbl-flowing s) (.stateAt s x y z)))
+      (let [f (current/flow (.-table s) (fn [a b c] (.stateAt s a b c)) x y z)
+            n (js/Math.hypot dx dz)]
+        (if (nil? f)
+          1
+          (current/crossing-factor (* current/PUSH (aget f 0)) (* current/PUSH (aget f 2)) (/ dx n) (/ dz n))))
+      1))
+
   ;; the water cell is 1 deep over a floor, with air over it: the body stands on the floor, it is not floating
   (standsInWater [s x y z]
     (if (not (zero? (aget (.-tbl-bubble s) (.stateAt s x y z))))
@@ -240,10 +252,8 @@
   (swimSideways [s i x y z region c x2 z2 ^boolean tight-src ^boolean src-sub]
     (let [risk (.swimRisk s x2 y z2)
           tight (or tight-src ^boolean (.tightAt s x2 y z2))
-          base (if src-sub (.-c-swim-sub-h s) (.-c-swim-h s))
-          extra (.currentAt s x2 y z2)
-          sec (+ base extra)]
-      (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
+          sec (* (if src-sub (.-c-swim-sub-h s) (.-c-swim-h s)) (.currentFactor s x2 y z2 (- x2 x) (- z2 z)))]
+      (when (and (< sec js/Infinity) ^boolean (.swimBegin s i true x2 y z2 sec 0 src-sub))
         (if tight
           (.tightMove s i x y z 0 region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
           (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))
@@ -283,10 +293,9 @@
           (when-not (or (== sa 2) (== sb 2) (and (== sa 1) (== sb 1)) ^boolean (.dragAt s x2 y z) ^boolean (.dragAt s x y z2))
             (let [slide (+ sa sb)
                   risk (.swimRisk s x2 y z2)
-                  base (+ (* (if src-sub (.-c-swim-sub-h s) (.-c-swim-h s)) SQRT2) (* slide CORNER-S))
-                  extra (.currentAt s x2 y z2)]
-              (when ^boolean (.swimBegin s i true x2 y z2 base extra src-sub)
-                (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i (+ base extra) risk 0 slide 0)
+                  base (+ (* (if src-sub (.-c-swim-sub-h s) (.-c-swim-h s)) SQRT2 (.currentFactor s x2 y z2 dx dz)) (* slide CORNER-S))]
+              (when (and (< base js/Infinity) ^boolean (.swimBegin s i true x2 y z2 base 0 src-sub))
+                (.edge s x2 y z2 0 (if (zero? slide) MOVE-SWIM MOVE-CORNER) i base risk 0 slide 0)
                 (.swimEnd s))))))))
 
   ;; a node floating in water: up, down, sideways and onto the bank; sideways moves and exits may cross tight cells (masks), a

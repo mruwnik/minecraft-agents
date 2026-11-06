@@ -11,6 +11,7 @@
             [engine.game :as game]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
+            [engine.path.planner.current :as current]
             [jobs.lib.breath :as breath]
             [engine.perception.mobs :as mobs]
             [jobs.lib.click :as click]
@@ -244,22 +245,61 @@
     (when cell
       {:status :replan :why :changed :learned true :felt true :cells [cell] :at [x y z] :step i})))
 
+(def water-box-in
+  "How far prismarine-physics shrinks the body's box, [sideways up-and-down], before it looks for the water cells that pull it."
+  [0.001 0.401])
+
+(defn pull
+  "The current's pull on the body at pose, #js [px pz] in shares of its stroke (current/PUSH): the flows (flow-at, a fn of
+  x y z) of the water cells its box touches, summed and made unit as the client physics does; nil where nothing pulls."
+  [flow-at {:keys [x y z]}]
+  (let [[side up] water-box-in
+        h (- (:body-half executor/policy) side)
+        span (fn [lo hi] (range (js/Math.floor lo) (inc (js/Math.floor hi))))
+        [a b c] (reduce (fn [[a b c :as v] [cx cy cz]]
+                          (if-let [f (flow-at cx cy cz)] [(+ a (aget f 0)) (+ b (aget f 1)) (+ c (aget f 2))] v))
+                        [0 0 0]
+                        (for [cx (span (- x h) (+ x h)) cy (span (+ y up) (- (+ y (:body-height executor/policy)) up))
+                              cz (span (- z h) (+ z h))]
+                          [cx cy cz]))
+        n (js/Math.hypot a b c)]
+    (when (and (pos? n) (pos? (js/Math.hypot a c)))
+      #js [(* current/PUSH (/ a n)) (* current/PUSH (/ c n))])))
+
+(defn against-current
+  "out with its yaw turned so that the body's stroke and the current's pull together carry it along the executor's
+  heading (current/stroke): in water, moving forward, where a current pulls (flow-at nil: no current is known)."
+  [flow-at pose {:keys [controls yaw] :as out}]
+  (if-let [^js p (and flow-at (:in-water pose) (:forward controls) (number? yaw) (pull flow-at pose))]
+    (let [u (current/stroke (aget p 0) (aget p 1) (- (js/Math.sin yaw)) (- (js/Math.cos yaw)))]
+      (assoc out :yaw (executor/yaw-to 0 0 (aget u 0) (aget u 1))))
+    out))
+
+(defn flow-fn
+  "flow-at for against-current over a pathWorld: current/flow of its snapshot's cells (a walk makes its pathWorld only
+  once the body is in water)."
+  [^js pw]
+  (let [table (.-table pw) snapshot (.-snapshot pw)
+        state-at (fn [x y z] (.stateAt ^js snapshot x y z))]
+    (fn [x y z] (current/flow table state-at x y z))))
+
 (defn decide-tick
   "One tick of a walk, pure: [state' out] for the pose, out {:done map} or {:controls :yaw :pitch} (with :warn, a gate
-  breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate :felt?}: felt?, over a mask, ends the walk at a floor or roof the body felt (felt-solid);
+  breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate :felt? :flow-at}: felt?, over a mask, ends the walk at a floor or roof the body felt (felt-solid);
   watch-stop (fn [i state' pose]) the look-ahead's done map or nil; gate (nil: off) {:see :plain? :floors :opts} for
-  jobs.lib.walk.sight."
-  [{:keys [policy steps watch-stop gate] :as env} {:keys [exec] :as state} pose]
-  (let [pose (standing-pose pose)]
-    (if gate
-      (gate-tick env state pose)
-      (let [i (:i exec)
-            {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
-            done (or done (when (:felt? env) (felt-solid steps (:i exec') pose)) (when-let [c (:air-c env)] (air-stop c steps i (:i exec') pose)) (when watch-stop (watch-stop i exec' pose)))
-            state' (assoc state :exec exec')]
-        [state' (if done
-                  {:done done}
-                  {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch})]))))
+  jobs.lib.walk.sight; flow-at (flow-fn) steers against a current (against-current)."
+  [{:keys [policy steps watch-stop gate flow-at] :as env} {:keys [exec] :as state} pose]
+  (let [pose (standing-pose pose)
+        [state' out] (if gate
+                       (gate-tick env state pose)
+                       (let [i (:i exec)
+                             {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
+                             done (or done (when (:felt? env) (felt-solid steps (:i exec') pose)) (when-let [c (:air-c env)] (air-stop c steps i (:i exec') pose)) (when watch-stop (watch-stop i exec' pose)))
+                             state' (assoc state :exec exec')]
+                         [state' (if done
+                                   {:done done}
+                                   {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch})]))]
+    [state' (if (:done out) out (against-current flow-at pose out))]))
 
 (defn gate-env
   "The floor gate's env for walking steps (jobs.lib.walk.sight), nil when no step has an unseen floor. see: what the body
@@ -295,6 +335,7 @@
   (let [gate (gate-env (:primitives c) steps)
         watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
         env {:policy (wworld/body-policy c) :steps steps :gate gate :felt? (boolean (:unknown c)) :air-c c
+             :flow-at (let [f (delay (some-> (wworld/path-world (:primitives c)) flow-fn))] (fn [x y z] (some-> @f (apply [x y z]))))
              :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
         _ (when gate
             (ctx/emit! c :walk.gates :debug {:steps (into [] (comp (take 60) (map (juxt :x :y :z :move #(boolean (:unseen-floor %))))) steps)}))

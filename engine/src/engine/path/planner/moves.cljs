@@ -328,10 +328,8 @@
           ;; water ahead at our level: walk in and swim
           (let [risk (.swimRisk s x2 y z2)
                 tight (or tight-src ^boolean (.tightAt s x2 y z2))
-                base (.-c-swim-h s)
-                extra (if (pos? (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2))) (.-c-current s) 0)
-                sec (+ base extra)]
-            (when ^boolean (.swimBegin s i true x2 y z2 base extra false)
+                sec (* (.-c-swim-h s) (.currentFactor s x2 y z2 (- x2 x) (- z2 z)))]
+            (when (and (< sec js/Infinity) ^boolean (.swimBegin s i true x2 y z2 sec 0 false))
               (if tight
                 (.tightMove s i x y z h region c x2 y z2 0 MOVE-SWIM sec risk 0 SNAP SNAP)
                 (.edge s x2 y z2 0 MOVE-SWIM i sec risk 0 0 0))

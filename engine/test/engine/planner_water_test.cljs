@@ -659,6 +659,18 @@
         dear (cost (plan-course "waterfall-up" {:costs {:current 0.4}}) :seconds)]
     (is (> dear base))))
 
+;; a stream 1 deep in a walled channel along x (z 6), level x - 9 (lower water toward +x): the current runs +x. The
+;; walk round the walls is dearer than the stream swum down, cheaper than it swum up.
+(def stream
+  (world (into [[8 64 5 18 65 5 "stone"] [8 64 7 18 65 7 "stone"]]
+               (for [x (range 10 17)] [x 64 6 x 64 6 "water" {:level (- x 9)}]))))
+
+(deftest a-stream-is-swum-down-and-walked-round-up
+  (let [down (run stream {:x 9 :y 64 :z 6} (near 17 64 6 0))
+        up (run stream {:x 17 :y 64 :z 6} (near 9 64 6 0))]
+    (is (some #{(:swim MOVE)} (moves down)) (moves down))
+    (is (not-any? #{(:swim MOVE)} (moves up)) (moves up))))
+
 ;; ---- water: dominance of the surface over open-water diving ----
 
 (defn deep-lake [fill]
