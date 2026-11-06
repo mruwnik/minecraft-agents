@@ -194,3 +194,15 @@
     (with-redefs [cost/death-body (fn [_ _] (swap! builds inc) body)]
       (is (= 3 (count (death-spot/near-deaths (ctx-on (tu/fake-on-floor {}) (mem/view s)))))))
     (is (= 1 @builds))))
+
+;; the fake's world counter stands while only the body changes, as a real one does after a hit or a pickup
+(deftest a-shared-toll-table-is-not-served-to-a-body-hurt-or-armed-since
+  (let [c (ready-test/ctx-of {:entities [(zombie 1 6 0)]})
+        p (:primitives c)
+        at-zombie #(:factor (first (filter (fn [r] (= [6 64 0] [(:x r) (:y r) (:z r)])) (threats/threat-tolls c))))
+        well (at-zombie)]
+    (swap! (fake/state p) assoc-in [:self :health] 6)
+    (is (> (at-zombie) well) "hurt: the same mob costs more a second at fewer hp")
+    (swap! (fake/state p) assoc-in [:self :health] 20)
+    (fake/add-item! p "diamond_sword" 1)
+    (is (< (at-zombie) well) "armed: a mob it would fight is cheap")))

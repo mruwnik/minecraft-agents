@@ -265,12 +265,17 @@
   [threats]
   (mapv (fn [t] [(field/field-key t) (select-keys t [:held :key]) (round-weight (:weight t))]) threats))
 
+(defn body-inputs
+  "[health equipment weapon] of c's body: all tolls-of reads of it (cost/threat-factor, threat-factor-cap, stance)."
+  [c]
+  (let [{:keys [health equipment weapon]} (body-of (:primitives c))]
+    [health equipment weapon]))
+
 (defn toll-inputs
   "What tolls-of reads of threats ({:mob :pos :weight}): a map of their table-key less the weight to the highest weight
-  (round-weight), and the body's health, armour and weapon (toll-inputs-no-worse?)."
+  (round-weight), and the body-inputs (toll-inputs-no-worse?)."
   [c threats]
-  (let [{:keys [health equipment weapon]} (body-of (:primitives c))]
-    [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats)) health equipment weapon]))
+  (into [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats))] (body-inputs c)))
 
 (defn toll-inputs-no-worse?
   "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, none at a higher weight, the same armour and weapon, health no
@@ -308,12 +313,12 @@
                         (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r))))))))))))
 
 (defn shared-tolls
-  "tolls-of threats ts of c, read once per check-cache window for the same threats (threat-field/shared: one table, so
-  walk.world/with-tolls merges it once)."
+  "tolls-of threats ts of c, read once per check-cache window for the same threats and body-inputs (threat-field/shared:
+  one table, so walk.world/with-tolls merges it once)."
   [c ts]
   (if (empty? ts)
     []
-    (field/shared c [::threat-tolls (table-key ts)]
+    (field/shared c [::threat-tolls (table-key ts) (body-inputs c)]
                   #(tolls-of c ts)
                   count)))
 
