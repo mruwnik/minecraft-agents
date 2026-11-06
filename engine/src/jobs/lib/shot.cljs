@@ -32,7 +32,7 @@
   group (caught/groups), else shooter (a pillager, blaze, ghast, witch, breeze or trident drowned has no counted prior)."
   [e]
   (let [k (some-> (:attacker (:data e)) threat/kind)]
-    (if (and k (some #(contains? % k) (vals caught/groups))) k shooter)))
+    (if (and k (caught/counted-group ::caught/flights k)) k shooter)))
 
 (defn shot-spots
   "Pure: for each :hurt entry that is a shot (shot?) and carries a :dir, the points reach, 2/3 and 1/3 of reach blocks

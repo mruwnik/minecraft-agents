@@ -51,11 +51,16 @@
   "The mob kinds a flight counts as from one group: what group-of reads."
   {:zombie #{"zombie" "husk" "drowned" "zombie_villager"} :creeper #{"creeper"} :bow threat/bow-mobs :spider #{"spider" "cave_spider"}})
 
+(defn counted-group
+  "The group of mob-name whose counts (which: ::flights or ::fights) are counted, nil when its own is not."
+  [which mob-name]
+  (let [counted (settings/get settings which)]
+    (some (fn [[g kinds]] (when (and (contains? kinds mob-name) (contains? counted g)) g)) groups)))
+
 (defn group-of
   "The group whose counts (which: ::flights or ::fights) price mob-name's: its own when counted, else the zombie family's."
   [which mob-name]
-  (let [counted (settings/get settings which)]
-    (or (some (fn [[g kinds]] (when (and (contains? kinds mob-name) (contains? counted g)) g)) groups) :zombie)))
+  (or (counted-group which mob-name) :zombie))
 
 (defn sigmoid [x] (/ 1 (+ 1 (js/Math.exp (- x)))))
 

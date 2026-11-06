@@ -26,6 +26,7 @@
             [jobs.survival.respond-choose :as choose]
             [jobs.survival.respond.cornered :as pick]
             [jobs.lib.shot :as shot]
+            [jobs.lib.cost.caught :as caught]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.survival.respond.cover :as cover]
@@ -1671,6 +1672,13 @@
           (await (core/tick! eng))
           (is (= [] (filterv #(> (:x %) 3) (tu/walked-to eng))) "no walk through the fire to the zombie five blocks off")
           (is (zero? (count (calls p "attack")))))))))
+
+(deftest a-shooter-is-priced-as-itself-only-while-its-group-is-counted
+  (let [stray {:data {:attacker {:name "stray"} :dir {:x 1 :z 0}}}
+        shooter-of #(shot/shooter-of stray)]
+    (is (= "stray" (shooter-of)) "the bow group is counted")
+    (settings/with-settings {::caught/flights {:zombie {:lived [[10 0 1]] :died []}}}
+      (fn [] (is (= "skeleton" (shooter-of)) "a group no flights count is priced as the skeleton")))))
 
 (deftest an-unseen-shooters-place-is-a-point-out-along-the-way-the-arrow-came-from
   (let [entry (fn [data] {:data data})
