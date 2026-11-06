@@ -640,6 +640,9 @@
               steps {:drop-cut (fn [_ _ _] :too-big) :dig-cell! (fn [_ _] :dug) :look-at! (fn [_ _] nil) :mem (fn [_] {})}]
           (is (= :too-big (await (drops/cut-via c steps [2 64 0] 5))) "cut-via passes it up, not nil"))))))
 
+(deftest a-too-big-cut-says-the-heap-was-full-not-that-the-search-outgrew-it
+  (is (= "mine's cut toward 2,64,0 not made, the heap was full: the drop is left" (drops/cut-too-big-text [2 64 0]))))
+
 (deftest a-drops-worth-is-its-replacement-cost-and-a-goal-ore-dug-on-the-way-is-an-extra-item
   (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"}}
         goal (:value (cost/goal-value [{:name "raw_iron" :count 1}]))

@@ -330,7 +330,7 @@
                           (skip! c pos) :again)
                       (= :blocked walked) (let [w (near/last-walk c)]
                                             (ctx/emit! c :mine.walk-failed :info {:pos (access/cell pos) :why (result/why w) :cause (contract/cause-key w)
-                                                                                  :text (str "mine's walk to " (str/join "," (access/cell pos)) " gave up (" (result/why w) (when (= :too-big cut) ", and the cut search outgrew the heap") "); it skips the target and counts a failure")})
+                                                                                  :text (str "mine's walk to " (str/join "," (access/cell pos)) " gave up (" (result/why w) (when (= :too-big cut) ", and the heap was too full for a cut search") "); it skips the target and counts a failure")})
                                             (skip-failed! c pos) :again)
                       (= :partial walked) (stalled! c pos)
                       (torches/branch-torch-due? c) (await (torches/torch-step! c true))

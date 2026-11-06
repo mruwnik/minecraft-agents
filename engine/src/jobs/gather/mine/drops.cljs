@@ -108,7 +108,7 @@
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route priced by cut-prices, a cell never seen
   taken for stone) from the body's cell to a stand within 1 of the dug cell, priced at most max-s seconds; nil with no such way,
   :dearer when every way costs more, :searching while a search that spent its nodes goes on (kept: ask again), :too-big
-  when it outgrew the heap."
+  when the heap was full."
   [c dug max-s]
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
@@ -147,7 +147,7 @@
   of what is left (kept in :cut-spent over rounds, each dig booked at its own price once dug or failed; a cell that fills
   again is paid for again). When every way costs more, a walk to the frontier toward the dug cell (frontier), at its steps'
   price, and a look at the cell, then planned again. :cut (open: walk again), :partial (a dig or walk waits on the world),
-  :too-big (the route search outgrew the heap) or nil (no way left, a dig or walk failed, or a dug cell planned again at
+  :too-big (the heap was full) or nil (no way left, a dig or walk failed, or a dug cell planned again at
   once: it did not stay open)."
   [c {:keys [drop-cut dig-cell! look-at! mem frontier walk-to!]} dug max-s]
   (let [p (:primitives c)
@@ -295,6 +295,11 @@
   (boolean (or (result/unreachable-walk? res)
                (contains? (conj search-ended-whys :detour) (result/why res)))))
 
+(defn cut-too-big-text
+  "The event text when the route search found the heap full (it may never have searched)."
+  [dug-at]
+  (str "mine's cut toward " (str/join "," dug-at) " not made, the heap was full: the drop is left"))
+
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
   out of sight or out of reach from the dig spot is seen and picked up; a dug cell no walk gets beside (dug from a
@@ -309,7 +314,7 @@
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))
                   (await (cut-to-drop! c dug-at (worth c 1) #{dug-at})))
-            _ (when (= :too-big cut) (ctx/emit! c :mine.cut-too-big :info {:pos dug-at :text (str "mine's cut toward " (str/join "," dug-at) " outgrew the heap: the drop is left")}))
+            _ (when (= :too-big cut) (ctx/emit! c :mine.cut-too-big :info {:pos dug-at :text (cut-too-big-text dug-at)}))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))
