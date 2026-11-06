@@ -860,8 +860,7 @@
                (select-keys (ctx/mem c) [:restore-now :restore-pending]))]
     (.setOwner (:primitives eng) "tx")
     (is (= {:restore-pending true} (run! {:step :dig-route :own-cut true})) "walk through first")
-    (is (= {:restore-pending true} (run! {:step :dig-route :own-cut true} false)) "a route stopped in a dead end stays open for the next way")
-    (is (= {:restore-pending true} (run! {:step :stair :own-cut true} false)) "so does a stopped stair")
+    (is (= {:restore-now true :restore-pending true} (run! {:step :dig-route :own-cut true} false)) "a route stopped in a dead end is closed behind at once")
     (is (= {:restore-now true :restore-pending true} (run! {:step :stair :own-cut true})) "a stair's cut is closed behind at once")))
 
 (deftest the-put-back-holds-dug-route-cells-the-walk-has-still-to-enter

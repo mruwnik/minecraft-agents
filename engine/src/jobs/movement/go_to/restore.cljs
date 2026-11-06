@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
+            [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.reserve :as reserve]
@@ -84,7 +85,9 @@
   child call each (ctx/call). It runs once the body got on past the escalation (restore-next!). A hole skip-why
   refuses, or the place child ends without placing (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A hole the body stands in is stepped off once (jobs.lib.step-off) before it is tried again.
-  A placed one is forgotten. A hole of the dug route the body has not passed is held until the body is within range of the goal (:restore-held)."
+  A placed one is forgotten. A hole of the dug route the body has not passed is held until the body is within range of the goal (:restore-held), and so
+  is a cut of the body's own build (:mend) while the body is still shut in (escape/walk-enclosed?): the next way would cut it
+  again, its put-back owed once."
   [c pos]
   (let [p (:primitives c)
         seen (:restore-seen (ctx/mem c) #{})
@@ -100,7 +103,7 @@
                     (if (#{:changed :kept} why)
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
                       (done! :skipped {:cell cell :block was :why why})))]
-        (if (ahead-cell? c pos cell)
+        (if (or (ahead-cell? c pos cell) (and (:mend e) (escape/walk-enclosed? c)))
           (do (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (assoc :restore-held true))) :again)
         (if-let [why (skip-why c e)]
           (if (and (= :occupied why) (not (contains? (:restore-stepped (ctx/mem c)) cell)))
