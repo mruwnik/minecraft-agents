@@ -944,6 +944,21 @@
     (is (<= (+ open (* 4 4 (cost/dig-cost "stone"))) (- wet-s dry-s))
         "the stair's next two columns, at least four digs, are dug under water at 5 times their dry seconds")))
 
+(deftest a-flooded-way-swims-its-steps-under-the-water-and-breathes-where-its-head-is-over-it
+  ;; card 8b609f09: a walked step inside the flood was priced dry and the time under water never fell
+  (let [hp-s (cost/walk-hp-seconds)
+        flood-s (partial dig-route/flood-s (:flood (dig-route/body-prices (tu/fake {:blocks {"1,66,0" "water"}}) (constantly false))))
+        open [:dig [1 65 0] "stone"]
+        swum [:step [1 64 0]]
+        ;; enough swum steps to outlast the air and 20 hp drowned at 2 a second
+        n (js/Math.ceil (/ (+ (cost/air-left-s {}) 10) (cost/wet-move-s {} :walk)))
+        half (repeat (js/Math.ceil (/ n 2)) swum)]
+    (is (pos? (cost/wet-step-s {} 20 hp-s 0)) "a step under water is swum, slower than walked")
+    (is (< (js/Math.abs (- (flood-s [open swum]) (flood-s [open]) (cost/wet-step-s {} 20 hp-s (cost/flood-under-s {})))) 1e-9)
+        "a step whose head is under the pool's level is swum")
+    (is (= ##Inf (flood-s (cons open (repeat n swum)))) "a way that never surfaces drowns")
+    (is (< (flood-s (concat [open] half [[:step [1 66 0]]] half)) ##Inf) "a step with the head over the water breathes")))
+
 (deftest a-dig-route-dearer-than-its-worth-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
         route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false false {:worth-s 30}))]

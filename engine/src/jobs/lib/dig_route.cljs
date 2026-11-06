@@ -97,14 +97,20 @@
       level [0 level' under]
       l (let [[w u] @(:open flood)] [w l u]))))
 
+(defn flood-walk
+  "A step to a feet cell at height y of a way whose flood stands at level, the head under it for under seconds: [seconds
+  over a walked step, under after]: swum with the head at or under the level, else walked, the body breathing."
+  [flood level under y]
+  (if (<= (inc y) level) ((:step flood) under) [0 0]))
+
 (defn flood-s
-  "Seconds over their :dig-s a way's moves cost under flood (flood-dig), moves [[:dig cell name] | [:step feet-cell] ..]
-  in order."
+  "Seconds over their :dig-s and walked steps a way's moves cost under flood (flood-dig, flood-walk), moves [[:dig cell
+  name] | [:step feet-cell] ..] in order."
   [flood moves]
   (first (reduce (fn [[s level under :as acc] [kind [_ y _ :as cell] name]]
                    (if (= :dig kind)
                      (if-let [[w level under] (flood-dig flood level under y name ((:level flood) cell))] [(+ s w) level under] acc)
-                     acc))
+                     (if level (let [[w under] (flood-walk flood level under y)] [(+ s w) level under]) acc)))
                  [0 nil 0] moves)))
 
 (defn search
@@ -235,7 +241,7 @@
                                          s)]
                                  (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
         ;; key -> #js [seconds digs dig-seconds prev-key move blocks-placed dug pillar-run flood-level under-water-s] of the
-        ;; cheapest way found to the cell (the flood its digs let in: flood-dig), dug its
+        ;; cheapest way found to the cell (the flood its digs let in: flood-dig, flood-walk), dug its
         ;; steps' dug cells as a chain #js [keys parent lx hx ly hy lz hz] (nil: none), each link the box of its own and every
         ;; earlier link's cells: links share their tails, where a set a node grew to kilobytes of heap
         dug-link (fn [^js ks ^js parent]
@@ -258,6 +264,7 @@
         relax! (fn [ck ^js from-node ^js acc nx ny nz move stair? face-s]
                  (let [level (aget acc 4)
                        nk (if (some? level) (- -1 (key nx ny nz)) (key nx ny nz))
+                       wet-s (if (some? level) (let [[w u] (flood-walk flood level (aget acc 5) ny)] (aset acc 5 u) w) 0)
                        k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
                        placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
                    (when (and (not (.has done nk))
@@ -266,7 +273,7 @@
                      (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
                            absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
-                           nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s)
+                           nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)
                            ^js old (.get best nk)]
                        (when (or (nil? old) (< nd (aget old 0)))
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0) (aget acc 4) (aget acc 5)])
@@ -445,7 +452,7 @@
   body's; a cell (opts :own-s cell) prices over 0, the body's own build, at that instead), as :flood (route's) the level
   of seen water that flows into a cell dug (rules/fluid-neighbours, beside or above; for a cell in opts :plugs also a
   neighbour not seen, as water), the water let in (cost/flood-dig-s,
-  flood-under-s) and a dig on inside it (cost/wet-dig-s), a stair's step at least its
+  flood-under-s) and a dig or step on inside it (cost/wet-dig-s, wet-step-s), a stair's step at least its
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps and
   :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
@@ -470,7 +477,8 @@
               :plugs plugs
               :open (delay [(cost/flood-dig-s @wet (.-health self) (cost/walk-hp-seconds)) (cost/flood-under-s @wet)])
               :dig (fn [under-s name] (let [d (or (dig-cost name) 0)]
-                                        [(cost/wet-dig-s @wet (.-health self) (cost/walk-hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))}
+                                        [(cost/wet-dig-s @wet (.-health self) (cost/walk-hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))
+              :step (fn [under-s] [(cost/wet-step-s @wet (.-health self) (cost/walk-hp-seconds) under-s) (+ under-s (cost/wet-move-s @wet :walk))])}
       :step-s (cost/walk-step-s)
       :stair-s (cw/stair-cost 1)
       :unseen? unseen?
@@ -493,7 +501,7 @@
   each priced :fall-s (blocks -> seconds) on top of its step; each step's floor must be a seen solid block, unless the step is up and
   :place-s prices laying one (against a face, the stair job's floor). A* with the walked steps' price as the lower bound.
   Priced :step-s a step, (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs; with :flood, body-prices', the water
-  a way's digs let in and its digs inside it on top: flood-dig), a step up that digs or
+  a way's digs let in and its digs and steps inside it on top: flood-dig, flood-walk), a step up that digs or
   lays its floor at least :stair-s (a stair's step) and :place-s a floor laid,
   :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on, and
