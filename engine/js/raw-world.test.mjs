@@ -276,6 +276,16 @@ test('epoch counts block updates and chunk loads and unloads, not reads', () => 
   assert.equal(raw.epoch(), e0 + 2)
 })
 
+test('a block update that resends the state it replaces moves neither epoch nor changes', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const before = [raw.epoch(), raw.changes()]
+  bot.emit('blockUpdate', { position: new Vec3(3, 70, 4), stateId: id('stone') }, { position: new Vec3(3, 70, 4), stateId: id('stone') })
+  assert.deepEqual([raw.epoch(), raw.changes()], before)
+  bot.emit('blockUpdate', { position: new Vec3(3, 70, 4), stateId: id('stone') }, { position: new Vec3(3, 70, 4), stateId: id('dirt') })
+  assert.deepEqual([raw.epoch(), raw.changes()], before.map(n => n + 1))
+})
+
 test('sightTable lets sight pass beds, as the entity sight check does', () => {
   const table = sightTable(registry)
   assert.deepEqual(['red_bed', 'white_bed'].map(n => table[id(n)]), [0, 0])

@@ -339,6 +339,21 @@
         "a doorway with no door, open air round the hut over ground not seen past a block: no wall there, no refuge")
     (is (true? (rooms/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside, its own floor not seen")))
 
+(deftest a-refuge-answer-outlives-world-changes-past-the-steady-key
+  (let [floods (atom 0)
+        epoch (atom 0)
+        ask (fn [steady]
+              (let [p #js {:perception {} :worldEpoch (fn [] @epoch)}]
+                (with-redefs [reach-room/steady-key (constantly steady)
+                              rooms/flood-refuge? (fn [_ _] (swap! floods inc) true)]
+                  (rooms/refuge-room? p home)
+                  (swap! epoch inc)
+                  (rooms/refuge-room? p home))
+                @floods))]
+    (is (= 1 (ask "near world unchanged")) "a far update (the world epoch alone) keeps the answer")
+    (reset! floods 0)
+    (is (= 2 (ask nil)) "with no steady key the world epoch decides")))
+
 (defn counting!
   "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn.
   A multi-arity fn (compiled calls use its arity entries) counts only its widest arity: the shorter ones call it."

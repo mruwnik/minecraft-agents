@@ -113,10 +113,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   }
 
   const onUpdate = (oldBlock, newBlock) => {
-    changes++
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
-    if (near(getBot(), p.x, p.y, p.z)) bump()
     const bot = getBot()
     const ry = p.y - minYOf(bot)
     const key = keyOf(p.x >> 4, p.z >> 4, ry >> 4)
@@ -130,7 +128,10 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     }
     lights.delete(key)
     if (key === lastLightKey) lastLightKey = -1
+    // a resent state (a cancelled dig) changes nothing a cache rests on
     if (oldBlock?.stateId === id) return
+    changes++
+    if (near(bot, p.x, p.y, p.z)) bump()
     for (const fn of listeners) fn(p.x, p.y, p.z, id)
   }
 

@@ -160,7 +160,7 @@
         p #js {:worldEpoch (fn [] @epoch)}
         c {:primitives p :view (fn [] {:now 0 :data {}})}
         sizes (for [i (range 200)]
-                (do (when (zero? (mod i 50)) (swap! epoch inc))
+                (do (reset! epoch (inc (quot i 50)))
                     (field/shared c [:place i] (constantly i))
                     (.-size ^js (.get field/bodies p))))]
     (is (= field/max-fields (apply max sizes)))

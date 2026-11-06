@@ -94,10 +94,11 @@
 (defonce refuge-kept (js/WeakMap.))
 
 (defn refuge-room?
-  "flood-refuge? of cell pos, kept per body while the world stays the same (reach-room/steady-key and the body's world epoch):
-  a flight asks for each door side from its price, its survey and every enter-room quote."
+  "flood-refuge? of cell pos, kept per body while the world near it stays the same (reach-room/steady-key; the body's world
+  epoch, which also moves on far updates, only without one): a flight asks for each door side from its price, its survey and
+  every enter-room quote."
   [p pos]
-  (let [key (str (some-> (aget p "perception") reach-room/steady-key) "|" (some-> (aget p "worldEpoch") (.call p)))
+  (let [key (or (some-> (aget p "perception") reach-room/steady-key) (some-> (aget p "worldEpoch") (.call p)))
         kept (let [h (.get refuge-kept p)]
                (if (and h (= key (:key h)))
                  h
