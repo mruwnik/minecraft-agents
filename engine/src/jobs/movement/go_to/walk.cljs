@@ -530,7 +530,7 @@
         _ (own-way-left! c0 way)
         floor (dive-floor! c0 pos)
         {:keys [own-way-top cave-ok]} (ctx/mem c0)
-        c (cond-> c0
+        c (cond-> (assoc c0 :budget-near (tuning/budget-near))
             (and own-way-top (not cave-ok)) (assoc :own-floor (- own-way-top (climb/cave-dip)))
             (:over-budget (ctx/mem c0)) (assoc :over-budget true)
             (:route (:args c0)) (assoc :seed (:route (:args c0)))

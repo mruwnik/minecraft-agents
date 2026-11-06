@@ -15,7 +15,7 @@
    ;; a goal set (query.goals; n-goals 0: the one goal above), indexed (engine.path.planner.goals)
    n-goals ^js goal-index
    ;; options
-   max-nodes max-drop weight risk-weight ^:mutable goal-flood ^:mutable flood-after pre-flood frontier-reach
+   max-nodes max-drop weight risk-weight ^:mutable goal-flood ^:mutable flood-after pre-flood frontier-reach budget-near
    ;; a search for an alternative path (options.avoid, see avoidCost): kinds of move refused, cells near earlier paths
    ^boolean avoiding avoid-kinds ^js avoid-cells avoid-factor
    ;; options.only (nil: none): a Set of cell-key, the only cells the search enters (a route re-priced along its own cells)

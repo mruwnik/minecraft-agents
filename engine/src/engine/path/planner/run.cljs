@@ -18,47 +18,47 @@
 
   ;; Out of nodes, the partial end is the expanded node nearest the goal that the search could still have gone on from:
   ;; an open node descends from it or stands a move beside it (a step, a jump up or a drop), or it stands by land not
-  ;; loaded or not seen (oneWayOpen), or no cliff or gap is beside it (walled in by solid ground: a way to dig on, as the
-  ;; walk to a goal behind a wall ends). A dead end whose every way on the search has tried is no place to walk to and plan
+  ;; loaded or not seen (oneWayOpen). The nearest node stays the end within budget-near of the goal, where the caller digs
+  ;; on (the dead end by a wall round the goal). A dead end whose every way on the search has tried is no place to walk to and plan
   ;; again (it was often reached the long way round); with no such node the end is the nearest one. cut: the node whose
   ;; expansion the budget cut short (-1: none), so live.
   (budgetEnd [s cut]
-    (let [n (.-n-nodes s)
-          live (js/Uint8Array. n)
-          ^js open (js/Set.)
-          beside? (fn [i]
-                    (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)]
-                      (loop [dx -1 dz -1 dy (- (.-max-drop s))]
-                        (cond
-                          (> dy 1) (recur dx (inc dz) (- (.-max-drop s)))
-                          (> dz 1) (recur (inc dx) -1 dy)
-                          (> dx 1) false
-                          ^boolean (.has open (.keyOf s (+ x dx) (+ y dy) (+ z dz) 0)) true
-                          :else (recur dx dz (inc dy))))))
-          on? (fn [i] (or (== (aget live i) 1) ^boolean (beside? i) ^boolean (.oneWayOpen s i)))
-          up! (fn [i] (loop [j i]
-                        (when (and (>= j 0) (zero? (aget live j)))
-                          (aset live j 1)
-                          (recur (aget (.-parents s) j)))))]
-      (up! cut)
-      (dotimes [i n]
-        (when (>= (aget (.-heap-pos s) i) 0)
-          (up! (aget (.-parents s) i))
-          (.add open (.keyOf s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i) 0))))
-      (when-not (or (<= (.-best-node s) 0) ^boolean (on? (.-best-node s))
-                    (not ^boolean (.cliffBeside s (aget (.-xs s) (.-best-node s)) (aget (.-ys s) (.-best-node s)) (aget (.-zs s) (.-best-node s)) (aget (.-hs s) (.-best-node s)))))
-        (loop [i 1 best -1 best-d (.-start-distance s)]
-          (if (< i n)
-            (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)
-                  d (.progressTo s x y z)]
-              (if (and (< d best-d) (== (aget (.-heap-pos s) i) -2)
-                       (not ^boolean (.endsOnMagma s x y z (aget (.-hs s) i)))
-                       ^boolean (on? i))
-                (recur (inc i) i d)
-                (recur (inc i) best best-d)))
-            (when-not (neg? best)
-              (set! (.-best-node s) best)
-              (set! (.-best-distance s) best-d)))))))
+    (when-not (or (<= (.-best-node s) 0) (<= (.-best-distance s) (.-budget-near s)))
+      (let [n (.-n-nodes s)
+            live (js/Uint8Array. n)
+            ^js open (js/Set.)
+            beside? (fn [i]
+                      (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)]
+                        (loop [dx -1 dz -1 dy (- (.-max-drop s))]
+                          (cond
+                            (> dy 1) (recur dx (inc dz) (- (.-max-drop s)))
+                            (> dz 1) (recur (inc dx) -1 dy)
+                            (> dx 1) false
+                            ^boolean (.has open (.keyOf s (+ x dx) (+ y dy) (+ z dz) 0)) true
+                            :else (recur dx dz (inc dy))))))
+            on? (fn [i] (or (== (aget live i) 1) ^boolean (beside? i) ^boolean (.oneWayOpen s i)))
+            up! (fn [i] (loop [j i]
+                          (when (and (>= j 0) (zero? (aget live j)))
+                            (aset live j 1)
+                            (recur (aget (.-parents s) j)))))]
+        (up! cut)
+        (dotimes [i n]
+          (when (>= (aget (.-heap-pos s) i) 0)
+            (up! (aget (.-parents s) i))
+            (.add open (.keyOf s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i) 0))))
+        (when-not ^boolean (on? (.-best-node s))
+          (loop [i 1 best -1 best-d (.-start-distance s)]
+            (if (< i n)
+              (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)
+                    d (.progressTo s x y z)]
+                (if (and (< d best-d) (== (aget (.-heap-pos s) i) -2)
+                         (not ^boolean (.endsOnMagma s x y z (aget (.-hs s) i)))
+                         ^boolean (on? i))
+                  (recur (inc i) i d)
+                  (recur (inc i) best best-d)))
+              (when-not (neg? best)
+                (set! (.-best-node s) best)
+                (set! (.-best-distance s) best-d))))))))
 
   ;; The goal flood proved the goal walled in or cut off: finish so, unless the start's own region is sealed (the forward search
   ;; drains within a small budget, no loaded-edge node), when the start is what keeps the body from the goal.

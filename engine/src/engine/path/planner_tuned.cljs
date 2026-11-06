@@ -40,6 +40,8 @@
    - options.knownEdges: a Set of the cells (knownKey) earlier searches found at the loaded edge that no search has
      known to its end since. When it is empty, a frontier in known land is never taken: every edge was searched past,
      and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).
+   - options.budgetNear (0): a search out of nodes ends at its nearest node when that is within this many blocks of the
+     goal (progressTo), a dead end or not (go-to's budget-near: there it digs on); a farther dead end gives way (budgetEnd).
    - options.dangers: known hostiles, an array of {x y z close radius rate block} (at most 8): a move adds to its risk rate
      (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
      dangers together add at most options.dangerCap (4) a second (see dangerRisk), each hp priced at options.damageWeight. A danger with block true (a seen mob) also fills its cell: no plan enters it. jobs.lib.threats builds them.
@@ -339,7 +341,7 @@
      ;; options
      max-nodes (option options "maxDrop" 3) (option options "weight" 1) (option options "riskWeight" 2)
      (option options "goalFlood" 4000) (option options "floodAfter" 3000) (option options "preFlood" 256)
-     (reach-of options from goal)
+     (reach-of options from goal) (option options "budgetNear" 0)
      ;; avoid
      (some? avoid) (if (some? avoid) (.-kinds avoid) 0) (if (some? avoid) (.-cells avoid) nil) (if (some? avoid) (.-factor avoid) 0)
      (.-only options)

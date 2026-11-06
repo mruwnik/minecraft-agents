@@ -645,7 +645,8 @@
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
   :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile), :swim-h Depth Strider on the boots (swim-profile); with the head under water, or the breath not yet full, :air-used is the air
   its oxygen says it has used, and under water there is no turtle grace (it may be spent on this dive), only Water Breathing's seconds left; :health is the hp drowning to which
-  is lethal, :drown-prices the price of each hp of drowning (jobs.lib.cost/drown-prices), :air-seen (known-fn) which air counts."
+  is lethal, :drown-prices the price of each hp of drowning (jobs.lib.cost/drown-prices), :air-seen (known-fn) which air counts;
+  c's :budget-near (go-to's) is :budget-near."
   [c]
   (let [self (.self (:primitives c))
         food (food-of c)
@@ -665,7 +666,8 @@
                    (when-some [costs (cost/walk-costs)] {:costs costs})
                    (when-some [m (y-margin)] {:y-margin m})
                    (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))})
-                   (when-some [d (:descent-s c)] {:costs (assoc (cost/walk-costs) :descent d)}))
+                   (when-some [d (:descent-s c)] {:costs (assoc (cost/walk-costs) :descent d)})
+                   (when-some [n (:budget-near c)] {:budget-near n}))
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self (cost/walk-hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))

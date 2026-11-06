@@ -294,7 +294,7 @@
         (for [k (range 6)] (stone 0 (- -3 k) 0 (- -3 k) (+ 65 k)))))
 
 (deftest a-search-out-of-nodes-ends-on-the-way-it-could-go-on-not-in-a-dead-end-nearer-the-goal
-  (let [r (run walkway-dead-end {:x 0 :y 64 :z 0} (near 35 64 2 1) {:maxNodes 2000})
+  (let [r (run walkway-dead-end {:x 0 :y 64 :z 0} (near 35 64 2 1) {:maxNodes 2000 :budgetNear 6})
         [_ y z] (last-cell r)]
     (is (= ["partial" "budget"] [(:status r) (:reason r)]))
     (is (= 64 y) "on the field, not the walkway")
@@ -308,6 +308,30 @@
 
 (deftest a-search-out-of-nodes-ends-at-the-wall-of-a-walled-in-goal-not-at-the-rim-of-the-flood
   (doseq [n [150 250 350 450]]
-    (let [r (run peninsula-walled-goal {:x 0 :y 64 :z 0} (near 46 64 0 1) {:maxNodes n})]
+    (let [r (run peninsula-walled-goal {:x 0 :y 64 :z 0} (near 46 64 0 1) {:maxNodes n :budgetNear 6})]
       (is (= ["partial" "budget"] [(:status r) (:reason r)]))
-      (is (= [42 64 0] (last-cell r)) "the peninsula's end by the ring, a dead end with solid walls"))))
+      (is (= [42 64 0] (last-cell r)) "the peninsula's end by the ring, a dead end within budget-near"))))
+
+;; The same lane with a pit (no floor) beside its end: the dead end by the ring is still the end.
+(def peninsula-pit-by-the-ring
+  (-> (filterv #(not= % (stone 10 -1 42 1 64)) peninsula-walled-goal)
+      (conj (stone 10 -1 42 0 64) (stone 10 1 41 1 64))))
+
+(deftest a-dead-end-within-budget-near-of-the-goal-is-the-end-with-a-pit-beside-it
+  (doseq [n [150 250 350 450]]
+    (let [r (run peninsula-pit-by-the-ring {:x 0 :y 64 :z 0} (near 46 64 0 1) {:maxNodes n :budgetNear 6})]
+      (is (= ["partial" "budget"] [(:status r) (:reason r)]))
+      (is (= [42 64 0] (last-cell r))))))
+
+;; A 1-wide lane shut by a stone wall 16 blocks short of the goal: its end is a dead end too far out to dig on from.
+(def lane-shut-far-from-the-goal
+  [(stone -30 -10 10 10 64) (stone 10 0 30 0 64) (stone 43 -3 49 3 64)
+   [43 64 -3 49 66 -3 "stone"] [43 64 3 49 66 3 "stone"] [43 64 -2 43 66 2 "stone"] [49 64 -2 49 66 2 "stone"]
+   [11 64 -1 31 66 -1 "stone"] [11 64 1 31 66 1 "stone"] [31 64 0 31 66 0 "stone"]])
+
+(deftest a-dead-end-beyond-budget-near-of-the-goal-gives-way-to-a-node-the-search-could-go-on-from
+  (doseq [n [150 250 350 450]]
+    (let [r (run lane-shut-far-from-the-goal {:x -20 :y 64 :z 0} (near 46 64 0 1) {:maxNodes n :budgetNear 6})
+          [x] (last-cell r)]
+      (is (= ["partial" "budget"] [(:status r) (:reason r)]))
+      (is (<= x 10) "on the field, not in the lane"))))

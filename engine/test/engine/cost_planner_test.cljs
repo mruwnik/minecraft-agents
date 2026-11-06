@@ -33,6 +33,11 @@
     (is (= 2 (.-swimH (.-costs o)))))
   (is (nil? (.-costs (wplan/with-drops #js {} {}))) "no costs: the planner's defaults"))
 
+(deftest go-tos-budget-near-reaches-the-planner
+  (let [c {:primitives (tu/fake {:self {:health 20 :food 20}}) :args {}}]
+    (is (= 6 (.-budgetNear (wplan/with-drops #js {} (wworld/body-policy (assoc c :budget-near 6))))))
+    (is (undefined? (.-budgetNear (wplan/with-drops #js {} (wworld/body-policy c)))) "no caller's: the planner's default")))
+
 (deftest every-name-is-a-planner-cost
   (is (every? #(contains? pf/default-costs (keyword %)) (vals cost/planner-names))))
 
