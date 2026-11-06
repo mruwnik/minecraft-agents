@@ -566,6 +566,11 @@
     (:value (item-value [{:name meat :count (or (tbl/kill-drops mob meat) expected-drops)}]
                         :overrides (measured-worths @game/version)))))
 
+(defn animal-find-worth
+  "Seconds a search for an animal of kind `mob` is worth: animal-worth less one trip (the walk to it is priced apart)."
+  [mob]
+  (- (animal-worth mob) (trip)))
+
 (defn per-climb [] (settings/get settings ::per-climb))
 
 (defn detour-cost

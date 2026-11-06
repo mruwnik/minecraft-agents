@@ -29,9 +29,6 @@
   [n]
   (cost/items-find-worth {"oak_log" n}))
 
-(defn ^:async obtain-small! [s args n]
-  (await (obtain! s args n)))
-
 (defn free-trees
   "A tree 30 blocks off on each side: the search starts the way its legs sort first, which the test must not depend on."
   []
@@ -62,7 +59,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world (:blocks village-trunk) []) (:zones village-trunk))]
-          (await (obtain-small! s {:any-of ["oak_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 12))
+          (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 12))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for logs it may take")
           (await (f/run-ticks s 600))
           (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "when exploring fails the stop names the refusal"))))))
@@ -117,7 +114,7 @@
         (let [pillar (into {} (concat (for [y (range 63 67)] [(str "0," y ",4") "bedrock"])
                                       (for [y (range 67 73)] [(str "0," y ",4") "oak_log"])))
               s (f/start (ore-world pillar []) [f/own-zone])]
-          (await (obtain-small! s {:item "oak_log" :count 2 :explore true} 60))
+          (await (obtain! s {:item "oak_log" :count 2 :explore true} 60))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for other logs")
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
 
@@ -196,7 +193,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (update (ore-world {} []) :self assoc :health 1 :food 0) [f/own-zone])]
-          (await (obtain-small! s {:item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
+          (await (obtain! s {:item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
           (is (seq (f/events-of s :waiting)) "the hurt, foodless body's search waits")
           (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))
 
@@ -225,7 +222,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} []) [f/own-zone])]
-          (await (obtain-small! s {:worth (logs-worth 20) :any-of ["oak_planks" "spruce_planks" "birch_planks"] :count 2 :ways #{:gather :craft} :explore true} 200))
+          (await (obtain! s {:worth (logs-worth 20) :any-of ["oak_planks" "spruce_planks" "birch_planks"] :count 2 :ways #{:gather :craft} :explore true} 200))
           (is (seq (f/events-of s :obtain.exploring)))
           (is (every? #(< 1 (count (:for %))) (f/events-of s :obtain.exploring)) "searches for logs of every species, not oak alone"))))))
 

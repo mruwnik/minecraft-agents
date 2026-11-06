@@ -211,7 +211,7 @@
   [c answer looked]
   (let [cells (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
         ks (u/nearest-first (u/self-pos c) identity (mapv cell cells))
-        price ((sense/find-price c (- (cost/animal-worth (:mob (:args c))) (cost/trip))) nil {:cells ks})
+        price ((sense/find-price c (cost/animal-find-worth (:mob (:args c)))) nil {:cells ks})
         offered (set (take (sense/cell-looks price ks (count looked) 0) ks))]
     (await (pick/pick-walk! c (filter #(offered (cell %)) cells)
                             (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))))

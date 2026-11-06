@@ -138,7 +138,7 @@
   (let [{:keys [mob radius]} (:args c)
         [origin _] (range-from-origin c)
         seen (count (animals/herd (:primitives c) mob 24))
-        worth (- (cost/animal-worth mob) (cost/trip))
+        worth (cost/animal-find-worth mob)
         e (when (pos? worth)
             (await (ctx/call c :explore 'jobs.explore.search
                              (child/search-args {:target mob :count (inc seen) :center origin :max-distance (max 1 (long radius))

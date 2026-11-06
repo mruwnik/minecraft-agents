@@ -126,7 +126,7 @@
   "No animal in reach: walk and look for one (jobs.explore.search; one in view beyond :radius counts). :continue while it
   runs, :again once it found one (the child is called again), else nil."
   [c]
-  (let [worth (- (cost/animal-worth (:mob (:args c))) (cost/trip))
+  (let [worth (cost/animal-find-worth (:mob (:args c)))
         e (when (pos? worth)
             (await (ctx/call c :explore 'jobs.explore.search
                              (child/search-args {:target (:mob (:args c)) :count 1 :worth worth :takeable true}))))]

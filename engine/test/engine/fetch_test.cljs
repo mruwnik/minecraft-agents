@@ -1227,7 +1227,7 @@
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
           (await (run-ticks s 120))
           (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
-          (is (<= (count (events-of s :obtain.exploring)) 6) "bounded by the explore rounds")
+          (is (= 1 (count (events-of s :obtain.exploring))) "one search")
           (is (= :no-source (:reason (last (events-of s :stopped))))))))))
 
 (deftest obtain-sapling-leaf-breaking-is-bounded
