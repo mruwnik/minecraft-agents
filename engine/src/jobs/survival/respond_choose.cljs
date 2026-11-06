@@ -29,7 +29,7 @@
   room: it digs no pit or pocket in its own floor or walls, :lean? the pillar would leave the body too few blocks to roof in on its top (respond.pillar/lean?): the dig-down comes before it (a pit regains its blocks), :arriving? an armed body, a melee mob reaches the body within ::arrival-s: no pit or pocket is dug beside it (it takes longer than the mob needs), :pillar-first? a mob in a diagonal cell the walls must fill, no weapon, and a pillar fits: the pillar comes first (a fist fight there only trades hits), :pillar-cheaper? an armed body loses the fight and a pillar is priced under it (respond.options/pillar-cover): pressed, it tries a pillar before the fight, :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
   [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed? lean? pillar-first? pillar-cheaper? arriving?]}]
   (cond->> (cond
-             creeper? [:back-off :plug :pillar :plug-dig :fight]
+             creeper? [:back-off :plug :pillar :plug-dig :fight :stand]
              enderman? [:water :roof :plug :plug-dig :fight]
              win? [:fight]
              flyer? [:plug :plug-dig :fight]
@@ -55,11 +55,11 @@
     (first (reduce (fn [[out [s & more :as ss]] o] (if (priced-options o) [(conj out s) more] [(conj out o) ss])) [[] sorted] order))))
 
 (defn with-zone-pillar
-  "order with :plug-zone, :plug-dig-zone and :pillar-zone (walls, a pit or pocket, a pillar through another's area) after every way that keeps off, before a last :fight."
+  "order with :plug-zone, :plug-dig-zone and :pillar-zone (walls, a pit or pocket, a pillar through another's area) after every way that keeps off, before a last :fight and :stand."
   [order]
   (let [order (vec order)
-        fight-last? (= :fight (peek order))
+        tail (vec (reverse (take-while #{:fight :stand} (reverse order))))
         extra (cond-> [] (some #{:plug} order) (conj :plug-zone) (some #{:plug-dig} order) (conj :plug-dig-zone) (some #{:pillar} order) (conj :pillar-zone))]
-    (-> (if fight-last? (pop order) order)
+    (-> (subvec order 0 (- (count order) (count tail)))
         (into extra)
-        (cond-> fight-last? (conj :fight)))))
+        (into tail))))

@@ -111,7 +111,15 @@
     (is (< (:damage (cost/refuge-answer {:mobs [(mob "zombie" 7)]} {:door-s 4 :hide-s 30})) (:damage (cost/cover-answer {:mobs [(mob "zombie" 7)]} {:open-s 4 :seconds 34}))) "a run away from a mob 7 off is not a stand while it comes")
     (is (< (js/Math.abs (- (:seconds (refuge 2 30)) 2 (* 30 (- 1 share)))) 1e-9) "only the hide's lost share is paid")
     (is (< (:seconds (refuge 2 30)) (:seconds pillar)) "dearer on a pillar, where the hide is idle")
-    (is (nil? (cost/refuge-answer {:mobs [(mob "creeper" 2)]} {:door-s 2 :hide-s 30})) "no run to a refuge from a creeper is priced")))
+    (is (seq (:blasts (cost/refuge-answer {:mobs [(mob "creeper" 2)]} {:door-s 2 :hide-s 30}))) "a creeper 2 off blows on the run to the door, priced as a cover's")
+    (is (nil? (:blasts (cost/refuge-answer {:mobs [(mob "creeper" 12)]} {:door-s 1 :hide-s 30}))) "a door shut before it can swell: no blast")))
+
+(deftest a-creeper-alone-leaves-a-cornered-body-the-stand-answer
+  (let [answers (cost/cornered-answers {:mobs [(mob "creeper" 8)] :fight nil :covers {}})]
+    (is (some? (:stand answers)) "no fight, no cover: standing is still priced")
+    (is (seq (:blasts (:stand answers))) "its price is the creeper's blast")
+    (is (= :stand (:answer (cost/decide (body 20) (into {} (filter val) answers) here))) "decide picks it")
+    (is (nil? (:stand (cost/cornered-answers {:mobs [(mob "zombie" 8)] :fight nil :covers {}}))) "only a creeper's blast is stood")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))

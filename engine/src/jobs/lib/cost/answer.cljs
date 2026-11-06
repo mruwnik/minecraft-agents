@@ -690,12 +690,12 @@
   cover that is open for door-s (the run to the door: the bed beyond it is no exposure) and then hid for hide-s, of which only the share
   of time no work fills is lost (home-work-share): a danger waits outside a shut door as under a pillar (hide-stays), but a
   hide at home is not idle. The run's blows are flee-mob's, a mob chased from where it stands, over the door-s of the run.
-  later: the answer if the mobs stay (the fight); food: the body's (default 20); nil with a creeper or a mob that keeps up."
+  later: the answer if the mobs stay (the fight); food: the body's (default 20); a creeper blasts as cover-answer's over the run; nil with a mob that keeps up."
   [{:keys [equipment mobs later food]} {:keys [door-s hide-s]}]
   (let [stats (armour/armour-stats equipment)
         v (danger/flee-walk-speed (or food 20))
-        per (map #(flee-mob stats v {:gain (fn [m] (danger/closing-rate (or food 20) m))} %) mobs)]
-    (when (and (every? some? per) (not-any? #(= "creeper" (:name %)) mobs))
+        per (map #(flee-mob stats v {:gain (fn [m] (danger/closing-rate (or food 20) m))} %) (remove #(= "creeper" (:name %)) mobs))]
+    (when (every? some? per)
       (let [scaled (map (fn [f] (let [k (min 1 (/ door-s (max 1e-9 (:seconds f))))] (-> f (update :damage * k) (update :shape (fn [w] (some-> w (* k))))))) per)
             run {:damage (reduce + (map :damage scaled)) :hit (reduce max 0 (map :hit scaled))}
             shape (when-let [ss (seq (keep :shape scaled))] (apply max ss))]
@@ -713,9 +713,12 @@
 
 (defn cornered-answers
   "The answers {key answer} a cornered body wearing equipment has to mobs [flee-mob's]: the fight and each of covers {way
-  {:open-s :seconds :fails}} it can make (cover-answers, the fight after it); decide takes the cheapest."
+  {:open-s :seconds :fails}} it can make (cover-answers, the fight after it), and with a creeper among mobs :stand, doing
+  nothing until each creeper has blasted (stand-answer over no end): the last answer, so decide always has one; decide takes the cheapest."
   [{:keys [equipment mobs fight covers]}]
-  (assoc (cover-answers {:equipment equipment :mobs mobs :then (when fight [fight]) :fight fight :covers covers}) :fight fight))
+  (let [creepers (filter #(= "creeper" (:name %)) mobs)]
+    (cond-> (assoc (cover-answers {:equipment equipment :mobs mobs :then (when fight [fight]) :fight fight :covers covers}) :fight fight)
+      (seq creepers) (assoc :stand (stand-answer {:equipment equipment :mobs creepers :seconds ##Inf})))))
 
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (a

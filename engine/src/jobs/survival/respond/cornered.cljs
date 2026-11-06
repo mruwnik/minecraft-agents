@@ -3,7 +3,7 @@
   (:require [jobs.lib.shelter.fill :as fill]
             [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar]]
-            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! back-off-search! back-off! blocked! recently-hurt? hurt-window-s]]
+            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! hold! back-off-search! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -249,6 +249,7 @@
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
                   :plug-dig-zone (when (and (flight/tried? c :plug-dig) (:zone-dig (ctx/mem c))) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
+                  :stand (await (hold! c :stand "no way out of the creeper: standing"))
                   :pillar (await (refuge/pillar! c false))
                   :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))
                   :water (await (stand! c :water :water "in water, away from the enderman"))

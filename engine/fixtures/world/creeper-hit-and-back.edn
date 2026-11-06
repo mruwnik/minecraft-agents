@@ -50,13 +50,23 @@
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 10}]
    :limit-s 30}
   ;; Card 306ae782: a fist body with no blocks in a dead end, a creeper walking in from 6 blocks: every option fails, and it must not stand
-  ;; holding "cornered" while the creeper closes (it fights at once when the creeper is within reach).
+  ;; holding "cornered" while the creeper closes (it fights at once when the creeper is within reach). Card 879e513d: with nothing to
+  ;; fight or dig, the priced answer is standing (the creeper's blast), held on purpose, not a failed flight refiring.
   {:name "cornered-body-does-not-hold-still-for-a-closing-creeper"
    :blocks [[:fill [8 0 15] [28 3 17] "stone"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
    :body {:at [9.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]]}
    :act [[:summon "creeper" [15.5 0 16.5]]]
-   :expect [{:event {:source :job :kind :retreat_blocked} :within-s 20}
+   :expect [{:event {:source :job :kind :holding :data {:reason "no way out of the creeper: standing"}} :within-s 20}
             {:no-event {:source :job :kind :holding :data {:reason "cornered"}} :for-s 10}]
+   :limit-s 30}
+  ;; Card 879e513d: a pickaxe body in an obsidian dead end (nothing to dig, no blocks, no sword) with a creeper coming: it holds,
+  ;; pricing the blast, and never fails every option at once.
+  {:name "pickaxe-body-in-an-obsidian-dead-end-stands-for-a-creeper"
+   :blocks [[:fill [8 0 15] [28 3 17] "obsidian"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
+   :body {:at [9.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :act [[:summon "creeper" [17.5 0 16.5]]]
+   :expect [{:event {:source :job :kind :holding :data {:reason "no way out of the creeper: standing"}} :within-s 20}
+            {:no-event {:source :job :kind :retreat_blocked} :for-s 10}]
    :limit-s 30}
   ;; Card 306ae782: a body on a 3-high plateau wall to wall with a creeper walking at it from the west: the only way off is a jump down the
   ;; east edge (costs no health), which the flight takes instead of standing cornered. Lit closed arena, stone plateau x 5..12.

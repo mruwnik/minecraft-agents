@@ -676,7 +676,8 @@
 (deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
   (is (= [:plug :pillar :back-off :plug-dig :plug-zone :plug-dig-zone :pillar-zone :fight] (choose/with-zone-pillar (choose/escape-order {}))))
   (is (= [:fight :plug :pillar :plug-dig :plug-zone :plug-dig-zone :pillar-zone] (choose/with-zone-pillar (choose/escape-order {:pressed? true :faster? true}))))
-  (is (= [:fight] (choose/with-zone-pillar [:fight])) "no plug or pillar in the order, none added"))
+  (is (= [:fight] (choose/with-zone-pillar [:fight])) "no plug or pillar in the order, none added")
+  (is (= [:plug :plug-zone :fight :stand] (choose/with-zone-pillar [:plug :fight :stand])) "standing stays the last option"))
 
 (deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-walked-from-the-pillar-is-respond-s-priced-choice
   (async done
@@ -916,6 +917,17 @@
 (def room
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."
   (wall-cells (concat (for [x (range -2 10)] [x -2]) (for [x (range -2 10)] [x 2]) (for [z (range -1 2)] [-2 z]))))
+
+(deftest a-body-cornered-by-a-lone-creeper-with-nothing-to-dig-or-hit-with-prices-standing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (hidden-round hiding-retreat {:self {:pos [0.5 64 0.5]} :blocks hard-sided-dead-end
+                                                                  :inventory [{:name "stone_pickaxe" :count 1}]
+                                                                  :entities [(assoc (creeper 8.5 64 0.5) :visible true)]}
+                                                         120000 (fn [_] nil)))]
+          (is (seq (filter #(and (= :retreat.cornered (:kind %)) (contains? (:prices %) :stand)) @seen)) "standing is among the priced answers")
+          (is (some #(= :holding (:kind %)) @seen) "the step holds in place until the creeper comes"))))))
 
 ;; the one step back ends 3.5 from the lit creeper, inside its blast (flee-search/fuse-blast): no back-off, no blocks to wall
 ;; or pillar with, so the hit that knocks it back and the step after it are the answer a player takes
@@ -2268,7 +2280,7 @@
 (deftest no-pit-or-pocket-is-dug-beside-a-melee-mob-that-arrives-first
   (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:arriving? true})))
   (is (= [:plug :pillar :back-off :plug-dig :fight] (choose/escape-order {})) "no mob close: the pit stays an option")
-  (is (= [:back-off :plug :pillar :plug-dig :fight] (choose/escape-order {:arriving? true :creeper? true})) "a creeper keeps its order"))
+  (is (= [:back-off :plug :pillar :plug-dig :fight :stand] (choose/escape-order {:arriving? true :creeper? true})) "a creeper keeps its order"))
 
 (deftest a-body-shot-from-nowhere-on-open-ground-steps-away-not-cornered-by-the-spots-in-the-rock-under-it
   ;; the ground under the floor is unseen, as live: the shot's spots straight down stay, and must not count as a mob that catches the body
