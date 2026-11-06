@@ -13,6 +13,8 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.child :as child]
+            [jobs.lib.cost.table :as table]
+            [jobs.lib.walk-pick :as pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.lava :as lava]
             [jobs.lib.need :as need]
@@ -44,7 +46,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
-  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails), and unless that block roofs the body's room (jobs.lib.blocks/roof-price over 0: the walk goes first, a way that keeps the shelter); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
+  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails), and unless that block roofs the body's room (jobs.lib.blocks/roof-price over 0, which skips the open-side rule) and go-to's quote of the walk costs less than the dig and that price (the walk keeps the shelter); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false, and not from under a block that roofs the body's room when its shelter costs more than the dig's :worth: roof-kept!; a root call's worth is ##Inf, so with no other way it digs through), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
@@ -425,19 +427,38 @@
     (ctx/update-mem! c assoc :roof-kept kept)
     true))
 
+(defn ^:async walk-cheaper?
+  "Whether go-to's quote of the walk into reach of pos costs fewer seconds (pick/quoted-s) than digging the roof block at
+  hit plus its shelter price; :continue while the quote goes on."
+  [c pos hit price]
+  (let [[_ args] (await (b/walk-request c pos (:see (:args c))))
+        q (await (pick/quote! c (assoc args :worth ##Inf)))
+        name (some-> (u/seen-block (:primitives c) (zipmap [:x :y :z] hit)) .-name)]
+    (if (:estimate q)
+      :continue
+      (< (pick/quoted-s c q) (+ (or (some-> name table/dig-cost) 0) price)))))
+
 (defn ^:async dig-through!
   "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does.
-  A block that roofs the body's room costs its shelter (b/roof-price): before-walk? it is left for the walk, the way that
-  costs no shelter; after a failed walk it is the only way, dug unless the price is over the dig's worth (roof-kept!).
+  A block that roofs the body's room costs its shelter (b/roof-price): before-walk? it is left for the walk when the walk's
+  quote (walk-cheaper?) costs less than the dig and that price; after a failed walk it is the only way, dug unless the
+  price is over the dig's worth (roof-kept!).
+  Before the walk a block with an open side (open-side?) is left for the walk too, unless it roofs the room.
   :again, :continue, or nil when there is no such block, it is kept, or the child could not dig it."
   [c pos before-walk?]
   (when-let [hit (when (:through (:args c)) (b/through-cell c pos))]
-    (when-not (if before-walk? (pos? (b/roof-price c hit)) (roof-kept! c hit))
-      (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-        (cond
-          (= :continue r) :continue
-          :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
-                    (when (= :done (:kind r)) :again)))))))
+    (let [price (if before-walk? (b/roof-price c hit) 0)
+          walk (when (pos? price) (await (walk-cheaper? c pos hit price)))]
+      (cond
+        (= :continue walk) :continue
+        (and before-walk? (zero? price) (open-side? c pos)) nil
+        (or walk (roof-kept! c hit)) nil
+        :else
+        (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+          (cond
+            (= :continue r) :continue
+            :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
+                      (when (= :done (:kind r)) :again))))))))
 
 (defn pillar-height
   "How many blocks to pillar up to reach pos from the feet: pos at least 3 above the feet cell and within 3 cells sideways, as many blocks as leave it 3 above the feet (1 to 6; the blocks left are for climbing to its drop); else nil."
@@ -506,7 +527,7 @@
       (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
       (unreachable! c :no-walk)
       (not (b/in-reach? c pos (:see (:args c))))
-      (or (when-not (open-side? c pos) (await (dig-through! c pos true)))
+      (or (await (dig-through! c pos true))
           (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
             (if (:unreachable w)
               (or (await (pillar-up! c pos)) (await (dig-through! c pos false)) (unreachable! c (:unreachable w)))

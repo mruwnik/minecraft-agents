@@ -22,6 +22,7 @@
             [jobs.lib.world-files :as world]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.sense :as sense]
+            [jobs.lib.walk-pick :as pick]
             [engine.sense-test :as st]
             [plan.shape :as shape]))
 
@@ -488,6 +489,21 @@
               [_ rich-dug rich-roof] (await (dig-at {:worth 1e9}))]
           (is (pos? root-price) "the hole costs shelter")
           (is (= [true [[2 67 0]] true [[2 67 0]]] [root-dug root-roof rich-dug rich-roof]) "only the dirt is dug, from the roof top"))))))
+
+;; the same room and dirt with the walk round priced a day long (go-to's quote stubbed): the roof is cheaper, dug through first
+(deftest a-roof-with-a-very-long-way-round-is-dug-through
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self {:pos {:x 2.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks door-room
+                          :states {"5,63,0" {:open false :half "lower" :facing "east"} "5,64,0" {:open false :half "upper" :facing "east"}}
+                          :time 1000 :light {} :light-default [0 0]})
+              _ (tu/seeing-all (:p env))
+              r (with-redefs [pick/quote! (fn ^:async q [_ _] {:uses {:job-time [86400 86400 86400]}})]
+                  (await (tu/child-outcome (:eng env) job {:pos [2 67 0]} 120)))
+              dug (mapv #(let [v (.-pos (.-args %))] [(.-x v) (.-y v) (.-z v)]) (calls (:p env) "dig"))]
+          (is (= {:dug true} (select-keys r [:dug])) (pr-str r))
+          (is (= [2 65 0] (first dug)) (pr-str dug)))))))
 
 ;; a room reaching past the spawn-free radius in the dark is sealed but not safe: its roof hole still lets walkers in
 (deftest a-roof-over-a-sealed-dark-room-is-priced-too
