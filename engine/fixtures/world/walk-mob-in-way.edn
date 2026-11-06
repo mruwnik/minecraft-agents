@@ -13,7 +13,7 @@
  [{:name "cow-in-the-corridor-replans-and-arrives-round"
    ;; the cow stands in the corridor after the walk is planned (a cow seen first is planned round at once, no replan)
    :act [[:job (jobs.movement.go-to {:pos #at [29 0 16] :range 1 :ways #{:walk :clear-seal}})]
-         [:wait-s 0.5]
+         [:await {:source :job :kind :planned} 20]
          [:summon "cow" [18.5 0 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :job :kind :replan :data {:why :mob}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]

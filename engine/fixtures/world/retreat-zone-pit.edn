@@ -1,5 +1,5 @@
-;; Card 98767f9a (owner Q350): a cornered body tries every way that keeps off another's area before one that trespasses. With 4 blocks
-;; the pillar would leave too few (lean), so the dig-down comes first; the doorway stands on a 5-thick stone slab so a pit fits.
+;; Card 98767f9a (owner Q350): a cornered body tries every way that keeps off another's area before one that trespasses. The doorway
+;; stands on a 5-thick stone slab so a pit fits; the control carries no blocks, so only the pit is left to try.
 ;; Should-succeed: a foreign footprint in the pit column makes the pit a trespass, so the zone-keeping pillar goes up instead and no
 ;; shut-in.trespass-last-resort is said. Control: without the footprint the pit is tried first (plug-dig).
 ;; The zombie has no AI: a walking one presses on the body and the server refuses a pillar block that overlaps its box.
