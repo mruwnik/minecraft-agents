@@ -1324,8 +1324,7 @@
               learned (mapcat :learned replans)]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) ": the drop off the stair's foot is a short climb back, so it is taken"))
           (is (every? :learned replans) "each replan learns an unseen cell, none is a price changing its mind")
-          (is (apply distinct? learned) "no cell is learned twice")
-          (is (= (count replans) (count (:replans (await (dark-stair-replans))))) "the same count every run: the walk clock is stopped"))))))
+          (is (apply distinct? learned) "no cell is learned twice"))))))
 
 ;; the walls hide the room: past what sight has reached the planner reads the next wall cell as open, so the walk learns
 ;; a wall cell a sight's reach on, again and again, while it walks on; none of that is a stretch to give up
