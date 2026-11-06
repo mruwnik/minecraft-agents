@@ -2,7 +2,7 @@
   "go-to's search kept over rounds (jobs.lib.walk.search/searches) when the land round the goal loads after it began (card
   9c4471aa; live j53: a search begun while the chunks round a goal on a sealed platform were still arriving read the goal
   unloaded, never ran the goal flood, and gave up :searching after 100 rounds)."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [are deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
@@ -94,6 +94,36 @@
           (reset! wsearch/searches {})
           (is (= ["searching" true] [(:status first-plan) (:fresh first-plan)]))
           (is (false? (:fresh second-plan)) "the second round goes on with the first round's search"))))))
+
+;; a mob that comes along between rounds begins a new search priced with it: the walk's watch takes every mob sensed at
+;; the plan as known, so a walk kept on a search begun before the mob would never plan round it nor stop for it
+(deftest a-walk-s-search-begins-again-when-a-danger-appears
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! wsearch/searches {})
+        (let [p (tu/fake {:floor [0 0 47 47] :self {:pos [2.5 64 2.5]}})
+              c {:primitives p}
+              plan (fn [dangers]
+                     (wsearch/plan-walk-budgeted! c (wworld/with-dangers (wworld/path-world p) dangers)
+                                                  [45 64 45] 0 1 {:policy executor/policy :budget 16 :progress false}))
+              [first-plan second-plan] (await (tu/with-expansion-budget 16 (fn ^:async both [] [(await (plan nil)) (await (plan #js [#js {:mob "zombie" :x 20 :y 64 :z 20 :close 1 :radius 3 :rate 4}]))])))]
+          (reset! wsearch/searches {})
+          (is (= ["searching" true] [(:status first-plan) (:fresh first-plan)]))
+          (is (true? (:fresh second-plan)) "the zombie's round begins a search that prices it"))))))
+
+;; a quote prices and is not walked, so it goes on whatever its dangers and mask; a walk's search goes on only over the
+;; same dangers and mask (a floor learned missing must not be walked on a plan that thought it there)
+(deftest which-unfinished-search-goes-on
+  (let [key-with (fn [dangers tolls mask] [[2 64 2] [45 64 45] 0 1 :policy nil dangers nil tolls mask])
+        kept (key-with nil 2 [0 0 2])]
+    (reset! wsearch/searches {:who {kept {:key kept}}})
+    (are [k quoted found?] (= found? (some? (wsearch/unfinished-like :who k quoted)))
+      (key-with nil 3 [0 0 2]) false true
+      (key-with [["zombie" 5 16 5 4]] 2 [0 0 2]) false false
+      (key-with nil 2 [1 0 2]) false false
+      (key-with [["zombie" 5 16 5 4]] 3 [1 0 2]) true true)
+    (reset! wsearch/searches {})))
 
 ;; the goal stays unloaded far past the loaded floor's east edge (card 7a031d15): no node of the loaded land is 8 blocks
 ;; nearer than the start, so only an ended search walks; ending only once all loaded land is searched took more rounds

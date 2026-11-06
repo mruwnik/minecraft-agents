@@ -297,12 +297,15 @@
         (< (js/Math.hypot (- px gx 0.5) (- py gy) (- pz gz 0.5)) closest)))))
 
 (defn unfinished-like
-  "The body's unfinished search that plans the same walk as key k from the same cell, whatever its dangers, tolls, avoided
-  cells and mask (the last four parts of a key): a search that needs several rounds is priced by the world as it began, not
-  restarted by every mob that moves or toll that drifts, which would never end it (the walk's watch replans on what changed)."
-  [who k]
-  (let [same (vec (take 6 k))]
-    (first (filter #(and (not (:within %)) (= same (vec (take 6 (:key %))))) (vals (get @searches who))))))
+  "The body's unfinished search that plans the same walk as key k from the same cell, whatever its tolls and avoided cells
+  (a search that needs several rounds is priced by the world as it began, not restarted by every toll that drifts, which
+  would never end it). A quote's (quoted) also whatever its dangers and mask: it prices and is not walked. A walk's needs
+  the same dangers and mask, so a mob that came along or a floor learned missing begins a new search priced with it (the
+  walk's watch takes every mob sensed at the plan as known)."
+  [who k quoted]
+  (let [same #(mapv (fn [i] (nth % i nil)) (if quoted (range 6) [0 1 2 3 4 5 6 9]))
+        want (same k)]
+    (first (filter #(and (not (:within %)) (= want (same (:key %)))) (vals (get @searches who))))))
 
 (defn ^:async plan-walk-budgeted!
   "plan-walk! that runs at most budget expansions of search (run-search!), going on with the body's unfinished search
@@ -315,7 +318,7 @@
   (let [t (clock/now)
         who (:primitives c)
         k0 (search-key c to range weight policy walls pw)
-        near-kept (unfinished-like who k0)
+        near-kept (unfinished-like who k0 quoted)
         k (if (and near-kept (nil? (get-in @searches [who k0]))) (:key near-kept) k0)
         kept (get-in @searches [who k])
         known (when frontier (known-cells! c to range))
