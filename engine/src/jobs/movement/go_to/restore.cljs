@@ -79,6 +79,12 @@
                  (and (:y pos) (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))
                       near (>= i near))))))
 
+(defn shut-in-short?
+  "Whether the body is out of the call's range of a cell goal pos and shut in where it stands (escape/walk-enclosed?)."
+  [c pos]
+  (boolean (and (:y pos) (> (u/dist (zipmap [:x :y :z] (end/feet-cell c)) pos) (:range (:args c) 1))
+                (escape/walk-enclosed? c))))
+
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes, each in another's zone, claim or plan: undoing the
   trespass, so the place ignores zones), lowest first, with jobs.blocks.place (the dug block or what it drops), one
@@ -86,8 +92,8 @@
   refuses, or the place child ends without placing (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A hole the body stands in is stepped off once (jobs.lib.step-off) before it is tried again.
   A placed one is forgotten. A hole of the dug route the body has not passed is held until the body is within range of the goal (:restore-held), and so
-  is a cut of the body's own build (:mend) while the body is still shut in (escape/walk-enclosed?): the next way would cut it
-  again, its put-back owed once."
+  is a cut of the body's own build (:mend) while the body is still shut in short of the goal (shut-in-short?): the next way
+  would cut it again, its put-back owed once."
   [c pos]
   (let [p (:primitives c)
         seen (:restore-seen (ctx/mem c) #{})
@@ -103,7 +109,7 @@
                     (if (#{:changed :kept} why)
                       (do (tidy/forget-cell! c cell) (done! :changed cell))
                       (done! :skipped {:cell cell :block was :why why})))]
-        (if (or (ahead-cell? c pos cell) (and (:mend e) (escape/walk-enclosed? c)))
+        (if (or (ahead-cell? c pos cell) (and (:mend e) (shut-in-short? c pos)))
           (do (ctx/update-mem! c #(-> % (update :restore-seen (fnil conj #{}) cell) (assoc :restore-held true))) :again)
         (if-let [why (skip-why c e)]
           (if (and (= :occupied why) (not (contains? (:restore-stepped (ctx/mem c)) cell)))
