@@ -8,11 +8,16 @@
   (let [s (atom seed)]
     (fn [n] (swap! s #(mod (+ (* % 1103515245) 12345) 2147483648)) (mod (quot @s 65536) n))))
 
-(defn- goal-set [rand]
+(defn- goal-set
+  "Square, row, column and two-far-apart-clusters shapes, so the grid's thin cases are met."
+  [rand]
   (let [spread (nth [3 40 300] (rand 3))
+        [sx sz] (nth [[spread spread] [spread 1] [1 spread] [spread spread]] (rand 4))
+        centers (nth [[[0 0]] [[0 0]] [[0 0]] [[-2000 -1500] [2500 1800]]] (rand 4))
         ranges [0 0 0 1 2.5 4.5 20]]
-    (vec (for [_ (range (inc (rand (nth [4 60 1500] (rand 3)))))]
-           {:x (- (rand spread) (quot spread 2)) :y (+ 60 (rand 8)) :z (- (rand spread) (quot spread 2))
+    (vec (for [_ (range (inc (rand (nth [4 60 1500] (rand 3)))))
+               :let [[cx cz] (nth centers (rand (count centers)))]]
+           {:x (+ cx (- (rand sx) (quot sx 2))) :y (+ 60 (rand 8)) :z (+ cz (- (rand sz) (quot sz 2)))
             :r (nth ranges (rand (count ranges))) :near (rand 2)}))))
 
 (defn- indexed [gs]
@@ -37,17 +42,22 @@
                 1 h
                 2 (if (= 1 near) (+ (max h dy) (* (- SQRT2 1) (min h dy))) h))))))
 
+(defn- random-query [rand _gs]
+  (let [far (nth [4 40 2000] (rand 3))]
+    [(- (rand (* 2 far)) far) (- (rand (* 2 far)) far)]))
+
+(defn- query-near-a-goal [rand gs]
+  (let [{gx :x gz :z} (nth gs (rand (count gs)))]
+    [(+ gx (rand 5) -2) (+ gz (rand 5) -2)]))
+
 (deftest the-indexed-goal-set-answers-as-a-scan-of-every-goal
   (let [rand (rng 7)]
-    (dotimes [_ 30]
+    (dotimes [_ 60]
       (let [gs (goal-set rand)
             g (indexed gs)]
-        (dotimes [_ 40]
-          (let [far (nth [4 40 2000] (rand 3))
-                x (- (rand (* 2 far)) far)
-                y (+ 56 (rand 16))
-                z (- (rand (* 2 far)) far)
-                [x z] (if (zero? (rand 3)) (let [{gx :x gz :z} (nth gs (rand (count gs)))] [(+ gx (rand 5) -2) (+ gz (rand 5) -2)]) [x z])]
+        (doseq [query (take 40 (cycle [query-near-a-goal random-query random-query]))]
+          (let [[x z] (query rand gs)
+                y (+ 56 (rand 16))]
             (is (= (scan-goal-at gs x y z) (goals/goal-at g x y z)) "the first goal holding the cell")
             (doseq [mode [0 1 2]]
               (is (= (scan-least gs mode x y z) (goals/least g mode x y z)) "the same least: the heuristic neither looser nor above it"))))))))
