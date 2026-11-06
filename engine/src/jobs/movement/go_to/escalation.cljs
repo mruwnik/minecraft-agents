@@ -37,6 +37,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.step-off :as step-off]
+            [jobs.lib.threat-field :as threat-field]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -421,7 +422,7 @@
       (search-bound/spent? c (ctx/mem c))
       (do (search-spent! c (end/feet-cell c))
           (await (choose-escalation! c pos failed)))
-      (routes-searching! (route-owner c)) (do (ctx/hold-still! c :searching) (ctx/update-mem! c assoc :escalate-now true) :again)
+      (routes-searching! (route-owner c) (threat-field/world-epoch (:primitives c))) (do (ctx/hold-still! c :searching) (ctx/update-mem! c assoc :escalate-now true) :again)
       :else (await (choose-escalation! c pos failed)))))
 
 (defn dive-refused!

@@ -355,12 +355,12 @@
   (let [nodes (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes)]
     {:id id :left (volatile! nodes) :floor (quot nodes 2) :asked (volatile! {})}))
 
-(defn unfinished-kept
-  "[key kept] of the call id's kept search that asks k's question but for the :bound-s and has not ended or ended with no
-  route (the chain's time left falls every round: a search begun again at each would never get on, and a smaller bound finds no route a larger one did not)."
+(defn same-question-kept
+  "[key kept] of the call id's kept search that asks k's question but for the :bound-s: the chain's time left falls every
+  round, and a search begun again at each would never get on (sliced-answer reads an ended one's answer under k's bound)."
   [id k]
   (let [same (fn [k] (update k 3 dissoc :bound-s))]
-    (first (for [[k2 kept] (get @kept-routes id) :when (and (= (same k2) (same k)) (or (not (:ended? kept)) (nil? (:dig (:a kept)))))] [k2 kept]))))
+    (first (for [[k2 kept] (get @kept-routes id) :when (= (same k2) (same k))] [k2 kept]))))
 
 (defn answered-run
   "The kept run of an ended search: answer a, nothing else (a closure made inside sliced-answer's swap! would share its
@@ -370,18 +370,22 @@
 
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
-  slice has left under max-s when given (a kept search goes on under the call's bound as it falls); :searching while it has not ended. An ended search keeps its answer only: its cell maps are freed."
-  ([slice k start] (sliced-answer slice k start nil))
-  ([{:keys [id left asked]} k start max-s]
+  slice has left under max-s when given (a kept search goes on under the call's bound as it falls); :searching while it
+  has not ended. An ended search keeps its answer only (its cell maps are freed) and the world epoch it was last run at
+  (threat-field/world-epoch): its route answers k under k's bound while that epoch holds, as the cheapest there is."
+  ([slice k start epoch] (sliced-answer slice k start nil epoch))
+  ([{:keys [id left asked]} k start max-s epoch]
    (if-let [a (get @asked k)]
      a
-     (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (unfinished-kept id k))
+     (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (same-question-kept id k))
+           kept (when-not (and (:dig (:a kept)) (not= epoch (:epoch kept))) kept)
            run (or (:run kept) (start))
            [a used] (if (pos? @left) (run @left max-s) [nil 0])]
        (vswap! left - used)
-       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :ended? (or (some? a) (:ended? kept) false)})))
-       (vswap! asked assoc k (or a :searching))
-       (or a :searching)))))
+       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :epoch epoch :ended? (or (some? a) (:ended? kept) false)})))
+       (let [a (if (and (:dig a) max-s (> (:seconds a) max-s)) {:problem :dearer} a)]
+         (vswap! asked assoc k (or a :searching))
+         (or a :searching))))))
 
 (defn flood-cells-per-node
   "Flood cells that cost a slice as much CPU as one search node expanded: cost/search-cell-s over cost/flood-cell-s."
@@ -406,11 +410,11 @@
   (swap! kept-routes update id select-keys (keys @asked)))
 
 (defn routes-searching!
-  "Go on with the call id's searches kept unfinished (kept-routes) within one slice: whether one still has not ended.
-  The ones that end stay kept, for the next escalate!'s choice."
-  [id]
+  "Go on with the call id's searches kept unfinished (kept-routes) within one slice, at world epoch: whether one still
+  has not ended. The ones that end stay kept, for the next escalate!'s choice."
+  [id epoch]
   (let [slice (route-slice id)]
-    (doseq [[k _] (get @kept-routes id)] (sliced-answer slice k nil))
+    (doseq [[k kept] (get @kept-routes id) :when (not (:ended? kept))] (sliced-answer slice k nil epoch))
     (searching? slice)))
 
 (defn searching-ends
@@ -568,7 +572,7 @@
         search (fn [refused spent]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m)
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (threat-field/world-epoch p))
                            (dig-route/route seen-floor from goal (opts refused m spent)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was

@@ -17,6 +17,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.threat-field :as threat-field]
             [jobs.lib.need :as need]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.walk.world :as wworld]
@@ -1399,13 +1400,28 @@
         k [[0 64 0] [9 64 0] false {} {} #{}]
         starts (atom 0)
         start #(do (swap! starts inc) (fn [_] [{:problem :too-big} 5 (fn [] false)]))
-        a (choose/sliced-answer slice k start)
+        a (choose/sliced-answer slice k start nil)
         kept (get-in @choose/kept-routes [(:id slice) k])]
     (is (= {:problem :too-big} a))
     (is (= 0 (second ((:run kept) 100))) "what is kept is the answer, not the search that holds its cell maps")
     (vreset! (:asked slice) {})
-    (is (= {:problem :too-big} (choose/sliced-answer slice k start)))
+    (is (= {:problem :too-big} (choose/sliced-answer slice k start nil)))
     (is (= 1 @starts) "the ended search is not begun again")))
+
+(deftest an-ended-route-answers-a-smaller-bound-while-the-world-holds
+  (let [slice (choose/route-slice "ended-bound")
+        k #(vector [0 64 0] [9 64 0] false {:bound-s %} {} #{})
+        route {:dig [[1 64 0]] :seconds 7}
+        starts (atom 0)
+        start #(do (swap! starts inc) (fn [_ _] [route 5 (fn [] false)]))
+        ask (fn [bound epoch] (vreset! (:asked slice) {}) (choose/sliced-answer slice (k bound) start bound epoch))]
+    (is (= route (ask 30 1)))
+    (is (= route (ask 20 1)) "a smaller bound the route fits")
+    (is (= {:problem :dearer} (ask 5 1)) "a bound under the cheapest route: none under it")
+    (is (= 1 @starts) "the ended search is not begun again")
+    (ask 5 2)
+    (is (= 2 @starts) "the world changed: searched again")
+    (choose/forget-routes! (:id slice))))
 
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))
@@ -1538,7 +1554,7 @@
       (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
         (fn []
           (let [first-round (choice)
-                _ (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c)))))
+                _ (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c) (threat-field/world-epoch (:primitives c))))))
                 last-round (choice)]
             (is (= [30 :searching] first-round))
             (is (= [30 :dig-route] last-round) "the kept search's answer, under the same bound")
