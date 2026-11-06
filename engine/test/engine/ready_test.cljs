@@ -861,6 +861,24 @@
     0 true
     1e9 false))
 
+(deftest a-leg-of-a-walk-to-look-tour-is-priced-as-its-share-of-one-walk-home
+  ;; A dark yard, the tour begun 6 west of the stand the body is at: the next stand is as far from home as this one, so the
+  ;; leg adds its walk there and nothing to the walk home; walking on straight away from home it adds both ways.
+  (let [c (ctx-of (assoc open-night :self {:pos {:x 6.5 :y 64 :z 0.5}}))
+        home {:x 0 :y 64 :z 0}
+        across {:x 0 :y 64 :z 6}
+        there (/ (js/Math.hypot 6 6) cost/walk-speed)
+        near? (fn [a b] (< (js/Math.abs (- a b)) 1e-9))
+        tour (walk-risk/tour-leg-way c across home)
+        alone (walk-risk/look-way c across 1)]
+    (is (near? there (:secs tour)) "the walk there, none added home")
+    (is (near? (* 2 there) (:secs alone)) "premise: alone, there and back")
+    (is (< 0 (:hp tour) (:hp alone)) "the dark walk's hp too: one way's, not two")
+    (is (< (look-edge/walk-price c across ##Inf home) (look-edge/walk-price c across ##Inf nil)))
+    (is (near? (/ 12 cost/walk-speed) (:secs (walk-risk/tour-leg-way c {:x 12 :y 64 :z 0} home)))
+        "straight on away from home: the walk home grows by the leg, as there and back")
+    (is (= alone (walk-risk/tour-leg-way c across {:x 6 :y 64 :z 0})) "at home: there and back")))
+
 (deftest a-torch-the-body-carries-beats-the-walk-to-look
   (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false) ctx/mem (constantly {})]
     (let [safe (fp-light/lights-itself (ready/safe-at (constantly {:x 15 :y 40 :z 0})) (constantly []))]

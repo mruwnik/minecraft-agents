@@ -9,6 +9,8 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.look :as look]
+            [jobs.lib.walk-risk :as walk-risk]
+            [jobs.lib.ready :as ready]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.reach.room :as reach-room]
             [engine.shelter-support :refer [night]]))
@@ -62,6 +64,39 @@
         (let [short {:ways [:walk] :round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable}))}]
           (is (= [0 [0 64 0] nil [:completed] [[8 64 0]] nil] (await (walk-look nil ##Inf (assoc registry/jobs 'jobs.movement.go-to short))))
               "the walk was bought but never left the start: no stand was reached, so the side is not looked at from close by (its neighbours keep their legs), only declined for this decision"))))))
+
+(deftest each-leg-is-priced-with-the-walk-home-to-where-the-call-began
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [asked (atom [])]
+          (with-redefs [walk-risk/tour-leg-way (fn [_ to home] (swap! asked conj [(:x to) home]) {:hp 0 :lethal-hp 0 :secs 1})]
+            (await (walk-look nil)))
+          (is (= [[6 {:x 0 :y 64 :z 0}]] @asked) "the leg is a share of the tour home, not a walk back to where it stands"))))))
+
+(deftest a-tour-round-a-yard-is-bought-as-one-walk-out-and-one-back
+  ;; Legs round a yard on a ring 8 about where the call began: past the first, each walks 11.3 blocks and leaves the walk home
+  ;; as long as it was. Booked as one tour the three legs cost 38.6 blocks; booked each as there and back from its stand,
+  ;; 61.2, and a worth of 15 s (48 blocks at walk speed) stopped the third leg.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [visited (atom #{})
+              legs (atom [{:side [0 64 9] :to {:x 0 :y 64 :z 8}} {:side [-9 64 0] :to {:x -8 :y 64 :z 0}}])
+              p (tu/seeing-all (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+              eng (core/create {:primitives p :dir (tu/tmp-dir) :now (constantly 1000000) :jobs registry/jobs
+                                :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now (constantly 1000000)})})]
+          (with-redefs [ctx/worth (constantly 15)
+                        ready/next-leg (fn ([_ _] nil) ([_ _ _ _] (let [l (first @legs)] (swap! legs rest) l)))
+                        look/unseen? (fn [p [side]]
+                                       (let [x (.-x (.-pos (.self p))) z (.-z (.-pos (.self p)))
+                                             [sx _ sz] (if (map? side) [(:x side) 0 (:z side)] side)]
+                                         (swap! visited conj [(js/Math.floor x) (js/Math.floor z)])
+                                         (> (js/Math.hypot (- sx x) (- sz z)) 2)))]
+            (core/submit! eng '(jobs.movement.walk-look {:side [9 64 0] :to [8 64 0]}) {})
+            (await (tu/tick-until-idle! eng 80)))
+          (is (contains? @visited [-8 0]) "the third leg is walked")
+          (is (= [0 0] (mapv js/Math.floor [(.-x (.-pos (.self p))) (.-z (.-pos (.self p)))])) "and the body walks home once"))))))
 
 (deftest the-walk-looked-entry-is-one-and-belongs-to-the-latest-root-job
   (async done

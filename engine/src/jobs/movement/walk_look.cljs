@@ -16,7 +16,7 @@
   (go-to, on foot) and looked at again (look-edge/look!), then, while the last side showed, the hall at :at is still judged by an unseen edge and an unseen side is left that another walk is bought for, the next one; then the body walks back to where the call began. A side still
   unseen after the walk is written to body memory (:walk-looked {:cells}, walked-policy): from close by it stayed unseen, so no later
   walk-look is offered for it (jobs.lib.ready/walk-look). Readiness runs it as a check's :look-first child, the leg priced
-  (walk-risk/look-way there and back); the check after it offers the next leg the walk opened. Needs nothing; ends :done
+  (walk-risk/look-way there and back), each later leg as its share of the one walk back (walk-risk/tour-leg-way); the check after it offers the next leg the walk opened. Needs nothing; ends :done
   (also when the side shows before the walk), condition-failed :no-way-back {:from} when the walk back fails. Info
   walk-look.ended {:side :unseen} at the end.")
 
@@ -98,7 +98,7 @@
         from (:from (ctx/mem c))
         cell (cell-of side)]
     (if (and (look/unseen? (:primitives c) [side]) (not (contains? (:edge-looked (ctx/mem c)) cell)))
-      (await (look-edge/look! c [cell] to))
+      (await (look-edge/look! c [cell] to (ctx/worth c) from))
       (let [_ (finish-leg! c side to (:at (:args c)))
             _ (ctx/update-mem! c update :tried (fnil conj #{}) cell)
             _ (when (arrived? c to) (ctx/update-mem! c update :stands (fnil conj #{}) (stand-of to)))

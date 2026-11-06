@@ -163,10 +163,11 @@
 
 (defn walk-price
   "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than
-  `worth` buys, or its seconds and the walks before it (affords-walk?) over it. A walk toward an unseen wall is priced,
-  not counted."
-  [c to worth]
-  (let [s (walk-risk/look-cost c (walk-risk/look-way c to 1) worth)]
+  `worth` buys, or its seconds and the walks before it (affords-walk?) over it. With `home` (nil: none), where a tour of such walks
+  began, the walk back is home from `to`, less what the walk home from here already owed (walk-risk/tour-leg-way). A walk
+  toward an unseen wall is priced, not counted."
+  [c to worth home]
+  (let [s (walk-risk/look-cost c (walk-risk/tour-leg-way c to home) worth)]
     (when (and s (affords-walk? c s worth)) s)))
 
 (defn ^:async look!
@@ -177,10 +178,12 @@
   another are bought from what the call's worth leaves.
   A cell the first look left unseen is tried at once when a walk shows no more of it: it is in sight range in a clear line from the feet, or in range but hidden by a wall that no stand cell sees past, or the stand cell nearest it is where the body stands.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
-  place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given."
+  place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given. `home`: where
+  the tour of walks began, which the walk back goes to (walk-price)."
   ([c cells] (look! c cells nil))
   ([c cells to] (look! c cells to (ctx/worth c)))
-  ([c cells to worth]
+  ([c cells to worth] (look! c cells to worth nil))
+  ([c cells to worth home]
    (let [phases (:edge-phase (ctx/mem c))
          cell (or (first (filter #(<= 1 (get phases % 0) 4) cells)) (first cells))
          cells (cons cell (remove #{cell} cells))
@@ -202,7 +205,7 @@
                    near (when-not no-new-view? near)
                    _ (when no-new-view? (ctx/update-mem! c assoc :edge-close true))
                    spent (:edge-spent (ctx/mem c) 0)
-                   price (when (and near (= 1 phase)) (walk-price c near worth))
+                   price (when (and near (= 1 phase)) (walk-price c near worth home))
                    _ (when price (ctx/update-mem! c assoc :edge-spent (+ spent price)))
                    _ (when price (ctx/update-mem! c assoc :edge-walked true))
                    w (if (and near (or price (= 2 phase)))

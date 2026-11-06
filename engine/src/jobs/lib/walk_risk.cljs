@@ -230,6 +230,22 @@
                          (assoc (into {} (for [k [:hp :lethal-hp]] [k (cost/look-first (k there) (- (k both) (k there)) dark)]))
                                 :secs (cost/look-first secs secs dark)))))
 
+(defn tour-leg-way
+  "{:hp :lethal-hp :secs} one leg of a walk-and-look tour that began at `home` ({:x :y :z}) adds: from the feet to `to`,
+  then home from there, less the walk home from the feet the legs before it already owe, so the legs of one tour sum to
+  its walk out and one walk back. At home (or none), look-way's walk there and back (dark 1)."
+  [c to home]
+  (let [feet (sh-sense/feet (:primitives c))]
+    (if (or (nil? home) (u/within? feet home 1))
+      (look-way c to 1)
+      (check-cache/cached c [::tour-leg (floor-cell feet) to home]
+                          #(let [home (update home :y (fn [y] (or y (:y feet))))
+                                 tour (estimate c home {:plan {:status "partial" :steps (way feet to nil)}})
+                                 owed (estimate c home)
+                                 blocks (- (+ (u/dist feet to) (u/dist to home)) (u/dist feet home))]
+                             (assoc (into {} (for [k [:hp :lethal-hp]] [k (max 0 (- (k tour) (k owed)))]))
+                                    :secs (/ (max 0 blocks) cost/walk-speed)))))))
+
 (def recheck-ms "How long a walk held :risky waits before status prices it again." 10000)
 
 (defn- raw-epoch [p] (some-> (look/raw-of p) rays/epoch-of))

@@ -111,7 +111,7 @@
 (defn next-leg
   "{:side :to}: the next walk to look of the walk-look run that began at `from` ({:x :y :z}), or nil: look-edge/far-side over the
   region round `from`, minus the sides a walk-look looked at in vain and `tried` (the cells [x y z] this run's legs went to),
-  from where the body stands, one leg bought from the call's worth; sides within sight of a cell in `:stands` (walked to), and with `:route-to` those farther than a look from the segment `:route-from` to it (when it is more than a block off: a hall judged where the body stands has no way to look along), are left out."
+  from where the body stands, one leg bought from the call's worth as its share of the tour home to `:route-from` (walk-risk/tour-leg-way); sides within sight of a cell in `:stands` (walked to), and with `:route-to` those farther than a look from the segment `:route-from` to it (when it is more than a block off: a hall judged where the body stands has no way to look along), are left out."
   ([c from] (next-leg c from #{} {}))
   ([c from tried] (next-leg c from tried {}))
   ([c from tried {:keys [stands route-from route-to]}]
@@ -123,7 +123,7 @@
         walks? (and route-to (not (u/within? route-from route-to 1)))
         off-route? (fn [[x y z]] (and walks? (> (segment-dist route-from route-to {:x x :y y :z z}) near)))]
     (look-edge/far-side p (sh-sense/feet p) from (fn [side] (or (walked side) (off-route? side)))
-                        (fn [to] (some->> (walk-risk/look-way c to 1) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % left))))
+                        (fn [to] (some->> (walk-risk/tour-leg-way c to route-from) (walk-risk/look-cost c) (#(look-edge/affords-walk? c % left))))
                         (into (or stands #{}) (:stands state))))))
 
 (defn walk-look

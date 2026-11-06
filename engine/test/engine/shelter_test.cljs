@@ -1810,7 +1810,7 @@
         cell (first (look-edge/pending c #{}))
         many (set (map (fn [i] [i 100 100]) (range 40)))
         walk-price-after (fn [spent cell & [worth]]
-                           (with-redefs [ctx/mem (constantly {:edge-spent spent})] (look-edge/walk-price c cell (or worth 100))))]
+                           (with-redefs [ctx/mem (constantly {:edge-spent spent})] (look-edge/walk-price c cell (or worth 100) nil)))]
     (is (some? cell))
     (is (seq (look-edge/pending c many)) "no count of cells tried ends the look at the edge")
     (with-redefs [walk-risk/look-way (fn [_ _ _] {:hp 0 :secs 1})
