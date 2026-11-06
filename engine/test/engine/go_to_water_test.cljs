@@ -179,7 +179,7 @@
             (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p)))
             (is (true? (:in-water @out)) (str "result " @out))))))))
 
-;; each walk on to the dry stand moves the body, no nearer, its re-plan still searching (walk-round! "blocked", :budget):
+;; each walk on to the dry stand moves the body, no nearer, its re-plan still searching (walk-round! "blocked", :searching marker):
 ;; the walk goes on for its rounds, not stopped after the first
 (deftest a-dry-walk-whose-rounds-walk-and-still-search-goes-on
   (async done
@@ -187,12 +187,18 @@
       (fn ^:async t []
         (let [n (atom 0)]
           (with-redefs [near/walk-round! (dry-walk-fails (fn [c] (swap! n inc)
+                                                           {:result {:status :no-path :reason :budget :searching true} :status "blocked" :to (:pos c)}))]
+            (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (pond 12)}
+                           {:pos [10 64 0] :range 3 :ways #{:walk :clear-seal}}))
+            (is (= (tuning/dry-walk-rounds) @n)))
+          (reset! n 0)
+          (with-redefs [near/walk-round! (dry-walk-fails (fn [c] (swap! n inc)
                                                            {:result {:status :no-path :reason :budget} :status "blocked" :to (:pos c)}))]
             (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (pond 12)}
                            {:pos [10 64 0] :range 3 :ways #{:walk :clear-seal}}))
-            (is (= (tuning/dry-walk-rounds) @n))))))))
+            (is (= 1 @n) "the planner's final node cap ends the dry walk")))))))
 
-;; a swim up whose rounds move the body, no nearer, the re-plan still searching (walk-round! "blocked", :budget): its
+;; a swim up whose rounds move the body, no nearer, the re-plan still searching (walk-round! "blocked", :searching marker): its
 ;; search goes on while the head is under, and the swim is no failure
 (deftest a-swim-to-air-whose-rounds-walk-and-still-search-keeps-going
   (async done
@@ -203,9 +209,16 @@
           (with-redefs [breath/find-air! (fn [& _] (js/Promise.resolve {:x 4 :y 64 :z 0}))
                         breath/head-under? (constantly true)
                         near/walk-round! (fn [& _] (swap! n inc)
-                                           (js/Promise.resolve {:result {:status :no-path :reason :budget} :status "blocked"}))]
+                                           (js/Promise.resolve {:result {:status :no-path :reason :budget :searching true} :status "blocked"}))]
             (is (true? (await (air/swim-to-air! c {} {:x 28 :y 64 :z 0} "short of air" (fn [])))))
-            (is (= (inc air/max-search-rounds) @n))))))))
+            (is (= (inc air/max-search-rounds) @n)))
+          (reset! n 0)
+          (with-redefs [breath/find-air! (fn [& _] (js/Promise.resolve {:x 4 :y 64 :z 0}))
+                        breath/head-under? (constantly true)
+                        near/walk-round! (fn [& _] (swap! n inc)
+                                           (js/Promise.resolve {:result {:status :no-path :reason :budget} :status "blocked"}))]
+            (is (false? (await (air/swim-to-air! c {} {:x 28 :y 64 :z 0} "short of air" (fn [])))) "the planner's final node cap fails the swim")
+            (is (= 1 @n))))))))
 
 (deftest leave-water-false-keeps-an-arrival-in-water
   (async done

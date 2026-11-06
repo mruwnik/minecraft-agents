@@ -252,8 +252,8 @@
                           (when (and (< i 10) (seq (:list (core/state eng))))
                             (await (core/tick! eng))
                             (recur (inc i))))
-                        [(:status @out) (select-keys (:result @out) [:status :reason]) (count (moved eng))]))]
+                        [(:status @out) (select-keys (:result @out) [:status :reason :searching]) (count (moved eng))]))]
           (try
-            (is (= ["partial" {:status :no-path :reason :budget} 1] (await (round 5))) "walked 5 blocks: a walk, booked, cut by the search's budget")
+            (is (= ["partial" {:status :no-path :reason :budget :searching true} 1] (await (round 5))) "walked 5 blocks: a walk, booked, cut by the search's budget")
             (is (= ["searching" {:status :searching} 0] (await (round 0))) "walked nothing: still searching")
             (finally (set! drive/follow! follow!))))))))

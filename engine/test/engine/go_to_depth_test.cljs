@@ -356,11 +356,16 @@
       (fn ^:async t []
         (let [mem* (atom {})
               c (gcol/stub-ctx (tu/fake {:self {:pos {:x 0.5 :y 40 :z 0.5}}}) mem* {})]
+          (with-redefs [near/walk-round! (fn [& _] (js/Promise.resolve {:status "blocked" :result {:status :no-path :reason :budget :searching true}
+                                                                        :from {:x 0.5 :y 40 :z 0.5} :to {:x 1.5 :y 40 :z 0.5}}))
+                        esc/own-recut! (constantly nil)]
+            (await (own-way/walk-own-way! c {:x 5 :y 44 :z 0 :floor 43} {}))
+            (is (nil? (:own-way-done @mem*)) (pr-str @mem*)))
           (with-redefs [near/walk-round! (fn [& _] (js/Promise.resolve {:status "blocked" :result {:status :no-path :reason :budget}
                                                                         :from {:x 0.5 :y 40 :z 0.5} :to {:x 1.5 :y 40 :z 0.5}}))
                         esc/own-recut! (constantly nil)]
             (await (own-way/walk-own-way! c {:x 5 :y 44 :z 0 :floor 43} {}))
-            (is (nil? (:own-way-done @mem*)) (pr-str @mem*))))))))
+            (is (true? (:own-way-done @mem*)) "the planner's final node cap ends the stair")))))))
 
 ;; A dirt mass (x -90..10, y 29..59, z -1..1) with the body's own level tunnel (feet 40) from x 0 west to x -60, its own
 ;; stair from there west up to the top (floors [-61 40 0] .. [-80 59 0]), and beside the body a stair of its own that

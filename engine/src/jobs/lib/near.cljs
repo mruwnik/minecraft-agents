@@ -153,7 +153,7 @@
   and :frontier-known true when that node lay in land earlier searches knew to their end (wsearch/known-land).
   With budget (go-to), each plan searches at most that many expansions (plan!): a plan still searching is the result
   {:status :searching} (wplan/no-walk), nothing walked; a re-plan still searching after the body walked part of the
-  way ends a walk that got where it got: {:status :no-path :reason :budget}, as a plan cut by its budget; progress false: an unfinished search walks nowhere (plan!).
+  way ends a walk that got where it got: {:status :no-path :reason :budget :searching true}, as a plan cut by its budget but for the marker; progress false: an unfinished search walks nowhere (plan!).
   dangers: whether the plans keep away from known dangers (plan!). avoid: cells the plans keep off (plan!). dark: false plans dark cells like lit ones. tolls: cells the plans price (plan!).
   unknown: the mask spec (plan!); the result then says what the last plan said of unseen floors (with-sight).
   sight: (fn [x y z]) of a feet cell, the policy's :goal-seen: only a cell in range that answers true is the goal.
@@ -191,7 +191,7 @@
                            (= :stair-cheaper (:status done)) done
 
                            (and (= :searching (:status done)) (pos? walked))
-                           {:status :no-path :reason :budget :replans (:replans done)}
+                           {:status :no-path :reason :budget :searching true :replans (:replans done)}
 
                            (not= :door-stuck (:status done))
                            (cond-> (with-sight (drive/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)
@@ -216,9 +216,10 @@
 
 (defn search-goes-on?
   "Whether walk-round!'s answer r is of a search not ended yet: nothing walked (\"searching\"), or a walk whose re-plan was
-  still searching (:reason :budget), whatever its status: the way is not known yet, which is no failure."
+  still searching (walk-once!'s :searching marker), whatever its status: the way is not known yet, which is no failure.
+  A plan's final budget cut (:reason :budget alone) is a failure."
   [{:keys [status result]}]
-  (or (= "searching" status) (= :budget (:reason result))))
+  (or (= "searching" status) (true? (:searching result))))
 
 (defn ^:async walk-round!
   "One walk-once! toward the cell pos ({:x :y :z} of whole numbers) from where the body stands (the caller has checked the

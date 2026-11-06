@@ -61,7 +61,7 @@
 (defn dive-end
   "A fruitless round's result as go-to gives it up under a dive floor: a search the floor cut short (:box), or a masked one that spent its node budget flooding unseen cells under it (:budget), is :way-dives."
   [c pos result]
-  (if (and (:dive-floor c) (#{:box :budget} (some-> (:reason result) keyword)))
+  (if (and (:dive-floor c) (not (near/search-goes-on? {:result result})) (#{:box :budget} (some-> (:reason result) keyword)))
     (assoc result :reason :way-dives :dip (climb-dip) :rise (js/Math.round (- (:y pos) (:y (u/self-pos c)))))
     result))
 
@@ -97,7 +97,7 @@
         cell (dissoc way :floor)
         _ (stair-mem/use-way! c [(:x way) (:y way) (:z way)])
         {:keys [status result from to] :as r} (await (near/walk-round! level cell 0 (dissoc opts :progress)))
-        n (cond-> (:searching (ctx/mem c) 0) (and (= "searching" status) (:fresh result)) inc)
+        n (cond-> (:searching (ctx/mem c) 0) (or (and (= "searching" status) (:fresh result)) (true? (:searching result))) inc)
         nearer? (< (u/dist to cell) (dec (u/dist from cell)))]
     (ctx/update-mem! c assoc :own-way-on true :searching n)
     (when-not (or (= "arrived" status) (and (near/search-goes-on? r) (< n (max-searching))) nearer? (esc/own-recut! c))

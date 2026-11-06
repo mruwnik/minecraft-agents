@@ -513,16 +513,19 @@
                  (is (nil? (:route @mem*)))
                  (done)))))))
 
-;; the body walked, no nearer, and the round's re-plan was still searching (walk-round! "blocked", :budget): the route stays
+;; the body walked, no nearer, and the round's re-plan was still searching (walk-round! "blocked", :searching marker): the route stays
 (deftest a-via-round-whose-search-goes-on-keeps-the-route
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [mem* (atom {:route [[0 64 0] [50 64 0]]})
               c (gcut/with-call (gcol/stub-ctx (tu/fake {:self {:pos {:x 30.5 :y 64 :z 0.5}}}) mem* {}))]
+          (with-redefs [near/walk-round! (fn [& _] (js/Promise.resolve {:status "blocked" :result {:status :no-path :reason :budget :searching true}}))]
+            (await (gwalk/walk-via! c {:x 58 :y 64 :z 0} :open))
+            (is (= [[0 64 0] [50 64 0]] (:route @mem*))))
           (with-redefs [near/walk-round! (fn [& _] (js/Promise.resolve {:status "blocked" :result {:status :no-path :reason :budget}}))]
             (await (gwalk/walk-via! c {:x 58 :y 64 :z 0} :open))
-            (is (= [[0 64 0] [50 64 0]] (:route @mem*)))))))))
+            (is (nil? (:route @mem*)) "the planner's final node cap drops the route")))))))
 
 (deftest a-walk-counts-its-floors-in-process-and-a-restart-keeps-them
   (let [mem* (atom {})

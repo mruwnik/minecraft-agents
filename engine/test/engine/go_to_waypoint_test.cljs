@@ -109,14 +109,16 @@
         (let [{:keys [mem]} (await (waypoint-walk! 20.5 {:status :arrived} "arrived" {:waypoint-why :needs-health}))]
           (is (nil? (:waypoint-why mem))))))))
 
-;; a waypoint walk that moved the body, no nearer, its re-plan still searching (walk-round! "blocked", :budget) failed at
+;; a waypoint walk that moved the body, no nearer, its re-plan still searching (walk-round! "blocked", :searching marker) failed at
 ;; nothing: no reason for a give-up to name
 (deftest a-waypoint-walk-whose-search-goes-on-is-no-failure
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [mem]} (await (waypoint-walk! 1.6 {:status :no-path :reason :budget} "blocked" {:waypoint-why :needs-health}))]
-          (is (nil? (:waypoint-why mem)) (pr-str mem)))))))
+        (let [{:keys [mem]} (await (waypoint-walk! 1.6 {:status :no-path :reason :budget :searching true} "blocked" {:waypoint-why :needs-health}))]
+          (is (nil? (:waypoint-why mem)) (pr-str mem)))
+        (let [{:keys [mem]} (await (waypoint-walk! 1.6 {:status :no-path :reason :budget} "blocked"))]
+          (is (= :budget (:waypoint-why mem)) "the planner's final node cap is a failure"))))))
 
 (deftest a-stand-already-walked-to-is-no-waypoint-again
   (let [p (hiding cliff-with-ramp (fn [[x _ z]] (and (> x 30) (<= z 3))))
