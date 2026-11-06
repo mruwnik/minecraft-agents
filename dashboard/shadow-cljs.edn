@@ -27,7 +27,7 @@
          :autorun false
          :closure-defines {engine.core.clock/frozen true}
          :build-hooks [(engine.build-hooks/add-job-namespaces)]
-         :compiler-options {:infer-externs false :static-fns true :fn-invoke-direct true}}
+         :compiler-options {:infer-externs false :static-fns true :fn-invoke-direct true :source-map-include-sources-content false}}
   ;; Opt-in: the planner's recorded pins (planner-*-golden namespaces), run when planner code changes: `tools/test-engine --golden`.
   :test-golden {:target :node-test
                 :output-to "../engine/out/test-golden.cjs"
@@ -36,7 +36,7 @@
                 :autorun false
                 :closure-defines {engine.core.clock/frozen true}
                 :build-hooks [(engine.build-hooks/add-job-namespaces)]
-                :compiler-options {:infer-externs false :static-fns true :fn-invoke-direct true}}
+                :compiler-options {:infer-externs false :static-fns true :fn-invoke-direct true :source-map-include-sources-content false}}
   ;; Re-records test/planner-bench.json (`npm run record:planner-bench`).
   :planner-record {:target :node-script
                    :main engine.planner-record/main
