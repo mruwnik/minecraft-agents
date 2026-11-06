@@ -162,7 +162,8 @@
   "{:pick x :price seconds :quote q} of the one of xs whose walk go-to quotes cheapest, within limit-s seconds (those whose
   straight walk alone is over it are left out, the rest quoted best-first, best!). target (fn [x]) {:pos :range} bounds the
   straight walk, walk (fn [x]) are the go-to args; ok?, quote and like as best!. A quote whose search still goes on prices nothing
-  (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later); a priced pick wins over a search still going on.
+  (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later); a priced pick wins over a search still going on unless one of the candidates it left out could
+  still be cheaper (its straight-walk bound or guess-s under the pick's price): then :searching.
   Nil when no walk is priced. price (fn [x s]), default s, adds to a walk's seconds s what x costs besides.
   The first quote that finds no way (no-way?) asks once whether the others (cells with a y, walks over what the body has
   seen) are out of reach too (none-reachable!): then each
@@ -173,7 +174,7 @@
         cell #(update-vals (select-keys % [:x :z]) js/Math.floor)
         bound #(walk-s feet (target %))
         searching (atom false)
-        reaching (atom false)
+        reaching (atom nil)
         guess-s (fn [x] (cost-planner/left-s (u/flat-dist (cell feet) (cell (:pos (target x)))) (:back (walk x))))
         rebound (fn ^:async tighter [_ q left]
                   (when (no-way? q)
@@ -182,7 +183,7 @@
                               (await (none-reachable! c goals)))
                           mean (second (get-in q [:uses :job-time]))]
                       (cond
-                        (= :searching r) (do (reset! reaching true) (constantly ##Inf))
+                        (= :searching r) (do (reset! reaching (apply min (map #(max (bound %) (guess-s %)) left))) (constantly ##Inf))
                         (not (true? r)) false
                         (and (number? mean) (js/isFinite mean)) (fn [x] (max (bound x) (guess-s x)))
                         :else (constantly ##Inf)))))
@@ -192,5 +193,5 @@
                                                (do (reset! searching true) ##Inf)
                                                (price x (quoted-s c q))))}))]
     (cond
-      best best
+      (and best (or (nil? @reaching) (<= (:price best) @reaching))) best
       (or @reaching @searching) :searching)))
