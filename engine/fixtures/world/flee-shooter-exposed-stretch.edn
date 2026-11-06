@@ -1,0 +1,32 @@
+;; Card 04bc5242: flee-search's shooter mark prices the seconds a route spends in a shooter's line of fire (respond.goal/choose-opts), not one yes/no.
+;; Stone x 0..63, z 0..31, y 0..6; a lit corridor along z 16 (x 4..60) is a skeleton's line of fire. The skeleton (NoAI, helmeted) stands 6 west of the body.
+;; Two side branches north of the corridor are the only cover: a short one at x 18 (z 12..15), 6 east of the body, and a long one at x 56 (z 6..15), 44 east.
+;; Both routes start and end in or out of fire alike; they differ by the stretch of corridor between: 6 cells against 44. The far branch lies farther from the skeleton
+;; (a better flight score), so a mark of one yes/no per route picked it; priced by the seconds in fire, the near one wins.
+;; Should-succeed: the flight's retreat.target is a cover cell and the body ends in the near branch. Should-fail: it ends in the far branch or dies on the way.
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :plot {:length 64 :width 32 :height 8}
+  :blocks [[:fill [0 0 0] [63 6 31] "stone"]
+           [:fill [4 3 16] [60 5 16] "air"]
+           [:fill [18 3 12] [18 5 15] "air"]
+           [:fill [56 3 6] [56 5 15] "air"]
+           [:set [6 4 16] "minecraft:light[level=12]"]
+           [:set [14 4 16] "minecraft:light[level=12]"]
+           [:set [26 4 16] "minecraft:light[level=12]"]
+           [:set [38 4 16] "minecraft:light[level=12]"]
+           [:set [50 4 16] "minecraft:light[level=12]"]
+           [:set [58 4 16] "minecraft:light[level=12]"]
+           [:set [18 4 13] "minecraft:light[level=12]"]
+           [:set [56 4 10] "minecraft:light[level=12]"]]
+  :body {:at [12.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "the-flight-takes-the-short-exposed-stretch-to-cover"
+   :act [[:summon "skeleton" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.respond-to-hostile {})]]
+   :expect [{:event {:source :job :kind :retreat.target :data {:cover true}} :within-s 25 :of-job true}
+            {:no-event {:source :body :kind :died} :for-s 20}]
+   :after [[:body-near [18.5 3 13.5] 3]]}]}
