@@ -7,7 +7,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.access :as access]
-            [jobs.lib.access.rules :as rules]
             [jobs.lib.aim :as aim]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.dig-look :as dig-look]
@@ -415,7 +414,7 @@
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
   jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost, a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
   (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, own-builds/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
-  and may-dig?, none beside seen water (beside-water?: route-cell! digs only past lava); :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
+  and may-dig? (a dig beside seen water priced as its flood: body-prices); :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than the least of route-opts :worth-s and :bound-s with what it carries, or with
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
@@ -442,7 +441,6 @@
         sensed (fn [x y z] (let [k (+ (* (+ (- x fx) 1048576) 2147483648) (* (+ (- z fz) 1048576) 1024) y 512)]
                              (if (.has known k) (.get known k) (let [b (u/sensed p {:x x :y y :z z})] (.set known k b) b))))
         block-at (fn [[x y z]] (when-let [b (sensed x y z)] (if (true? (.-unknown b)) access/hidden-guess (.-name b))))
-        beside-water? (fn [cell] (boolean (some (fn [[n _]] (not= "lava" n)) (rules/fluid-neighbours block-at cell))))
         seen-floor (fn [[x y z]]
                      (when-let [b (sensed x y z)]
                        (if-not (true? (.-unknown b))
@@ -532,7 +530,7 @@
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
         opts (fn [refused m] (merge prices
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s}
-                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell) (not (beside-water? cell)))
+                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
                                                             ((:dig-s prices) name cell)))}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
@@ -551,7 +549,7 @@
             (let [a (search refused)
                   ;; the straight dig needs no search: when the search prices its own expansions past it, it is the route
                   a (if-let [st (when (= :dearer (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
-                  bad (when (map? a) (remove #(and (escape/diggable? block-at may-dig? %) (not (beside-water? %))) (:dig a)))]
+                  bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) (when (and dearer? (= :dearer (:problem a))) :dearer)
                     (empty? bad) a

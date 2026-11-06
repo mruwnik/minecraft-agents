@@ -15,6 +15,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
@@ -651,7 +652,7 @@
           (is (= #{true} (set (map :need-drop @(:digs one)))) "a fetching dig needs a tool, else it punches the rock by hand and the route was priced for a tool it never gets")
           (is (= #{false} (set (map :need-drop @(:digs two)))))
           (is (= #{false} (set (map :collect @(:digs one)))) "rock nobody else owns is left as dug: nothing is put back")
-          (is (= #{#{:lava-adjacent}} (set (map :accept @(:digs one)))) "seen lava beside a route cell is sealed by the dig, not a refusal that ends the route"))))))
+          (is (= #{#{:lava-adjacent :fluid-adjacent}} (set (map :accept @(:digs one)))) "seen lava beside a route cell is sealed by the dig, water beside was priced as its flood: neither is a refusal that ends the route"))))))
 
 (deftest a-dig-route-through-another-s-zone-picks-up-its-drops-for-the-put-back
   (async done
@@ -894,15 +895,23 @@
     (is (seq round) "the refused tunnel is dug round")
     (is (not-any? (comp straight :cell) round))))
 
-(deftest a-dig-route-never-plans-a-dig-beside-water-it-would-be-refused
-  ;; KitOak94: the route dug toward the ore through its stair's plug beside water; route-cell! (no :fluid-adjacent) refused it
-  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
-        route (fn [fluid] (choose/route-cells (tu/fake {:blocks (assoc world "2,66,0" fluid) :inventory [{:name "stone_pickaxe" :count 1}]})
-                                              [0 64 0] [4 64 0] (constantly true) (constantly false)))
-        wet (route "water")]
-    (is (seq wet) "the way is dug round the water")
-    (is (not-any? #{[2 65 0]} (map :cell wet)) "the cell under the water is left")
-    (is (some #{[2 65 0]} (map :cell (route "lava"))) "lava beside is sealed by the dig: the straight tunnel stands")))
+(deftest a-dig-beside-water-is-priced-as-its-flood-and-a-goal-ringed-by-water-is-dug-to
+  ;; KitOak94: the only way to the ore went beside water; a refused dig there left the ore unreachable
+  (let [hp-s (cost/walk-hp-seconds)
+        p (tu/fake {:blocks {"0,65,0" "water"} :inventory [{:name "stone_pickaxe" :count 1}]})
+        dig-s (:dig-s (dig-route/body-prices p (constantly false)))
+        ;; a one-wide row under three water cells, the rock over them too high to dig round: the row is the only way
+        world (assoc (box 0 63 0 5 90 0 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air"
+                     "1,66,0" "water" "2,66,0" "water" "3,66,0" "water")
+        route (choose/route-cells (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]}) [0 64 0] [4 64 0] (constantly true) (constantly false))]
+    (is (< (js/Math.abs (- (dig-s "stone" [0 64 0]) (dig-s "stone" [5 64 0]) (cost/flood-dig-s {} 20 hp-s))) 1e-9)
+        "the cell under the water costs its flood over a dry one")
+    (is (= (dig-s "stone" [0 64 0]) (dig-s "stone" [1 65 0])) "water beside floods it too")
+    (is (= (dig-s "stone" [5 64 0]) (dig-s "stone" [0 66 0])) "water under it does not rise into it")
+    (is (pos? (cost/flood-dig-s {} 20 hp-s)) "the flood is swum, not walked")
+    (is (< (cost/flood-dig-s {} 20 hp-s) (cost/flood-dig-s {:air-used 14.5} 20 hp-s)) "with its air nearly spent the body drowns some hp")
+    (is (= ##Inf (cost/flood-dig-s {:air-used 14.5} 2 hp-s)) "a flood the body does not live through")
+    (is (some #{[2 65 0]} (map :cell route)) "the goal is dug to under the water")))
 
 (deftest a-dig-route-dearer-than-its-worth-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
@@ -1327,9 +1336,9 @@
       (is (< (Math/abs (- (- (seconds 0.9) (seconds 0.01)) (* 0.89 beyond))) 1e-6)
           "the toll is the chance times the fall the void adds past the 9 blocks the step already falls"))))
 
-(deftest water-seen-only-as-the-dig-route-reaches-it-sends-the-route-round-it
-  ;; KitOak94 and the live fixture: the plan read the pool beside the shaft's top as unseen rock (it shows once the digging starts); the dig there was refused :fluid-adjacent
-  ;; and the route ended :refused. Now the refusal plans the route again, round the water it now knows.
+(deftest water-seen-only-as-the-dig-route-reaches-it-is-dug-past
+  ;; KitOak94 and the live fixture: the plan read the pool beside the shaft's top as unseen rock (it shows once the digging starts);
+  ;; the dig there was refused :fluid-adjacent and the route ended :refused. A dig beside water is dug, its flood priced.
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1346,4 +1355,15 @@
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
           (is (= [19 2 16] (feet p)))
           (is (not-any? #(= :refused (:reason %)) (events-of seen :go-to.escalation-stopped)))
-          (is (not-any? #{{"x" 19 "y" 5 "z" 16}} (map #(js->clj (.-pos (.-args %))) (calls p "dig"))) "the cell beside the water is never dug"))))))
+          (is (some #{{"x" 19 "y" 5 "z" 16}} (map #(js->clj (.-pos (.-args %))) (calls p "dig"))) "the cell beside the water is dug"))))))
+
+(deftest a-route-dig-refused-for-a-falling-block-ends-the-route
+  ;; the planner does not know the block that would fall: a route planned again would dig the same cell, refused again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refused {:kind :condition-failed :cause {:reason :hazard :hazards [:falling-block]} :data {:dug false}}
+              {:keys [seen]} (with-redefs [b/dig-cell-ending! (fn [_ _ _] (js/Promise.resolve refused))]
+                               (await (dig-route-run! below-pocket [{:name "stone_pickaxe" :count 1}] nil)))]
+          (is (some #(= [:dig-route :refused] [(:step %) (:reason %)]) (events-of seen :go-to.escalation-stopped))
+              (pr-str (map #(select-keys % [:step :reason]) (events-of seen :go-to.escalation-stopped)))))))))

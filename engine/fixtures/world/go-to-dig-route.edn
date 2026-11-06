@@ -50,15 +50,15 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [20 3 16] "stone"] [:body-near [20.5 3 16.5] 3.6]]}
-  ;; card 2b3f9198: seen water beside the shaft's top cell (a pool flush with the top): the route's digs take no cell beside water (blocks.dig would refuse
-  ;; it :fluid-adjacent), so it is dug round the pool, never stopped part way
-  {:name "seen-water-beside-the-shaft-is-dug-round"
-   :blocks [[:set [20 5 16] "water"]]
+  ;; cards 2b3f9198, fd0e530c: the pocket is walled in bedrock but for the shaft cell [19 4 16] under an island [19 5 16] in a pool, reached along a
+  ;; causeway from the body: the only way in is a dig beside water. It is dug at the flood's price (the pool pours down the shaft), not refused
+  {:name "goal-whose-only-way-is-beside-water-is-dug-to"
+   :blocks [[:fill [14 0 11] [24 4 21] "bedrock"] [:fill [19 2 16] [19 3 16] "air"] [:set [19 4 16] "stone"]
+            [:fill [14 5 11] [24 5 21] "water"] [:fill [14 5 16] [19 5 16] "stone"]]
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
-   :after [[:block [19 5 16] "stone"] [:body-near [19.5 2 16.5] 1.5]]}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:block [19 5 16] "water"] [:body-near [19.5 2 16.5] 1.5]]}
   ;; should fail: the pocket's floor is lava, so its goal cell is no place to stand: go-to refuses at once (goal-not-standable), digs nothing and never steps in
   {:name "pocket-over-lava-is-refused"
    :blocks [[:set [19 1 16] "lava"]]

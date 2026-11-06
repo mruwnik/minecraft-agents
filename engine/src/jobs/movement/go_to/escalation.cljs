@@ -624,9 +624,10 @@
   "Dig one cell of a :dig-route escalation: look first at a cell the body has not sensed, then check it again as it
   is now (escape/protected?, escape/diggable? over may-dig-fn and own-dig-fn: a block built there since the route
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left; a cell whose floor is unseen is dug
-  on top only after the dig found no side stand to step aside to and look from), noting it as a hole once dug.
+  on top only after the dig found no side stand to step aside to and look from; beside lava, which it seals, or water, which
+  the route priced as its flood, dig-route/body-prices), noting it as a hole once dug.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
-  was planned over rock that is not there) or a dig refused for a hazard (water beside it, seen only as it was reached), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
+  was planned over rock that is not there), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
   [c {:keys [cell guess block beside looked] :as planned}]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
@@ -643,7 +644,7 @@
               fetch? (and (fetch-tool? c) (not by-hand?))
               no-pickaxe? (not-any? #(re-find #"_pickaxe$" (str (:name %))) (u/inventory p))
               before (b/inventory-map p)
-              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (if fetch? (ways-for true) #{:carried :craft}) :need-drop (and (not by-hand?) (or fetch? no-pickaxe?)) :accept #{:lava-adjacent} :not-protected? true
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (if fetch? (ways-for true) #{:carried :craft}) :need-drop (and (not by-hand?) (or fetch? no-pickaxe?)) :accept #{:lava-adjacent :fluid-adjacent} :not-protected? true
                     :collect (and (or (own-cut? c) (some? (tidy/refusal c :dig pos))) (b/room-for-drop? p n))}
               args (cond-> args (own-cut? c) (assoc :settings {:jobs.lib.access/spare-own-builds false}))
               e (await (b/dig-cell-ending! c pos args))
@@ -657,11 +658,7 @@
             (note-holes! c [dug])
             (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)])))
           (when (and guess (not looked)) (note-guess! c cell beside (not= :not-diggable o)))
-          (cond
-            (and guess (= :not-diggable o)) :replan
-            ;; a hazard the plan did not know of (water beside, seen only now): planned again round it
-            (and (= :refused o) (= :hazard (contract/cause-key e))) :replan
-            :else o))))))
+          (if (and guess (= :not-diggable o)) :replan o))))))
 
 (defn replans-spent?
   "Whether the dig route's replans (memory :replan-budget {:since :fallback-s}, begun at the first) have taken the body as long
