@@ -206,7 +206,7 @@
 
 (def oak-tree
   "A trunk of four logs with leaves on top, outside the hut."
-  (into {"10,68,0" "oak_leaves"} (for [y (range 64 68)] [(str "10," y ",0") "oak_log"])))
+  (into {"20,68,0" "oak_leaves"} (for [y (range 64 68)] [(str "20," y ",0") "oak_log"])))
 
 (defn ^:async fell-tree-world! [world]
   (let [clock (atom 1000000)
@@ -321,4 +321,4 @@
               id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)))
-          (is (= :exposed (:reason (waiting-of eng id)))))))))
+          (is (= [:risky :dawn] ((juxt :reason :wait) (waiting-of eng id)))))))))
