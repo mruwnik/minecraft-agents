@@ -18,17 +18,18 @@
 
 (def rest-box-xz "Blocks either side of a bed a monster keeps its sleeper from resting (vanilla Player.startSleepInBed: an AABB of 8 either way across, 5 either way up and down, round the bed block's bottom centre)." 8)
 (def rest-box-y "See rest-box-xz." 5)
+(def rest-box-y-below "Cells below the bed the client's own check (mineflayer bed.js: monsters from 6 below to 4 above the head cell) refuses too, one more than vanilla's 5; the union is what stops a sleep." 6)
 
 (defn monsters-near-bed?
   "Whether a hostile the body knows of stands in the rest box (rest-box-xz, rest-box-y) round the bed cell `at`: vanilla
   refuses the sleep then (\"you may not rest now\"). Known hostiles are taken from the box's far corner as seen from the
   body, since their distance is the body's."
   [p at]
-  (let [corner (Math/sqrt (+ (* 2 rest-box-xz rest-box-xz) (* rest-box-y rest-box-y)))
+  (let [corner (Math/sqrt (+ (* 2 rest-box-xz rest-box-xz) (* rest-box-y-below rest-box-y-below)))
         reach (+ corner (u/dist (u/self-pos {:primitives p}) at))]
     (boolean (some (fn [e] (let [m (danger/mob-pos p e)]
                              (and (<= (Math/abs (- (:x m) (+ (:x at) 0.5))) rest-box-xz) (<= (Math/abs (- (:z m) (+ (:z at) 0.5))) rest-box-xz)
-                                  (<= (Math/abs (- (:y m) (:y at))) rest-box-y))))
+                                  (<= (- rest-box-y-below) (- (Math/floor (:y m)) (:y at)) rest-box-y))))
                    (danger/known-hostiles p reach {})))))
 
 (defn sleeping-players

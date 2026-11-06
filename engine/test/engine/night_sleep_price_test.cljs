@@ -88,6 +88,8 @@
     (is (true? (near zombie {:x 0 :y 64 :z 0})))
     (is (false? (near zombie {:x 20 :y 64 :z 0})) "more than 8 blocks across")
     (is (false? (near zombie {:x 0 :y 72 :z 0})) "more than 5 blocks up")
+    (is (true? (near (assoc zombie :pos {:x 0 :y 64 :z 0}) {:x 0 :y 70 :z 0})) "the bed 6 above it: the client's own check refuses it")
+    (is (false? (near (assoc zombie :pos {:x 0 :y 64 :z 0}) {:x 0 :y 71 :z 0})) "7 above it")
     (is (true? (near (assoc zombie :pos {:x 8 :y 69 :z 8}) {:x 0 :y 64 :z 0})) "the box's far corner, 12.4 blocks off")
     (is (true? (near (assoc zombie :pos {:x 0 :y 64 :z 8}) {:x 0 :y 64 :z 0})) "8 across to the cell's centre")))
 
