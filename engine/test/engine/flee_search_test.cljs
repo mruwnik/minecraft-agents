@@ -797,3 +797,8 @@
     (swim {:x 3.5 :y 64 :z 0.5})
     (is (pos? (.-size wet)))
     (is (every? number? (js/Array.from (.keys wet))))))
+
+(deftest a-caught-flight-blasts-at-the-nearest-of-its-caught-headings
+  (let [end (fn [x d] (assoc (end-of x 0 1 :found? false :unseen [(inc x) 64 0] :caught-s 1.5 :caught? true :blast-d d :arrive 5) :dead-chance 0))
+        c (search/caught-chance [(end 4 5.5) (end -4 3.5)] {:k 0 :n 0} {} nil)]
+    (is (= 3.5 (:blast-d c)) "two caught headings, blasts at 5.5 and 3.5: the worse one prices the flight")))

@@ -917,7 +917,7 @@
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."
   (wall-cells (concat (for [x (range -2 10)] [x -2]) (for [x (range -2 10)] [x 2]) (for [z (range -1 2)] [-2 z]))))
 
-;; the one step back ends 3.5 from the lit creeper, inside its blast (flee-search/fuse-caught-s): no back-off, no blocks to wall
+;; the one step back ends 3.5 from the lit creeper, inside its blast (flee-search/fuse-blast): no back-off, no blocks to wall
 ;; or pillar with, so the hit that knocks it back and the step after it are the answer a player takes
 (deftest a-body-cornered-by-a-creeper-with-no-step-out-of-its-blast-hits-it-back-and-steps-away
   (async done

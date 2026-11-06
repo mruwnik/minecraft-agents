@@ -374,35 +374,38 @@
           (when (and (every? #(<= (u/dist % spot) cost/fuse-cancel-range) burning) (pos? (cost/blast-damage d)))
             d))))))
 
-(defn fuse-caught-s
-  "cost/fuse-s when fuse-blast of creeper ch on route hurts, else 0."
-  [ch route]
-  (if (fuse-blast ch route) cost/fuse-s 0))
-
 (defn route-past
   "The centred cells of timed cells past those chaser ch reaches without moving."
   [ch cells]
   (let [way #(way-at ch %)]
     (mapv cost/centred (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells))))
 
+(defn caught-blast
+  "{:caught-s :blast-d} of timed cells against chasers: caught-s is the most seconds a chaser not :calm? is within its blow,
+  past the cells it reaches without moving (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin
+  (a margin is for a race to one place). A shooter? lands no blow. A creeper blows only when its fuse runs its length
+  (fuse-blast, walked once: cost/fuse-s over it, its distance to :blast-d, the least over the creepers; nil none)."
+  [chasers cells]
+  (let [per (map (fn [ch]
+                   (let [way #(way-at ch %)
+                         route (route-past ch cells)]
+                     (if (= "creeper" (:name ch))
+                       (let [d (fuse-blast ch route)] {:s (if d cost/fuse-s 0) :d d})
+                       {:s (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route route :way way :swim #(swim-at ch %) :speed (:speed ch)})})))
+                 (remove (some-fn :calm? shooter?) chasers))
+        ds (keep :d per)]
+    (cond-> {:caught-s (reduce max 0 (map :s per))}
+      (seq ds) (assoc :blast-d (reduce min ds)))))
+
 (defn blast-d
   "The least distance a creeper of chasers blasts a body walking timed cells at (fuse-blast), nil when none hurts."
   [chasers cells]
-  (let [ds (keep #(fuse-blast % (route-past % cells)) (filter #(= "creeper" (:name %)) (remove (some-fn :calm? shooter?) chasers)))]
-    (when (seq ds) (reduce min ds))))
+  (:blast-d (caught-blast chasers cells)))
 
 (defn caught-s
-  "The most seconds a chaser not :calm? is within its blow on timed cells, past the cells it reaches without moving
-  (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place).
-  A shooter? lands no blow. A creeper blows only when its fuse runs its length (fuse-caught-s)."
+  "The most seconds a chaser not :calm? is within its blow on timed cells (caught-blast)."
   [chasers cells]
-  (reduce max 0 (map (fn [ch]
-                       (let [way #(way-at ch %)
-                             route (route-past ch cells)]
-                         (if (= "creeper" (:name ch))
-                           (fuse-caught-s ch route)
-                           (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route route :way way :swim #(swim-at ch %) :speed (:speed ch)}))))
-                     (remove (some-fn :calm? shooter?) chasers))))
+  (:caught-s (caught-blast chasers cells)))
 
 (defn trap-s
   "What a dead end at the first unseen cell of scored end e costs it when it traps the body: its :trapped, and the
@@ -459,8 +462,8 @@
    (let [here (arrive-at chasers from)
          raced (mapv (fn [{:keys [end cells] :as e}]
                        (let [arrive (arrive-at chasers (cost/centred end))
-                             c-s (caught-s chasers cells)]
-                         (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :blast-d (blast-d chasers cells) :caught? (pos? c-s))))
+                             {c-s :caught-s d :blast-d} (caught-blast chasers cells)]
+                         (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :blast-d d :caught? (pos? c-s))))
                      priced)]
      (mapv (fn [e]
              (let [race (dead-end-race chasers e (or pool raced))
@@ -591,7 +594,7 @@
   and gains on the chasers, none of which gets to its end before the body. The flight takes the best-scored way not
   caught: the chance is that of a way the race calls free, the prior (plus its dead end at counts, wworld/way-counts,
   when it runs unseen); a catch lasts the least seconds the race keeps a chaser in reach over the caught headings (nil
-  with none caught), a creeper's blast landing at the greatest distance of them (:blast-d; nil none). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
+  with none caught), a creeper's blast landing at the least distance of them (:blast-d; nil none). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
   it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight), :cornered? when
   choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (unseen-ahead, glanced
   the cells the flight looked at: the flight would be the cornered step, no walk away); with one, the flight looks first,
@@ -610,7 +613,7 @@
       refuge? {:chance 0 :refuge-s (door-s picked (:door? opts))}
       best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts :dead-chance (:dead-chance best)})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught)))
-             (some :blast-d caught) (assoc :blast-d (reduce max (keep :blast-d caught))))
+             (some :blast-d caught) (assoc :blast-d (reduce min (keep :blast-d caught))))
       (and (empty? ring) (boxed? ends)) {:chance 1 :cornered? true}
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter :unseen ring)))
@@ -620,7 +623,7 @@
                        :cornered? (not (or free? look?))}
                 look? (assoc :look look?)
                 timed (assoc :seconds (reduce min (map :caught-s timed)))
-                (some :blast-d timed) (assoc :blast-d (reduce max (keep :blast-d timed))))))))
+                (some :blast-d timed) (assoc :blast-d (reduce min (keep :blast-d timed))))))))
 
 (defn way-up-chance
   "{:chance} of a flight that takes a stair up it has seen (respond.cover/way-up): a seen way, at wworld/way-counts counts."
