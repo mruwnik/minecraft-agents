@@ -48,7 +48,7 @@
          :pen: its own pen's surplus, hunted there (:pen's cull).
          A chest found empty or a source go-to cannot reach is forgotten; a farm with nothing ripe is passed over.
   :collect  Harvest items lying within 8 blocks (collect-drops).
-  :hunt  The nearest passive food animal within hunt-radius, the walk one kill pays (sources/walk-reach of home-food/best-kill-points) (combat.hunt over the animal's kind, which collects its drops).
+  :hunt  The nearest passive food animal within the walk its own kill pays (hunt-reach: sources/walk-reach of home-food/kill-points of its kind) (combat.hunt over the animal's kind, which collects its drops).
   :crops  Mature crops, sweet berry bushes or melons within crop-radius, the walk the points still wanted pay, within the blocks perception remembers (look/memory-radius) (blocks.dig).
   :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within its ::bank-radius) and eats or cooks them.
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
@@ -104,6 +104,12 @@
   or as far as the search saw what it found (:found-reach), so a find at the edge is not out of reach."
   [c]
   (max (sources/walk-reach c (home-food/best-kill-points (:primitives c))) (:found-reach (ctx/mem c) 0)))
+
+(defn hunt-reach
+  "How far an animal of `kind` is hunted: the walk one kill of it pays (sources/walk-reach at home-food/kill-points), or
+  :found-reach; hunt-radius is the most of any kind."
+  [c kind]
+  (max (sources/walk-reach c (home-food/kill-points (:primitives c) kind)) (:found-reach (ctx/mem c) 0)))
 
 (defn crop-radius
   "How far the crop way looks: the walk the points still wanted pay (sources/walk-reach), within the blocks perception
@@ -168,7 +174,7 @@
       (= :continue e) :continue
       (pos? (:collected (:data e) 0)) :again)))
 
-(defn animal-opts [c own?] {:radius (hunt-radius c) :lift (settings/get settings ::kept-lifted-below) :own? own?})
+(defn animal-opts [c own?] {:radius (hunt-radius c) :reach #(hunt-reach c %) :lift (settings/get settings ::kept-lifted-below) :own? own?})
 
 (defn hunt-left?
   "Whether an animal in sight is left to hunt (own?: in its own pens too)."
@@ -201,7 +207,7 @@
     (if own?
       ['jobs.animals.cull (cond-> (assoc common :radius 8 :center (select-keys pos [:x :z]))
                             box (-> (dissoc :radius :center) (assoc :box {:min (zipmap [:x :y :z] (first box)) :max (zipmap [:x :y :z] (second box))})))]
-      ['jobs.combat.hunt (-> common (dissoc :mob) (assoc :item (meat-of (.-name animal)) :radius (hunt-radius c) :ways #{:carried}))])))
+      ['jobs.combat.hunt (-> common (dissoc :mob) (assoc :item (meat-of (.-name animal)) :radius (hunt-reach c (.-name animal)) :ways #{:carried}))])))
 
 (defn ^:async hunt!
   "Kill the nearest food animal with the real job (combat.hunt; own?: animals.cull over its own pen): :again, or nil when

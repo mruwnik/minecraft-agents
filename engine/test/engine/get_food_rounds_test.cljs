@@ -1523,3 +1523,16 @@
   (let [m (get-food/forgive {:skipped-animals [1 2] :chases {1 3 2 1}} [1])]
     (is (= [2] (:skipped-animals m)))
     (is (= {2 1} (:chases m)))))
+
+(deftest an-animal-in-sight-past-the-reach-of-its-own-kind-is-not-a-hunt-target
+  (let [p (tu/fake-on-floor {})
+        at (fn [kind id x] #js {:name kind :uuid (str "u" id) :id id :baby false :pos #js {:x x :y 64 :z 0}})
+        seen #js [(at "chicken" 1 30) (at "cow" 2 60)]
+        reach {"chicken" 40 "cow" 100}]
+    (with-redefs [look/seen-objs (fn [_ _] seen)
+                  access/trespass-refusal (constantly nil)
+                  spare/penned? (fn [& _] false)
+                  ctx/mem (constantly {})]
+      (is (= ["chicken" "cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach reach}))))
+      (is (= ["cow"] (map #(.-name (:entity %)) (animals/in-sight {:primitives p :args {}} {:radius 100 :lift 0 :reach (assoc reach "chicken" 20)})))
+          "a chicken past what its own meat pays is left, as a cow of that distance is not"))))

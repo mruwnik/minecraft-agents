@@ -118,10 +118,13 @@
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone, claim or plan), or what jobs.lib.animal-spare/why
   says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last ::keep-adults of a kind are lifted only at
   lift food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt.
+  reach (kind -> blocks), when given, drops the animals of a kind farther than it.
   own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
-  [c {:keys [radius lift own?]}]
+  [c {:keys [radius reach lift own?]}]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
-        seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
+        me (u/self-pos c)
+        seen (cond->> (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
+               reach (filter #(<= (u/dist me (u/pos-of (.-pos %))) (reach (.-name %)))))
         adult-es (remove #(true? (.-baby %)) seen)
         seen-uuids (set (map #(.-uuid %) seen))
         adults (into {} (map (fn [k] [k (spare/adults-of-kind c k adult-es seen-uuids radius)])) (distinct (map #(.-name %) adult-es)))
