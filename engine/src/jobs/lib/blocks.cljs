@@ -12,6 +12,13 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.price :as price]
+            [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.threats :as threats]
             [jobs.lib.waits :as waits]
             [jobs.lib.need :as need]
             [jobs.lib.reserve :as reserve]
@@ -183,20 +190,54 @@
            (when cell (str ", blocked by " (or block "a block") " at " (pr-str cell))))))))
 
 (defn roof-over-body?
-  "Whether a block at cell roofs the space the body stands in: over its head with a seen open cell right under it. It
-  may be a build's ceiling, so a tunnelling dig leaves it (the caller pillars, or the call ends unreachable). A pillar (jobs.blocks.dig) does not start under one."
+  "Whether a block at cell roofs the space the body stands in: over its head with a seen open cell right under it."
   [c [x y z]]
   (let [[_ fy _] (feet-cell c)]
     (and (< (inc fy) y)
          (let [kind-at (aim/seen-kind-at (:primitives c))]
            (and (not= :open (kind-at x y z)) (= :open (kind-at x (dec y) z)))))))
 
+(defn roof-price
+  "Seconds breaking the block at cell costs in shelter lost (Q121): 0 unless it roofs the body's room (roof-over-body?) and
+  that room is safe now (sh-inside/safe-room-at?); else the mobs that come in through the hole while the body stays (its
+  job's stay, price/stay-s, or the night left when longer: a body sheltering stays till morning), spawning at the likeliest
+  cell it opens onto (spawn-light/chance-at of a stay; a cell not seen solid counts as open), priced as an opening
+  (cost/opening-price)."
+  [c [x y z :as cell]]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)]
+    (if-not (and (roof-over-body? c cell) (sh-inside/safe-room-at? p feet))
+      0
+      (let [beyond (remove #(sh-sense/solid-at? p %)
+                           (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
+            chance (apply max 0 (map #(spawn-light/chance-at p % false nil true) beyond))
+            stay-s (max (price/stay-s c) (/ (sh-clock/ms-until-morning (.-timeOfDay (.self p))) 1000))
+            spawns (* chance stay-s)
+            body (assoc (threats/death-body c) :health (.-health (.self p)))]
+        (cost/opening-price body (cost/spawns-hurt body spawns feet) {:spawns spawns} feet)))))
+
+(defn goal-worth
+  "Seconds the call's goal is worth: ctx/worth when a caller names one, else what getting one of names is worth (cost/worth-to;
+  none: ctx/worth)."
+  [c names]
+  (let [w (ctx/worth c)]
+    (if (or (js/isFinite w) (empty? names))
+      w
+      (cost/worth-to (threats/death-body c) names (sh-sense/feet (:primitives c))))))
+
+(defn roof-kept
+  "{:cell :price :worth} when breaking cell costs more shelter (roof-price) than (worth-of), else nil."
+  [c cell worth-of]
+  (let [s (roof-price c cell)
+        w (when (pos? s) (worth-of))]
+    (when (and w (> s w)) {:cell cell :price (js/Math.round s) :worth (js/Math.round w)})))
+
 (defn through-cell
-  "The block a player would dig to get at pos: line-blocker's cell when it is natural (through-natural), within reach, not tried before and no roof over the body (roof-over-body?), else nil."
+  "The block a player would dig to get at pos: line-blocker's cell when it is natural (through-natural), within reach and not tried before, else nil. A roof over the body is the caller's to price (roof-kept)."
   [c pos]
   (let [{:keys [cell block]} (line-blocker c pos)]
     (when (and cell block (re-find through-natural block) (not (contains? (:through (ctx/mem c)) cell))
-               (not (roof-over-body? c cell)) (in-reach? c (zipmap [:x :y :z] cell)))
+               (in-reach? c (zipmap [:x :y :z] cell)))
       cell)))
 
 (defn base-in-the-way

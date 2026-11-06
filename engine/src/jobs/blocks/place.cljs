@@ -250,11 +250,13 @@
 
 (defn ^:async dig-through!
   "A walk to a stand that sees pos failed and a seen terrain block (not :for-plan's own cell) lies in the line within reach:
-  dig it, as a player does. :continue, :again, or nil when there is none or it could not be dug."
+  dig it, as a player does, unless it roofs the body's room at a shelter price over the place's worth (b/roof-kept, b/goal-worth of
+  :item). :continue, :again, or nil when there is none or it could not be dug."
   [c pos]
   (let [hit (when (:through (:args c)) (b/through-cell c pos))
         for-plan (:for-plan (:args c))]
-    (when (and hit (not (and for-plan (= for-plan (get (world/footprints c) (vec hit))))))
+    (when (and hit (not (and for-plan (= for-plan (get (world/footprints c) (vec hit)))))
+               (not (b/roof-kept c hit #(b/goal-worth c (keep identity [(:item (:args c))])))))
       (let [e (waits/waiting-out c (await (ctx/call c :through 'jobs.blocks.dig (assoc (clear-args c (u/cell-pos hit)) :collect true :need-drop true))))]
         (if (= :continue e)
           :continue

@@ -46,7 +46,7 @@
 
   A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
-  then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false, and never from under a block that roofs the body's room), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
+  then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call, unless :pillar is false, and not from under a block that roofs the body's room when its shelter costs more than the dig is worth: roof-kept!), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs; with none to stand on it ends {:reason :hazard
   :hazards [:under-feet] :why :no-side-stand}. Only :accept :under-feet digs it from on top.
@@ -63,6 +63,7 @@
   (collect-drops' drops it could not take), :stepped-aside [x y z] (the cell it stood on) when it stepped off the column
   first, :stepped-down [x y z] (the cell it stands in) when picking up the drops walked it down into the hole. :done with :reason :dug, or :already-clear (air there, nothing done). Condition-failed: :fluid (a fluid is not dug),
   :fluid-adjacent (:on-fluid :fail, with :hazards and a :hint), :cannot (bedrock and the like), and the conditions above.
+  An :unreachable ending carries :roof-kept {:cell :price :worth} when the way kept the roof over the body's room.
   Nothing-possible: :lava-unsealed, :failed (the primitive refused, its status as :primitive). Limit-reached :time: the
   primitive timed out.")
 
@@ -72,7 +73,7 @@
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
    :see {:doc "true: dig only from where the eye sees the block (jobs.lib.aim: nothing seen solid in the way, as a player aims), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough, the game lets a dig pass through blocks" :spec boolean? :default true}
-   :through {:doc "false: no block in the aim line is dug first (a block roofing the body's room is never dug for it); a block no stand sees ends :unreachable (a take-back digs nothing but its own blocks)" :spec boolean? :default true}
+   :through {:doc "false: no block in the aim line is dug first; a block no stand sees ends :unreachable (a take-back digs nothing but its own blocks)" :spec boolean? :default true}
    :pillar {:doc "false: a block overhead that no walk reaches is not pillared up to (the caller's :ways leave out :pillar)" :spec boolean? :default true}
    :clear-seal {:doc "false: the walk into reach is :walk only (a seal cleanup's own dig must not start another cleanup)" :spec boolean? :default true}
    :walk {:doc "false: a block out of reach (or out of sight with :see) ends :unreachable :no-walk at once, the body takes no step to it (a pick on the way)" :spec boolean? :default true}
@@ -383,6 +384,7 @@
   block in the line to the cell that the dig will not break for a way in."
   [c why]
   (ctx/end c :nothing-possible (cond-> {:reason :unreachable :pos (:pos (b/parse (:args c))) :why why}
+                                 (:roof-kept (ctx/mem c)) (assoc :roof-kept (:roof-kept (ctx/mem c)))
                                  (b/base-in-the-way c (:pos (b/parse (:args c)))) (assoc :blocked-by (b/base-in-the-way c (:pos (b/parse (:args c))))))))
 
 (defn note-under-feet!
@@ -416,15 +418,24 @@
                    (some (fn [[ex ez]] (stand? (+ nx ex) ny (+ nz ez))) [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
           b/neighbours)))
 
+(defn roof-kept!
+  "Whether breaking cell would cost more shelter than the dig is worth (b/roof-kept; worth b/goal-worth of the target's
+  drops): noted as :roof-kept in memory for the ending's data."
+  [c cell pos]
+  (when-let [kept (b/roof-kept c cell #(b/goal-worth c (b/drops-of (:primitives c) (b/target-name (:primitives c) pos b/hidden-guess))))]
+    (ctx/update-mem! c assoc :roof-kept kept)
+    true))
+
 (defn ^:async dig-through!
-  "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does. :again, :continue, or nil when there is no such block or the child could not dig it."
+  "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does, unless it roofs the body's room at a shelter price over the dig's worth (roof-kept!). :again, :continue, or nil when there is no such block or the child could not dig it."
   [c pos]
   (when-let [hit (when (:through (:args c)) (b/through-cell c pos))]
-    (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-      (cond
-        (= :continue r) :continue
-        :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
-                  (when (= :done (:kind r)) :again))))))
+    (when-not (roof-kept! c hit pos)
+      (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        (cond
+          (= :continue r) :continue
+          :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
+                    (when (= :done (:kind r)) :again)))))))
 
 (defn pillar-height
   "How many blocks to pillar up to reach pos from the feet: pos at least 3 above the feet cell and within 3 cells sideways, as many blocks as leave it 3 above the feet (1 to 6; the blocks left are for climbing to its drop); else nil."
@@ -438,8 +449,8 @@
 (defn ^:async pillar-up!
   "A block overhead that no walk reaches: a player stacks a block or two under the feet. One pillar child per call (carried blocks only); :again when it built, :continue while it waits, else nil."
   [c pos]
-  (when-let [h (and (not (false? (:pillar (:args c)))) (not (:pillared (ctx/mem c)))
-                    (or (:pillaring (ctx/mem c)) (not (b/roof-over-body? c (update (b/feet-cell c) 1 + 2))))
+  (when-let [h (and (not (false? (:pillar (:args c)))) (not (:pillared (ctx/mem c))) (pillar-height c pos)
+                    (or (:pillaring (ctx/mem c)) (not (roof-kept! c (update (b/feet-cell c) 1 + 2) pos)))
                     (pillar-height c pos))]
     (ctx/update-mem! c assoc :pillaring true)
     (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]

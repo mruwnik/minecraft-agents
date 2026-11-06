@@ -1,24 +1,31 @@
-;; Cards 2e426c84 (tunnel-through) and 06598fb2 (pillar): a body shut in a stone room (air x 14..18, z 14..18, y 0..1,
-;; roof y 2, rock to y 5) is asked for a block just over the roof. The roof over its head is a build's ceiling: it is
-;; neither tunnelled through nor pillared into, the dig ends :unreachable and the roof stays whole. Old code dug the
-;; roof cell [16 2 16] (through-cell, then pillar-up!). Should-succeed counterpart: ore in the roof itself is still
-;; pillared to (blocks-dig-unseen-and-under-feet/ore-overhead-in-a-shut-room-is-reached-by-pillaring).
+;; Q121: breaking the roof over the body's room is priced, the shelter lost (jobs.lib.blocks/roof-price: the mobs the
+;; hole lets in while the body stays), against what the dig is worth (its drops' with no :worth). A body shut in a stone
+;; room (air x 14..18, z 14..18, y 0..1, roof y 2, rock to y 5, unseen over the roof: open dark at the worse case) is
+;; asked for dirt over the roof: the shelter costs more than the dirt, so the roof is neither tunnelled through
+;; (:pillar false) nor pillared into (default); the dig ends :unreachable with :roof-kept. Old code had no :roof-kept.
+;; With a doorway out to the plot the room is no shelter (not sealed): nothing to lose, the roof is dug through (old
+;; code: :unreachable).
 {:defaults
  {:tags [:blocks :access] :time :any
   :plot {:height 10}
   :blocks [[:fill [12 0 12] [20 5 20] "stone"] [:fill [14 0 14] [18 1 18] "air"] [:set [13 1 16] "glowstone"]]
   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
-  :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 80 :of-job true}
-           {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
-  :after [[:block [16 2 16] "stone"] [:block [15 2 16] "stone"] [:block [17 2 16] "stone"] [:block [16 2 15] "stone"]
-          [:block [16 2 17] "stone"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]
   :limit-s 100}
  :cases
- [{:name "a-roof-over-the-body-is-not-tunnelled-to-a-block-above"
+ [{:name "a-roof-whose-shelter-is-worth-more-than-the-dirt-over-it-is-not-tunnelled"
    :blocks [[:set [16 3 16] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
-   :after [[:block [16 3 16] "dirt"]]}
-  {:name "a-pillar-does-not-start-under-a-roof-over-the-body"
-   :blocks [[:set [16 4 16] "iron_ore"]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
+   :after [[:block [16 2 16] "stone"] [:block [16 3 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
+  {:name "a-pillar-does-not-start-under-a-roof-whose-shelter-is-worth-more-than-the-dirt"
+   :blocks [[:set [16 4 16] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 4 16]})]]
-   :after [[:block [16 4 16] "iron_ore"]]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
+   :after [[:block [16 2 16] "stone"] [:block [16 4 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
+  {:name "an-open-rooms-roof-is-dug-through-to-the-dirt-over-it"
+   :blocks [[:fill [19 0 16] [20 1 16] "air"] [:set [16 3 16] "dirt"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [16 2 16] "air"] [:block [16 3 16] "air"]]}]}
