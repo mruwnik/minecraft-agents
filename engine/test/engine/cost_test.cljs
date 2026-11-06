@@ -41,7 +41,7 @@
       "only worn slots count"))
 
 (deftest diamond-and-enchanted-armour-cost-less-than-plain-armour-of-the-same-points
-  (let [rate #(cost/hurt-rate % "zombie")]
+  (let [rate #(cost/mob-hurt (cost/armour-stats %) "zombie" 1)]
     (is (< (rate diamond-8) (rate iron-8)) "toughness")
     (is (< (rate (enchanted iron-8 "protection")) (rate iron-8)) "protection")
     (is (< (cost/fight-damage {:weapon "iron_sword" :equipment diamond-8 :mobs [{:name "zombie" :distance 0}]})
@@ -97,7 +97,7 @@
 
 (deftest an-enchanted-worn-chestplate-lowers-the-danger-rate
   (let [body {:health 20 :weapon "diamond_sword"}
-        rate #(cost/threat-factor (assoc body :equipment {:torso %}) "zombie" 1)
+        rate #(let [b (assoc body :equipment {:torso %})] (cost/threat-factor b {:name "zombie"} 1 (cost/answered-together b ["zombie"] nil)))
         plain {:name "iron_chestplate"}]
     (is (< (rate (assoc plain :enchants [{:name "protection" :level 4}])) (rate plain)))))
 

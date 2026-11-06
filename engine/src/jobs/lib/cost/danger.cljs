@@ -9,7 +9,7 @@
   weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
   outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  danger-opts: the :flee factor (x4) and max-rate, as settings."
+  danger-opts: max-rate, as a setting."
   (:require [engine.args :as a]
             [engine.constants :as constants]
             [engine.path.planner.base :as base]
@@ -26,7 +26,6 @@
 (a/defargs settings
   {::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
-   ::flee-factor {:default 4 :doc "Danger price: a known mob the body would flee costs this times its hp a second." :spec (a/num-in 0 nil)}
    ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
@@ -122,10 +121,9 @@
 (def danger-cap "hp a second all known dangers together cost at most (the planner's dangerCap); a larger ::max-rate raises it." 4)
 
 (defn danger-opts
-  "The danger options {:stances :max-rate}, from the settings ::flee-factor and ::max-rate."
+  "The danger options {:max-rate}, from the setting ::max-rate."
   []
-  {:stances {:flee (settings/get settings ::flee-factor)}
-   :max-rate (settings/get settings ::max-rate)})
+  {:max-rate (settings/get settings ::max-rate)})
 
 (defn mob-of-threat
   "{:name :held} of a threat entry {:mob :held ...}."
@@ -133,16 +131,6 @@
   {:name mob :held held})
 
 (defn name-of [m] (if (map? m) (:name m) m))
-
-(defn mob-kind-of
-  "The threat kind of m, a mob name or {:name :held} (a drowned holding a trident is its own kind)."
-  [m]
-  (threat/kind (if (map? m) m {:name m})))
-
-(defn hurt-rate
-  "hp a second mob m (a name, or {:name :held}) takes off a body wearing equipment while it can reach it."
-  [equipment m]
-  (threat/mob-hurt (armour/armour-stats equipment) (mob-kind-of m) 1))
 
 (defn threat-factor-cap
   "The most threat-factor all known mobs together cost a cell for body: the danger cap (or a larger ::max-rate) at the hp

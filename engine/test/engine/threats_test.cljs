@@ -9,6 +9,8 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.mob-toll :as mob-toll]
+            [jobs.lib.cost.death]
             [jobs.lib.cost.health]
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.threats :as threats]))
@@ -19,24 +21,22 @@
 (def unarmed {:health 20 :equipment nil :weapon nil :pos {:x 0 :y 64 :z 0} :carried 1000})
 (def armed (assoc unarmed :weapon "diamond_sword"))
 
+(defn answered [body mob] (cost/answered-together body [mob] (:pos body)))
+
 (deftest stance-is-what-the-reflex-would-do
-  (are [body mob stance] (= stance (cost/stance body mob))
+  (are [body mob stance] (= stance (:stance (answered body mob)))
     unarmed "zombie" :flee
     armed "zombie" :fight
     (assoc armed :health 5) "zombie" :fight
     unarmed "creeper" :flee
     armed "creeper" :fight))
 
-(deftest a-drowned-with-a-trident-hurts-by-its-throw-not-its-bare-hands
-  (is (> (cost/hurt-rate nil {:name "drowned" :held "trident"}) (cost/hurt-rate nil "drowned")))
-  (is (= (cost/hurt-rate nil "drowned") (cost/hurt-rate nil {:name "drowned" :held "stick"}))))
-
-(defn toll [body mob] (cost/threat-factor body mob 1))
+(defn toll [body mob] (cost/threat-factor body {:name mob} 1 (answered body mob)))
 
 (deftest toll-falls-with-a-weapon-and-armour-and-follows-the-fights-own-price
   (let [wooden (assoc unarmed :weapon "wooden_sword")
         iron {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :feet {:name "iron_boots"}}]
-    (is (= :fight (cost/stance wooden "zombie")))
+    (is (= :fight (:stance (answered wooden "zombie"))))
     (is (< 0 (toll armed "zombie") (toll wooden "zombie")) "a diamond sword's fight costs less a second than a wooden one's")
     (is (< (toll (assoc armed :equipment iron) "zombie") (toll armed "zombie")) "armour lowers the fight's blows")
     (is (< (toll armed "zombie") (toll unarmed "zombie")) "a flight costs more than a fight")))
@@ -49,16 +49,35 @@
 
 (deftest a-pack-met-together-is-fled-though-each-of-it-is-fought-alone
   (let [body (assoc armed :carried 1000 :respawn {:x 5000 :y 64 :z 0})
-        together (cost/answered-together body (repeat 4 "zombie"))]
-    (is (= :fight (:stance (cost/answered body "zombie"))) "one zombie: a fight")
+        together (cost/answered-together body (repeat 4 "zombie") (:pos body))]
+    (is (= :fight (:stance (answered body "zombie"))) "one zombie: a fight")
     (is (= :flee (:stance together)) "four met together: the reflex flees them, none is tolled as a fight")))
 
-(deftest threats-whose-fields-overlap-are-one-group-and-one-with-no-field-is-its-own
-  (let [drowned {:id 4 :name "drowned" :kind "hostile" :pos {:x 7 :y 64 :z 1}}
-        c (ready-test/ctx-of {:entities [(zombie 1 6 0) (zombie 2 8 2) drowned]})
-        ts (threats/known-threats c)]
-    (is (= #{["zombie" "zombie"] ["drowned"]}
-           (set (map #(vec (sort (map (fn [i] (:mob (nth ts i))) %))) (threats/overlap-groups c ts)))))))
+;; old stances keyed a whole kind ({:name :held}) by its dearest group and joined fields sharing any cell, so the far
+;; zombie, 55 blocks off, was fled with the pack
+(deftest a-lone-zombie-far-from-a-fled-pack-keeps-its-own-fight
+  (let [c (ready-test/ctx-of {:inventory [{:name "diamond_sword" :count 1}]
+                              :entities (conj (mapv #(zombie % 30 (- % 2)) [1 2 3 4]) (zombie 5 -25 0))})
+        ts (threats/known-threats c)
+        st (threats/stances c ts)
+        stance-at (fn [x] (set (map #(:stance (st (threats/threat-id %))) (filter #(= x (:x (:pos %))) ts))))]
+    (is (= #{:flee} (stance-at 30)) "the four met together: fled")
+    (is (= #{:fight} (stance-at -25)) "the lone one met alone: fought")))
+
+(deftest the-planner-answers-a-mob-with-the-reflex-s-body-and-chase-speed
+  (let [at (:pos unarmed)
+        adult (mob-toll/answer-mob {:mob "zombie"})
+        baby (mob-toll/answer-mob {:mob "zombie" :chaser "baby"})]
+    (is (= :flee (:stance (cost/answered-together unarmed [adult] at))))
+    (is (= :fight (:stance (cost/answered-together unarmed [baby] at))) "a baby zombie keeps up: no flight, so a fight")
+    (is (< (:price (cost/answered-together (assoc armed :absorption 8) [adult] at)) (:price (cost/answered-together armed [adult] at)))
+        "absorption hearts take blows")))
+
+(deftest a-mob-tolls-its-meet-rate-times-its-meeting-s-price
+  (let [a (answered armed "zombie")
+        {:keys [shape rate]} (jobs.lib.cost.death/notice-prior "zombie")]
+    (is (= (* 0.5 (* (/ shape rate) (:price a))) (cost/threat-factor armed {:name "zombie"} 0.5 a)) "the first term of the met chance, at the weight")
+    (is (= (* 4 (jobs.lib.cost.health/hp-price 20)) (cost/threat-factor armed {:name "zombie"} 1 {:price ##Inf})) "at most ::max-rate hp a second")))
 
 (deftest a-sensed-zombie-tolls-its-way-dear-to-flee-cheap-to-fight
   (let [bare (tolls {:entities [(zombie 1 6 0)]})
@@ -87,19 +106,10 @@
         fled (first (filter :fled (threats/known-threats c)))]
     (is (= ["skeleton" "stone_sword" "skeleton"] ((juxt :mob :held :chaser) fled)))))
 
-(deftest danger-terms-are-options-and-the-defaults-keep-the-price
-  (let [toll #(settings/with-settings % (fn [] (toll unarmed "zombie")))
-        base (toll {})
-        hp (jobs.lib.cost.health/hp-price 20)]
-    (is (= (* 4 hp) base) "default 2.5 hp a second x 4 (flee), capped at 4 hp a second")
-    (is (= (* 2 hp) (toll {:jobs.lib.cost.danger/max-rate 2})) "max-rate caps one danger")
-    (is (= (* 1.25 hp) (toll {:jobs.lib.cost.danger/flee-factor 0.5})) "the flee factor scales the rate")))
-
-(deftest the-danger-settings-name-the-danger-options
-  (is (= {:stances {:flee 2} :max-rate 3}
-         (settings/with-settings {:jobs.lib.cost.danger/flee-factor 2 :jobs.lib.cost.danger/max-rate 3}
-           cost/danger-opts)))
-  (is (= {:stances {:flee 4} :max-rate 4} (cost/danger-opts)) "the defaults"))
+(deftest max-rate-caps-one-danger
+  (is (= (* 0.1 (jobs.lib.cost.health/hp-price 20))
+         (settings/with-settings {:jobs.lib.cost.danger/max-rate 0.1} (fn [] (toll unarmed "zombie")))))
+  (is (= {:max-rate 3} (settings/with-settings {:jobs.lib.cost.danger/max-rate 3} cost/danger-opts))))
 
 (defn fled-view
   "A memory view at t 1000 whose :threat entries were written at the given ms with the given data."
