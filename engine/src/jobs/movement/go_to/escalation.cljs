@@ -217,11 +217,11 @@
   (or (= :none (:step base)) (> (escape-way/price p feet base) (cw/put-back-cost 0))))
 
 (defn search-begun!
-  "Note in memory (:route-search) when the dig-route searches kept over rounds from feet began and what the way without
-  them is worth (search-bound/fallback-s), once."
+  "Note in memory (:route-search) when the dig-route searches kept over rounds from feet began, what the way without
+  them is worth (search-bound/fallback-s) and the opts' :worth-s they search under, once."
   [c feet goal opts]
   (when-not (:route-search (ctx/mem c))
-    (ctx/update-mem! c assoc :route-search {:since (ctx/now c) :fallback-s (search-bound/fallback-s c feet goal (may-dig-fn c) opts)})))
+    (ctx/update-mem! c assoc :route-search {:since (ctx/now c) :fallback-s (search-bound/fallback-s c feet goal (may-dig-fn c) opts) :worth-s (:worth-s opts)})))
 
 (defn search-spent!
   "Drop the call's kept searches, which stood the body still as long as the way without them costs (search-bound/spent?): those

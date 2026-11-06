@@ -655,8 +655,8 @@
   6)
 
 (def leg-margin
-  "Blocks round its two ends a leg's route (dig-leg) first strays: a leg runs along the line, and every cell the route
-  search weighs is a zone and tool check."
+  "Blocks round its two ends a leg's route (dig-leg) first strays: a leg runs along the line, and a narrow box keeps
+  its search small."
   1)
 
 (defn leg-ends
@@ -830,11 +830,13 @@
 (defn way-opts
   "The opts of go-to call c's choice of a way from feet (escape-way/choose and the dig ways): a search that stood the body
   still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
-  own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
+  own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s). A
+  choice after a failed escalation searches no dearer than the dig route's replans (:worth-s), held with its searches
+  (memory :route-search) over the rounds they take."
   [c feet fetch? slice]
   {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? (pickaxe-fetch c fetch?) :own-s (own-cut-fn c) :plugs (smem/plugs-of c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
-   :guess-risk (guess-risk c) :worth-s (when (:escalation (ctx/mem c)) (:fallback-s (:replan-budget (ctx/mem c)))) :bound-s (call-budget-s c)
+   :guess-risk (guess-risk c) :worth-s (let [m (ctx/mem c)] (if-let [rs (:route-search m)] (:worth-s rs) (when (:escalation m) (:fallback-s (:replan-budget m))))) :bound-s (call-budget-s c)
    :max-damage (:max-damage (wworld/walk-settings c))
    :risk-s (fn [cells goal work-s] (walk-risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 

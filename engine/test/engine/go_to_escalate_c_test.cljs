@@ -1352,6 +1352,36 @@
       (is (pos? (:placed (:guess-risk @seen))) "the looks this call made price the quote's route too")
       (is (= #{[1 2]} (:spent @seen))))))
 
+;; a choice after a failed escalation searches under the replans' bound over rounds: once the :searching branch has
+;; dropped the failed escalation from memory, the next round asks the same search, which goes on rather than begins again
+(deftest a-choice-after-a-failed-escalation-keeps-its-search-over-rounds
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 14 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        feet [0 64 0]
+        goal [10 64 0]
+        starts (atom 0)
+        search dig-route/search
+        choice (fn []
+                 (let [slice (choose/route-slice (choose/route-owner c))
+                       o (choose/way-opts c feet false slice)
+                       e (choose/dig-way (:primitives c) feet goal (constantly true) o)]
+                   (esc/search-begun! c feet goal o)
+                   (ctx/update-mem! c dissoc :escalation)
+                   (choose/keep-routes! slice)
+                   [(:worth-s o) (:step e)]))]
+    (.setOwner (:primitives eng) "tx")
+    (ctx/update-mem! c assoc :escalation {:step :pillar} :replan-budget {:since 0 :fallback-s 30})
+    (with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+      (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+        (fn []
+          (let [first-round (choice)
+                _ (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c)))))
+                last-round (choice)]
+            (is (= [30 :searching] first-round))
+            (is (= [30 :dig-route] last-round) "the kept search's answer, under the same bound")
+            (is (= 1 @starts) "one search, gone on over the rounds")
+            (choose/forget-routes! (choose/route-owner c))))))))
+
 (defn ^:async priced-search-run!
   "run-job! with every dig-route search counted: {:out :seen :searched-s (nodes expanded at each search's :node-s) :max-ss
   (each search's bound, in order)}."
