@@ -285,6 +285,11 @@
   [blocks]
   (* blocks walk-floor (quote-unseen-factor)))
 
+(defn left-s
+  "rest-s of `blocks` rounded to whole blocks, there and back with `back?`: what go-to's quote adds for the walk still to go."
+  [blocks back?]
+  (* (if back? 2 1) (rest-s (js/Math.round blocks))))
+
 (defn walk-landing "The setting ::landing, nil when none." [] (or (settings/get settings ::landing) nil))
 (defn gap-miss-jumps "The setting ::gap-miss-jumps." [] (settings/get settings ::gap-miss-jumps))
 (defn walk-drop-cost "The setting ::drop-cost." [] (settings/get settings ::drop-cost))

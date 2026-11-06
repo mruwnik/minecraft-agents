@@ -132,12 +132,12 @@
         s (* legs (or seconds (:seconds partial) 0))
         [ex _ ez] (last (:waypoints partial))
         rest-blocks (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))
-        left-s (* legs (+ (cost-planner/rest-s rest-blocks) (or rest-dig-s 0)))
+        to-go-s (+ (cost-planner/left-s rest-blocks back?) (* legs (or rest-dig-s 0)))
         time (cond
                found [s s (* s (quote-most-factor))]
                dig-seconds (let [d (* legs dig-seconds)] [d d ##Inf])
                (refusals reason) (get-in contract/too-expensive [:uses :job-time])
-               (or partial searching? budget? escalating?) [s (+ s left-s) ##Inf]
+               (or partial searching? budget? escalating?) [s (+ s to-go-s) ##Inf]
                :else (get-in contract/too-expensive [:uses :job-time]))]
     (cond-> {:uses {:job-time time} :route (assoc (dissoc r :goal :risk) :escalating (boolean escalating?))}
       (:risk r) (assoc :risk (:risk r))

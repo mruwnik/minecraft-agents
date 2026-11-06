@@ -164,3 +164,17 @@
           (with-redefs [ctx/quote (fn ([_ _ args] (swap! seen conj args) (js/Promise.resolve {})) ([_ _ args _] (swap! seen conj args) (js/Promise.resolve {})))]
             (await (rooms/route-cost nil {:pos {:x 1 :y 64 :z 1}})))
           (is (= [{:pos {:x 1 :y 64 :z 1}}] @seen)))))))
+
+(deftest cheapest-names-a-priced-pick-though-the-reach-search-still-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (tu/fake {})}
+              none-reachable! pick/none-reachable!
+              no-route {:route {:found false :reason :exhausted} :uses {:job-time [0 5 5]}}
+              xs [{:x 0 :y 64 :z 6} {:x 0 :y 64 :z 9} {:x 0 :y 64 :z 12}]
+              cheapest (fn [] (pick/cheapest! c xs {:target (fn [x] {:pos x :range 0}) :walk (fn [x] {:pos x}) :ok? (constantly true)
+                                                    :quote (fn [_ args] (js/Promise.resolve (if (= 6 (:z (:pos args))) no-route {:uses {:job-time [0 20 20]}})))}))]
+          (set! pick/none-reachable! (fn [_ _] (js/Promise.resolve :searching)))
+          (try (is (some? (:pick (await (cheapest)))) "a priced walk wins over a search still going on")
+               (finally (set! pick/none-reachable! none-reachable!))))))))

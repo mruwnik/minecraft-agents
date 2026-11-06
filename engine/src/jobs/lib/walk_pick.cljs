@@ -162,19 +162,19 @@
   "{:pick x :price seconds :quote q} of the one of xs whose walk go-to quotes cheapest, within limit-s seconds (those whose
   straight walk alone is over it are left out, the rest quoted best-first, best!). target (fn [x]) {:pos :range} bounds the
   straight walk, walk (fn [x]) are the go-to args; ok?, quote and like as best!. A quote whose search still goes on prices nothing
-  (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later).
+  (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later); a priced pick wins over a search still going on.
   Nil when no walk is priced. price (fn [x s]), default s, adds to a walk's seconds s what x costs besides.
   The first quote that finds no way (no-way?) asks once whether the others (cells with a y, walks over what the body has
   seen) are out of reach too (none-reachable!): then each
   of their quotes would be go-to's guess with no route, ##Inf, or with a way that changes the world (the quote's mean is finite)
-  quote-of-route's rest-s of its straight blocks, so that is their bound; :searching while that search goes on."
+  cost-planner/left-s of its straight blocks, so that is their bound; :searching while that search goes on."
   [c xs {:keys [target walk limit-s ok? quote price like] :or {price (fn [_ s] s) limit-s ##Inf}}]
   (let [feet (u/self-pos c)
         cell #(update-vals (select-keys % [:x :z]) js/Math.floor)
         bound #(walk-s feet (target %))
         searching (atom false)
         reaching (atom false)
-        guess-s (fn [x] (* (if (:back (walk x)) 2 1) (cost-planner/rest-s (js/Math.floor (u/flat-dist (cell feet) (cell (:pos (target x))))))))
+        guess-s (fn [x] (cost-planner/left-s (u/flat-dist (cell feet) (cell (:pos (target x)))) (:back (walk x))))
         rebound (fn ^:async tighter [_ q left]
                   (when (no-way? q)
                     (let [goals (map #(let [{:keys [pos range]} (target %)] (assoc (cell pos) :y (some-> (:y pos) js/Math.floor) :range (or range 0))) left)
@@ -192,6 +192,5 @@
                                                (do (reset! searching true) ##Inf)
                                                (price x (quoted-s c q))))}))]
     (cond
-      @reaching :searching
       best best
-      @searching :searching)))
+      (or @reaching @searching) :searching)))
