@@ -572,7 +572,7 @@
           (core/submit! eng '(mining-parent) {})
           (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
-;; stones on 8-high pillars: seen from the floor, no stand beside them.
+;; stones on 8-high pillars: seen from the floor, no stand beside them. go-to walks nearer and looks before it gives up, so the body may end facing away from a stone and never see it: the listed ones are a seen subset.
 (deftest seen-ore-with-no-way-to-stand-beside-it-is-listed-unreached
   (async done
     (tu/run-async done
@@ -584,7 +584,8 @@
                                  {:blocks (merge floor pillars) :inventory pickaxe} 120 (constantly 0.5)))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
-          (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
+          (is (seq (:unreached e)))
+          (is (every? (set (map (fn [[x z]] [x 71 z]) stones)) (:unreached e)))
           (is (re-find #"seen ore out of reach" (:text e)))
           (is (<= (js/Math.hypot (first (feet s)) (nth (feet s) 2)) 4) "the walled-in ore was judged from where the body stood"))))))
 
