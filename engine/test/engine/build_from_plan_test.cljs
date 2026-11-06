@@ -1076,26 +1076,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (fence-run {"4,64,3" "dirt" "2,64,3" "oak_leaves"} kit {} {}))]
+        (let [[result p seen] (await (fence-run {"4,64,3" "dirt" "2,64,3" "oak_leaves"} kit {} {}))]
           (is (= 2 (count (h/calls p "dig"))))
+          (is (= 2 (count (ce/ends seen :dug))) "every dig goes through the dig job")
+          (is (= 9 (count (ce/ends seen :placed))) "every place goes through the place job")
           (is (= ["oak_fence" "oak_fence"] (mapv #(block p %) [[4 64 3] [2 64 3]])))
           (is (= {:placed 9 :wrong [] :missing [] :given-up {}} (select-keys result [:placed :wrong :missing :given-up]))))))))
-
-(deftest every-place-goes-through-the-place-job
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[_ p seen] (await (fence-run {} kit {} {}))]
-          (is (= 9 (count (h/calls p "place"))))
-          (is (= 9 (count (ce/ends seen :placed)))))))))
-
-(deftest every-dig-goes-through-the-dig-job
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[_ p seen] (await (fence-run {"4,64,3" "dirt" "2,64,3" "oak_leaves"} kit {} {}))]
-          (is (= 2 (count (h/calls p "dig"))))
-          (is (= 2 (count (ce/ends seen :dug)))))))))
 
 (deftest a-dig-with-the-last-worn-pickaxe-warns-that-no-spare-was-had
   (async done
@@ -1105,24 +1091,14 @@
               [_ _ seen] (await (fence-run {"4,64,3" "stone"} (conj kit worn) {} {}))]
           (is (= 1 (count (h/events-of seen :tool.no-spare)))))))))
 
-(deftest a-wrong-hand-block-outside-the-soft-names-is-dug-by-hand-not-given-up-as-no-tool
+(deftest a-wrong-snow-or-ice-block-is-dug-by-hand-with-or-without-a-shovel
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result p] (await (fence-run {"4,64,3" "ice"} kit {} {}))]
-          (is (= "oak_fence" (block p [4 64 3])))
-          (is (= {} (:given-up result))))))))
-
-(deftest a-wrong-snow-block-is-dug-by-hand-with-or-without-a-shovel
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[with p] (await (fence-run {"4,64,3" "snow_block"} (conj kit {:name "iron_shovel" :count 1}) {} {}))
-              [without q] (await (fence-run {"4,64,3" "snow_block"} kit {} {}))]
-          (is (= "oak_fence" (block p [4 64 3])))
-          (is (= {} (:given-up with)))
-          (is (= "oak_fence" (block q [4 64 3])))
-          (is (= {} (:given-up without))))))))
+        (doseq [[found inv] [["snow_block" (conj kit {:name "iron_shovel" :count 1})] ["snow_block" kit] ["ice" kit]]]
+          (let [[result p] (await (fence-run {"4,64,3" found} inv {} {}))]
+            (is (= "oak_fence" (block p [4 64 3])) found)
+            (is (= {} (:given-up result)) found)))))))
 
 (deftest a-wrong-stone-is-dug-with-the-carried-pickaxe-and-without-one-is-given-up-as-no-tool
   (async done
@@ -1462,11 +1438,6 @@
         p (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}})
         stands (plan/ground-stands p [[15 64 10] [14 64 10] [13 64 8] [16 64 12]])]
     (is (= [[15 65 10] [14 64 10] [13 64 8] [16 65 12]] (vec stands)))))
-
-(deftest a-bed-is-no-floor-for-a-stand-above-it
-  (let [ground (into {(h/cell-key 14 64 10) "white_bed"} (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"]))
-        p (tu/seeing-all (tu/fake-on-floor {:blocks ground :self {:pos {:x 12.5 :y 64 :z 14.5}}}))]
-    (is (= [[13 64 8]] (vec (plan/ground-stands p [[14 64 10] [13 64 8]]))))))
 
 (deftest only-a-low-floor-is-no-stand
   (doseq [[block state stand] [["white_bed" {} [13 64 8]] ["oak_slab" {:type "bottom"} [13 64 8]] ["oak_slab" {:type "top"} [14 65 10]]
