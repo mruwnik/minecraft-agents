@@ -1,10 +1,9 @@
-;; Gates and a body shut in for the night. Card 4bf8de7b: (B) a by-hand use-on on a gate in a night shelter is not held silently: it
-;; waits :exposed when the dark walk is too risky (Q380 prices a short one and goes; the case sets a risk share of 0), and with a :checks {:safe? (not (threatened))} override it walks out and clicks; (C) the pen-gate
+;; Gates and a body shut in for the night. Card 4bf8de7b: (B) a by-hand use-on on a gate in a night shelter walks out for a short click at the default worth
+;; (Q380 prices the dark walk and goes), and with a :checks {:safe? (not (threatened))} override it walks out and clicks too; (C) the pen-gate
 ;; reflex, with the body shut in a room for the night, does not start for an own-pen gate left open 6 blocks away (shut-gate's safe? is
 ;; exposed there); a gate inside the room is shut.
 ;; Night room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16]. Gate in a fence line at [24 0 16].
-;; Should-succeed: use-on with the :checks override walks out and opens the gate; the reflex shuts the gate inside the room. Should-fail: the default
-;; use-on waits :exposed with the gate shut; the reflex does not start shut-gate for the far gate, gate open.
+;; Should-succeed: use-on, by default or with the :checks override, walks out and opens the gate; the reflex shuts the gate inside the room. Should-fail: the reflex does not start shut-gate for the far gate, gate open.
 ;; The reflex reads only gates in the body's view cone (default yaw faces south): the gate case faces north, toward the gate.
 {:defaults
  {:tags [:animals :pen-gate :night]
@@ -16,11 +15,11 @@
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
   :limit-s 90}
  :cases
- [{:name "by-hand-use-on-in-the-shelter-waits-naming-the-reason"
-   :settings {:jobs.lib.cost.risk/risk-share 0}
+ [{:name "by-hand-use-on-in-the-shelter-walks-out-for-a-short-click"
    :act [[:job (jobs.items.use {:on #at [24 0 16]})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 20 :of-job true}]
-   :after [[:block [24 0 16] "oak_fence_gate[open=false]"] [:body-near [16.5 0 16.5] 2]]}
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.use"}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :of-job true}]
+   :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}
   {:name "use-on-with-a-checks-override-walks-out-and-opens-the-gate"
    :act [[:job (jobs.items.use {:on #at [24 0 16] :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.use"}} :within-s 70 :of-job true}]

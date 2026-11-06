@@ -1,5 +1,5 @@
 ;; A dig of the ore beside the body in a wide dark hall stays its walk and dig (mine.expect/stay-s), priced like any exposure (jobs.lib.price/priced);
-;; priced over what the body may risk (risk-share 0), it goes ahead only with one torch for its cell (ready/dark-near-ok, cost/dark-or-lit) and hangs it.
+;; priced against the ore's worth, it goes ahead only with one torch for its cell (ready/dark-near-ok, cost/dark-or-lit) and hangs it.
 ;; Hall x 5..40, z 4..28, y 0..1, unlit; the body in a 1-cell alcove at [4 0 16] facing west at iron ore in the wall [3 1 16].
 ;; Stone mass x 2..44, z 2..30, y 0..6.
 {:defaults
@@ -14,17 +14,14 @@
  [{:name "torches-carried-dig-the-ore-beside-the-body"
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [3 1 16] "air"] [:item "raw_iron" [:= 1]]]}
-  {:name "no-risk-allowed-torches-carried-dig-the-ore-and-hang-one-torch"
-   :settings {:jobs.lib.cost.risk/risk-share 0}
+  {:name "torches-carried-dig-the-ore-and-hang-one-torch"
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [3 1 16] "air"] [:item "raw_iron" [:= 1]] [:item "torch" [:= 7]]]}
-  {:name "no-risk-allowed-no-torches-no-gather-is-refused-the-dark"
-   :settings {:jobs.lib.cost.risk/risk-share 0}
+  {:name "no-torches-no-gather-is-refused-the-dark"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :expect [{:event {:source :job :data {:reason :exposed}} :within-s 60 :of-job true}]
    :after [[:block [3 1 16] "iron_ore"] [:item "raw_iron" [:= 0]]]}
-  {:name "no-risk-allowed-ore-at-the-feet-in-the-open-hall-gets-a-floor-torch"
-   :settings {:jobs.lib.cost.risk/risk-share 0}
+  {:name "ore-at-the-feet-in-the-open-hall-gets-a-floor-torch"
    :blocks [[:set [3 1 16] "stone"] [:set [21 0 16] "iron_ore"]]
    :body {:at [20.5 0 16.5] :yaw 270}
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]

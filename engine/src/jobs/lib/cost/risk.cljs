@@ -11,7 +11,7 @@
 
 (a/defargs settings
   {::risk-share {:default 0.5 :spec (a/num-in 0 nil)
-                 :doc "Share of the health the body has that the expected damage of a walk (spawns met on its dark open stretches, hostiles near its way), of a stay at an exposed place or of a risky job's work may take; above it the start check waits."}
+                 :doc "Share of the health the body has that the expected damage may take where no call worth prices it (a nil worth: price/fit's body fitness, share-hp), and the health a risky walk's heal wait heals to. A call with a worth, ##Inf included, is priced by cost alone (walk-risk/status, ready/priced)."}
    ::hungry-food {:default 6 :spec (a/int-in 0 20)
                   :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
    ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
