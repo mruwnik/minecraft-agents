@@ -303,7 +303,7 @@
         ;; over the head too; down: the cell entered; a pillar: the cell over the head), floors, falls and refusals left out. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
         back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
         stands? (fn [x y z] (and (inside? x y z) (some? (back-s x y z)) (some? (back-s x (inc y) z))))
-        to-start (fn [x z] (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))))
+        to-start (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y (from 1)))))
         back-best (js/Map.) back-done (js/Set.) back-queue #js []
         back-tick (volatile! 0)
         ;; the end cells of a range search, nearest the start first: one enters the back search only once its bound is the
@@ -314,13 +314,13 @@
                       (let [k (key x y z) old (.get back-best k)]
                         (when (and (not (.has back-done k)) (or (nil? old) (< g old)))
                           (.set back-best k g)
-                          (heap-push! back-queue #js [(+ g (to-start x z)) (vswap! back-tick inc) k]))))
+                          (heap-push! back-queue #js [(+ g (to-start x y z)) (vswap! back-tick inc) k]))))
         back-into! (fn [g x y z s]
                      (when (and (some? s) (stands? x y z)) (back-relax! (+ g s) x y z)))
         seed-due! (fn []
                     (loop []
                       (when-let [[x y z :as cell] (first @seeds)]
-                        (when (or (zero? (.-length back-queue)) (<= (to-start x z) (aget back-queue 0 0)))
+                        (when (or (zero? (.-length back-queue)) (<= (to-start x y z) (aget back-queue 0 0)))
                           (vswap! seeds rest)
                           (when (and (stands? x y z) (or (= cell goal) (end? (key x y z)))) (back-relax! 0 x y z))
                           (recur)))))
@@ -352,10 +352,10 @@
     (vreset! back-lb (fn [x y z] (let [k (key x y z)]
                                    (if (.has back-done k)
                                      (.get back-best k)
-                                     (if-let [^js t (aget back-queue 0)] (max 0 (- (aget t 0) (to-start x z))) 0)))))
+                                     (if-let [^js t (aget back-queue 0)] (max 0 (- (aget t 0) (to-start x y z))) 0)))))
     (.set best start-key #js [0 0 0 nil nil 0 nil 0])
     (heap-push! queue #js [(heuristic fx (from 1) fz) 0 start-key])
-    (vreset! seeds (sort-by (fn [[x _ z]] (to-start x z))
+    (vreset! seeds (sort-by (fn [[x y z]] (to-start x y z))
                             (cons goal (when r
                                          (let [w (js/Math.ceil r) ds (range (- w) (inc w))]
                                            (for [dx ds dy ds dz ds]

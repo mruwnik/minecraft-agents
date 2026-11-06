@@ -351,3 +351,9 @@
         [n1 d1] (reads 2048)]
     (is (= n0 n1) "cells 1024 apart in y are different cells: no read is a cache hit for another")
     (is (= (map (fn [[x y z]] [x (- y 2048) z]) d1) d0))))
+
+(deftest the-back-search-does-not-climb-open-air-above-the-start
+  (let [top (atom 0)
+        w (fn [[_ y _]] (swap! top max y) (if (< y 10) "stone" "air"))]
+    (dr/route w [0 10 0] [20 4 6] {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 100000})
+    (is (< @top 60) "a cell above the start costs a climb each block to reach, so the air over it is read only as far as the route's price allows, not for ever")))
