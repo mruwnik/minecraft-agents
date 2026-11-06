@@ -9,6 +9,10 @@
             [cljs.test :refer [deftest is are testing]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
+            [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.core.ending :as ending]
@@ -96,6 +100,17 @@
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
     (game/select! p)
     {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}))
+
+(defn remembering-ctx
+  "ctx-of world over a real perception that has looked all round, so the blocks of world are in the body's memory (a threat field reads memory only)."
+  [world]
+  (let [c (ctx-of world)
+        raw (:primitives c)
+        per (perception/create (fake-raw/create raw) {:now (constantly 1000000)})
+        p (perception/wrap raw per)]
+    (doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))
+    (game/select! p)
+    (assoc c :primitives p)))
 
 (defn worthless "ctx c of a goal worth nothing: it affords no risk." [c] (assoc c :worth (constantly 0)))
 

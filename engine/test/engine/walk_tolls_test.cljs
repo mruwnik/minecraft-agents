@@ -100,7 +100,7 @@
   "A ctx over lake remembering a hit by attacker taken at the lake's shore [1 64 4], 10 min ago (1 h :hurt ttl)."
   [attacker]
   (let [now 36000000]
-    (assoc (ready-test/ctx-of lake)
+    (assoc (ready-test/remembering-ctx lake)
            :view (fn [] {:now now :data {:policies {:hurt {:cap 50 :ttl 3600000}}
                                          :entries {:hurt [{:t (- now 600000) :data {:health 15 :pos {:x 1.5 :y 64 :z 4.5} :attacker {:name attacker}}}]}}}))))
 
