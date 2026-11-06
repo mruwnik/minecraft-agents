@@ -1,0 +1,32 @@
+;; Card ab58ec22 (b37e22cd, 786879704): from-plan at night under a thick tree canopy (a never-lit cell: 9 leaf layers leave the
+;; site sky light 6 even by full day, so dawn does not light it), no torch carried, a chest of torches booked 62 blocks west out on open grass.
+;; The fetch is weighed against the night left (the torches can as well be fetched at dawn). Should-fail (waits, no fetch):
+;; near-dawn-the-canopy-site-waits-for-day: at 22800 the night left (about 35 s) is less than the dark walk to the chest and back; the
+;; pre-fix code took any price for a never-lit cell and started the fetch. Should-succeed: dusk-the-torches-are-fetched: at 13500 (about
+;; 475 s of night left) the fetch is worth it; the torches are fetched and the site built.
+;; The canopy reaches 20 blocks past the site on every side, so no open column lights it sideways.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:build :light :night :fetch]
+  :time :night :time-why :dawn-decision
+  :plot {:height 16 :floor "grass_block" :length 96 :width 48}
+  :blocks [[:fill [40 4 4] [94 12 43] "oak_leaves[persistent=true]"]
+           [:fill [50 0 14] [50 3 14] "oak_log"] [:fill [50 0 34] [50 3 34] "oak_log"]
+           [:fill [80 0 14] [80 3 14] "oak_log"] [:fill [80 0 34] [80 3 34] "oak_log"]
+           [:set [2 0 24] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+  :memory [{:kind :fetch/stock :data {:pos #at [2 0 24] :items {"torch" 8}}}]
+  :body {:at [45.5 0 24.5] :effects [["resistance" 600 4]] :inventory [["oak_planks" 6]]}
+  :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [64 0 24] #at [65 0 24]] :want "oak_planks"}]}]
+  :limit-s 300}
+ :cases
+ [{:name "near-dawn-the-canopy-site-waits-for-day"
+   :body {:at [30.5 0 24.5]}
+   :act [[:time-set 22800] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 15"] [:until-seen {:block "chest"} 10]
+         [:rcon "execute as $BODY at @s run tp @s ~15 ~ ~ -90 0"] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :text #{[:contains "a torch does"] [:contains "dawn does not light it"]}}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 15 :of-job true}]}
+  {:name "dusk-the-torches-are-fetched"
+   :act [[:time-set 13500] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
+   :after [[:block [64 0 24] "oak_planks"] [:block [65 0 24] "oak_planks"]]}]}
