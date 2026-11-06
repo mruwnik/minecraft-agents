@@ -308,7 +308,7 @@
             (ctx/emit! c :go-to.in-water :info
                        {:at (end/feet-cell c)
                         :text (str "arrived within range but in water: "
-                                   (in-water-why dry tried? r (= "water" (some-> (u/block-at p pos) .-name)) status (end/feet-cell c)))}))
+                                   (in-water-why dry tried? r (contains? breath/swimmable (breath/seen-water-name p pos)) status (end/feet-cell c)))}))
           (arrived! c)))))
 
 (defn ^:async arrive!

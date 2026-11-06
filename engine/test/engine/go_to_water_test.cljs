@@ -154,6 +154,16 @@
           (is (true? (:arrived @out)) (str "result " @out))
           (is (re-find #"goal cell is water" (str (:text (first (gt/events-of s :go-to.in-water)))))))))))
 
+;; kelp is water to the body (breath/swimmable): a goal in kelp is "the goal cell is water", not "holds no water"
+(deftest a-goal-in-kelp-says-the-goal-is-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (gt/go! {:self {:pos [10.5 61 0.5] :inWater true} :blocks (merge (pond 24) (box 10 61 0 10 61 0 "kelp"))}
+                                                 {:pos [10 61 0] :range 0 :ways #{:walk :clear-seal}}))]
+          (is (true? (:arrived @out)) (str "result " @out))
+          (is (re-find #"goal cell is water" (str (:text (first (gt/events-of s :go-to.in-water)))))))))))
+
 (defn dry-walk-fails
   "walk-round! where a walk on to the east bank (x over 12) answers r (fn of c), any other the real one."
   [r]
