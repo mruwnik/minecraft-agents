@@ -237,6 +237,14 @@
            (:caught (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :caught 1})))
         "a shooter is no melee race: its arrows land all the flight")))
 
+(deftest a-flight-caught-by-a-creeper-takes-the-blast-at-the-distance-the-search-puts-the-body-when-the-fuse-ends
+  (let [creeper (mob "creeper" 4)
+        blasts #(get-in (cost/flee-answer (merge {:food 20 :mobs [creeper] :caught 1} %)) [:caught :blasts])
+        swell (first (blasts {}))
+        far (first (blasts {:caught-blast 5.5}))]
+    (is (< 0 far swell) "5.5 off takes a little of the swell-start blast")
+    (is (zero? (first (blasts {:caught-blast 6}))) "6 off, none")))
+
 (deftest the-prior-and-the-ways-catch-are-one-mix-so-a-small-dead-end-chance-moves-the-price-little
   (let [zombie (mob "zombie" 4 35)
         price #(cost/answer-price (body 12) (cost/flee-answer {:health 12 :food 20 :mobs [zombie] :caught %}) here)

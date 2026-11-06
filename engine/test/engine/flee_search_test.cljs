@@ -346,6 +346,12 @@
     (is (>= (caught "creeper" [[1 0] [0 0.4] [-1 0.8]]) 1.5) "a route that ends 4 from the spot it lit at before the fuse does: the body stands in the blast")
     (is (zero? (caught "creeper" [[1 0] [-3 0.5] [-6 1]])) "a route that ends 9 off before the fuse does: past 7, the fuse stops")))
 
+(deftest a-creeper-blast-distance-is-where-the-route-puts-the-body-when-the-fuse-ends
+  (let [at {:x 3.5 :y 64 :z 0.5}
+        blast (fn [pts] (search/blast-d [{:name "creeper" :mob "creeper" :pos at}] (mapv (fn [[x t]] {:x x :y 64 :z 0 :t t}) pts)))]
+    (is (< 3.9 (blast [[1 0] [0 0.4] [-1 0.8]]) 4.1) "a route that ends 4 off the lit spot")
+    (is (nil? (blast [[1 0] [-3 0.5] [-6 1]])) "no blast when the fuse stops")))
+
 (deftest a-sword-skeleton-gets-a-walking-way-and-a-bow-skeleton-and-a-blaze-do-not
   (let [at {:x 0.5 :y 64 :z 0.5}
         c (ctx-of (tu/fake {:blocks field :self {:pos at}}))

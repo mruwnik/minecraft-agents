@@ -459,7 +459,7 @@
   later (the fight with them, nil none) or the walk again, one return more, from a mob's :again (the distance it is met at
   on the way back, default its :distance) when nearer, paid by the chance its mobs are met again (:stays: caught, or got away and
   met again by flee-meets) unless the way back passes one nearer than it stands. :caught: each flight is caught by its way (caught: the flee
-  search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast) over the flight, a melee mob over
+  search's chance of it, nil 0), its mobs then landing their blows (a creeper its blast, at caught-blast blocks when the flee search knows where its fuse ends, else at its swell start) over the flight, a melee mob over
   caught-s seconds of it (the flee search's race) at reach-rate; or else at the prior of the body's health
   (jobs.lib.cost.caught/prior of its mobs, the likeliest caught), they then landing its blows (the trials counted a
   flight's blows from all its chasers) of that mob's, in a flight begun in water (the trials counted flights on land) a melee mob's over
@@ -470,7 +470,7 @@
   swim: the blocks a body in water swims to dry land first (flee-mob's; ##Inf none known) and land the blocks to walk on there, at its planner/swim-speed times the share of a sprint a flight's pace is on foot (danger/flee-walk-speed over body-speed).
   The flight gains on each mob at its danger/closing-rate.
   nil when a mob keeps up or none is given."
-  [{:keys [health food equipment mobs returns later caught caught-s swim land] :as args}]
+  [{:keys [health food equipment mobs returns later caught caught-s caught-blast swim land] :as args}]
   (let [stats (armour/armour-stats equipment)
         priors (map #(caught-prior/prior (:name %) health) mobs)
         prior (when (seq priors) (apply max-key :chance priors))
@@ -492,7 +492,7 @@
                                   :near (reduce max 0 (map :seconds per))
                                   :caught {:chance (- 1 (js/Math.pow (- 1 caught) times))
                                            :hit hit
-                                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats m)))}}
+                                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (if caught-blast (blast-hurt stats caught-blast) (blow stats m))))}}
                             melee (keep (fn [[m f]] (when-not (= "creeper" (:name m)) (assoc f :kind (threat/kind m)))) (map vector mobs per))
                             shared (vals (group-by :kind (filter :rate-shape melee)))
                             shape (fight/sum-shape (concat (map (fn [f] [(* times (:damage f)) (some-> (:shape f) (* times))]) (remove :rate-shape melee))
