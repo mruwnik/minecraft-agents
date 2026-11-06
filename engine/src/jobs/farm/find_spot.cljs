@@ -28,7 +28,7 @@
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible with cause and :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
   missing or unreadable), the search's :text and :best, the patch fewest cells short of a spot
-  {:pos :w :h :short :unseen :no-floor :foreign :steep :over-step :dark :unfarmable :far :away} (cells with no seen ground, water/lava/ice on top,
+  {:pos :w :h :short :no-floor :foreign :steep :over-step :dark :unfarmable :far :away} (cells with lava or magma on top,
   another's; off height, a step over :max-step, too dark or untillable where the crops do not pay for the fix; :far, short 0, a patch whose crops pay for
   all but the walk). A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
   :spots best first up to ::limit, each {:pos :w :h :score :worth :costs :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
@@ -39,10 +39,10 @@
   the :patch-worth arg shared over the cells, a dry one at the same share of a wet one (a :plan with no crops or farmland is worth the :patch-worth arg; without it, an order with no cap, its spots rank by their costs alone); costs are :earthwork (cost/earthwork-s of :work, the blocks the cells are off the
   commonest ground height y), the :walk from :center (cost/walk-cost of :away), and, each only where it pays: torches for cells
   under crop light 9 (cost/light-cost, a trip when none is carried; :dark? true, jobs.farm.grow hangs them), water brought to dry
-  cells (a trip a source and the irrigate step), a top a hoe cannot till dug out and filled with dirt. A patch scoring 0 or less
+  cells (a trip a source and the irrigate step), a top a hoe cannot till (ice too) dug out and filled with dirt, water under a cell filled with dirt (its seen depth in :fill, earthwork-s), an unseen cell taken at the worse case (dark, untillable, at height y; the walk there is the look; :unseen counts them). A patch scoring 0 or less
   is no spot. :level is the % of cells at y; open sky is reported in :sky, not scored. :farmable is the % of its cells whose
   ground is farmland or a hoe makes farmland of (dirt, grass, path, coarse or rooted dirt).
-  A patch is left out when a column of it is unseen, lies under another plan's footprint, or in a zone or claim of another owner (the body's
+  A patch is left out when a column of it has lava or magma on top, lies under another plan's footprint, or in a zone or claim of another owner (the body's
   own zones are fine); :max-step makes a patch with a bigger step a miss (:over-step), not a spot.
   Needs nothing; it reads only what the body has seen and looks around at each place it scans.")
 

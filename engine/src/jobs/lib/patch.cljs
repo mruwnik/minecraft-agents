@@ -82,20 +82,20 @@
   (:cost (cost/walk-cost {:distance away})))
 
 (defn score-patch
-  "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s :bucket-s s}, nil when any top is
-  nil: :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole) less the earthwork of levelling it
+  "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s :bucket-s s :fill n :unseen n}, nil when any top is
+  nil: :fill is the blocks of water to fill under its cells (earthwork-s on top of the levelling), :unseen the cells not seen (their tops are y, their cells the cells' worse case); :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole) less the earthwork of levelling it
   (cost/earthwork-s) and the walk to it, in seconds. A patch for no crops and no :worth is an order with no cap: :worth nil, scored by its costs alone, refused only
   when they are ##Inf. Any other patch scoring 0 or less has :why: :far (its worth pays for the levelling,
   not the walk too), :steep (it pays for no levelling) or :barren (it pays for nothing: dark or untillable). Open sky is
   reported, not priced: crops need light, which the cells say."
-  [{:keys [tops cells sky away torches fetch-s bucket-s] whole :worth}]
+  [{:keys [tops cells sky away torches fetch-s bucket-s fill unseen] whole :worth}]
   (when-not (some nil? tops)
     (let [y (commonest tops)
           work (reduce + (map #(js/Math.abs (- % y)) tops))
           level (js/Math.round (/ (* 100 (count (filter #(= y %) tops))) (count tops)))
           away (or away 0)
           field (when (seq cells) (field-price cells (or torches 0) (if whole (/ whole (count cells)) (cell-worth true)) fetch-s (or bucket-s 0)))
-          costs (merge (:costs field) {:earthwork (cost/earthwork-s work) :walk (walk-s away)})
+          costs (merge (:costs field) {:earthwork (cost/earthwork-s (+ work (or fill 0))) :walk (walk-s away)})
           worth (if field (:worth field) whole)
           net (if field (:net field) worth)
           score (- (or worth 0) (reduce + (vals costs)))
@@ -104,6 +104,8 @@
                :away (js/Math.round away) :worth (some-> worth js/Math.round) :costs (update-vals costs js/Math.round)
                :score (js/Math.round score) :dark? (boolean (:lit? field))}
         field (assoc :farmable (js/Math.round (/ (* 100 (count (filter :farmable? cells))) n)))
+        (pos? (or unseen 0)) (assoc :unseen unseen)
+        (pos? (or fill 0)) (assoc :fill fill)
         (if worth (<= score 0) (= ##-Inf score)) (assoc :why (cond (pos? (- net (:earthwork costs))) :far
                                        (pos? net) :steep
                                        :else :barren))))))
@@ -150,6 +152,24 @@
       (or (nil? raw)
           (when-let [packed (look/known-light-at p x (inc y) z)]
             (<= crops/grow-light (max (bit-and packed 15) (bit-shift-right packed 4))))))))
+
+(defn column-lack
+  "What the column x z has in place of ground when surface/column-top finds none: {:kind :water :y surface :depth blocks of
+  water seen down from it}, {:kind :ice :y}, {:kind :hard} (lava, magma, or open air seen all the way down: no spot) or
+  {:kind :unseen} (a cell of it not seen, or rock with no air seen over it)."
+  [name-fn x z from-y depth]
+  (let [low (inc (- from-y depth))]
+    (loop [y (+ from-y depth) gap? false]
+      (let [n (when (>= y low) (name-fn {:x x :y y :z z}))]
+        (cond
+          (< y low) {:kind (if gap? :unseen :hard)}
+          (nil? n) (recur (dec y) true)
+          (or (open? n) (surface/canopy? n)) (recur (dec y) gap?)
+          (= "water" n) {:kind :water :y y
+                         :depth (count (take-while #(= "water" (name-fn {:x x :y % :z z})) (range y (dec low) -1)))}
+          (contains? #{"ice" "frosted_ice"} n) {:kind :ice :y y}
+          (surface/no-floor n) {:kind :hard}
+          :else {:kind :unseen})))))
 
 (defn patch-ring
   "How many cells out from the centre of the patch with NW corner x z lies (the larger of its x and z offsets, rounded up)."
@@ -204,7 +224,7 @@
   until the read count reaches budget, the last ring is done, or :limit good
   spots are in hand (the ring it is in is finished first). Returns {:next-ring
   :found :miss :done :reads :cache}; found is the best :limit spots so far, miss the patch with
-  the fewest cells short of one (no seen ground, another's, off height, too dark or untillable; a :far one none), nil when none. The column
+  the fewest cells short of one (lava or magma on top, another's, off height, too dark or untillable; a :far one none), nil when none. The column
   caches (:cache) are passed back in the state, so a later slice reads no column twice."
   [p {:keys [w h range depth limit blocked? farmland? torches worth bucket-s] limit-step :max-step :or {farmland? true} :as a} from {:keys [next-ring found miss cache]} budget]
   (let [reads (volatile! 0)
@@ -214,11 +234,13 @@
         tops (volatile! (:tops cache {}))
         skies (volatile! (:skies cache {}))
         grounds (volatile! (:grounds cache {}))
+        lackss (volatile! (:lacks cache {}))
         memo (fn [store f]
                (fn [& k] (if-let [e (find @store k)]
                            (val e)
                            (let [r (apply f k)] (vswap! store assoc k r) r))))
         top-of (memo tops (fn [x z] (surface/column-top name-fn x z (:y from) depth)))
+        lack-of (memo lackss (fn [x z] (column-lack name-fn x z (:y from) depth)))
         sky-of (memo skies (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
         farmable-at? (memo grounds (fn [x z t] (contains? bs/farmable-ground (name-fn {:x x :y t :z z}))))
         lit? (crop-lit-fn p)
@@ -232,22 +254,33 @@
         rings (sort (keys by-ring))
         away-of (fn [x z] (js/Math.hypot (- (+ x (/ (dec w) 2)) fx) (- (+ z (/ (dec h) 2)) fz)))
         cand (fn [[x z]]
-               (when (some? (top-of (+ x (quot w 2)) (+ z (quot h 2))))
+               (when (let [cx (+ x (quot w 2)) cz (+ z (quot h 2))]
+                 (or (some? (top-of cx cz)) (contains? #{:water :ice} (:kind (lack-of cx cz)))))
                  (let [cols (for [dx (clojure.core/range w) dz (clojure.core/range h)] [(+ x dx) (+ z dz)])
-                       tops (mapv (fn [[cx cz]] (top-of cx cz)) cols)
-                       bare (keep (fn [[col t]] (when (nil? t) col)) (map vector cols tops))
-                       foreign (count (filter (fn [[[cx cz] t]] (and t blocked? (blocked? cx t cz))) (map vector cols tops)))
-                       miss (fn [m] (merge {:miss true :pos {:x x :y (or (some-> (seq (remove nil? tops)) commonest) (:y from)) :z z} :w w :h h
+                       seen (mapv (fn [[cx cz]] (top-of cx cz)) cols)
+                       lacks (mapv (fn [[cx cz] t] (when (nil? t) (lack-of cx cz))) cols seen)
+                       hard (keep (fn [[col l]] (when (= :hard (:kind l)) col)) (map vector cols lacks))
+                       ys (remove nil? (map (fn [t l] (or t (:y l))) seen lacks))
+                       base (commonest ys)
+                       tops (mapv (fn [t l] (or t (:y l) base)) seen lacks)
+                       fill (reduce + 0 (keep #(when (= :water (:kind %)) (:depth %)) lacks))
+                       unseen (count (filter #(= :unseen (:kind %)) lacks))
+                       foreign (count (filter (fn [[[cx cz] t]] (and blocked? (blocked? cx t cz))) (map vector cols tops)))
+                       miss (fn [m] (merge {:miss true :pos {:x x :y base :z z} :w w :h h
                                             :bare [] :dark 0 :foreign 0 :away (js/Math.round (away-of x z))}
                                            m))]
-                   (if (pos? (+ (count bare) foreign))
-                     (miss {:short (+ (count bare) foreign) :bare bare :foreign foreign})
+                   (if (pos? (+ (count hard) foreign))
+                     (miss {:short (+ (count hard) foreign) :bare (vec hard) :foreign foreign})
                      (let [cells (when farmland?
-                                   (mapv (fn [[cx cz] t] {:lit? (lit? cx t cz) :wet? (wet? cx cz t)
-                                                          :farmable? (farmable-at? cx cz t)})
-                                         cols tops))
+                                   (mapv (fn [[cx cz] t l]
+                                           (case (:kind l)
+                                             :unseen {:lit? false :wet? false :farmable? false}
+                                             :ice {:lit? (lit? cx t cz) :wet? false :farmable? false}
+                                             {:lit? (lit? cx t cz) :wet? (and (nil? l) (wet? cx cz t))
+                                              :farmable? (or (some? l) (farmable-at? cx cz t))}))
+                                         cols tops lacks))
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
-                           s (score-patch {:tops tops :cells cells :sky sky :torches torches :worth worth :bucket-s bucket-s :away (away-of x z) :fetch-s (when farmland? (fetch-s x z))})
+                           s (score-patch {:tops tops :cells cells :sky sky :torches torches :worth worth :bucket-s bucket-s :fill fill :unseen unseen :away (away-of x z) :fetch-s (when farmland? (fetch-s x z))})
                            step (max-step tops h)]
                        (if (and limit-step (> step limit-step))
                          (miss {:short (count (remove #(= (:y s) %) tops)) :over-step step})
@@ -269,7 +302,7 @@
               miss (nearest-miss (cons miss misses))]
           (cond
             (and (= limit (count found)) (<= (js/Math.round (best-possible (* w h) farmland? worth (wet-ring (inc r)) (inc r) (seq waters))) (:score (peek found)))) {:next-ring (inc r) :found found :miss miss :done true :reads @reads}
-            (>= @reads budget) {:next-ring (inc r) :found found :miss miss :done false :reads @reads :cache {:tops @tops :skies @skies :grounds @grounds}}
+            (>= @reads budget) {:next-ring (inc r) :found found :miss miss :done false :reads @reads :cache {:tops @tops :skies @skies :grounds @grounds :lacks @lackss}}
             :else (recur (rest rs) found miss)))))))
 
 (defn scan
@@ -280,22 +313,19 @@
 
 
 (defn lacks
-  "A miss of scan-rows with its columns of no seen ground split into :no-floor (water, lava or ice on top) and :unseen."
-  [p {:keys [bare] :as miss} from-y depth]
-  (let [floorless? (fn [[x z]] (some #(contains? surface/no-floor (u/seen-name p {:x x :y % :z z}))
-                                     (range (+ from-y depth) (- from-y depth) -1)))
-        n (count (filter floorless? bare))]
-    (-> (dissoc miss :bare :miss)
-        (assoc :no-floor n :unseen (- (count bare) n)))))
+  "A miss of scan-rows with its :bare columns (lava, magma and the like on top) counted as :no-floor."
+  [miss]
+  (-> (dissoc miss :bare :miss)
+      (assoc :no-floor (count (:bare miss)))))
 
 (defn lacks-text
-  "What a miss of lacks lacks, e.g. \"40 of 256 cells short: 30 unseen, 6 water/lava/ice, 4 another's plan, zone or claim\"."
-  [{:keys [w h short unseen no-floor dark unfarmable foreign steep over-step far]}]
+  "What a miss of lacks lacks, e.g. \"40 of 256 cells short: 6 lava or magma, 4 another's plan, zone or claim\"."
+  [{:keys [w h short no-floor dark unfarmable foreign steep over-step far]}]
   (if far
     (str "the best patch lies " far " blocks off: its crops do not pay for the walk")
     (str short " of " (* w h) " cells short: "
          (str/join ", " (keep (fn [[n what]] (when (pos? n) (str n " " what)))
-                              [[unseen "unseen"] [no-floor "water/lava/ice"] [foreign "another's plan, zone or claim"]
+                              [[no-floor "lava or magma"] [foreign "another's plan, zone or claim"]
                                [(if over-step short 0) (str "off the patch's height, with a step of " over-step " over the most allowed")]
                                [steep "off the patch's height, dearer to level than the crops are worth"]
                                [dark "too dark, dearer to light than the crops are worth"]
@@ -315,7 +345,7 @@
     (if (or (:done r) (>= spent (max-reads)))
       (do (ctx/update-mem! c (fn [m] (cond-> (dissoc m :patch-scan)
                                        (and (empty? (:found r)) (:miss r))
-                                       (update :patch-miss #(nearest-miss [% (lacks (:primitives c) (:miss r) (:y from) (:depth a))])))))
+                                       (update :patch-miss #(nearest-miss [% (lacks (:miss r))])))))
           (not-empty (:found r)))
       (do (ctx/update-mem! c assoc :patch-scan (assoc (select-keys r [:next-ring :found :miss :cache]) :from from :reads spent))
           :again))))

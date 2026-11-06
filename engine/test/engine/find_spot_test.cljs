@@ -243,11 +243,11 @@
           (is (pos? with))
           (is (not (pos? (or without 0))) "no bucket carried or to be had: no water is brought"))))))
 
-(deftest never-picks-water-or-lava
+(deftest never-picks-lava-or-magma
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:blocks (merge (patch 2 0 3 3 63 "water") (patch -4 0 3 3 63 "lava"))})
+        (let [{:keys [eng]} (setup {:blocks (merge (patch 2 0 3 3 63 "magma_block") (patch -4 0 3 3 63 "lava"))})
               r (await (child-outcome eng job small 4))]
           (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text))))))))
 
@@ -255,11 +255,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (setup {:blocks (assoc (patch 2 0 3 3 63 "dirt") "4,63,2" "water")})
+        (let [{:keys [eng]} (setup {:blocks (assoc (patch 2 0 3 3 63 "dirt") "4,63,2" "lava")})
               r (await (child-outcome eng job small 4))]
-          (is (= {:pos {:x 2 :y 63 :z 0} :w 3 :h 3 :short 1 :unseen 0 :no-floor 1 :dark 0 :foreign 0}
+          (is (= {:pos {:x 2 :y 63 :z 0} :w 3 :h 3 :short 1 :no-floor 1 :dark 0 :foreign 0}
                  (dissoc (:best r) :away)))
-          (is (re-find #"nearest to fit: 3x3 at 2 63 0, 1 of 9 cells short: 1 water/lava/ice$" (:text r))))))))
+          (is (re-find #"nearest to fit: 3x3 at 2 63 0, 1 of 9 cells short: 1 lava or magma$" (:text r))))))))
 
 (deftest no-ground-is-none
   (async done
@@ -582,4 +582,33 @@
         r (pt/scan-rows p {:w 5 :h 5 :range 48 :depth 4 :limit 3 :worth 25} {:x 0 :y 64 :z 2} {:next-ring 0 :found []} ##Inf)]
     (is (empty? (:found r)) "a patch worth 25 s with water brought does not pay for a 45-block walk")
     (is (= {:short 0 :far 45} (select-keys (:miss r) [:short :far :steep])))
-    (is (re-find #"lies 45 blocks off" (pt/lacks-text (pt/lacks p (:miss r) 64 4))))))
+    (is (re-find #"lies 45 blocks off" (pt/lacks-text (pt/lacks (:miss r)))))))
+
+(deftest column-lack-table
+  (are [m expected] (= expected (pt/column-lack (names-of m) 0 0 64 12))
+    {[0 63 0] "water" [0 62 0] "water" [0 61 0] "stone"} {:kind :water :y 63 :depth 2}
+    {[0 63 0] "ice"} {:kind :ice :y 63}
+    {[0 63 0] "lava"} {:kind :hard}
+    {[0 63 0] "magma_block"} {:kind :hard}
+    {[0 63 0] "stone" [0 64 0] "stone"} {:kind :unseen}
+    {} {:kind :hard}))
+
+(deftest column-lack-is-unseen-where-a-cell-was-not-seen
+  (is (= {:kind :unseen} (pt/column-lack (fn [{:keys [y]}] (when (not= y 70) "air")) 0 0 64 12))))
+
+(deftest score-patch-prices-unseen-and-filled-cells
+  (let [seen (vec (repeat 8 {:lit? true :wet? true :farmable? true}))
+        base (pt/score-patch {:tops (vec (repeat 9 63)) :cells (conj seen {:lit? true :wet? true :farmable? true}) :away 0})
+        filled (pt/score-patch {:tops (vec (repeat 9 63)) :cells (conj seen {:lit? true :wet? true :farmable? true}) :fill 3 :away 0})
+        unseen (pt/score-patch {:tops (vec (repeat 9 63)) :cells (conj seen {:lit? false :wet? false :farmable? false}) :unseen 1 :away 0})]
+    (is (= (js/Math.round (cost/earthwork-s 3)) (-> filled :costs :earthwork)) "water under a cell is priced as the blocks to fill")
+    (is (< (:score filled) (:score base)))
+    (is (= 1 (:unseen unseen)))
+    (is (< (:score unseen) (:score base)) "an unseen cell is taken as dark ground a hoe cannot till")
+    (is (pos? (:score unseen)) "yet eight seen cells pay for it: the patch is a spot, not a miss")))
+
+(deftest a-patch-with-a-water-cell-is-a-spot-priced-for-the-fill
+  (let [p (tu/seeing-all (tu/fake {:blocks (assoc (patch 2 0 3 3 63 "dirt") "3,63,1" "water")}))
+        r (pt/scan-rows p {:w 3 :h 3 :range 4 :depth 4 :limit 3 :worth 25} {:x 3 :y 64 :z 1} {:next-ring 0 :found []} ##Inf)]
+    (is (= 1 (:fill (first (:found r)))) "the one water cell is filled, not refused")
+    (is (pos? (-> r :found first :costs :earthwork)))))
