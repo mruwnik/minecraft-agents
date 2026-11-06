@@ -9,6 +9,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.places :as places]
             [jobs.lib.price :as price]
@@ -189,13 +190,22 @@
             :else (recur more)))))))
 
 (defn ^:async reuse-stair!
-  "Before the first cut of the stair down: a go-to child (slot :stair-own) down the stair this body cut earlier (own-stair-bottom),
-  so the new steps go on from its foot. nil once that is done, failed or not due, else :again / :continue while it walks."
+  "Before the first cut of the stair down: on the foot of a stair this body cut (stair-memory/foot-heading, as after a shed
+  between two calls) the new steps go on along its heading; else a go-to child (slot :stair-own) down the stair this body cut
+  earlier (own-stair-bottom), so the new steps go on from its foot. nil once that is done, failed or not due, else :again /
+  :continue while it walks."
   [c]
   (let [d (:descent (ctx/mem c))
-        {:keys [state cell heading]} (:own-stair d)]
+        {:keys [state cell heading]} (:own-stair d)
+        feet (access/cell (cell-of (u/self-pos c)))
+        on-heading (when (and (nil? state) (nil? (:top d))) (smem/foot-heading c feet))]
     (cond
       (or (:top d) (contains? #{:none :done :failed} state)) nil
+      on-heading (do (ctx/emit! c :mine.stair-plan :info {:own-stair feet :text (str "mine goes on down its stair from " (str/join "," feet) ", " on-heading)})
+                     (ctx/update-mem! c #(cond-> (-> % (assoc-in [:descent :own-stair] {:state :done :cell feet :heading on-heading})
+                                                     (update :descent assoc :top feet :top-heading (keyword on-heading)))
+                                           (nil? (:heading (:args c))) (assoc :heading on-heading)))
+                     :again)
       (nil? state) (let [way (await (own-stair-bottom c))]
                      (if (= :searching way)
                        :continue

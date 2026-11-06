@@ -14,6 +14,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -73,49 +74,31 @@
 (declare heading-steps)
 
 (defn ahead
-  "A point 3 blocks on from the feet along the way the job digs on (its :dug-heading, :heading or :direction, else the way the body faces)."
+  "A point 3 blocks on from the feet along the way the job digs on: its :dug-heading, :heading or :direction, else the
+  heading of the body's own stair that ends at the feet (stair-memory/foot-heading: the mine's next stair goes on down it),
+  else the way the body faces."
   [c]
-  (let [heading (keyword (or (some-> (or (:dug-heading (ctx/mem c)) (:heading (:args c)) (:direction (:args c))) (#(when (or (string? %) (keyword? %)) (name %))))
+  (let [{:keys [x y z] :as at} (u/self-pos c)
+        feet (mapv js/Math.floor [x y z])
+        heading (keyword (or (some-> (or (:dug-heading (ctx/mem c)) (:heading (:args c)) (:direction (:args c))) (#(when (or (string? %) (keyword? %)) (name %))))
+                             (smem/foot-heading c feet)
                              (look/facing (:primitives c))))
-        [dx dz] (heading-steps heading [0 0])
-        {:keys [x z]} (u/self-pos c)]
-    {:x (+ x (* 3 dx)) :z (+ z (* 3 dz))}))
-
-(defn carried-of
-  "Items carried of the names."
-  [c names]
-  (reduce + 0 (keep #(when (contains? names (:name %)) (:count %)) (u/inventory (:primitives c)))))
-
-(defn taken-back
-  "The items of the last shed's names carried beyond what it left plus one for each cell the job dug since (its memory
-  :dug-n): what the body picked up again of what it threw, as in a one-wide stair where they land within reach. 0 with no shed."
-  [c]
-  (let [{:keys [shed-left dug-n]} (ctx/mem c)]
-    (if-let [{:keys [names carried dug-at]} shed-left]
-      (max 0 (- (carried-of c names) carried (- (or dug-n 0) dug-at)))
-      0)))
+        [dx dz] (heading-steps heading [0 0])]
+    {:x (+ (:x at) (* 3 dx)) :z (+ (:z at) (* 3 dz))}))
 
 (defn ^:async shed!
-  "Throw away the junk stone over ::junk-cap: a jobs.storage.make-room child for the slots it frees. :continue while it
-  runs, else nil. A make-room that frees nothing, or a shed whose items the body has picked up again since (taken-back),
-  is kept in the job's memory as :shed-failed: throwing them again would come to the same."
+  "Throw away the junk stone over ::junk-cap: a jobs.storage.make-room child for the slots it frees, thrown away from
+  where the dig goes on (ahead). :continue while it runs, else nil; a make-room that frees nothing is kept in the job's
+  memory as :shed-failed."
   [c]
   (let [p (:primitives c)
-        n (surplus-slots c)
-        back (when (and (pos? n) (not (:shed-failed (ctx/mem c)))) (taken-back c))]
-    (cond
-      (or (not (pos? n)) (:shed-failed (ctx/mem c))) nil
-      (pos? back) (do (ctx/update-mem! c assoc :shed-failed true)
-                      (ctx/emit! c :trip.shed-taken-back :info {:count back :text (str "the body picked up again " back " of the junk it threw; it digs on with it")})
-                      nil)
-      :else
-      (let [e (await (ctx/call c :shed 'jobs.storage.make-room {:free (min 36 (+ (u/free-slots p) n)) :toss-from (ahead c)}))
-            names (into #{} (map :item) (get-in e [:data :tossed]))]
+        n (surplus-slots c)]
+    (when (and (pos? n) (not (:shed-failed (ctx/mem c))))
+      (let [e (await (ctx/call c :shed 'jobs.storage.make-room {:free (min 36 (+ (u/free-slots p) n)) :toss-from (ahead c)}))]
         (cond
           (= :continue e) :continue
           (pos? (surplus-slots c)) (do (ctx/update-mem! c assoc :shed-failed true) nil)
-          :else (do (ctx/update-mem! c assoc :shed-left {:names names :carried (carried-of c names) :dug-at (:dug-n (ctx/mem c) 0)})
-                    nil))))))
+          :else nil)))))
 
 (defn plan
   "What a trip start does: :roomy, :no-chest, :far or :deposit, with the chest and its walk cost."

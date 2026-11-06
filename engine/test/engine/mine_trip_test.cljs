@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [jobs.gather.mine :as mine]
             [jobs.gather.mine.cause :as cause]
+            [jobs.gather.mine.descent :as mine-descent]
             [jobs.lib.need :as need]
             [jobs.lib.trip :as trip]
             [engine.mine-support :as m :refer [as-child rock-world inv cells]]
@@ -207,27 +208,22 @@
     (is (= :surplus (cause-with {})))
     (is (nil? (cause-with {:collecting true})))))
 
-(deftest a-shed-whose-junk-the-body-picked-up-again-is-not-thrown-again
-  ;; KitOak94: in a one-wide stair the 92 cobblestone thrown landed within reach and the next step took them back (95 = 92 + 3 dug)
+(deftest a-shed-on-its-own-stair-throws-back-up-it-and-the-next-stair-goes-on-down-it
+  ;; KitOak94: after each shed a new stair started the way the body faced, onto the junk just thrown, and took it back (95 = 92 + 3 dug)
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (tu/fake-on-floor {:inventory (into [{:name "stone_pickaxe" :count 1}] (repeat 3 {:name "cobblestone" :count 64}))})
-              c {:primitives p :args {:block "iron_ore"} :view (fn [] {:data mem/empty-data :now 1000})}
-              shed (fn ^:async shed-with [m]
-                     (let [m (atom m) calls (atom 0)
-                           orig [ctx/mem ctx/update-mem! ctx/emit! ctx/call]]
-                       (set! ctx/mem (fn [_] @m))
-                       (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
-                       (set! ctx/emit! (fn ([_ _ _]) ([_ _ _ _])))
-                       (set! ctx/call (fn [& _] (swap! calls inc) (swap! (fake/state p) update :inventory #(vec (take 2 %))) (js/Promise.resolve {:kind :done :data {:tossed [{:item "cobblestone" :count 64}]}})))
-                       (try (await (trip/shed! c))
-                            (finally (let [[a b d e] orig] (set! ctx/mem a) (set! ctx/update-mem! b) (set! ctx/emit! d) (set! ctx/call e))))
-                       [@calls @m]))
-              [calls m] (await (shed {:shed-left {:names #{"cobblestone"} :carried 64 :dug-at 0} :dug-n 3}))]
-          (is (zero? calls) "192 carried after leaving 64 and digging 3: the thrown ones came back")
-          (is (:shed-failed m))
-          (let [[calls m] (await (shed {:shed-left {:names #{"cobblestone"} :carried 64 :dug-at 0} :dug-n 128}))]
-            (is (= 1 calls) "128 dug since: the junk is new, it is thrown")
-            (is (not (:shed-failed m)))
-            (is (= {:names #{"cobblestone"} :carried 64 :dug-at 128} (:shed-left m)) "what it left is what the next shed counts from")))))))
+        (let [p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              data (mem/add-entry mem/empty-data :stair-way {:t 0 :data {:dim "overworld" :floors [[0 65 2] [0 64 1] [0 63 0]]}} {:cap 10 :ttl :forever})
+              c {:primitives p :args {:block "iron_ore"} :view (fn [] {:data data :now 1000})}
+              m (atom {})
+              orig [ctx/mem ctx/update-mem! ctx/emit!]]
+          (set! ctx/mem (fn [_] @m))
+          (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
+          (set! ctx/emit! (fn ([_ _ _]) ([_ _ _ _])))
+          (try
+            (is (= {:x 0.5 :z -2.5} (trip/ahead c)) "the stair goes on north (the body faces south): the junk is thrown away from it, up the stair")
+            (is (= :again (await (mine-descent/reuse-stair! c))))
+            (is (= "north" (:heading @m)) "the next stair goes on down the one it stands at the foot of")
+            (is (= [0 64 0] (get-in @m [:descent :top])))
+            (finally (let [[a b d] orig] (set! ctx/mem a) (set! ctx/update-mem! b) (set! ctx/emit! d)))))))))

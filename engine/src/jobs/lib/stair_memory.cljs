@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.look :as look]
             [jobs.lib.stair-cells :as cells]
             [jobs.lib.util :as u]
             [plan.shape :as shape]))
@@ -67,6 +68,17 @@
     (let [left (make-room! c)]
       (ctx/remember! c :stair-way {:dim dim :floors floors} {:cap (inc left) :ttl :forever}))
     floors))
+
+(defn foot-heading
+  "The heading name of the last step down of a stair this body cut (memory :stair-way) whose lowest stand is the feet cell
+  [x y z]: the way that stair goes on from here; nil when none ends here."
+  [c feet]
+  (let [dim (.-dimension (.self (:primitives c)))]
+    (some (fn [{{:keys [floors] :as d} :data}]
+            (let [[[bx by bz] [nx _ nz]] (sort-by second floors)]
+              (when (and (= dim (:dim d)) nx (= feet [bx (inc by) bz]))
+                (some (fn [[h step]] (when (= step [(- bx nx) (- bz nz)]) h)) look/headings))))
+          (reverse (ctx/entries c :stair-way)))))
 
 (defn record-way!
   "Remember the steps walked (memory :stair-way, one entry a connected way: remember-way!)."
