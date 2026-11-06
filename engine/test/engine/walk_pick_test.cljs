@@ -7,6 +7,8 @@
             [engine.library-test :as lib]
             [engine.test-util :as tu]
             [jobs.lib.clock :as clock]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.rooms :as rooms]
             [jobs.lib.util :as u]
             [jobs.lib.walk-pick :as pick]
@@ -173,7 +175,7 @@
         no-route {:route {:found false :reason :exhausted} :uses {:job-time [0 5 5]}}]
     (set! pick/none-reachable! (fn [_ _] (js/Promise.resolve :searching)))
     (try (await (pick/cheapest! c (map (fn [z] {:x 0 :y 64 :z z}) zs)
-                                {:target (fn [x] {:pos x :range 0}) :walk (fn [x] {:pos x}) :ok? (constantly true)
+                                {:target (fn [x] {:pos x :range 0}) :walk (fn [x] {:pos x :back true}) :ok? (constantly true)
                                  :quote (fn [_ args] (js/Promise.resolve (if (= 6 (:z (:pos args))) no-route {:uses {:job-time [0 20 20]}})))}))
          (finally (set! pick/none-reachable! none-reachable!)))))
 
@@ -188,3 +190,11 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= :searching (await (cheapest-while-reaching [6 7 400]))))))))
+
+(deftest cheapest-asks-again-when-an-unquoted-candidates-straight-walk-is-under-the-pick-though-its-guess-is-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [z (js/Math.floor (/ 4.5 cost/least-block-s))]
+          (is (< (* z cost/least-block-s) 5 (cost-planner/left-s z true)))
+          (is (= :searching (await (cheapest-while-reaching [6 z 400])))))))))

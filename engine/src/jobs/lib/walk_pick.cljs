@@ -163,7 +163,7 @@
   straight walk alone is over it are left out, the rest quoted best-first, best!). target (fn [x]) {:pos :range} bounds the
   straight walk, walk (fn [x]) are the go-to args; ok?, quote and like as best!. A quote whose search still goes on prices nothing
   (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later); a priced pick wins over a search still going on unless one of the candidates it left out could
-  still be cheaper (its straight-walk bound or guess-s under the pick's price): then :searching.
+  still be cheaper (its straight walk under the pick's price): then :searching.
   Nil when no walk is priced. price (fn [x s]), default s, adds to a walk's seconds s what x costs besides.
   The first quote that finds no way (no-way?) asks once whether the others (cells with a y, walks over what the body has
   seen) are out of reach too (none-reachable!): then each
@@ -183,7 +183,7 @@
                               (await (none-reachable! c goals)))
                           mean (second (get-in q [:uses :job-time]))]
                       (cond
-                        (= :searching r) (do (reset! reaching (apply min (map #(max (bound %) (guess-s %)) left))) (constantly ##Inf))
+                        (= :searching r) (do (reset! reaching (apply min (map bound left))) (constantly ##Inf))
                         (not (true? r)) false
                         (and (number? mean) (js/isFinite mean)) (fn [x] (max (bound x) (guess-s x)))
                         :else (constantly ##Inf)))))
