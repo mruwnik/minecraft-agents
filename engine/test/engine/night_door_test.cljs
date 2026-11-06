@@ -2,6 +2,7 @@
   "The night shuts an open door of the closed room the body stands in instead of digging in behind it."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.hut-shelter-test :refer [hut-world door-states door-open? roof door]]
             [engine.fake.raw-world :as fake-raw]
@@ -10,6 +11,7 @@
             [engine.perception :as perception]
             [engine.registry :as registry]
             [jobs.lib.world-files :as ew]
+            [jobs.lib.look-edge :as look-edge]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
@@ -99,6 +101,22 @@
       (fn ^:async t []
         (with-redefs [night/night-prices (fn ^:async [& _] {:bed -305})]
           (is (= 0 (await (night/look-worth {} true)))))))))
+
+(deftest a-look-worth-of-0-is-emitted-once-and-buys-no-edge-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem* (atom {})
+              emitted (atom [])]
+          (with-redefs [night/night-prices (fn ^:async [& _] {:bed -305 :exposed 0})
+                        ctx/mem (fn [_] @mem*)
+                        ctx/update-mem! (fn [_ f & args] (apply swap! mem* f args))]
+            (let [c {:emit (fn [kind _level data] (swap! emitted conj [kind data]))}
+                  w (await (night/look-priced c true))
+                  w2 (await (night/look-priced c true))]
+              (is (= [0 0] [w w2]))
+              (is (= [[:night.look-priced {:worth 0 :prices {:bed -305 :exposed 0}}]] @emitted) "emitted once, while the worth is unchanged")
+              (is (not (look-edge/pays? {} w [[20 64 0]])) "a side to look at is not bought when staying costs nothing"))))))))
 
 (defn seeing-setup
   "st/setup over a body that has seen only what its sight passes showed (perception over the fake), as live."
