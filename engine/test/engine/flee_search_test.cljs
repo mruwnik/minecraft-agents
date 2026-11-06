@@ -327,7 +327,10 @@
         over (mapv (fn [x] {:x x :y 64 :z 0 :t (* 2 x)}) (range 7))]
     (is (pos? (search/caught-s [{:name "zombie" :mob "zombie" :pos under}] over)) "a walker on that line would be")
     (is (zero? (search/caught-s [{:name "skeleton" :mob "skeleton" :pos under}] over)))
-    (is (zero? (search/caught-s [{:name nil :pos under :shooter? true}] over)) "nor where an unseen shot came from")))
+    (is (zero? (search/caught-s [{:name nil :pos under :shooter? true}] over)) "nor where an unseen shot came from")
+    (is (zero? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "bow" :pos under}] over)) "nor one seen holding its bow")
+    (is (pos? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "stone_sword" :pos under}] over)) "one holding a sword strikes")
+    (is (pos? (search/caught-s [{:name "blaze" :mob "blaze" :pos under}] over)) "a blaze strikes within 2 blocks")))
 
 (def cliff
   "A plateau (feet y 64) for x <= 0 over a lowland (feet y 54) east of it, a stair one block wide down the cliff along

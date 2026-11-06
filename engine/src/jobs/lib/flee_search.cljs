@@ -197,13 +197,13 @@
 
 (defn priced-key
   "The inputs of a search (gather) as the key of its kept result: its threats by cell and weight (cell-key-of), its chasers
-  by name, mob, calm, shooter and cell, its policy without the fns it carries (the air it counts is the remembered world's), its
+  by name, mob, held item, calm, shooter and cell, its policy without the fns it carries (the air it counts is the remembered world's), its
   covers by their :covers-key (the covers are only built at a dead end)."
   [in]
   (-> in
       (update :others #(mapv cell-key-of %))
       (update :caught-by #(mapv cell-key-of %))
-      (update :chasers #(mapv (juxt :name :mob :calm? :shooter? :pos :burns :speed) %))
+      (update :chasers #(mapv (juxt :name :mob :held :calm? :shooter? :pos :burns :speed) %))
       (update :policy #(into {} (remove (comp fn? val)) %))
       (dissoc :covers)))
 
@@ -280,11 +280,11 @@
                    plan-ms)))))))
 
 (defn shooter?
-  "Whether chaser ch shoots rather than strikes: a shot spot (:shooter?, where an unseen shot came from) or a mob whose
-  damage is a projectile (threat/damage-type). It lands no blow, so it runs no race (caught-s, the search's contact
-  deadline): its danger is its line of fire, the flight's mark (respond.goal/choose-opts)."
-  [{:keys [mob] :as ch}]
-  (boolean (or (:shooter? ch) (= :projectile (threat/damage-type mob)))))
+  "Whether chaser ch only shoots: a shot spot (:shooter?, where an unseen shot came from) or a mob {:mob :held} that
+  lands no blow (threat/strikes?). It runs no race (caught-s, the search's contact deadline, trap-s): its danger is its
+  line of fire, the flight's mark (respond.goal/choose-opts)."
+  [{:keys [mob held] :as ch}]
+  (boolean (or (:shooter? ch) (and mob (not (threat/strikes? {:name mob :held held}))))))
 
 (defn way-at
   "The blocks of chaser's way ({:way}: field/way-fn) to pos, nil when not known."
@@ -328,13 +328,13 @@
 
 (defn with-ways
   "chasers each with :way, the field/way-fn of its threat field over its give-up range (the ring's extent) to within cost/melee-reach, when it has a :mob name
-  (a shot spot has none) other than a creeper or a shooter? (a blast or an arrow passes where it cannot walk: the
-  straight line stands)."
+  (a shot spot has none) other than a creeper or a ranged one (threat/ranged?: a blast or an arrow passes where it cannot
+  walk, a blaze flies: the straight line stands)."
   [c chasers]
   (let [wet (js/Map.)]
     (mapv (fn [{:keys [mob pos] :as ch}]
             (cond-> (assoc ch :swim (swim-fn c pos wet))
-              (and mob (not= "creeper" mob) (not (shooter? ch)))
+              (and mob (not= "creeper" mob) (not (threat/ranged? {:name mob :held (:held ch)})))
               (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
           chasers)))
 

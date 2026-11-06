@@ -51,7 +51,7 @@
   (boolean (some #(= (cell goal) (:goal (:data %))) (ctx/entries c :goal-off))))
 
 (defn chasers
-  "The chasers a flight's search runs from, {:name (cost/mob-kind) :mob (its name) :pos :calm? (an enderman the client does
+  "The chasers a flight's search runs from, {:name (cost/mob-kind) :mob (its name) :held :pos :calm? (an enderman the client does
   not flag angry: it walks about, a flight from it is no race; an angry one is the cornered options')}: the hostiles the body senses or remembers
   within the longest follow range (this flight's dead skipped), the last known places of the mobs fled within
   threats/fled-memory-ms that it does not know now, and where shots came from (flight/fire-spots, :shooter? true). :burns: hostile-loss/mob-near's, as the cornered covers price a mob."
@@ -60,7 +60,7 @@
         dead (set (flight/dead-ids c))
         known (remove #(dead (.-id %)) (flight/known-chasers p))
         ids (set (map #(.-id %) known))]
-    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :pos (danger-q/mob-pos p e) :burns (:burns (hostile-loss/mob-near p e))}
+    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :held (.-held e) :pos (danger-q/mob-pos p e) :burns (:burns (hostile-loss/mob-near p e))}
                          (some? (.-speed e)) (assoc :speed (.-speed e))
                          (and (combat/enderman? e) (not (true? (.-angry e)))) (assoc :calm? true))) known)
         (into (comp (map :data) (remove #(ids (:id %)))

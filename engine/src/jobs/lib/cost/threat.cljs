@@ -286,6 +286,13 @@
   (let [k (kind m)]
     (or (= trident-kind k) (contains? weapon/ranged-mobs k))))
 
+(defn strikes?
+  "Whether mob {:name :held} lands blows within reach: one that does not shoot (ranged?), a blaze (vanilla BlazeAttackGoal
+  hits a target within 2 blocks) or a bow mob seen holding something other than a bow (AbstractSkeleton.reassessWeaponGoal
+  gives it the melee goal; a hand not seen is the bow it spawns with, bow-holders)."
+  [{:keys [name held] :as m}]
+  (or (not (ranged? m)) (= "blaze" name) (and (contains? bow-mobs name) (some? held) (not= "bow" held))))
+
 (defn kind-radius
   "Blocks within which a mob counts: radius, for a shooter (ranged?) ranged-radius (default radius)."
   [ranged? radius ranged-radius]
