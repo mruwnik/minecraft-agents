@@ -195,7 +195,7 @@
 
 (defn pillar-cover
   "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
-  then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire; it fails for a mob in its cell by
+  then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
   flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb);
   nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
@@ -207,7 +207,7 @@
           seconds (+ s (hide-out/quiet-s))
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
-      {:open-s (if (some combat/ranged? hostiles) seconds s) :seconds seconds
+      {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
        :fails (- 1 (* (- 1 refused) (- 1 climb)))})))
 
 (defn covers-in

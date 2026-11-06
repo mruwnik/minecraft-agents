@@ -2164,21 +2164,37 @@
             (await (refuge/plug-in! (assoc (stub-ctx p m) :args {}) :pocket #{:pocket})))
           (is (= [:plug-dig] @kinds) "hide-out takes no :pocket kind"))))))
 
-(deftest a-plug-is-not-begun-with-a-creeper-coming-from-beyond-its-swell-range
+(deftest a-plug-is-begun-unless-a-creeper-comes-before-its-side-shuts
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[x begun] [[10 0] [3 1] [30 1]]]
+        (doseq [[x open-s begun why] [[10 36 0 "walls 36 s open: the creeper 10 off comes first"]
+                                      [10 1 1 "a side shut in 1 s: before the creeper 10 off can swell"]
+                                      [3 36 1 "one already swelling beside the body is walled off"]
+                                      [30 36 1 "beyond its follow range"]]]
           (let [m (atom {})
                 p (tu/fake-on-floor {:entities [(creeper x 64 0)]})
                 plugs (atom 0)]
             (with-redefs [ctx/call (fn ^:async f [& _] (swap! plugs inc) :continue)
                           ctx/use (constantly nil)
                           hide-spot/recent (constantly [])
+                          shut-in/covers (fn ([_] {}) ([_ ways] (zipmap ways (repeat {:open-s open-s :seconds (+ open-s 30) :fails 0}))))
                           ctx/mem (fn [c] @(:mem c))
                           ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
               (await (refuge/plug-option! (assoc (stub-ctx p m) :args {}) :plug #{:walls})))
-            (is (= begun @plugs) (str "creeper " x " blocks off"))))))))
+            (is (= begun @plugs) why)))))))
+
+(deftest a-body-with-a-pickaxe-cornered-by-a-creeper-8-off-digs-a-side-pocket-before-it-comes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen while-hidden]}
+              (await (hidden-round hiding-retreat {:self {:pos [0.5 64 0.5]} :blocks dead-end :inventory [{:name "diamond_pickaxe" :count 1}]
+                                                   :entities [(assoc (creeper 8.5 64 0.5) :visible true)]}
+                                   120000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
+          (is (= #{[-1 64 0] [-1 65 0]} (set (placed-cells p))) "the pocket is shut with its own dug blocks: it closes before the creeper reaches its swell start")
+          (is (= ["j1"] while-hidden) "hiding in the pocket")
+          (is (empty? (blocked-events seen)) "a cornered answer was priced and taken"))))))
 
 (defn mob-at [mob-name x] #js {:name mob-name :id 9 :seen true :pos #js {:x x :y 64 :z 0} :distance x})
 

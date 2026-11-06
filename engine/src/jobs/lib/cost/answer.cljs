@@ -667,16 +667,18 @@
   (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
   it cannot be closed, default 0): the blows of build-answer over open-s (the exits besides :then: exits); then, by the chance the mobs are still about
   when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
-  blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). nil with a
-  creeper (its blast takes the walls)."
+  blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). A creeper
+  blasts as stand-answer's over open-s (one that reaches its swell start before the side shuts); shut in, the body is out
+  of its sight and it does not swell."
   [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s]}]
-  (when-not (some #(= "creeper" (:name %)) mobs)
-    (let [then (concat then (exits mobs dawn-s))
-          a (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
-          fails (if (seq failed) (or fails 0) 0)]
-      (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))
-        (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
-                                                       [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]])))))
+  (let [then (concat then (exits mobs dawn-s))
+        blasts (:blasts (stand-answer {:equipment equipment :mobs (filter #(= "creeper" (:name %)) mobs) :seconds open-s}))
+        a (cond-> (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
+            (seq blasts) (-> (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max (or % 0) (map blast-hp blasts))) (assoc :blasts blasts)))
+        fails (if (seq failed) (or fails 0) 0)]
+    (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))
+      (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
+                                                     [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]]))))
 
 (defn home-work-share
   "The share of a hide in the body's own house that work fills: counted-chance of ::home-work-counts."
@@ -693,7 +695,7 @@
   (let [stats (armour/armour-stats equipment)
         v (danger/flee-walk-speed (or food 20))
         per (map #(flee-mob stats v {:gain (fn [m] (danger/closing-rate (or food 20) m))} %) mobs)]
-    (when (every? some? per)
+    (when (and (every? some? per) (not-any? #(= "creeper" (:name %)) mobs))
       (let [scaled (map (fn [f] (let [k (min 1 (/ door-s (max 1e-9 (:seconds f))))] (-> f (update :damage * k) (update :shape (fn [w] (some-> w (* k))))))) per)
             run {:damage (reduce + (map :damage scaled)) :hit (reduce max 0 (map :hit scaled))}
             shape (when-let [ss (seq (keep :shape scaled))] (apply max ss))]

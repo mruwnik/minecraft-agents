@@ -274,8 +274,7 @@
   "{way cover} of shutting the body in against near by each way shut-in/covers finds possible here (the seconds a side
   stays open, the quote, the hide-out's quiet), and :pillar the pillar up (options/pillar-cover) while not tried this
   flight. The open doors of the closed (or not yet all seen) room the body stands in, when the flight would shut one (sealing, respond.doors/sealing-doors), are the cover :door (shut-in/door-cover), done by the flight's own door step.
-  None with a creeper near (cost/cover-answer: its blast takes the walls), so its quotes are not asked for: they take
-  seconds the fuse does not leave."
+  None with a creeper near: its quotes are not asked for, they take seconds the fuse does not leave."
   [c near sealing]
   (when-not (some combat/creeper? near)
     (let [cs (options/covers c cover-ways)

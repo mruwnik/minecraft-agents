@@ -111,7 +111,7 @@
     (is (< (:damage (cost/refuge-answer {:mobs [(mob "zombie" 7)]} {:door-s 4 :hide-s 30})) (:damage (cost/cover-answer {:mobs [(mob "zombie" 7)]} {:open-s 4 :seconds 34}))) "a run away from a mob 7 off is not a stand while it comes")
     (is (< (js/Math.abs (- (:seconds (refuge 2 30)) 2 (* 30 (- 1 share)))) 1e-9) "only the hide's lost share is paid")
     (is (< (:seconds (refuge 2 30)) (:seconds pillar)) "dearer on a pillar, where the hide is idle")
-    (is (nil? (cost/refuge-answer {:mobs [(mob "creeper" 2)]} {:door-s 2 :hide-s 30})) "a blast takes the walls: no cover")))
+    (is (nil? (cost/refuge-answer {:mobs [(mob "creeper" 2)]} {:door-s 2 :hide-s 30})) "no run to a refuge from a creeper is priced")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
@@ -289,7 +289,8 @@
     (is (= :fight (:answer (cost/decide (body 20) answers here))) "with no cover the fist is all that is left")
     (is (= :pit (:answer (cost/decide (body 20) (assoc answers :pit (cost/cover-answer {:mobs [spider]} {:open-s 4 :seconds 40})) here)))
         "a pit dug in 4 s under the spider's blows beats a fist fight it hardly survives")
-    (is (nil? (cost/cover-answer {:mobs [(mob "creeper" 4)]} {:open-s 4 :seconds 40})) "a blast takes the cover")))
+    (is (seq (:blasts (cost/cover-answer {:mobs [(mob "creeper" 4)]} {:open-s 4 :seconds 40}))) "a creeper that comes before the side shuts blows")
+    (is (= [true nil] ((juxt some? :blasts) (cost/cover-answer {:mobs [(mob "creeper" 12)]} {:open-s 1 :seconds 40}))) "shut in first: out of its sight, no blast")))
 
 (deftest a-cover-that-may-fail-pays-the-fight-after-it-by-that-chance
   (let [zombie (mob "zombie" 1)
