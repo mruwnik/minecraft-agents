@@ -17,6 +17,7 @@
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.lava :as lava]
+            [jobs.lib.loose :as loose]
             [jobs.lib.need :as need]
             [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
@@ -359,7 +360,8 @@
         status (.-status r)
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
-      "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids :names (vec (distinct (keep #(.-name %) (array-seq (or (.-drops r) #js [])))))
+      "dug" (do (when (seq ids) (loose/owe! c (select-keys pos [:x :y :z]) (collect-radius)))
+                (ctx/update-mem! c assoc :dug {:block block :ids ids :names (vec (distinct (keep #(.-name %) (array-seq (or (.-drops r) #js [])))))
                                                :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))}) :collect)
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})

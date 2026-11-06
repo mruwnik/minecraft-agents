@@ -8,10 +8,10 @@
 (def defaults {})
 
 (defn loose-items
-  "Holds when some seen item within :radius is one jobs.lib.loose takes (worth the detour, not thrown, not owed to a
-  live job, not in another's zone or claim) and the body is on the ground, has more than the nearly-full free slots.
+  "Holds when some seen item within :radius is one jobs.lib.loose takes (worth the detour, not thrown, not owed to
+  another job's dig, not in another's zone or claim) and the body is on the ground, has more than the nearly-full free slots.
   A danger near is the job's check (safe?), not the trigger's. It reads the jobs.lib.loose settings only, as the job it fires does
-  (register :args are ignored), and counts live jobs as that job does (loose/live-ids), so both judge alike.
+  (register :args are ignored), and reads the :owed records as that job does, so both judge alike.
   Low in the register: a survival reflex that holds fires first. Cooldown 30 s: what a run could not reach is
   remembered (:loose-left) and skipped."
   [p view _args kn _live]

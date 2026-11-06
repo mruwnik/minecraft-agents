@@ -18,6 +18,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.lava :as lava]
+            [jobs.lib.loose :as loose]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world]
             [jobs.lib.dig-look :as dig-look]
@@ -83,7 +84,10 @@
           (is (= "air" (block-at p at)))
           (is (= ["wooden_pickaxe"] (mapv #(.-item (.-args %)) (calls p "equip"))))
           (is (= 1 (carried p "cobblestone")))
-          (is (= 1 (count (ce/ends seen :dug)))))))))
+          (is (= 1 (count (ce/ends seen :dug))))
+          (is (= [{:cell at :radius (dig/collect-radius)}]
+                 (mapv #(select-keys (:data %) [:cell :radius]) (mem/entries (mem/view (:store eng)) loose/owed-kind)))
+              "the dig owes its drop to its job, for the loose judge to read"))))))
 
 (deftest a-hurt-body-digs-unless-the-caller-passes-a-health-floor
   (async done

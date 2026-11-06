@@ -10,7 +10,8 @@
     :zone         it lies in another's zone or claim (a :take verdict; no zone list never blocks);
     :collecting   another job's collect-drops is collecting round it (the :collecting hold, written by collect-drops, dropped in
                   its cleanup, ::hold-ttl-s at most);
-    :owed         it appeared under :owed-s ago while some other job runs: that job's own drop (a felled log, a dug ore);
+    :owed         it appeared under :owed-s ago within a dig's radius while another job's :owed record (owe!, written by
+                  jobs.blocks.dig, counting to :until, jobs.lib.expiry) still counts: that job's own drop (a felled log, a dug ore);
     :seed-glut    it is a seed kind and the body already carries :seed-cap of it;
     :left         a run left it (:loose-left, not reached or not picked up) in the last :left-s (longer than
                   :thrown-s and :owed-s: a spot a run failed on stays failed, where those two only guess at ownership)."
@@ -18,6 +19,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.cost :as cost]
             [jobs.lib.crops :as crops]
@@ -76,11 +78,21 @@
 
 (defn left-ids [view] (into #{} (mapcat (comp :ids :data)) (mem/entries view left-kind)))
 
-(defn live-ids
-  "The ids of the listed jobs (each has job memory in view from listing to its end), but except's. The trigger and
-  the job both count live jobs this way, so they judge alike."
+(def owed-kind :drops-owed)
+
+(defn owe!
+  "Record that the drops of a dig at cell (a {:x :y :z} map) are this ctx's root job's, within radius of it, for :owed-s.
+  The item age bound of judge is :owed-s as well, so a longer running job needs no renewal."
+  [c cell radius]
+  (let [o (options {})]
+    (ctx/remember! c owed-kind (expiry/stamp {:job (:root c) :cell cell :radius radius} (ctx/now c) (* 1000 (:owed-s o)))
+                   {:cap (:hold-cap o) :ttl (* 1000 (:owed-s o))})))
+
+(defn owed-records
+  "The data of the :owed records still counting at the view's time, except the job except's own."
   [view except]
-  (into #{} (comp (filter mem/job-kind?) (map name) (remove #{except})) (keys (:entries (:data view)))))
+  (into [] (comp (map :data) (filter #(expiry/current? (:now view) %)) (remove #(= except (:job %))))
+        (mem/entries view owed-kind)))
 
 (defn own-toss?
   "Whether spawn record s (item name) is the body's own toss: one of its :tosses (the toss primitive's {:at :item :count},
@@ -149,9 +161,9 @@
   (storage/carried-totals (u/inventory p)))
 
 (defn judge
-  "Why entity e is left (a keyword, see the ns doc), or nil when it is taken. live is the set of live job ids, except
-  the caller's own job id; :zone stands for a zone or a claim."
-  [{:keys [view kn o self feet live left except carried]} e]
+  "Why entity e is left (a keyword, see the ns doc), or nil when it is taken. owed is owed-records (not the caller's
+  own); :zone stands for a zone or a claim."
+  [{:keys [view kn o self feet owed left except carried]} e]
   (let [now (:now view)
         name (some-> (.-item e) .-name)
         pos (item-pos e)
@@ -167,7 +179,7 @@
       (contains? left (.-id e)) :left
       (and (crops/seed-item? name) (>= (get carried name 0) (:seed-cap o))) :seed-glut
       (some #(<= (u/dist (:anchor %) pos) (:radius %)) holds) :collecting
-      (and age (< age (* 1000 (:owed-s o))) (seq live)) :owed
+      (and age (< age (* 1000 (:owed-s o))) (some #(<= (u/dist (:cell %) pos) (:radius %)) owed)) :owed
       (not (verdict kn self now pos)) :zone
       (some #{name} (:always o)) nil
       (< (:ratio (worth o feet e)) (:min-ratio o)) :not-worth)))
@@ -181,7 +193,7 @@
   (let [o (options args)
         feet (u/pos-of (.-pos (.self p)))
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet feet
-             :live (live-ids view except) :left (left-ids view) :except except :carried (carried-of p)}
+             :owed (owed-records view except) :left (left-ids view) :except except :carried (carried-of p)}
         near (seen p o)
         near-ids (set (map #(.-id %) near))
         beyond (->> (look/seen-items p {:radius (:check-radius o) :max 32})
@@ -194,9 +206,9 @@
 
 (defn candidates
   "The seen item entities within :radius of the body judge takes, nearest first. except is the caller's own job id
-  (nil for the trigger): every other listed job counts as live (live-ids)."
+  (nil for the trigger): another job's current :owed records leave its drops to it."
   [p view kn args except]
   (let [o (options args)
         env {:view view :kn kn :o o :self (.-username (.self p)) :feet (u/pos-of (.-pos (.self p)))
-             :live (live-ids view except) :left (left-ids view) :except except :carried (carried-of p)}]
+             :owed (owed-records view except) :left (left-ids view) :except except :carried (carried-of p)}]
     (filterv #(nil? (judge env %)) (seen p o))))

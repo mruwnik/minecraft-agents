@@ -43,7 +43,9 @@
 (deftest a-seen-log-a-few-blocks-off-holds
   (is (true? (holds? (world log-near)))))
 
-(def live-j1 [(mem/job-kind "j1") {:args {} :children {}}])
+(defn owed-by [job until] [loose/owed-kind {:job job :cell {:x 3 :y 64 :z 0} :radius 8 :until until}])
+
+(def live-j1 (owed-by "j1" (+ now 100000)))
 
 (defn holds-with [overrides w & [opts]]
   (settings/with-settings (update-keys overrides #(keyword "jobs.lib.loose" (name %))) #(holds? w opts)))
@@ -63,11 +65,13 @@
   (is (false? (holds? (world log-ten-off) {:args {:radius 12}})) "the job it fires reads the settings: radius 8")
   (is (true? (holds-with {:radius 12} (world log-ten-off)))))
 
-(deftest trigger-and-job-count-the-same-jobs-live
+(deftest an-owed-record-leaves-a-fresh-drop-by-its-time-and-not-by-a-listed-job
   (let [fresh (assoc log-near :spawn {:at (- now 5000)})]
-    (is (false? (holds? (world fresh) {:memory [live-j1]}))
-        "a listed job's memory counts as live, as the job counts it")
-    (is (true? (holds? (world fresh) {:live #{"j1"}})) "not the engine's own list, which the job cannot see")))
+    (is (false? (holds? (world fresh) {:memory [live-j1]})) "a current record covering the drop")
+    (is (true? (holds? (world fresh) {:memory [(owed-by "j1" (- now 1))]})) "a record whose time ran out, whether or not its job runs")
+    (is (true? (holds? (world fresh) {:memory [[(mem/job-kind "j1") {:args {} :children {}}]]})) "a listed job with no record owes nothing")
+    (is (true? (holds? (world fresh) {:live #{"j1"}})) "not the engine's own list, which the job cannot see")
+    (is (true? (holds? (world fresh) {:memory [(update-in live-j1 [1 :radius] (constantly 0.5))]})) "a drop beyond the record's radius")))
 
 (deftest a-nearly-full-inventory-holds-nothing
   (is (false? (holds? (assoc (world log-near) :inventory (vec (for [i (range 34)] {:name "dirt" :count 64 :slot (+ 9 i)})))))))
