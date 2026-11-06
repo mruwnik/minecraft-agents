@@ -82,6 +82,25 @@
               lit (await (bed-price [15 15]))]
           (is (< lit dark) "alone the sleep skips the night, but placing the bed and falling asleep are seconds in the dark"))))))
 
+(deftest the-chance-a-mob-arrives-while-the-bed-is-lain-in-is-the-sleeps-refusal
+  (is (= 0 (bed-down/arrival-chance 0 5)))
+  (is (< 0.0059 (bed-down/arrival-chance 0.0012 5) 0.006))
+  (is (< (bed-down/arrival-chance 0.0012 5) (bed-down/arrival-chance 0.0012 10))))
+
+(deftest a-bed-in-the-open-is-dearer-the-likelier-a-mob-comes-to-refuse-the-sleep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [price (fn ^:async b [k]
+                      (let [{:keys [eng seen]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :light {} :light-default [15 0]})]
+                        (core/submit! eng (list 'jobs.survival.night {:settings {:jobs.lib.cost.value/spawn-chance-per-s {:k k :n-s 1000}}}) {})
+                        (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+                        (:prices (first (st/emitted seen :night.answers)))))
+              low (await (price 1))
+              high (await (price 40))]
+          (is (< (:bed low) (:bed high)))
+          (is (< (- (:bed high) (:bed low)) (- (:exposed high) (:exposed low))) "a refusal is a risk of the open night, not all of it"))))))
+
 (deftest a-hostile-within-the-boxes-vanilla-keeps-from-sleeping-refuses-the-sleep
   (let [near (fn [mob at] (sh-sleepers/monsters-near-bed? (tu/fake {:floor tu/walk-floor :time night :entities [mob]}) at))
         zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 2} :health 20}]
