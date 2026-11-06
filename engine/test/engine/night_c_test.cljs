@@ -393,15 +393,19 @@
             (is (= [placed] (mapv st/arg-pos (st/calls p "sleep"))) "and slept in: nothing spawns on the lit ground")))))))
 
 (deftest a-home-that-cannot-be-entered-leaves-the-carried-bed-in-the-bag-on-dark-ground
+  ;; at a spawn rate of one meet in 200 s: at the measured one (0.0012) a bed in the open is the cheapest night
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (-> bed-world (dissoc :lit-route) with-walled-home) {:x 10 :y 64 :z 0}))]
-          ((status! 0 5) eng)
-          (await (tu/run-until-empty eng 60))
-          (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
-          (is (= [] (st/calls p "sleep")))
-          (is (seq (st/calls p "place")) "the body dug in"))))))
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+           (fn ^:async inner []
+             (let [{:keys [eng p]} (await (night-at-home (-> bed-world (dissoc :lit-route) with-walled-home) {:x 10 :y 64 :z 0}))]
+               ((status! 0 5) eng)
+               (await (tu/run-until-empty eng 60))
+               (is (= [] (bed-places p)) "the failed walk into the home does not put the bed down in the dark open, priced as sheltered")
+               (is (= [] (st/calls p "sleep")))
+               (is (seq (st/calls p "place")) "the body dug in")))))))))
 
 (deftest a-carried-bed-bound-for-a-closed-home-is-priced-as-the-home-walk-alone
   (async done

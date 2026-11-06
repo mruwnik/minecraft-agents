@@ -907,9 +907,12 @@
                        0)
        "way-on" (do (println (pr-str (assoc (way-on-report agents since-ms) :since-ms since-ms))) 0)
        "dark-meets" (let [at (cell-reader open-chunks (path/join agents ".." "chunks"))
+                          tod (dark-meets/clock (for [b (array-seq (fs/readdirSync agents)) :let [f (path/join agents b "engine" "memory.edn")] :when (fs/existsSync f)
+                                                      [_ t w] (re-seq #":t (\d+), :wt (\d+)" (fs/readFileSync f "utf8"))]
+                                                  [(js/parseFloat t) (js/parseFloat w)]))
                           per (for [b (array-seq (fs/readdirSync agents)) :when (and (not (probe? b)) (fs/existsSync (path/join agents b "engine")))]
                                 (let [rs (read-agent (path/join agents b "engine") since-ms)]
-                                  [(dark-meets/exposure at rs) (dark-meets/meets at rs) (dark-meets/hurt at rs)]))]
+                                  [(dark-meets/exposure at tod rs) (dark-meets/meets at tod rs) (dark-meets/hurt at tod rs)]))]
                       (println (pr-str (assoc (dark-meets/report (map first per) (map second per) (map #(nth % 2) per)) :since-ms since-ms)))
                       0)
        "flee-pace" (do (println (pr-str (assoc (pace-report (since (:flight-steps folded))) :since-ms since-ms))) 0)

@@ -61,8 +61,8 @@
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0 :spec (a/num-in 0 nil)
                :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
-   ::spawn-chance-per-s {:default 0.005 :spec (a/num-in 0 nil)
-                         :doc "Chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance). Measured 0.00112 ((k+1)/n, k=212 meets in n=189539 s dark by the recorded chunks, trial logs to 2026-11-06; under y 40 0.0022, y 40-55 0.0006, above 0.0010) but not yet adopted: price tests assume this value. Recount: tools/event-counts.mjs dark-meets."}
+   ::spawn-chance-per-s {:default {:k 161 :n-s 133715} :spec (a/map-with {:k (a/num-in 0 nil) :n-s (a/num-in 0.1 nil)})
+                         :doc "Counts {:k :n-s} behind the chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance reads (k + 1) / n-s, 0.0012): k hostile meets (the first respond decision about a spawnable mob) in n-s seconds the body stood on a cell not lit-light? at the record's time of day (recorded block and sky light, sky less the darkening of the clock the bodies' memory entries stamp, clear sky), trial logs to 2026-11-06; per band under y 40 0.0022, y 40-55 0.0006, surface 0.0011. Recount: tools/event-counts.mjs dark-meets."}
    ::detour-factor {:default 1.27 :spec (a/num-in 1 nil)
                     :doc "Times the straight line a walk's way is taken to be (detours), for walk-blocks-per-s: 30255 blocks of steers over 23766 of straight line in 1235 walks (go-to walk jobs of 4 blocks or more), trial logs to 2026-10-28; a lower bound (steer chords). Recount: tools/event-counts.mjs walk-detour (:ratio)."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
@@ -412,9 +412,9 @@
     (/ (transduce (map spawns) + 0 cells) (max 1 (count cells)))))
 
 (defn spawn-chance
-  "The chance per second a mob spawns at place and reaches a body standing there: ::spawn-chance-per-s x spawn-share."
+  "The chance per second a mob spawns at place and reaches a body standing there: (k + 1) / n-s of ::spawn-chance-per-s x spawn-share."
   ([place] (spawn-chance place nil))
-  ([place opts] (* (settings/get settings ::spawn-chance-per-s) (spawn-share place opts))))
+  ([place opts] (let [{:keys [k n-s]} (settings/get settings ::spawn-chance-per-s)] (* (/ (inc k) n-s) (spawn-share place opts)))))
 
 (defn dark-factor
   "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block

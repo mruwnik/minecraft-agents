@@ -481,7 +481,7 @@
       (let [once (cost/dark-factor kit)]
         (is (= once (cost/dark-factor kit)))
         (is (= 1 @asked) "the second costed world reads the kept factor")
-        (let [rarer (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s 0.0001} #(cost/dark-factor kit))]
+        (let [rarer (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 10000}} #(cost/dark-factor kit))]
           (is (= 2 @asked) "other settings are priced anew")
           (is (< rarer once) "by them")
           (is (= once (cost/dark-factor kit)))

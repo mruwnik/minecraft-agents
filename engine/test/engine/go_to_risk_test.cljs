@@ -171,7 +171,7 @@
 (def diamond-kit [{:name "diamond_pickaxe" :count 1} {:name "diamond" :count 20}])
 
 (deftest a-walk-over-dark-open-ground-at-night-is-held-when-its-death-costs-more-than-waiting-for-dawn
-  ;; 190 blocks of dark open ground at tick 14000: an 11% death chance; dawn in 473 s, the day walk after it near free.
+  ;; 800 blocks of dark open ground at tick 14000: about an 11% death chance; dawn in 473 s, the day walk after it near free.
   ;; With no bed a death wakes at world spawn: by the hut, the walk back keeps the drops; 5000 blocks off, they are lost,
   ;; and the kit's walk risks over three times the hp the body may afford (67 against 19): held for dawn. A bare body
   ;; far off is not pinned: its walk and the allowance are near equal (the load's price is cost-test's).
@@ -185,13 +185,13 @@
                                          [[-5000 64 0] diamond-kit true]]]
           (let [world (-> night-hut (assoc :inventory inventory) (assoc-in [:self :worldSpawn] spawn))
                 {:keys [eng p seen]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)
-                id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})
+                id (core/submit! eng '(jobs.movement.go-to {:pos [800 64 0]}) {})
                 c (ready-test/ctx-of (assoc world :self {:pos inside :health 20 :food 20 :worldSpawn spawn}))]
             (await (st/tick-n eng 6))
             (is (= held? (= :risky (:reason (core/waiting eng id)))) (pr-str spawn (mapv :name inventory)))
             (is (not-any? #(= :risky (:reason %)) (st/emitted seen :stopped)) "never ended for its risk")))
         (let [c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 20 :food 20 :worldSpawn [-5000 64 0]} :inventory diamond-kit))
-              goal {:x 195 :y 64 :z 0}
+              goal {:x 800 :y 64 :z 0}
               [_ text {:keys [wait]}] (risk/status c goal (straight-plan c goal))]
           (is (= :dawn wait) "a goal worth arrival still waits for a cheaper way")
           (is (re-find #"hp" text)))
@@ -228,7 +228,7 @@
         (let [{:keys [eng p]} (st/setup (update night-hut :blocks merge hut-bed))
               _ (sky/with-sky p)
               _ (st/know-bed! eng {:x 4 :y 64 :z -1})
-              id (core/submit! eng '(jobs.movement.go-to {:pos [195 64 0]}) {})]
+              id (core/submit! eng '(jobs.movement.go-to {:pos [800 64 0]}) {})]
           (await (st/tick-n eng 4))
           (is (= [:risky :sleep] ((juxt :reason :wait) (core/waiting eng id))) "go-to holds for the sleep")
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
@@ -899,7 +899,7 @@
 
 (deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))
-        goal {:x 40 :y 64 :z 0}]
+        goal {:x 170 :y 64 :z 0}]
     (with-redefs [look/unseen-solid-at-fn (open-ground)]
       (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
       (is (= :ok (first (planned-status c goal)))))))
