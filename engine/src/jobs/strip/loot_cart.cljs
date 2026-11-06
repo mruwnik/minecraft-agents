@@ -1,5 +1,6 @@
 (ns jobs.strip.loot-cart
   (:require [jobs.lib.price :as price]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -146,6 +147,7 @@
               (await (near/risky-wait! c w)) :continue
               (= :blocked w) (stop! c :unreachable "cannot walk within reach of the cart")
               (= :partial w) :continue
+              (and (not (:emptied mem)) (= :later (first (ready/threatened (check-cache/fresh c))))) :continue
               :else
               (let [e (if (:emptied mem) "ok" (await (empty-cart! c id)))]
                 (cond
