@@ -1,7 +1,7 @@
 (ns jobs.lib.walk.way-log
   "The way-on inputs of a priced decision and what became of each way, for the measured prior (node tools/event-counts.mjs way-on).
-  :way-on.priced {:set :lit|:dark|:unknown :k :n :ways [[x y z d] ...]}: the counts the decision priced the flight with
-  (wworld/way-scan at the feet), the light there as the body perceives it (:unknown: no light data at the feet), and the first
+  :way-on.priced {:set :lit|:dark|:unknown :under? bool :k :n :ways [[x y z d] ...]}: the counts the decision priced the flight with
+  (wworld/way-scan at the feet), the light there as the body perceives it (:unknown: no light data at the feet), whether the prior was the under-ground one (wworld/under-ground?), and the first
   ways into cells it had not seen. :way-on.seen {:way [x y z d] :on bool}: whether the step goes on, read from the body's memory
   at the first resolve! that finds the way's cells there; resolve! runs after every sight pass (the :perception/pass hook)
   and before every decision logged, so a way is read in the pass that first sees it, in any job. :way-on.censored {:way :why :evicted}: a way dropped
@@ -42,7 +42,7 @@
   (resolve! c)
   (when scan
     (let [p (:primitives c)
-          v (assoc (select-keys scan [:k :n :ways]) :set (setting p (sh-sense/feet p)))
+          v (assoc (select-keys scan [:k :n :ways]) :set (setting p (sh-sense/feet p)) :under? (wworld/under-ground? p))
           waiting (mapv (comp :way :data) (ctx/entries c :way-pending))
           fresh (remove (set waiting) (distinct (:ways v)))]
       (ctx/emit! c :way-on.priced :info v)

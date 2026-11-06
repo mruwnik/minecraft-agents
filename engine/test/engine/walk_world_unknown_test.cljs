@@ -11,6 +11,7 @@
             [engine.perception.light :as light]
             [engine.perception.rays :as rays]
             [engine.settings :as settings]
+            [jobs.lib.shelter.sense :as sh-sense]
             [engine.test-util :as tu :refer [box]]
             [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
@@ -293,7 +294,9 @@
 (deftest the-way-counts-mark-a-body-whose-feet-see-no-sky-light
   (let [world {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -12 63 -12 12 63 12 "stone")}
         under? #(:under? (wworld/way-counts (looked-round-body world % [270])))]
-    (is (= [true nil] [(under? [0 0]) (under? [15 0])]) "sky light 0 at the feet: under ground; open sky: not")))
+    (is (= [true nil] [(under? [0 0]) (under? [15 0])]) "sky light 0 at the feet: under ground; open sky: not")
+    (with-redefs [sh-sense/sky-light-at (constantly nil)]
+      (is (= :unknown (under? [15 0])) "no sky light data: priced as the dearer prior, unknown is not the cheaper case"))))
 
 (defn- looked-round
   "rock-guess? of a body in world at light [sky block] after sight passes facing each of yaws."

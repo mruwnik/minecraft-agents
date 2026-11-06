@@ -45,7 +45,7 @@
         (way-log/log-priced! c scan)
         (way-log/log-priced! c scan)
         (way-log/resolve! c)))
-    (is (= [[:way-on.priced (assoc scan :set :lit)] [:way-on.priced (assoc scan :set :lit)]] @seen)
+    (is (= [[:way-on.priced (assoc scan :set :lit :under? :unknown)] [:way-on.priced (assoc scan :set :lit :under? :unknown)]] @seen)
         "the counts as given, not scanned again; the corridor's ends are not seen yet")
     (is (= ways (pending c)) "a way already waiting is not kept twice")
     (reset! seen [])

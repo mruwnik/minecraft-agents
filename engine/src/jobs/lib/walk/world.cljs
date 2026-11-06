@@ -108,14 +108,22 @@
         (:v hit)
         (let [v (way-on/scan known start)] (.set counted st {:k k :v v}) v)))))
 
-(defn way-counts
-  "{:k :n} of way-scan, {:k 0 :n 0} without a perception; :under? true when the sky light at the feet is 0 (cost/way-on-chance
-  reads caves by their own prior, not by these counts)."
+(defn under-ground?
+  "true when the sky light at the feet is 0, :unknown when it is not known (cost/way-on-chance then prices the dearer of the
+  two priors: unknown is never the cheaper case), else nil. Sky light, not block light: the way-on prior is cave shape, so a
+  torch-lit mine is still a cave."
   [p]
   (let [^js pos (when (aget p "perception") (.-pos (.self p)))
         sky (when pos (sh-sense/sky-light-at p {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}))]
-    (cond-> (if-let [v (way-scan p)] (select-keys v [:k :n]) {:k 0 :n 0})
-      (and sky (zero? sky)) (assoc :under? true))))
+    (cond (nil? sky) :unknown
+          (zero? sky) true)))
+
+(defn way-counts
+  "{:k :n} of way-scan, {:k 0 :n 0} without a perception; :under? is under-ground? when set (cost/way-on-chance reads caves by
+  their own prior, not by these counts)."
+  [p]
+  (cond-> (if-let [v (way-scan p)] (select-keys v [:k :n]) {:k 0 :n 0})
+    (under-ground? p) (assoc :under? (under-ground? p))))
 
 (declare kit-of)
 
