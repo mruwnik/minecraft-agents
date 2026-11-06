@@ -1,5 +1,5 @@
 ;; Card 0967797b: the died record lists the worn armour and the off-hand item, so recover-drops values a pile of worn iron armour and a shield (the body carries nothing else) and fetches it instead of skipping it as worthless.
-;; The kit is put on with RCON (equip is not under test); the body dies at [14 0 14], well inside the plot (a drop flung against the wall is not found), and respawns at [4 0 4].
+;; The kit is put on with RCON (equip is not under test) and the body reports all of it worn before it is killed (a death record taken before the inventory packets arrive lists nothing); the body dies at [14 0 14], well inside the plot (a drop flung against the wall is not found), and respawns at [4 0 4].
 ;; Should-succeed: once the pile is collected the body wears it: helmet, chestplate, leggings, boots and the shield in the off hand (every case waits for that).
 {:defaults
  {:tags [:survival :death :jobs]
@@ -10,7 +10,7 @@
         [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
         [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
         [:rcon "item replace entity $BODY weapon.offhand with minecraft:shield"]
-        [:wait-s 1]
+        [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"} :offHand {:name "shield"}}}] 20]
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]

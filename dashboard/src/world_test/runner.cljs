@@ -1327,6 +1327,14 @@
                 (phase-time-fix (if want-night :night :day) ticks default-day-limit))
         (if want-night 14000 1000)))))
 
+(defn start-case
+  "Case rc as the first holder of its time phase sets the clock for it: a case of :time :any whose :time-set step gives it a
+  lock phase starts at that phase's clock (a night clock left over would fail the phase check), else :day."
+  [rc]
+  (cond (not (lease/time-phase rc)) (assoc rc :time :day)
+        (= :any (:time rc)) (assoc rc :time (if (starts-night? rc) :night :day))
+        :else rc))
+
 (defn time-ok!
   "Whether the server's time suits case c, setting it first when allowed."
   [opts c]
@@ -2072,7 +2080,7 @@
                                              (fn [ok] (if ok
                                                         (.then (start-sleep-rule! rcon! opts rc batch nil (str (:id c) " starts night batch " batch)) (constantly ok))
                                                         ok)))
-                                :else (time-ok! opts (if (and (lease/time-phase rc) (not (and (= :night-x phase) (= :any (:time rc))))) rc (assoc rc :time :day))))))
+                                :else (time-ok! opts (start-case rc)))))
                               (.then (fn [ok]
                                        (if (or (not ok) (= :any phase))
                                          ok

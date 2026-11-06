@@ -96,6 +96,7 @@
    :tags [:readiness :survival :night :hostile]
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 20]
          [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:restart-body]
@@ -110,6 +111,7 @@
    :tags [:readiness :survival :night :hostile]
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 20]
          [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:restart-body]]

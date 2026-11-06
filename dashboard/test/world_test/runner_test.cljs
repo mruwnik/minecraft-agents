@@ -589,6 +589,14 @@
           (r/start-time-fix {:time :night-exclusive} 23500) (r/start-time-fix {:time :any} 9000)])
       "a repeat after a :time-set 9000 step starts at 9000, still day by night?, past the window"))
 
+(deftest a-time-any-case-with-a-time-set-step-starts-on-its-phase-clock
+  (is (= [1000 14000 1000 nil]
+         [(r/start-time-fix (r/start-case {:time :any :act [[:time-set 1000]]}) 14000)
+          (r/start-time-fix (r/start-case {:time :any :act [[:time-set 14000]]}) 1000)
+          (r/start-time-fix (r/start-case {:act []}) 18000)
+          (r/start-time-fix (r/start-case {:time :night :act []}) 14000)])
+      "an :any case with a day :time-set step locks :day but, left as :any, was never reset from a night clock"))
+
 (deftest a-joiner-re-sets-a-drifted-phase-time-and-leaves-an-in-window-one
   (async done
     (let [sets (atom [])

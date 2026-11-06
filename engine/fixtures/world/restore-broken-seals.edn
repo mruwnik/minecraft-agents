@@ -4,6 +4,7 @@
 ;; open ground, or a window in a hut that still has a doorway, is restored at once. The tidy entries come from real digs
 ;; (jobs.blocks.dig :ignore-zones? true on cells another plan's footprint claims). The plot has a second level (platform
 ;; at y 2 up a two-step ramp) so the open ground holds more than reach/room-cells (1024) standable cells.
+;; The doorway cases walk the body back to the hut centre before the first restore (a dig walks out for its drop, and a body outside is no one to keep in).
 ;; Run one case per call: node tools/world-test.mjs engine/fixtures/world/restore-broken-seals.edn --match <name> --first-plot N
 {:defaults
  {:tags [:tidy :restore-broken]
@@ -18,8 +19,9 @@
    :plans [{:id "other" :parts [{:id "door" :cells [#at [12 0 10] #at [12 1 10]] :want [:any "cobblestone"]}]}]
    :act [[:job (jobs.blocks.dig {:pos #at [12 0 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.blocks.dig {:pos #at [12 1 10] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
+         [:job (jobs.movement.go-to {:pos #xyz [10.5 0 10.5] :range 1})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to" :arrived true}} 25]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
-         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to" :arrived true}} 25]
+         [:job (jobs.movement.go-to {:pos #xyz [15 0 10] :range 1})] [:await {:source :job :kind :completed :after-previous true :data {:name "jobs.movement.go-to" :arrived true}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
             {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]
@@ -28,8 +30,9 @@
    :plans [{:id "other" :parts [{:id "door" :cells [#at [10 0 12] #at [10 1 12]] :want [:any "cobblestone"]}]}]
    :act [[:job (jobs.blocks.dig {:pos #at [10 0 12] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
          [:job (jobs.blocks.dig {:pos #at [10 1 12] :ignore-zones? true})] [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 20]
+         [:job (jobs.movement.go-to {:pos #xyz [10.5 0 10.5] :range 1})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to" :arrived true}} 25]
          [:job (jobs.survival.restore-broken {})] [:await {:source :job :kind :stopped :data {:not-restored [:any]}} 30]
-         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to" :arrived true}} 25]
+         [:job (jobs.movement.go-to {:pos #xyz [10 0 15] :range 1})] [:await {:source :job :kind :completed :after-previous true :data {:name "jobs.movement.go-to" :arrived true}} 25]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind :stopped :data {:not-restored [{:why :seals} {:why :seals}]}} :within-s 60}
             {:event {:source :job :kind :completed :data {:cells [[:any] [:any]]}} :within-s 85}]

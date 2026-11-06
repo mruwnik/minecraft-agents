@@ -5,7 +5,7 @@
 ;; holds and lights the site instead of waiting for ever.
 ;; Card b80e127a: coal-and-sticks-are-crafted-into-torches-then-lit: no torch carried, coal and sticks are: the torches light-area would hang
 ;; are crafted first (the torch obtain's cheapest priced way), then hung and the site built.
-;; Also: no-torch-dark-room-is-still-built-unlit (no torch, none craftable: nothing is hung, the build still ends done underground).
+;; Also: no-torch-dark-room-is-still-built-unlit (no torch, none craftable: nothing is hung, the build still ends done underground; the far dark corner stays unseen: a hung torch would make it seen and lit).
 {:defaults
  {:tags [:build :light :torches] :time :any
   :plot {:height 8 :light :dark :length 64}
@@ -29,7 +29,7 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]
          [:await {:source :job :kind :completed} 150]
          [:wait-s 1]
-         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 20]] {:ok true :light {:lit? false}}]]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 20]] {:ok true :light {:seen? false :lit? nil}}]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 150 :of-job true}]
    :after [[:block [5 0 14] "oak_planks"]]}
   {:name "dark-hall-torches-are-fetched-then-built"
