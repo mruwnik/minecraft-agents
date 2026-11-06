@@ -72,6 +72,10 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     lastPos = { x: e.x, y: e.y, z: e.z }
   }
   const bump = () => { epoch++; walked = 0 }
+  // counts every block update, chunk load or unload the body learns about, a new bot and going on or offline: the world
+  // anywhere may differ (worldEpoch; epoch above only moves near the body)
+  let changes = 0
+  let wasOffline = false
   const near = (bot, x, y, z, extra = 0) => {
     sample(bot)
     const e = bot?.entity?.position
@@ -88,6 +92,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
 
   // a column's sections (world section indices 0..63) leave the caches; the arg is mineflayer's corner Vec3 in blocks
   const forgetColumn = corner => {
+    changes++
     if (near(getBot(), corner.x + 8, hereY(getBot()), corner.z + 8, 8)) bump()
     const cx = corner.x >> 4
     const cz = corner.z >> 4
@@ -108,6 +113,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   }
 
   const onUpdate = (oldBlock, newBlock) => {
+    changes++
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
     if (near(getBot(), p.x, p.y, p.z)) bump()
@@ -133,6 +139,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     if (bot === hooked) return bot
     unhook()
     forget()
+    changes++
     lastPos = null
     walked = 0
     hooked = bot
@@ -280,6 +287,12 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     },
     // changes whenever a block, chunk column, chunk light or the hooked bot changes near the body
     epoch: () => { sample(follow()); return epoch },
+    changes: () => {
+      follow()
+      const offline = Boolean(isOffline())
+      if (offline !== wasOffline) { wasOffline = offline; changes++ }
+      return changes
+    },
     version: () => follow()?.version ?? null,
     // null while the bot has no registry yet (the perception waits and asks again)
     sightTable: () => { const bot = follow(); return bot?.registry ? tablesOf(bot).sight : null },

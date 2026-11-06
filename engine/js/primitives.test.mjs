@@ -618,6 +618,17 @@ test('body events: the respawn point chat line is spawn-set, the library spawnRe
   assert.deepEqual(seen, [{ kind: 'spawn-set', pos: at(12, 70, 3) }, { kind: 'spawn-reset' }])
 })
 
+test('worldEpoch moves on any block update, however far, and on a chunk load or unload', () => {
+  const { bot, p } = rig(world)
+  const e0 = p.worldEpoch()
+  bot.emit('blockUpdate', { position: new Vec3(900, 70, 3), stateId: 1 }, { position: new Vec3(900, 70, 3), stateId: 2 })
+  const e1 = p.worldEpoch()
+  bot.emit('chunkColumnUnload', new Vec3(-1600, 0, 0))
+  const e2 = p.worldEpoch()
+  bot.emit('chunkColumnLoad', new Vec3(-1600, 0, 0))
+  assert.deepEqual([e1 > e0, e2 > e1, p.worldEpoch() > e2, p.worldEpoch() === p.worldEpoch()], [true, true, true, true])
+})
+
 test('close quits the bot and the raw world lets go of it', async () => {
   const { bot, p } = rig(world)
   p.rawWorld.onBlockChange(() => {})
@@ -1805,6 +1816,18 @@ test('the raw world has no eye from the end of the connection until the fresh bo
   const during = p.rawWorld.eye()
   await untilSeen(seen, 'online')
   assert.deepEqual([before !== null, during, p.rawWorld.eye() !== null], [true, null, true])
+})
+
+test('worldEpoch moves when the connection ends and again once the fresh bot is adopted', async () => {
+  const bots = []
+  const { p, seen } = await online({ connect: connectOnce(bots), timeScale: 1 })
+  const before = p.worldEpoch()
+  bots[0].emit('end', 'socket closed')
+  const during = p.worldEpoch()
+  await untilSeen(seen, 'online')
+  const after = p.worldEpoch()
+  assert.deepEqual([during > before, after > during], [true, true])
+  await p.close()
 })
 
 test('after the reconnect acting calls run on the new bot', async () => {

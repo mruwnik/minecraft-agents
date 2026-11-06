@@ -584,7 +584,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // the raw world engine.perception looks at (stateAt, lightAt, eye, block changes): body-side only, never a job's
   const rawWorld = createRawWorld({ getBot: () => bot, isOffline: () => isOffline() || down, lightOverlay: (cx, cz, s) => view?.lightOverlay?.(cx, cz, s) })
   view?.onRelit?.(rawWorld.lightChanged)
-  return { setOwner, isOwner, self, worldAge, serverRules, entities, blockAt, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, physicsMs: () => bot.physicsClock?.intervalMs() ?? 50, close }
+  return { setOwner, isOwner, self, worldAge, serverRules, entities, blockAt, worldEpoch: rawWorld.changes, harvestTools, digTime, clearTime, pathWorld, ...acting, chatDirect, wait, isOffline, isSettling, lastKnown, offline, onBodyEvent, entityObservation, onEntityDeath, rawWorld, physicsMs: () => bot.physicsClock?.intervalMs() ?? 50, close }
 }
 
 const OWN_WORK_MS = 15000

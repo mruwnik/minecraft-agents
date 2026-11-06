@@ -9,6 +9,7 @@
   water (water-body), weight 1. At most ::max-cells cells, kept per body while what it read stays (field-of)."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.heap :as heap]
             [engine.path.planner.base :as base]
             [engine.perception.store :as store]
             [engine.settings :as settings]
@@ -282,30 +283,49 @@
   [{:keys [mob pos extent]}]
   [mob (some-> pos (update-vals #(js/Math.floor %)) (update :x #(js/Math.floor (/ % 2))) (update :z #(js/Math.floor (/ % 2)))) extent])
 
+(def max-fields
+  "Fields one body keeps, the least recently used dropped first: twice threats/::max-threats (8), the most one price reads.
+  A walker's is ~2.5 MB of heap and ~2.2 MB of dense grids, so a mob roaming (one per place) must not fill the heap."
+  16)
+
 (defonce bodies (js/WeakMap.))
 
+(defonce shared-asks #js {:hits 0 :misses 0})
+(heap/gauge! :shared-hits #(.-hits shared-asks))
+(heap/gauge! :shared-misses #(.-misses shared-asks))
+
 (defn world-epoch
-  "The change counter of the world p reads without a perception (the \"worldEpoch\" fn of the primitives), nil without one."
+  "What a shared value rests on: the change counter of the world p reads (the \"worldEpoch\" fn of the primitives) and,
+  with a perception, its memory's epoch (fields read memory); nil without a world counter."
   [p]
-  (some-> (aget p "worldEpoch") (.call p)))
+  (when-some [w (some-> (aget p "worldEpoch") (.call p))]
+    (if-let [per (aget p "perception")]
+      [w (memory-age/epoch (:st per))]
+      w)))
 
 (defn shared
   "The value of (thunk) for key k, kept per body (the primitives of c) for every job of it while the world has not changed
   (world-epoch; a body without one keeps nothing), never under check-cache/fresh: what the world shows a field does not
-  depend on the job asking."
+  depend on the job asking. At most max-fields values, the least recently used dropped first."
   [c k thunk]
   (let [p (:primitives c)
         epoch (world-epoch p)]
     (if (nil? epoch)
       (thunk)
-      (let [kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
-            hit (.get kept (pr-str k))]
+      (let [^js kept (or (.get bodies p) (let [m (js/Map.)] (.set bodies p m) m))
+            ks (pr-str k)
+            hit (.get kept ks)]
         (if (and hit (= epoch (:epoch hit)) (not (::check-cache/fresh c)))
-          (:v hit)
+          (do (doto kept (.delete ks) (.set ks hit))
+              (set! (.-hits shared-asks) (inc (.-hits shared-asks)))
+              (:v hit))
           (let [v (thunk)]
+            (set! (.-misses shared-asks) (inc (.-misses shared-asks)))
             ;; an entry of another epoch is never hit again; each holds a whole toll vector (MBs of cells)
             (doseq [[key e] (es6-iterator-seq (.entries kept))] (when-not (= epoch (:epoch e)) (.delete kept key)))
-            (.set kept (pr-str k) {:epoch epoch :v v})
+            (.delete kept ks)
+            (while (>= (.-size kept) max-fields) (.delete kept (.-value (.next (.keys kept)))))
+            (.set kept ks {:epoch epoch :v v})
             v))))))
 
 ;; ---------------------------------------------------------------- reads kept across checks
@@ -320,10 +340,6 @@
           :else 0)))
 
 (def max-sections "Sections of kept reads (16 KB each) one body keeps." 512)
-(def max-fields
-  "Fields one body keeps, the least recently used dropped first: twice threats/::max-threats (8), the most one price reads.
-  A walker's is ~2.5 MB of heap and ~2.2 MB of dense grids, so a mob roaming (one per place) must not fill the heap."
-  16)
 
 (defn ageing-step
   "memory-age/section-flips of section cx sy cz and the 6 beside it (a cell's reading flips when it becomes likelier

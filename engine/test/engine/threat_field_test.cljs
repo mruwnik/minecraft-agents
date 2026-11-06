@@ -9,6 +9,7 @@
             [engine.path.planner.base :as base]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.reach :as reach]
             [jobs.lib.threat-field :as field]))
 
@@ -152,6 +153,28 @@
     (reset! epoch 1)
     (field/shared c [:b] (constantly 2))
     (is (= ["[:b]"] (vec (es6-iterator-seq (.keys ^js (.get field/bodies p))))) "a value no check can hit is not held")))
+
+;; a mob roaming in a still world asks under a new key per place: the body must not keep a toll vector of each
+(deftest shared-keeps-at-most-max-fields-values-as-keys-and-epochs-come
+  (let [epoch (atom 0)
+        p #js {:worldEpoch (fn [] @epoch)}
+        c {:primitives p :view (fn [] {:now 0 :data {}})}
+        sizes (for [i (range 200)]
+                (do (when (zero? (mod i 50)) (swap! epoch inc))
+                    (field/shared c [:place i] (constantly i))
+                    (.-size ^js (.get field/bodies p))))]
+    (is (= field/max-fields (apply max sizes)))
+    (is (= 199 (field/shared c [:place 199] (constantly :read-again))) "the latest is still kept")))
+
+(deftest a-shared-value-is-read-again-when-the-memory-changes
+  (let [mem (atom 0)
+        p #js {:worldEpoch (fn [] 0) :perception {:st #js {}}}
+        c {:primitives p :view (fn [] {:now 0 :data {}})}]
+    (with-redefs [memory-age/epoch (fn [_] @mem)]
+      (field/shared c [:a] (constantly 1))
+      (is (= 1 (field/shared c [:a] (constantly 2))) "the same world and memory: kept")
+      (swap! mem inc)
+      (is (= 3 (field/shared c [:a] (constantly 3))) "the body saw more: its fields read memory, so read again"))))
 
 (deftest a-body-without-a-world-epoch-keeps-no-shared-value
   (let [p #js {}
