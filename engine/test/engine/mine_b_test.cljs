@@ -387,6 +387,31 @@
           (is (= (set (for [x [1 2 3 4] y [64 65]] [x y 0])) (set (dug-cells s))))
           (is (= 4 (count (events-of s :stair.step))) "each step is a jobs.access.stair child"))))))
 
+(deftest a-stair-at-the-height-of-an-ore-its-walk-gave-up-on-from-above-tries-it-again-once
+  ;; KitOak94: the walk to iron at y 64 gave up from y 85; the stair to y 16 passed y 64 15 blocks off it and never tried it again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ore {:x 739 :y 64 :z -182}
+              p (tu/fake-on-floor {:inventory [{:name "stone_pickaxe" :count 1}]})
+              m (atom {:descent {:own-stair {:state :none}} :skipped [ore] :walk-skipped {ore 85}})
+              c {:primitives p :args {:block "iron_ore" :ways #{:descend-stair}} :view (fn [] {:data mem/empty-data :now 1000})}
+              orig [ctx/mem ctx/update-mem! ctx/emit!]
+              at! (fn [y] (fake/swap-self! p assoc :pos [733.5 y -167.5]))]
+          (set! ctx/mem (fn [_] @m))
+          (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
+          (set! ctx/emit! (fn ([_ _ _]) ([_ _ _ _])))
+          (try
+            (at! 65)
+            (is (nil? (mine-descent/level-retry c)) "above the ore's height the stair digs on")
+            (at! 64)
+            (is (= :again (await (mine-descent/cut-round! c))))
+            (is (= [] (:skipped @m)) "the ore is a target again")
+            (is (nil? (mine-descent/level-retry c)) "once only: a second failure stands")
+            (swap! m assoc :walk-skipped {ore 64} :walk-retried #{})
+            (is (nil? (mine-descent/level-retry c)) "skipped from this height: nothing has changed")
+            (finally (let [[a b d] orig] (set! ctx/mem a) (set! ctx/update-mem! b) (set! ctx/emit! d)))))))))
+
 (deftest an-ore-has-a-tunnel-level-and-its-twin-kinds
   (is (= 16 (mine-descent/tunnel-level {:block "iron_ore"})))
   (is (= 16 (mine-descent/tunnel-level {:block "deepslate_iron_ore"})))

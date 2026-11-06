@@ -9,6 +9,7 @@
             [jobs.gather.mine :as mine]
             [jobs.gather.mine.cause :as cause]
             [jobs.lib.need :as need]
+            [jobs.lib.trip :as trip]
             [engine.mine-support :as m :refer [as-child rock-world inv cells]]
             [engine.test-util :as tu]))
 
@@ -205,3 +206,28 @@
         cause-with #(with-redefs [ctx/mem (constantly %)] (:reason (cause/stop-cause c)))]
     (is (= :surplus (cause-with {})))
     (is (nil? (cause-with {:collecting true})))))
+
+(deftest a-shed-whose-junk-the-body-picked-up-again-is-not-thrown-again
+  ;; KitOak94: in a one-wide stair the 92 cobblestone thrown landed within reach and the next step took them back (95 = 92 + 3 dug)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor {:inventory (into [{:name "stone_pickaxe" :count 1}] (repeat 3 {:name "cobblestone" :count 64}))})
+              c {:primitives p :args {:block "iron_ore"} :view (fn [] {:data mem/empty-data :now 1000})}
+              shed (fn ^:async shed-with [m]
+                     (let [m (atom m) calls (atom 0)
+                           orig [ctx/mem ctx/update-mem! ctx/emit! ctx/call]]
+                       (set! ctx/mem (fn [_] @m))
+                       (set! ctx/update-mem! (fn [_ f & args] (apply swap! m f args)))
+                       (set! ctx/emit! (fn ([_ _ _]) ([_ _ _ _])))
+                       (set! ctx/call (fn [& _] (swap! calls inc) (swap! (fake/state p) update :inventory #(vec (take 2 %))) (js/Promise.resolve {:kind :done :data {:tossed [{:item "cobblestone" :count 64}]}})))
+                       (try (await (trip/shed! c))
+                            (finally (let [[a b d e] orig] (set! ctx/mem a) (set! ctx/update-mem! b) (set! ctx/emit! d) (set! ctx/call e))))
+                       [@calls @m]))
+              [calls m] (await (shed {:shed-left {:names #{"cobblestone"} :carried 64 :dug-at 0} :dug-n 3}))]
+          (is (zero? calls) "192 carried after leaving 64 and digging 3: the thrown ones came back")
+          (is (:shed-failed m))
+          (let [[calls m] (await (shed {:shed-left {:names #{"cobblestone"} :carried 64 :dug-at 0} :dug-n 128}))]
+            (is (= 1 calls) "128 dug since: the junk is new, it is thrown")
+            (is (not (:shed-failed m)))
+            (is (= {:names #{"cobblestone"} :carried 64 :dug-at 128} (:shed-left m)) "what it left is what the next shed counts from")))))))

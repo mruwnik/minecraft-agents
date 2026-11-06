@@ -862,6 +862,16 @@
     (is (seq round) "the refused tunnel is dug round")
     (is (not-any? (comp straight :cell) round))))
 
+(deftest a-dig-route-never-plans-a-dig-beside-water-it-would-be-refused
+  ;; KitOak94: the route dug toward the ore through its stair's plug beside water; route-cell! (no :fluid-adjacent) refused it
+  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
+        route (fn [fluid] (choose/route-cells (tu/fake {:blocks (assoc world "2,66,0" fluid) :inventory [{:name "stone_pickaxe" :count 1}]})
+                                              [0 64 0] [4 64 0] (constantly true) (constantly false)))
+        wet (route "water")]
+    (is (seq wet) "the way is dug round the water")
+    (is (not-any? #{[2 65 0]} (map :cell wet)) "the cell under the water is left")
+    (is (some #{[2 65 0]} (map :cell (route "lava"))) "lava beside is sealed by the dig: the straight tunnel stands")))
+
 (deftest a-dig-route-dearer-than-its-worth-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
         route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false false {:worth-s 30}))]

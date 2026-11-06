@@ -81,18 +81,41 @@
         {:keys [x z]} (u/self-pos c)]
     {:x (+ x (* 3 dx)) :z (+ z (* 3 dz))}))
 
+(defn carried-of
+  "Items carried of the names."
+  [c names]
+  (reduce + 0 (keep #(when (contains? names (:name %)) (:count %)) (u/inventory (:primitives c)))))
+
+(defn taken-back
+  "The items of the last shed's names carried beyond what it left plus one for each cell the job dug since (its memory
+  :dug-n): what the body picked up again of what it threw, as in a one-wide stair where they land within reach. 0 with no shed."
+  [c]
+  (let [{:keys [shed-left dug-n]} (ctx/mem c)]
+    (if-let [{:keys [names carried dug-at]} shed-left]
+      (max 0 (- (carried-of c names) carried (- (or dug-n 0) dug-at)))
+      0)))
+
 (defn ^:async shed!
   "Throw away the junk stone over ::junk-cap: a jobs.storage.make-room child for the slots it frees. :continue while it
-  runs, else nil; a make-room that frees nothing is kept in the job's memory as :shed-failed."
+  runs, else nil. A make-room that frees nothing, or a shed whose items the body has picked up again since (taken-back),
+  is kept in the job's memory as :shed-failed: throwing them again would come to the same."
   [c]
   (let [p (:primitives c)
-        n (surplus-slots c)]
-    (when (and (pos? n) (not (:shed-failed (ctx/mem c))))
-      (let [e (await (ctx/call c :shed 'jobs.storage.make-room {:free (min 36 (+ (u/free-slots p) n)) :toss-from (ahead c)}))]
+        n (surplus-slots c)
+        back (when (and (pos? n) (not (:shed-failed (ctx/mem c)))) (taken-back c))]
+    (cond
+      (or (not (pos? n)) (:shed-failed (ctx/mem c))) nil
+      (pos? back) (do (ctx/update-mem! c assoc :shed-failed true)
+                      (ctx/emit! c :trip.shed-taken-back :info {:count back :text (str "the body picked up again " back " of the junk it threw; it digs on with it")})
+                      nil)
+      :else
+      (let [e (await (ctx/call c :shed 'jobs.storage.make-room {:free (min 36 (+ (u/free-slots p) n)) :toss-from (ahead c)}))
+            names (into #{} (map :item) (get-in e [:data :tossed]))]
         (cond
           (= :continue e) :continue
           (pos? (surplus-slots c)) (do (ctx/update-mem! c assoc :shed-failed true) nil)
-          :else nil)))))
+          :else (do (ctx/update-mem! c assoc :shed-left {:names names :carried (carried-of c names) :dug-at (:dug-n (ctx/mem c) 0)})
+                    nil))))))
 
 (defn plan
   "What a trip start does: :roomy, :no-chest, :far or :deposit, with the chest and its walk cost."

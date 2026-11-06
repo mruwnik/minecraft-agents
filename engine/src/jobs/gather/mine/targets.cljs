@@ -269,10 +269,17 @@
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
           (look/seen-items (:primitives c) {:radius radius :max 32})))))
 
+(defn walk-skip!
+  "Note pos as skipped for a walk from the height the body stands at (:walk-skipped {pos y}): a descent that reaches pos's height from
+  another tries it once more (descent/level-retry)."
+  [c pos]
+  (ctx/update-mem! c assoc-in [:walk-skipped pos] (:y (cell-of (u/self-pos c)))))
+
 (defn skip-failed!
-  "Skip the target and count a failure."
+  "Skip the target and count a failure; a walk's failure is noted too (walk-skip!)."
   [c pos]
   (skip! c pos)
+  (walk-skip! c pos)
   (u/failed! c))
 
 (defn cluster-of
@@ -293,6 +300,7 @@
     (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (result/why (near/last-walk c)) :cluster (count cluster)
                                           :text (str "mine skips " (str/join "," (access/cell pos)) (when (> (count cluster) 1) (str " and " (dec (count cluster)) " touching") ) ": no way to stand beside it")})
     (doseq [cell cluster] (skip! c cell))
+    (walk-skip! c pos)
     (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) (map access/cell cluster)))))
 
 (def air-names #{"air" "cave_air" "void_air" "light"})

@@ -316,8 +316,23 @@
                   (do (ctx/update-mem! c update :descent assoc :stop stop)
                       (if level? (stair-stopped! c) (no-stone! c))))))))
 
+(defn level-retry
+  "A target skipped for a walk that failed or found no stand from another height (:walk-skipped) at the feet's height, not tried
+  again yet: the stair has reached the ore's height, where a player tries it again before digging on down. Else nil."
+  [c]
+  (let [{:keys [walk-skipped walk-retried]} (ctx/mem c)
+        y (:y (cell-of (u/self-pos c)))]
+    (some (fn [[pos from-y]] (when (and (= y (:y pos)) (not= y from-y) (not (contains? walk-retried pos))) pos)) walk-skipped)))
+
+(defn retry!
+  "Target pos again: off :skipped, into :walk-retried (once only)."
+  [c pos]
+  (ctx/emit! c :mine.level-retry :info {:pos (access/cell pos) :text (str "mine's stair reached the height of " (str/join "," (access/cell pos)) "; it tries that ore again from here")})
+  (ctx/update-mem! c #(-> % (update :skipped (fn [s] (vec (remove #{pos} s)))) (update :walk-retried (fnil conj #{}) pos)))
+  :again)
+
 (defn ^:async cut-round!
-  "One cut of the stair (see descend-round!)."
+  "One cut of the stair (see descend-round!). A target skipped from higher up at the feet's height (level-retry) is tried again first."
   [c]
   (let [n (:steps (:descent (ctx/mem c)) 0)
         level? (to-level? c)
@@ -326,6 +341,7 @@
     (cond
       own own
       (= :continue back) :continue
+      (and (nil? back) (level-retry c)) (retry! c (level-retry c))
       back (do (ctx/emit! c :mine.not-back :warn {:cell back :text (str "mine could not walk back to its stair down at " (str/join "," back))})
                (stop! c :not-back))
       (and level? (mouth-torch-due? c)) (await (torch-step! c :stair))

@@ -263,13 +263,14 @@
       (and dug-heading (nil? (:heading (:args c))) (nil? (:direction (:args c)))) (assoc :heading dug-heading))))
 
 (defn booked
-  "The memory m after a dig ending e: its data kept, its ground and stair steps added to what earlier calls opened."
+  "The memory m after a dig ending e: its data kept, its ground, stair steps and cells dug (:dug-n, its report's :trip) added to what earlier calls opened."
   [m e]
   (let [d (:data e)
         known (into #{} (map :pos) (:ground m))]
     (-> m
         (assoc :dig-end d)
         (update :cut end/add-cut (:cut d))
+        (update :dug-n (fnil + 0) (get-in e [:report :trip :dug] 0))
         (update :ground (fnil into []) (remove #(known (:pos %))) (:ground d))
         (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
