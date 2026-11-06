@@ -316,6 +316,7 @@
         c-of (fn [blocks] (assoc (rt/ctx-of {:blocks (assoc blocks "738,62,-177" "cobblestone")}) :args {}
                                  :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}})))
         wet (c-of {"739,62,-177" "water"})
+        below (c-of {"738,61,-177" "water"})
         drained (c-of (into {} (map (fn [d] [(apply str (interpose "," (map + [738 62 -177] d))) "air"])) rules/neighbour-deltas))
         unseen (assoc (c-of {"739,62,-177" "air"}) :primitives (tu/seeing-all (tu/fake {:blocks {"738,62,-177" "cobblestone"} :unloaded ["739,62,-177"]})))]
     (is (false? ((own-builds/may-dig-fn wet) plug)))
@@ -323,7 +324,8 @@
     (is (true? ((own-builds/may-dig-fn wet) [738 61 -177])))
     ;; card 37b7baf9: a plug kept for ever shut a body in once its pool was gone
     (is (true? ((own-builds/may-dig-fn drained) plug)) "with the water seen gone the plug is an ordinary block")
-    (is (false? ((own-builds/may-dig-fn unseen) plug)) "a neighbour in an unloaded chunk may be the pool: the plug stays")))
+    (is (true? ((own-builds/may-dig-fn unseen) plug)) "a neighbour in an unloaded chunk leaves the plug diggable: its dig is priced as a flood")
+    (is (true? ((own-builds/may-dig-fn below) plug)) "water under the plug cannot rise into the cut")))
 
 (deftest an-own-stocked-pen-wall-cut-costs-its-put-back-and-the-herd-s-loss-and-the-pen-is-read-once
   ;; card dbd43651: the herd-loss branch of the put-back price; the may-dig, own and price fns of one escalation share one pen read

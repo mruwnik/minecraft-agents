@@ -53,6 +53,7 @@
                                                          goal-way dig-leg dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
                                                          route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
+            [jobs.lib.stair-memory :as stair-mem]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
             [jobs.movement.go-to.reprice :as reprice]
             [jobs.movement.go-to.result :as end]
@@ -708,7 +709,7 @@
             goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
             plan (fn [floors-unseen-ok?]
                    (route-cells (:primitives c) feet goal (may-dig-fn c (own-cut? c)) (own-dig-fn c (own-cut? c)) floors-unseen-ok? (pickaxe-fetch c (fetch-tool? c))
-                                (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c)
+                                (search-opts (merge {:stands (ledger/stair-stands c) :slice slice :spent (:spent-routes m) :own-s (own-cut-fn c) :own-cut (own-cut? c) :plugs (stair-mem/plugs-of c)
                                                      :guess-risk (guess-risk c) :worth-s (:fallback-s (:replan-budget m)) :bound-s (call-budget-s c)}
                                                     (range-opts c pos)))))
             cells (when in-range? (plan false))

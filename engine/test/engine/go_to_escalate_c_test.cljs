@@ -2,6 +2,7 @@
   "jobs.movement.go-to escalation (pillar, stair, dig route, a walk to a wall) and jobs.lib.escape, against the fake
   world."
   (:require [clojure.string :as str]
+            [jobs.lib.access.rules :as rules]
             [jobs.movement.go-to.search-bound :as search-bound]
             [engine.contract :as contract]
             [cljs.test :refer [deftest is are async]]
@@ -1217,6 +1218,18 @@
     [0 58 0] 3 true false
     [10 58 0] 4 true true
     [0 59 0] 2 true false))
+
+(deftest a-plug-with-an-unseen-neighbour-is-dug-at-its-flood-price
+  ;; card f043195e: the unseen neighbour of a plug may be the pool; it is priced as water, not banned
+  (let [hp-s (cost/walk-hp-seconds)
+        plug [10 64 0]
+        stone (into {} (map (fn [d] [(apply str (interpose "," (map + plug d))) "stone"])) rules/neighbour-deltas)
+        p (tu/seeing-all (tu/fake {:blocks (assoc stone "10,64,0" "stone") :unloaded ["11,64,0"] :inventory [{:name "stone_pickaxe" :count 1}]}))
+        dry (:dig-s (dig-route/body-prices p (constantly false)))
+        plugged (:dig-s (dig-route/body-prices p (constantly false) {:plugs #{plug}}))]
+    (is (< (js/Math.abs (- (plugged "stone" plug) (dry "stone" plug) (cost/flood-dig-s {} 20 hp-s))) 1e-9) "the flood price over a dry dig")
+    (is (< (plugged "stone" plug) ##Inf) "still dug: a price, not a ban")
+    (is (= (dry "stone" [20 64 0]) (plugged "stone" [20 64 0])) "a cell that is no plug is priced dry")))
 
 (deftest a-dig-route-and-a-way-price-each-dug-cell-by-what-it-destroys
   ;; another's planks are put back, the stone round them costs nothing; farmland under a growing crop costs its

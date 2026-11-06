@@ -34,6 +34,7 @@
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-placed-fn]]
+            [jobs.lib.stair-memory :as smem]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))
@@ -451,7 +452,8 @@
         worth-s (:worth-s route-opts)
         dearer? (:dearer? route-opts)
         max-damage (:max-damage route-opts)
-        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s :dearer? :max-damage)
+        plugs (:plugs route-opts)
+        route-opts (dissoc route-opts :slice :spent :own-s :guess-risk :worth-s :dearer? :max-damage :plugs)
         [fx fy fz] from
         [gx gy gz] goal
         ;; each cell is read for its floor, its name to dig and whether it is unseen: sensed once
@@ -467,7 +469,7 @@
                          (let [a (when-not (or floors-unseen-ok? (and (== x gx) (== (inc y) gy) (== z gz))) (sensed x (inc y) z))]
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
-        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s :max-damage max-damage})
+        prices (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s :max-damage max-damage :plugs plugs})
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
@@ -620,10 +622,10 @@
   "route-answer's route-opts for a choice's opts: its :slice, its :spent searches, its :own-s and :own-cut
   (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage]}]
+  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage plugs]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :node-s (cost/search-cell-s) :max-damage max-damage}
     closed? (assoc :max-fall 1)
-    slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
+    plugs (assoc :plugs plugs) slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
     guess-risk (assoc :guess-risk guess-risk :worth-s worth-s)))
 
@@ -825,7 +827,7 @@
   still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
   own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
   [c feet fetch? slice]
-  {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? (pickaxe-fetch c fetch?) :own-s (own-cut-fn c)
+  {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? (pickaxe-fetch c fetch?) :own-s (own-cut-fn c) :plugs (smem/plugs-of c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
    :guess-risk (guess-risk c) :worth-s (when (:escalation (ctx/mem c)) (:fallback-s (:replan-budget (ctx/mem c)))) :bound-s (call-budget-s c)
    :max-damage (:max-damage (wworld/walk-settings c))

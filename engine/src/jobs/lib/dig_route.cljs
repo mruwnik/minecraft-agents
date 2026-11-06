@@ -419,12 +419,12 @@
   hp-cost, at most the falls it survives), a block's dig-cost (nil: never dug; a nameless cell
   has none) with what the dig destroys (cost/destroyed-fn over opts :sensed, (fn [cell]) a sensed block, default the
   body's; a cell (opts :own-s cell) prices over 0, the body's own build, at that instead) and, beside seen water that
-  flows into it (rules/fluid-neighbours, beside or above), cost/flood-dig-s, and as :flood that water's level, the time
+  flows into it (rules/fluid-neighbours, beside or above; for a cell in opts :plugs also a neighbour not seen, as water), cost/flood-dig-s, and as :flood that water's level, the time
   the flood is crossed under water and a later dig's cost/wet-dig-s (route's :flood), a stair's step at least its
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps and
   :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
-  ([p unseen? {:keys [sensed own-s max-damage]}]
+  ([p unseen? {:keys [sensed own-s max-damage plugs]}]
    (let [self (.self p)
          equipment (cost/equipment-of (.-equipment self))
          max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {:args (when max-damage {:max-damage max-damage})}))
@@ -436,7 +436,7 @@
          wet (delay (merge (cost/air-profile (.-equipment self) (some-> (.-effects self) array-seq)) (cost/swim-profile (.-equipment self))
                            {:dig-pace (cost/wet-dig-pace (.-equipment self))}))
          flood-s (delay (cost/flood-dig-s @wet (.-health self) (cost/walk-hp-seconds)))
-         level (memoize (fn [[_ y _ :as cell]] (some->> (rules/fluid-neighbours seen-name cell) (keep (fn [[n [_ ny _]]] (when (and (not= "lava" n) (>= ny y)) ny))) seq (apply max))))]
+         level (memoize (fn [[_ y _ :as cell]] (some->> (rules/fluid-neighbours (if (contains? plugs cell) #(or (seen-name %) "water") seen-name) cell) (keep (fn [[n [_ ny _]]] (when (and (not= "lava" n) (>= ny y)) ny))) seq (apply max))))]
      {:max-fall max-fall
       :seen-steps (seen-sections/steps-fn p max-fall)
       :seen-cells (seen-sections/steps-fn p 1)
