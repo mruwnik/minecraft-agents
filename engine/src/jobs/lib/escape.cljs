@@ -338,7 +338,7 @@
 
 (defn stair-heading
   "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on, no fence or wall
-  (reach/tall-block: no step climbs onto one) (bridge?: or none, the stair lays that floor) and every cell of the n steps' cuts diggable? (may-dig?), as a keyword
+  (reach/tall-block: no step climbs onto one) (bridge?: or none, the stair lays that floor) and every cell of the n steps' cuts diggable? (may-dig?) and no fluid (the stair stops :fluid-in-cut), as a keyword
   (:east ...), or nil."
   ([block-at feet dirs] (stair-heading block-at feet dirs 1 (constantly true)))
   ([block-at feet dirs n may-dig?] (stair-heading block-at feet dirs n may-dig? false))
@@ -347,7 +347,7 @@
            (let [front (ahead feet d 1)]
              (when (and (or bridge? (solid? (block-at front))) (not (protected? (block-at front)))
                         (not (some->> (block-at front) (re-find reach/tall-block)))
-                        (every? #(diggable? block-at may-dig? %) (stair-cuts feet d (max 1 n))))
+                        (every? #(and (diggable? block-at may-dig? %) (not (bs/fluids (block-at %)))) (stair-cuts feet d (max 1 n))))
                (heading-names d))))
          dirs)))
 
