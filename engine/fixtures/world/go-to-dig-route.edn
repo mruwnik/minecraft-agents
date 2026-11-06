@@ -67,6 +67,20 @@
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:block [19 5 16] "stone"] [:block [20 4 16] "stone"] [:body-near [19.5 2 16.5] 1.5]]}
+  ;; card 37b7baf9: the body remembers the shaft's top cell as its own plug against water, but no water is beside it any more: it is dug as any block
+  {:name "own-plug-with-the-water-gone-is-dug-through"
+   :memory [{:kind :stair-plug :data {:dim "overworld" :cell #at [19 5 16]} :policy {:cap 60 :ttl :forever}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:block [19 5 16] "air"] [:body-near [19.5 2 16.5] 1.5]]}
+  ;; should fail: the same plug on the only way to the pocket with the pool still beside it: never dug, go-to gives up
+  {:name "own-plug-against-water-on-the-only-way-is-never-dug"
+   :blocks [[:fill [14 0 11] [24 4 21] "bedrock"] [:fill [19 2 16] [19 3 16] "air"] [:set [19 4 16] "stone"]
+            [:fill [14 5 11] [24 5 21] "water"] [:fill [14 5 16] [19 5 16] "stone"]]
+   :memory [{:kind :stair-plug :data {:dim "overworld" :cell #at [19 5 16]} :policy {:cap 60 :ttl :forever}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 140 :of-job true}]
+   :after [[:block [19 5 16] "stone"] [:body-far [19.5 2 16.5] 0.9]]}
   ;; should fail: the pocket's floor is lava, so its goal cell is no place to stand: go-to refuses at once (goal-not-standable), digs nothing and never steps in
   {:name "pocket-over-lava-is-refused"
    :blocks [[:set [19 1 16] "lava"]]
