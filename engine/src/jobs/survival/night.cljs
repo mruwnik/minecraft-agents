@@ -554,9 +554,9 @@
 (defn bed-walk-price
   "{:walk :walk-hp :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
   :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
-  staying put (spawns at the feet, spawn-light/night-chance, over the walk's
-  seconds but no longer than shelter-s, the seconds sheltering here takes, which closes them out (none when already enclosed:
-  spawns at the feet go on); the hostiles known near
+  staying put (spawns at the feet, spawn-light/night-chance, over shelter-s, the seconds the body stays open here: sheltering
+  here closes them out, the night left when nothing can; over the walk's seconds when already enclosed: spawns at the feet go
+  on); the hostiles known near
   the body), both priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage, each hp at jobs.lib.cost/hp-price (:walk-hp,
   :stay); :walk also costs jobs.lib.cost/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
   quoted route."
@@ -568,7 +568,7 @@
         hp (walk-hp-s c bed r)]
     {:walk (+ hp (cost/commute-s (sh/in-ground? p (ctx/view c)) secs shelter-s))
      :walk-hp hp
-     :stay (* hp-s (+ (price/stay-hp c here (if (pos? shelter-s) (min secs shelter-s) secs)) (price/way-fight-hp c (u/self-pos c))))}))
+     :stay (* hp-s (+ (price/stay-hp c here (if (pos? shelter-s) shelter-s secs)) (price/way-fight-hp c (u/self-pos c))))}))
 
 (defn budget-priced
   "The quoted route of q. A partial one over floors the body never saw (:unseen-floors, a search that spent go-to's node budget or

@@ -7,6 +7,8 @@
 ;; (A lit tunnel open at the end is priced as dark by the hall's chance, sh-inside/stay-hall: staying ties with the walk, the walk wins.)
 ;; Case 3 (cc56de38): at dusk in a glowstone-lit stone tunnel, the bed 82 blocks down it: the walk is lit (0 hp, no dearer than
 ;; staying; overdue, the bed is taken), so the body walks to the bed and sleeps. Should-fail: night.bed-walk-unsafe.
+;; Case 4 (7bb2b1b5): on dark obsidian ground with nothing carried (no way to shelter: staying is the whole night out) the bed 10
+;; blocks off over the dark is walked to and slept in. Should-fail: night.bed-walk-unsafe priced at the walk's seconds both sides.
 ;; Needs the night (bed use is decided by the clock).
 {:defaults
  {:tags [:night :survival :bed]
@@ -17,7 +19,16 @@
   :body {:at [6.5 0 8.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
   :limit-s 150}
  :cases
- [{:name "a-far-bed-down-a-lit-way-is-walked-to-from-dark-ground"
+ [{:name "a-near-bed-over-dark-ground-is-walked-to-with-no-way-to-shelter"
+   :plot {:light :sky :floor "obsidian" :length 56 :width 16 :height 6}
+   :memory [{:kind :bed :data {:pos #xyz [16 0 8]} :policy {:cap 1 :ttl :forever}}]
+   :blocks [[:set [48 0 8] "air"] [:set [49 0 8] "air"]
+            [:set [16 0 8] "red_bed[facing=east,part=foot]"] [:set [17 0 8] "red_bed[facing=east,part=head]"]]
+   :body {:inventory []}
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}
+            {:no-event {:source :job :kind :night.bed-walk-unsafe} :for-s 60 :until {:source :action :kind :done :data {:name "sleep"}}}]}
+  {:name "a-far-bed-down-a-lit-way-is-walked-to-from-dark-ground"
    :blocks [[:set [48 0 8] "red_bed[facing=east,part=foot]"] [:set [49 0 8] "red_bed[facing=east,part=head]"]
             [:set [24 0 6] "glowstone"] [:set [36 0 6] "glowstone"] [:set [48 0 6] "glowstone"]]
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
