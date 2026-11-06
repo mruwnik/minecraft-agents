@@ -18,6 +18,7 @@
             [jobs.lib.waits :as waits]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.escalate-choose :as choose]
+            [jobs.movement.go-to.escalation :as escalation]
             [jobs.lib.own-builds :as own-builds]
             [jobs.movement.go-to.way-steps :as way-steps]))
 
@@ -137,7 +138,7 @@
 (defn span-job
   "[job args] of the child that builds span e."
   [{:keys [step] :as e} ignore-zones? fetch?]
-  (let [ways-for (if fetch? #{:carried :chest :craft :gather} #{:carried})]
+  (let [ways-for (escalation/ways-for fetch?)]
     (case step
       :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk}}]
       :stair ['jobs.access.stair {:dir :down :heading (:heading e) :steps (:steps e) :accept #{:falling-block}

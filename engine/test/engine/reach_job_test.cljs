@@ -262,3 +262,9 @@
                                                     {:pos [40 41 0] :range 1}))]
           (is (true? (:arrived @out)) (pr-str @out (mapv (juxt :kind :text) @seen)))
           (is (<= 40 (second (feet p)))))))))
+
+(deftest reach-stair-and-bridge-children-may-craft-from-carried-goods-without-fetching
+  (are [step fetch? ways] (= ways (:ways (second (reach/span-job {:step step :heading :east :steps 3 :length 3} false fetch?))))
+    :stair false #{:carried :craft}
+    :bridge false #{:carried :craft}
+    :stair true #{:carried :chest :craft :gather}))
