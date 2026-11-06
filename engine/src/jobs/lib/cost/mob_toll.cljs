@@ -1,31 +1,39 @@
 (ns jobs.lib.cost.mob-toll
-  "What a second within a known mob's reach costs go-to's planner (jobs.lib.threats/threat-tolls): danger-rate, the mob's
-  hurt over 1 s x its stance's factor (danger/danger-opts), at most max-rate; threat-factor prices it at the hp price of the
-  body's health. The stance is the answer the reflex would take to the mob met beside the body (answer/decide), so the
-  planner and the reflex price a mob by one price."
+  "What a second within a known mob's reach costs go-to's planner (jobs.lib.threats/threat-tolls), by the answer the reflex
+  would take to the mob met beside the body (answer/decide), so the planner and the reflex price a mob by one price:
+  a mob the body would flee costs its hurt over 1 s x the :flee factor (danger/danger-opts); one it would fight costs the
+  fight's own price less its seconds (its blows and hunger, a death free: answer/answer-price*) over the exposure seconds (danger/exposure-s). Both at
+  most max-rate hp at the hp price of the body's health (threat-factor)."
   (:require [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.health :as health]))
 
-(defn stance
-  "How the planner prices mob m (a name, or {:name :held}) alone for body {:health :food :equipment :weapon :pos} and its
-  death (death/death-cost's :level :carried :respawn): :fight
-  when a fight is the cheapest answer to it met beside the body (answer/decide over answer/threat-answers), else :flee."
+(defn answered
+  "{:stance :rate} for mob m (a name, or {:name :held}) alone for body {:health :food :equipment :weapon :pos} and its
+  death (death/death-cost's :level :carried :respawn): :stance :fight when a fight is the cheapest answer to it met beside
+  the body (answer/decide over answer/threat-answers), else :flee; :rate the seconds a fight costs beyond itself (its price,
+  a death free, less its seconds) a second of the ::exposure-s a body is exposed to a mob, 0 for a flight."
   [body m]
-  (if (= :fight (:answer (answer/decide body (answer/threat-answers body [m] nil) (:pos body)))) :fight :flee))
+  (let [answers (answer/threat-answers body [m] nil)
+        {:keys [answer]} (answer/decide body answers (:pos body))
+        fight (:fight answers)]
+    (if (= :fight answer)
+      {:stance :fight
+       :rate (max 0 (/ (- (answer/answer-price* body fight (:pos body) 0) (:seconds fight)) (max 1 (danger/exposure-s))))}
+      {:stance :flee :rate 0})))
 
-(defn danger-rate
-  "hp a second a near mob m costs body (see the ns doc). opts: danger/danger-opts and :stance (default m's stance)."
-  ([body m] (danger-rate body m nil))
-  ([{:keys [equipment] :as body} m opts]
-   (min (get opts :max-rate danger/max-rate)
-        (* (danger/hurt-rate equipment m)
-           (get (merge danger/stances (:stances opts)) (or (:stance opts) (stance body m)))))))
+(defn stance
+  "How the planner prices mob m for body: :fight or :flee (answered)."
+  [body m]
+  (:stance (answered body m)))
 
 (defn threat-factor
-  "Seconds more each second within a known mob's reach costs body: m's danger-rate at stance st (default its stance) x
-  weight (0-1: a fading memory, the cell's place in its field) at the hp price of the body's health (the planner's
-  options.tolls factor)."
-  ([body m weight] (threat-factor body m weight (stance body m)))
-  ([{:keys [health] :as body} m weight st]
-   (* weight (danger-rate body m (assoc (danger/danger-opts) :stance st)) (health/hp-price (if (number? health) health 20)))))
+  "Seconds more each second within a known mob's reach costs body: weight (0-1: a fading memory, the cell's place in its
+  field) x, for the answer a ({:stance :rate}, default answered), a flight's hurt over 1 s x the :flee factor at the hp
+  price of the body's health, or a fight's rate; at most max-rate hp at that price (the planner's options.tolls factor)."
+  ([body m weight] (threat-factor body m weight (answered body m)))
+  ([{:keys [health equipment]} m weight {:keys [stance rate]}]
+   (let [{:keys [stances max-rate]} (danger/danger-opts)
+         hp-s (health/hp-price (if (number? health) health 20))]
+     (* weight (min (* max-rate hp-s)
+                    (if (= :fight stance) rate (* (danger/hurt-rate equipment m) (:flee stances) hp-s)))))))

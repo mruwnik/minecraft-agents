@@ -60,7 +60,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plain (await (plan-past {:entities [zombie]} [] true))
-              default (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 4 :jobs.lib.cost.danger/fight-factor 0.1 :jobs.lib.cost.danger/max-rate 4}))
+              default (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 4 :jobs.lib.cost.danger/max-rate 4}))
               cheap-flee (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/flee-factor 0.1}))
               capped (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/max-rate 0.2}))]
           (is (= (mapv (juxt :x :z) plain) (mapv (juxt :x :z) default)) "today's values as options: the same plan")

@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.health]
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.threats :as threats]))
 
@@ -30,16 +31,15 @@
   (is (> (cost/hurt-rate nil {:name "drowned" :held "trident"}) (cost/hurt-rate nil "drowned")))
   (is (= (cost/hurt-rate nil "drowned") (cost/hurt-rate nil {:name "drowned" :held "stick"}))))
 
-(deftest rate-falls-with-a-weapon-and-armour-and-is-the-hp-a-second-not-the-price
-  (let [rate #(/ (js/Math.round (* 100 (cost/danger-rate %1 %2))) 100)]
-    (is (= 4 (rate unarmed "zombie")) "3 dps x 4 (flee), capped at 4")
-    (is (= 0.25 (rate armed "zombie")) "2.5 hp a second (a hit of 2.5 on easy) x 0.1 (fight)")
-    (is (= 0.25 (rate (assoc armed :health 10) "zombie")) "health 10: still a fight; the dearer hp is the planner's damage weight")
-    (is (= 0.25 (rate (assoc armed :health 5) "zombie")) "health 5: the fight is still the cheapest answer, no health held back")
-    (is (= 0.16 (rate (assoc armed :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
-                                              :feet {:name "iron_boots"}}) "zombie"))
-        "10 iron points: vanilla's 8.5 effective points against a 2.5 hp hit take off more")
-    (is (= 4 (rate unarmed "creeper")) "a creeper the body cannot fight hit-and-back is fled")))
+(defn toll [body mob] (cost/threat-factor body mob 1))
+
+(deftest toll-falls-with-a-weapon-and-armour-and-follows-the-fights-own-price
+  (let [wooden (assoc unarmed :weapon "wooden_sword")
+        iron {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :feet {:name "iron_boots"}}]
+    (is (= :fight (cost/stance wooden "zombie")))
+    (is (< 0 (toll armed "zombie") (toll wooden "zombie")) "a diamond sword's fight costs less a second than a wooden one's")
+    (is (< (toll (assoc armed :equipment iron) "zombie") (toll armed "zombie")) "armour lowers the fight's blows")
+    (is (< (toll armed "zombie") (toll unarmed "zombie")) "a flight costs more than a fight")))
 
 (defn zombie [id x z] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
 
@@ -75,19 +75,18 @@
     (is (= ["skeleton" "stone_sword" "skeleton"] ((juxt :mob :held :chaser) fled)))))
 
 (deftest danger-terms-are-options-and-the-defaults-keep-the-price
-  (let [rate #(cost/danger-rate unarmed "zombie" %)]
-    (is (= (rate nil) (rate {})) "no options: today's rate")
-    (is (= 4 (rate {})) "default 2.5 hp a second x 4 (flee), capped at 4")
-    (is (= 1.25 (rate {:stances {:flee 0.5}})) "the flee factor scales the rate")
-    (is (< (js/Math.abs (- 0.5 (cost/danger-rate armed "zombie" {:stances {:fight 0.2}}))) 1e-9) "the fight factor")
-    (is (= 2 (rate {:max-rate 2})) "max-rate caps one danger")
-    (is (= 8 (rate {:max-rate 8 :stances {:flee 8}})) "a higher cap lets more through: 12 capped at 8")))
+  (let [toll #(settings/with-settings % (fn [] (toll unarmed "zombie")))
+        base (toll {})
+        hp (jobs.lib.cost.health/hp-price 20)]
+    (is (= (* 4 hp) base) "default 2.5 hp a second x 4 (flee), capped at 4 hp a second")
+    (is (= (* 2 hp) (toll {:jobs.lib.cost.danger/max-rate 2})) "max-rate caps one danger")
+    (is (= (* 1.25 hp) (toll {:jobs.lib.cost.danger/flee-factor 0.5})) "the flee factor scales the rate")))
 
 (deftest the-danger-settings-name-the-danger-options
-  (is (= {:stances {:flee 2 :fight 0.5} :max-rate 3}
-         (settings/with-settings {:jobs.lib.cost.danger/flee-factor 2 :jobs.lib.cost.danger/fight-factor 0.5 :jobs.lib.cost.danger/max-rate 3}
+  (is (= {:stances {:flee 2} :max-rate 3}
+         (settings/with-settings {:jobs.lib.cost.danger/flee-factor 2 :jobs.lib.cost.danger/max-rate 3}
            cost/danger-opts)))
-  (is (= {:stances {:flee 4 :fight 0.1} :max-rate 4} (cost/danger-opts)) "the defaults"))
+  (is (= {:stances {:flee 4} :max-rate 4} (cost/danger-opts)) "the defaults"))
 
 (defn fled-view
   "A memory view at t 1000 whose :threat entries were written at the given ms with the given data."

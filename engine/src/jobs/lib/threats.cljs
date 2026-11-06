@@ -213,11 +213,11 @@
   (let [p (:primitives c)] (merge (cost/death-body p (ctx/view c)) (body-of p))))
 
 (defn stances
-  "{mob stance} of threats ts (cost/mob-of-threat each) for c's body: cost/stance, the answer its reflex would take to the
-  mob met beside it, priced with what a death would cost it (death-body)."
+  "{mob {:stance :rate}} of threats ts (cost/mob-of-threat each) for c's body: cost/answered, the answer its reflex would
+  take to the mob met beside it, priced with what a death would cost it (death-body)."
   [c ts]
   (let [body (death-body c)]
-    (into {} (map (fn [m] [m (cost/stance body m)])) (distinct (map cost/mob-of-threat ts)))))
+    (into {} (map (fn [m] [m (cost/answered body m)])) (distinct (map cost/mob-of-threat ts)))))
 
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
@@ -231,7 +231,7 @@
         ts (threats-of c)
         st (stances c ts)
         ts (->> ts
-                (filter #(= :flee (st (cost/mob-of-threat %))))
+                (filter #(= :flee (:stance (st (cost/mob-of-threat %)))))
                 (mapv #(assoc % :toll (cost/threat-factor body (cost/mob-of-threat %) (:weight %) (st (cost/mob-of-threat %)))))
                 (filterv #(pos? (:toll %))))]
     (fn [{:keys [x y z] :as pos}]
@@ -284,7 +284,7 @@
   (round-weight), the body-inputs and the stances (toll-inputs-no-worse?)."
   [c threats]
   (conj (into [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats))] (body-inputs c))
-        (stances c threats)))
+        (update-vals (stances c threats) :stance)))
 
 (defn toll-inputs-no-worse?
   "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, none at a higher weight, the same armour, weapon and stances, health no

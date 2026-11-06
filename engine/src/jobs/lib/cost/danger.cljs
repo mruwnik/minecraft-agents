@@ -9,7 +9,7 @@
   weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
   outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  danger-opts: the stance factors (:flee x4, :fight x0.1) and max-rate, as settings."
+  danger-opts: the :flee factor (x4) and max-rate, as settings."
   (:require [engine.args :as a]
             [engine.constants :as constants]
             [engine.path.planner.base :as base]
@@ -27,7 +27,6 @@
   {::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::flee-factor {:default 4 :doc "Danger price: a known mob the body would flee costs this times its hp a second." :spec (a/num-in 0 nil)}
-   ::fight-factor {:default 0.1 :doc "Danger price: a known mob the body would fight costs this times its hp a second." :spec (a/num-in 0 nil)}
    ::max-rate {:default 4 :doc "Danger price: hp a second one known danger costs at most; above 4 it also raises the total of all dangers a second (the planner's dangerCap)." :spec a/pos-num?}
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
@@ -119,15 +118,13 @@
 ;; ---------------------------------------------------------------- the planner's danger rate
 
 (def max-dangers 8)
-(def stances "Rate factor: :flee from a mob costs the body far more than one it would :fight." {:flee 4 :fight 0.1})
 (def max-rate "hp a second one danger costs at most." 4)
 (def danger-cap "hp a second all known dangers together cost at most (the planner's dangerCap); a larger ::max-rate raises it." 4)
 
 (defn danger-opts
-  "The danger options as the {:stances :max-rate} that danger-rate takes, from the settings ::flee-factor,
-  ::fight-factor and ::max-rate."
+  "The danger options {:stances :max-rate}, from the settings ::flee-factor and ::max-rate."
   []
-  {:stances {:flee (settings/get settings ::flee-factor) :fight (settings/get settings ::fight-factor)}
+  {:stances {:flee (settings/get settings ::flee-factor)}
    :max-rate (settings/get settings ::max-rate)})
 
 (defn mob-of-threat
