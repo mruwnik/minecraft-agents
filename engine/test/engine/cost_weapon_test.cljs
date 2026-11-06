@@ -22,6 +22,11 @@
   (doseq [[d blow] [[1 3.877] [2 4.052] [3 4.226]]]
     (is (< (js/Math.abs (- blow (threat/arrow-blow d))) 1e-3) (str "difficulty " d))))
 
+(deftest a-pillagers-bolt-blows-as-an-arrow-does
+  (doseq [d [1 2 3]]
+    (settings/with-settings {::threat/difficulty d}
+      (fn [] (is (= (threat/arrow-blow d) (threat/mob-blow "pillager")) (str "difficulty " d))))))
+
 (deftest an-arrow-hits-at-the-posterior-mean-of-the-counts
   (is (< (js/Math.abs (- (/ 191 353) (threat/arrow-hit-chance))) 1e-9))
   (settings/with-settings {::threat/arrow-hits 0 ::threat/arrow-shots 0}

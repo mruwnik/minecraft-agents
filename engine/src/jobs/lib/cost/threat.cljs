@@ -87,14 +87,15 @@
 (def mob-hit
   "Damage one hit of a mob deals at normal difficulty, bow mobs apart (mob-blow). Unknown mobs count as 3."
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "spider" 2 "cave_spider" 3
-   "witch" 3 "drowned_trident" 8 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
+   "witch" 3 "drowned_trident" 8 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
 (def bow-mobs #{"skeleton" "stray" "parched" "bogged"})
 
 (defn mob-blow
-  "Damage one hit of mob-name deals before the difficulty's scaling: a bow mob's arrow (arrow-blow), else its mob-hit."
+  "Damage one hit of mob-name deals before the difficulty's scaling: a bow mob's or a pillager's arrow (arrow-blow: vanilla
+  Pillager.performRangedAttack shoots the crossbow at velocity 1.6, a skeleton's arrow speed), else its mob-hit."
   [mob-name]
-  (if (contains? bow-mobs mob-name) (arrow-blow (difficulty)) (get mob-hit mob-name 3)))
+  (if (or (contains? bow-mobs mob-name) (= "pillager" mob-name)) (arrow-blow (difficulty)) (get mob-hit mob-name 3)))
 
 (def door-breakers
   "Mobs that break a wooden door down, with the difficulty from which they do (vanilla BreakDoorGoal): a vindicator
