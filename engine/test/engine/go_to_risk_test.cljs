@@ -702,6 +702,12 @@
     (is (= 9 (allowed fed ##Inf [])) "arrive: all but 1; walking now or waiting is a choice of ways (walk-risk/status)")
     (is (zero? (allowed fed 0 [])) "a goal worth nothing buys no risk")))
 
+(deftest a-worth-buys-hp-at-the-price-a-walk-plans-them-at
+  (let [allowed (fn [food worth] (price/allowed (ready-test/ctx-of (assoc day-world :self {:pos inside :health 10 :food food} :inventory [])) worth))
+        worth 60]
+    (is (< (allowed 15 worth) (allowed 20 worth)) "hunger an hp brings makes it dearer: fewer hp bought")
+    (is (= (/ worth (cost/hp-weight 15 10 9)) (allowed 15 worth)) "the planner's :damage-weight is the allowance's price")))
+
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]
     (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]

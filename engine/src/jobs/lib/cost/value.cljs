@@ -505,6 +505,14 @@
   (let [short #(max 0 (- (foods/hungry-line % {}) food))]
     (* (food-point-worth) (- (short (- health damage)) (short health)))))
 
+(defn hp-weight
+  "Seconds one hp costs a body at health with food, spending up to hp: its hp-price and the mean hunger an hp of the
+  spend brings (hunger-s over hp: a hinge, so not the first hp's). The one price of an hp a walk's planner and the hp a
+  worth buys (jobs.lib.price/allowed-hp) share. Without a food (not a number): the hp-price alone."
+  [food health hp]
+  (+ (health/hp-price health)
+     (if (and (number? food) (pos? hp)) (/ (hunger-s food health hp) hp) 0)))
+
 (defn food-search-worth
   "Seconds a search for food is worth while the pack lacks `short` hunger points: food-point-worth each, less one trip."
   [short]

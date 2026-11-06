@@ -34,13 +34,14 @@
   "allowed for a body at health and food: see allowed."
   [health food worth waits?]
   (if (number? worth)
-    (min (dec health) (/ worth (cost/hp-price health)))
+    (let [cap (dec health)]
+      (min cap (/ worth (cost/hp-weight food health (max 1 cap)))))
     (let [share (risk/share-hp health food)]
       (if waits? share (max share (dec health))))))
 
 (defn allowed
   "The hp of expected damage the body may take on a risk now: as many as `worth` (seconds the goal is worth, by default the
-  call's, ctx/worth) buys at the price of an hp now (dearer when hurt), all but 1 at most (##Inf, arrive: all but 1); a goal
+  call's, ctx/worth) buys at the price of an hp now (dearer when hurt, and with the hunger it brings: cost/hp-weight, as a walk's planner prices it), all but 1 at most (##Inf, arrive: all but 1); a goal
   worth little is refused a dear trip (death is a cost), one worth 0 buys none. Whether to take the risk now or wait first is
   a choice of ways (walk-risk/status). With nil (body fitness: fit): cost.risk/share-hp, all but 1 hp while waiting never
   lowers the price (`waits?` false; by default while the body can not heal by waiting, cannot-heal?)."
