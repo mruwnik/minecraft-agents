@@ -35,7 +35,7 @@
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
-                 :doc "Spawn chance per second (jobs.lib.spawn-light/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
+                 :doc "Spawn chance per second (jobs.lib.spawn-light/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.0012, a lit or sunlit one 0."}
    ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
                        :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
    ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)

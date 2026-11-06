@@ -28,11 +28,18 @@
                  (and (makes? c) (craft-plan c tools 1))
                  (and (gathers? c) (or (gather-viable? c tools 1) (explorable? c tools 1)))))))
 
+(defn callable?
+  "Whether the need's child may be called at start status s: composite/startable?, or s carries a :look-first child,
+  which the engine runs before it asks the checks again (jobs.lib.ready/priced: the look was the cheapest way)."
+  [s]
+  (or (composite/startable? s) (some? (:look-first (nth s 2)))))
+
 (defn hall-cell
-  "The cell of a dark hall refusal a torch ends (jobs.lib.ready/hall-status: :exposed, lowered by :torch, :at), else nil."
+  "The cell of a dark hall refusal a torch ends (jobs.lib.ready/hall-status: :exposed, lowered by :torch, :at), else nil;
+  nil too while the refusal looks first (:look-first), a look being cheaper than the torch."
   [cause]
-  (let [{:keys [reason lowered-by at]} (when (map? cause) cause)]
-    (when (and (= :exposed reason) (contains? lowered-by :torch)) at)))
+  (let [{:keys [reason lowered-by at look-first]} (when (map? cause) cause)]
+    (when (and (= :exposed reason) (contains? lowered-by :torch) (nil? look-first)) at)))
 
 (def light-settle-ms "How long after a torch is hung its light may take to reach what the body perceives." 3000)
 
@@ -64,7 +71,7 @@
            (boolean (if (tools-wanted c names need)
                       (tool-viable? c names need)
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-                        (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
+                        (or (callable? s) (lights-itself? c (contract/status-cause s))))))))))
 
 (defn seen-refusal
   "The start status of the first seen raw need's child when it declines to start (its readiness or price), else nil:
@@ -74,7 +81,7 @@
     (when (and (seen-of c need) (not (tools-wanted c names need)))
       (let [need (with-block c need)
             s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-        (when-not (composite/startable? s) s)))))
+        (when-not (callable? s) s)))))
 
 (defn trees-unreachable?
   "Whether a seen log need's child declines :no-tree (the logs seen are not ones it can fell): the search looks
@@ -140,5 +147,5 @@
       (if-let [tools (tools-wanted c names need)]
         (gather-held c tools 1)
         (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-          (when-not (or (composite/startable? s) (lights-itself? c (contract/status-cause s)))
+          (when-not (or (callable? s) (lights-itself? c (contract/status-cause s)))
             (with-meta (contract/status-cause s) {:kind (first s)})))))))

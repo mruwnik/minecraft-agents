@@ -2,6 +2,7 @@
   "items.obtain's choice between a way whose raw needs are all seen and a search for one that is not: each priced, the
   cheaper taken."
   (:require [cljs.test :refer [deftest is]]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.hostile-test :as h]
@@ -260,3 +261,15 @@
     (is (= (* 3 price) (plan/steps-s c smelts)))
     (is (= (* 3 price) (plan/plan-cost c v (assoc smelts :gather {}))))
     (is (= (* 3 price) (plan/smelt-s c 3)))))
+
+(deftest a-seen-trees-check-that-looks-first-calls-the-gather-and-hangs-no-torch
+  ;; a dark-hall refusal resting on an unseen edge carries the walk to look (ready/priced): the engine runs it before the start
+  (let [c (rooted {:primitives (tu/seeing-all (tu/fake-on-floor {:blocks (into {} (for [y (range 64 68)] [(str "3," y ",0") "oak_log"]))}))
+                   :view (constantly (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})))
+                   :args {:item "oak_log" :count 1 :ways #{:gather} :explore false :ignore-zones? true}})
+        never [:never "dark hall" {:reason :exposed :lowered-by #{:torch} :at {:x 0 :y 64 :z 0} :chance 0.004}]
+        looks (assoc-in never [2 :look-first] ['jobs.movement.walk-look {:side [0 67 0] :to {:x 0 :y 64 :z 0}}])
+        judged (fn [s] (with-redefs [ctx/child-status (fn [& _] s) ctx/mem (constantly {}) ctx/entries (constantly [])]
+                         [(need/seen-refusal c ["oak_log"] 1) (need/torch-due c (contract/status-cause s))]))]
+    (is (= [nil nil] (judged looks)) "called: the look runs first, no torch")
+    (is (= [never {:x 0 :y 64 :z 0}] (judged never)) "no look left: refused, and a torch is due")))

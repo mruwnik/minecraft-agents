@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
-            [jobs.items.obtain.need :refer [climbs-first? gather-viable? pickaxe-first? seen-refusal tree? light-settling? tools-wanted torch-due trees-unreachable?]]
+            [jobs.items.obtain.need :refer [callable? climbs-first? gather-viable? pickaxe-first? seen-refusal tree? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan search-way]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
@@ -405,7 +405,8 @@
            (not (if (explore-opts c)
                   ;; :later (dark, night) is the child's to wait out and :look its to look up at, not a sign that nothing is there
                   (and (or (:tunnel? need) (seen-of c need))
-                       (#{:ok :later :look} (first (ctx/child-status c (gather-slot need) (:job need) (:args need)))))
+                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
+                         (or (= :later (first s)) (callable? s))))
                   (gather-viable? c names (- target have)))))
       (if-let [s (seen-refusal c names (- target have))]
         (do (ctx/update-mem! c assoc-in [:gather :refusal] {:kind (first s) :text (second s) :job (:job need) :cause (contract/status-cause s)})
