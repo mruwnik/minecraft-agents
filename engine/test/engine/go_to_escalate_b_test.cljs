@@ -283,6 +283,23 @@
           (is (= {:arrived true} @(:out open)) "an own pit with no animals in it is dug out of as before")
           (is (empty? (events-of (:seen open) :go-to.restored)) "and its holes are left"))))))
 
+;; the leg search after the failed pillar goes on a round (:searching): the failed pillar is not run again, and once the
+;; stair is cut the body walks on from its top rather than escalating there
+(deftest a-search-held-after-a-failed-escalation-neither-reruns-it-nor-escalates-after-the-next-way
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "pen" :owner "Fake" :min [-2 60 -2] :max [2 64 2]}]
+              cow {:id 7 :name "cow" :kind "passive" :pos {:x 0.5 :y 61 :z 0.5}}
+              leg ec/dig-leg
+              answers (atom [{:step :searching}])]
+          (set! ec/dig-leg (fn [& args] (let [a (first @answers)] (swap! answers rest) (or a (apply leg args)))))
+          (try
+            (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit :entities [cow] :inventory [{:name "dirt" :count 8}]}) 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
+              (is (= {:arrived true} @out))
+              (is (= [:pillar] (mapv :step (events-of seen :go-to.escalation-stopped)))))
+            (finally (set! ec/dig-leg leg))))))))
+
 (deftest a-way-through-own-builds-is-searched-only-when-its-least-cost-can-beat-the-way-that-spares-them
   ;; card f1d55046: an own cut adds at least one cell's put-back to its way
   (let [p (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 8}]}))

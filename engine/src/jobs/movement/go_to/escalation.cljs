@@ -368,8 +368,9 @@
       (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
       (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
       (= :searching (:step e))
+      ;; a failed escalation's child is done: left in memory it would run again before the search goes on
       (do (search-begun! c feet goal opts)
-          (ctx/update-mem! c assoc :escalate-now true :escalate-failed failed)
+          (ctx/update-mem! c #(-> % (dissoc :escalation) (assoc :escalate-now true :escalate-failed failed)))
           :again)
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       (start-hold c pos feet e) (reprice/end c (start-hold c pos feet e))

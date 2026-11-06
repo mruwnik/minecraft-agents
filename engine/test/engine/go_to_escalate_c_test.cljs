@@ -1145,16 +1145,24 @@
            (is (= :dig-route (:step legs)) (pr-str (:step legs))))))))
 
 ;; a bedrock slab three wide across the line between the body and both leg ends: no route within leg-margin of the
-;; line reaches them; the leg goes round it
-(deftest a-dig-leg-goes-round-a-slab-wider-than-its-margin-across-the-line
-  (let [slab (box 4 60 -1 5 70 1 "bedrock")
-        p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") slab) :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}]
+;; line reaches them; the leg goes round it, searched in slices over later rounds like the first pass
+(deftest a-dig-leg-goes-round-a-slab-wider-than-its-margin-across-the-line-over-several-slices
+  (let [p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") (box 4 60 -1 5 70 1 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        leg #(choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-slab")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
-      (let [e (choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-slab")})
-            cells (set (map #(str/join "," (:cell %)) (:cells e)))]
-        (is (= :dig-route (:step e)) (pr-str e))
-        (is (not-any? (set (keys slab)) cells) "no slab cell is dug")))))
+      (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+        #(let [legs (doall (take 300 (repeatedly leg)))]
+           (is (= {:step :searching} (first legs)))
+           (is (= :dig-route (:step (first (remove #{{:step :searching}} legs)))) (pr-str (last legs))))))))
+
+;; the detour leg digs longer than the call has left (memory :dug-s of its worth): out of dig budget, not past its worth
+(deftest a-detour-leg-past-the-calls-dig-time-is-out-of-dig-budget
+  (let [p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") (box 4 60 -1 5 70 1 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 100)}
+        leg #(choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-past-budget")})]
+    (with-redefs [ctx/mem (constantly {:dug-s 99.9}) ctx/left (constantly {})]
+      (is (= :dig-budget (:why (first (remove #{{:step :searching}} (take 300 (repeatedly leg))))))))))
 
 (deftest a-flood-is-charged-to-the-slice-at-its-measured-cpu-against-a-search-node
   (let [p (tu/fake {:blocks (box -20 63 -20 20 63 20 "stone")})
