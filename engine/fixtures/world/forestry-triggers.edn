@@ -21,6 +21,24 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
    :after [[:not-block [16 4 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 1]]]}
+  ;; Card a48235d8: standing trees 4 and 5 blocks from a hanging trunk, canopies joined to its crown, must not make it read as standing.
+  {:name "part-cut-tree-trigger-fells-a-hanging-trunk-between-standing-trees"
+   :register [{:trigger :part-cut-tree}]
+   :blocks [[:fill [10 0 12] [23 11 20] "air"]
+            [:fill [16 4 16] [16 6 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 6 16] "oak_log"]
+            [:fill [21 0 16] [21 8 16] "oak_log"] [:fill [19 7 14] [23 9 18] "oak_leaves[persistent=true]"] [:fill [21 7 16] [21 8 16] "oak_log"]
+            [:fill [12 0 16] [12 8 16] "oak_log"] [:fill [10 7 14] [14 9 18] "oak_leaves[persistent=true]"] [:fill [12 7 16] [12 8 16] "oak_log"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
+   :after [[:not-block [16 4 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 1]]]}
+  {:name "part-cut-tree-trigger-ignores-standing-trees-alone"
+   :register [{:trigger :part-cut-tree}]
+   :blocks [[:fill [10 0 12] [23 11 20] "air"]
+            [:fill [21 0 16] [21 8 16] "oak_log"] [:fill [19 7 14] [23 9 18] "oak_leaves[persistent=true]"] [:fill [21 7 16] [21 8 16] "oak_log"]
+            [:fill [12 0 16] [12 8 16] "oak_log"] [:fill [10 7 14] [14 9 18] "oak_leaves[persistent=true]"] [:fill [12 7 16] [12 8 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 45}]
+   :after [[:block [21 0 16] "oak_log"] [:block [12 0 16] "oak_log"]]
+   :limit-s 55}
   {:name "part-cut-tree-trigger-waits-for-a-cow-lure"
    :register [{:trigger :part-cut-tree}]
    :body {:inventory [["iron_axe" 1] ["wheat" 4]]}
