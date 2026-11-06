@@ -354,7 +354,7 @@
     (pillar-knock-s (.-health self) (equipment-of (.-equipment self)) opens)))
 
 (defn unseen-fall-s
-  "Seconds a step drop-by blocks down (kind :down or :drop) onto a floor the body has not seen costs on top of turning
+  "Seconds a step drop-by blocks down (kind :down, :drop, :drop-4 or :drop-8: jobs.lib.walk.sight/prior-kind of its rise) onto a floor the body has not seen costs on top of turning
   back when that floor is not there: the walk goes on down onto what lies under it, value/::unseen-fall-counts' share of
   kind at each depth, when the whole drop is one the planner takes (max-drop; a deeper one it does not, and its dead end
   is priced apart): the fall's hp (fall-damage at hp-cost from health) and a pillar back up to the takeoff (pillar-s,

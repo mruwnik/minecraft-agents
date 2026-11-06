@@ -39,7 +39,7 @@
                                    (let [kind (wsight/floor-kind steps i)
                                          prior-kind (wsight/prior-kind (wsight/step-rise steps i))
                                          drop-by (js/Math.round (- (:y (steps (dec i))) (:y s)))]
-                                     {:fall-s (when (#{:down :drop} kind) (cost/unseen-fall-s kind drop-by fall))
+                                     {:fall-s (when (#{:down :drop} kind) (cost/unseen-fall-s prior-kind drop-by fall))
                                       :look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
                                       :p (cost/floor-absent-chance prior-kind (get counts prior-kind))
                                       :extra-s (cost/chance-times (cost/floor-dead-end-chance kind counts) left)

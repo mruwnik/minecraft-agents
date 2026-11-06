@@ -484,7 +484,7 @@
                             (let [kind (wsight/rise-kind rise)
                                   n (if (= :drop kind) (- rise) 1)]
                               (* (cost/floor-absent-chance (wsight/prior-kind rise) nil)
-                                 (max 0 (- (cost/unseen-fall-s (if (= :drop kind) :drop :down) n fall) ((:fall-s prices) n)))))))
+                                 (max 0 (- (cost/unseen-fall-s (if (= :drop kind) (wsight/prior-kind rise) :down) n fall) ((:fall-s prices) n)))))))
         floor-absent-s (fn [[x y z] rise]
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))

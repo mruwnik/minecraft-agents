@@ -1,6 +1,7 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
   (:require [cljs.test :refer [deftest is are use-fixtures]]
+            [jobs.lib.cost.value :as value]
             [engine.args :as a]
             [engine.constants :as constants]
             [engine.fake :as fake]
@@ -371,16 +372,23 @@
         "a later floor is reached only while those before it held")))
 
 (deftest an-unseen-floor-not-there-a-step-down-costs-the-survivable-falls-under-it-and-the-climb-back-out
-  (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1 5 1 30 2} :drop {0 1}}}
+  (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1 5 1 30 2} :drop {0 1} :drop-4 {1 1} :drop-8 {2 1}}}
     (fn []
       (let [body {:health 20 :equipment nil :max-drop 8 :carried 64 :share 0}
             out #(+ (cost/hp-cost 20 (cost/fall-damage nil %)) (cost/pillar-s 0 % %))]
         (is (= (+ (* 0.25 (out 1)) (* 0.25 (out 6))) (cost/unseen-fall-s :down 1 body))
             "a 1-block step: each depth under it by its share, the 31-block fall past max-drop never taken")
         (is (= (out 3) (cost/unseen-fall-s :drop 3 body)))
+        (is (= (out 5) (cost/unseen-fall-s :drop-4 4 body)) "a 4-block drop lands on its own band's histogram")
+        (is (= (out 10) (cost/unseen-fall-s :drop-8 8 (assoc body :max-drop 20))) "so does an 8-block one")
         (is (< 0 (cost/unseen-fall-s :down 1 body) (cost/unseen-fall-s :down 1 (assoc body :carried 0)) ##Inf)
             "finite, and dearer with the pillar's blocks to fetch")
         (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")))))
+
+(deftest the-measured-fall-histograms-are-deeper-for-a-deeper-drop
+  (let [counts (settings/get value/settings ::value/unseen-fall-counts)
+        mean (fn [k] (let [c (counts k)] (/ (reduce + (map (fn [[b n]] (* b n)) c)) (reduce + (vals c)))))]
+    (is (apply < (map mean [:drop :drop-4 :drop-8])))))
 
 (deftest a-pillar-prices-the-fall-of-a-knock-off-at-each-block-by-its-chance
   (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock 1 :kept 1}}

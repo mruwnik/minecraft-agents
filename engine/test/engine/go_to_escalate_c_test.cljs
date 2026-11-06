@@ -1355,7 +1355,7 @@
     (is (< (seconds 0.01) (seconds 0.9)) "the likelier the floor a 9-block fall lands on is a void (a :drop-8's chance), the dearer the way")
     (let [self (.self p)
           fall {:health (.-health self) :equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall (dig-route/body-prices p (constantly false))) :carried 0 :share (wworld/unseen-share p)}
-          beyond (- (cost/unseen-fall-s :drop 9 fall) ((:fall-s (dig-route/body-prices p (constantly false))) 9))]
+          beyond (- (cost/unseen-fall-s :drop-8 9 fall) ((:fall-s (dig-route/body-prices p (constantly false))) 9))]
       (is (< 0 beyond) "a void under the 9-block drop falls on")
       (is (< (Math/abs (- (- (seconds 0.9) (seconds 0.01)) (* 0.89 beyond))) 1e-6)
           "the toll is the chance times the fall the void adds past the 9 blocks the step already falls"))))
