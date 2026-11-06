@@ -58,7 +58,7 @@
 
 (defn pending
   "The cells [x y z] to look at before the body's region is judged: unseen cells beside the closed region the body stands in
-  under a cover, and its unseen ground (the flood stands on seen blocks under unseen cells), that lit-side? shows, nearest
+  under a cover, the cells over a side block that make a flood cell an unseen-edge? (a wall's head cell in a room three high), and its unseen ground (the flood stands on seen blocks under unseen cells), that lit-side? shows, nearest
   first, not looked at in c's job memory. A dark cell stays unseen after a look and
   is not looked at twice. Reads no memory of a frame without a job: pass `looked` then."
   ([c] (pending c (:edge-looked (ctx/mem c) #{})))
@@ -66,15 +66,17 @@
    (let [p (:primitives c)
          feet (sh-sense/feet p)]
      (when (covered? p)
-       (let [flood (some->> (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet))
-                            :cells
-                            (map vec))
+       (let [kind-at (reach-room/room-kind-at p (reach-room/shut-kind-at p))
+             raw (:cells (reach-room/room-flood p kind-at (:x feet) (:y feet) (:z feet)))
+             flood (map vec raw)
+             unseen? (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))
+             head-sides (keep #(when (reach-room/unseen-edge? p kind-at % unseen?) (sh-inside/unseen-beside unseen? %)) raw)
              h (sh-sense/room-roof-height)
              sky-open? (some (fn [[x y z]] (let [cell {:x x :y y :z z}] (or (sh-sense/open-air-above? p cell (+ y h)) (sh-sense/sky-reaches-from-above? p cell)))) flood)
              under-roof? (fn [[x y z]] (let [cell {:x x :y y :z z}] (or (sh-sense/roofed? p h cell) (sh-sense/leaf-roofed? p h cell))))]
          (->> flood
               (filter (fn [[x y z]] (nil? (u/seen-block p {:x x :y y :z z}))))
-              (concat (reach-room/unseen-sides p feet))
+              (concat (reach-room/unseen-sides p feet) head-sides)
               distinct
               (remove looked)
               (filter (if sky-open? under-roof? any?))

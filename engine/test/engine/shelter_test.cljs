@@ -33,6 +33,7 @@
             [engine.perception :as perception]
             [engine.perception.store :as store]
             [engine.test-util :as tu :refer [run-until-empty]]
+            [engine.reach-test :as reach-test]
             [engine.shelter-support :refer [walls-cheap day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack wall-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
 
@@ -1754,6 +1755,17 @@
                                             #js {:unknown true :pos pos}))))]
     (tu/set-sensed! p (fn [pos] (if (seen? (.-x pos) (.-y pos) (.-z pos)) (.blockAt (tu/oracle raw-p) pos) #js {:unknown true})))
     (is (= #{[14 65 1] [14 66 0]} (set (look-edge/pending {:primitives p} #{}))) "the two missed cells, no rock behind them")))
+
+(deftest the-unseen-cell-over-a-beds-head-in-a-three-high-room-is-looked-at-but-in-a-two-high-room-it-is-not
+  ;; The stone over a bed's head makes the room an unseen edge only where the room is three high (two high, the roof is that
+  ;; step's ceiling); the feet-side list alone left the body no cell to look at, so it dug in a room it had closed.
+  (let [room (fn [h] (let [shell (tu/box 8 64 -2 12 (+ 64 h) 2 "stone")
+                           inner (for [x (range 9 12) y (range 64 (+ 64 h)) z (range -1 2)] (str x "," y "," z))]
+                       (reach-test/hiding (:p (setup {:time night :floor tu/walk-floor :self {:pos {:x 10.5 :y 64 :z 0.5}}
+                                                         :blocks (assoc (apply dissoc shell inner) "9,64,-1" "red_bed" "10,64,-1" "red_bed" "10,65,-1" "stone")}))
+                                          #{[10 65 -1]})))]
+    (is (= [[10 65 -1]] (look-edge/pending {:primitives (room 3)} #{})))
+    (is (empty? (look-edge/pending {:primitives (room 2)} #{})))))
 
 (deftest a-region-open-to-the-sky-through-a-gap-is-not-looked-at-beyond-the-roof
   ;; A roofed hall whose end gap leads onto an open plain: the plain's unseen cells show nothing the night can use (the gap is
