@@ -233,17 +233,14 @@
                          (vswap! tick inc))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
         ;; stair that turns back over its own cut)
-        ;; a link's box holds every cell before it: a cell outside it is dug by none of them. Boxes hold cells as cell-of reads
-        ;; their keys back, so a cell whose key reads back otherwise (y past the key's range) is looked up as it reads back
-        dug-behind? (fn dug-behind? [k x y z]
+        ;; a link's box holds every cell before it: a cell outside it is dug by none of them
+        dug-behind? (fn [k x y z]
                       (let [c (key x y z)]
-                        (if-not (< -513 y 512)
-                          (let [[x y z] (cell-of c)] (dug-behind? k x y z))
-                          (loop [^js l (aget (.get best k) 6)]
-                            (cond
-                              (or (nil? l) (< x (aget l 2)) (> x (aget l 3)) (< y (aget l 4)) (> y (aget l 5)) (< z (aget l 6)) (> z (aget l 7))) false
-                              (.includes (aget l 0) c) true
-                              :else (recur (aget l 1)))))))
+                        (loop [^js l (aget (.get best k) 6)]
+                          (cond
+                            (or (nil? l) (< x (aget l 2)) (> x (aget l 3)) (< y (aget l 4)) (> y (aget l 5)) (< z (aget l 6)) (> z (aget l 7))) false
+                            (.includes (aget l 0) c) true
+                            :else (recur (aget l 1))))))
         expand! (fn [ck]
                   (let [[mx my mz] (cell-of ck)
                         node (.get best ck)
