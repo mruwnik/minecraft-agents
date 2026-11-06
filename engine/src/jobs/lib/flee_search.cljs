@@ -356,9 +356,11 @@
 
 (defn trap-s
   "What a dead end at the first unseen cell of scored end e costs it when it traps the body: its :trapped, and the
-  arrival its end scores past that of its last seen cell (the chasers get to the dead end then)."
-  [chasers {:keys [cells seen-n arrive trapped]}]
-  (+ trapped (max 0 (- (min arrive unreached-s) (min (arrive-at chasers (cost/centred (nth cells (dec seen-n)))) unreached-s)))))
+  arrival of the chasers that walk (not shooter?) at its end past theirs at its last seen cell (they get to the dead end then)."
+  [chasers {:keys [cells seen-n end trapped]}]
+  (let [walkers (remove shooter? chasers)
+        at #(min (arrive-at walkers (cost/centred %)) unreached-s)]
+    (+ trapped (max 0 (- (at end) (at (nth cells (dec seen-n))))))))
 
 (defn back-via
   "The walk back of a flight on scored end r that finds its way shut at its first unseen cell, along other way e

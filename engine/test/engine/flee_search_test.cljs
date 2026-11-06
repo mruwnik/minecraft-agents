@@ -332,6 +332,16 @@
     (is (pos? (search/caught-s [{:name "skeleton" :mob "skeleton" :held "stone_sword" :pos under}] over)) "one holding a sword strikes")
     (is (pos? (search/caught-s [{:name "blaze" :mob "blaze" :pos under}] over)) "a blaze strikes within 2 blocks")))
 
+(deftest a-dead-end-is-timed-by-the-walkers-alone
+  ;; trap-s took the end's arrival over every chaser: a skeleton behind the body set what the dead end cost
+  (let [behind {:x -19.5 :y 64 :z 0.5}
+        trap (fn [chaser] (let [chasers [(assoc chaser :pos behind)]]
+                            (search/trap-s chasers {:cells [{:x 0 :y 64 :z 0} {:x 10 :y 64 :z 0}] :seen-n 1 :end {:x 10 :y 64 :z 0} :trapped 5
+                                                    :arrive (search/arrive-at chasers {:x 10.5 :y 64 :z 0.5})})))]
+    (is (< 5 (trap {:name "zombie" :mob "zombie"})) "a walker behind gets to the dead end after the last seen cell")
+    (is (= 5 (trap {:name "skeleton" :mob "skeleton"})) "a shooter never walks to it")
+    (is (= 5 (trap {:name nil :shooter? true})) "nor does a shot spot")))
+
 (def cliff
   "A plateau (feet y 64) for x <= 0 over a lowland (feet y 54) east of it, a stair one block wide down the cliff along
   z 0 from x 1 to x 9."
