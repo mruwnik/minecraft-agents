@@ -29,7 +29,7 @@
     (let [run (dr/search deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3})]
       (run 10)
       (is (= {:problem :dearer} (first (run 100000 5))) "a search begun under a larger bound goes on under the lower one it is handed"))
-    (is (= :no-route (:problem (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000}))) "a bound in seconds of digging")))
+    (is (= {:problem :no-route :boxed true :searched-s 0} (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000})) "a bound in seconds of digging")))
 
 (deftest a-goal-walled-in-ends-without-a-flood-however-wide-the-wall
   (let [shell (fn [d name] (into {} (for [x (range (- 10 d) (+ 11 d)) y (range (- 10 d) (+ 11 d)) z (range (- d) (inc d))
@@ -68,7 +68,7 @@
   (let [w (world {[1 9 0] "air" [1 8 0] "air" [1 7 0] "air" [1 6 0] "air"})]
     (is (= [] (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4 :fall-s (constantly 0)}))))
     (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 100 0) :margin 3}))) "a dear fall is dug round")
-    (is (= :no-route (:problem (dr/route (world {[1 6 0] "air" [1 7 0] "air"}) [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 1 0) :max-dig-s 2 :margin 2})))
+    (is (= {:problem :no-route :boxed true :searched-s 0} (dr/route (world {[1 6 0] "air" [1 7 0] "air"}) [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 1 0) :max-dig-s 2 :margin 2}))
         "no hole is dug to fall down it at a price in hp")))
 
 (deftest a-pillar-climbs-out-of-a-pit-without-digging-when-blocks-are-carried
@@ -90,7 +90,7 @@
   (let [w (fn [[_ y _ :as c]] (or ({[2 11 0] "stone"} c) (if (< y 10) "stone" "air")))
         r (dr/route w [0 10 0] [2 12 0] {:place-s 1 :step-s 0.2 :margin 2})]
     (is (= [[:laid [1 10 0]] [:walk nil]] (map (juxt :move :place) (:steps r))))
-    (is (= :no-route (:problem (dr/route w [0 10 0] [2 12 0] {:step-s 0.2 :margin 2}))) "without a block the step has no floor")))
+    (is (= {:problem :no-route :boxed true :searched-s 0} (dr/route w [0 10 0] [2 12 0] {:step-s 0.2 :margin 2})) "without a block the step has no floor")))
 
 (deftest a-floor-of-the-bodys-own-stair-is-neither-dug-nor-built-on
   (let [w (world {[3 8 0] "air"})
@@ -105,7 +105,7 @@
         roof {[1 11 0] "gravel" [2 11 0] "sand" [3 11 0] "gravel"}
         free {[0 9 0] "air" [0 10 0] "air" [3 9 0] "air" [3 10 0] "air"}
         opened (fn [r] (set (:dig r)))]
-    (is (= :no-route (:problem (dr/route (at (merge roof free)) [0 9 0] [3 9 0] {:margin 0}))) "the straight line is all under falling blocks")
+    (is (= {:problem :no-route :boxed true :searched-s 0} (dr/route (at (merge roof free)) [0 9 0] [3 9 0] {:margin 0})) "the straight line is all under falling blocks")
     (is (not-any? (comp #{[1 10 0] [2 10 0]} identity) (opened (dr/route (at (merge roof free)) [0 9 0] [3 9 0] {:margin 2}))) "the detour opens nothing under them")))
 
 (deftest a-cell-is-priced-once-however-many-steps-reach-it

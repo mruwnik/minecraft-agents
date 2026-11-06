@@ -129,7 +129,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil)} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood searched-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -361,8 +361,8 @@
                      {:dig (vec (distinct (mapcat :dig steps))) :steps steps :seconds (aget (.get best ck) 0)}))
         ;; with node-s, the search's CPU is a cost of the route it finds: it goes on only while what is left to find may
         ;; still save more than the search has spent (a ski rental's rule: at worst twice the best), against the route in
-        ;; hand (its cheapest end reached) or max-s
-        spent-s (fn [] (if node-s (* node-s (.-size done)) 0))
+        ;; hand (its cheapest end reached) or max-s; :searched-s, what earlier searches of the same question spent, counts too
+        spent-s (fn [] (+ searched-s (if node-s (* node-s (.-size done)) 0)))
         max-s (volatile! (or max-s ##Inf))
         bound-s (fn [] (min @max-s (aget incumbent 0)))
         ended (fn [] (if (<= (aget incumbent 0) @max-s) (route-to (aget incumbent 1)) {:problem :dearer}))
@@ -397,7 +397,7 @@
                      (let [top (heap-pop! back-queue)
                            k (some-> top (aget 2))]
                        (cond
-                         (nil? top) (cond-> {:problem :no-route} @back-boxed (assoc :boxed true))
+                         (nil? top) (cond-> {:problem :no-route} @back-boxed (assoc :boxed true :searched-s (spent-s)))
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                          (.has back-done k) nil
                          (== k start-key) (do (vreset! back-over true) nil)
@@ -449,7 +449,7 @@
                       (let [top (heap-pop! queue)
                            ck (some-> top (aget 2))]
                        (cond
-                         (nil? top) (cond-> {:problem :no-route} @boxed (assoc :boxed true))
+                         (nil? top) (cond-> {:problem :no-route} @boxed (assoc :boxed true :searched-s (spent-s)))
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (ended)
                          (.has done ck) (recur)
@@ -525,13 +525,13 @@
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
-  :node-s seconds of CPU a cell expanded (priced-search), :back-h? the back search's bound in the heuristic, :prior-h? with
+  :node-s seconds of CPU a cell expanded (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price}, {:problem :no-route} (:boxed true when the
-  :margin box kept it from a cell),
+  :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))

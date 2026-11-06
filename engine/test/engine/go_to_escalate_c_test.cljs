@@ -1219,6 +1219,23 @@
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (is (= [nil] (take 1 (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
 
+;; the leg's far end hangs over a seen pit one block deep: the leg ends in the pit under it
+(deftest a-dig-leg-end-over-a-pit-ends-in-the-pit
+  (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") {"9,63,0" "air"}) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        leg #(choose/dig-leg c [3 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-pit")})]
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
+      (is (= [9 64 0] (:cell (last (:cells (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))) "its last cut is the pit's head cell"))))
+
+;; the goal hangs over open air with no block carried: no box holds a way to it, and each wider one cuts the search off
+;; again; the widening stops once the searches (their CPU slowed tenfold) have spent what the way without a dig route costs
+(deftest a-dig-leg-widening-round-an-end-no-box-reaches-stops-by-price
+  (let [p (tu/fake {:blocks (box -2 50 -14 7 80 14 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-void")})]
+    (with-redefs [ctx/mem (constantly {:route-search {:fallback-s 60}}) ctx/left (constantly {}) cost/search-cell-s (constantly 0.001)]
+      (is (= {:step :none :why :past-worth} (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
+
 ;; the detour leg digs longer than the call has left (memory :dug-s of its worth): out of dig budget, not past its worth
 (deftest a-detour-leg-past-the-calls-dig-time-is-out-of-dig-budget
   (let [p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") (box 4 60 -1 5 70 1 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
