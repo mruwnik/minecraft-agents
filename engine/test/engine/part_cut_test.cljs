@@ -71,6 +71,12 @@
                         (into {} (for [x (range 7 14)] [(fm/k x 68 0) "oak_leaves"])))))
       "the neighbour's foot is seen from the ledge beside it; its leaves join through a run of leaves past leaf-decay reach"))
 
+(deftest a-standing-neighbour-s-own-leaves-close-by-are-no-crown-of-a-part-cut-trunk
+  (doseq [nx [10 11]]
+    (is (= [{:x 6 :y 65 :z 0}]
+           (trunks (merge (fm/ground [[6 0] [nx 0]]) {(fm/k (inc nx) 63 0) "air"} (part-cut 6) (lt/tree nx 0 "oak" 4))))
+        "leaves beside the neighbour's trunk are nearer its logs than the hanging ones")))
+
 (defn trunks-hiding [blocks cells] (mapv :base (part-cut/part-cut-trees (hiding (:p (lt/setup {:blocks blocks})) cells) 12 nil)))
 
 (deftest a-branch-beside-a-trunk-hidden-in-the-leaves-is-no-part-cut-trunk

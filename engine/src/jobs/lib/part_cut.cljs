@@ -71,11 +71,13 @@
   6)
 
 (defn crown
-  "The seen leaves (a set of positions) within leaf-decay-steps (taxicab, so unseen cells on the way do not matter) of a
-  log of col: that tree's own leaves, not those of a neighbour whose canopy joins it."
-  [leaves col]
-  (let [steps (fn [a b] (+ (abs (- (:x a) (:x b))) (abs (- (:y a) (:y b))) (abs (- (:z a) (:z b)))))]
-    (into #{} (filter (fn [l] (some #(<= (steps l %) leaf-decay-steps) col))) leaves)))
+  "The seen leaves (a set of positions) that col (the logs of one column) owns: within leaf-decay-steps (taxicab, so unseen
+  cells on the way do not matter) of a log of col, and no nearer to a seen log of another column (vanilla decay counts from
+  the nearest log), so a neighbour's own leaves are not part of this tree's crown. A tie stays with col."
+  [leaves col others]
+  (let [steps (fn [a b] (+ (abs (- (:x a) (:x b))) (abs (- (:y a) (:y b))) (abs (- (:z a) (:z b)))))
+        nearest (fn [l logs] (transduce (map #(steps l %)) min ##Inf logs))]
+    (into #{} (filter (fn [l] (let [own (nearest l col)] (and (<= own leaf-decay-steps) (<= own (nearest l others)))))) leaves)))
 
 (defn standing-under?
   "Whether the seen log g may stand on the ground (grounded?) with its column going up, through seen logs and unseen cells, to touch a
@@ -105,13 +107,14 @@
 (defn part-cut?
   "Whether the tree t (as trees-near gives it) is a part-cut trunk, read only from seen evidence of a cut: a log of its
   column hangs over a column seen cut to the ground (cut-column?), it is joined to no standing log, and no seen standing
-  trunk rises under its crown (the leaves of its column's logs). seen is a delay of seen-around."
+  trunk rises under its crown (the leaves its column's logs own). seen is a delay of seen-around."
   [p seen t]
   (let [{:keys [logs leaves]} @seen
         {:keys [x y z] :as h} (hanging p logs (:base t))]
     (boolean
      (and h (cut-column? p h) (not (living? p logs h))
-          (let [c (crown leaves (cons h (filter #(and (= x (:x %)) (= z (:z %)) (> (:y %) y)) logs)))]
+          (let [c (crown leaves (cons h (filter #(and (= x (:x %)) (= z (:z %)) (> (:y %) y)) logs))
+                        (remove #(and (= x (:x %)) (= z (:z %))) logs))]
             (not-any? #(standing-under? p c %) logs))))))
 
 (defn part-cut-trees
