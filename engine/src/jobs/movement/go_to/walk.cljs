@@ -277,6 +277,15 @@
       (end/finish! c {:status :stopped :arrived false :reason :unreachable :why :hanging
                       :text (str "the only stand within range is a climbable at " hang " with no floor under it")}))))
 
+(defn in-water-why
+  "Why an arrival stays in water. Range 0 with no dry stand says the goal is water only when the goal's own block is."
+  [dry tried? r goal-water? status feet]
+  (cond dry (str "the walk on to the dry stand at " [(:x dry) (:y dry) (:z dry)] " ended " status)
+        tried? "the walk on to a dry stand failed earlier in the call"
+        (and (zero? r) goal-water?) "the goal cell is water"
+        (zero? r) (str "the goal cell holds no water; the water is at the body's cell " feet)
+        :else "no dry stand seen within range"))
+
 (defn ^:async leave-water!
   "An arrival within range of pos, in water: with the leave-water setting (default true), once a call (mem :dry-tried), walk on to the
   nearest seen dry stand within range (air/dry-stand, dry-radius of the body; walk-dry!). Out of water and in range:
@@ -299,10 +308,7 @@
             (ctx/emit! c :go-to.in-water :info
                        {:at (end/feet-cell c)
                         :text (str "arrived within range but in water: "
-                                   (cond dry (str "the walk on to the dry stand at " [(:x dry) (:y dry) (:z dry)] " ended " status)
-                                         tried? "the walk on to a dry stand failed earlier in the call"
-                                         (zero? r) "the goal cell is water"
-                                         :else "no dry stand seen within range"))}))
+                                   (in-water-why dry tried? r (= "water" (some-> (u/block-at p pos) .-name)) status (end/feet-cell c)))}))
           (arrived! c)))))
 
 (defn ^:async arrive!

@@ -140,6 +140,11 @@
                                    {:pos [28 64 0] :range 1 :ways #{:walk :clear-seal}}))]
               (is (empty? (gt/events-of s :go-to.surfacing)) "two fresh searches each side of a walk are not more than two restarts"))))))))
 
+(deftest the-goal-is-called-water-only-when-its-own-block-is
+  (is (= "the goal cell is water" (walk/in-water-why nil false 0 true nil {})))
+  (is (re-find #"goal cell holds no water" (walk/in-water-why nil false 0 false nil {:x 1 :y 2 :z 3})))
+  (is (= "no dry stand seen within range" (walk/in-water-why nil false 2 false nil {}))))
+
 (deftest a-goal-cell-that-is-water-says-so-when-the-body-stays-in-it
   (async done
     (tu/run-async done
