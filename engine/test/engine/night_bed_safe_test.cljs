@@ -13,6 +13,7 @@
             [engine.perception.rays :as rays]
             [engine.planner-fixture :as pf]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -250,16 +251,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the spawn bed counts at any distance: Bramble #34/#35 walked toward one 18000 blocks off every night
-        (doseq [[bed remember! blocks] [[{:x 120 :y 64 :z 0} st/know-bed! {"120,64,0" "red_bed"}]
-                                 [{:x -18000 :y 64 :z 0} remember-spawn-bed! {}]]]
-          (let [{:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks blocks))]
-            (remember! eng bed)
-            (swap! clock + (* 4 sh-clock/ms-per-day))
-            (core/submit! eng '(jobs.survival.night) {})
-            (await (st/tick-n eng 12))
-            (is (= [bed] (map :pos (st/entries eng :bed-walk-unsafe))) (str "the walk's dark to " bed " costs more than sheltering here"))
-            (is (empty? (st/calls raw "sleep")))))))))
+        ;; the spawn bed counts at any distance: Bramble #34/#35 walked toward one 18000 blocks off every night.
+        ;; At one meet in 200 s: at the measured rate (0.0012) the 120-block walk is cheaper than staying.
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+          (fn ^:async inner []
+            (doseq [[bed remember! blocks] [[{:x 120 :y 64 :z 0} st/know-bed! {"120,64,0" "red_bed"}]
+                                     [{:x -18000 :y 64 :z 0} remember-spawn-bed! {}]]]
+              (let [{:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks blocks))]
+                (remember! eng bed)
+                (swap! clock + (* 4 sh-clock/ms-per-day))
+                (core/submit! eng '(jobs.survival.night) {})
+                (await (st/tick-n eng 12))
+                (is (= [bed] (map :pos (st/entries eng :bed-walk-unsafe))) (str "the walk's dark to " bed " costs more than sheltering here"))
+                (is (empty? (st/calls raw "sleep"))))))))))))
 
 (def dusk
   "Night by the clock (a bed takes a sleeper), the sky not dark yet."
@@ -603,7 +608,9 @@
           (st/know-bed! eng near)
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 50 :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
+          ;; every walk passes the price check: what is pinned is which beds are asked, not the walk's dark
           (with-redefs [child/call-walk* priced
+                        night/bed-walk-safe? (constantly true)
                         night/bed-worth (fn ^:async [_ bed _] (if (= bed near) 100 1))]
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 12)))
