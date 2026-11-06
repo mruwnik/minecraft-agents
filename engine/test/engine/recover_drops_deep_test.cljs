@@ -178,15 +178,14 @@
           (is (<= 5 (count @calls)) "every run walked again")
           (is (nil? (recovered eng)) "refusals that searched nothing are no failed walks"))))))
 
-(deftest a-stair-the-tunnel-cannot-start-abandons-the-pile-once
+(deftest a-pile-under-rock-with-no-pickaxe-to-get-is-skipped-up-front
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:blocks deep-ground
-                                         :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
+        (let [{:keys [eng p]} (setup {:blocks deep-ground
+                                      :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
           (die! eng {:pos pile-pos :inventory pile} 5000)
           (core/submit! eng job {})
           (await (run-until-empty eng 120))
-          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
-          (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :unreachable (:reason %))) @seen))))
-          (is (re-find #":no-tool \(no pickaxe could be got\)" (:detail (recovered eng))) (pr-str (recovered eng))))))))
+          (is (= {:decision :skip :reason :too-far :cost :infinite :chance 0} (select-keys (recovered eng) [:decision :reason :cost :chance])) (pr-str (recovered eng)))
+          (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "no stair is started for a way down no tool can dig"))))))
