@@ -295,7 +295,7 @@
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
         lava-goal? (and (#{:goal-enclosed :goal-cut-off} (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in (or out of sight) digs straight into it when it can
-        dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword)) (out-of-sight? c result) (and (refused-drop? result) (not @shut?)) (and (drop-stranded? c feet pos result) (dig-toward c feet goal spare opts))))
+        dig-in? (and (not into?) (or gap? (= :goal-enclosed (some-> (:reason result) keyword)) (out-of-sight? c result) (and (refused-drop? result) (not @shut?)) (and (drop-stranded? c feet pos result) (let [d (dig-toward c feet goal spare opts)] (and d (not= :none (:step d)))))))
         ;; a buried body whose plan ran out of land read the rock round it as rock: to a goal no higher than it is
         ;; across (a stair climbs to that) it digs toward it leg by leg, the last one into it; else the ways out as before
         rock-dig? (and (#{:exhausted :start-enclosed} (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c)))
@@ -326,10 +326,13 @@
                                     :else e)))))
         choose-by (cond into? #(goal-way c feet goal %1 %2)
                      ;; a goal too far for one dig route, no stair or pillar out (a plateau top): a dig off the land's edge
-                     dig-in? #(or (dig-toward c feet goal %1 %2)
-                                  (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
-                                    (or (when (#{:none :approach} (:step e)) (frontier-way (:primitives c) feet goal %1 %2))
-                                        e)))
+                     dig-in? #(let [d (dig-toward c feet goal %1 %2)]
+                                (if (and d (not= :none (:step d)))
+                                  d
+                                  (let [e (escape-way/choose (:primitives c) feet goal %1 %2)
+                                        w (or (when (#{:none :approach} (:step e)) (frontier-way (:primitives c) feet goal %1 %2)) e)]
+                                    ;; the leg's own reason (:past-worth, :dig-budget) outlives a none from the other ways
+                                    (if (and d (= :none (:step w))) d w))))
                      ;; its route searches are shared through the slice's answers: choose runs again per zone rule below
                      rock-dig? #(let [l (dig-leg c feet goal %1 %2)
                                       e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))]
@@ -721,7 +724,7 @@
       (contains? (:escalation m) :then)
       (await (escalation-next! c pos {:step :dig-route :reason :replans-spent :cell cell :fallback-s (:fallback-s (:replan-budget m))}))
       ;; a leg's end lay on the guess: the next leg is chosen from what the body sees now (a replan to the goal is a whole-way search)
-      (:leg-s (:escalation m))
+      (and (:leg-s (:escalation m)) in-range?)
       (escalated! c pos (:escalation m) false)
       ;; the replan's searches stood the body still as long as the way without the route costs: the ways are chosen again
       (search-bound/spent? c m)

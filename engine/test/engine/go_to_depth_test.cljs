@@ -738,6 +738,16 @@
           (is (not-any? (fn [[from to]] (and (= goal (vec to)) (> (u/dist (zipmap [:x :y :z] from) (zipmap [:x :y :z] to)) choose/leg-blocks))) @searches)
               (pr-str @searches)))))))
 
+(deftest legs-that-keep-meeting-wrong-guesses-end-replans-spent-once-the-replans-are-spent
+  ;; the leg's replan is a replan like any: spent, it fails :replans-spent instead of choosing the next leg for ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (with-redefs [esc/replans-spent? (constantly true)]
+                                   (await (climb! (assoc in-phantom :blocks (dissoc phantom "4,60,0" "4,61,0")) {:pos [26 48 0]})))]
+          (is (some #(= [:dig-route :replans-spent] ((juxt :step :reason) %)) (gt/events-of s :go-to.escalation-stopped))
+              (pr-str @out)))))))
+
 ;; A pocket goal (3 64 6) sealed by seen stone on every side, 6 blocks from the body; the only walk is 40 blocks round the
 ;; loop, under the old 48-block floor but dearer than digging the 6 blocks. The body stands in the open.
 (def short-loop (merge (floor 63 0 0 20 0) (floor 63 20 0 20 6) (floor 63 0 6 20 6)))

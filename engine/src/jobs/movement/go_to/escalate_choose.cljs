@@ -790,11 +790,11 @@
                   {:step :none :why :dig-budget :dug-s (:dug-s (ctx/mem c) 0) :budget-s (call-budget-s c)}))))))
 
 (defn dig-toward
-  "dig-way to a goal within leg-blocks of from, else its next leg (dig-leg), nil for a leg that is none: a whole-way
-  search to a far goal searches a ball of guessed rock round the body."
+  "dig-way to a goal within leg-blocks of from, else its next leg (dig-leg, which may be {:step :none :why ..}): a
+  whole-way search to a far goal searches a ball of guessed rock round the body."
   [c from goal may-dig? opts]
   (if (next (leg-ends from goal))
-    (let [l (dig-leg c from goal may-dig? opts)] (when-not (= :none (:step l)) l))
+    (dig-leg c from goal may-dig? opts)
     (dig-way (:primitives c) from goal may-dig? opts)))
 
 (defn nearest-stand
