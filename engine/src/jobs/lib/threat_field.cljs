@@ -239,10 +239,10 @@
   (walk-range mob (threat/give-up-range mob)))
 
 (defn shared-walker?
-  "Whether threat {:mob :pos} is a walker whose field is its way alone (no water mob, no shooter): one walk serves its
-  field and its steps over an extent (walker-field)."
-  [{:keys [mob pos]}]
-  (and pos (string? mob) (not (contains? water-mobs mob)) (not= :projectile (threat/damage-type mob))))
+  "Whether threat {:mob :held :pos} is a walker whose field is its way alone (no water mob, no shooter: threat/ranged? of
+  what it holds): one walk serves its field and its steps over an extent (walker-field)."
+  [{:keys [mob held pos]}]
+  (and pos (string? mob) (not (contains? water-mobs mob)) (not (threat/ranged? {:name mob :held held}))))
 
 (defn field
   "The field of mob {:mob :pos :extent} known to the body of primitives p (see the ns doc): {:cells #js [#js [x y z w] ...]
@@ -279,9 +279,10 @@
 
 (defn field-key
   "What one field is kept under: the mob, its place to 2 blocks across (a mob stepping about keeps its field, and the
-  tolls built from it stay one vector) and its extent."
-  [{:keys [mob pos extent]}]
-  [mob (some-> pos (update-vals #(js/Math.floor %)) (update :x #(js/Math.floor (/ % 2))) (update :z #(js/Math.floor (/ % 2)))) extent])
+  tolls built from it stay one vector), its extent and whether it shoots (shared-walker? reads what it holds)."
+  [{:keys [mob held pos extent]}]
+  [mob (some-> pos (update-vals #(js/Math.floor %)) (update :x #(js/Math.floor (/ % 2))) (update :z #(js/Math.floor (/ % 2)))) extent
+   (threat/ranged? {:name mob :held held})])
 
 (def max-fields
   "Fields one body keeps, the least recently used dropped first: twice threats/::max-threats (8), the most one price reads.

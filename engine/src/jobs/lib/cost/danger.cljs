@@ -148,7 +148,7 @@
   [{:keys [health equipment weapon]} m]
   (if (and (not= "creeper" (name-of m))
            (fight/leaves-reserve? {:health health :reserve fight/default-reserve
-                                   :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name (name-of m) :distance 0}]})}))
+                                   :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name (name-of m) :held (:held m) :distance 0}]})}))
     :fight
     :flee))
 

@@ -131,10 +131,10 @@
     (sort-by (juxt :price :hurt)
              (for [h (keys dig-leave/headings)
                    :let [cells (dig-leave/exit-cells p h)
-                         mobs (map (fn [m] {:name (.-name m) :pos (danger/mob-pos p m)})
+                         mobs (map (fn [m] {:name (.-name m) :held (.-held m) :pos (danger/mob-pos p m)})
                                    (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) cells))
                          lookups {:kind-at (danger/opened-lookup (reach/mob-lookup p) cells) :arrow-at (danger/opened-lookup (reach/arrow-lookup p) cells)}
-                         hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :pos (:pos %)} lookups))
+                         hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :held (:held %) :pos (:pos %)} lookups))
                                                           (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
                                                           :weapon weapon :health (.-health self)))]]
                {:heading h :price (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) cells) nil)} (sh-sense/feet p)) :hurt hurt}))))

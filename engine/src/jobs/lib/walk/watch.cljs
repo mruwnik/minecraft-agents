@@ -274,7 +274,7 @@
    :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {}) :opens (atom nil)
    :status (:status plan) :interval (refresh-ticks (:ms plan) (settings/physics-ms (:primitives c))) :budget #(wworld/damage-budget c)}
     known (assoc :known known :sense #(threats/sensed-mobs (:primitives c) {})
-                 :reach-of (fn [{:keys [name pos]}] (field/reach-fn (field/field-of c {:mob name :pos pos})))))))
+                 :reach-of (fn [{:keys [name held pos]}] (field/reach-fn (field/field-of c {:mob name :held held :pos pos})))))))
 
 (defn mob-cells
   "The cells {:x :y :z} (feet and head) of the entities, not items and not the body, that stand on the leg the body is

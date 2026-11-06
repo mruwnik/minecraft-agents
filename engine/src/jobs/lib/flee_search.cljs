@@ -335,7 +335,7 @@
     (mapv (fn [{:keys [mob pos] :as ch}]
             (cond-> (assoc ch :swim (swim-fn c pos wet))
               (and mob (not (#{"creeper" "blaze"} mob)) (threat/strikes? {:name mob :held (:held ch)}))
-              (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
+              (assoc :way (field/way-fn (field/field-of c {:mob mob :held (:held ch) :pos pos :extent (give-up-at ch)}) (floor-cell pos) (cost/melee-reach)))))
           chasers)))
 
 (def unreached-s

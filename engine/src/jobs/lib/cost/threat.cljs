@@ -276,10 +276,18 @@
 
 (def trident-kind "The kind of a drowned holding a trident: it throws (vanilla: 8 hp a throw, every 2 s) rather than strikes." "drowned_trident")
 
+(def melee-bow-kind
+  "The kind of a bow mob seen holding something other than a bow: it strikes (AbstractSkeleton.reassessWeaponGoal gives it
+  the melee goal) rather than shoots; a hand not seen is the bow it spawns with."
+  "skeleton_melee")
+
 (defn kind
-  "The name the tables here are keyed by for mob {:name :held}: a drowned holding a trident is its own kind."
+  "The name the tables here are keyed by for mob {:name :held}: a drowned holding a trident and a bow mob holding no bow
+  are their own kinds."
   [{:keys [name held]}]
-  (if (and (= "drowned" name) (= "trident" held)) trident-kind name))
+  (cond (and (= "drowned" name) (= "trident" held)) trident-kind
+        (and (contains? bow-mobs name) (some? held) (not= "bow" held)) melee-bow-kind
+        :else name))
 
 (defn ranged?
   "Whether mob {:name :held} shoots or throws."
@@ -288,11 +296,10 @@
     (or (= trident-kind k) (contains? weapon/ranged-mobs k))))
 
 (defn strikes?
-  "Whether mob {:name :held} lands blows within reach: one that does not shoot (ranged?), a blaze (vanilla BlazeAttackGoal
-  hits a target within 2 blocks) or a bow mob seen holding something other than a bow (AbstractSkeleton.reassessWeaponGoal
-  gives it the melee goal; a hand not seen is the bow it spawns with, bow-holders)."
-  [{:keys [name held] :as m}]
-  (or (not (ranged? m)) (= "blaze" name) (and (contains? bow-mobs name) (some? held) (not= "bow" held))))
+  "Whether mob {:name :held} lands blows within reach: one that does not shoot (ranged?: a bow mob holding no bow, kind)
+  or a blaze (vanilla BlazeAttackGoal hits a target within 2 blocks)."
+  [{:keys [name] :as m}]
+  (or (not (ranged? m)) (= "blaze" name)))
 
 (defn kind-radius
   "Blocks within which a mob counts: radius, for a shooter (ranged?) ranged-radius (default radius)."

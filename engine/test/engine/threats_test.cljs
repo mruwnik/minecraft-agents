@@ -185,6 +185,21 @@
     (is (not= (tolls-with [(at "a") (assoc (skeleton 2 11 0) :uuid "b")]) (tolls-with [(at "a") (assoc (skeleton 2 11 0) :uuid "a")]))
         "two mobs add their tolls, one mob known twice counts its dearest")))
 
+(deftest a-skeleton-is-priced-by-what-it-holds-a-bow-shoots-where-it-sees-a-sword-strikes-along-its-way
+  (let [c (ready-test/ctx-of {:blocks (merge (tu/box 8 64 1 8 66 4 "stone") (tu/box 16 64 0 16 66 0 "stone"))
+                              :inventory [{:name "diamond_sword" :count 1}]})
+        p (:primitives c)
+        _ (aset p "worldEpoch" (constantly 0))
+        tolls-with (fn [held]
+                     (swap! (fake/state p) assoc :entities [(fake/entity-in (assoc (skeleton 1 10 0) :held held))])
+                     (into {} (map (juxt (juxt :x :y :z) :factor)) (threats/threat-tolls c)))
+        bow (tolls-with "bow")
+        sword (tolls-with "stone_sword")
+        behind-wall [7 64 2]
+        on-pillar [16 67 0]]
+    (is (> (get sword behind-wall) (get bow behind-wall) 0) "behind a wall a bow has no line of fire; a sword walks round and strikes")
+    (is (= [true nil] [(pos? (get bow on-pillar)) (get sword on-pillar)]) "a bow shoots up a pillar a sword cannot climb")))
+
 (deftest a-helmet-saves-a-mob-from-the-sun-and-unsensed-equipment-counts-as-worn
   (let [mob #(clj->js (cond-> {} % (assoc :equipment %)))]
     (is (death-spot/bare-headed? (mob [nil nil nil nil nil nil])) "sensed, nothing on the head: it burns")
