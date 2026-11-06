@@ -1273,3 +1273,24 @@
         seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
                               (:seconds (straight-dig p [0 64 0] true {}))))]
     (is (< (seconds 1) (seconds 0.1)) "the likelier the floor it lands on is a void, the dearer the way")))
+
+(deftest water-seen-only-as-the-dig-route-reaches-it-sends-the-route-round-it
+  ;; KitOak94 and the live fixture: the plan read the pool beside the shaft's top as unseen rock (it shows once the digging starts); the dig there was refused :fluid-adjacent
+  ;; and the route ended :refused. Now the refusal plans the route again, round the water it now knows.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (box 2 0 2 30 5 30 "stone") (assoc "19,2,16" "air" "19,3,16" "air" "20,5,16" "water"))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 16.5 :y 6 :z 16.5}} :blocks world :inventory [{:name "stone_pickaxe" :count 1}]})
+              sensed (.-sensedAt p)
+              _ (aset p "sensedAt" (fn [q] (if (and (= [20 5 16] [(.-x q) (.-y q) (.-z q)]) (empty? (calls p "dig"))) #js {:unknown true} (sensed q))))
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 2 16] :range 0 :unknown false})))]
+          (is (some #{[19 5 16]} (map :cell (choose/route-cells p [16 6 16] [19 2 16] (constantly true) (constantly false) false false {:range 0 :near [19 2 16]})))
+              "planned before the water shows, the route digs beside it")
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
+          (is (= [19 2 16] (feet p)))
+          (is (not-any? #(= :refused (:reason %)) (events-of seen :go-to.escalation-stopped)))
+          (is (not-any? #{{"x" 19 "y" 5 "z" 16}} (map #(js->clj (.-pos (.-args %))) (calls p "dig"))) "the cell beside the water is never dug"))))))

@@ -617,7 +617,7 @@
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left; a cell whose floor is unseen is dug
   on top only after the dig found no side stand to step aside to and look from), noting it as a hole once dug.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
-  was planned over rock that is not there), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
+  was planned over rock that is not there) or a dig refused for a hazard (water beside it, seen only as it was reached), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
   [c {:keys [cell guess block beside looked] :as planned}]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
@@ -648,7 +648,11 @@
             (note-holes! c [dug])
             (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)])))
           (when (and guess (not looked)) (note-guess! c cell beside (not= :not-diggable o)))
-          (if (and guess (= :not-diggable o)) :replan o))))))
+          (cond
+            (and guess (= :not-diggable o)) :replan
+            ;; a hazard the plan did not know of (water beside, seen only now): planned again round it
+            (and (= :refused o) (= :hazard (contract/cause-key e))) :replan
+            :else o))))))
 
 (defn replans-spent?
   "Whether the dig route's replans (memory :replan-budget {:since :fallback-s}, begun at the first) have taken the body as long
