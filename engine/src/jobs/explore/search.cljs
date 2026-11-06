@@ -50,7 +50,7 @@
   For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground), as is one whose ground lies more than ::surface-dip (8) below the feet (a pit, ravine or cave mouth): they live on the open surface.
 
   Legs are cost/leg-spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
-  leg is never tried twice and never goes beyond distance-limit (XZ) of the origin: the max-distance setting, :within, and cost/search-radius of the worth. It is skipped (:skipped)
+  leg is never tried twice and never goes beyond distance-limit (XZ) of the origin: :within and cost/search-radius of a finite worth, else the max-distance setting and :within. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius (for farm animals only a note younger than ::animal-searched-ttl-s: they wander); with :use-notes false only a note this job made counts.
 
@@ -144,9 +144,11 @@
   (min (settings/get settings ::max-distance) (or (:within (:args c)) ##Inf)))
 
 (defn distance-limit
-  "How far (XZ) from the origin legs go: note-reach, at most the cost/search-radius the worth pays for."
+  "How far (XZ) from the origin legs go: with a finite worth, :within at most the cost/search-radius it pays for; without one, note-reach."
   [c]
-  (min (note-reach c) (js/Math.ceil (cost/search-radius (worth-of c) (leg-spacing)))))
+  (if-let [w (priced-worth c)]
+    (min (or (:within (:args c)) ##Inf) (js/Math.ceil (cost/search-radius w (leg-spacing))))
+    (note-reach c)))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn rise [] (settings/get settings ::rise))
@@ -738,7 +740,7 @@
           me (here c)
           near (min (:scan-radius (:args c)) (near-sight))
           gone (if (pos? near) (departed c ns (sense p names near) near) #{})]
-      (->> (noted p ns names (:origin m) (distance-limit c) gone (ctx/now c) (fresh-ms) (set (:revisited m)) true)
+      (->> (noted p ns names (:origin m) (note-reach c) gone (ctx/now c) (fresh-ms) (set (:revisited m)) true)
            (takeable c)
            (sort-by #(xz-dist [(me 0) (me 2)] [((:pos %) 0) ((:pos %) 2)]))
            first))))

@@ -132,7 +132,7 @@
          [:job (jobs.explore.search {:target "cow" :within 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
-         [:job (jobs.explore.search {:target "cow" :worth 1 :within 60 :use-notes true})]]
+         [:job (jobs.explore.search {:target "cow" :worth 1 :within 60 :use-notes true})]] ; worth 1 s: no leg is worth its walk, so the search ends at once instead of walking the plot
    :expect [{:event {:source :job :kind :stopped} :within-s 70 :of-job true}]
    :limit-s 90}
   {:name "search-notes-count-a-cow-outside-and-say-where"
@@ -142,7 +142,7 @@
          [:job (jobs.explore.search {:target "cow" :within 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
-         [:job (jobs.explore.search {:target "cow" :worth 1 :within 60 :use-notes true})]]
+         [:job (jobs.explore.search {:target "cow" :within 60 :use-notes true})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:noted true}] :text [:contains "found 1 cow at"]}} :within-s 70 :of-job true}]
    :limit-s 90}
 

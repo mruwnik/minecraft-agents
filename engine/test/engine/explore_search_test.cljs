@@ -505,6 +505,13 @@
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
     (is (= (count (search/spiral-points [0 0] 16 64)) (count order)))))
 
+(deftest a-priced-search-plans-legs-past-the-max-distance-setting
+  (let [c {:args {:pattern :spiral :worth 1e7} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
+        far (fn [c] (apply max (map #(js/Math.hypot (% 0) (% 1)) (search/candidates c {:origin [0 0 0]}))))]
+    (is (> (far c) 96) "a finite worth pays for legs beyond the setting")
+    (is (<= (far (assoc-in c [:args :worth] ##Inf)) 96) "unpriced, the setting limits the legs")
+    (is (<= (far (assoc-in c [:args :within] 40)) 40) ":within still caps a priced search")))
+
 (deftest ground-another-body-searched-for-these-targets-is-skipped
   (async done
     (tu/run-async done

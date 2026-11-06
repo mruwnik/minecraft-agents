@@ -57,7 +57,6 @@
  [jobs.explore.look :radius]
  [jobs.explore.look :useful?]
  [jobs.explore.search :heading]
- [jobs.explore.search :max-legs]
  [jobs.explore.search :pattern]
  [jobs.explore.search :within]
  [jobs.farm.compost :at]
