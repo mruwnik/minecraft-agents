@@ -13,7 +13,6 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.pace :as pace]
             [jobs.lib.walk.search :as wsearch]
-            [jobs.lib.walk.way-log :as way-log]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.air :as air]
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
@@ -101,7 +100,6 @@
   [c0 pos]
   (let [c (health/with-body-food c0)
         m (ctx/mem c)]
-    (way-log/resolve! c)
     (when (:held m) (ctx/update-mem! c dissoc :held))
     (when (:unknown c)
       (wworld/with-seeds (:unknown c) (when (:y pos) (mapv #(js/Math.floor (% pos)) [:x :y :z])) (into (ledger/stair-stands c) (ledger/tunnel-stands c))))
@@ -120,8 +118,7 @@
                                 (some-> (:doors (:args c)) keyword)))))))))
 
 (defn ^:async step!
-  "One iteration of a call: :again to go on in the same call, else what the call returns. The flee ways waiting for their
-  cells are read first (way-log/resolve!), so a way seen on any walk is counted."
+  "One iteration of a call: :again to go on in the same call, else what the call returns."
   [c0 pos]
   (let [jumped (jumped? c0)]
     (when jumped (restart-after-jump! c0 pos))

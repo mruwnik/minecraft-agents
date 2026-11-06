@@ -341,7 +341,8 @@
            (when (>= to total)
              (set! (.-pass st) nil)
              (set! (.-done (.-lastStart st)) true)
-             (set! (.-passes st) (inc (.-passes st))))))
+             (set! (.-passes st) (inc (.-passes st)))
+             (when-let [f (:on-pass opts)] (f)))))
        (let [ms (- (js/performance.now) started)]
          (set! (.-steps st) (inc (.-steps st)))
          (set! (.-stepMs st) (+ (.-stepMs st) ms))
@@ -532,6 +533,7 @@
         (count-why! st :look-for :passes 1)
         (count-why! st :look-for :rays n)
         (set! (.-rays st) (+ (.-rays st) n))
+        (when-let [f (:on-pass opts)] (f))
         true))))
 
 (def feel-margin 0.1)

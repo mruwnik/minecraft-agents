@@ -177,6 +177,21 @@
     (try (some-> (hook) (.catch failed))
          (catch :default e (failed e)))))
 
+(defn pass-hook
+  "(fn []) that runs hook on core/hook-ctx of the engine in eng-ref (nothing before it exists). A throw is emitted as
+  :pass-hook-failed at most once per every-ms, never thrown: it runs inside perception's own steps and looks."
+  [eng-ref hook every-ms]
+  (let [last-failed (atom (- js/Infinity))]
+    (fn []
+      (when-let [eng @eng-ref]
+        (try (hook (core/hook-ctx eng))
+             (catch :default e
+               (let [t (js/Date.now)]
+                 (when (>= (- t @last-failed) every-ms)
+                   (reset! last-failed t)
+                   (core/emit! eng {:source :system :kind :pass-hook-failed :level :warn
+                                    :text (str "the perception pass hook failed: " (or (ex-message e) e))})))))))))
+
 (defn ^:async wait-out-danger!
   "Before a stop, give a running danger reflex up to danger-wait-ms to end (a body stopped mid-escape suffocates while the
   engine is down). Logs what it waited for."
@@ -222,7 +237,9 @@
                                                                         :onEvent on-view-event}))))
         ;; what the body has seen (engine.perception); BODY_PERCEPTION=0 runs without it
         per (when (and (.-rawWorld raw-p) (not= "0" (.. js/process -env -BODY_PERCEPTION)))
-              (perception/create (.-rawWorld raw-p) {}))
+              (perception/create (.-rawWorld raw-p)
+                                 {:on-pass (pass-hook eng-ref (:perception/pass hooks/all)
+                                                      (settings/get perception/settings :engine.perception/error-every-ms))}))
         sensed (senses/wrap raw-p (.-rawWorld raw-p))
         p (if per (entity-observations/wrap-heard (perception/wrap sensed per)) sensed)
         world (open-world {:state-dir state-dir :world (:world cfg) :agent (:agent opts) :root root

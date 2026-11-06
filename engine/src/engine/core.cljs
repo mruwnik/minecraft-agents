@@ -117,6 +117,7 @@
 (def submit! list-edits/submit!)
 (def act! round/act!)
 (def make-ctx round/make-ctx)
+(def hook-ctx round/hook-ctx)
 (def drop-reflex-job! base/drop-reflex-job!)
 (def cut! schedule/cut!)
 (def do-now! schedule/do-now!)

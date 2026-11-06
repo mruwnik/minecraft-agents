@@ -510,7 +510,6 @@
   (when-not (contains? (ctx/mem c) :goal)
     (ctx/update-mem! c assoc :goal (goal/interrupted-goal (ctx/view c) (:root c))))
   (loop [unchanged 0 looks 0]
-    (way-log/resolve! c)
     (let [hs (near c)
           t0 (ctx/now c)
           before (signature c hs)

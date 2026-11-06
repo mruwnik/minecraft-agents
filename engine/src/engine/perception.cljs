@@ -18,6 +18,7 @@
     `:effort` (0-1) scales the grid: a pass casts effort-min (0.15) to all of a `:ray-deg` grid; aimed rows always.
     A forced pass with `{:reuse? true}` (jobs.lib.look/see!) casts nothing when the last finished pass had the same eye spot, look, world and light, at the same effort or more, less than 2 s ago.
     A pass is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick).
+    `:on-pass` (an opt of create) is called once each pass or look-for! has recorded what it saw (main: the :perception/pass hook).
     Slices share one mark stamp while the raw-world epoch, darkness and near stay and for 2 s at most, wherever the eye moves: a cell recorded in it is not read again, so its recorded time is up to 2 s old (a thin block is read every time).
     A new pass starts when the eye moved or turned, every `:idle-ms` if the world changed (a block or chunk update, the
     daylight, a torch in hand), else every `:still-ms`.
@@ -129,8 +130,8 @@
 ;; ---- create
 
 (defn create
-  "A perception over a rawWorld reader. opts override `(defaults)` (plus :now, a clock in ms, and :rand, the random
-  source in [0, 1) that jitters each pass's rays within their grid cells)."
+  "A perception over a rawWorld reader. opts override `(defaults)` (plus :now, a clock in ms, :rand, the random
+  source in [0, 1) that jitters each pass's rays within their grid cells, and :on-pass, (fn []) called after each pass)."
   [raw opts]
   (let [o (merge (defaults) {:now #(js/Date.now) :rand #(js/Math.random)} opts)
         g (rays/grid o)]

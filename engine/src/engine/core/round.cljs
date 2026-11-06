@@ -354,3 +354,15 @@
   [eng inst args]
   (make-ctx eng {:root (:id inst) :slots [] :chain [(:id inst)] :token nil
                  :args args :round (:round inst) :reflex (:reflex inst)}))
+
+(defn hook-ctx
+  "The ctx a hook run outside any job gets (the :perception/pass hook): sensing, memory reads and writes, events with
+  :source :system. No token: it cannot act, call or own the body. Its writes are saved by the next housekeeping."
+  [eng]
+  (let [store (:store eng)
+        dirty! #(some-> (:memory-dirty eng) (reset! true))]
+    {:engine eng :primitives (:primitives eng)
+     :view #(mem/view store)
+     :remember (fn [kind data policy] (mem/write! store kind data policy) (dirty!))
+     :forget (fn [kind pred] (mem/forget-where! store kind pred) (dirty!))
+     :emit (fn [kind level fields] (emit! eng (merge fields {:source :system :kind kind :level level})))}))

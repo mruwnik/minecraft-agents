@@ -282,6 +282,14 @@
       (is (= #{"name" "pos" "distance" "age-ms"} (set (keys b))))
       (is (every? number? (map b ["distance" "age-ms"]))))))
 
+(deftest on-pass-runs-after-each-pass-and-each-look-for-but-not-a-reused-pass
+  (let [n (atom 0)
+        {:keys [per]} (rig (wall 5 8 [] {"0,65,5" "diamond_ore"}) {:on-pass #(swap! n inc)})]
+    (perception/pass! per)
+    (perception/pass! per {:reuse? true})
+    (perception/look-for! per {:names #{"diamond_ore"}})
+    (is (= 2 @n))))
+
 (deftest sensedAt-answers-as-js-and-is-redone-when-the-eye-turns
   (let [{:keys [p per]} (rig {"0,65,-5" "gold_block"})
         wrapped (perception/wrap p per)

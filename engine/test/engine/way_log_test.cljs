@@ -76,3 +76,15 @@
   (let [seen (atom [])]
     (with-body wt/open-corridor nil #(way-log/log-priced! (stub seen) nil))
     (is (= [] @seen) "a decision that priced no way counts logs none")))
+
+(deftest resolve-cost-per-pass-bench
+  ;; resolve! runs after every sight pass (the :perception/pass hook): printed per call, never a pass/fail
+  (let [c (stub (atom []))
+        per-call (fn [] (let [n 200 t0 (js/performance.now)]
+                          (with-body wt/open-corridor nil #(dotimes [_ n] (way-log/resolve! c)))
+                          (/ (- (js/performance.now) t0) n)))
+        idle (per-call)
+        _ (doseq [i (range way-log/pending-cap)] ((:remember c) :way-pending {:way [(+ 100 i) 64 0 0]} {:cap way-log/pending-cap :ttl :forever}))
+        full (per-call)]
+    (println (str "\nway-log/resolve! per pass: none waiting " (.toFixed idle 4) " ms, " way-log/pending-cap " unread waiting " (.toFixed full 4) " ms"))
+    (is (= way-log/pending-cap (count (pending c))) "ways whose cells are unseen stay waiting")))

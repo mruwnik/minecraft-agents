@@ -3,11 +3,16 @@
             [engine.bodies :as bodies]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.hooks :as hooks]
             [engine.main :as main]
+            [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.trigger-api :as api]
             [engine.test-util :as tu]
+            [jobs.lib.look :as look]
             ["fs" :as fs]
             ["path" :as path]))
 
@@ -108,6 +113,30 @@
           (await (js/Promise. #(js/setTimeout % 20)))
           (is (= [:warm-failed :warm-failed] (mapv :kind @raw)))
           (is (= ["warming the tables failed: sync" "warming the tables failed: async"] (mapv :message @raw))))))))
+
+(deftest a-way-seen-in-a-mining-look-is-read-in-the-same-pass
+  ;; the body at [0 64 0] faces south (+z) at a stone wall from z 5: the way from [0 64 4] south is rock
+  (let [raw-events (atom [])
+        p (tu/blind (tu/fake {:blocks (tu/box -8 58 5 8 72 8 "stone")}))
+        eng-ref (atom nil)
+        per (perception/create (fake-raw/create p) {:on-pass (main/pass-hook eng-ref (:perception/pass hooks/all) 60000)})
+        store (atom {:data {} :now (constantly 0) :world-time (constantly 0)})
+        eng {:store store :primitives (perception/wrap p per)
+             :events (events/make {:body "Fake" :sinks [#(swap! raw-events conj %)] :now #(js/Date.now)})}
+        _ (mem/write! store :way-pending {:way [0 64 4 2]} {:cap 64 :ttl :forever})
+        _ (reset! eng-ref eng)
+        _ (look/see! (core/hook-ctx eng))]
+    (is (= [{:way [0 64 4 2] :on false}] (mapv #(select-keys (:data %) [:way :on]) (filter #(= :way-on.seen (:kind %)) @raw-events))))
+    (is (= [] (mem/entries (mem/view store) :way-pending)) "read once, then forgotten")))
+
+(deftest a-pass-hook-that-throws-emits-pass-hook-failed-at-most-once-per-every-ms
+  (let [raw (atom [])
+        eng {:events (events/make {:body "Fake" :sinks [#(swap! raw conj %)] :now #(js/Date.now)})}
+        run (main/pass-hook (atom eng) (fn [_] (throw (js/Error. "boom"))) 60000)]
+    (run)
+    (run)
+    (is (= [:pass-hook-failed] (mapv :kind @raw)) "the second throw within every-ms is not emitted again, and none is thrown")
+    (is (= ["the perception pass hook failed: boom"] (mapv :message @raw)))))
 
 (deftest a-second-signal-does-not-stop-again
   (async done

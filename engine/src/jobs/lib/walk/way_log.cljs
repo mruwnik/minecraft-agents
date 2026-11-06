@@ -3,8 +3,8 @@
   :way-on.priced {:set :lit|:dark|:unknown :k :n :ways [[x y z d] ...]}: the counts the decision priced the flight with
   (wworld/way-scan at the feet), the light there as the body perceives it (:unknown: no light data at the feet), and the first
   ways into cells it had not seen. :way-on.seen {:way [x y z d] :on bool}: whether the step goes on, read from the body's memory
-  at the first resolve! that finds the way's cells there; resolve! runs every respond-to-hostile tick, every decision
-  logged and every go-to step, so a way seen in any job is read. :way-on.censored {:way :why :evicted}: a way dropped
+  at the first resolve! that finds the way's cells there; resolve! runs after every sight pass (the :perception/pass hook)
+  and before every decision logged, so a way is read in the pass that first sees it, in any job. :way-on.censored {:way :why :evicted}: a way dropped
   unread to keep at most pending-cap waiting; one still waiting when the logs are counted is censored too.
   Nothing is read but the body's memory."
   (:require [engine.ctx :as ctx]
