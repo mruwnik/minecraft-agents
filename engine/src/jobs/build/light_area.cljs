@@ -5,6 +5,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
@@ -86,10 +87,7 @@
   [c]
   (filterv #(sh-sense/spawnable? (:primitives c) (zipmap [:x :y :z] %)) (area c)))
 
-(defn lighting
-  "{:spots [cell ..] :uncovered [cell ..]} (jobs.lib.torch-plan/plan) for what the area still owes: spots nearest the body
-  first, those a place failed at left out."
-  [c]
+(defn- plan-lighting [c]
   (let [p (:primitives c)
         block-at (access/seen-at p)
         here (u/self-pos c)
@@ -105,6 +103,14 @@
                        #(torch/perceived-dark? p %))
               :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
               :spots spots :sources torches})))
+
+(defn lighting
+  "{:spots [cell ..] :uncovered [cell ..]} (jobs.lib.torch-plan/plan) for what the area still owes: spots nearest the body
+  first, those a place failed at left out. One plan for the step's checks: kept (check-cache) while the args, the torches hung,
+  the places failed, the cells looked at and the body's cell stay."
+  [c]
+  (let [{:keys [torches failed viewed]} (ctx/mem c)]
+    (check-cache/cached c [::lighting (:args c) torches failed viewed (u/cell-vec (u/self-pos c))] #(plan-lighting c))))
 
 (defn half-seen?
   "An open cell whose floor or head cell the body has not seen yet: whether it is spawn ground is undecided."
