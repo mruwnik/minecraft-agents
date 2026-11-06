@@ -20,6 +20,7 @@
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond-choose :as choose]
+            [jobs.lib.util :as u]
             [jobs.lib.rooms :as rooms]))
 
 ;; The hut of hut-shelter-test: walls x 3..7, z -2..2, roof y 67, room x 4..6 z -1..1, a door at (5,64,2) facing south.
@@ -176,6 +177,13 @@
           (await (tu/run-until-empty eng 6))
           (is (not (ran-home? seen)))
           (is (not (hs/door-open? raw)) "the door was never opened for a look"))))))
+
+(deftest a-chaser-that-loses-to-the-walk-alone-but-not-to-the-looks-at-the-door-gets-no-glance
+  (let [me {:x 5.5 :y 64 :z 5.5} d {:x 5 :y 64 :z 2}
+        walk (u/dist me (rooms/mid d))
+        mob-dist 4.5]
+    (is (cost/reach-first? walk [mob-dist] 20 [\"zombie\"]) "the walk to the door alone is won")
+    (is (not (cost/reach-first? (rooms/glance-steps me d 20) [mob-dist] 20 [\"zombie\"])) "the click, the walk through and the looks make it lost")))
 
 (deftest a-creeper-is-never-led-to-the-hut
   (async done

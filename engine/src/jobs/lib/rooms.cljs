@@ -242,6 +242,14 @@
                :when (some-> (u/seen-block p cell) .-name reach/openable?)]
            cell)))
 
+(defn glance-steps
+  "Blocks the body's time at door cell d from me weighs in the glance's race: the walk to the door, the two blocks through
+  it and back to the spot, and the seconds of the click and of up to ::door-looks looks at each of the two spots, at the
+  body's own pace (food). A shut that waits on an animal is not counted: it comes after the chaser's reach is settled."
+  [me d food]
+  (+ (u/dist me (mid d)) 2
+     (* (cost/body-speed food) (cost/look-s (inc (* 2 (door-looks)))))))
+
 (defn ^:async glance-in!
   "Once a flight per building: when survey dropped a door side (a cell beside a seen door or gate; a home cell with
   none is looked into from its door sides) only for :unseen cells and the body is within door-glance-radius of it,
@@ -259,7 +267,7 @@
                               pos {:x x :y y :z z}
                               d (door-cell p pos)]
                         :when (and (= :unseen why) d (not (glanced k)) (<= (u/dist me pos) door-glance-radius)
-                              (reaches-first? p (u/dist me (mid d)) [d] threats))]
+                              (reaches-first? p (glance-steps me d (food p)) [d] threats))]
                     {:k k :pos pos :d d}))]
     (when at
       (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at))
