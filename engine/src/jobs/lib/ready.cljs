@@ -203,15 +203,15 @@
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
   stand in there (hall-cell), dark only in a dark hall; over ::risk-limit :never, lowered by a torch. Where that cell is
   the body's own, the unseen walls of its room are looked at first (room-look). A hall judged by an unseen edge
-  (sh-inside/dark-hall :roofed or :sky) is also priced as the walk to look at `goal` (default `to`; look-first), back
-  at the chance the edge is open (cost/hall-chance); a seen `goal`, as the walk to look at the far side of the hall's region (walk-look)."
+  (sh-inside/dark-hall-edge :roofed or :sky) is also priced as the walk to look at `goal` (default `to`; look-first), back
+  at the chance the edge is open (cost/hall-edge-chance); a seen `goal`, as the walk to look at the far side of the hall's region (walk-look)."
   ([c to] (dark-status c to to))
   ([c to goal]
    (let [p (:primitives c)
          at (spawn-light/hall-cell p to)
          chance (spawn-light/chance-at p at false)
          where (place-text to)
-         hall (delay (sh-inside/dark-hall p at nil))
+         hall (delay (sh-inside/dark-hall-edge p at nil))
          look (delay (when (u/within? (sh-sense/feet p) at 1)
                        (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)
                            (air-look c (str "dark at " where ", the air round the body not seen sealed") chance))))]
@@ -222,9 +222,9 @@
        :else
        (cond-> (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
                                :lowered-by #{:torch} :chance chance :at at)
-         (#{:roofed :sky} @hall) (as-> s (if (sh-sense/seen-cell? p goal)
+         (#{:roofed :sky} (:hall @hall)) (as-> s (if (sh-sense/seen-cell? p goal)
                                              (walk-look s c at)
-                                             (look-first s c goal (cost/hall-chance @hall)))))))))
+                                             (look-first s c goal (cost/hall-edge-chance @hall)))))))))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,

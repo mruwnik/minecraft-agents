@@ -56,7 +56,7 @@
     (and small? (sh-sense/seen-cell? p (update at :y dec))) 0
     (light-carried? p) (settings/get settings ::lit-chance)
     (seen-lit? p at) (settings/get settings ::lit-chance)
-    :else (let [hall (let [{:keys [hall edge]} (sh-inside/dark-hall-edge p at nil)] (cost/hall-chance hall edge))]
+    :else (let [hall (cost/hall-edge-chance (sh-inside/dark-hall-edge p at nil))]
             (+ (* hall (settings/get settings ::hall-chance)) (* (- 1 hall) (settings/get settings ::dark-chance))))))
 
 (defn climb-out-s

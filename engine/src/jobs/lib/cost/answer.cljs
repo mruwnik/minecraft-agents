@@ -616,6 +616,11 @@
      (let [{:keys [far near]} (get (settings/get value/settings ::value/unseen-edge-dark-counts) hall)]
        (* edge (counted-chance {:k 0 :n 0 :prior [far near]}))))))
 
+(defn hall-edge-chance
+  "hall-chance of a sh-inside/dark-hall-edge verdict ({:hall :edge})."
+  [{:keys [hall edge]}]
+  (hall-chance hall edge))
+
 (defn spot-plantable-chance
   "The chance a replant spot of which the body has not seen the soil, room or light can be planted: counted-chance of
   value/::unseen-spot-counts' pseudo-counts."

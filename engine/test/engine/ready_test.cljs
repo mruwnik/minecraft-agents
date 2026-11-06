@@ -48,6 +48,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.world :as known]
             [jobs.strip.site :as strip-site]
@@ -642,6 +643,17 @@
     (let [text (second (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))]
       (is (re-find #"a mob can walk from dark floor farther than 24 blocks off" text))
       (is (not (re-find #"a hall of dark floor beyond" text))))))
+
+(deftest the-look-first-price-of-an-unseen-hall-is-the-chance-a-walker-comes-through-its-edge
+  ;; a lit yard behind a 3-high rim is a hall only past an unseen edge a walker reaches at edge-chance, not for sure
+  (let [asked (atom nil)]
+    (with-redefs [sh-sense/block-light-at (constantly 0)
+                  sh-sense/sky-light-at (constantly 0)
+                  sh-sense/seen-cell? (constantly false)
+                  sh-inside/dark-hall-edge (constantly {:hall :sky :edge 0.25})
+                  walk-risk/look-way (fn [_ _ dark] (reset! asked dark) {:hp 0 :lethal-hp 0 :secs 1})]
+      (ready/dark-status (ctx-of (assoc open-night :time st/noon)) outside))
+    (is (= (cost/hall-chance :sky 0.25) @asked))))
 
 (deftest a-way-out-of-a-dark-hall-underground-is-no-exposure-but-other-work-there-is
   (with-redefs [ready/hall-status (fn [_ _] [:never "hall" {:reason :exposed}])]
