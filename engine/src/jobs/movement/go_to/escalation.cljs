@@ -253,6 +253,21 @@
         s (reprice/status c pos plan)]
     (when (= :later (first s)) s)))
 
+(defn way-total
+  "Seconds way e from feet takes the body to goal, one sum for a stair, a pillar and a dig leg: the way's own price
+  (escape-way/way-s for a stair or pillar, with its climb left; price for a leg) and the walk on from its end to goal
+  along the straight line, a seen solid cell of that line and of the one over it dug (cost/dig-cost) as the walk goes; no dangers."
+  [p feet goal e may-dig?]
+  (let [walk-s (escape-way/rest-s-fn p goal)
+        block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
+        rest-s (fn [cell] (+ (walk-s cell)
+                             (transduce (comp (mapcat #(vector % (escape/up % 1))) (remove unseen?) (map block-at) (remove dig-route/open?) (map #(or (cost/dig-cost %) 0))) + 0
+                                        (take escape-way/read-line-cells (escape/line-cells cell goal)))))]
+    (if (= :dig-route (:step e))
+      (+ (escape-way/price p feet e) (rest-s (:cell (peek (:cells e)))))
+      (escape-way/way-s p feet goal e (assoc (escape/carried-pillar-item p) :rest-s rest-s :may-dig? may-dig?)))))
+
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
@@ -312,10 +327,9 @@
                                         e)))
                      ;; its route searches are shared through the slice's answers: choose runs again per zone rule below
                      rock-dig? #(let [l (dig-leg c feet goal %1 %2)
-                                      e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))
-                                      price (fn [w] (escape-way/price (:primitives c) feet w (:own-s %2)))]
+                                      e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))]
                                   (cond
-                                    (and e (= :pillar (:step e)) (<= (price e) (price l))) e
+                                    (and e (#{:stair :pillar} (:step e)) (<= (way-total (:primitives c) feet goal e %1) (way-total (:primitives c) feet goal l %1))) e
                                     (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
                                       (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (and (= :none (:step e)) (not (:why e)))) l e))
