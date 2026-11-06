@@ -156,6 +156,14 @@
     (is (> (chance two) (chance one) 0) "the second skeleton adds its own shots")
     (is (> (toll two) (toll one) 0) "and its own toll")))
 
+(deftest tolls-are-built-from-the-weight-rounded-as-the-shared-key-rounds-it
+  (let [c (ready-test/ctx-of {:entities [(skeleton 1 10 0)]})
+        t (first (threats/known-threats c))
+        table #(into {} (map (juxt (juxt :x :y :z) :factor)) (threats/tolls-of c [(assoc t :weight %)]))]
+    (is (= (threats/round-weight 0.52) (threats/round-weight 0.5)))
+    (is (= (table 0.5) (table 0.52)) "weights in one 1/20 step give one table")
+    (is (not= (table 0.5) (table 0.6)))))
+
 (deftest a-helmet-saves-a-mob-from-the-sun-and-unsensed-equipment-counts-as-worn
   (let [mob #(clj->js (cond-> {} % (assoc :equipment %)))]
     (is (death-spot/bare-headed? (mob [nil nil nil nil nil nil])) "sensed, nothing on the head: it burns")

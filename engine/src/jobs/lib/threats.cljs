@@ -253,16 +253,21 @@
   [c pos stay-s worth]
   ((stay-danger-fn c) pos stay-s worth))
 
+(defn round-weight
+  "A threat's weight to 1/20: what tolls-of prices and threat-tolls keys by, so a table is a function of its key."
+  [weight]
+  (/ (js/Math.round (* 20 weight)) 20))
+
 (defn tolls-of
   "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
-  cost/threat-factor (the mob, its weight x the cell's) more a second; the dearest of one mob where it is known twice (a
+  cost/threat-factor (the mob, its weight to 1/20 x the cell's) more a second; the dearest of one mob where it is known twice (a
   kind with no :key counts as one mob), mobs of one :key each summed, at most cost/threat-factor-cap."
   [c threats]
   (let [body (body-of (:primitives c))
         cap (cost/threat-factor-cap body)
         by-cell (js/Map.)]
     (doseq [{:keys [mob weight key] :as t} threats
-            :let [f (cost/threat-factor body (cost/mob-of-threat t) weight)]
+            :let [f (cost/threat-factor body (cost/mob-of-threat t) (round-weight weight))]
             :when (pos? f)
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)
@@ -288,6 +293,6 @@
    (let [ts (filterv keep? (known-threats c))]
      (if (empty? ts)
        []
-       (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (/ (js/Math.round (* 20 (:weight t))) 20)]) ts)]
+       (field/shared c [::threat-tolls (mapv (fn [t] [(field/field-key t) (round-weight (:weight t))]) ts)]
                      #(tolls-of c ts)
                      count)))))
