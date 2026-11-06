@@ -16,7 +16,7 @@
 
 (def target [])
 
-(def defaults {})
+(def defaults {:spend {:job-time 10}})
 
 (defn checker [c]
   (let [{:keys [lit? stay-s]} (:args c)]

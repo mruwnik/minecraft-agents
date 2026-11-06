@@ -17,6 +17,9 @@
        {:lit? true} rt/open-night :later
        {:lit? true} rt/night-hut :ok)))
 
+(deftest the-job-time-budget-is-on
+  (is (= 10 (get-in (:defaults (get registry/jobs 'jobs.debug.ready-probe)) [:spend :job-time]))))
+
 (deftest the-report-carries-the-status-of-the-checker-run-before-it-without-running-it-again
   (let [c (assoc (rt/ctx-of rt/night-hut) :args {})
         runs (atom 0)
