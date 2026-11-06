@@ -74,12 +74,12 @@
     (is (= (model) (db/apply-pending-show (model))))))
 
 (deftest initial-db-reads-show-from-the-address
-  (are [search expected] (= expected (:show-body (db/initial-db search "who")))
+  (are [search expected] (= expected (:show-body (db/initial-db search)))
     "" nil
     "?show=Near" "Near"
     "?world=test&show=Probe_1" "Probe_1")
-  (is (= true (:places-open? (db/initial-db "" "who"))))
-  (is (= false (:players-open? (db/initial-db "" "who")))))
+  (is (= true (:places-open? (db/initial-db ""))))
+  (is (= false (:players-open? (db/initial-db "")))))
 
 (def mixed-bodies
   [{:name "Work" :up true :state {:pos {:x 0 :z 0}} :engine {:job {:id "j" :name "dig"}}}
