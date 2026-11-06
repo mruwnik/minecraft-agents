@@ -11,6 +11,7 @@
             [jobs.lib.fuel :as fuel]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
+            [engine.heap :as heap]
             [engine.settings :as settings]
             [engine.game :as game]))
 
@@ -137,11 +138,13 @@
 
 (defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block|^bamboo|^bamboo_sapling)$" name)))
 
+(def unseen-peak-density (memoize #(base-rates/peak-density % nil)))
+
 (defn ore-find-seconds
   "Seconds to find ore: its hand figure, else :ore-scan-s over the density of its best layer (nil: no placement or no scan)."
   [{:keys [ores ore-scan-s]} ore]
   (or (first (get ores ore))
-      (let [density (base-rates/peak-density ore nil)]
+      (let [density (unseen-peak-density ore)]
         (when (and ore-scan-s (pos? density)) (/ ore-scan-s density)))))
 
 (defn find-seconds [md basis b]
@@ -183,25 +186,33 @@
     (when b
       (mapv (fn [[item n]] {:name item :count n}) (block-yields md (deep-merge default-basis basis) b loot (crop? b loot))))))
 
-(defn block-sources
-  "{item name worth} of what blocks drop: the cheapest way, per item. tool-price is the seconds of the pickaxe a block of that
-  tier needs, beyond the stone one every body is assumed to have (0 when none)."
-  [md basis crafted tool-price]
+(defn block-rows
+  "[[seconds tier [[item expected drops] ..]] ..] of the blocks block-sources prices: each one's seconds without the pickaxe
+  (tier nil: a crop, which needs none)."
+  [md basis crafted]
   (let [item? #(some? (aget (.-itemsByName md) %))]
-    (reduce (fn [acc b]
-              (let [name (.-name b)
-                    loot (aget (.-blockLoot md) name)
-                    crop (crop? b loot)]
-                (if (or (not (number? (.-hardness b))) (neg? (.-hardness b))
-                        (and (crafted name) (not crop) (not (contains? (:natural basis) name)))
-                        (not (or crop (item? name))))
-                  acc
-                  (let [cost (if crop
-                               (+ (:farm-s basis) (get-in basis [:find :crop]))
-                               (+ (dig-seconds md basis b) (find-seconds md basis b) (tool-price (block-tier md b))))]
-                    (reduce (fn [acc [item n]] (if (pos? n) (update acc item #(min (or % js/Infinity) (/ cost n))) acc))
-                            acc (block-yields md basis b loot crop))))))
-            {} (array-seq (.-blocksArray md)))))
+    (into [] (keep (fn [b]
+                     (let [name (.-name b)
+                           loot (aget (.-blockLoot md) name)
+                           crop (crop? b loot)]
+                       (when-not (or (not (number? (.-hardness b))) (neg? (.-hardness b))
+                                     (and (crafted name) (not crop) (not (contains? (:natural basis) name)))
+                                     (not (or crop (item? name))))
+                         [(if crop
+                            (+ (:farm-s basis) (get-in basis [:find :crop]))
+                            (+ (dig-seconds md basis b) (find-seconds md basis b)))
+                          (when-not crop (block-tier md b))
+                          (filterv (comp pos? second) (block-yields md basis b loot crop))]))))
+          (array-seq (.-blocksArray md)))))
+
+(defn block-sources
+  "{item name worth} of what blocks drop (block-rows): the cheapest way, per item. tool-price is the seconds of the pickaxe a
+  block of that tier needs, beyond the stone one every body is assumed to have (0 when none)."
+  [rows tool-price]
+  (reduce (fn [acc [cost tier yields]]
+            (let [cost (if tier (+ cost (tool-price tier)) cost)]
+              (reduce (fn [acc [item n]] (update acc item #(min (or % js/Infinity) (/ cost n)))) acc yields)))
+          {} rows))
 
 (defn mob-sources
   "{item name worth} of what mobs drop (entityLoot): the kill, the hurt and the finding, per expected drop."
@@ -277,27 +288,49 @@
   (let [b (aget (.-blocksByName md) (get-in basis [:gear :ref-block]))]
     (update basis :gear assoc :ref-hardness (.-hardness b) :ref-material (.-material b) :ref-tier (block-tier md b))))
 
-(defn build-table-with
-  "build-table's table, the blocks priced with tool-price (tier -> seconds, see block-sources)."
-  [version overrides basis tool-price]
-  (let [md (facts/data version)
+(def version-facts
+  "What build-table reads of minecraft-data version alone, the same for every basis and pass (memoised). The fixpoint
+  works on item indices (names' order): :recipes-ix holds each item's recipes as #js [count #js [ingredient index]], :smelts-ix its smelt
+  inputs, :dependents-ix the items whose recipe or smelt reads it; a name outside names is index -1, worth nothing found."
+  (memoize
+   (fn [version]
+     (let [md (facts/data version)
+           items (array-seq (.-itemsArray md))
+           names (mapv #(.-name %) items)
+           ix (into {} (map-indexed (fn [i n] [n i])) names)
+           ix-of #(get ix % -1)
+           recipes (recipe-list md)
+           by-result (group-by first recipes)
+           smelts (smelt-sources names)
+           dependents (reduce (fn [m [n ins]] (reduce #(update %1 %2 (fnil conj #{}) n) m ins))
+                              {} (concat (for [[n rs] by-result [_ _ ins] rs] [n ins]) smelts))
+           per-name (fn [f] (into-array (map f names)))]
+       {:md md :items items :names names :by-result by-result :smelts smelts
+        :crafted (set (map first recipes))
+        :ingredients (set (mapcat #(nth % 2) recipes))
+        :recipes-ix (per-name (fn [n] (some->> (by-result n) (map (fn [[_ k ins]] #js [k (into-array (map ix-of ins))])) into-array)))
+        :smelts-ix (per-name (fn [n] (some->> (smelts n) (map ix-of) into-array)))
+        :dependents-ix (per-name (fn [n] (into-array (keep ix (dependents n)))))
+        :smelting-ix (into #{} (keep ix) (keys smelts))
+        :fuels-ix (into [] (keep (fn [[i n]] (when-let [per (fuel/fuel-per-unit :furnace n)] [i per]))) (map-indexed vector names))
+        :tools (set (keep #(when (number? (.-maxDurability %)) (.-name %)) items))}))))
+
+(defn worth-at [t i] (if (neg? i) js/Infinity (aget t i)))
+
+(defn table-builder
+  "(fn [tool-price]) -> build-table's table, the blocks priced with tool-price (tier -> seconds, see block-sources); all
+  that the tool prices leave alone is worked out once."
+  [version overrides basis]
+  (let [{:keys [md items names by-result smelts crafted ingredients recipes-ix smelts-ix dependents-ix smelting-ix fuels-ix tools]} (version-facts version)
         basis (full-basis basis)
-        items (array-seq (.-itemsArray md))
-        names (map #(.-name %) items)
-        recipes (recipe-list md)
-        crafted (set (map first recipes))
-        ingredients (set (mapcat #(nth % 2) recipes))
-        smelts (smelt-sources names)
+        craft-step (:craft-step basis)
         foods-table (foods/table-for version)
         food-floor (fn [n] (if (contains? foods/harmful n) 0 (* (:food-point-s basis) (get-in foods-table [n :points] 0))))
-        sourced (merge-with min (block-sources md basis crafted tool-price) (mob-sources md basis))
-        natural (into {} (map (fn [[n w]] [n (if (or (crafted n) (contains? smelts n) (used? md ingredients version n))
-                                                  w
-                                                  (* w (:junk-share basis)))]))
-                       sourced)
-        by-result (group-by first recipes)
+        floors (into-array (map food-floor names))
+        rows (block-rows md basis crafted)
+        mobs (mob-sources md basis)
         pinned (into {} (map (fn [[n o]] [n (override-fn o)])) overrides)
-        pin (fn [n w] ((get pinned n identity) w))
+        pins (into-array (map #(get pinned % identity) names))
         ;; nothing yields it, so it cannot be replaced: a precious food is worth what eating it gives a body at the reference health, a tool or armour piece what its uses save
         gear-basis (ref-gear-basis md basis)
         no-source (into {} (map (fn [i] (let [n (.-name i)]
@@ -306,36 +339,44 @@
                                                 (number? (.-maxDurability i)) (gear/use-worth gear-basis n (.-maxDurability i))
                                                 :else (* (:no-source-each basis) (/ 64 (max 1 (.-stackSize i)))))])))
                          items)
-        entry (fn [natural table smelt-s n]
-                (let [via-recipe (some->> (by-result n)
-                                          (map (fn [[_ k ins]] (/ (+ (:craft-step basis) (reduce + (map #(get table % js/Infinity) ins))) k)))
-                                          (apply min))
-                      via-smelt (some->> (smelts n) (map #(+ smelt-s (get table % js/Infinity))) (apply min))
-                      w (min (get natural n js/Infinity) (or via-recipe js/Infinity) (or via-smelt js/Infinity))]
-                  [n (pin n (if (js/isFinite w) (max w (food-floor n)) w))]))
-        ;; the names whose recipe or smelt reads an ingredient
-        dependents (reduce (fn [m [n ins]] (reduce #(update %1 %2 (fnil conj #{}) n) m ins))
-                           {} (concat (for [[n rs] by-result [_ _ ins] rs] [n ins]) smelts))
-        smelting (set (keys smelts))
-        smelt-of (fn [table] (+ (:smelt-step basis) (fuel-each table)))
-        ;; each round prices only the names an input of changed last round, which a full round would leave as they are
+        entry (fn [natural t smelt-s i]
+                (let [w (reduce (fn [w r]
+                                  (let [sum (reduce #(+ %1 (worth-at t %2)) 0 (aget r 1))]
+                                    (min w (/ (+ craft-step sum) (aget r 0)))))
+                                (aget natural i) (aget recipes-ix i))
+                      w (reduce #(min %1 (+ smelt-s (worth-at t %2))) w (aget smelts-ix i))]
+                  ((aget pins i) (if (js/isFinite w) (max w (aget floors i)) w))))
+        smelt-of (fn [t] (+ (:smelt-step basis) (transduce (map (fn [[i per]] (/ (aget t i) per))) min js/Infinity fuels-ix)))
+        ;; each round prices only the items an input of changed last round, which a full round would leave as they are
         fixpoint (fn [natural]
-                   (let [t0 (into {} (map (fn [n] [n (pin n (get natural n js/Infinity))])) names)]
-                     (loop [t t0 smelt-s (smelt-of t0) dirty names i 0]
-                       (let [t' (into t (map #(entry natural t smelt-s %)) dirty)
-                             changed (filter #(not= (get t %) (get t' %)) dirty)]
-                         (if (or (empty? changed) (>= i 60))
+                   (let [t0 (into-array (map-indexed (fn [i _] ((aget pins i) (aget natural i))) names))]
+                     (loop [t t0 smelt-s (smelt-of t0) dirty (range (count names)) round 0]
+                       (let [t' (aclone t)
+                             _ (doseq [i dirty] (aset t' i (entry natural t smelt-s i)))
+                             changed (filter #(not (identical? (aget t %) (aget t' %))) dirty)]
+                         (if (or (empty? changed) (>= round 60))
                            t'
                            (let [smelt-s' (smelt-of t')]
                              (recur t' smelt-s'
-                                    (into (if (= smelt-s smelt-s') #{} smelting) (mapcat dependents) changed)
-                                    (inc i))))))))
-        unsourced (into {} (keep (fn [[n w]] (when-not (or (js/isFinite w) (by-result n) (smelts n)) [n (max (no-source n) (food-floor n))])))
-                        (fixpoint natural))
-        ;; again with the items nothing yields at their floor, so a recipe of one (a golden apple of an apple) is priced by its ingredients
-        table (fixpoint (merge natural unsourced))]
-    (tier-floors basis overrides (set (keep #(when (number? (.-maxDurability %)) (.-name %)) items))
-                 (into {} (map (fn [[n w]] [n (if (js/isFinite w) w (pin n (max (no-source n) (food-floor n))))])) table))))
+                                    (into (if (identical? smelt-s smelt-s') #{} smelting-ix) (mapcat #(aget dependents-ix %)) changed)
+                                    (inc round))))))))
+        natural-of (fn [m] (into-array (map #(get m % js/Infinity) names)))]
+    (fn [tool-price]
+      (let [sourced (merge-with min (block-sources rows tool-price) mobs)
+            natural (into {} (map (fn [[n w]] [n (if (or (crafted n) (contains? smelts n) (used? md ingredients version n))
+                                                      w
+                                                      (* w (:junk-share basis)))]))
+                          sourced)
+            first-t (fixpoint (natural-of natural))
+            unsourced (into {} (keep (fn [[i n]] (let [w (aget first-t i)]
+                                                   (when-not (or (js/isFinite w) (by-result n) (smelts n)) [n (max (no-source n) (aget floors i))]))))
+                            (map-indexed vector names))
+            ;; again with the items nothing yields at their floor, so a recipe of one (a golden apple of an apple) is priced by its ingredients
+            table (fixpoint (natural-of (merge natural unsourced)))]
+        (tier-floors basis overrides tools
+                     (into {} (map-indexed (fn [i n] (let [w (aget table i)]
+                                                       [n (if (js/isFinite w) w ((aget pins i) (max (no-source n) (aget floors i))))])))
+                           names))))))
 
 (defn tool-price-fn
   "tier -> worth per block of the cheapest pickaxe of that harvest tier (its table worth over its durability, one use per
@@ -356,14 +397,24 @@
   pickaxe; three passes settle the diamond tier). The extra args only key table-for's memo."
   [version overrides basis & _]
   (let [md (facts/data version)
-        basis* (full-basis basis)]
-    (nth (iterate #(build-table-with version overrides basis (tool-price-fn md basis* %))
-                  (build-table-with version overrides basis (constantly 0)))
-         2)))
+        basis* (full-basis basis)
+        build (table-builder version overrides basis)]
+    (nth (iterate #(build (tool-price-fn md basis* %)) (build (constantly 0))) 2)))
+
+(defonce ^{:doc "Tables table-for built in this process and the ms they took: gauges, so a body.stall says whether a table build held the loop."}
+  builds #js {:n 0 :ms 0})
+
+(heap/gauge! :worth-tables #(.-n builds))
+(heap/gauge! :worth-table-ms #(js/Math.round (.-ms builds)))
 
 (def table-for
   "build-table, memoized on what it reads: its arguments and the settings the hp prices come from."
-  (let [built (memoize build-table)]
+  (let [built (memoize (fn [& args]
+                         (let [t0 (js/performance.now)
+                               table (apply build-table args)]
+                           (set! (.-n builds) (inc (.-n builds)))
+                           (set! (.-ms builds) (+ (.-ms builds) (- (js/performance.now) t0)))
+                           table)))]
     (fn [version overrides basis]
       (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
 

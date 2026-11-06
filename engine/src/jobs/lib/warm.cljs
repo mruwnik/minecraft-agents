@@ -6,14 +6,24 @@
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost.value :as value]))
 
+(defn steps
+  "The warm-up, one fn per table or posterior."
+  []
+  (concat
+   [#(value/measured-worth @game/version)
+    #(value/item-value [{:name "stone"}])
+    #(value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))
+    blocks/default-state-table]
+   (for [which [::caught/flights ::caught/fights]
+         counts (vals (settings/get caught/settings which))]
+     #(caught/posterior counts))))
+
 (defn warm!
   "Build the item worth tables of the body's game version (as item-value and find-worth ask them), the planner's block table and the
-  posterior of every counted flight and fight group (caught/prior: the first masked plan's unseen-share prices spawns with them)."
+  posterior of every counted flight and fight group (caught/prior: the first masked plan's unseen-share prices spawns with them).
+  One step per event-loop turn, so the body's timers run between them; a promise of nil, rejected with a step's error."
   []
-  (value/item-value [{:name "stone"}])
-  (value/item-value [{:name "stone"}] :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version)))
-  (blocks/default-state-table)
-  (doseq [which [::caught/flights ::caught/fights]
-          counts (vals (settings/get caught/settings which))]
-    (caught/posterior counts))
-  nil)
+  (reduce (fn [p step]
+            (.then p #(js/Promise. (fn [ok fail] (js/setImmediate (fn [] (try (step) (ok nil) (catch :default e (fail e)))))))))
+          (js/Promise.resolve nil)
+          (steps)))
