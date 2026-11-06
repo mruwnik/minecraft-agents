@@ -14,6 +14,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.need :as need]
             [jobs.lib.per-body :as per-body]
             [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
@@ -281,16 +282,27 @@
      (or (lava? 0 0 0) (lava? 0 -1 0)
          (every? (fn [[dx dz]] (or (lava? dx 0 dz) (lava? dx -1 dz))) [[1 0] [-1 0] [0 1] [0 -1]])))))
 
+(defn pickaxe-fetch
+  "When fetch? (fetch-tool?): a delay of the seconds a wooden pickaxe costs to get (need/item-price under the fetch ways:
+  its walk there and back with its risk under the sky now, so a long walk at night is dear), asked only when route-s
+  digs quicker with one; else nil."
+  [c fetch?]
+  (when fetch? (delay (need/item-price c "wooden_pickaxe" 1 {:how need/sources} nil))))
+
 (defn route-s
-  "Seconds digging cells ([x y z]) takes with the quickest tool carried (with a wooden pickaxe too when fetch?), blocks
-  own? calls the body's own not counted; block-at reads them (default escape/block-at-of)."
-  ([p cells own? fetch?] (route-s p (escape/block-at-of p) cells own? fetch?))
-  ([p block-at cells own? fetch?]
-    (transduce (comp (remove #(and own? (own? % (block-at %))))
-                     (map #(/ (cond-> (tools/clear-ms p (block-at %))
-                                fetch? (min (js/Number (.clearTime p (block-at %) "wooden_pickaxe"))))
-                              1000)))
-               + 0 cells)))
+  "Seconds digging cells ([x y z]) takes with the quickest tool carried, or with a wooden pickaxe got first at
+  @fetch (pickaxe-fetch) when that is quicker; blocks own? calls the body's own not counted; block-at reads them
+  (default escape/block-at-of). shares (optional) weighs each cell's dig."
+  ([p cells own? fetch] (route-s p (escape/block-at-of p) cells own? fetch))
+  ([p block-at cells own? fetch] (route-s p block-at cells own? fetch (constantly 1)))
+  ([p block-at cells own? fetch shares]
+   (let [cells (remove #(and own? (own? % (block-at %))) cells)
+         sum (fn [ms] (transduce (map #(* (shares %) (/ (ms (block-at %)) 1000))) + 0 cells))
+         carried (sum #(tools/clear-ms p %))]
+     (if-not fetch
+       carried
+       (let [fetched (sum #(min (tools/clear-ms p %) (js/Number (.clearTime p % "wooden_pickaxe"))))]
+         (if (< fetched carried) (min carried (+ @fetch fetched)) carried))))))
 
 (defn rest-dig-s
   "Seconds an unfinished dig search's rest is expected to cost (dig-price's :searching or :budget, so a quote does not
@@ -302,13 +314,11 @@
         rock-at #(or (block-at %) access/hidden-guess)
         solid-at (look/unseen-solid-at-fn p)
         own? (own-placed-fn c)
-        fetch? (fetch-tool? c)
         share #(cond (or (nil? (block-at %)) (dig-look/unknown? p %)) (solid-at %)
                      (escape/solid? (block-at %)) 1
-                     :else 0)]
-    (transduce (comp (mapcat (fn [[x y z]] [[x y z] [x (inc y) z]]))
-                     (map #(let [k (share %)] (if (zero? k) 0 (* k (route-s p rock-at [%] own? fetch?))))))
-               + 0 (concat (escape/line-cells from goal) [goal]))))
+                     :else 0)
+        cells (filter #(pos? (share %)) (mapcat (fn [[x y z]] [[x y z] [x (inc y) z]]) (concat (escape/line-cells from goal) [goal])))]
+    (route-s p rock-at cells own? (pickaxe-fetch c (fetch-tool? c)) share)))
 
 (def route-searches
   "The most route searches route-cells makes round cells may-dig? refuses."
@@ -417,7 +427,7 @@
   and may-dig? (a dig beside seen water priced as its flood: body-prices); :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than the least of route-opts :worth-s and :bound-s with what it carries, or with
-  a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
+  a wooden pickaxe got at its price when fetch? (pickaxe-fetch: the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel
   through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor, unless
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
   priced at the chance it is none (cost/floor-absent-chance of the step's kind) times the fall it adds past the step's own (cost/unseen-fall-s less its :fall-s), in the search and the straight dig. Other route-opts go to the search (:place-s,
@@ -806,7 +816,7 @@
   still past its worth (search-bound, memory :spent-routes) is not begun again; a dig route prices a cell of the body's
   own builds at its put-back (:own-s); escape-way/choose prices a way's dangers by walk-risk/way-risk-s (:risk-s)."
   [c feet fetch? slice]
-  {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? fetch? :own-s (own-cut-fn c)
+  {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? (pickaxe-fetch c fetch?) :own-s (own-cut-fn c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
    :guess-risk (guess-risk c) :worth-s (when (:escalation (ctx/mem c)) (:fallback-s (:replan-budget (ctx/mem c)))) :bound-s (call-budget-s c)
    :max-damage (:max-damage (wworld/walk-settings c))

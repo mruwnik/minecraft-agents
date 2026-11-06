@@ -931,10 +931,11 @@
 (deftest a-dig-route-is-priced-with-the-pickaxe-the-body-would-fetch
   (let [world (assoc (box 0 60 -1 40 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
         route (fn [inventory fetch?] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false fetch? {:worth-s 30}))]
-    (is (nil? (route [] false)) "shut in: bare hands cannot tunnel 12 stones")
-    (is (seq (route [] true)) "a free body crafts a pickaxe and tunnels")
-    (is (seq (route [{:name "wooden_pickaxe" :count 1}] false)) "a wooden pickaxe tunnels 12 blocks")
-    (is (seq (route [{:name "stone_pickaxe" :count 1}] false)) "a stone pickaxe tunnels 12 blocks")))
+    (is (nil? (route [] nil)) "shut in: bare hands cannot tunnel 12 stones")
+    (is (seq (route [] (delay 5))) "a free body crafts a pickaxe and tunnels")
+    (is (nil? (route [] (delay 60))) "a pickaxe dearer to get than the route is worth is no way to tunnel")
+    (is (seq (route [{:name "wooden_pickaxe" :count 1}] nil)) "a wooden pickaxe tunnels 12 blocks")
+    (is (seq (route [{:name "stone_pickaxe" :count 1}] nil)) "a stone pickaxe tunnels 12 blocks")))
 
 (deftest a-pocket-floor-seen-only-from-inside-is-no-bar-when-floors-unseen-are-ok
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
