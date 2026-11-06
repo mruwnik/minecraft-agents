@@ -1676,6 +1676,8 @@
   (let [entry (fn [data] {:data data})
         arrow {:damageType "arrow" :dir {:x 1 :z 0}}]
     (is (= {:x 12.5 :y 64 :z 0.5} (first (shot/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12))))
+    (is (= {:x 12.5 :y 64 :z 0.5} (first (shot/shot-spots [(entry (assoc arrow :pos {:x 0.5 :y 64 :z 0.5}))] {:x 0.5 :y 64 :z 3.5} 12)))
+        "the way runs from where the body was hit, not from where it stands now")
     (is (= {:x 0.5 :y 64 :z -11.5}
            (first (shot/shot-spots [(entry {:attacker {:name "pillager"} :dir {:x 0 :z -1}})] {:x 0.5 :y 64 :z 0.5} 12)))
         "a ranged attacker is a shooter")

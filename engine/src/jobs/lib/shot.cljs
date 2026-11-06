@@ -28,14 +28,15 @@
 
 (defn shot-spots
   "Pure: for each :hurt entry that is a shot (shot?) and carries a :dir, the points reach, 2/3 and 1/3 of reach blocks
-  out from from along it, level and at each of pitches above or below, then the points those depths straight under
-  from (a skeleton down a shaft under the body shoots up it); the first is the level one reach out."
-  [entries {:keys [x y z]} reach]
+  out along it from where the body was hit (the entry's :pos, else from), level and at each of pitches above or below,
+  then the points those depths straight under it (a skeleton down a shaft under the body shoots up it); the first is the
+  level one reach out."
+  [entries from reach]
   (let [outs [reach (* reach (/ 2 3)) (/ reach 3)]]
     (->> entries
          (filter shot?)
-         (keep (comp :dir :data))
-         (mapcat (fn [{dx :x dz :z}]
+         (keep (fn [{:keys [data]}] (when-let [dir (:dir data)] [dir (or (:pos data) from)])))
+         (mapcat (fn [[{dx :x dz :z} {:keys [x y z]}]]
                    (concat (for [pitch pitches
                                  h outs]
                              {:x (+ x (* h dx)) :y (+ y (* h (js/Math.tan (* js/Math.PI (/ pitch 180))))) :z (+ z (* h dz))})
