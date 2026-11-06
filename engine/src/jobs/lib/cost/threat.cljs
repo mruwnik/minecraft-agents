@@ -106,12 +106,30 @@
   [k]
   (inc (weapon/weapon-damage (subs k (inc (count melee-bow-kind))))))
 
+(def armed-base
+  "Vanilla attack damage at normal difficulty of the melee mobs that add the main-hand weapon's bonus to it."
+  {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "zombified_piglin" 5 "piglin" 5 "vindicator" 5})
+
+(defn base-name
+  "The mob name of kind k: the part before the held item of an armed kind (kind)."
+  [k]
+  (if (string? k) (first (str/split k #"/")) k))
+
+(defn armed-blow
+  "Damage one blow of armed kind k (\"zombie/iron_sword\") deals at normal difficulty: the mob's attack plus its item's
+  bonus (weapon-damage less a fist's 1), nil when k is no armed kind."
+  [k]
+  (let [[mob item] (when (string? k) (str/split k #"/"))]
+    (when (and item (contains? armed-base mob))
+      (+ (armed-base mob) (dec (weapon/weapon-damage item))))))
+
 (defn mob-blow
   "Damage one hit of mob-name deals before the difficulty's scaling: a bow mob's or a pillager's arrow (arrow-blow: vanilla
   Pillager.performRangedAttack shoots the crossbow at velocity 1.6, a skeleton's arrow speed), else its mob-hit."
   [mob-name]
   (cond (or (contains? bow-mobs mob-name) (= "pillager" mob-name)) (arrow-blow (difficulty))
         (melee-bow? mob-name) (melee-bow-blow mob-name)
+        (armed-blow mob-name) (armed-blow mob-name)
         :else (get mob-hit mob-name 3)))
 
 (def door-breakers
@@ -294,11 +312,13 @@
 (def trident-kind "The kind of a drowned holding a trident: it throws (vanilla: 8 hp a throw, every 2 s) rather than strikes." "drowned_trident")
 
 (defn kind
-  "The name the tables here are keyed by for mob {:name :held}: a drowned holding a trident and a bow mob holding no bow
-  (one kind a held item) are their own kinds."
+  "The name the tables here are keyed by for mob {:name :held}: a drowned holding a trident, a bow mob holding no bow and
+  an armed-base mob holding a weapon are their own kinds (the last two one a held item; base-name gives the mob back).
+  A seen empty hand is held \"none\" (prim-sense), a hand not seen nil."
   [{:keys [name held]}]
   (cond (and (= "drowned" name) (= "trident" held)) trident-kind
         (and (contains? bow-mobs name) (some? held) (not= "bow" held)) (str melee-bow-kind "/" held)
+        (and (contains? armed-base name) (> (weapon/weapon-damage held) 1)) (str name "/" held)
         :else name))
 
 (defn ranged?
@@ -352,20 +372,20 @@
 
 (defn lone-hit-rate
   "Hits a second of a lone sword fight: the measured rates of the zombie family and spiders, a skeleton's bow-hit-rate, else one a second."
-  [mob-name]
-  (cond (= trident-kind mob-name) (settings/get settings ::trident-rate)
-        (contains? bow-mobs mob-name) (bow-hit-rate)
-        (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
-        (contains? #{"spider" "cave_spider"} mob-name) (settings/get settings ::spider-hit-rate)
+  [kind-name]
+  (cond (= trident-kind kind-name) (settings/get settings ::trident-rate)
+        (contains? bow-mobs kind-name) (bow-hit-rate)
+        (contains? measured-hit-rate (base-name kind-name)) (settings/get settings ::hit-rate)
+        (contains? #{"spider" "cave_spider"} kind-name) (settings/get settings ::spider-hit-rate)
         :else 1))
 
 (defn hit-rate-shape
   "The shape of the Gamma over lone-hit-rate of ranged mob-name, the mobs of a kind sharing the one rate: ::hit-rate-hits + 0.5
   for the measured families; nil for a vanilla cadence (a trident drowned's throws, a skeleton's shots); 1 for a rate with no hits counted,
   an exponential (the maximum-entropy prior of a positive rate of known mean)."
-  [mob-name]
-  (cond (or (= trident-kind mob-name) (contains? bow-mobs mob-name)) nil
-        (contains? measured-hit-rate mob-name) (+ 0.5 (settings/get settings ::hit-rate-hits))
+  [kind-name]
+  (cond (or (= trident-kind kind-name) (contains? bow-mobs kind-name)) nil
+        (contains? measured-hit-rate (base-name kind-name)) (+ 0.5 (settings/get settings ::hit-rate-hits))
         :else 1))
 
 (defn base-threat

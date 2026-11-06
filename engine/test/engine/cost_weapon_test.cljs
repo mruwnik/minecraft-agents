@@ -70,3 +70,24 @@
 (deftest a-bow-mob-holding-a-weapon-blows-two-plus-the-weapons-bonus
   (doseq [[item hp] [["stone_sword" 6] ["iron_sword" 7] ["diamond_sword" 8]]]
     (is (= hp (threat/mob-blow (threat/kind {:name "skeleton" :held item}))) item)))
+
+(deftest an-armed-melee-mob-blows-its-base-plus-the-weapons-bonus
+  (doseq [[mob item hp] [["zombie" "iron_sword" 8] ["husk" "stone_sword" 7] ["drowned" "diamond_sword" 9]
+                         ["zombified_piglin" "golden_sword" 8] ["piglin" "golden_sword" 8] ["vindicator" "iron_axe" 13]]]
+    (is (= hp (threat/mob-blow (threat/kind {:name mob :held item}))) (str mob " " item))))
+
+(deftest an-armed-kind-is-priced-as-its-mob-in-the-name-keyed-tables
+  (let [k (threat/kind {:name "zombie" :held "iron_sword"})]
+    (is (= (threat/lone-hit-rate "zombie") (threat/lone-hit-rate k)))
+    (is (= (threat/hit-rate-shape "zombie") (threat/hit-rate-shape k)))))
+
+(deftest a-seen-empty-hand-or-a-non-weapon-keeps-the-plain-kind
+  (is (= "zombie" (threat/kind {:name "zombie" :held "none"})))
+  (is (= "zombie" (threat/kind {:name "zombie" :held nil})))
+  (is (= 3 (threat/mob-blow (threat/kind {:name "zombie" :held "dirt"})))))
+
+(deftest a-bow-mob-seen-with-an-empty-hand-is-a-melee-kind-blowing-two
+  (is (= "skeleton_melee/none" (threat/kind {:name "skeleton" :held "none"})))
+  (is (= 2 (threat/mob-blow (threat/kind {:name "skeleton" :held "none"}))))
+  (is (threat/strikes? {:name "skeleton" :held "none"}))
+  (is (not (threat/strikes? {:name "skeleton" :held nil}))))
