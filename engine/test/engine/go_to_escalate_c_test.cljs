@@ -11,6 +11,9 @@
             [engine.go-to-test :as gt]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
@@ -19,7 +22,6 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
-            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.util :as u]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
@@ -1292,16 +1294,31 @@
 
 ;; card e252d55b: the goal floats in seen air with no fallback way and no bound but ##Inf; the body remembers only the
 ;; cells round it. Once a box holds them and what a step reads past them, a wider one adds only guessed rock: no leg
-(deftest a-dig-leg-widening-at-no-price-ends-once-its-box-holds-all-the-body-remembers
-  (let [p (tu/fake {:blocks (box 0 60 -3 5 68 3 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
+(deftest a-dig-leg-widening-at-no-price-ends-once-its-box-s-faces-are-unremembered-though-the-body-remembers-far-away
+  (let [f (tu/fake {:blocks (box 0 60 -3 5 68 3 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
+        raw (fake-raw/create f)
+        per (perception/create raw {:now (constantly 1000000)})
+        ^js st (:st per)
         seen [0 60 -3 8 68 3]
-        _ (tu/set-sensed! p (fn [pos] (if (every? true? (map #(<= %1 (js/Math.floor (aget pos %2)) %3) (take 3 seen) ["x" "y" "z"] (drop 3 seen)))
-                                        (.blockAt (tu/oracle p) pos)
-                                        #js {:unknown true :pos pos})))
+        in? (fn [[x y z]] (every? true? (map #(<= %1 %2 %3) (take 3 seen) [x y z] (drop 3 seen))))
+        ;; the body remembers the stone round it and, 1000 blocks off, a second place
+        _ (doseq [x (range 0 9) y (range 60 69) z (range -3 4)] (store/record! st (store/store-of st (.-dim st)) x y z (.stateAt raw x y z) 1000000))
+        _ (store/record! st (store/store-of st (.-dim st)) 1000 64 0 (.stateAt raw 1000 64 0) 1000000)
+        p (perception/wrap f per)
+        _ (tu/set-sensed! p (fn [pos] (if (in? (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"])) (.blockAt f pos) #js {:unknown true :pos pos})))
         c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        margins (atom [])
+        route-cells choose/route-cells
         leg #(choose/dig-leg c [2 64 0] [7 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-widens-past-memory")})]
-    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {}) seen-sections/seen-box (constantly seen)]
-      (is (= [nil] (take 1 (drop-while #{{:step :searching}} (take 300 (repeatedly leg)))))))))
+    ;; a second arity gives the stand-in the arity-8 entry dig-leg calls
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})
+                  choose/route-cells (fn ([p from goal may-dig? own?] (route-cells p from goal may-dig? own?))
+                                         ([p from goal may-dig? own? unseen-ok? fetch? opts]
+                                           (some->> (:margin opts) (swap! margins conj))
+                                           (route-cells p from goal may-dig? own? unseen-ok? fetch? opts)))]
+      (is (= [nil] (take 1 (drop-while #{{:step :searching}} (take 300 (repeatedly leg))))))
+      ;; the box round the leg of 5 doubled once holds the stone and 3 past it; old code widened till it held the far place
+      (is (<= (apply max @margins) 10) (str "widest margin " (apply max @margins))))))
 
 ;; the detour leg digs longer than the call has left (memory :dug-s of its worth): out of dig budget, not past its worth
 (deftest a-detour-leg-past-the-calls-dig-time-is-out-of-dig-budget

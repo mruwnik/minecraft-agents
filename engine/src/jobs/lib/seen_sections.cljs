@@ -40,16 +40,22 @@
         (.set extents s e)
         (when (<= (aget e 1) (aget e 4)) e)))))
 
-(defn seen-box
-  "[x0 y0 z0 x1 y1 z1]: the box of every cell the body of primitives p remembers; nil without a memory or with none."
-  [p]
+(defn faces-unseen?
+  "Whether the body of primitives p remembers no cell within r of a face of the box [x0 y0 z0 x1 y1 z1], inside it or out
+  (by each section's box of remembered cells), the bottom face left out at or under floor-y; nil without a memory."
+  [p [x0 y0 z0 x1 y1 z1] r floor-y]
   (when-let [st (st-of p)]
-    (let [b #js [##Inf ##Inf ##Inf ##-Inf ##-Inf ##-Inf]]
+    (let [low (if (<= y0 floor-y) ##-Inf y0)
+          clear #js [true]]
       (.forEach (sections st) (fn [^js s] (when-let [e (extent s)]
-                                            (dotimes [j 3]
-                                              (aset b j (js/Math.min (aget b j) (aget e (inc j))))
-                                              (aset b (+ j 3) (js/Math.max (aget b (+ j 3)) (aget e (+ j 4))))))))
-      (when (<= (aget b 0) (aget b 3)) (vec b)))))
+                                            (when (and (<= (- x0 r) (aget e 4)) (<= (aget e 1) (+ x1 r))
+                                                       (<= (- low r) (aget e 5)) (<= (aget e 2) (+ y1 r))
+                                                       (<= (- z0 r) (aget e 6)) (<= (aget e 3) (+ z1 r))
+                                                       (not (and (<= (+ x0 r) (aget e 1)) (<= (aget e 4) (- x1 r))
+                                                                 (<= (+ low r) (aget e 2)) (<= (aget e 5) (- y1 r))
+                                                                 (<= (+ z0 r) (aget e 3)) (<= (aget e 6) (- z1 r)))))
+                                              (aset clear 0 false)))))
+      (aget clear 0))))
 
 (defn steps-fn
   "A fn [x y z] of the fewest steps (each at most one cell across, one up or max-fall down) between the cell and any cell

@@ -75,13 +75,23 @@
     (is (nil? (seen/toward w [0 64 0] [0 64 0] 3 0.3 1 100)) "none nearer a goal the body stands at")))
 
 
-(deftest the-seen-box-holds-every-remembered-cell-and-no-more
+(deftest a-box-s-faces-are-unseen-when-no-remembered-cell-lies-within-r-of-them-inside-or-out
   (let [w (seeing (tu/fake-on-floor {}))
         cells (atom [])]
     (.forEach (store/store-of (st w) (.-dim (st w)))
               (fn [^js s] (let [o [(* 16 (.-cx s)) (* 16 (.-sy s)) (* 16 (.-cz s))]]
                             (doseq [dx (range 16) dy (range 16) dz (range 16) :let [c (mapv + o [dx dy dz])] :when (remembered? w c)]
                               (swap! cells conj c)))))
-    (is (seq @cells))
-    (is (= (into (apply mapv min @cells) (apply mapv max @cells)) (seen/seen-box w)))
-    (is (nil? (seen/seen-box (tu/fake {}))) "no memory, no box")))
+    (let [[x0 y0 z0] (apply mapv min @cells) [x1 y1 z1] (apply mapv max @cells)
+          ;; the memory's sections are whole: a box 3 past each section's remembered cells
+          [sx0 sy0 sz0] (mapv #(* 16 (js/Math.floor (/ % 16))) [x0 y0 z0])
+          [sx1 sy1 sz1] (mapv #(+ 15 (* 16 (js/Math.floor (/ % 16)))) [x1 y1 z1])]
+      (is (true? (seen/faces-unseen? w [(- sx0 3) (- sy0 3) (- sz0 3) (+ sx1 3) (+ sy1 3) (+ sz1 3)] 3 -64)) "round all the memory")
+      (is (false? (seen/faces-unseen? w [(- x0 2) (- y0 3) (- z0 3) (+ x1 3) (+ y1 3) (+ z1 3)] 3 -64)) "a cell 2 inside a face")
+      (is (true? (seen/faces-unseen? w [(- sx0 3) (- y0 1) (- sz0 3) (+ sx1 3) (+ sy1 3) (+ sz1 3)] 3 (- y0 1))) "the floor face left out")
+      (is (true? (seen/faces-unseen? w [(+ sx1 4) y0 z0 (+ sx1 40) y1 z1] 3 -64)) "beside the memory, 4 past it")
+      (is (false? (seen/faces-unseen? w [(+ x1 3) y0 z0 (+ x1 40) y1 z1] 3 -64)) "beside the memory, 3 past it"))
+    (store/record! (st w) (store/store-of (st w) (.-dim (st w))) 1000 64 0 1 1000000)
+    (is (false? (seen/faces-unseen? w [998 60 -10 1010 70 10] 3 -64)) "a place far off, 2 inside a face")
+    (is (true? (seen/faces-unseen? w [990 60 -10 1010 70 10] 3 -64)) "a place far off, deep inside")
+    (is (nil? (seen/faces-unseen? (tu/fake {}) [0 0 0 1 1 1] 3 -64)) "no memory, no answer")))
