@@ -292,6 +292,15 @@
     (is (true? (esc/own-may-beat? p feet pillar)))
     (is (false? (esc/own-may-beat? p feet {:step :dig-route :cells []})) "a way that costs nothing is never beaten")))
 
+(deftest a-dig-never-opens-the-body-s-own-plug-against-water
+  ;; KitOak94: a dig route priced its stair plug [738 62 -177] as a flood of a few seconds and dug it; the water behind it runs down the stair
+  (let [plug [738 62 -177]
+        c (assoc (rt/ctx-of {:blocks {}}) :args {}
+                 :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}}))]
+    (is (false? ((own-builds/may-dig-fn c) plug)))
+    (is (false? ((own-builds/may-dig-fn c true) plug)) "not even where the body may cut its own builds")
+    (is (true? ((own-builds/may-dig-fn c) [738 61 -177])))))
+
 (deftest an-own-stocked-pen-wall-cut-costs-its-put-back-and-the-herd-s-loss-and-the-pen-is-read-once
   ;; card dbd43651: the herd-loss branch of the put-back price; the may-dig, own and price fns of one escalation share one pen read
   (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 0.5 :y 61 :z 0.5}}

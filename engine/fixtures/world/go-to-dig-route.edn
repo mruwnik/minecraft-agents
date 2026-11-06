@@ -59,6 +59,14 @@
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [19 5 16] "water"] [:body-near [19.5 2 16.5] 1.5]]}
+  ;; seen water beside the shaft's top cell (a pool flush with the top): its flood costs more than digging round the pool, so the dry way is dug
+  {:name "dry-way-round-is-still-taken-over-a-flood"
+   :blocks [[:set [20 5 16] "water"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalation-stopped} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:block [19 5 16] "stone"] [:block [20 4 16] "stone"] [:body-near [19.5 2 16.5] 1.5]]}
   ;; should fail: the pocket's floor is lava, so its goal cell is no place to stand: go-to refuses at once (goal-not-standable), digs nothing and never steps in
   {:name "pocket-over-lava-is-refused"
    :blocks [[:set [19 1 16] "lava"]]

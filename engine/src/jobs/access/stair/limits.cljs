@@ -2,7 +2,8 @@
   "The settings the stair steps read (keys under :jobs.access.stair.limits/), which tunnel runs too."
   (:require [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.access.rules :as rules]))
+            [jobs.lib.access.rules :as rules]
+            [jobs.lib.stair-memory :as smem]))
 
 (a/defargs settings
   {:jobs.access.stair.limits/max-cell-digs {:default 3 :doc "Digs of one cell before a stair or tunnel run stops :refills." :spec (a/int-in 0 nil)}
@@ -20,3 +21,7 @@
 (defn bridge-depth [] (settings/get settings :jobs.access.stair.limits/bridge-depth))
 (defn take-back-floors? [] (settings/get settings :jobs.access.stair.limits/take-back-floors?))
 (defn dig-plugs? [] (settings/get settings :jobs.access.stair.limits/dig-plugs?))
+(defn kept-plugs
+  "The cells this body plugged against water (stair-memory/plugs-of) that its digs leave shut: none under dig-plugs?."
+  [c]
+  (if (dig-plugs?) #{} (smem/plugs-of c)))

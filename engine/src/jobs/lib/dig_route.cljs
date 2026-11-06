@@ -380,7 +380,7 @@
   hp-cost, at most the falls it survives), a block's dig-cost (nil: never dug; a nameless cell
   has none) with what the dig destroys (cost/destroyed-fn over opts :sensed, (fn [cell]) a sensed block, default the
   body's; a cell (opts :own-s cell) prices over 0, the body's own build, at that instead) and, beside seen water that
-  flows into it (rules/fluid-neighbours, beside or above), cost/flood-dig-s, a stair's step at least its
+  flows into it (rules/fluid-neighbours, beside or above), cost/flood-dig-s of its dig, a stair's step at least its
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps and
   :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
@@ -393,14 +393,15 @@
          destroyed (cost/destroyed-fn sensed)
          cut-s (fn [name cell] (let [own (if own-s (own-s cell) 0)] (if (pos? own) own (destroyed name cell false))))
          seen-name (fn [cell] (when-let [b (sensed cell)] (when-not (true? (.-unknown b)) (.-name b))))
-         flood-s (delay (cost/flood-dig-s (merge (cost/air-profile (.-equipment self) (some-> (.-effects self) array-seq)) (cost/swim-profile (.-equipment self)))
-                                          (.-health self) (cost/walk-hp-seconds)))
-         water-s (fn [[_ y _ :as cell]] (if (some (fn [[n [_ ny _]]] (and (not= "lava" n) (>= ny y))) (rules/fluid-neighbours seen-name cell)) @flood-s 0))]
+         wet (delay (merge (cost/air-profile (.-equipment self) (some-> (.-effects self) array-seq)) (cost/swim-profile (.-equipment self))
+                           {:dig-pace (cost/wet-dig-pace (.-equipment self))}))
+         flood-s (memoize (fn [dig-s] (cost/flood-dig-s @wet (.-health self) (cost/walk-hp-seconds) dig-s)))
+         water-s (fn [[_ y _ :as cell] dig-s] (if (some (fn [[n [_ ny _]]] (and (not= "lava" n) (>= ny y))) (rules/fluid-neighbours seen-name cell)) (flood-s dig-s) 0))]
      {:max-fall max-fall
       :seen-steps (seen-sections/steps-fn p max-fall)
       :seen-cells (seen-sections/steps-fn p 1)
       :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
-      :dig-s (fn [name cell] (some-> (dig-cost name) (+ (cut-s name cell) (water-s cell))))
+      :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell) (water-s cell d))))
       :step-s (cost/walk-step-s)
       :stair-s (cw/stair-cost 1)
       :unseen? unseen?
