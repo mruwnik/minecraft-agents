@@ -762,7 +762,7 @@ test('entities finds the pose index through the registry', () => {
 
 test('entities does not put lyingDown or username on mobs, and gives no sight fields', () => {
   const [zombie] = rig(world).p.entities({ kind: 'hostile' })
-  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'height', 'id', 'kind', 'name', 'pos'])
+  assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'height', 'held', 'id', 'kind', 'name', 'pos'])
 })
 
 test('a hostile mob reports the item in its main hand as held', () => {
@@ -770,6 +770,13 @@ test('a hostile mob reports the item in its main hand as held', () => {
     bot.entities = { 1: { id: 1, type: 'hostile', name: 'drowned', position: at(1, 64, 0), heldItem: { name: 'trident' } } }
   })
   assert.equal(p.entities({ kind: 'hostile' })[0].held, 'trident')
+})
+
+test('a hostile mob seen with an empty hand reports held none', () => {
+  const p = withBot(bot => {
+    bot.entities = { 1: { id: 1, type: 'hostile', name: 'skeleton', position: at(1, 64, 0) } }
+  })
+  assert.equal(p.entities({ kind: 'hostile' })[0].held, 'none')
 })
 
 const mobCases = [

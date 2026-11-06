@@ -101,7 +101,8 @@
   (let [skeleton (fn [id x z] (assoc (mob id "skeleton" x z) :held "bow"))
         held-of (fn [spec] (.-held (first (.knownMobs (:p (rig spec))))))]
     (is (= "bow" (held-of {:entities [(skeleton 1 0 4)]})) "in front: its hand is seen")
-    (is (nil? (held-of {:entities [(skeleton 1 6 -3)] :blocks wall})) "heard through a wall: its hand is not seen")))
+    (is (nil? (held-of {:entities [(skeleton 1 6 -3)] :blocks wall})) "heard through a wall: its hand is not seen")
+    (is (= "none" (held-of {:entities [(assoc (skeleton 1 0 4) :held "none")]})) "an empty hand seen stays distinct from nil")))
 
 (deftest a-creeper-seen-three-seconds-ago-round-a-corner-still-counts
   (let [{:keys [p clock]} (rig {:entities [(mob 1 "creeper" 2 4)] :blocks wall})]

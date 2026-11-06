@@ -107,6 +107,8 @@ export function createSense (env) {
     }
   }
 
+  // A seen empty hand is a name no item has, so cljs tells it from a hand not seen (no held at all).
+  const NOTHING_HELD = 'none'
   // what a mob holds in its main hand, as a player sees it (a drowned's trident)
   const heldName = e => (e.heldItem ?? e.equipment?.[0])?.name
 
@@ -135,7 +137,7 @@ export function createSense (env) {
         ...(k === 'item' && itemSpawn(env.bot, e.id) && { spawn: itemSpawn(env.bot, e.id) }),
         ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
         ...(e.name === 'creeper' && { creeper: true }),
-        ...(k === 'hostile' && heldName(e) && { held: heldName(e) })
+        ...(k === 'hostile' && { held: heldName(e) ?? NOTHING_HELD })
       }))
   }
 
