@@ -9,6 +9,7 @@
   :limit-s 120}
  :cases
  [{:name "hurt-body-breeds-without-waiting-for-health"
+   :zones [{:name "pen" :min [14 0 14] :max [19 3 19] :owner "$body"}]
    :blocks [[:fill [14 0 14] [19 0 14] "oak_fence"] [:fill [14 0 19] [19 0 19] "oak_fence"]
             [:fill [14 0 15] [14 0 18] "oak_fence"] [:fill [19 0 15] [19 0 18] "oak_fence"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
