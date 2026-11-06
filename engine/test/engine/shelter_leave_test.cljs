@@ -208,7 +208,7 @@
         (await
          (settings/with-settings {:jobs.survival.leave-shelter/job-time-s 30} ; runs end on their budget: the hold spans several
            (fn ^:async held []
-             (let [{:keys [eng p clock]} (await (dug-in-world {:entities [(assoc far-zombie :pos {:x 8 :y 64 :z 0})] :self {:health 3}}))
+             (let [{:keys [eng p clock]} (await (dug-in-world {:entities [(assoc far-zombie :pos {:x 8 :y 64 :z 0})] :inventory (into st/wall-stack h/sword) :self {:health 6}}))
                    sealed {:x 0.5 :y 64 :z 0.5}
                    held (atom nil)]
                (st/on-wait! p (fn [n]
@@ -263,12 +263,14 @@
          (into {} (for [x (range 18 22) y [64 65]] [(str x "," y ",16") "air"]))
          {"17,64,16" "glass" "17,65,16" "glass" "20,66,16" "glowstone"}))
 
-(deftest a-fragile-body-whose-every-way-is-priced-at-its-health-leaves-by-the-way-the-zombie-is-least-likely-to-reach
+(deftest a-fragile-bodys-ways-out-are-priced-by-the-death-the-zombie-risks-them-so-the-glass-toward-it-is-dearest
   (let [p (tu/fake {:floor [15 15 21 17] :time st/noon :blocks seal-room-blocks :self {:pos {:x 16.5 :y 64 :z 16.5} :health 1.5}
                     :inventory h/sword
                     :entities [{:id 7 :name "zombie" :kind "hostile" :visible true :pos {:x 21.5 :y 64 :z 16.5}}]})
         c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
-        exits (leave-shelter/exits c)]
-    (is (apply = (map :price exits)) "every way a mob could reach costs the body's health in hp: the prices tie")
-    (is (= :west (:heading (first exits))) "so the way the zombie reaches least often goes first, not the first listed")
+        exits (leave-shelter/exits c)
+        prices (map :price exits)]
+    (is (= prices (sort prices)) "cheapest first")
+    (is (< (first prices) (last prices)) "the ways differ though the hurt is capped at the health: the death each risks is priced")
+    (is (= :west (:heading (first exits))) "the way the zombie reaches least often goes first")
     (is (= :east (:heading (last exits))) "and the glass toward it last")))

@@ -24,9 +24,9 @@
    ;; a stone pocket [16 1 16] (two cells) sealed east by its own glass :shelter blocks; a roofed stone room east
    ;; (x 18..22) holds a NoAI zombie it sees through the glass. The west wall (one stone, open air beyond) is the
    ;; cheap way out: the body holds while the zombie's room has unseen wall cells (its way round is guessed open: the
-   ;; hold is priced at the body's health in hp, ~60 s), then digs the west wall and leaves, the glass seal stays.
+   ;; hold is priced by the death the zombie risks the way, ~650 s at 1.5 hp with the sword), then digs the west wall and leaves, the glass seal stays.
    :time :day :time-why :dawn-decision
-   :limit-s 300
+   :limit-s 800
    :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]
             [:set [17 1 16] "glass"] [:set [17 2 16] "glass"] [:set [20 3 16] "glowstone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
@@ -38,14 +38,14 @@
          [:wait-s 3]
          [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
-            {:event {:source :job :kind :completed} :within-s 240 :of-job true}]
+            {:event {:source :job :kind :completed} :within-s 750 :of-job true}]
    :after [[:block [17 1 16] "glass"] [:block [17 2 16] "glass"] [:not-block [15 1 16] "stone"]]}
   {:name "fragile-body-held-by-a-zombie-on-every-side-leaves-once-the-hold-has-cost-the-way-out"
    ;; a glass block [15..17 1..3 15..17] with the body's two cells hollowed out, on the open plot; the sides and the lid
    ;; are its own :shelter blocks. A NoAI zombie 5 east (under a stone roof: by day it would burn up) could walk to any side were it open. The body holds, then
-   ;; leaves by the west, the side farthest from it; its seal cleanup then leaves every glass block the zombie's field holds.
+   ;; leaves, after a hold of several hundred seconds (the death price of the cheapest way), by the west, the side farthest from it; its seal cleanup then leaves every glass block the zombie's field holds.
    :time :day :time-why :dawn-decision
-   :limit-s 400
+   :limit-s 900
    :blocks [[:fill [15 1 15] [17 3 17] "glass"] [:fill [16 1 16] [16 2 16] "air"] [:fill [19 4 14] [24 4 18] "stone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [15 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
                                               {:cell #at [15 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
@@ -64,7 +64,7 @@
          [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30}
-            {:event {:source :job :kind :completed} :within-s 360 :of-job true}]
+            {:event {:source :job :kind :completed} :within-s 850 :of-job true}]
    :after [[:not-block [15 1 16] "glass"] [:block [17 1 16] "glass"] [:block [17 2 16] "glass"]]}
   {:name "fragile-body-leaves-its-seal-by-day-with-nothing-near"
    :time :day :time-why :dawn-decision

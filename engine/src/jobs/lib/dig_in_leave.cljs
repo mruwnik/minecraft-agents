@@ -214,23 +214,28 @@
       [[(+ x dx) y (+ z dz)] [(+ x dx) (inc y) (+ z dz)]])))
 
 (defn opening-price
-  "{:price :hurt :chance} of opening cells ([x y z]): the hurt of cost/route-danger from the hostiles that could reach or shoot the
+  "{:price :hurt} of opening cells ([x y z]): the hurt of cost/route-danger from the hostiles that could reach or shoot the
   body were they open (jobs.lib.danger/dangers-opened), the mobs met spawning on them (spawn-light/spawns-over), priced by
-  cost/opening-price; :chance is the sum of the field weights of the mobs that reach the cells (hurt is capped at the health)."
+  cost/opening-price, plus the death each reaching mob risks (route-danger's :death-s, cost/death-s) which the hurt cap
+  at the health hides; :hurt is that hurt and death in hp."
   [c cells]
   (let [p (:primitives c)
         self (.self p)
+        at (sh-sense/feet p)
         body (assoc (cost/death-body p (ctx/view c)) :health (.-health self))
         weapon (combat/best-weapon p (combat/weapons c))
         mobs (map (fn [m] {:name (.-name m) :held (.-held m) :pos (danger/mob-pos p m)})
                   (danger/dangers-opened p threats/max-follow-range cells))
         lookups {:kind-at (danger/opened-lookup (reach/mob-lookup p) cells) :arrow-at (danger/opened-lookup (reach/arrow-lookup p) cells)}
-        danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :held (:held %) :pos (:pos %)} lookups))
-                                  (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
-                                  :weapon weapon :health (.-health self))
-        hurt (:danger danger)]
-    {:price (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) cells) nil)} (sh-sense/feet p))
-     :hurt hurt :chance (transduce (map :weight) + 0 (:mobs danger))}))
+        reach-of (memoize #(field/reach-fn (field/field p {:mob (:name %) :held (:held %) :pos (:pos %)} lookups)))
+        danger-of (fn [death-s] (:danger (cost/route-danger (game/version-of p) reach-of
+                                                            (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)
+                                                            :weapon weapon :health (.-health self) :death-s death-s)))
+        hurt (danger-of 0)
+        with-death (danger-of (cost/death-s p (ctx/view c) at))]
+    {:price (+ (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked at cells) nil)} at)
+               (* (- with-death hurt) (cost/walk-hp-seconds)))
+     :hurt with-death}))
 
 (defn level-exit
   "{:heading :cells :through} for the first heading of order not yet tried (leave-mem :level-tried) whose wall

@@ -116,10 +116,10 @@
       (seq (danger/dangers-opened p threats/max-follow-range (opened-cells c))))))
 
 (defn exits
-  "The headings out of the shelter, cheapest first, as {:heading :price :hurt :chance}: dig-leave/opening-price of the way through
-  its cells (dig-leave/exit-cells); at one price (hurt is capped at the health, so every way a mob could reach prices alike), the way the mobs are least likely to reach first (:chance)."
+  "The headings out of the shelter, cheapest first, as {:heading :price :hurt}: dig-leave/opening-price of the way through
+  its cells (dig-leave/exit-cells); at one price, the least hurt first."
   [c]
-  (sort-by (juxt :price :chance)
+  (sort-by (juxt :price :hurt)
            (for [h (keys dig-leave/headings)]
              (assoc (dig-leave/opening-price c (dig-leave/exit-cells (:primitives c) h)) :heading h))))
 
