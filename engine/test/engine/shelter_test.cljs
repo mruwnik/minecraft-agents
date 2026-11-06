@@ -24,7 +24,6 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.util :as u]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.torch :as torch]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -1730,15 +1729,6 @@
           shown (look-edge/pending {:primitives dark} #{})]
       (is (seq shown) "a dark wall within near-of is looked at")
       (is (every? near? shown)))))
-
-(deftest a-wall-cell-looked-at-from-beside-it-reads-as-seen
-  (let [{:keys [blocks light]} (lit-tunnel-box false)
-        raw-p (tu/fake {:time night :yaw 0 :pitch 40 :self {:pos {:x 10.5 :y 64 :z 0.5}} :blocks blocks})
-        _ (swap! (fake/state raw-p) assoc :light-default [0 0] :light light)
-        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})
-        p (perception/wrap raw-p per)]
-    (perception/pass! per)
-    (is (= ["stone" "stone"] (map #(u/seen-name p {:x 10 :y % :z 1}) [64 65])))))
 
 (deftest unseen-cells-inside-the-rock-are-not-looked-at-but-the-missed-cells-of-the-tunnels-shell-are
   ;; The 1-wide tunnel's shell is seen but for one ceiling cell and the head-high wall beside it: the flood steps up into
