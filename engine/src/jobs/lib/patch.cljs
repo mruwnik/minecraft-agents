@@ -51,7 +51,7 @@
     (+ bucket-s (* sources (+ (cost/trip) fetch-s)) (cost/field-step-s :irrigate sources))))
 
 (defn field-price
-  "The dearest-paying way to grow field-crop on cells [{:lit? :wet? :farmable?}] (a cell may carry :p-lit and :p-farm, the chances it is lit or farmable, counted as that share of each case): {:worth :costs {:light :water :replace}
+  "The dearest-paying way to grow field-crop on cells [{:lit? :wet? :farmable?}] (a cell may carry :p-farm, the one chance its soil, room and light let it be planted, counted as that share of each case): {:worth :costs {:light :water :replace}
   :net :lit? :watered?}. Dark cells grow only when torched (torch-cells a torch, cost/light-cost with torches carried), dry
   ones grow slower unless water is brought (water-s, fetch-s the walk to water and back, bucket-s a bucket's price; nil fetch-s: none is known, so none is brought), a cell a hoe cannot till only when its top is dug out and filled with
   dirt (two blocks of cost/earthwork-s); each is done when it pays. w-wet is a wet cell's worth, a dry one that share of
@@ -60,9 +60,8 @@
   ([cells torches w-wet fetch-s] (field-price cells torches w-wet fetch-s 0))
   ([cells torches w-wet fetch-s bucket-s]
   (let [either (fn [v p] (if p [[true p] [false (- 1 p)]] [[v 1]]))
-        counts (reduce (fn [m {:keys [lit? wet? farmable? p-lit p-farm]}]
-                         (reduce (fn [m [l pl]] (reduce (fn [m [f pf]] (update m [l wet? f] (fnil + 0) (* pl pf))) m (either farmable? p-farm)))
-                                 m (either lit? p-lit)))
+        counts (reduce (fn [m {:keys [lit? wet? farmable? p-farm]}]
+                         (reduce (fn [m [f pf]] (update m [lit? wet? f] (fnil + 0) pf)) m (either farmable? p-farm)))
                        {} cells)
         n (fn [pred] (reduce + 0 (keep (fn [[k v]] (when (apply pred k) v)) counts)))
         w-dry (* w-wet (/ (cell-worth false) (cell-worth true)))
@@ -87,7 +86,7 @@
 
 (defn score-patch
   "Price a patch {:tops [y ...] :cells [{:lit? :wet? :farmable?} ...] :away dist :sky bool :torches n :worth s :fetch-s s :bucket-s s :fill n :unseen n}, nil when any top is
-  nil: :fill is the blocks of water to fill under its cells (earthwork-s on top of the levelling), :unseen the cells not seen (their tops are y, their cells weighed by the chance each is lit and farmable); :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole) less the earthwork of levelling it
+  nil: :fill is the blocks of water to fill under its cells (earthwork-s on top of the levelling), :unseen the cells not seen (their tops are y, their cells weighed by the chance each can be planted); :score is its :worth (field-price, each wet cell :worth over the cells, nil: cell-worth; with no :cells, a patch for no crops, :worth whole) less the earthwork of levelling it
   (cost/earthwork-s) and the walk to it, in seconds. A patch for no crops and no :worth is an order with no cap: :worth nil, scored by its costs alone, refused only
   when they are ##Inf. Any other patch scoring 0 or less has :why: :far (its worth pays for the levelling,
   not the walk too), :steep (it pays for no levelling) or :barren (it pays for nothing: dark or untillable). Open sky is
@@ -149,7 +148,7 @@
             (recur (inc y)))))))
 
 (defn crop-lit-fn
-  "(fn [x y z]) whether the cell over the top y of a column gets crops/grow-light (block light, or sky light undarkened: the clock does not decide); true without a world; an unseen cell is dark (cand weighs it by the chance it is lit)."
+  "(fn [x y z]) whether the cell over the top y of a column gets crops/grow-light (block light, or sky light undarkened: the clock does not decide); true without a world; an unseen cell is dark (cand counts an unseen cell's light inside its plantable chance)."
   [p]
   (let [raw (look/raw-of p)]
     (fn [x y z]
@@ -278,9 +277,7 @@
                      (let [cells (when farmland?
                                    (mapv (fn [[cx cz] t l]
                                            (case (:kind l)
-                                             :unseen {:lit? false :wet? false :farmable? false
-                                                      :p-lit (look/unseen-lit-chance p {:x cx :y (inc t) :z cz})
-                                                      :p-farm (cost/spot-plantable-chance)}
+                                             :unseen {:lit? true :wet? false :farmable? false :p-farm (cost/spot-plantable-chance)}
                                              :ice {:lit? (lit? cx t cz) :wet? false :farmable? false}
                                              {:lit? (lit? cx t cz) :wet? (and (nil? l) (wet? cx cz t))
                                               :farmable? (or (some? l) (farmable-at? cx cz t))}))

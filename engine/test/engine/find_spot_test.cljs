@@ -624,3 +624,14 @@
         mixed (score unseen-world)]
     (is (< (or barren 0) (or mixed 0)) "six unseen cells weighed by their chances beat seen untillable stone")
     (is (< mixed good))))
+
+(deftest an-unseen-cell-counts-its-plantable-chance-once
+  (let [w (pt/cell-worth true)
+        p (cost/spot-plantable-chance)
+        n 10000
+        k (js/Math.round (* p n))
+        cells (fn [farmable? m] (repeat m {:lit? true :wet? true :farmable? farmable?}))
+        weighed (pt/field-price (repeat n {:lit? true :wet? true :farmable? false :p-farm p}) 0 w)
+        counted (pt/field-price (concat (cells true k) (cells false (- n k))) 0 w)]
+    (is (< (js/Math.abs (- (:net weighed) (:net counted))) (* 0.001 (:net counted)))
+        "light, soil and room are the one chance: the weighed cells price as that share planted, no second factor")))
