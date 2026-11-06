@@ -177,6 +177,16 @@
     (is (= [false false] (fires? world :jobs.lib.breath/drown-hp 10)))
     (is (= [false false] (fires? world :jobs.lib.breath/margin-s 0)))))
 
+(deftest the-drown-allowance-is-the-time-air-left-ms-gives-the-same-health
+  (let [self (clj->js {:oxygen 0 :health 7 :effects []})]
+    (settings/with-settings {:jobs.lib.breath/drown-hp 7}
+      (fn [] (is (= (breath/air-left-ms self) (* 1000 (breath/drown-allowance-s))))))))
+
+(deftest air-left-ms-counts-the-helmets-drain-and-grace
+  (let [bare (clj->js {:oxygen 20 :health 10 :effects []})
+        resp (clj->js {:oxygen 20 :health 10 :effects [] :equipment {"head" {:name "diamond_helmet" :enchants [{:name "respiration" :level 3}]}}})]
+    (is (< (breath/air-left-ms bare) (breath/air-left-ms resp)))))
+
 (deftest no-air-seen-fires-at-once
   (is (= [true true] (fires? {:self {:inWater true :oxygen 20} :blocks (assoc (shaft 69) "0,70,0" "stone")}))))
 

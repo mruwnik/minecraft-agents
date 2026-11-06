@@ -302,7 +302,7 @@
   {::margin-s {:default 3 :doc "Seconds of spare breath a body in water with its head submerged keeps on reaching air: it counts as drowning once its air left (plus ::drown-hp) is under the swim to air plus this." :spec (a/num-in 0 nil)}
    ::drown-hp {:default 0 :doc "Health the body may lose to drowning before it counts as drowning (an unusual job may allow some)." :spec (a/num-in 0 nil)}
    ::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
-   ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
+   ::ticks-per-health {:default 10 :doc "Game ticks a drowning body takes to lose one health point once the oxygen is gone (the game's rule: 2 health every 20 ticks)." :spec (a/int-in 1 nil)}
    ::look-share {:default 0.03 :doc "Share of the air left (oxygen, then health) that looking for air may take before the search goes on with what it has seen." :spec (a/num-in 0 1)}
    ::swim-ms {:default planner/swim-sub-ms :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air (the planner's price of a swim with the head under water)." :spec (a/num-in 0 nil)}})
 
@@ -321,9 +321,9 @@
           (or air-drain 1)))))
 
 (defn drown-allowance-s
-  "Seconds of drowning the body may take: ::drown-hp at 2 hp every ::ticks-per-health."
+  "Seconds of drowning the body may take: ::drown-hp at one hp every ::ticks-per-health (air-left-ms counts the same)."
   []
-  (/ (settings/ticks->ms (* (settings/get settings ::ticks-per-health) (/ (settings/get settings ::drown-hp) 2))) 1000))
+  (/ (settings/ticks->ms (* (settings/get settings ::ticks-per-health) (settings/get settings ::drown-hp))) 1000))
 
 (defn straight-up-reaches-air?
   "Whether the own column, seen water all the way, has air over it within steps cells: the usual lake, found without a flood."
@@ -405,14 +405,14 @@
             (recur next (into seen next) (inc steps))))))))
 
 (defn air-left-ms
-  "Wall-clock ms a drowning body has before it dies: a point of oxygen lasts ::ticks-per-oxygen ticks, then 2 health
-  every ::ticks-per-health."
+  "Wall-clock ms a drowning body has before it dies: its air (air-left-s: oxygen at the helmet's drain, plus its grace),
+  then one health point every ::ticks-per-health."
   [self]
-  (settings/ticks->ms (+ (* (settings/get settings ::ticks-per-oxygen) (max 0 (.-oxygen self)))
-                         (* (settings/get settings ::ticks-per-health) (max 0 (or (.-health self) 20))))))
+  (+ (* 1000 (air-left-s self))
+     (settings/ticks->ms (* (settings/get settings ::ticks-per-health) (max 0 (or (.-health self) 20))))))
 
 (defn drown-hp
-  "Health the game's drowning takes in s seconds past the breath: 2 at every second ::ticks-per-health hit, as air-left-ms counts it."
+  "Health the game's drowning takes in s seconds past the breath: 2 at every second ::ticks-per-health hit (one hp each), as air-left-ms counts it."
   [s]
   (* 2 (js/Math.floor (/ (* 1000 (max 0 s)) (settings/ticks->ms (* 2 (settings/get settings ::ticks-per-health)))))))
 
