@@ -170,11 +170,20 @@
     (is (= (table 0.5) (table 0.52)) "weights in one 1/20 step give one table")
     (is (not= (table 0.5) (table 0.6)))))
 
-(deftest threats-differing-only-in-what-they-hold-or-their-key-are-different-tables
-  (let [t {:mob "skeleton" :pos {:x 10 :y 64 :z 0} :weight 1}]
-    (are [a b] (not= (threats/table-key [a]) (threats/table-key [b]))
-      (assoc t :held "bow") (assoc t :held "stone_sword")
-      (assoc t :key "a") (assoc t :key "b"))))
+(deftest one-ctx-prices-mobs-differing-only-in-what-they-hold-or-in-their-key-each-its-own-way
+  (let [pool (into {} (for [x (range 8 11) z (range -1 2)] [(str x ",63," z) "water"]))
+        c (ready-test/ctx-of {:blocks pool :inventory [{:name "diamond_sword" :count 1}]})
+        p (:primitives c)
+        _ (aset p "worldEpoch" (constantly 0))
+        tolls-with (fn [entities]
+                     (swap! (fake/state p) assoc :entities (mapv fake/entity-in entities))
+                     (into {} (map (juxt (juxt :x :y :z) :factor)) (threats/threat-tolls c)))
+        drowned {:id 3 :uuid "d" :name "drowned" :kind "hostile" :pos {:x 9.5 :y 63 :z 0.5}}
+        at (fn [s] (assoc (skeleton 1 10 0) :uuid s))]
+    (is (not= (tolls-with [(assoc drowned :held "trident")]) (tolls-with [(assoc drowned :held "stick")]))
+        "a trident is thrown, a stick is nothing")
+    (is (not= (tolls-with [(at "a") (assoc (skeleton 2 11 0) :uuid "b")]) (tolls-with [(at "a") (assoc (skeleton 2 11 0) :uuid "a")]))
+        "two mobs add their tolls, one mob known twice counts its dearest")))
 
 (deftest a-helmet-saves-a-mob-from-the-sun-and-unsensed-equipment-counts-as-worn
   (let [mob #(clj->js (cond-> {} % (assoc :equipment %)))]
