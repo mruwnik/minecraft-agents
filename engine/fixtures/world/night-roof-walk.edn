@@ -36,6 +36,16 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 100 :of-job true}]
    :after [[:block [19 0 16] "oak_door[half=lower,open=false]"] [:body-near [21.5 0 16.5] 2.5]]
    :limit-s 110}
+  ;; 24a73a15: a carried bed and a home 16 blocks off (no home radius): the walk in is quoted, the bed goes down inside, not here
+  {:name "carried-bed-walks-to-a-home-16-blocks-off-and-is-put-down-inside"
+   :time :night-exclusive :time-why :sleep
+   :blocks [[:fill [19 0 14] [23 3 18] "stone" :hollow] [:fill [20 0 15] [22 2 17] "air"] [:fill [19 0 16] [19 1 16] "air"] [:set [19 0 16] "oak_door[facing=west,half=lower,hinge=left,open=true]"] [:set [19 1 16] "oak_door[facing=west,half=upper,hinge=left,open=true]"] [:set [17 0 15] "torch"] [:set [20 0 15] "torch"]]
+   :body {:inventory [["cobblestone" 16] ["red_bed" 1]]}
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [21 0 16]}) [:now]]
+         [:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [21 0 16] 2]}} :within-s 100}]
+   :after [[:item "red_bed" 0] [:body-near [21.5 0 16.5] 2.5]]
+   :limit-s 110}
   {:name "long-dark-route-digs-in-where-it-stands"
    :blocks [[:fill [0 -4 0] [63 -2 31] "stone"] [:fill [33 2 15] [35 2 17] "stone"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [34 0 16]}) [:now]]
