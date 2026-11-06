@@ -52,7 +52,7 @@
   [p view hs]
   (cond-> (mapv #(mob-near p %) hs)
     (and (not-any? #(and (danger-q/seen-only? %) (threat/ranged? {:name (.-name %) :held (.-held %)})) hs) (shot/open? p view))
-    (conj {:name "skeleton" :distance (settings/get shot/settings ::shot/reach)})))
+    (conj {:name shot/shooter :distance (settings/get shot/settings ::shot/reach)})))
 
 (defn loss-over
   "Seconds doing nothing about hostiles hs (JS entities) of p for seconds (a number, or a spread as cost/stand-loss

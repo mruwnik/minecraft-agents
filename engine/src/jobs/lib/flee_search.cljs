@@ -248,7 +248,7 @@
         share (spawn-light/share-of p false nil)
         slow (pace)
         t0 (clock/now)
-        contact-s (arrive-at (remove :calm? chasers) pos)
+        contact-s (arrive-at (remove (some-fn :calm? shooter?) chasers) pos)
         named-n (count (filter :pos targets))]
     (if (nil? ring-world)
       []

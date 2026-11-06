@@ -84,20 +84,22 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [work (fn ^:async search-work [zombie-x]
+        (let [work (fn ^:async search-work [zombie-x & [chaser]]
                      (let [events (atom [])
                            c (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}) events)]
-                       (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x zombie-x :y 64 :z 0.5}}] [] {}))
+                       (await (search/search! c [(merge {:name "zombie" :mob "zombie" :pos {:x zombie-x :y 64 :z 0.5}} chaser)] [] {}))
                        (some (fn [[kind fields]] (when (= :retreat.search-work kind) fields)) @events)))
               far (await (work -4.5))
               pressed (await (work 0.9))
+              shot-spot (await (work 0.9 {:name nil :mob nil :shooter? true}))
               ticks (atom 0)
               slow (let [orig clock/now]
                      (set! clock/now #(* 500 (swap! ticks inc)))
                      (try (await (work -4.5)) (finally (set! clock/now orig))))]
           (is (< 1 (:planned slow) 12) (str "a search that takes seconds on the clock ends before the chaser arrives " (pr-str slow)))
           (is (= 12 (:planned far)) (pr-str far))
-          (is (= 1 (:planned pressed)) (pr-str pressed)))))))
+          (is (= 1 (:planned pressed)) (pr-str pressed))
+          (is (= 12 (:planned shot-spot)) (str "where a shot came from lands no blow: no contact cuts the search " (pr-str shot-spot))))))))
 
 (deftest a-pressed-body-plans-a-ring-route-whatever-named-targets-come-first
   ;; named targets are planned before the ring: a pressed body must not keep only a route toward the zombie

@@ -926,6 +926,27 @@
           (is (= [{:x -1 :y 65 :z 0} (:chance (:price field))] [(:target stair) (:chance (:price stair))])
               (str "the same tunnel with a stair the body cut: the flight takes it, so the price is a seen way's like the field's, not a way through the unseen cells the flight never looks at " (pr-str stair))))))))
 
+(deftest an-unseen-shooters-line-of-fire-costs-a-flight-step-that-stays-in-it
+  ;; the flight's marks priced only seen shooters' lines: a step straight along an unseen one's line cost it nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [costs (atom nil)
+              in-line {:x -3 :y 64 :z 0}
+              behind-wall {:x 6 :y 64 :z 4}
+              s (setup {:ms-per-call 0 :blocks (tu/box 2 64 2 14 66 2 "stone")})
+              s (assoc-in s [:eng :jobs 'marker]
+                          {:round (fn ^:async r [c]
+                                    (let [covered? (cover/cover-fn (:primitives c) [] (respond.state/fire-spots c))
+                                          marks (:marks (respond.goal/choose-opts c [] covered? nil))
+                                          cost (fn [cell] (transduce (comp (filter #((:holds? %) {:step cell :end cell})) (map :s)) + 0 marks))]
+                                      (reset! costs (mapv cost [in-line behind-wall])))
+                                    (ctx/end c :done nil))})]
+          (mem/write! (:store (:eng s)) :hurt {:damageType "minecraft:arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
+          (await (run-job! s 'marker {}))
+          (is (pos? (first @costs)) (pr-str @costs))
+          (is (zero? (second @costs)) "out of the line behind the wall"))))))
+
 (deftest the-flee-price-runs-from-the-chasers-the-flight-runs-from
   ;; a zombie standing 13 blocks off, beyond the danger radius, chases neither: both step away from it as a bystander
   (async done

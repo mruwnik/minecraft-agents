@@ -13,6 +13,8 @@
   {::reach {:default 12 :doc "Blocks out along the way a shot came from that stand for the place of a shooter the body has not seen (cover, seal sides and back-off turn on it)." :spec (a/num-in 1 nil)}
    ::window-s {:default 5 :doc "Seconds a shot's direction stands for an unseen shooter." :spec (a/num-in 0 nil)}})
 
+(def shooter "The mob a shot from a shooter not seen is priced as." "skeleton")
+
 (def pitches
   "Degrees above the level at which a shot's way is tried: a hit shows the way it came from, not the height."
   [0 -30 30 -60 60])
