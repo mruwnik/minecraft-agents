@@ -506,7 +506,7 @@
                                 (every? some? steps) (every? some? heads))
                        {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
                                     (reduce + 0 (for [[x y z :as cell] cells
-                                                      :when (and (not (climb? cell)) (true? (some-> (sensed x (dec y) z) .-unknown)))]
+                                                      :when (and (or (not (climb? cell)) (and down? (pos? (get down-steps (- fy y 1) 0)))) (true? (some-> (sensed x (dec y) z) .-unknown)))]
                                                   (floor-absent-s [x (dec y) z])))
                                     (* (:node-s route-opts 0) 2 (count cells)))
                         :dig (vec (distinct (for [[x y z] (cons from cells)

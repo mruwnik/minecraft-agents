@@ -1238,7 +1238,21 @@
   [p goal floors-unseen-ok? route-opts]
   (choose/route-answer p [0 80 0] goal (constantly true) (constantly false) floors-unseen-ok? false (merge {:node-s 1 :worth-s ##Inf} route-opts)))
 
+(deftest the-straight-dig-over-a-drop-is-priced-at-the-falls-hp-cost
+  (let [p (tu/fake {:blocks drop-world :self {:pos {:x 0.5 :y 80 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
+        {:keys [dig seconds]} (straight-dig p [0 64 0] false {})
+        fall-s ((:fall-s (dig-route/body-prices p (constantly false))) 16)]
+    (is (= [[0 79 0]] dig) "the platform under the feet is dug")
+    (is (> seconds fall-s) "the 16-block drop it opens costs its hp, not a stair of one-block steps")))
+
 (deftest the-straight-dig-takes-no-fall-the-calls-health-spend-refuses
   (let [p (tu/fake {:blocks drop-world :self {:pos {:x 0.5 :y 80 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})]
     (is (some? (straight-dig p [0 64 0] false {})) "the body's own limit allows the drop")
     (is (nil? (straight-dig p [0 64 0] false {:max-damage 7})) "a call that spends 7 hp takes no 16-block drop")))
+
+(deftest a-landing-part-way-down-the-straight-dig-on-an-unseen-floor-is-priced-over-the-chance-it-is-none
+  (let [world (merge (box -2 60 -2 2 80 2 "stone") (zipmap (map #(str "0," % ",0") (range 71 80)) (repeat "air")) {"0,80,0" "air" "0,81,0" "air" "0,65,0" "air" "0,64,0" "air"})
+        p (hiding-with-pickaxe world #{[0 70 0]})
+        seconds (fn [solid] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly solid))]
+                              (:seconds (straight-dig p [0 64 0] true {}))))]
+    (is (< (seconds 1) (seconds 0.1)) "the likelier the floor it lands on is a void, the dearer the way")))
