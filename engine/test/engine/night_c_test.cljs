@@ -197,6 +197,23 @@
   (let [p (tu/fake (hut/hut-world {:x 5 :y 64 :z 6} {}))]
     (is (= {:open 3 :closed 1} (reach-room/open-sides p [[5 64 0] [6 64 0] [4 64 0] [3 64 0]])) "three floor cells inside, one wall cell")))
 
+(def wide-hut
+  "A planks hut x 12..18, z -8..-2 (room -7..-3), roof y 67, a shut door in its south wall at x 15."
+  {:blocks (merge (into {} (remove (fn [[k _]] (let [[x _ z] (map js/Number (.split k ","))] (and (<= 13 x 17) (<= -7 z -3))))) (tu/box 12 64 -8 18 66 -2 "oak_planks"))
+                  (tu/box 12 67 -8 18 67 -2 "oak_planks")
+                  {"15,64,-2" "oak_door" "15,65,-2" "oak_door"})
+   :states {"15,64,-2" {:open false :half "lower" :facing "south"} "15,65,-2" {:open false :half "upper" :facing "south"}}})
+
+(deftest a-hut-seen-is-priced-as-home-though-the-night-calls-it-worth-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (merge {:self {:pos {:x 15 :y 64 :z 2}} :time night :inventory (conj st/dirt-stack {:name "iron_pickaxe" :count 1})} wide-hut)
+              {:keys [eng seen]} (await (night-at-home world {:x 15 :y 64 :z -5} {:worth 0} {:unseen true :home? false}))]
+          (await (tu/run-until-empty eng 80))
+          (is (contains? (:prices (first (st/emitted seen :night.answers))) :home)
+              "the walk is quoted to rank, at no worth of its own: the call's worth 0 must not turn it back at the unseen floor"))))))
+
 (deftest a-hut-not-seen-inside-is-dug-in-against-when-the-walk-and-its-chance-of-being-open-cost-more-than-digging-in
   (async done
     (tu/run-async done
