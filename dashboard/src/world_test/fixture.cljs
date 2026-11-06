@@ -306,7 +306,7 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-effect-gone :until-pos :until-facing})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :freeze-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-effect-gone :until-pos :until-facing})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all})
 (def cli-tools #{"jobs" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote" "snapshot"})
@@ -329,6 +329,7 @@
   (case op
     :until (not (and (= 3 (count step)) (number? b) (vector? a) (or (#{:memory :file} (first a)) (and (= :cli (first a)) (not (step-problem? a))))))
     :until-seen (not (and (= 3 (count step)) (number? b) (map? a) (string? (or (:entity a) (:block a))) (or (nil? (:min a)) (number? (:min a)))))
+    :freeze-body (not (and (= 2 (count step)) (number? a) (pos? a)))
     :until-rcon (not (and (= 4 (count step)) (string? a) (string? b) (number? (nth step 3))))
     :until-effect-gone (not (and (= 3 (count step)) (string? a) (number? b)))
     :until-pos (not (and (= 3 (count step)) (map? a) (number? b)))
@@ -1146,7 +1147,7 @@
   [c]
   (let [{:keys [length width]} (:plot c)
         lx (or length 32) lz (or width 32)]
-    (boolean (or (some #(= :kill-body (first %)) (filter vector? (:act c))) (some (fn [[x _ z]] (or (< x 0) (>= x lx) (< z 0) (>= z lz)))
+    (boolean (or (some #(#{:kill-body :freeze-body} (first %)) (filter vector? (:act c))) (some (fn [[x _ z]] (or (< x 0) (>= x lx) (< z 0) (>= z lz)))
                    (filter coords? (keep ::rel (filter map? (tree-seq coll? seq (:act c))))))))))
 
 (defn left-plot-why

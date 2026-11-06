@@ -1539,6 +1539,14 @@
   (-> (park-body! opts)
       (.then #(start-body! opts nil true nil true))))
 
+(defn freeze-body!
+  "SIGSTOPs the body's own process (io :pid, :kill, :sleep) for s seconds, then SIGCONTs it; the SIGCONT is sent
+  even when the wait fails, so a cut case never leaves a frozen body. The server times a frozen client out."
+  [{:keys [pid kill sleep]} s]
+  (kill pid "SIGSTOP")
+  (-> (sleep (* 1000 s))
+      (.finally #(kill pid "SIGCONT"))))
+
 (defn settling-reply?
   "True when a tool's answer is the lease's refusal of a body that has just started: {:ok false :reason \"settling\"}."
   [out]
@@ -1678,6 +1686,10 @@
                                           (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a (await-since a t0 @cli-ms @prev-ms) (* 1000 b) ids)
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) (reset! prev-ms (:time-ms ev)) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
+                         :freeze-body (.then (freeze-body! {:pid (some-> (get @bodies (:body opts)) .-pid)
+                                                            :kill #(.kill js/process %1 %2) :sleep sleep}
+                                                           a)
+                                             (constantly ids))
                          :restart-body (.then (restart-body! opts) (constantly ids))
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
                          :until-seen (.then (until-step! opts (f/seen-check a) b @last-job @event-job) (constantly ids))

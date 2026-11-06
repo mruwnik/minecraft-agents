@@ -905,6 +905,19 @@
           (.catch (fn [e] (is false (.-message e))))
           (.finally done)))))
 
+(deftest freeze-body-stops-the-process-and-always-continues-it
+  (async done
+    (let [sent (atom [])
+          kill (fn [pid sig] (swap! sent conj [pid sig]))]
+      (-> (r/freeze-body! {:pid 77 :kill kill :sleep (fn [ms] (swap! sent conj [:sleep ms]) (js/Promise.resolve nil))} 35)
+          (.then (fn [_] (is (= [[77 "SIGSTOP"] [:sleep 35000] [77 "SIGCONT"]] @sent))))
+          (.then (fn [_]
+                   (reset! sent [])
+                   (r/freeze-body! {:pid 77 :kill kill :sleep (fn [_] (js/Promise.reject (js/Error. "cut")))} 35)))
+          (.then (fn [_] (is false "should have thrown")))
+          (.catch (fn [e] (is (= "cut" (.-message e))) (is (= [[77 "SIGSTOP"] [77 "SIGCONT"]] @sent))))
+          (.finally done)))))
+
 (deftest until-rcon-times-out-with-the-last-reply
   (async done
     (let [now (atom 0)

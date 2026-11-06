@@ -721,6 +721,7 @@
     (is (some? (f/left-plot-why origin c (at 20010.5 19980.5))) "north of the plot")
     (is (nil? (f/left-plot-why origin c "No entity was found")))
     (is (nil? (f/left-plot-why origin far (at 19900.5 20010.5))) "a deliberately far goal may leave")
+    (is (nil? (f/left-plot-why origin (f/merge-case {} {:name "a" :act [[:freeze-body 35]]}) (at 21.5 -15.5))))
     (is (nil? (f/left-plot-why origin (f/merge-case {} {:name "a" :act [[:kill-body] [:wait-s 1]]}) (at 21.5 -15.5)))
         "a case that kills its own body respawns at world spawn")))
 
@@ -878,6 +879,9 @@
 
 (deftest cli-http-restart-steps-and-file-checks-validate
   (let [ps #(f/problems (merge {:name "x" :time :day :plot {:height 16} :body {:at [0 0 0]} :expect [{:event {} :within-s 1}]} %))]
+        (is (empty? (ps {:act [[:freeze-body 35]]})))
+    (is (seq (ps {:act [[:freeze-body]]})))
+    (is (seq (ps {:act [[:freeze-body 0]]})))
     (is (empty? (ps {:act [[:restart-body] [:cli "plans" ["check"] {:ok true}] [:http :cancel-all] [:http :cancel "j1" {:ok true}]]
                      :after [[:memory {:deaths [:any]}] [:file "engine/a.edn" {}]]})))
     (is (some #(re-find #":act steps" %) (ps {:act [[:http :bogus]]})))

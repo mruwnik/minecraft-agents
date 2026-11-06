@@ -1,0 +1,18 @@
+;; A death the server deals while the body's client hangs is reported once, when the fresh bot logs in dead (:died :atJoin),
+;; and recover-drops then fetches the pile. A zombie stands at the body; the runner SIGSTOPs the body 35 s (the server times it out).
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [10.5 0 10.5] :spawnpoint [4 0 4] :inventory [["raw_iron" 24] ["cobblestone" 64]]}
+  :limit-s 150}
+ :cases
+ [{:name "died-at-join-once-then-pile-recovered"
+   :act [[:summon "zombie" [11.5 0 10.5] "{PersistenceRequired:1b}"]
+         [:freeze-body 35]
+         [:await {:source :body :kind :respawned} 60]
+         [:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :body :kind :died :data {:atJoin true}} :within-s 100}
+            {:count-event {:source :body :kind :died} :for-s 100 :at-least 1 :at-most 1}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 140 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}
