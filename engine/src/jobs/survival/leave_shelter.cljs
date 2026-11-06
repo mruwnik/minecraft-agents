@@ -117,7 +117,7 @@
   [c]
   (let [p (:primitives c)]
     (when (foods/fragile? (.self p))
-      (seq (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) (opened-cells c))))))
+      (seq (danger/dangers-opened p threats/max-follow-range (opened-cells c))))))
 
 (defn exits
   "The headings out of the shelter, cheapest first, as {:heading :price :hurt}: cost/opening-price of the way through
@@ -132,7 +132,7 @@
              (for [h (keys dig-leave/headings)
                    :let [cells (dig-leave/exit-cells p h)
                          mobs (map (fn [m] {:name (.-name m) :held (.-held m) :pos (danger/mob-pos p m)})
-                                   (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) cells))
+                                   (danger/dangers-opened p threats/max-follow-range cells))
                          lookups {:kind-at (danger/opened-lookup (reach/mob-lookup p) cells) :arrow-at (danger/opened-lookup (reach/arrow-lookup p) cells)}
                          hurt (:danger (cost/route-danger (game/version-of p) #(field/reach-fn (field/field p {:mob (:name %) :held (:held %) :pos (:pos %)} lookups))
                                                           (map #(zipmap [:x :y :z] %) cells) mobs (.-equipment self)

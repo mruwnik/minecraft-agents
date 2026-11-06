@@ -211,7 +211,7 @@
   hostiles for them (hostile-loss/loss-over), which the other ways out (fight, seal, walk) do not pay."
   [c]
   (let [s (cost/retry-s :place)]
-    (+ s (hostile-loss/loss-over (:primitives c) (ctx/view c) (flight/near-known (:primitives c) (set (flight/dead-ids c)) (danger-q/hostile-radius) (danger-q/ranged-radius)) s))))
+    (+ s (hostile-loss/loss-over (:primitives c) (ctx/view c) (flight/near-known (:primitives c) (set (flight/dead-ids c)) (danger-q/hostile-radius) :fire-range) s))))
 
 (defn ^:async build!
   "A jobs.access.pillar child of height with item, from where the body stands: :continue, or {:built n :mob? m}, m

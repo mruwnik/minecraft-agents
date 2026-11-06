@@ -92,7 +92,7 @@
   jobs.lib.danger/dangers); nil with none."
   [c]
   (let [p (:primitives c)
-        hs (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)})]
+        hs (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius :fire-range})]
     (when (seq hs) #(hostile-loss/loss-over p (ctx/view c) hs %))))
 
 (def exposed-s

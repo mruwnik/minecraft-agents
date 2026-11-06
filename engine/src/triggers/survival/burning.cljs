@@ -19,4 +19,4 @@
                 (body/burning? world)
                 (or (settings/get settings ::with-hostile)
                     (body/in-hazard? world)
-                    (not (danger-q/danger-near? world (danger-q/hostile-radius) (danger-q/ranged-radius)))))))
+                    (not (danger-q/danger-near? world (danger-q/hostile-radius)))))))

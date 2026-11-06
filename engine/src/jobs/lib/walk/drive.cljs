@@ -145,7 +145,7 @@
   (let [p (:primitives c)
         [fx fy fz] from
         [tx ty tz] floor]
-    (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
+    (or (seq (danger-q/hostiles-near-way p {:x fx :y fy :z fz} (danger-q/hostile-radius) {:ranged-radius :fire-range}))
         (some (fn [[dx dz]] (some #(some-> (u/seen-block p {:x (+ tx dx) :y % :z (+ tz dz)}) .-name (= "lava")) (range ty (inc fy))))
               [[0 0] [1 0] [-1 0] [0 1] [0 -1]]))))
 

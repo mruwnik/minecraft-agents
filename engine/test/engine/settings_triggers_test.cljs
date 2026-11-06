@@ -70,11 +70,11 @@
     (is (hungry/hungry (at 3 15) (refused 100000 50000) {}) "healed: the refusal no longer holds it")))
 
 (deftest a-layer-moves-the-accessors
-  (settings/with-settings {:jobs.lib.danger/hostile-radius 5 :jobs.lib.danger/ranged-radius 6
+  (settings/with-settings {:jobs.lib.danger/hostile-radius 5
                            :triggers.survival.hungry/bake-wheat 4 :triggers.survival.hungry/rest-s 7
                            :triggers.survival.tidy-pending/retry-s 9}
     (fn []
-      (is (= [5 6] [(danger-q/hostile-radius) (danger-q/ranged-radius)]))
+      (is (= 5 (danger-q/hostile-radius)))
       (is (= [4 7] [(hungry/bake-wheat) (hungry/default-rest-s)]))
       (is (= 9 (tidy-pending/retry-s))))))
 

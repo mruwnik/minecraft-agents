@@ -89,9 +89,8 @@
   swung at, none walked to. A fight that ends other than done keeps its memory (its given-up counts) for the next."
   [c weapons reach-only?]
   (let [radius (danger-q/hostile-radius)
-        ranged-radius (danger-q/ranged-radius)
         radius (if reach-only? (min radius (hit-reach)) radius)
-        ranged-radius (if reach-only? radius ranged-radius)]
+        ranged-radius (if reach-only? radius :fire-range)]
     (ctx/update-mem! c assoc :cornered true)
     (ctx/update-mem! c #(cond-> % (:cornered (:children %)) (update-in [:children :cornered] dissoc :start)))
     (let [hits-before (hits-total (:struck (:fight-prior (ctx/mem c))))
@@ -130,8 +129,8 @@
   "The hostiles a cornered body weighs: within :radius, ranged ones within :ranged-radius, the dead skipped."
   [c]
   (let [radius (danger-q/hostile-radius)
-        ranged-radius (danger-q/ranged-radius)]
-    (flight/near-known (:primitives c) (set (flight/dead-ids c)) radius ranged-radius)))
+        ]
+    (flight/near-known (:primitives c) (set (flight/dead-ids c)) radius :fire-range)))
 
 (defn angry-enderman?
   "Whether one of hostiles is an enderman that is angry (the client's flag), hurt the body this flight (its health is under the flight's start) or

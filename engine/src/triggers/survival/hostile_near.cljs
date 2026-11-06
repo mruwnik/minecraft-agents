@@ -10,7 +10,7 @@
     a known hostile mob within :radius (args, default 8) that has a walkable way to the body
       (jobs.lib.danger: not walled off, not across a pit it cannot climb, body not sealed in; in closed quarters a heard
       one counts only once seen or beside the body), or
-    a known ranged mob (jobs.lib.cost.weapon/ranged-mobs) with a line of fire within :ranged-radius (default 16) and its fire range, or
+    a known ranged mob (jobs.lib.cost.weapon/ranged-mobs) with a line of fire within :ranged-radius (default its kind's fire range) and its fire range, or
     a recent shot from a shooter not seen (jobs.lib.shot/open?: the hit's direction, a line of fire to the body's feet).
   Only known mobs count (engine.perception's mob memory), so an unseen silent creeper behind the body does not.
   :visible-only false lets a heard melee mob count unseen; the way to the body still counts.

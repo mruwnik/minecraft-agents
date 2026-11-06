@@ -28,7 +28,7 @@
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
   open in the way is shut, not walled over (jobs.blocks.fill-cells :shut-open).
-  Done at once when no ranged mob within the danger ranged radius (jobs.lib.danger/::ranged-radius) has a line of fire. With no cell to fill it looks around once (yielding
+  Done at once when no ranged mob within its fire range has a line of fire. With no cell to fill it looks around once (yielding
   :continue) before it ends :no-gap, for cells it has not seen yet.
   The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers).
   Needs: one of them carried, or a fetch by the call's ways (jobs.lib.need, jobs.items.obtain) to get one; else it does not
@@ -70,10 +70,9 @@
 (def ray-heights "Heights above the body's feet the arrows are aimed at." [game/eye-height 0.9])
 
 (defn ranged-dangers
-  "The ranged mobs within the danger ranged radius with a line of fire to the body, nearest first."
+  "The ranged mobs within their fire range with a line of fire to the body, nearest first."
   [c]
-  (let [r (danger-q/ranged-radius)]
-    (filterv combat/ranged? (danger-q/dangers (:primitives c) r {:ranged-radius r} {}))))
+  (filterv combat/ranged? (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius :fire-range} {})))
 
 (defn clear-rays
   "How many of the two arrow rays from the mob at mob-pos to the body at body-pos cross no :solid cell of kind-at."

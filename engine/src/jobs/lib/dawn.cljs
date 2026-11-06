@@ -24,7 +24,7 @@
   ([p danger-opts]
    (if (settings/get settings ::with-hostile)
      []
-     (danger/dangers p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)} danger-opts))))
+     (danger/dangers p (settings/get settings ::hostile-radius) {:ranged-radius :fire-range} danger-opts))))
 
 (defn hostile-known?
   "Whether a real danger is known within ::hostile-radius (known-dangers, same danger-opts), unless ::with-hostile is set."

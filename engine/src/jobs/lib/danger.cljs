@@ -21,7 +21,6 @@
 
 (a/defargs settings
   {::hostile-radius {:default 8 :doc "Blocks within which a known hostile mob that can reach the body counts as a danger (the hostile-near trigger and go-to's cut check read it)." :spec (a/int-in 0 nil)}
-   ::ranged-radius {:default 16 :doc "Blocks within which a known ranged mob with a line of fire counts as a danger." :spec (a/int-in 0 nil)}
    ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}
    ::close-hearing {:default 2 :doc "Blocks within which a heard mob is loud enough to be beside the body (heard-close?)." :spec (a/num-in 0 nil)}
    ::hit-s {:default 5 :doc "Seconds a melee mob whose blow hurt the body counts as a real danger whatever the way test says (hit-ids): it reached the body." :spec (a/num-in 0 nil)}
@@ -97,24 +96,24 @@
 (defn known-scan [] (settings/get settings ::known-scan))
 (defn close-hearing [] (settings/get settings ::close-hearing))
 (defn hostile-radius [] (settings/get settings ::hostile-radius))
-(defn ranged-radius [] (settings/get settings ::ranged-radius))
 
 (defn radius-in "The :radius of args, else the ::hostile-radius setting." [args] (or (:radius args) (hostile-radius)))
-(defn ranged-radius-in "The :ranged-radius of args, else the ::ranged-radius setting." [args] (or (:ranged-radius args) (ranged-radius)))
 
 (defn kind-radius
-  "Blocks within which a mob counts as a danger: radius, for a shooter (ranged?) ranged-radius (default radius); with
-  neither given, the settings'."
-  ([ranged?] (kind-radius ranged? (hostile-radius) (ranged-radius)))
-  ([ranged? radius ranged-radius] (threat/kind-radius ranged? radius ranged-radius)))
+  "Blocks within which mob {:name :held} counts as a danger: radius, for a shooter (ranged?) :ranged-radius when given, else
+  its kind's fire range (threat/kind-radius); with no radius, the ::hostile-radius setting."
+  ([mob] (kind-radius mob (hostile-radius) nil))
+  ([mob radius ranged-radius] (threat/kind-radius mob radius ranged-radius)))
+
+(defn entity-radius [e radius ranged-radius]
+  (kind-radius {:name (.-name e) :held (.-held e)} radius ranged-radius))
 
 (defn known-hostiles
-  "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by
+  "The hostiles the body knows of within radius (ranged ones within :ranged-radius: a number, or :fire-range for their kind's), nearest first; a heard one by
   its band (mob-distance). Uses the perception's mob memory (p.knownMobs) when p has one, else the raw hostile list."
   [p radius {:keys [ranged-radius]}]
-  (let [rr (or ranged-radius radius)
-        within (fn [e] (<= (mob-distance p e) (kind-radius (combat/ranged? e) radius rr)))]
-    (->> (combat/known-or-raw p (max (known-scan) radius rr))
+  (let [within (fn [e] (<= (mob-distance p e) (entity-radius e radius ranged-radius)))]
+    (->> (combat/known-or-raw p (max (known-scan) (threat/listing-radius radius ranged-radius)))
          (filter within)
          (sort-by #(mob-distance p %))
          vec)))
@@ -129,13 +128,12 @@
 
 (defn hostiles-near-way
   "The hostiles the body knows of (known-hostiles: seen or heard, a heard one at its rough spot) within radius
-  (ranged ones within :ranged-radius) of the straight way from the body to goal ({:x :y :z}), nearest the way first."
+  (ranged ones within :ranged-radius, as known-hostiles) of the straight way from the body to goal ({:x :y :z}), nearest the way first."
   [p goal radius {:keys [ranged-radius]}]
-  (let [rr (or ranged-radius radius)
-        body (u/pos-of (.-pos (.self p)))
+  (let [body (u/pos-of (.-pos (.self p)))
         off (fn [e] (way-distance body goal (mob-pos p e)))]
-    (->> (known-hostiles p (+ (u/dist body goal) (max radius rr)) {})
-         (filter #(<= (off %) (kind-radius (combat/ranged? %) radius rr)))
+    (->> (known-hostiles p (+ (u/dist body goal) (threat/listing-radius radius ranged-radius)) {})
+         (filter #(<= (off %) (entity-radius % radius ranged-radius)))
          (sort-by off)
          vec)))
 
@@ -307,18 +305,18 @@
     (fn [x y z] (if (contains? open [x y z]) :open (look x y z)))))
 
 (defn dangers-opened
-  "The known hostiles within radius (ranged ones within ranged-radius) that would be a real danger (danger-in?) to the
+  "The known hostiles within radius (ranged ones within their fire range) that would be a real danger (danger-in?) to the
   body were the cells ([x y z]) open: a way through them to the body, or a line of fire through them, nearest first. A
   heard mob is placed by what the body sees now (open-cell-from): it is not in a cell the cells' opening would show."
-  [p radius ranged-radius cells]
+  [p radius cells]
   (let [kind-at (opened-lookup (reach/mob-lookup p) cells)
         opts {:arrow-at (opened-lookup (reach/arrow-lookup p) cells) :sight-at (sight-lookup p)}]
-    (filter #(danger-in? p kind-at % opts) (known-hostiles p radius {:ranged-radius ranged-radius}))))
+    (filter #(danger-in? p kind-at % opts) (known-hostiles p radius {:ranged-radius :fire-range}))))
 
 (defn danger-opened?
   "Whether any of dangers-opened is."
-  [p radius ranged-radius cells]
-  (boolean (seq (dangers-opened p radius ranged-radius cells))))
+  [p radius cells]
+  (boolean (seq (dangers-opened p radius cells))))
 
 (defn query-proofs [p] (proofs/proofs (reach/cell-of (u/pos-of (.-pos (.self p))))))
 
@@ -344,12 +342,12 @@
           (known-hostiles p radius opts))))
 
 (defn danger-near?
-  "Whether a real danger (nearest-danger) is within radius, ranged mobs within :ranged-radius (default radius). The one
+  "Whether a real danger (nearest-danger) is within radius, ranged mobs within their fire range. The one
   definition of danger for the hostile-near fact and the tidy safety check; opts as nearest-danger's
   danger-opts."
-  ([p radius ranged-radius] (danger-near? p radius ranged-radius {}))
-  ([p radius ranged-radius danger-opts]
-   (some? (nearest-danger p radius {:ranged-radius ranged-radius} danger-opts))))
+  ([p radius] (danger-near? p radius {}))
+  ([p radius danger-opts]
+   (some? (nearest-danger p radius {:ranged-radius :fire-range} danger-opts))))
 
 (defn seen-hostiles
   "The hostiles the body knows of within 64 (known-hostiles: the perception's mob memory, seen or
@@ -368,7 +366,7 @@
   ([world memory args opts]
    (if (body/dead? memory)
      []
-     (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args (ranged-radius))}
+     (dangers world (:radius args (hostile-radius)) {:ranged-radius (:ranged-radius args :fire-range)}
               (merge {:sight? (:visible-only args true) :ignore-heard? (or (:ignore-heard? args) (body/heard-muted? memory)) :watched (body/watched memory) :hit-ids (hit-ids memory) :shooting? true
                       :sight-at (when (:visible-only args true) (sight-lookup world))}
                      opts)))))

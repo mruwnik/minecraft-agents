@@ -1,7 +1,7 @@
 (ns jobs.survival.respond-flight
   "Flee from the hostiles in range, one whole flight per round: run until no mob chases the body any more.
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
-  ::hostile-radius (ranged ones ::ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
+  ::hostile-radius (ranged ones their fire range) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
   sight for respond.state/lost-s (4 s), a melee one beyond ::hostile-radius that stood at one place in sight for respond.state/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
   respond.state/::blast-reach (6) always has one: its blast).
@@ -66,7 +66,7 @@
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
   Plugged in or up a pillar it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
-  hostile within its follow range (jobs.lib.threats; ranged ones at least ::ranged-radius) would have a walkable way to
+  hostile within its follow range (jobs.lib.threats; ranged ones at least their fire range) would have a walkable way to
   the refuge if its own blocks were gone, and for the hide-out ::quiet-s setting (30 s) more after the last such danger (a silent mob is forgotten
   after a few seconds); then the flight ends :hidden. After the hide-out ::hide-s setting (60 s) in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
@@ -192,7 +192,7 @@
   [c]
   (let [{:keys [fled chasers refuge]} (ctx/mem c)]
     (not (or (seq fled) (seq chasers) refuge (shot/open? (:primitives c) (ctx/view c))
-             (seq (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {:sight? false :hit-ids (danger-q/hit-ids (ctx/view c))}))))))
+             (seq (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius :fire-range} {:sight? false :hit-ids (danger-q/hit-ids (ctx/view c))}))))))
 
 (def kept-keys
   "Memory the response owns beyond a flight: the child calls, the fight's counts and the last flight's ending."

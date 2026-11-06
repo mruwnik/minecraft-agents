@@ -360,7 +360,7 @@
   [c]
   (let [p (:primitives c)
         args (trigger-args c)]
-    (if-let [e (first (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)}))]
+    (if-let [e (first (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (:ranged-radius args :fire-range)}))]
       (str ": " (dawn/hostile-text [(dawn/describe p e)]))
       "")))
 
@@ -478,7 +478,7 @@
          hit (danger/hit-ids (ctx/view c))
          body (u/pos-of (.-pos (.self p)))
          goal (update goal :y #(or % (:y body)))
-         near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)})]
+         near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (:ranged-radius args :fire-range)})]
      (and (seq near)
           (every? (fn [e] (and (>= (way-nearest body goal route (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5))
                                (not (melee-catches? p e goal route))

@@ -87,5 +87,5 @@
              (foods/fragile? self)
              (not (look/dark-here? world)))
          (or (meal/carries-food? self reserved)
-             (not (danger-q/danger-near? world (danger-q/hostile-radius) (danger-q/ranged-radius))))
+             (not (danger-q/danger-near? world (danger-q/hostile-radius))))
          (if urgent? :urgent true))))

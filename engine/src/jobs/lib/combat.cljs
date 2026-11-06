@@ -40,12 +40,11 @@
 (defn hostiles
   "The hostile mobs within radius of the body that it knows of (seen or heard), nearest first, as JS entities.
   opts: :sight :only keeps the visible ones; :sight :prefer lists visible ones first, each group nearest first;
-  without :sight the known ones all count. :ranged-radius r counts ranged mobs out to r instead of radius."
+  without :sight the known ones all count. :ranged-radius r counts ranged mobs out to r (or :fire-range: their kind's) instead of radius."
   ([p radius] (hostiles p radius {}))
   ([p radius {:keys [sight ranged-radius]}]
-   (let [rr (or ranged-radius radius)
-         all (->> (known-or-raw p (max radius rr))
-                  (filter #(<= (.-distance %) (threat/kind-radius (ranged? %) radius rr))))]
+   (let [all (->> (known-or-raw p (threat/listing-radius radius ranged-radius))
+                  (filter #(<= (.-distance %) (threat/kind-radius {:name (.-name %) :held (.-held %)} radius ranged-radius))))]
      (case sight
        :only (filterv #(.-visible %) all)
        :prefer (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)

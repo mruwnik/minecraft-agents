@@ -227,7 +227,6 @@
  :jobs.lib.cost.planner/drop-cost
  :jobs.lib.cost.threat/difficulty
  :jobs.lib.danger/hostile-radius
- :jobs.lib.danger/ranged-radius
  :jobs.lib.hostile-fight/leash
  :jobs.lib.loose/radius
  :jobs.lib.room-order/toss-below

@@ -177,7 +177,7 @@
 
 (defn hostile-near [radius]
   (flag :hostile-near [:hostile-near (str "a hostile within " radius)] [:no-hostile-near (str "no hostile within " radius)]
-        (online (fn [c _] (danger-q/danger-near? (world c) radius radius)))))
+        (online (fn [c _] (some? (danger-q/nearest-danger (world c) radius {:ranged-radius radius} {}))))))
 
 (defn coord [p k] (if (map? p) (get p k) (get p ({:x 0 :y 1 :z 2} k))))
 

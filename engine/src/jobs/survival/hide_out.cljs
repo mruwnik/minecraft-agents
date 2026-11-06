@@ -6,6 +6,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.hostile-loss :as hostile-loss]
@@ -19,7 +20,7 @@
 (def doc
   "Wait in a refuge the body is in (sealed in a plug or pit, or up a pillar: the call's :kind, with its :anchor feet cell and :cells filled)
   while it keeps a danger off, one hold (a :wait, why hiding) a round. A danger is a known hostile within its follow range
-  (jobs.lib.threats; ranged ones at least danger/::ranged-radius), the ids in :skip left out, that would have a walkable way to
+  (jobs.lib.threats; ranged ones at least their fire range), the ids in :skip left out, that would have a walkable way to
   the anchor were the refuge's own cells open (jobs.lib.reach/walkable-way?).
   Done {:hold :quiet} once the ::quiet-s setting (30 s) has passed since the last such danger; {:hold :spent}
   once ::hide-s (60 s) have passed in the refuge with no real danger on the body as it stands (danger/danger-near?, the
@@ -78,15 +79,14 @@
 (defn dead [c] (set (:skip (:args c))))
 
 (defn refuge-danger?
-  "Whether a hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius), the skipped left out,
+  "Whether a hostile within its follow range (jobs.lib.threats; ranged ones at least their fire range), the skipped left out,
   would have a walkable way to the refuge's anchor cell were the refuge's own cells open: a danger the refuge keeps off."
   [c]
   (let [p (:primitives c)
         {:keys [anchor cells]} (:args c)
         open (set cells)
-        ranged-radius (danger-q/ranged-radius)
-        reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max ranged-radius)))
-        known (flight/near-known p (dead c) threats/max-follow-range ranged-radius)]
+        reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max (threat/fire-range (threat/kind {:name (.-name e) :held (.-held e)})))))
+        known (flight/near-known p (dead c) threats/max-follow-range :fire-range)]
     (boolean (some #(and (<= (danger-q/mob-distance p %) (reach-of %))
                          (reach/walkable-way? p (danger-q/mob-pos p %) anchor #{} open))
                    known))))
@@ -136,7 +136,7 @@
   the body (it only opens the walls, leaving it ::opened-s exposed to the other hostiles near), so it stays when leaving costs more (::leave-s in the open among them); a pillar takes the blast, with the climbers and shooters that reach its top, for ::leave-s, and ground melee mobs cannot."
   [c]
   (let [p (:primitives c)
-        near (flight/near-known p (dead c) (danger-q/hostile-radius) (danger-q/ranged-radius))
+        near (flight/near-known p (dead c) (danger-q/hostile-radius) :fire-range)
         others (remove combat/creeper? near)
         shielded? (contains? #{:plug :plug-dig :pit} (:kind (:args c)))
         loss #(hostile-loss/loss-over p (ctx/view c) %1 %2)
@@ -175,8 +175,7 @@
         hurt? (boolean (and hold-at (body/mob-hit-since? (ctx/view c) hold-at)))
         _ (ctx/update-mem! c assoc :quiet-from quiet-from :hidden-since hidden-since :hold-at now)
         radius (danger-q/hostile-radius)
-        ranged-radius (danger-q/ranged-radius)
-        danger-on-body? (fn [] (danger-q/danger-near? p radius ranged-radius {:kind-at (sealed-lookup p)}))
+        danger-on-body? (fn [] (danger-q/danger-near? p radius {:kind-at (sealed-lookup p)}))
         held-ms (- now hidden-since)
         breaker (breaker c)
         dig-out? (or (:dig-out (ctx/mem c))

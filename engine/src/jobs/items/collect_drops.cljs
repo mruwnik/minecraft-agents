@@ -12,6 +12,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-route :as dig-route]
@@ -653,7 +654,7 @@
         spot (u/pos-of (.-pos item))]
     (and (= "water" (u/seen-name p {:x x :y y :z z}))
          (boolean (some #(<= (u/dist spot (danger-q/mob-pos p %)) (danger-q/hostile-radius))
-                        (danger-q/known-hostiles p (+ (danger-q/ranged-radius) (danger-q/hostile-radius)) {}))))))
+                        (danger-q/known-hostiles p (+ (threat/fire-range "skeleton") (danger-q/hostile-radius)) {}))))))
 
 (defn ^:async try-take!
   "One try at a drop: walk, dig or collect as its place asks (a stuck collect digs and tries once more). {:wait true} while a child

@@ -56,7 +56,7 @@
 (a/defargs args
   {:targets {:doc "entity ids, player usernames and mob types to kill; a single one may be given bare" :spec (a/or-of number? string? #{:hostiles} (a/coll-of (a/or-of number? string?))) :default []}
    :radius {:doc "targets within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :ranged-radius {:doc "with :hostiles, ranged hostiles (skeletons and the like) within this many blocks count; nil: :radius" :spec (a/num-in 0 nil) :default nil}
+   :ranged-radius {:doc "with :hostiles, ranged hostiles (skeletons and the like) within this many blocks count; nil: :radius; :fire-range: their kind's fire range (at least :radius)" :spec (a/or-of (a/num-in 0 nil) (a/pred ":fire-range" #(= :fire-range %))) :default nil}
    :hold {:doc "true: never walk toward a melee mob; strike one that comes within reach" :spec boolean? :default false}
    :prior {:doc "with :hostiles, the data of an earlier call's declined ending (:killed :given-up :names :struck): the fight goes on from its counts" :spec map? :default nil}
    :skip {:doc "with :hostiles, entity ids already dead: not fought" :spec (a/coll-of number?) :default []}

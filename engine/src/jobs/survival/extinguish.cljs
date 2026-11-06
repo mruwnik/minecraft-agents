@@ -374,7 +374,7 @@
   "On fire, nothing to do but wait it out off the fire (stand-wait!). Never beside a real danger: that ends stopped
   :hostile-near, so the hostile reflex can act."
   [c]
-  (if (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius) (danger-q/ranged-radius))
+  (if (danger-q/danger-near? (:primitives c) (danger-q/hostile-radius))
     (ctx/end c :condition-failed :hostile-near {:text "a hostile is near: not standing still"})
     (await (stand-wait! c))))
 

@@ -57,9 +57,8 @@
   trigger, is dropped). The killed and the :skip ids are left out, and so is a calm enderman: a swing provokes it."
   [c]
   (let [{:keys [radius ranged-radius skip]} (:args c)
-        ranged-radius (or ranged-radius radius)
         dead (into (set skip) (:killed (ctx/mem c)))
-        all (->> (danger-q/known-hostiles (:primitives c) radius {:ranged-radius (max radius ranged-radius)})
+        all (->> (danger-q/known-hostiles (:primitives c) radius {:ranged-radius ranged-radius})
                  (remove #(contains? dead (.-id %)))
                  (remove danger-q/calm-enderman?)
                  (remove #(and (combat/ranged? %) (not (danger-q/danger? (:primitives c) %)))))]

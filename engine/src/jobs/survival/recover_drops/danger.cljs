@@ -18,7 +18,7 @@
   that the trip has not been weighed with near (:weighed), or nil."
   [c]
   (let [args (ready/trigger-args c)]
-    (danger-q/nearest-danger (:primitives c) (danger-q/radius-in args) {:ranged-radius (danger-q/ranged-radius-in args)}
+    (danger-q/nearest-danger (:primitives c) (danger-q/radius-in args) {:ranged-radius (:ranged-radius args :fire-range)}
                              {:skip (:weighed (ctx/mem c)) :sight? (:visible-only args true)
                               :ignore-heard? (body/heard-muted? (ctx/view c))})))
 

@@ -157,7 +157,7 @@
   "Whether a shooter is known near: a pillar raised higher only lifts the body further into its line of fire."
   [c]
   (let [p (:primitives c)]
-    (boolean (some combat/ranged? (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius))))))
+    (boolean (some combat/ranged? (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range :fire-range)))))
 
 (defn ^:async hide-hold!
   "Plugged in or up the pillar: one round of jobs.survival.hide-out (a hold, why hiding; :again) while the refuge keeps a danger off, then
@@ -180,7 +180,7 @@
   "The hostiles the body knows within follow range, as [{:name :pos [x y z]}]; empty when it only heard one."
   [c]
   (let [p (:primitives c)]
-    (->> (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius))
+    (->> (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range :fire-range)
          (reduce (fn [[seen out] e] (if (contains? seen (.-id e)) [seen out] [(conj seen (.-id e)) (conj out e)])) [#{} []])
          second
          (mapv (fn [e] {:name (.-name e) :seen (danger-q/seen-only? e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})))))

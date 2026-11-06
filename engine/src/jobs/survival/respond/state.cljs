@@ -215,7 +215,6 @@
   asks it for the chasers the flight's next step runs from."
   [c mem]
   (let [radius (danger-q/hostile-radius)
-        ranged-radius (danger-q/ranged-radius)
         p (:primitives c)
         low? (<= (.-health (.self p)) (hide-health))
         now (ctx/now c)
@@ -223,7 +222,7 @@
         live (remove #(dead (.-id %)) (known-chasers p))
         listed (into {} (map (juxt #(.-id %) identity)) live)
         reached (set (:reached mem))
-        joining (remove #(dead (.-id %)) (concat (danger-q/dangers p radius {:ranged-radius ranged-radius} {:sight? false})
+        joining (remove #(dead (.-id %)) (concat (danger-q/dangers p radius {:ranged-radius :fire-range} {:sight? false})
                                                  (filter #(reached (.-id %)) live)))
         chasers (merge-with #(assoc %2 :since (:since %1 (:since %2)))
                             (:chasers mem) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
@@ -259,7 +258,7 @@
    :s (/ (js/Math.round (/ (- now (:since ch now)) 100)) 10) :moved moved :acted? (>= moved 1)})
 
 (defn look!
-  "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged :ranged-radius)
+  "Update the flight's chasers (job memory :chasers, by id): the real dangers within :radius (ranged: their fire range)
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why, logged once as
   info hostile.stopped (stop-fields). The chasers still on, as JS entities, nearest first. A mob that hurt the body in its
   refuge (:reached) has a way whatever the map says."

@@ -3,7 +3,7 @@
   view cone or heard, remembered while likely still near) feeds jobs.lib.reach's dangers, nearest-danger and the
   hostile-near trigger; reach reads blocks from the raw world's state ids when there is one; the mobs of one query share
   their walk proofs."
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [deftest is are]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.danger :as danger-q]
@@ -421,15 +421,28 @@
     (is (= [] (danger-ids quiet)))
     (is (false? (hostile-near? quiet)))))
 
-(deftest a-shooter-counts-out-to-the-ranged-radius-any-other-mob-to-the-radius
-  (is (= 8 (danger-q/kind-radius false 8 16)))
-  (is (= 16 (danger-q/kind-radius true 8 16)))
-  (is (= 8 (danger-q/kind-radius true 8 nil)) "no ranged radius: the radius")
-  (is (= (danger-q/hostile-radius) (danger-q/kind-radius false)))
-  (is (= (danger-q/ranged-radius) (danger-q/kind-radius true))))
+(deftest a-shooter-counts-out-to-its-fire-range-any-other-mob-to-the-radius
+  (is (= 8 (danger-q/kind-radius {:name "zombie"} 8 16)))
+  (is (= 16 (danger-q/kind-radius {:name "skeleton"} 8 16)) "a given ranged radius wins")
+  (is (= 8 (danger-q/kind-radius {:name "skeleton"} 8 nil)) "none: the radius")
+  (are [mob r] (= r (danger-q/kind-radius {:name mob} 8 :fire-range))
+    "skeleton" 15
+    "pillager" 8
+    "blaze" 48
+    "ghast" 64)
+  (is (= 10 (danger-q/kind-radius {:name "drowned" :held "trident"} 8 :fire-range)))
+  (is (= 8 (danger-q/kind-radius {:name "drowned"} 8 :fire-range)) "bare-handed it is melee")
+  (is (= (danger-q/hostile-radius) (danger-q/kind-radius {:name "zombie"}))))
 
 (deftest a-zombie-keeps-its-armour-only-when-seen
   (let [zombie (fn [id x z] (assoc (mob id "zombie" x z) :equipment {:head {:name "iron_helmet"}}))
         head-of (fn [spec] (some-> (.-equipment (first (.knownMobs (:p (rig spec))))) .-head .-name))]
     (is (= "iron_helmet" (head-of {:entities [(zombie 1 0 4)]})) "in front: its armour is seen")
     (is (nil? (head-of {:entities [(zombie 1 6 -3)] :blocks wall})) "heard through a wall: its armour is not seen")))
+
+(deftest known-hostiles-counts-each-shooter-out-to-its-own-fire-range
+  (let [ids (fn [mobs ranged] (let [{:keys [p]} (rig {:entities mobs})]
+                                (set (map #(.-id %) (danger-q/known-hostiles p 8 {:ranged-radius ranged})))))
+        mobs [(mob 1 "skeleton" 0 14) (mob 2 "pillager" 0 12) (mob 3 "blaze" 0 40) (mob 4 "zombie" 0 12)]]
+    (is (= #{1 3} (ids mobs :fire-range)) "skeleton 15 and blaze 48 reach; a pillager shoots from 8, a zombie walks")
+    (is (= #{} (ids mobs nil)) "no ranged radius: the radius for all")))

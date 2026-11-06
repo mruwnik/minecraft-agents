@@ -318,9 +318,19 @@
   (or (not (ranged? m)) (= "blaze" name)))
 
 (defn kind-radius
-  "Blocks within which a mob counts: radius, for a shooter (ranged?) ranged-radius (default radius)."
-  [ranged? radius ranged-radius]
-  (if ranged? (or ranged-radius radius) radius))
+  "Blocks within which mob {:name :held} counts: radius, for a shooter (ranged?) ranged-radius (nil: radius; :fire-range: its
+  kind's fire-range, at least radius)."
+  [mob radius ranged-radius]
+  (cond (not (ranged? mob)) radius
+        (= :fire-range ranged-radius) (max radius (fire-range (kind mob)))
+        :else (or ranged-radius radius)))
+
+(defn listing-radius
+  "Blocks out to which the mobs a kind-radius filter weighs must be fetched."
+  [radius ranged-radius]
+  (if (= :fire-range ranged-radius)
+    (apply max radius (settings/get settings ::default-fire-range) (vals fire-ranges))
+    (max radius (or ranged-radius radius))))
 
 (defn damage-type [mob-name]
   (cond (= "creeper" mob-name) :explosion

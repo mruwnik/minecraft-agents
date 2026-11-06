@@ -250,7 +250,7 @@
   "The hostiles the body knows of (seen, heard or remembered) within the hostile-near trigger's radius (ranged ones its
   ranged radius) of the way still ahead to pos, nearest the way first: what may send the body back again."
   [c pos]
-  (danger-q/hostiles-near-way (:primitives c) pos (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))
+  (danger-q/hostiles-near-way (:primitives c) pos (danger-q/hostile-radius) {:ranged-radius :fire-range}))
 
 (defn nearest-hostile
   "{:nearest-hostile name :nearest-hostile-at place} of the hostile nearest the way ahead to pos, else of the nearest

@@ -141,7 +141,7 @@
   could reach the body or shoot it were the shelter blocks of ledger l open (danger-q/danger-opened?): one walled off
   by rock the body has seen is no reason to keep the shelter."
   [p l]
-  (danger-q/danger-opened? p threats/max-follow-range (danger-q/ranged-radius) (keep #(when (stay/shelter-purposes (:purpose %)) (:cell %)) l)))
+  (danger-q/danger-opened? p threats/max-follow-range (keep #(when (stay/shelter-purposes (:purpose %)) (:cell %)) l)))
 
 (def beside (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [dx dy dz]))
 

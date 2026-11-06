@@ -610,7 +610,7 @@
         (doseq [time [1000 14000]]
           (let [{:keys [p]} (setup-seeing {:time time :blocks wide-room :self {:health 20} :entities [(zombie 8 0)]} nil 1000)]
             (looked-round! p)
-            (is (not (danger-q/danger-near? p 8 16 {})) (str "heard through the wall at time " time))))))))
+            (is (not (danger-q/danger-near? p 8 {})) (str "heard through the wall at time " time))))))))
 
 (deftest a-roofed-body-stays-in-for-a-phantom-it-sees-but-not-for-a-seen-zombie
   (are [entity stays?] (= stays? (let [p (tu/fake {:time 14000 :blocks breached-room :entities [entity]})]

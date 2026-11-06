@@ -106,12 +106,11 @@
         (if (= :placed r) :ok r)))))
 
 (defn shooters
-  "Where the seen ranged hostiles within the flight's :ranged-radius stand, and the unseen shooters of recent shots (flight/fire-spots)."
+  "Where the seen ranged hostiles within their fire range stand, and the unseen shooters of recent shots (flight/fire-spots)."
   [c]
   (let [radius (danger-q/hostile-radius)
-        ranged-radius (danger-q/ranged-radius)
         p (:primitives c)]
-    (into (->> (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})
+    (into (->> (danger-q/known-hostiles p radius {:ranged-radius :fire-range})
                (filter #(and (combat/ranged? %) (danger-q/seen-only? %)))
                (mapv #(danger-q/mob-pos p %)))
           (flight/fire-spots c))))

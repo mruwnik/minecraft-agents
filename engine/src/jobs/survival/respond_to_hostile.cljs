@@ -40,7 +40,7 @@
   "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else flee; one whole attempt per round, deciding
   afresh before each call of the child. The flight (jobs.survival.respond-flight) is this job's own step loop: it makes every
   choice (room, door, walk, cover, shut-in, pillar, back-off, fist) and each way is its own call (the fight choice is jobs.lib.cost, see the README row).
-  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (::ranged-radius for ranged mobs);
+  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (their fire range for ranged mobs);
   none near is done at once. The call's :use :tools are the weapons, handed to both children.
   Returns: :done when no danger is near and the body holds no refuge, or when every danger is only heard and the fight declined
   (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body, or each mob stands where an earlier flight from it left it (hostile/stood-still?) (it is watched, danger/still-watched?: muted while a seen one comes no nearer than danger/answered-within and a heard one sounds the same, the body unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
@@ -111,7 +111,7 @@
         _ (ctx/update-mem! c assoc :last-run decision)
         e (if (= :fight decision)
             (await (ctx/call c :fight 'jobs.combat.attack
-                             {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
+                             {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius :fire-range
                               :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
                               :checks {:safe? '(always) :fit? '(always)}}))
             (await (flight/flee! c)))]

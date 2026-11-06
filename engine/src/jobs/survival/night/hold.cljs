@@ -86,7 +86,7 @@
          (foods/starving? self {})
          (not (meal/carries-food? self (reserve/spared (ctx/view c) self)))
          (zero? (ctx/count-in c :hungry (foods/starving-rest-ms)))
-         (not (danger-q/danger-near? p (danger-q/hostile-radius) (danger-q/ranged-radius))))))
+         (not (danger-q/danger-near? p (danger-q/hostile-radius))))))
 
 (def in-shelter-ways
   "The get-food ways a sheltered hold allows: they need no walk out of the shelter."
