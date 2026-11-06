@@ -243,7 +243,7 @@
                                                     :inventory [{:name "dirt" :count 2}]}
                                                    {:pos [8 64 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          (is (seq (steps seen)) "it digs its way out: a dig route or a stair, whichever prices lower"))))))
+          (is (= [:dig-route] (steps seen)) "the cell past the seen thin wall is dug at the chance it is rock, under a stair's price"))))))
 
 (defn ^:async pit-escape
   "The result and escalation steps of go-to out of the 3-deep pit carrying n dirt."

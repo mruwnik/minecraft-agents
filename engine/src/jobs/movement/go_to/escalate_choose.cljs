@@ -477,6 +477,7 @@
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
         ;; a guess is dug again till it holds: its dig at the price over the chance it does, once, in the search
         prices (if (every? zero? (vals guess-risk)) prices (dig-route/by-share prices #(/ 1 (- 1 (risk %)))))
+        solid-share (escape/dig-share-fn p)
         ;; a floor not seen is read as rock where the route may walk on it; the chance it is none (cost/floor-absent-chance of
         ;; the step's kind, the prior turn-back prices it by) is the fall at the measured depths past the step's own (cost/unseen-fall-s less its :fall-s) and the pillar
         ;; back up, priced onto each walk step that lands on one, in the search and the straight dig. Only a floor under a cell
@@ -586,7 +587,7 @@
                     (map? a) (recur (into refused bad) (:searched-s a spent))))))]
     (cond
       (or (nil? a) (#{:searching :dearer} a) (:boxed a)) a
-      (not (cost/affords? (route-s p (:dig a) own? fetch?) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil
+      (not (cost/affords? (route-s p (escape/block-at-of p) (:dig a) own? fetch? solid-share) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil
       (cost/affords? (:seconds a) (or worth-s ##Inf)) a
       dearer? :dearer)))
 
