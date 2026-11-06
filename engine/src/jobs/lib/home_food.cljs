@@ -13,6 +13,7 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.crops :as crops]
             [jobs.lib.foods :as foods]
             [jobs.lib.game-facts :as facts]
@@ -85,7 +86,7 @@
     (for [[kind as] (group-by :kind own)
           :let [spare-n (spare/takeable-adults (spare/keep-adults) (count as))]
           :when (pos? spare-n)]
-      {:kind :pen :pos (:pos (first as)) :points (* spare-n (kill-points p kind))})))
+      {:kind :pen :animal kind :pos (:pos (first as)) :points (* spare-n (kill-points p kind))})))
 
 (def kept-crops
   "The crop sources of the last ask: {:key :sources}. Their seen-block reads cost ms over a field's cells, and choosers
@@ -111,11 +112,17 @@
                   found))]
     (concat crops (pen-sources c))))
 
+(defn pen-point-s
+  "Seconds a food point of a kill of `kind` in the body's own pen takes: the kill (the stone sword's hits on the kind's
+  full health) over the kill's points; no search, the animal is known. A pen source is the surplus over the breeding
+  pair, so the kill leaves the pair and nothing is bought back."
+  [p kind]
+  (/ (weapon/kill-seconds "stone_sword" (get weapon/passive-max-health kind)) (kill-points p kind)))
+
 (defn sources
   "See the ns doc, the ripe crops of a 16-block column as one field (its :box of cells and their :crops): each with :blocks and the seconds (:walk-s) of the
   walk to it from far, and the seconds of fetching it from here (:fetch-s: a trip and the walk, cost.value/trip and
-  walk-cost) and of each point's work (:point-s: a crop's harvest step, cost/field-step-s; a pen animal's kill, at the
-  field's price, cost.food/field-point-s; a chest's none)."
+  walk-cost) and of each point's work (:point-s: a crop's harvest step, cost/field-step-s; a pen animal's kill, pen-point-s; a chest's none)."
   ([c far] (sources c far (u/self-pos c)))
   ([c far here]
    (let [per-s (cost/walk-blocks-per-s)
@@ -131,7 +138,7 @@
            :let [blocks (u/dist far (:pos s))]]
        (assoc s :blocks blocks :walk-s (/ blocks per-s)
               :fetch-s (+ (cost/trip) (:cost (cost/walk-cost {:distance (u/dist here (:pos s))})))
-              :point-s (case (:kind s) :chest 0 :crop (:point-s s) (food/field-point-s)))))))
+              :point-s (case (:kind s) :chest 0 :crop (:point-s s) (pen-point-s (:primitives c) (:animal s))))))))
 
 (defn chain-trip
   "The trip c's call chain is on when the caller names none: its job-time spend left (ctx/left), taken whole, ending

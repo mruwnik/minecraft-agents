@@ -655,9 +655,18 @@
     (tu/run-async done
       (fn ^:async t []
         (let [wild (mapv #(assoc %1 :id %2 :pos {:x %3 :y 64 :z 0}) three-cows [17 18 19] [-4 -8 -9])
+              {:keys [eng p]} (hunt-world (into (vec (take 2 three-cows)) wild) own-farm)]
+          (await (run-until-empty eng 40))
+          (is (= [17] (distinct (call-args p "attack" "id"))) "the pen holds only the breeding pair: no surplus to take"))))))
+
+(deftest get-food-takes-its-pen-surplus-over-a-wild-animal-it-must-search-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wild (mapv #(assoc %1 :id %2 :pos {:x %3 :y 64 :z 0}) three-cows [17 18 19] [-4 -8 -9])
               {:keys [eng p]} (hunt-world (into three-cows wild) own-farm)]
           (await (run-until-empty eng 40))
-          (is (= [17] (distinct (call-args p "attack" "id")))))))))
+          (is (= [7] (distinct (call-args p "attack" "id"))) "a pen kill needs no search: priced cheaper than the wild cow"))))))
 
 (deftest get-food-walks-to-its-own-pen-out-of-sight
   (async done
