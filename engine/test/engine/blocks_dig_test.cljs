@@ -444,14 +444,14 @@
                          (assoc "3,68,0" "dirt"))
               env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false} 20))
+              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false :worth 10} 20))
               {:keys [price worth]} (:roof-kept r)]
           (is (= [:unreachable [3 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (< worth price) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 
-;; the same room and slab, the caller's goal worth more than the shelter: the holder decides, so the roof is dug through
-(deftest a-roof-whose-shelter-is-worth-less-than-the-goal-is-dug-through
+;; the same room and slab, a root call (worth ##Inf) and no other way: the roof is dug through
+(deftest a-roof-with-no-other-way-is-dug-through-at-the-roots-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -461,9 +461,33 @@
                          (assoc "3,68,0" "dirt"))
               env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (tu/child-outcome (:eng env) job {:pos [3 68 0] :pillar false :worth 1e9} 60))]
-          (is (nil? (:roof-kept (:cause (:ending r)))) (pr-str r))
-          (is (seq (calls (:p env) "dig"))))))))
+              r (await (tu/child-outcome (:eng env) job {:pos [3 68 0] :pillar false} 60))]
+          (is (= {:dug true} (select-keys r [:dug])) (pr-str r))
+          (is (= [3 65 0] (some-> (first (calls (:p env) "dig")) .-args .-pos (as-> v [(.-x v) (.-y v) (.-z v)])))))))))
+
+;; a shut room with a door out to steps onto its roof, the dirt one over the roof (the 2e426c84 shape): a hole costs the
+;; shelter, so the walk round goes first and the roof stays whole, at the root's worth and at any worth
+(def door-room
+  (-> (merge (tu/box -6 62 -6 14 62 6 "stone") (tu/box -1 63 -2 5 65 2 "stone"))
+      (as-> m (apply dissoc m (keys (tu/box 0 63 -1 4 64 1 "air"))))
+      (assoc "5,63,0" "oak_door" "5,64,0" "oak_door" "7,63,-2" "stone" "6,64,-2" "stone" "2,67,0" "dirt")))
+
+(deftest a-roof-with-a-way-round-is-kept-whatever-the-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dig-at (fn ^:async da [extra]
+                       (let [env (setup {:self {:pos {:x 2.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks door-room
+                                         :states {"5,63,0" {:open false :half "lower" :facing "east"} "5,64,0" {:open false :half "upper" :facing "east"}}
+                                         :time 1000 :light {} :light-default [0 0]})
+                             _ (tu/seeing-all (:p env))
+                             price (b/roof-price {:engine {:warned (atom #{})} :primitives (:p env) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}} [2 65 0])
+                             r (await (tu/child-outcome (:eng env) job (merge {:pos [2 67 0]} extra) 120))]
+                         [price (:dug r) (mapv #(let [v (.-pos (.-args %))] [(.-x v) (.-y v) (.-z v)]) (calls (:p env) "dig"))]))
+              [root-price root-dug root-roof] (await (dig-at {}))
+              [_ rich-dug rich-roof] (await (dig-at {:worth 1e9}))]
+          (is (pos? root-price) "the hole costs shelter")
+          (is (= [true [[2 67 0]] true [[2 67 0]]] [root-dug root-roof rich-dug rich-roof]) "only the dirt is dug, from the roof top"))))))
 
 ;; a room reaching past the spawn-free radius in the dark is sealed but not safe: its roof hole still lets walkers in
 (deftest a-roof-over-a-sealed-dark-room-is-priced-too
@@ -481,24 +505,20 @@
           (is (= [:unreachable [0 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 
-;; the hole stays till mended, so the stay spans the night and the day whatever the hour: just after the sky turns day (tick 23700) the price is that of midday, not halved by a day counted as 0 s
-(deftest a-roof-hole-is-priced-alike-at-midday-and-just-after-dawn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [interior (keys (tu/box 0 63 -1 30 64 1 "air"))
-              tunnel (keys (tu/box 0 66 0 40 67 0 "air"))
-              blocks (-> (tu/box -3 62 -3 42 70 3 "stone")
-                         (as-> m (apply dissoc m (concat interior tunnel)))
-                         (assoc "0,68,0" "dirt"))
-              price-at (fn ^:async pa [time]
-                         (let [env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time time :light {} :light-default [0 0]})
-                               _ (tu/seeing-all (:p env))
-                               r (await (ending-cause (:eng env) job {:pos [0 68 0] :pillar false :worth 10} 40))]
-                           (:price (:roof-kept r))))
-              midday (await (price-at 6000))
-              dawn (await (price-at 23700))]
-          (is (< 0.8 (/ dawn midday) 1.25) (pr-str [midday dawn])))))))
+;; the hole stays till mended, so its price is the same at every hour: midday, either side of dusk, midnight, just after dawn
+(deftest a-roof-hole-is-priced-the-same-at-every-hour
+  (let [interior (keys (tu/box 0 63 -1 30 64 1 "air"))
+        tunnel (keys (tu/box 0 66 0 40 67 0 "air"))
+        blocks (-> (tu/box -3 62 -3 42 70 3 "stone")
+                   (as-> m (apply dissoc m (concat interior tunnel)))
+                   (assoc "0,68,0" "dirt"))
+        price-at (fn [time]
+                   (let [{:keys [p]} (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :blocks blocks :time time :light {} :light-default [0 0]})]
+                     (tu/seeing-all p)
+                     (b/roof-price {:engine {:warned (atom #{})} :primitives p :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}} [0 65 0])))
+        prices (mapv price-at [6000 12500 12600 18000 23700])]
+    (is (pos? (first prices)) (pr-str prices))
+    (is (apply = prices) (pr-str prices))))
 
 ;; the same slab with rock over it: the hole opens onto nothing, the ore over it is worth the dig
 (deftest a-cave-ceiling-that-shelters-nothing-is-dug-through-to-an-ore-above
@@ -1025,7 +1045,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-seeing {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava" "2,63,1" "stone" "-2,64,3" "chest"}
                                              :containers {"-2,64,3" [{:name "cobblestone" :count 5}]}})
-              result (await (tu/child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :ways #{:carried} :worth 100} 60))]
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :ways #{:carried}} 60))]
           (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
           (is (= "cobblestone" (block-at p {:x 2 :y 64 :z 1})) "the lava is sealed with a fetched block"))))))
 
@@ -1342,7 +1362,7 @@
                          (assoc "0,68,0" "dirt"))
               env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
               _ (tu/seeing-all (:p env))
-              r (await (ending-cause (:eng env) job {:pos [0 68 0]} 40))]
+              r (await (ending-cause (:eng env) job {:pos [0 68 0] :worth 10} 40))]
           (is (= [:unreachable [0 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
           (is (empty? (filter #(<= 65 (.-y (.-pos (.-args %)))) (calls (:p env) "dig"))) "the roof is not dug")
           (is (empty? (calls (:p env) "place")) "nothing is pillared"))))))

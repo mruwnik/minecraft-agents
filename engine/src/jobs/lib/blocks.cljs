@@ -200,29 +200,21 @@
   "Seconds breaking the block at cell costs in shelter lost (Q121): 0 unless it roofs the body's room (roof-over-body?) and
   that room is shut now (sh-inside/safe-room-at?, or sealed but for its dark: dark-room-at?), where the hole lets outside
   walkers in. The hole stays until mended, so the mobs spawning at the likeliest cell it opens onto (a cell not seen solid
-  counts as open) are counted over the night (night-chance; the night left when it is night) and the day (chance-at of
-  full day, stay? true; the day left, or the day after the night), priced as an opening (cost/opening-price)."
+  counts as open) are counted over one whole day and night whatever the hour (chance-at of full day with stay? true over
+  the day ticks, night-chance over the night ticks), priced as an opening (cost/opening-price)."
   [c [x y z :as cell]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)]
     (if-not (and (roof-over-body? c cell) (or (sh-inside/safe-room-at? p feet) (sh-inside/dark-room-at? p feet)))
       0
-      (let [self (.self p)
-            t (.-timeOfDay self)
-            day? (.-isDay self)
-            cycle sh-clock/night-end-tick
-            day-s (sh-clock/ticks->s (if day? (mod (- sh-clock/dusk-tick t) cycle) (- (+ cycle sh-clock/dusk-tick) sh-clock/morning-tick)))
-            night-s (if day? (sh-clock/ticks->s (- sh-clock/morning-tick sh-clock/dusk-tick)) (/ (sh-clock/ms-until-morning t) 1000))
+      (let [night-ticks (- sh-clock/morning-tick sh-clock/dusk-tick)
+            day-s (sh-clock/ticks->s (- sh-clock/night-end-tick night-ticks))
+            night-s (sh-clock/ticks->s night-ticks)
             beyond (remove #(sh-sense/solid-at? p %)
                            (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
             spawns (apply max 0 (map #(+ (* day-s (spawn-light/chance-at p % false 0 true)) (* night-s (spawn-light/night-chance p %))) beyond))
-            body (assoc (threats/death-body c) :health (.-health self))]
+            body (assoc (threats/death-body c) :health (.-health (.self p)))]
         (cost/opening-price body (cost/spawns-hurt body spawns feet) {:spawns spawns} feet)))))
-
-(defn worth-of-items
-  "A root dig's or place's worth (the engine's worth-of): getting one of names, to the body (cost/worth-to); 0 for none."
-  [c names]
-  (cost/worth-to (threats/death-body c) (keep identity names) (sh-sense/feet (:primitives c))))
 
 (defn roof-kept
   "{:cell :price :worth} when breaking cell costs more shelter (roof-price) than the call's worth (ctx/worth), else nil."

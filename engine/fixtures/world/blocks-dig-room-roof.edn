@@ -1,10 +1,10 @@
-;; Q121: breaking the roof over the body's room is priced, the shelter lost (jobs.lib.blocks/roof-price: the mobs the
-;; hole lets in while the body stays), against what the dig is worth (a root call's worth-of: the drops'). A body shut in a stone
-;; room (air x 14..18, z 14..18, y 0..1, roof y 2, rock to y 5, unseen over the roof: open dark at the worse case) is
-;; asked for dirt over the roof: the shelter costs more than the dirt, so the roof is neither tunnelled through
-;; (:pillar false) nor pillared into (default); the dig ends :unreachable with :roof-kept. Old code had no :roof-kept.
-;; With a doorway out to the plot the room is no shelter (not sealed): nothing to lose, the roof is dug through (old
-;; code: :unreachable).
+;; Q121: breaking the roof over the body's shut room costs its shelter (jobs.lib.blocks/roof-price: the mobs the hole
+;; lets in over a day and a night). A body shut in a stone room (air x 14..18, z 14..18, y 0..1, roof y 2, rock to y 5,
+;; unseen over the roof: open dark at the worse case) is asked for dirt over the roof. The walk goes first; with no way
+;; out, the roof is dug through unless its price is over the call's :worth: at :worth 10 it is neither tunnelled
+;; (:pillar false) nor pillared into (default), the dig ends :unreachable with :roof-kept; at the root's worth (none
+;; given) it is dug through. With a door out to steps onto the roof (card 2e426c84's shape), the walk round reaches the
+;; dirt and the roof stays whole. With a doorway out the room is no shelter: nothing to lose, the roof is dug through.
 {:defaults
  {:tags [:blocks :access] :time :any
   :plot {:height 10}
@@ -14,16 +14,29 @@
  :cases
  [{:name "a-roof-whose-shelter-is-worth-more-than-the-dirt-over-it-is-not-tunnelled"
    :blocks [[:set [16 3 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false :worth 10})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:block [16 2 16] "stone"] [:block [16 3 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
   {:name "a-pillar-does-not-start-under-a-roof-whose-shelter-is-worth-more-than-the-dirt"
    :blocks [[:set [16 4 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 4 16]})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 4 16] :worth 10})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:block [16 2 16] "stone"] [:block [16 4 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
+  {:name "a-root-dig-with-no-other-way-digs-through-the-roof"
+   :blocks [[:set [16 3 16] "dirt"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [16 2 16] "air"] [:block [16 3 16] "air"]]}
+  {:name "a-root-dig-walks-round-by-the-door-and-keeps-the-roof"
+   :blocks [[:fill [12 3 12] [20 5 20] "air"] [:fill [20 0 16] [20 1 16] "air"]
+            [:set [19 0 16] "oak_door[facing=east,half=lower,hinge=left,open=false]"]
+            [:set [19 1 16] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
+            [:set [22 0 13] "stone"] [:set [21 1 13] "stone"] [:set [16 4 16] "dirt"]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 4 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:block [16 2 16] "stone"] [:block [16 4 16] "air"]]}
   {:name "an-open-rooms-roof-is-dug-through-to-the-dirt-over-it"
    :blocks [[:fill [19 0 16] [20 1 16] "air"] [:set [16 3 16] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
