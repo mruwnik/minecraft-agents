@@ -131,7 +131,7 @@
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 60))]
           (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings")
-          (is (< 5 (count (distinct (map #(js->clj (.-args %)) (h/calls (:p s) "look"))))) "more than five distinct look directions: priced, not cut off after five cells: priced, not cut off after five"))))))
+          (is (< 5 (count (distinct (map #(js->clj (.-args %)) (h/calls (:p s) "look"))))) "more than five distinct look directions: priced, not cut off after five cells"))))))
 
 (defn aged-run
   "A herd run with the gate aged to unknown (seeing), after f was applied to the setup."

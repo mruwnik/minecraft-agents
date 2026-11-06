@@ -339,7 +339,7 @@
     {:cursor [0.5 0.5 0.5]}
     {:against [2 62 0] :cursor [0.5 1 0.5]}
     {:against [2 63 0] :cursor [0.5 1.5 0.5]}
-    {:against [2 63.5 0] :cursor [0.5 1 0.5]}))
+    {:against [2.5 63.5 0] :cursor [0.5 1 0.5]}))
 
 (deftest a-click-without-a-cursor-aims-at-the-middle-of-the-face-toward-the-cell
   (let [env (bd/setup {:self body})
