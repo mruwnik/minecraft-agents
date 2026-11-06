@@ -18,7 +18,8 @@
             [jobs.lib.shelter.inside :as inside]
             [jobs.lib.part-cut :as part-cut]
             [jobs.lib.trees :as trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.walk.plan :as wplan]))
 
 (defn gate-opts [c]
   {:except (:for-plan (:args c)) :own-plans-ok? (false? (access/spare-own-builds))})
@@ -175,19 +176,24 @@
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
   of the column's foot (3 when that has no path: the foot may be the trunk itself). When the cell under the foot is
-  unseen the trunk may go on down, and when it is air the log hangs (cut below), so the walk aims at the column's ground
-  (go-to's column goal), not at that height: no walk reaches a cell in the air.
+  unseen the trunk may go on down, when it is air the log hangs (cut below), and when go-to proves no cell within 3 of
+  the foot stands (a log off the base's column: its foot at the base's height lies in the trunk or the crown), the
+  walk aims at the column's ground (go-to's column goal), not at that height. A range go-to proves no stand within is
+  not walked: such a walk gives up at once.
   :there, :partial or :blocked."
   [c pos base-y]
   (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
-    (let [foot (if (let [under (trees/seen-name (:primitives c) {:x (:x pos) :y (dec base-y) :z (:z pos)})]
-                     (or (nil? under) (contains? bs/air under)))
-                 (select-keys pos [:x :z])
-                 (assoc pos :y base-y))
-          w (await (walk-near! c foot 2))]
-      (if (= :blocked w)
-        (await (walk-near! c foot 3))
+    (let [cell (assoc pos :y base-y)
+          under (trees/seen-name (:primitives c) (update cell :y dec))
+          ranges (cond
+                   (or (nil? under) (contains? bs/air under)) nil
+                   (not (wplan/no-stand-near? c cell 2 nil)) [2 3]
+                   (not (wplan/no-stand-near? c cell 3 nil)) [3])
+          [foot ranges] (if ranges [cell ranges] [(select-keys pos [:x :z]) [2 3]])
+          w (await (walk-near! c foot (first ranges)))]
+      (if (and (= :blocked w) (second ranges))
+        (await (walk-near! c foot (second ranges)))
         w))))
 
 (defn log-dig-args

@@ -59,7 +59,7 @@
   explore, a search that ran out of loaded land walks to its frontier (walk/plan-walk! :frontier). With budget, at most
   that many expansions of search (walk/plan-walk! :budget): the plan may be status \"searching\" (walk nowhere, the
   search goes on at the next call) or a walk to where an unfinished search has got to (never, with progress false).
-  With budget, each plan's search is an info :planned event {:ms :status :sprint :why :nodes} (:sprint: whether the policy lets the plan sprint; nodes only once the search is over); with the head under water also :oxygen (0-20) and :swim-steps (the plan's swimming steps).
+  With budget, each plan's search is an info :planned event {:ms :status :sprint :why :nodes} (:sprint: whether the policy lets the plan sprint; nodes only once the search is over), with a :why that judges the goal alone (goal-not-standable, goal-on-magma) also its :goal [x y z], :range and :goal-block (the seen block there); with the head under water also :oxygen (0-20) and :swim-steps (the plan's swimming steps).
   With dangers, each plan costs the dangers the body knows of now (jobs.lib.threats/planner-dangers): it keeps away from them.
   With dark (default: unless false), each plan costs dark cells more by the hp a zombie would cost the kit, up to twice a lit cell unarmed (wworld/with-dark: look/dark-fn).
   With avoid (a set of [x y z] cells), each plan costs entering them much more (wworld/with-avoid): a way round is taken when there is one.
@@ -83,6 +83,7 @@
           (ctx/emit! c :planned :info (cond-> {:ms (js/Math.round (or (:ms plan) 0)) :status (:status plan) :sprint (boolean (:sprint policy))
                                                  :moves (move-runs (:steps plan))}
                                         (some-> r .-reason) (assoc :why (.-reason r))
+                                        (#{"goal-not-standable" "goal-on-magma"} (some-> r .-reason)) (assoc :goal (vec to) :range range :goal-block (u/seen-name (:primitives c) (zipmap [:x :y :z] to)))
                                         (some-> r .-expanded) (assoc :nodes (.-expanded r))
                                         (breath/head-under? (:primitives c)) (assoc :oxygen (.-oxygen (.self (:primitives c)))
                                                                                    :swim-steps (count (filter :swim (:steps plan))))))))

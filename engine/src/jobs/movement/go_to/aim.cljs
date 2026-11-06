@@ -59,10 +59,9 @@
     (column/aim (:primitives c) goal (tuning/y-slack) (js/Math.floor (:y (u/self-pos c))) (not unknown))))
 
 (defn not-standable?
-  "Whether the planner answers goal-not-standable for pos alone (no search, wplan/goal-stand-problem)."
+  "Whether the planner answers goal-not-standable for pos alone (wplan/no-stand-near?)."
   [c pos]
-  (let [pw (wworld/path-world (:primitives c) (:unknown c))]
-    (boolean (and pw (= :goal-not-standable (wplan/goal-stand-problem c pw [(:x pos) (:y pos) (:z pos)] (:range (:args c) 1)))))))
+  (wplan/no-stand-near? c pos (:range (:args c) 1) (:unknown c)))
 
 (defn seen-stand-within?
   "Whether a cell within r0 (at most column/approach-range) of the cell [x y z] stands by the cells the body has seen

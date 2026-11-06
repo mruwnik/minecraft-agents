@@ -1,0 +1,20 @@
+;; Card 63d30ee7: a base on a branch put the walk to a lower trunk log at the branch's height, inside the crown, where go-to
+;; proves no cell stands: each walk gave up at once goal-not-standable (KitOak94, 12-24 in a row). Tree: 15 logs at x 16, z 16
+;; (y 0..14) in a crown of persistent leaves (y 9..15), a branch log at [17 8 16] over air. fell-tree :at the branch commits it
+;; as the base; the lowest log of the tree is the trunk's foot [16 0 16], 8 below, too deep for go-to's y-slack to re-aim.
+;; Should-succeed: the first log is dug with no walk go-to refuses at once (the walk aims at the trunk column's ground).
+;; Fails on the old code: approach! aimed at [16 8 16] (the cell under it a seen log), go-to answered goal-not-standable.
+{:defaults
+ {:tags [:forestry :fell-tree] :time :any
+  :plot {:height 24 :floor "grass_block"}
+  :blocks [[:fill [16 0 16] [16 14 16] "oak_log"]
+           [:fill [13 9 13] [19 15 19] "oak_leaves[persistent=true]"]
+           [:fill [16 9 16] [16 14 16] "oak_log"]
+           [:set [17 8 16] "oak_log"]]
+  :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "a-branch-base-walks-to-the-trunk-ground-not-into-the-crown"
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [17 8 16]})]]
+   :expect [{:event {:source :job :kind :tidy.dug :data {:cell [16 0 16]}} :within-s 80}
+            {:no-event {:source :job :kind :planned :data {:why "goal-not-standable"}} :for-s 80 :until {:source :job :kind :tidy.dug}}]}]}

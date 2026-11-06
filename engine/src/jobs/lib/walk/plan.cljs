@@ -90,6 +90,13 @@
     (when (.step s 0)
       (#{:goal-not-standable :goal-on-magma} (keyword (.-reason ^js (.result s)))))))
 
+(defn no-stand-near?
+  "Whether go-to gives a walk to within range of pos ({:x :y :z}) up at once, goal-not-standable (goal-stand-problem over
+  the seen world, unknown as wworld/path-world takes it): a caller choosing a walk goal asks this, not a test of its own."
+  [c pos range unknown]
+  (let [pw (wworld/path-world (:primitives c) unknown)]
+    (boolean (and pw (= :goal-not-standable (goal-stand-problem c pw [(:x pos) (:y pos) (:z pos)] range))))))
+
 (defn with-drops
   "options (the planner's, a JS object) with the policy's :drop-cost: a number is the planner's costs.dropFactor (nil: as
   it is), false takes no drop of 2 or 3 (maxDrop 1). The policy's :max-drop is maxDrop, its :fall-factor fallFactor, and

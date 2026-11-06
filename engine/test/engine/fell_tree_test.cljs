@@ -845,3 +845,42 @@
               (is (= :condition-failed (:kind (:ending out))))
               (is (= :logs-left (get-in out [:ending :cause :reason])))
               (is (= 2 (get-in out [:ending :cause :left])) "3 logs dug, 1 collected"))))))))
+
+(def crowned-trunk
+  "A trunk at x 6 z 0 (logs y 64-76) in a solid crown of leaves (y 66-76, 3 round it) over dirt: no cell within 3 of a
+  trunk cell at y 69 stands, nor one within go-to's y-slack of it in its column."
+  (merge (into {} (for [x (range 3 10) z (range -3 4)] [(str x ",63," z) "dirt"]))
+         (into {} (for [x (range 3 10) y (range 66 77) z (range -3 4)] [(str x "," y "," z) "oak_leaves"]))
+         (into {} (for [y (range 64 77)] [(str "6," y ",0") "oak_log"]))))
+
+(deftest a-log-whose-foot-at-the-base-height-has-no-stand-is-walked-to-by-its-column
+  ;; KitOak94: a base on a branch put the foot of a lower trunk log inside the crown, and each walk there gave up at once
+  ;; goal-not-standable. Old code aimed at {:x 6 :y 69 :z 0} (the cell under it is a log), twice.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks crowned-trunk} {})
+              walks (atom [])
+              ends (atom [])
+              call! ctx/call
+              job (tu/ready {:round (fn ^:async approach-round [c] (let [w (await (log/approach! c {:x 6 :y 67 :z 0} 69))]
+                                                       (if (= :partial w) :continue (ctx/end c :done {:w w}))))})]
+          (with-redefs [ctx/call (fn ^:async spy [c k job & [args :as more]]
+                                   (when (= :walk k) (swap! walks conj (:pos args)))
+                                   (let [e (await (apply call! c k job more))]
+                                     (when (= :walk k) (swap! ends conj (get-in e [:data :why])))
+                                     e))]
+            (await (tu/child-outcome eng job {} 200)))
+          (is (seq @walks))
+          (is (nil? (:y (first @walks))) "the walk aims at the column, not at a height go-to proves has no stand")
+          (is (not-any? #{:goal-not-standable} @ends) "no walk is asked for that go-to refuses at once"))))))
+
+(deftest a-walk-to-a-cell-with-no-stand-near-names-the-goal-in-its-planned-event
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (fm/start {:blocks crowned-trunk} {})]
+          (await (tu/child-outcome eng 'jobs.movement.go-to {:pos {:x 6 :y 69 :z 0} :range 2} 60))
+          (is (= [{:goal [6 69 0] :range 2 :goal-block "oak_log"}]
+                 (into [] (comp (filter #(and (= :planned (:kind %)) (= "goal-not-standable" (:why %)))) (map #(select-keys % [:goal :range :goal-block])) (take 1)) @seen))
+              "the live log names the cell go-to refused and what is there"))))))
