@@ -13,6 +13,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.need :as need]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.blocks :as b]
@@ -941,6 +942,19 @@
     (is (nil? (route [] (delay 60))) "a pickaxe dearer to get than the route is worth is no way to tunnel")
     (is (seq (route [{:name "wooden_pickaxe" :count 1}] nil)) "a wooden pickaxe tunnels 12 blocks")
     (is (seq (route [{:name "stone_pickaxe" :count 1}] nil)) "a stone pickaxe tunnels 12 blocks")))
+
+(deftest the-pickaxe-fetch-price-is-asked-once-while-the-body-and-its-world-hold
+  (let [asked (atom 0)
+        p (tu/fake {:blocks (box 0 60 -1 4 70 1 "stone") :inventory []})
+        price (fn [p] @(choose/pickaxe-fetch {:primitives p} true))]
+    (with-redefs [need/item-price (fn [& _] (swap! asked inc) 7)]
+      (is (= [7 7] [(price p) (price p)]))
+      (is (= 1 @asked) "a second quote and round read the price the first made")
+      (price (tu/fake {:blocks (box 0 60 -1 4 70 1 "stone") :inventory [{:name "oak_log" :count 3}]}))
+      (is (= 2 @asked) "another body asks again")
+      (swap! (fake/state p) update :inventory fake/add-to "oak_log" 3)
+      (price p)
+      (is (= 3 @asked) "carrying logs now changes what a pickaxe costs"))))
 
 (deftest a-pocket-floor-seen-only-from-inside-is-no-bar-when-floors-unseen-are-ok
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
