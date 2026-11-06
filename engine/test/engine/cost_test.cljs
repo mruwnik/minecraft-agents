@@ -1019,6 +1019,16 @@
                ["a 2x2 trunk's top log, leaves over it" 0 {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] #js {:name "dark_oak_leaves"}}]
                ["a branch log under leaves" 0 {[0 64 0] (log "x") [1 64 0] (log "x") [0 65 0] #js {:name "oak_leaves"}}]
                ["1x1 trunks grown together" 0 {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y") [0 65 1] (log "y")}]
+               ["a wall of upright logs, bare tops" place {[0 64 0] (log "y") [0 65 0] (log "y") [1 64 0] (log "y") [1 65 0] (log "y")
+                                                           [0 66 0] #js {:name "air"} [1 66 0] #js {:name "air"} [-1 65 0] #js {:name "air"}
+                                                           [0 65 1] #js {:name "air"} [0 65 -1] #js {:name "air"} [2 65 0] #js {:name "air"}
+                                                           [1 65 1] #js {:name "air"} [1 65 -1] #js {:name "air"}}]
+               ["a 2x2 dark-oak trunk, leaves on its top" 0 {[0 64 0] (log "y") [0 65 0] (log "y") [1 64 0] (log "y") [1 65 0] (log "y")
+                                                              [0 66 0] #js {:name "dark_oak_leaves"} [1 66 0] #js {:name "air"} [-1 65 0] #js {:name "air"}
+                                                              [0 65 1] #js {:name "air"} [0 65 -1] #js {:name "air"} [2 65 0] #js {:name "air"}
+                                                              [1 65 1] #js {:name "air"} [1 65 -1] #js {:name "air"}}]
+               ["a single bare trunk, top seen" 0 {[0 64 0] (log "y") [0 65 0] (log "y") [0 66 0] #js {:name "air"} [1 65 0] #js {:name "air"} [-1 65 0] #js {:name "air"}
+                                                    [0 65 1] #js {:name "air"} [0 65 -1] #js {:name "air"}}]
                ["a bare horizontal log" place {[0 64 0] (log "x")}]
                ["a 2x2 of logs beside a pane" place {[0 64 0] (log "y") [0 64 1] (log "y") [0 65 0] (log "y") [1 64 0] #js {:name "glass_pane"}}]]]
         (is (= expected (price sensed [0 64 0])) what)))

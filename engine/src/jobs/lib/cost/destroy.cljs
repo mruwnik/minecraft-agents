@@ -47,17 +47,30 @@
 (defn placed-log?
   "True when the tree wood at cell looks placed: a built block (planks, glass, doors...) touching it, or, with no leaves
   touching it and no vertical log stacked on or under a vertical one, a horizontal axis or a log beside it in a horizontal
-  line. Leaves and stacked trunks mark a tree (2x2 trunks, branches, trunks grown together). (sensed cell) is a sensed
-  block or nil."
+  line. Leaves and stacked trunks mark a tree (2x2 trunks, branches, trunks grown together), unless a stacked vertical
+  log has a vertical log of its wood beside it and both columns end in a seen leafless top (a wall of upright logs; an
+  unseen top stays natural). (sensed cell) is a sensed block or nil."
   [sensed [x y z]]
   (let [name-at (fn [c] (let [b (sensed c)] (when-not (or (nil? b) (true? (.-unknown b))) (.-name b))))
         props (some-> (sensed [x y z]) .-properties)
         vertical? (not (contains? #{"x" "z"} (some-> props .-axis)))
         side [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]
         up-down [[0 1 0] [0 -1 0]]
-        at (fn [[dx dy dz]] (name-at [(+ x dx) (+ y dy) (+ z dz)]))]
+        at (fn [[dx dy dz]] (name-at [(+ x dx) (+ y dy) (+ z dz)]))
+        own (name-at [x y z])
+        vertical-log? (fn [c] (let [b (sensed c)]
+                                (and (= own (name-at c)) (not (contains? #{"x" "z"} (some-> b .-properties .-axis))))))
+        bare-top? (fn [[cx cy cz]]
+                    (let [[tx ty tz] (loop [k cy] (if (vertical-log? [cx k cz]) (recur (inc k)) [cx (dec k) cz]))
+                          around (map (fn [[dx dy dz]] (sensed [(+ tx dx) (+ ty dy) (+ tz dz)])) (cons [0 1 0] side))]
+                      (and (every? #(and % (not (true? (.-unknown %)))) around)
+                           (not-any? #(re-find #"leaves$" (.-name %)) around))))
+        wall? (and vertical?
+                   (some (fn [[dx _ dz]] (let [c [(+ x dx) y (+ z dz)]] (and (vertical-log? c) (bare-top? c)))) side)
+                   (bare-top? [x y z]))]
     (boolean
      (or (some #(some->> (at %) (re-find built-block)) (concat side up-down))
+         wall?
          (and (not-any? #(some->> (at %) (re-find #"leaves$")) (concat side up-down))
               (not (and vertical? (some #(rules/tree-wood? (at %)) up-down)))
               (or (not vertical?)
