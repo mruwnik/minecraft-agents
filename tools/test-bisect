@@ -7,6 +7,7 @@
 # A busy step (75) is retried up to TEST_BISECT_BUSY_RETRIES times (default 30, same sleep); a commit that still cannot be run is never named: INCONCLUSIVE, exit 1.
 # Steps at commits before ef81c1c6 (retired 2-slot `compile` kind, no idle exit) run under main's res-slot `server` slot and stop their servers at the step's end (their own nested `compile` slot is made a no-op with a private RES_SLOT_DIR and a floor-less RES_SLOT_CONFIG); later commits are untouched.
 # The per-step explicit compile stays: test-engine passes a compile failure on as a plain exit 1, which would score bad.
+# The good end is tested first; a failure or skip there is INCONCLUSIVE, exit 3.
 # Defaults: bad = HEAD, good = HEAD~20. Prints the first bad commit, its failing tests and the step count. TEST_EVENTS=1: @@test plan, phase, result and progress lines per step and a verdict result.
 # The worktree (and its shadow servers) is removed on exit, error, INT and TERM.
 # Why not JS: a thin shell wrapper around git bisect, like tools/test-engine.
@@ -123,6 +124,16 @@ while true; do
   cat "$work/setup.log" >&2; echo "test-bisect: worktree setup failed" >&2; exit 2
 done
 cd "$wt" || exit 2
+# git bisect trusts the good end; a test already red there would name the commit after it
+git checkout -q --detach "$good_sha" || exit 2
+if ! BISECT_OUT= BISECT_WORK="$work" "$self" --step "${nss[@]}"; then
+  gshort="$(git rev-parse --short "$good_sha")"
+  result "INCONCLUSIVE good end $gshort" error "the tests do not pass at the good rev"
+  echo "INCONCLUSIVE: the tests do not pass at the good rev $gshort (failed, skipped or never ran), so no first bad commit can be named; pick an older good rev"
+  exit 3
+fi
+rm -f "$work/steps"
+git checkout -q --detach "$bad_sha" || exit 2
 git bisect start "$bad_sha" "$good_sha" >/dev/null || exit 2
 echo "test-bisect: ${nss[*]} between $(git rev-parse --short "$good_sha") (good) and $(git rev-parse --short "$bad_sha") (bad)"
 # the steps write their step and @@test lines straight to this stdout (a free fd); run.log keeps only the bisect's own output

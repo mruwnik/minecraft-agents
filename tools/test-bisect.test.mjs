@@ -52,9 +52,9 @@ test('finds the first bad commit, skips a compile-broken one, removes the worktr
 test('adjacent revs: the bad rev itself is the answer (never tested during the bisect, so its failures are collected afterwards)', () => {
   const { d, shas } = fakeRepo()
   try {
-    const r = run(d, ['engine.a-test', '--good', shas[4], '--bad', shas[5]])
+    const r = run(d, ['engine.a-test', '--good', shas[2], '--bad', shas[3]])
     assert.equal(r.status, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[5]} c5 after`))
+    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[3]} c3 culprit`))
     assert.match(r.stdout, /FAIL in \(a-test\)/)
     assert.equal(sh(d, 'git', 'worktree', 'list').split('\n').length, 1)
   } finally { rmSync(d, { recursive: true, force: true }) }
@@ -157,9 +157,9 @@ test('adjacent revs with test-engine always busy: inconclusive, never FIRST BAD,
 test('a busy test-engine step is retried, then gives its verdict', () => {
   const { d, shas } = fakeRepo()
   try {
-    const r = run(d, ['engine.a-test', '--good', shas[4], '--bad', shas[5]], { FAKE_TE_BUSY_N: '2', TEST_BISECT_BUSY_RETRIES: '5', TEST_BISECT_RETRY_SLEEP: '0' })
+    const r = run(d, ['engine.a-test', '--good', shas[2], '--bad', shas[3]], { FAKE_TE_BUSY_N: '2', TEST_BISECT_BUSY_RETRIES: '5', TEST_BISECT_RETRY_SLEEP: '0' })
     assert.equal(r.status, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[5]} c5 after`))
+    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[3]} c3 culprit`))
     assert.match(r.stdout, /FAIL in \(a-test\)/)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
@@ -167,9 +167,9 @@ test('a busy test-engine step is retried, then gives its verdict', () => {
 test('a busy compile (75) is retried, then gives its verdict', () => {
   const { d, shas } = fakeRepo()
   try {
-    const r = run(d, ['engine.a-test', '--good', shas[4], '--bad', shas[5]], { FAKE_COMPILE_BUSY_N: '2', TEST_BISECT_BUSY_RETRIES: '5', TEST_BISECT_RETRY_SLEEP: '0' })
+    const r = run(d, ['engine.a-test', '--good', shas[2], '--bad', shas[3]], { FAKE_COMPILE_BUSY_N: '2', TEST_BISECT_BUSY_RETRIES: '5', TEST_BISECT_RETRY_SLEEP: '0' })
     assert.equal(r.status, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[5]} c5 after`))
+    assert.match(r.stdout, new RegExp(`FIRST BAD: ${shas[3]} c3 culprit`))
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
 
@@ -310,5 +310,16 @@ test('TEST_EVENTS=1: the plan comes first, before the worktree is set up, and a 
     const phases = ev.filter((e) => e.event === 'phase').map((e) => e.name)
     assert.match(phases[0], /^worktree: setting up/)
     assert.ok(phases.some((p) => /^worktree: waiting for a free server slot/.test(p)), phases.join('|'))
+  } finally { rmSync(d, { recursive: true, force: true }) }
+})
+
+test('a good rev that already fails is inconclusive (exit 3), never the next commit named first bad', () => {
+  const { d, shas } = fakeRepo()
+  try {
+    const r = run(d, ['engine.a-test', '--good', shas[3], '--bad', shas[5]])
+    assert.equal(r.status, 3, r.stdout + r.stderr)
+    assert.match(r.stdout, /INCONCLUSIVE: the tests do not pass at the good rev/)
+    assert.doesNotMatch(r.stdout, /FIRST BAD/)
+    assert.equal(sh(d, 'git', 'worktree', 'list').split('\n').length, 1)
   } finally { rmSync(d, { recursive: true, force: true }) }
 })
