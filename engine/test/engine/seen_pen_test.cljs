@@ -9,7 +9,9 @@
             [engine.hostile-test :as h]
             [engine.perception :as perception]
             [engine.test-util :as tu]
+            [jobs.animals.herd-pen :as hp]
             [jobs.animals.herd-survey :as hs]
+            [jobs.lib.cost :as cost]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.memory-age :as memory-age]
             [jobs.lib.pen :as pen]
@@ -129,7 +131,7 @@
               _ (ht/submit! s {:target 1})
               _ (await (ht/run-ticks s 60))]
           (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings")
-          (is (< 5 (count (h/calls (:p s) "look"))) "the looks are priced, not cut off after five cells"))))))
+          (is (< 5 (count (distinct (map #(js->clj (.-args %)) (h/calls (:p s) "look"))))) "more than five distinct look directions: priced, not cut off after five cells: priced, not cut off after five"))))))
 
 (defn aged-run
   "A herd run with the gate aged to unknown (seeing), after f was applied to the setup."
@@ -212,3 +214,18 @@
 (deftest only-a-no-approach-refusal-looks-at-an-approach-cell
   (with-redefs [ctx/mem (constantly {})]
     (is (nil? (hs/unseen-approach {:primitives #js {:sensedAt (fn [_] #js {:unknown true})}} {:why :other :cell [5 64 5]})))))
+
+(defn ^:async looked-cell
+  "unseen-cell!'s pick for one unseen leak at [5 64 0] and an animal worth `worth` seconds."
+  [worth]
+  (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :args {:mob "cow"}}]
+    (with-redefs [cost/animal-find-worth (constantly worth)
+                  ctx/worth (constantly ##Inf)]
+      (await (hp/unseen-cell! c {:leaks [{:why :unloaded :pos [5 64 0]}]} #{})))))
+
+(deftest the-look-at-an-unseen-pen-cell-is-priced-by-the-animals-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= [5 64 0] (some-> (await (looked-cell 1e6)) vec)) "a dear animal: the cell is looked at")
+        (is (nil? (await (looked-cell 0))) "an animal worth under its trip: no look pays")))))
