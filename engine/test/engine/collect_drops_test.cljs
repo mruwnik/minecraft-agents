@@ -576,6 +576,17 @@
           (let [result (await (tu/child-outcome eng job {:radius 8} 60))]
             (is (some #(and (= :child_started (:kind %)) (= :pillar (:slot %))) @seen) "the body pillared up to the niche")))))))
 
+(deftest a-drop-in-a-wall-niche-one-above-the-feet-is-walked-to-from-the-room-beside-its-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [y (range 64 67) z [-1 0 1]] [(str "3," y "," z) "stone"]))
+              {:keys [eng p]} (bd/setup {:self body :blocks (assoc wall "3,65,0" "air")})]
+          (drop! p [3 65 0] "cobblestone")
+          (seen-from-above! p)
+          (let [result (await (tu/child-outcome eng job {:radius 8} 40))]
+            (is (empty? (:left result)) "the walk to the niche's floor block finds the room cell beside it")))))))
+
 (deftest a-drop-picked-up-while-the-collect-action-answers-unreachable-is-collected-not-left
   (async done
     (tu/run-async done

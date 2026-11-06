@@ -49,7 +49,7 @@
   A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar way (and :stair with :dig), then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the cheapest dig route (jobs.lib.dig-route
   priced as go-to's, over the blocks the body has seen, an unseen one taken for stone) that opens a way to it, each a jobs.blocks.dig child (zones, claims, hazards
-  are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No way leaves the drop :no-route, and a way dearer than the drop is worth leaves it {:reason :past-worth :worth-s seconds} (:too-big when the heap was full), a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
+  are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. A drop in a wall niche one above the feet is walked to by the block under it (the room cell beside it). No way leaves the drop :no-route, and a way dearer than the drop is worth leaves it {:reason :past-worth :worth-s seconds} (:too-big when the heap was full), a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   With :near, a sweep that sees no drop first looks at that spot, and climbs to it (go-to :pillar/:stair) when it lies over a block above the feet, and counts the items it picks up on the way. A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
   With :expect n, a sweep that took fewer than n waits ::expect-wait-ms and sweeps again, at most ::expect-rounds times (a drop still falling or not yet seen); the call is not done while it waits.
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
@@ -281,11 +281,20 @@
   (cond-> #{:walk :pillar :clear-seal}
     (:dig (:args c)) (conj :stair)))
 
+(defn walk-cell
+  "The cell go-to walks to for a drop: its own cell, or the solid cell it rests on when no one can stand in its own (a wall niche: the body stands beside the block under it, within pickup reach of the item, which range 1 of the niche's own cell never allows)."
+  [c item]
+  (let [[x y z :as cell] (item-cell item)
+        p (:primitives c)]
+    (if (and (not (high? c item)) (not (reach/seen-standable? p {:x x :y y :z z})) (sh-sense/solid-at? p {:x x :y (dec y) :z z}))
+      [x (dec y) z]
+      cell)))
+
 (defn ^:async walk-down!
   "Walk within a block of item, lower or higher than the feet, with go-to's drop-walk-ways (a drop in a pit or
   on a column top; go-to prices each): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
   [c item]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways (drop-walk-ways c) :worth (drops-worth c item)}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (walk-cell c item) :range 1 :ways (drop-walk-ways c) :worth (drops-worth c item)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
