@@ -1,5 +1,5 @@
 (ns agent-tools.jobs-test
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [agent-tools.fake-socket :as fake]
             [agent-tools.jobs :as jobs]
             [agent-tools.world-data :as data]
@@ -385,6 +385,12 @@
           (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine {:id "j3" :name "jobs.x" :status :running}))))
           (.then (fn [{:keys [out]}] (is (not (re-find #"reflex" (str (:hint (data/read-edn out))))) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest a-now-job-set-to-resume-after-the-reflex-is-queued-behind-it-too
+  (are [status] (re-find #"queued behind reflex :night" (str (:hint (jobs/with-hint {:mutating true} {:ok true :job {:id "j2" :status status}}
+                                                                                    {:current {:id "j9" :name "jobs.survival.night" :reflex :night}}))))
+    :queued
+    :resuming))
 
 (deftest usage-shows-the-submit-form-where-to-find-args-and-now
   (is (re-find #"\(jobs\.movement\.go-to \{:pos" jobs/usage))

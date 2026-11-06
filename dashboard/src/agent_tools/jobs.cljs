@@ -302,9 +302,11 @@
   (str "queued: the body is logged out (" (some-> by name) (when why (str " " (name why)))
        (some->> (observe-status/back-text back-at (js/Date.now)) (str ", back about ")) "); the job runs after it is back"))
 
+(def waiting-turn? "Statuses of a job that has not run yet and waits for the body: listed, or set to resume once a reflex ends." #{:queued :resuming})
+
 (defn queued? [value]
-  (or (= :queued (get-in value [:job :status]))
-      (some #(= :queued (:status %)) (:items value))))
+  (or (waiting-turn? (get-in value [:job :status]))
+      (some #(waiting-turn? (:status %)) (:items value))))
 
 (defn with-hint
   "The mutation answer plus a :hint where its meaning is easily misread: a cancel/retry of a job that is gone, a queued job
