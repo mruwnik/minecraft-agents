@@ -127,10 +127,22 @@
   [dy]
   (cond (zero? dy) :level (pos? dy) :up (= -1 dy) :down :else :drop))
 
+(defn prior-kind
+  "The key of cost/floor-absent-chance's prior and a call's floor counts for a step of rise dy: rise-kind, a :drop of 4 to 7
+  blocks :drop-4 and of 8 or more :drop-8 (a deeper floor is likelier none)."
+  [dy]
+  (let [kind (rise-kind dy)]
+    (cond (not= :drop kind) kind (< dy -7) :drop-8 (< dy -3) :drop-4 :else :drop)))
+
+(defn step-rise
+  "The rise in blocks of steps' step i from the step before (none before i 0: 0)."
+  [steps i]
+  (js/Math.round (- (:y (nth steps i)) (:y (get steps (dec i) (nth steps i))))))
+
 (defn floor-kind
   "The rise-kind of steps' step i, by its rise from the step before (none before i 0: :level)."
   [steps i]
-  (rise-kind (js/Math.round (- (:y (nth steps i)) (:y (get steps (dec i) (nth steps i)))))))
+  (rise-kind (step-rise steps i)))
 
 (defn mark-steps
   "steps with :unseen-floor on each step after the first that stands on its floor (h 0) where (unknown-floor? x y z) of

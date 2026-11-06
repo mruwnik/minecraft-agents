@@ -14,7 +14,7 @@
   priced by cost/turn-back-cost, its look a peek over a drop or an aim (cost/walk-unknown-prices), its walk back the blocks
   from the plan's start to its takeoff (a step down goes on down to what lies under it first and climbs back out:
   cost/unseen-fall-s, whatever the call's :ways), its chance of not being there cost/floor-absent-chance of its kind
-  (wsight/floor-kind) over the call's floors of each kind found there or not (cut/floor-counts). :worth is cost/tour-worth
+  (wsight/prior-kind) over the call's floors of each kind found there or not (cut/floor-counts). :worth is cost/tour-worth
   of the goal's straight blocks at the call's start and the call's worth (ctx/worth). No second way is known when the plan is
   made: a floor not there costs, when no lower step has one either (cost/floor-dead-end-chance), the worse case of
   finding one, the tour that worth still pays for (less cost/tour-cost of the call's tour so far), whose end without one
@@ -37,10 +37,11 @@
           floors (keep-indexed (fn [i s]
                                  (when (:unseen-floor s)
                                    (let [kind (wsight/floor-kind steps i)
+                                         prior-kind (wsight/prior-kind (wsight/step-rise steps i))
                                          drop-by (js/Math.round (- (:y (steps (dec i))) (:y s)))]
                                      {:fall-s (when (#{:down :drop} kind) (cost/unseen-fall-s kind drop-by fall))
                                       :look (if (#{:down :drop} kind) peek-s aim-s) :back (get backs (max 0 (dec i)))
-                                      :p (cost/floor-absent-chance kind (get counts kind))
+                                      :p (cost/floor-absent-chance prior-kind (get counts prior-kind))
                                       :extra-s (cost/chance-times (cost/floor-dead-end-chance kind counts) left)
                                       :cell [(js/Math.floor (:x s)) (dec (js/Math.floor (:y s))) (js/Math.floor (:z s))]})))
                                steps)]

@@ -349,10 +349,12 @@
   (is (= 0.5 (cost/counted-chance {:k 0 :n 0})) "nothing counted: the uniform prior")
   (is (= 0.25 (cost/counted-chance {:k 0 :n 0 :prior [1 3]})) "a measured prior's pseudo-counts")
   (settings/with-settings {:jobs.lib.cost.value/unseen-floor-counts {:level {:absent 1 :present 3} :down {:absent 3 :present 1}
-                                                                      :up {:absent 0 :present 1} :drop {:absent 1 :present 1}}}
+                                                                      :up {:absent 0 :present 1} :drop {:absent 1 :present 1}
+                                                                      :drop-4 {:absent 3 :present 1} :drop-8 {:absent 9 :present 1}}}
     (fn []
       (is (= 0.25 (cost/floor-absent-chance :level nil)) "the measured prior of the step's kind, not the uniform one")
       (is (= 0.75 (cost/floor-absent-chance :down nil)))
+      (is (= [0.5 0.75 0.9] (mapv #(cost/floor-absent-chance % nil) [:drop :drop-4 :drop-8])) "a deeper drop's floor is likelier none")
       (is (= 0.5 (cost/floor-absent-chance :level {:absent 2})) "a call's floors of the kind seen not there raise it")
       (is (= (* 0.75 0.5 0.5) (cost/floor-dead-end-chance :level nil)) "a level floor not there: no step 1, 2 or 3 lower either")
       (is (= (* 0.8 0.5 0.5) (cost/floor-dead-end-chance :level {:down {:absent 1}})) "the call's lower floors not there raise it")))

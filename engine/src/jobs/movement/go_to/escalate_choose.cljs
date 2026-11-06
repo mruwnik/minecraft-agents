@@ -479,7 +479,7 @@
         absent-s (memoize (fn [rise]
                             (let [kind (wsight/rise-kind rise)
                                   n (if (= :drop kind) (- rise) 1)]
-                              (* (cost/floor-absent-chance kind nil)
+                              (* (cost/floor-absent-chance (wsight/prior-kind rise) nil)
                                  (max 0 (- (cost/unseen-fall-s (if (= :drop kind) :drop :down) n fall) ((:fall-s prices) n)))))))
         floor-absent-s (fn [[x y z] rise]
                          (let [a (sensed x (inc y) z)]

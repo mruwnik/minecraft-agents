@@ -78,6 +78,10 @@
   (is (= [:level :level :level :drop :level] (mapv #(ws/floor-kind road %) (range 5))) "the first step, before none: level")
   (is (= [:up :down] (mapv #(ws/floor-kind [(st 1 64 0 :start) (st 2 65 0 :walk) (st 3 64 0 :walk)] %) [1 2]))))
 
+(deftest a-drops-prior-kind-is-banded-by-its-depth
+  (is (= [:level :up :down :drop :drop :drop-4 :drop-4 :drop-8 :drop-8]
+         (mapv ws/prior-kind [0 1 -1 -2 -3 -4 -7 -8 -20]))))
+
 (deftest marks-skip-swim-steps-and-the-step-leaving-them
   (let [steps [(st 1 64 0 :start) (assoc (st 2 64 0 :swim) :swim true) (st 3 64 0 :walk) (st 4 64 0 :walk)]
         marked (ws/mark-steps steps (constantly true))]

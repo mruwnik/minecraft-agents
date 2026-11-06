@@ -1292,7 +1292,7 @@
   "f run with ::unseen-floor-counts holding each kind of kinds absent at chance p, every other kind at an even chance."
   [kinds p f]
   (settings/with-settings {:jobs.lib.cost.value/unseen-floor-counts
-                           (merge (zipmap [:level :up :down :drop] (repeat {:absent 1 :present 1})) (zipmap kinds (repeat {:absent p :present (- 1 p)})))}
+                           (merge (zipmap [:level :up :down :drop :drop-4 :drop-8] (repeat {:absent 1 :present 1})) (zipmap kinds (repeat {:absent p :present (- 1 p)})))}
     f))
 
 (deftest a-goal-over-an-unseen-floor-is-priced-over-the-chance-the-floor-is-none
@@ -1310,7 +1310,7 @@
 (deftest a-route-that-ends-in-range-short-of-the-goal-is-not-priced-over-the-goals-unseen-floor
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (hiding-with-pickaxe world #{[4 63 0]})
-        seconds (fn [absent] (absent-at [:level :up :down :drop] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf :range 2 :near [4 64 0]}))))]
+        seconds (fn [absent] (absent-at [:level :up :down :drop :drop-4 :drop-8] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s ##Inf :range 2 :near [4 64 0]}))))]
     (is (= (seconds 0.01) (seconds 0.9)) "its end stands on a seen floor")))
 
 (def drop-world
@@ -1337,8 +1337,8 @@
 (deftest a-landing-part-way-down-the-straight-dig-on-an-unseen-floor-is-priced-over-the-chance-it-is-none
   (let [world (merge (box -2 60 -2 2 80 2 "stone") (zipmap (map #(str "0," % ",0") (range 71 80)) (repeat "air")) {"0,80,0" "air" "0,81,0" "air" "0,65,0" "air" "0,64,0" "air"})
         p (hiding-with-pickaxe world #{[0 70 0]})
-        seconds (fn [absent] (absent-at [:drop] absent #(:seconds (straight-dig p [0 64 0] true {}))))]
-    (is (< (seconds 0.01) (seconds 0.9)) "the likelier the floor a 9-block fall lands on is a void (a :drop's chance), the dearer the way")
+        seconds (fn [absent] (absent-at [:drop-8] absent #(:seconds (straight-dig p [0 64 0] true {}))))]
+    (is (< (seconds 0.01) (seconds 0.9)) "the likelier the floor a 9-block fall lands on is a void (a :drop-8's chance), the dearer the way")
     (let [self (.self p)
           fall {:health (.-health self) :equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall (dig-route/body-prices p (constantly false))) :carried 0 :share (wworld/unseen-share p)}
           beyond (- (cost/unseen-fall-s :drop 9 fall) ((:fall-s (dig-route/body-prices p (constantly false))) 9))]
