@@ -142,6 +142,13 @@
     (is (= [:open] (map :end (decided "zombie"))) "a zombie at 12 blocks is out of melee reach"))
   (is (= [:other :ranged] (keys (:by-class (c/notice-report (c/notices [(saw 0 "skeleton" 12) (saw 0 "zombie" 12)])))))))
 
+(deftest a-drowned-holding-a-trident-is-ranged-and-caught-within-its-throw-range
+  (let [run (fn [held d] (c/notices [(rec 0 :saw :mob "drowned" :held held :distance d :at {:x d :y 64 :z 0}) (pos 1000 0)
+                                     (rec 1500 :decided :mob "drowned" :held held :at {:x d :y 64 :z 0})]))]
+    (is (= [:caught] (map :end (run "trident" 9))))
+    (is (= [:ranged] (keys (:by-class (c/notice-report (run "trident" 9))))))
+    (is (= [:open] (map :end (run nil 9))) "bare-handed it is melee")))
+
 (deftest a-ranged-mob-is-caught-within-its-own-kinds-range
   (let [caught (fn [mob d] (map :end (c/notices [(saw 0 mob d) (pos 1000 0) (rec 1500 :decided :mob mob :at {:x d :y 64 :z 0})])))]
     (is (= [:caught] (caught "skeleton" 14)))

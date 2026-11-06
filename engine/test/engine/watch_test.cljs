@@ -93,6 +93,11 @@
         (is (= 3 (count @looks)))
         (is (every? #(= 65.62 (:y (:pos %))) @looks))))))
 
+(deftest a-saw-event-carries-what-the-mob-holds
+  (check (fn ^:async t [] (let [{:keys [c events]} (rig {:entities [(assoc (mob 1 "creeper" 0 -6) :held "stick")]})]
+        (await (watch/watch! c {:risky? true}))
+        (is (= "stick" (:held (first @events))))))))
+
 (deftest a-creeper-behind-is-known-after-the-scan
   (check (fn ^:async t [] (let [{:keys [c p events]} (rig {:entities [(mob 1 "creeper" 0 -6)]})]
         (is (= [] (known-ids p)) "before: unseen behind")

@@ -150,6 +150,7 @@
       (ctx/remember! c :hostile entry hostile-policy)
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run :id) :text (encounter-text entry prev) :near (mapv #(.-name %) near)
                                                                        :mobs (mapv #(str (.-name %) " " (.-id %)) near))
+                                            (some? (.-held threat)) (assoc :held (.-held threat))
                                             prices (assoc :prices (update-vals prices js/Math.round))
                                             cover (assoc :cover cover)
                                             refuge-s (assoc :refuge-s refuge-s)))

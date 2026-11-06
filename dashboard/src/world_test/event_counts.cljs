@@ -138,7 +138,7 @@
         (and (str/includes? line ":kind :hostile.decided") (str/includes? line ":hostile-near"))
         (let [e (whole)]
           {:k :decided :t t :gen gen :job (root-job (get-in e [:context :job-id]))
-           :mob (get-in e [:data :mob]) :decision (get-in e [:data :decision]) :health (get-in e [:data :health]) :near (get-in e [:data :near])
+           :mob (get-in e [:data :mob]) :held (get-in e [:data :held]) :decision (get-in e [:data :decision]) :health (get-in e [:data :health]) :near (get-in e [:data :near])
            :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
 
         (str/includes? line ":kind :retreat.step-speed")
@@ -153,8 +153,8 @@
           {:k :gap :t t :gen gen :width width :run run :dy dy :sprint sprint :out out :from from})
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
-        (let [{{:keys [name distance pos id]} :data} (whole)]
-          {:k :saw :t t :gen gen :mob name :id id :distance distance :at pos})
+        (let [{{:keys [name distance pos id held]} :data} (whole)]
+          {:k :saw :t t :gen gen :mob name :held held :id id :distance distance :at pos})
 
         (and (str/includes? line ":hostile-near") (re-find held-re line))
         {:k :held :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
@@ -254,7 +254,10 @@
 
 (defn dist [a b] (js/Math.sqrt (+ (js/Math.pow (- (:x a) (:x b)) 2) (js/Math.pow (- (:y a) (:y b)) 2) (js/Math.pow (- (:z a) (:z b)) 2))))
 
-(defn ranged-mob? [mob] (threat/ranged? {:name mob}))
+(defn ranged-mob?
+  "Whether mob shoots or throws; held is the item it was seen holding (a drowned with a trident throws), nil unseen."
+  ([mob] (ranged-mob? mob nil))
+  ([mob held] (threat/ranged? {:name mob :held held})))
 
 (defn start-id [{:keys [gen job mob]}] (if (= "creeper" mob) [gen job] [gen job mob]))
 
@@ -501,8 +504,8 @@
 
 (defn reach-of
   "Blocks from the body within which mob can catch it: a ranged one by its line of fire out to its kind's threat/fire-range, any other by melee reach."
-  [mob]
-  (if (ranged-mob? mob) (threat/fire-range mob) (danger/melee-reach)))
+  [mob held]
+  (if (ranged-mob? mob held) (threat/fire-range (threat/kind {:name mob :held held})) (danger/melee-reach)))
 
 (defn exposures
   "Rows of the fixture sightings in records (sorted by :t): world fixtures that stand a body still (a notify job in place of the
@@ -529,12 +532,12 @@
   the body's position, a decision: the mob's spot) and not older than give-up-ms. A hurt from a kind catches any mob of it; a decision
   only a mob within reach-of the body."
   [records]
-  (let [row (fn [{:keys [id t0 mob s]} end] {:id id :t t0 :mob mob :s s :end end})
-        weight (fn [mob d] (if (and (ranged-mob? mob) (<= d (threat/fire-range mob))) 1 (threat/way-weight d)))
+  (let [row (fn [{:keys [id t0 mob held s]} end] (cond-> {:id id :t t0 :mob mob :s s :end end} held (assoc :held held)))
+        weight (fn [mob held d] (if (and (ranged-mob? mob held) (<= d (threat/fire-range (threat/kind {:name mob :held held})))) 1 (threat/way-weight d)))
         gain (fn [e t] (update e :s + (* (:w e) (/ (min (- t (:t e)) give-up-ms) 1000))))
-        reached? (fn [st gen t mob mob-at]
+        reached? (fn [st gen t mob held mob-at]
                    (let [p (get-in st [:last gen])]
-                     (and mob-at p (<= (- t (:t p)) pos-age-ms) (<= (dist p mob-at) (reach-of mob)))))
+                     (and mob-at p (<= (- t (:t p)) pos-age-ms) (<= (dist p mob-at) (reach-of mob held)))))
         catch (fn [st gen t mob near]
                 (let [fresh (filter #(and (= mob (:mob %)) (<= (- t (:t %)) give-up-ms)) (get-in st [:open gen] []))
                       one (when (seq fresh) (apply min-key #(if near (dist near (:at %)) 0) fresh))]
@@ -548,9 +551,9 @@
                    :saw (if (or (contains? threat/provoked-only mob) (> (:distance r) (threat/follow-range mob))
                                 (and (:id r) (contains? (get-in st [:seen gen]) (:id r))))
                           st
-                          (-> st (update-in [:seen gen] (fnil conj #{}) (:id r)) (update-in [:open gen] (fnil conj []) {:id [gen t mob] :t0 t :mob mob :at (:at r) :t t :s 0 :w (weight mob (:distance r))})))
+                          (-> st (update-in [:seen gen] (fnil conj #{}) (:id r)) (update-in [:open gen] (fnil conj []) {:id [gen t mob] :t0 t :mob mob :held (:held r) :at (:at r) :t t :s 0 :w (weight mob (:held r) (:distance r))})))
                    :hurt (reduce (fn [st mob] (catch st gen t mob (or (:at r) (get-in st [:last gen])))) st (:causes r))
-                   :decided (if (reached? st gen t mob (:at r))
+                   :decided (if (reached? st gen t mob (:held r) (:at r))
                               (catch st gen t mob (:at r))
                               st)
                    :pos (let [{gone true kept false} (group-by #(> (- t (:t %)) give-up-ms) mine)
@@ -558,7 +561,7 @@
                               {left true near false} (group-by #(> (dist r (:at %)) (threat/follow-range (:mob %))) moved)]
                           (-> st
                               (assoc-in [:last gen] r)
-                              (assoc-in [:open gen] (mapv #(assoc % :t t :w (weight (:mob %) (dist r (:at %)))) near))
+                              (assoc-in [:open gen] (mapv #(assoc % :t t :w (weight (:mob %) (:held %) (dist r (:at %)))) near))
                               (update :rows into (concat (map #(row % :gap) gone) (map #(row % :left) left)))))
                    st)))
              {:open {} :rows [] :last {}}
@@ -574,7 +577,7 @@
 
 (defn notice-report [rows]
   {:all (notice-tally rows)
-   :by-class (into (sorted-map) (map (fn [[ranged? rs]] [(if ranged? :ranged :other) (notice-tally rs)])) (group-by (comp ranged-mob? :mob) rows))
+   :by-class (into (sorted-map) (map (fn [[ranged? rs]] [(if ranged? :ranged :other) (notice-tally rs)])) (group-by #(ranged-mob? (:mob %) (:held %)) rows))
    :by-mob (into (sorted-map) (map (fn [[m rs]] [m (notice-tally rs)])) (group-by :mob rows))
    :by-case (into (sorted-map) (map (fn [[l rs]] [l (notice-tally rs)])) (group-by :label (filter :label rows)))})
 
