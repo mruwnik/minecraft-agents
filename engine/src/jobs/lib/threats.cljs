@@ -17,6 +17,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.cost.tolls :as cost-tolls]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.hide-spot :as hide-spot]
@@ -253,7 +254,7 @@
   ((stay-danger-fn c) pos stay-s worth))
 
 (defn tolls-of
-  "go-to's tolls ([{:x :y :z :factor}]) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
+  "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
   cost/threat-factor (the mob, its weight x the cell's) more a second; the dearest of one mob where it is known twice (a
   kind with no :key counts as one mob), mobs of one :key each summed, at most cost/threat-factor-cap."
   [c threats]
@@ -271,12 +272,16 @@
             mk (str (or key mob))
             v (* f (aget cell 3))]
         (when-not (>= (or (.get mobs mk) 0) v) (.set mobs mk v))))
-    (mapv (fn [^js r] {:x (.-x r) :y (.-y r) :z (.-z r) :factor (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r)))))})
-          (es6-iterator-seq (.values by-cell)))))
+    (let [^js rows (js/Array.from (.values by-cell))]
+      (cost-tolls/packed (.-length rows)
+                    (fn [i xs ys zs factors]
+                      (let [^js r (aget rows i)]
+                        (aset xs i (.-x r)) (aset ys i (.-y r)) (aset zs i (.-z r))
+                        (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r))))))))))))
 
 (defn threat-tolls
   "tolls-of the known-threats of c (those keep? holds of): go-to's price of every known mob (the planner's options.tolls).
-  Read once per check-cache window for the same threats (threat-field/shared: one vector, so walk.world/with-tolls merges
+  Read once per check-cache window for the same threats (threat-field/shared: one table, so walk.world/with-tolls merges
   it once)."
   ([c] (threat-tolls c any?))
   ([c keep?]

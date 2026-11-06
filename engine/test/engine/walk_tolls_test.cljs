@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
+            [engine.path.planner.base :as base]
             [engine.registry :as registry]
             [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
@@ -70,7 +71,8 @@
     (is (= (wworld/tolls-key tolled) (wworld/tolls-key (wworld/with-tolls pw (cost/zone-tolls [[6 64 1] [5 64 0]])))))
     (is (= 2 (.-size (.-cells (.-tolls (wplan/plan-options tolled 1 nil nil))))))
     (is (= (wworld/tolls-key tolled) (wworld/tolls-key (wworld/with-dangers tolled nil))) "other costs keep the tolls")
-    (is (= [[5 64 0 12] [6 64 1 10]] (mapv (juxt :x :y :z :factor) (wworld/tolls-key (wworld/with-tolls tolled [{:x 5 :y 64 :z 0 :factor 2}]))))
+    (is (= {(base/cell-key 5 64 0) 12 (base/cell-key 6 64 1) 10}
+           (into {} (map vec) (es6-iterator-seq (.entries (.-cells (.-tolls (wworld/with-tolls tolled [{:x 5 :y 64 :z 0 :factor 2}])))))))
         "tolls added later add to the cells already tolled")))
 
 (deftest a-failed-step-is-priced-by-its-tries-until-a-cell-round-it-changes
@@ -103,15 +105,25 @@
   (let [c (met-in-the-lake "drowned")
         tolls (threats/threat-tolls c)
         cells (set (map (juxt :x :y :z) tolls))
-        costed (fn [dangers?] (wworld/tolls-key (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? dangers?})))]
+        costed (fn [dangers?] (.-tolls (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? dangers?})))
+        planned (into {} (map vec) (es6-iterator-seq (.entries (.-cells (costed true)))))]
     (is (= (* 41 4 3) (count cells)) "every water cell of the lake, the far end 39 blocks off too")
     (is (contains? cells [40 61 8]))
     (is (not (contains? cells [1 64 4])) "the dry shore is no water")
     (is (every? #(pos? (:factor %)) tolls))
-    (is (= cells (set (map (juxt :x :y :z) (costed true)))) "go-to's costed world carries them")
+    (is (= (into {} (map (fn [{:keys [x y z factor]}] [(base/cell-key x y z) factor])) tolls) planned)
+        "go-to's costed world carries them at the same prices")
     (is (nil? (costed false)) "a walk that ignores dangers does not")
     (is (= [] (threats/threat-tolls (met-in-the-lake "zombie"))) "a hit by a land mob above near-death: no threat")
     (is (= [] (threats/threat-tolls (ready-test/ctx-of lake))) "nothing met: no tolls")))
+
+(deftest a-threat-toll-table-holds-no-row-maps-and-a-search-key-no-tolls
+  (let [c (met-in-the-lake "drowned")
+        ^js tolls (threats/threat-tolls c)
+        k (wworld/tolls-key (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true}))]
+    (is (= (* 41 4 3) (count tolls)))
+    (is (instance? js/Float64Array (.-factors tolls)) "typed arrays, not a cljs map per cell")
+    (is (and (= 3 (count k)) (every? number? k)) "the kept search's key is a fingerprint, not the merged rows")))
 
 (deftest tolls-problem-names-a-malformed-entry
   (is (nil? (wworld/tolls-problem nil)))

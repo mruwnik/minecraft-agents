@@ -10,6 +10,20 @@
   "Times its own seconds a cell of another's zone costs more to cross: a last resort, not a ban."
   10)
 
+(deftype Packed [xs ys zs factors]
+  ICounted
+  (-count [_] (.-length factors))
+  ISeqable
+  (-seq [_] (seq (map (fn [i] {:x (aget xs i) :y (aget ys i) :z (aget zs i) :factor (aget factors i)}) (range (.-length factors))))))
+
+(defn packed
+  "n tolls held as typed arrays (x y z, factor), filled by (fill! i xs ys zs factors) for each i: a mob's field tolls tens of
+  thousands of cells, a cljs map each would cost ten times the memory. Seqs as {:x :y :z :factor} each."
+  [n fill!]
+  (let [xs (js/Int32Array. n) ys (js/Int32Array. n) zs (js/Int32Array. n) factors (js/Float64Array. n)]
+    (dotimes [i n] (fill! i xs ys zs factors))
+    (->Packed xs ys zs factors)))
+
 (defn tolls
   "The :tolls arg of go-to for cells ([x y z] each, feet cells) each costing factor times its own seconds more."
   [cells factor]
