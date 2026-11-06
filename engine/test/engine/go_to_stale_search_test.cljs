@@ -289,3 +289,16 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= 2 (await (searches-for-two-plans-to-a-walled-goal! false))))))))
+
+(deftest a-kept-quote-plan-holds-its-answer-not-the-planner-phases
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (box -2 63 -2 12 63 2 "stone") :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
+          (reset! wsearch/searches {})
+          (await (walk/plan-walk! {:primitives p} (.pathWorld p) [10 64 0] 0 (walk/default-weight) {:budget 300 :quoted true}))
+          (let [kept (vals (get @wsearch/searches p))]
+            (is (= 1 (count kept)))
+            (is (every? :within kept))
+            (is (not-any? (fn [s] (some #(contains? s %) [:limited :unlimited :r])) kept) "the planner's cell maps are freed once the search is over"))
+          (reset! wsearch/searches {}))))))

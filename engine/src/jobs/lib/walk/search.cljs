@@ -89,6 +89,11 @@
                         (dissoc (get m who) k))]
              (if (empty? kept) (dissoc m who) (assoc m who kept))))))
 
+(defn finished
+  "Search s over with answer within, as kept: what go-on? and route-changed? read, not the planner phases (their cell maps and open sets)."
+  [s within]
+  (-> s (dissoc :limited :unlimited :r) (assoc :within within)))
+
 (defn route-changed?
   "Whether a cell the kept finished search's route runs through (the column from one below to two over each step, and the
   cells beside it a corner or hop reads) reads differently in pw than in the land the search planned over."
@@ -320,7 +325,7 @@
         ms (- (clock/now) t)]
     (if within
       (do (keep-search! who k (when (and quoted (not done))
-                              (assoc search :within within :quote-only (not= "found" (.-status ^js (:r within))))))
+                              (assoc (finished search within) :quote-only (not= "found" (.-status ^js (:r within))))))
           (when known (learn-known! known (:r within)))
           (assoc (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within) :ms ms))
       (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false)) #(wplan/one-way-priced? c to %1 %2 %3 true) (nearer-than-closest c to)) :fresh fresh?)

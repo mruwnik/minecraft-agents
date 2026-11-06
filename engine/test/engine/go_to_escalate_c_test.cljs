@@ -1150,6 +1150,13 @@
         (is (= :budget (choose/dig-price c [38 64 0])))
         (is (empty? @choose/kept-routes) "nothing is kept: asked at no time cost, a kept search would grow with every quote")))))
 
+(deftest a-dig-quote-of-no-running-call-that-ended-keeps-no-search
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+    (.setOwner (:primitives eng) "tx")
+    (is (not= :budget (choose/dig-price c [4 64 0])) "the search ended within its slice")
+    (is (empty? @choose/kept-routes) "an ended quote's answer is not kept under the job's quote key")))
+
 (deftest a-dig-quote-of-a-running-call-goes-on-searching
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]

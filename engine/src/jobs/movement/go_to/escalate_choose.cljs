@@ -340,6 +340,12 @@
   (let [same (fn [k] (update k 3 dissoc :bound-s))]
     (first (for [[k2 kept] (get @kept-routes id) :when (and (= (same k2) (same k)) (or (not (:ended? kept)) (nil? (:dig (:a kept)))))] [k2 kept]))))
 
+(defn answered-run
+  "The kept run of an ended search: answer a, nothing else (a closure made inside sliced-answer's swap! would share its
+  context, and with it the search fn)."
+  [a]
+  (fn [& _] [a 0 (constantly false)]))
+
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
   slice has left under max-s when given (a kept search goes on under the call's bound as it falls); :searching while it has not ended. An ended search keeps its answer only: its cell maps are freed."
@@ -351,7 +357,7 @@
            run (or (:run kept) (start))
            [a used] (if (pos? @left) (run @left max-s) [nil 0])]
        (vswap! left - used)
-       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (fn [& _] [a 0 (constantly false)]) run) :a a :ended? (or (some? a) (:ended? kept) false)})))
+       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :ended? (or (some? a) (:ended? kept) false)})))
        (vswap! asked assoc k (or a :searching))
        (or a :searching)))))
 
@@ -828,7 +834,7 @@
           opts (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :node-s (cost/search-cell-s))
           e (dig-way p feet goal (may-dig-fn c) opts)]
       (keep-routes! slice)
-      (when (and (not owner) (= :searching (:step e))) (forget-routes! quote-id))
+      (when-not owner (forget-routes! quote-id))
       (case (:step e)
         :searching (if owner :searching :budget)
         :dig-route (let [s (+ (route-s p (map :cell (:cells e)) (:own? opts) (:fetch? opts))
