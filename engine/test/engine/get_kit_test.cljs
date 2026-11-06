@@ -662,5 +662,5 @@
             (await (f/run-ticks s 1))
             (.advance (.-world (:p s)) 40)
             (when (and (< i 400) (= :not-done @(:out s))) (recur (inc i))))
-          (is (= {:status :stopped :kind :nothing-possible :reason :exposed} (select-keys @(:out s) [:status :kind :reason])))
-          (is (re-find #"jobs.gather.mine declines to start" (str (:why @(:out s))))))))))
+          (is (= {:status :stopped :kind :nothing-possible :reason :zone-exit} (select-keys @(:out s) [:status :kind :reason])) "unseen rock is priced at its measured chance of being open, so the mine starts and ends with its own refusal: it cannot get out of the zone")
+          (is (re-find #"gathering ended :zone-exit: mine could not get out of zone" (str (:why @(:out s))))))))))
