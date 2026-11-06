@@ -286,12 +286,12 @@
 (defn pickaxe-fetch
   "When fetch? (fetch-tool?): a delay of the seconds a wooden pickaxe costs to get (need/item-price under the fetch ways:
   its walk there and back with its risk under the sky now, so a long walk at night is dear), asked only when route-s
-  digs quicker with one; else nil. The price is kept per body (threat-field/shared) while its world epoch, feet cell,
-  carried items and sky hold: every quote and round of a dig search asks it."
+  digs quicker with one; else nil. The price is kept per body (threat-field/shared) while its world epoch, carried items and
+  walk-risk/body-inputs hold: every quote and round of a dig search asks it."
   [c fetch?]
   (when fetch?
-    (delay (threat-field/shared c [::pickaxe-fetch (mapv js/Math.floor (let [{:keys [x y z]} (u/self-pos c)] [x y z])) (mapv (juxt :name :count) (u/inventory (:primitives c))) (sh-sense/sky-subtract-now (:primitives c))]
-                                #(need/item-price c "wooden_pickaxe" 1 {:how need/sources} nil) (constantly 1)))))
+    (delay (threat-field/shared c [::pickaxe-fetch (hash (walk-risk/body-inputs c)) (mapv (juxt :name :count) (u/inventory (:primitives c)))]
+                                #(need/item-price c "wooden_pickaxe" 1 {:how need/sources} nil)))))
 
 (defn route-tool
   "{:s :fetch?}: the seconds digging cells ([x y z]) takes with the quickest tool carried, or with a wooden pickaxe got

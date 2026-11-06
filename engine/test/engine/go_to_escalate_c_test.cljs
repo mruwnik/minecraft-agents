@@ -945,16 +945,22 @@
 
 (deftest the-pickaxe-fetch-price-is-asked-once-while-the-body-and-its-world-hold
   (let [asked (atom 0)
-        p (tu/fake {:blocks (box 0 60 -1 4 70 1 "stone") :inventory []})
-        price (fn [p] @(choose/pickaxe-fetch {:primitives p} true))]
+        ctx-of (fn [inventory]
+                 (let [{:keys [eng p]} (gt/setup {:blocks (box 0 60 -1 4 70 1 "stone") :inventory inventory})]
+                   [p (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]))
+        [p c] (ctx-of [])
+        price (fn [c] @(choose/pickaxe-fetch c true))]
     (with-redefs [need/item-price (fn [& _] (swap! asked inc) 7)]
-      (is (= [7 7] [(price p) (price p)]))
+      (is (= [7 7] [(price c) (price c)]))
       (is (= 1 @asked) "a second quote and round read the price the first made")
-      (price (tu/fake {:blocks (box 0 60 -1 4 70 1 "stone") :inventory [{:name "oak_log" :count 3}]}))
+      (price (second (ctx-of [{:name "oak_log" :count 3}])))
       (is (= 2 @asked) "another body asks again")
       (swap! (fake/state p) update :inventory fake/add-to "oak_log" 3)
-      (price p)
-      (is (= 3 @asked) "carrying logs now changes what a pickaxe costs"))))
+      (price c)
+      (is (= 3 @asked) "carrying logs now changes what a pickaxe costs")
+      (swap! (fake/state p) assoc-in [:self :health] 6)
+      (price c)
+      (is (= 4 @asked) "a hit changes what the walk there risks"))))
 
 (deftest a-pocket-floor-seen-only-from-inside-is-no-bar-when-floors-unseen-are-ok
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
