@@ -56,7 +56,7 @@
 
 (defn finish-leg!
   "Writes the leg to the :walk-looked entry: a side still unseen after a walk that reached its stand (arrived?), or a look from where a walk shows no more, with the
-  stand it was looked from, so every side within sight of that stand is one judgment; an unseen side whose walk was not bought
+  stand it was looked from, so every side within sight of that stand is one judgment; the stand of a walk that reached it and showed its side (no later leg walks back there); an unseen side whose walk was not bought
   or did not reach the stand (cut off: nothing was looked at from there), kept until a leg walks; and the seconds the leg spent, kept per hall `at`. The entry belongs to the root job that wrote it: another root's write starts it afresh, so it lives as long as one decision."
   [c side to at]
   (let [m (ctx/mem c)
@@ -73,7 +73,8 @@
                      (cond-> {:root (:root c) :cells (:cells before) :stands (:stands before) :declined (when-not looked? (:declined before))
                               :spent (update (let [sp (:spent before)] (when (map? sp) sp)) hall (fnil + 0) spent)}
                        (and unseen? looked?) (-> (update :cells #(vec (distinct (conj (vec %) cell)))) (update :stands #(vec (distinct (conj (vec %) stand)))))
-                       (and unseen? (not looked?)) (update :declined #(vec (distinct (conj (vec %) cell)))))
+                       (and unseen? (not looked?)) (update :declined #(vec (distinct (conj (vec %) cell))))
+                       (and (not unseen?) (arrived? c to)) (update :stands #(vec (distinct (conj (vec %) stand)))))
                      walked-policy))))
 
 (defn ended

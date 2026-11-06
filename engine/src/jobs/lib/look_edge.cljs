@@ -23,20 +23,28 @@
   within this of the nearest, so a long tunnel is seen in a few strides."
   6)
 
+(defn open-beside-fn
+  "(fn [[x y z] ok?]): a cell beside the unseen [x y z] that the body has seen open and that (ok? nx ny nz) accepts (default
+  any). A look shows a face only across open air: a cell inside rock, reached by the flood over unseen cells, never shows."
+  [p]
+  (let [open-seen? (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})] (and b (not= :solid (reach/kind-of b)))))]
+    (fn open-beside
+      ([cell] (open-beside cell (constantly true)))
+      ([[x y z] ok?]
+       (some (fn [[dx dy dz]] (let [nx (+ x dx) ny (+ y dy) nz (+ z dz)] (and (open-seen? nx ny nz) (ok? nx ny nz))))
+             [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))))
+
 (defn lit-side?
-  "A predicate on an unseen cell [x y z]: a cell the body has seen open is beside it (a look shows a face only across open
-  air: a cell inside rock, reached by the flood over unseen cells, never shows), and that cell is bright enough to be seen
-  or the unseen cell is within near-of of the feet (a dark wall that close shows). A side of a dark stretch farther off is
-  never shown (a dark cell is not recorded), so the region stays open there."
+  "A predicate on an unseen cell [x y z]: a cell the body has seen open is beside it (open-beside-fn), and that cell is
+  bright enough to be seen or the unseen cell is within near-of of the feet (a dark wall that close shows). A side of a
+  dark stretch farther off is never shown (a dark cell is not recorded), so the region stays open there."
   [p feet]
   (let [see-lit (look/see-lit-fn p)
         near (look/near-of p)
-        open-seen? (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})] (and b (not= :solid (reach/kind-of b)))))]
-    (fn [[x y z]]
+        open-beside (open-beside-fn p)]
+    (fn [[x y z :as cell]]
       (let [near? (and near (<= (u/dist feet {:x x :y y :z z}) near))]
-        (some (fn [[dx dy dz]] (let [nx (+ x dx) ny (+ y dy) nz (+ z dz)]
-                                 (and (open-seen? nx ny nz) (or (nil? see-lit) near? (== 1 (see-lit nx ny nz))))))
-              [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))))
+        (open-beside cell (fn [nx ny nz] (or (nil? see-lit) near? (== 1 (see-lit nx ny nz)))))))))
 
 (defn unseen-roof?
   "Whether a cell in the roof column over the {:x :y :z} cell (2..6 above it) is unseen with no seen block under it: a roof
@@ -115,7 +123,9 @@
   "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the closed region round `region` whose walkable-near
   cell `to` (not beside `from`: a look from there shows as much) shows the most unseen sides within look/near-of (the
   farthest from `from` among equals), among those `to` that (affordable? to) accepts (default all: a nearer walk is
-  the one bought when the best is dear), and not within look/near-of of a `stands` cell ({:x :y :z}: a look from there showed what it could), nil when none: a walk to `to` and a look there shows `side` or the region past
+  the one bought when the best is dear), and not within look/near-of of a `stands` cell ({:x :y :z}: a look from there showed what it could), nor with `to` beside one (a walk back there shows nothing new), nil when none. A side of
+  the region's flood with no seen open cell beside it lies inside rock (open-beside-fn): no walk shows it, so it is left to
+  the unseen-rock prior (the spawn flood's :edge is kept). A walk to `to` and a look there shows `side` or the region past
   it, however far `to` lies from `side` (a tunnel seen without its floor has no stand cell nearer). The end of a dark
   tunnel a look from here cannot make out; a big dark yard is crossed in few legs, each showing the walls it nears."
   ([p from region looked] (far-side p from region looked (constantly true)))
@@ -125,10 +135,11 @@
          near (or (look/near-of p) 4)
          edge (:edge (sh-inside/spawn-region p region (sh-sense/sky-subtract-now p)))
          seen-from-stand? (fn [[sx sy sz]] (some #(<= (u/dist % {:x sx :y sy :z sz}) near) stands))
-         sides (remove #(or (looked %) (seen-from-stand? %)) (distinct (concat (some-> edge vector) (reach-room/unseen-sides p region))))
+         stood? (fn [to] (some #(u/within? % to 1) stands))
+         sides (remove #(or (looked %) (seen-from-stand? %)) (distinct (concat (some-> edge vector) (filter (open-beside-fn p) (reach-room/unseen-sides p region)))))
          shown (fn [{:keys [x y z]}] (count (filter (fn [[sx sy sz]] (<= (u/dist {:x x :y y :z z} {:x sx :y sy :z sz}) near)) sides)))]
      (some->> (seq sides)
-              (keep (fn [side] (when-let [to (@near-fn side)] (when-not (u/within? from to 1) {:side side :to to}))))
+              (keep (fn [side] (when-let [to (@near-fn side)] (when-not (or (u/within? from to 1) (stood? to)) {:side side :to to}))))
               (sort-by (juxt #(if (= edge (:side %)) 0 1) #(- (shown (:to %))) #(- (u/dist from (:to %)))))
               (filter #(affordable? (:to %)))
               first))))
