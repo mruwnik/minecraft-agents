@@ -2,7 +2,10 @@
   "items.obtain's ways beyond the chest and the craft chain (:loose, :hunt, :crops, :search) and its :bill."
   (:require [cljs.test :refer [deftest is async are]]
             [engine.blocks-dig-test :as bd]
+            [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.ending :as ending]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.game :as game]
             [engine.hostile-test :as h]
@@ -66,6 +69,24 @@
         _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops} :worth (bread-worth)}) {})
         _ (await (tu/run-ticks (:eng s) (:clock s) 6 700))]
     (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s))))))
+
+(defn ^:async gathered-under
+  "The child an obtain of one wheat (no :worth of its own) called by a parent of worth `worth` gathers by, nil when it gathers by none."
+  [worth]
+  (let [s (grow/setup {})
+        parent {:args {} :can-start? (fn [_] (contract/ok :ready "ready")) :round (fn ^:async r [c] (await (ctx/call c :kid 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops}})) (ctx/end c :done nil))}
+        eng (assoc-in (:eng s) [:jobs 'wheat-parent] (ending/wrap parent))
+        _ (core/submit! eng (list 'wheat-parent {:worth worth}) {})
+        _ (await (tu/run-ticks eng (:clock s) 6 700))]
+    (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s))))))
+
+(deftest an-obtain-child-works-to-its-callers-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (nil? (await (gathered-under 1))) "a lone wheat is not worth growing a field for a 1 s call")
+        (is (= (quote jobs.farm.grow) (await (gathered-under 100000))) "a dear call: grown")
+        (is (= (quote jobs.farm.grow) (await (gathered-under ##Inf))) "no limit: grown")))))
 
 (defn young-or-ripe [age] {:blocks {"3,63,0" "farmland" "3,64,0" "wheat"} :ages {"3,64,0" age}})
 
