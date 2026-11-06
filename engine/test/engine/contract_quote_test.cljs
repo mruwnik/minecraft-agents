@@ -89,6 +89,30 @@
                      (await (core/tick! eng))
                      (is (= [{:uses {:job-time [0 6 ##Inf]}} {:uses {:job-time [0 7 ##Inf]}}] (:got @world)))))))))))
 
+;; ---------------------------------------------------------------- yielding
+
+(defn turned-during
+  "Whether a setImmediate queued just before (f c) ran by the time f's promise settled."
+  [f]
+  (fn ^:async turned [c]
+    (let [turned (atom false)]
+      (js/setImmediate #(reset! turned true))
+      (await (f c))
+      @turned)))
+
+(deftest an-awaited-quote-or-call-lets-the-event-loop-turn
+  ;; a loop of quotes or child calls that each settle in microtasks starved timers and the connection for seconds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {'plain plain
+                                    'asker (asking (fn ^:async both [c]
+                                                     [(await ((turned-during #(ctx/quote % 'plain {})) c))
+                                                      (await ((turned-during #(ctx/call % :kid 'plain {})) c))]))})]
+          (core/submit! eng '(asker) {})
+          (await (core/tick! eng))
+          (is (= [true true] (:got @world))))))))
+
 ;; ---------------------------------------------------------------- the quote deadline
 
 (def slow-quote

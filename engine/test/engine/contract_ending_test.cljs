@@ -578,7 +578,7 @@
             (core/register-reflex! eng {:trigger :holds})
             (swap! world assoc :leaf-ok true :fire :holds)
             (let [round (core/tick! eng)]
-              (await (next-turn))
+              (while (not (:release @world)) (await (next-turn)))
               (drop! eng)
               ((:release @world))
               (await round))

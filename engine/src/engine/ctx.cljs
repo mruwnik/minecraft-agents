@@ -133,13 +133,20 @@
       (update (expr/leaf registry job args) 0 assoc :sym job))
     [job args]))
 
+(defn after-turn
+  "Promise p settled one macrotask later: a job loop of awaited calls or quotes, each settled in microtasks, would
+  otherwise never let timers, sensing or the connection run until the loop ends."
+  [p]
+  (js/Promise. (fn [resolve reject]
+                 (.then (js/Promise.resolve p) #(js/setImmediate resolve %) #(js/setImmediate reject %)))))
+
 (defn call
   "Run one round of job (a definition map, or a job namespace symbol) as the
   child in slot, with args (its own and the call keys). A promise of :continue, or the child's ending with its
   :report; an ending other than :done becomes this round's :because unless the job says its own."
   [ctx slot job args]
   (let [[def args] (child-job ctx job args)]
-    ((:call ctx) slot def args)))
+    (after-turn ((:call ctx) slot def args))))
 
 (defn quote
   "A promise of what job (a definition map, or a job namespace symbol) expects to use and yield for a call with args:
@@ -152,7 +159,7 @@
   ([ctx job args] (engine.ctx/quote ctx job args nil))
   ([ctx job args quote-deadline]
    (let [[def args] (child-job ctx job args)]
-     ((:quote ctx) def args quote-deadline false))))
+     (after-turn ((:quote ctx) def args quote-deadline false)))))
 
 (defn next-way
   "A promise of {:way k :dropped {way why}}: the first of this contract job's ways, in its ways order, that the call
