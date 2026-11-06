@@ -16,8 +16,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.memory-age :as memory-age]
-            [jobs.lib.reach :as reach]
-            [jobs.lib.util :as u]))
+            [jobs.lib.reach :as reach]))
 
 (a/defargs settings
   {::max-cells {:default 4000 :doc "The most cells one mob's field holds, the nearest first." :spec (a/int-in 1 nil)}
@@ -393,26 +392,37 @@
         (set! (.-step e) step)))
     e))
 
-(defn adopt!
-  "Takes memory as it is now as the base of the kept reads e of a section: after the reads of one field, whose glances
-  wrote the cells they saw (synchronously, so nothing else wrote meanwhile) as they read them."
-  [{:keys [st]} ^js e]
-  (let [^js st st
-        dim (.-dim st)
-        cx (.-cx e) sy (.-sy e) cz (.-cz e)]
-    (set! (.-ids e) (some-> (store/section-ids st dim cx sy cz) .slice))
-    (set! (.-stamp e) (store/section-stamp st dim cx sy cz))))
+(defn remembered-kinds
+  "#js [walk arrow]: the kinds (reach/kind-of, reach/arrow-kind-of) of the cell x y z as the body of perception per
+  remembers it: never seen, or remembered and likelier changed than not (memory-age/likelier-changed?), reads unseen
+  (:ground, :open). by-id: the kinds of each remembered state id, filled as read."
+  [per ^js by-id x y z]
+  (let [^js st (:st per)
+        ^js sec (store/section-at st x y z)
+        i (store/cell-index x y z)
+        v (if sec (aget (.-ids sec) i) 0)]
+    (if (zero? v)
+      #js [:ground :open]
+      (let [id (dec v)
+            ^js kinds (or (.get by-id id)
+                          (let [^js info (.stateInfo ^js (:raw per) id)
+                                b #js {:name (.-name info) :properties (.-properties info)}
+                                k #js [(reach/kind-of b) (reach/arrow-kind-of b) (.-name info)]]
+                            (.set by-id id k)
+                            k))]
+        (if (memory-age/likelier-changed? st (aget kinds 2) (- ((.-nowFn st)) (store/cell-seen sec i)) x y z)
+          #js [:ground :open]
+          kinds)))))
 
 (defn section-reads
-  "#js [kind-at arrow-at deps unloaded]: reach/mob-lookup and reach/arrow-lookup of p, each cell's kinds kept in secs
-  (the body's, per 16^3 section of its memory: refresh!); deps: the sections read, key -> their kept reads; unloaded:
-  the cell keys read that were not loaded (not kept: such a cell reads otherwise once its chunk loads, with no memory
-  write; nor is a cell that unloads after it was read: remembered terrain stays known). flags.cleared: secs was cleared
+  "#js [kind-at arrow-at deps flags]: reach/mob-lookup and reach/arrow-lookup of p over what its body remembers
+  (remembered-kinds: a sight pass writes what the body sees), each cell's kinds kept in secs (the body's, per 16^3
+  section of its memory: refresh!); deps: the sections read, key -> their kept reads. flags.cleared: secs was cleared
   during the read, so entries of deps are no longer in it."
   [p ^js secs]
   (let [per (aget p "perception")
         deps (js/Map.)
-        unloaded (js/Set.)
+        by-id (js/Map.)
         flags #js {:cleared false}
         last #js [nil nil nil nil]
         section (fn [cx sy cz]
@@ -437,19 +447,13 @@
                  (let [^js e (section (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))
                        i (store/cell-index x y z)
                        c (aget (if walk? (.-walk e) (.-arrow e)) i)]
-                   (cond
-                     (pos? c) (aget codes-of c)
-                     (.has unloaded (base/cell-key x y z)) (if walk? :ground :open)
-                     :else
-                     (let [b (u/sensed p {:x x :y y :z z})
-                           unseen? (or (nil? b) (true? (.-unknown b)))
-                           walk (if unseen? :ground (reach/kind-of b))
-                           arrow (if unseen? :open (reach/arrow-kind-of b))]
-                       (if (some? b)
-                         (do (aset (.-walk e) i (code-of walk)) (aset (.-arrow e) i (code-of arrow)))
-                         (.add unloaded (base/cell-key x y z)))
-                       (if walk? walk arrow))))))]
-    #js [(read true) (read false) deps unloaded flags]))
+                   (if (pos? c)
+                     (aget codes-of c)
+                     (let [^js kinds (remembered-kinds per by-id x y z)]
+                       (aset (.-walk e) i (code-of (aget kinds 0)))
+                       (aset (.-arrow e) i (code-of (aget kinds 1)))
+                       (aget kinds (if walk? 0 1)))))))]
+    #js [(read true) (read false) deps flags]))
 
 (defonce memories (js/WeakMap.))
 
@@ -463,17 +467,16 @@
     mem))
 
 (defn keep!
-  "Keeps v under ks in mem with the sections reads (section-reads) read, unless a cell read was not loaded or the
-  section reads were cleared meanwhile; memory as it is now the base of those sections (adopt!)."
-  [per ^js mem ks v reads]
+  "Keeps v under ks in mem with the sections reads (section-reads) read, unless the section reads were cleared
+  meanwhile."
+  [^js mem ks v reads]
   (let [^js fields (.-fields mem)
-        cleared? (.-cleared ^js (aget reads 4))]
+        cleared? (.-cleared ^js (aget reads 3))]
     ;; secs cleared (past max-sections): the kept fields' reads are no longer refreshed
     (when cleared? (.clear fields))
     (.delete fields ks)
-    (when-not (or cleared? (pos? (.-size (aget reads 3))))
+    (when-not cleared?
       (let [es (vec (es6-iterator-seq (.values (aget reads 2))))]
-        (run! #(adopt! per %) es)
         (while (>= (.-size fields) max-fields) (.delete fields (.-value (.next (.keys fields)))))
         (.set fields ks #js [v (mapv (fn [^js e] #js [e (.-version e)]) es) reads])))))
 
@@ -503,12 +506,12 @@
              ks (pr-str k)]
          (if-let [^js hit (kept-hit per mem ks)]
            (let [v (aget hit 0)]
-             (when (grow! v) (keep! per mem ks v (aget hit 2)))
+             (when (grow! v) (keep! mem ks v (aget hit 2)))
              v)
            (let [reads (section-reads p (.-secs mem))
                  v (thunk {:kind-at (aget reads 0) :arrow-at (aget reads 1)})]
              (grow! v)
-             (keep! per mem ks v reads)
+             (keep! mem ks v reads)
              v)))))))
 
 (defn field-of

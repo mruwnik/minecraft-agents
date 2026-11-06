@@ -90,6 +90,7 @@
         per (perception/create (fake-raw/create raw) {:now (constantly 1000000)})]
     {:c {:primitives (perception/wrap raw per) :view (fn [] {:now 0 :data {}})}
      :per per
+     :raw raw
      :look! #(doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))}))
 
 (deftest a-walkers-field-and-its-steps-over-an-extent-are-one-walk
@@ -237,3 +238,13 @@
         _ (look!)
         reach (field/reach-fn (field/field-of c {:mob "zombie" :pos {:x 30.5 :y 64 :z 15.5}}))]
     (is (nil? (reach 16 64 16)) "walls, glass, door and roof seen from inside: the zombie outside has no way in")))
+
+(deftest a-field-holds-what-the-body-remembers-not-a-change-in-view-it-has-not-looked-at
+  (let [{:keys [c raw look!]} (seen-body {})
+        raw-state (fake/state raw)
+        zombie {:mob "zombie" :pos {:x 0.5 :y 64 :z 0.5}}]
+    (look!)
+    (swap! raw-state #(-> % (fake/put-block [6 64 0] "stone") (fake/put-block [6 65 0] "stone")))
+    (is (some? ((field/reach-fn (field/field-of (check-cache/fresh c) zombie)) 6 64 0)) "not looked at: the floor it remembers")
+    (look!)
+    (is (nil? ((field/reach-fn (field/field-of (check-cache/fresh c) zombie)) 6 64 0)) "looked at: the pillar")))
