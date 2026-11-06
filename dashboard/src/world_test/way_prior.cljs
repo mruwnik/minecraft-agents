@@ -172,8 +172,22 @@
        :on (fit-of (as #(-> % (update :seen + (:unread %)) (update :on + (:unread %)))) false)
        :censored (fit-of ps true)})))
 
+(defn calibration
+  "The pooled prior's check without the model's k-and-ways-share-theta assumption: per k/n bucket (tenths) of the places with
+  a read way, {:places :seen :on :rate} the rate the read ways went on, and :predicted the mean of (k+a)/(n+a+b) at the fit's
+  mean a and b (a, b: the :read fit's means). The two should agree if the formula is calibrated."
+  [places a b]
+  (->> places
+       (filter #(and (pos? (:n %)) (pos? (:seen %))))
+       (group-by #(min 9 (quot (* 10 (:k %)) (:n %))))
+       (into (sorted-map)
+             (map (fn [[bucket ps]]
+                    (let [seen (reduce + (map :seen ps)) on (reduce + (map :on ps))]
+                      [bucket {:places (count ps) :seen seen :on on :rate (r3 (/ on seen))
+                               :predicted (r3 (/ (reduce + (map #(/ (+ (:k %) a) (+ (:n %) a b)) ps)) (count ps)))}]))))))
+
 (defn report
-  "{:hyper :unread :evicted :all :by-setting} over places; :unread the ways never seen that waited long enough to count
+  "{:hyper :unread :evicted :all :by-setting :calibration} over places; :unread the ways never seen that waited long enough to count
   (mature), :evicted the unread ways way-log dropped."
   [places evicted]
   (let [places (mature places)]
@@ -181,4 +195,5 @@
      :unread (reduce + (map :unread places))
      :evicted evicted
      :all (fit places)
+     :calibration (when-let [f (:read (fit places))] (calibration places (get-in f [:a :mean]) (get-in f [:b :mean])))
      :by-setting (into (sorted-map) (keep (fn [[s ps]] (when-let [f (fit ps)] [s f]))) (group-by :set places))}))

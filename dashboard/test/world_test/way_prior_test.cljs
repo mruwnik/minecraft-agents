@@ -49,3 +49,10 @@
   (let [p {:set :lit :k 1 :n 2 :ways 4 :seen 2 :on 1 :unread 2 :waits [100 300] :unread-ages [50 400]}]
     (is (= [1] (map :unread (w/mature [p]))) "the median wait is 200 ms: the way waiting 50 is left out, the one waiting 400 stays")
     (is (= [2] (map :unread (w/mature [(assoc p :waits [])]))) "no way read: every unread way counts")))
+
+(deftest calibration-reads-the-on-rate-per-k-over-n-bucket-beside-the-formula
+  (let [p (fn [k n seen on] {:set :lit :k k :n n :ways seen :seen seen :on on :unread 0})
+        cal (w/calibration [(p 0 4 2 0) (p 0 4 2 0) (p 4 4 2 2) (p 4 4 2 1) (p 2 4 0 0)] 1 1)]
+    (is (= [0 9] (keys cal)) "the place with no read way is left out")
+    (is (= {:places 2 :seen 4 :on 0 :rate 0.0 :predicted 0.167} (get cal 0)))
+    (is (= {:places 2 :seen 4 :on 3 :rate 0.75 :predicted 0.833} (get cal 9)))))
