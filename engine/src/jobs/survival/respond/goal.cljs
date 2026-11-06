@@ -53,7 +53,7 @@
   "The chasers a flight's search runs from, {:name (cost/mob-kind) :mob (its name) :pos :calm? (an enderman the client does
   not flag angry: it walks about, a flight from it is no race; an angry one is the cornered options')}: the hostiles the body senses or remembers
   within the longest follow range (this flight's dead skipped), the last known places of the mobs fled within
-  threats/fled-memory-ms that it does not know now, and where shots came from (flight/fire-spots). :burns: hostile-loss/mob-near's, as the cornered covers price a mob."
+  threats/fled-memory-ms that it does not know now, and where shots came from (flight/fire-spots, :shooter? true). :burns: hostile-loss/mob-near's, as the cornered covers price a mob."
   [c]
   (let [p (:primitives c)
         dead (set (flight/dead-ids c))
@@ -65,7 +65,7 @@
         (into (comp (map :data) (remove #(ids (:id %)))
                     (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (:mob %) :mob (:mob %) :pos pos})))
               (threats/listed-threats p (threats/fresh-threats (ctx/view c))))
-        (into (map (fn [pos] {:name nil :pos pos})) (flight/fire-spots c)))))
+        (into (map (fn [pos] {:name nil :pos pos :shooter? true})) (flight/fire-spots c)))))
 
 (defn safe-home
   "Pure: the first of homes (positions) whose walk, its end in search ends, is a safe run (flee-search/safe-why nil);

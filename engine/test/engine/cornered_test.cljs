@@ -2229,3 +2229,21 @@
   (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:arriving? true})))
   (is (= [:plug :pillar :back-off :plug-dig :fight] (choose/escape-order {})) "no mob close: the pit stays an option")
   (is (= [:back-off :plug :pillar :plug-dig :fight] (choose/escape-order {:arriving? true :creeper? true})) "a creeper keeps its order"))
+
+(deftest a-body-shot-from-nowhere-on-open-ground-steps-away-not-cornered-by-the-spots-in-the-rock-under-it
+  ;; the ground under the floor is unseen, as live: the shot's spots straight down stay, and must not count as a mob that catches the body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:health 14}})
+              sensed (tu/sensed-by p)]
+          (tu/set-sensed! p (fn [pos] (if (< (.-y pos) 63) #js {:unknown true :pos pos} (sensed pos))))
+          (mem/write! (:store eng) :hurt {:amount 6 :health 14 :damageType "minecraft:arrow" :attacker {:id 50 :name "arrow"} :dir {:x 1 :z 0}}
+                      {:cap 50 :ttl 60000})
+          (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+          (await (core/tick! eng))
+          (let [step (first (filter #(= :retreat.target (:kind %)) @seen))]
+            (is (= [] (:from step)))
+            (is (pos? (:shot-spots step)))
+            (is (< (first (:target step)) 0) "away from the shot, west"))
+          (is (not-any? #(= :retreat.cornered (:kind %)) @seen)))))))

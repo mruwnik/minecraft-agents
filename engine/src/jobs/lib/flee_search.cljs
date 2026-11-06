@@ -197,13 +197,13 @@
 
 (defn priced-key
   "The inputs of a search (gather) as the key of its kept result: its threats by cell and weight (cell-key-of), its chasers
-  by name, mob, calm and cell, its policy without the fns it carries (the air it counts is the remembered world's), its
+  by name, mob, calm, shooter and cell, its policy without the fns it carries (the air it counts is the remembered world's), its
   covers by their :covers-key (the covers are only built at a dead end)."
   [in]
   (-> in
       (update :others #(mapv cell-key-of %))
       (update :caught-by #(mapv cell-key-of %))
-      (update :chasers #(mapv (juxt :name :mob :calm? :pos :burns :speed) %))
+      (update :chasers #(mapv (juxt :name :mob :calm? :shooter? :pos :burns :speed) %))
       (update :policy #(into {} (remove (comp fn? val)) %))
       (dissoc :covers)))
 
@@ -338,13 +338,14 @@
 
 (defn caught-s
   "The most seconds a chaser not :calm? is within its blow on timed cells, past the cells it reaches without moving
-  (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place)."
+  (those the flight's start pays, cost.answer/flee-mob): cost/reach-s, no race margin (a margin is for a race to one place).
+  A :shooter? (where an unseen shot came from) lands no blow: it shoots, and its place is a guess, often in rock."
   [chasers cells]
   (reduce max 0 (map (fn [ch]
                        (let [way #(way-at ch %)
                              past (drop-while #(zero? (cost/arrival-s (:name ch) (:pos ch) (cost/centred %) (way %) (swim-at ch %) (:speed ch))) cells)]
                          (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route (mapv cost/centred past) :way way :swim #(swim-at ch %) :speed (:speed ch)})))
-                     (remove :calm? chasers))))
+                     (remove (some-fn :calm? :shooter?) chasers))))
 
 (defn trap-s
   "What a dead end at the first unseen cell of scored end e costs it when it traps the body: its :trapped, and the
