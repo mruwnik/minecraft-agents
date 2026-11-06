@@ -82,13 +82,6 @@
     (.sort a (fn [^js l ^js r] (let [x (aget l 0) y (aget r 0)] (cond (< x y) -1 (< y x) 1 :else 0))))
     (map #(aget ^js % 1) a)))
 
-(defn quote-gain
-  "Seconds quoting a candidate of bound b is expected to save on the best price so far: its price is b times one of
-  the ratios (quoted price over bound, ##Inf for no price) of the quotes of its like so far or, as often as each of
-  them, b itself (a candidate unlike them all)."
-  [best b ratios]
-  (/ (reduce (fn [s r] (let [p (* b r)] (if (< p best) (+ s (- best p)) s))) (max 0 (- best b)) ratios) (inc (count ratios))))
-
 (defn ^:async best!
   "{:pick :price :quote} the cheapest of candidates, nil when none has a finite price. bound (fn [x]) seconds no more
   than x's price; args (fn [x]) the go-to args of the walk to x; price (fn [x q]) x's seconds with q, go-to's quote of
@@ -107,13 +100,13 @@
     (loop [[x & more :as left] (by-bound bound candidates) best nil bound bound rebound rebound]
       (cond
         (or (empty? left) (not (js/isFinite (bound x))) (and best (<= (:price best) (bound x)))) best
-        (or (and best (<= (quote-gain (:price best) (bound x) (get @ratios (like x))) (quote-s)))
+        (or (and best (<= (cost/quote-gain (:price best) (bound x) (get @ratios (like x))) (quote-s)))
             (and ok? (not (ok? x)))) (recur more best bound rebound)
         :else (let [b (bound x)
                     q (await ((or quote quote!) c (args x)))
                     s (price x q)
                     _ (vswap! quoted inc)
-                    _ (when (pos? b) (vswap! ratios update (like x) conj (/ s b)))
+                    _ (when (and (pos? b) (not (:estimate q))) (vswap! ratios update (like x) conj (/ s b)))
                     best (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best)
                     r (when rebound (await (rebound x q more)))]
                 (cond

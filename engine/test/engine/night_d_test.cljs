@@ -171,10 +171,10 @@
                         (set! pick/best! (fn ^:async b [c xs opts]
                                            (let [n @quotes
                                                  r (await (best! c xs opts))]
-                                             (when (< n @quotes) (swap! picks conj [(- @quotes n) (:price r)]))
+                                             (swap! picks conj [(- @quotes n) (:price r)])
                                              r)))
                         (try (await (flee-with (fn [args] (swap! ms + quote-ms) (swap! quotes inc) {:uses {:job-time [0 (price args) 0]}}) ground))
-                             @picks
+                             (remove (comp zero? first) @picks)
                              (finally (set! clock/now stopped) (set! pick/best! best!)))))
               free (await (picks 0))
               priced (await (picks 150))]

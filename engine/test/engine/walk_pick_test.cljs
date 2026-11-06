@@ -17,8 +17,8 @@
   [candidates]
   (let [quote! pick/quote!
         asked (atom [])]
-    (set! pick/quote! (fn [_ x] (some-> (:on-quote x) (apply [])) (swap! asked conj (:id x)) (js/Promise.resolve {:s (:s x)})))
-    (try [(await (pick/best! nil candidates {:bound :bound :args identity :price (fn [_ q] (:s q))})) @asked]
+    (set! pick/quote! (fn [_ x] (some-> (:on-quote x) (apply [])) (swap! asked conj (:id x)) (js/Promise.resolve {:s (:s x) :estimate (:estimate x)})))
+    (try [(await (pick/best! nil candidates {:bound :bound :args identity :like :kind :price (fn [_ q] (:s q))})) @asked]
          (finally (set! pick/quote! quote!)))))
 
 (defn ^:async with-death-chance
@@ -59,6 +59,21 @@
           (is (= 1 (:id (:pick best))))
           (is (= 18 (count asked)) "with each quote 0.15 s, the 19th's saving, (6.6 - 3.8) / 19 s, is less")
           (is (= 32 (count (second (await (picked cands))))) "a quote that costs nothing goes on to the bound"))))))
+
+(deftest a-quote-still-searching-gives-no-price-ratio-to-its-kind
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; id 2's quote is a search's estimate (no price): its ##Inf ratio would cut the kind's expected saving to a third
+        ;; and stop the quoting at id 2; a quote costs 2.5 s, id 3's saving (6.6 - 0.6) / 2 = 3 s beats it
+        (let [ms (atom 0)
+              cands (mapv (fn [i] (let [b (* 0.2 i)] (cond-> {:id i :bound b :s (+ 6 (* 3 b)) :kind :a :on-quote #(swap! ms + 2500)}
+                                                         (= 2 i) (assoc :s ##Inf :estimate true)))) (range 1 11))
+              stopped clock/now
+              [_ asked] (try (set! clock/now #(deref ms))
+                             (await (picked cands))
+                             (finally (set! clock/now stopped)))]
+          (is (= [1 2 3] asked)))))))
 
 (deftest pick-walk-takes-the-place-whose-quoted-walk-is-cheapest-not-the-nearest
   (async done
