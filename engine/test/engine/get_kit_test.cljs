@@ -411,15 +411,15 @@
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
 (defn ^:async stocked-home-kit
-  "The no-food warnings, ending and register food holds of a kit of items with a booked chest of
+  "The no-food warnings, ending and register food holds (the reserve.set notices: its cleanup drops them) of a kit of items with a booked chest of
   40 bread at home and bread carried."
   [bread items]
   (let [s (start (hungry-world [{:name "bread" :count bread}] 16) {:items items :explore false})]
     (mem/write! (:store (:eng s)) :fetch/stock {:pos [4 64 4] :items {"bread" 40}} {:cap 64 :ttl :forever})
     (await (f/run-ticks s 80))
     {:no-food (mapv :cause (f/events-of s :kit.no-food)) :out (select-keys @(:out s) [:status :item :reason])
-     :held (into {} (keep (fn [{:keys [data]}] (when (= "food for the kit's trip" (:why data)) [(:item data) (:count data)])))
-                 (mem/entries (mem/view (:store (:eng s))) :reserve))}))
+     :held (into {} (keep (fn [{:keys [why item count]}] (when (= "food for the kit's trip" why) [item count])))
+                 (f/events-of s :reserve.set))}))
 
 (deftest with-a-stocked-chest-at-home-the-kit-carries-the-food-for-its-trip
   (async done

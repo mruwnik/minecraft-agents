@@ -52,17 +52,51 @@
   (is (= {"raw_iron" 2 "iron_ore" 1}
          (reserve/held (body [(item "raw_iron" 4) (item "iron_ore" 1) (item "stick" 9)] [{:tag :ore :count 3}]) :tools))))
 
-(deftest entries-expire-by-time-and-by-dead-job
-  (are [entry jobs live] (= live (boolean (seq (reserve/held (body [(item "diamond" 1)] [(merge {:item "diamond"} entry)] :jobs jobs) :tools))))
-    {:until 2000} [] true
-    {:until 1000} [] false
-    {:by "agent"} [] true
-    {:by "j1"} ["j1"] true
-    {:by "j1/bill"} [["j1" {:children {:bill {:args {}}}}]] true
-    {:by "j1/bill"} [["j1" {:children {}}]] false
-    {:by "j1/bill"} ["j1"] false
-    {:by "j1/a/b"} [["j1" {:children {:a {:children {:b {}}}}}]] true
-    {:by "j1"} [] false))
+(deftest entries-expire-by-time-and-not-by-a-dead-job
+  (are [entry live] (= live (boolean (seq (reserve/held (body [(item "diamond" 1)] [(merge {:item "diamond"} entry)]) :tools))))
+    {:until 2000} true
+    {:until 1000} false
+    {:by "agent"} true
+    {:by "gone-job" :until 2000} true
+    {:by "gone-job" :until 900} false))
+
+(defn writer
+  "A ctx for job j1 over a register in an atom; t the clock in ms."
+  [t]
+  (let [d (atom mem/empty-data)]
+    {:id "j1" :t t :d d
+     :view (fn [] {:data @d :now @t})
+     :remember (fn [kind data policy]
+                 (swap! d #(-> % (mem/remove-entries kind (fn [e] (= (:id data) (:id (:data e)))))
+                               (mem/add-entry kind {:t @t :data data} policy))))
+     :forget (fn [kind pred] (swap! d mem/remove-entries kind (fn [e] (pred (:data e)))))}))
+
+(deftest a-jobs-entries-are-stamped-renewed-while-it-runs-and-lapse-after-it
+  (let [c (writer (atom 0))
+        want [{:id "j1-a" :item "diamond" :count 1 :strength 1 :by "j1"}]
+        ttl-ms #(- (:until (first (reserve/entries ((:view c))))) @(:t c))
+        write! #(reserve/set-job-entries! c want)]
+    (write!)
+    (let [ttl (ttl-ms)]
+      (is (pos? ttl) "stamped with an expiry")
+      (reset! (:t c) (quot ttl 4))
+      (write!)
+      (is (= ttl (+ (quot ttl 4) (ttl-ms))) "still fresh: not rewritten")
+      (reset! (:t c) (* 3 (quot ttl 4)))
+      (write!)
+      (is (= ttl (ttl-ms)) "past half its ttl: stamped anew")
+      (reset! (:t c) (* 5 ttl))
+      (is (empty? (reserve/entries ((:view c)))) "the job never renewed: it lapsed"))))
+
+(deftest rows-renew-a-running-jobs-entries-and-release-drops-them
+  (let [c (assoc (writer (atom 0)) :primitives (tu/fake {:inventory [(item "diamond" 1)]}))]
+    (reserve/set-job-entries! c [{:id "j1-a" :item "diamond" :count 1 :strength 1 :by "j1"}])
+    (let [ttl (:until (first (reserve/entries ((:view c)))))]
+      (reset! (:t c) (* 3 (quot ttl 4)))
+      (reserve/rows c :tools)
+      (is (> (:until (first (reserve/entries ((:view c))))) ttl)))
+    (reserve/release! c)
+    (is (empty? (reserve/entries ((:view c)))))))
 
 (deftest the-built-in-rules-hold-through-the-same-answer
   (let [c (body [(item "golden_apple" 2) (item "stone_pickaxe" 1) (item "bread" 4)]

@@ -499,6 +499,7 @@
   "However the call ends: the scaffold its tree placed is released to the scaffold-left trigger."
   [c _]
   (ledger/release-root! c)
+  (reserve/release! c)
   (ctx/end c :done nil))
 
 (def meta {:tags [:goal :craft]})

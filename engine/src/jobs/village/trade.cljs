@@ -12,6 +12,12 @@
             [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]))
 
+(defn cleanup
+  "However the call ends: the payment is no longer reserved."
+  [c _]
+  (reserve/release! c)
+  (ctx/end c :done nil))
+
 (def meta {:tags [:goal]})
 
 (def doc

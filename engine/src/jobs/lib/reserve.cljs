@@ -1,7 +1,8 @@
 (ns jobs.lib.reserve
   "The body's register of reserved items: body memory kind :reserve, entries {:id :item|:tag :count|:all :strength 0..1
   :by \"agent\"|job instance id :why :until ms|nil :not #{chooser..} the choosers it does not bind}. Writing an id replaces its entry. An entry counts while :until has
-  not passed and its :by job still lives. It covers carried units only.
+  not passed; a job's entries are stamped ledger ::ttl-s ahead, renewed by its set-job-entries! and by rows (keep-alive!), and
+  dropped by release! in its cleanup, so a job that dies leaves them only until the ttl. It covers carried units only.
   (entries view) the live entries. (rows c chooser) [{:name :count :strength}] of the carried units reserved, strongest
   first: the register plus the built-in rules (the food reserve, jobs.lib.home-food/carry-points, precious food, one carried bed while no home bed is placed (not for the :night chooser: that bed is the camp bed), a chooser's
   :choose/override :avoid names), each at strength 1. (held c chooser) {name count} of those units, the one answer to
@@ -13,6 +14,9 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.register :as register]
+            [engine.settings :as settings]
+            [jobs.lib.expiry :as expiry]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food]
             [jobs.lib.foods :as foods]
@@ -70,23 +74,43 @@
                 (when (some (comp food/reserve-food? :name) inv) (food/food-reserve inv (home-food/carry-points c)))
                 (whole (:avoid (overrides c chooser))))))
 
-(defn hold!
-  "Write the entry {:id :tag|:item :count 1 :strength 1 :why} held by the job c, unless one with that id is live: it lapses with the job."
-  [c id attrs]
-  (when-not (some #(= id (:id %)) (entries (ctx/view c)))
-    (ctx/remember! c kind (merge {:id id :count 1 :strength 1 :by (:id c)} attrs) policy)))
+(defn- ttl-ms [] (* 1000 (settings/get ledger/settings ::ledger/ttl-s)))
+
+(defn- mine?
+  "Whether entry e is held by job c or a job below it."
+  [c e]
+  (let [by (:by e)]
+    (and by (or (= (:id c) by) (str/starts-with? by (str (:id c) "/"))))))
+
+(defn keep-alive!
+  "Stamp anew the entries held by c that run out within half the ttl (expiry/due?): a job still running keeps them."
+  [c]
+  (let [now (ctx/now c) ttl (ttl-ms)]
+    (doseq [e (entries (ctx/view c))
+            :when (and (:until e) (mine? c e) (expiry/due? now ttl e))]
+      (ctx/remember! c kind (expiry/stamp e now ttl) policy))))
+
+(defn release!
+  "Drop the entries held by job c: its cleanup calls it."
+  [c]
+  (ctx/forget-where! c kind #(= (:id c) (:by %))))
 
 (defn set-job-entries!
-  "Make the entries held by job c exactly `wanted` (maps with :id and :by c's id): nothing is written when they already are, so a call every round makes no reserve events."
+  "Make the entries held by job c exactly `wanted` (maps with :id and :by c's id, stamped with :until unless they carry one): nothing is written when they already are and none runs out soon, so a call every round makes no reserve events."
   [c wanted]
-  (let [mine (filterv #(= (:id c) (:by %)) (entries (ctx/view c)))]
-    (when-not (= (set mine) (set wanted))
-      (ctx/forget-where! c kind #(= (:id c) (:by %)))
-      (doseq [e wanted] (ctx/remember! c kind e policy)))))
+  (let [now (ctx/now c) ttl (ttl-ms)
+        mine (filterv #(= (:id c) (:by %)) (entries (ctx/view c)))
+        bare #(dissoc % :until)
+        same? (= (set (map bare mine)) (set (map bare wanted)))]
+    (cond
+      (and same? (not-any? #(expiry/due? now ttl %) mine)) nil
+      :else (do (ctx/forget-where! c kind #(= (:id c) (:by %)))
+                (doseq [e wanted] (ctx/remember! c kind (cond-> e (not (:until e)) (expiry/stamp now ttl)) policy))))))
 
 (defn rows
   "See the ns doc."
   [c chooser]
+  (keep-alive! c)
   (let [inv (u/inventory (:primitives c))
         carried (carried-of inv)
         asked (concat (map (fn [[n k]] [n k 1]) (builtin c chooser inv carried))

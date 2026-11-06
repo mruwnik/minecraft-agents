@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
@@ -288,6 +289,7 @@
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
   (ledger/release-root! c)
+  (reserve/release! c)
   (wsearch/release! c)
   (goal/clear! c)
   (choose/forget-routes! (:route-owner (ctx/mem c)))

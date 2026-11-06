@@ -21,8 +21,15 @@
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]
             [clojure.string]))
+
+(defn cleanup
+  "However the call ends: the bill's reserve entries are dropped."
+  [c _]
+  (reserve/release! c)
+  (ctx/end c :done nil))
 
 (def meta {:tags [:goal]})
 
