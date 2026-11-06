@@ -171,6 +171,12 @@
         entry (some #(when (= rid (:id %)) %) (:register (core/state eng)))]
     (boolean (and rid entry (= :danger (or (:level entry) (:level (base/trigger-def eng (:trigger entry))) :danger))))))
 
+(defn run-warm-hook! [eng hook]
+  (let [failed (fn [e] (core/emit! eng {:source :system :kind :warm-failed :level :warn
+                                        :text (str "warming the tables failed: " (or (ex-message e) e))}))]
+    (try (some-> (hook) (.catch failed))
+         (catch :default e (failed e)))))
+
 (defn ^:async wait-out-danger!
   "Before a stop, give a running danger reflex up to danger-wait-ms to end (a body stopped mid-escape suffocates while the
   engine is down). Logs what it waited for."
@@ -240,10 +246,7 @@
                                                   :on-event (fn [e] (some-> @eng-ref (core/emit! e)))})
                           (fn []))
         stop-heap (heap/start! #(core/emit! eng %) (:stats-ms eng) #(heap/running-context eng))
-        _ (js/setTimeout (fn [] (try ((:body/warm hooks/all))
-                                     (catch :default e
-                                       (core/emit! eng {:source :system :kind :warm-failed :level :warn :text (str "warming the tables failed: " (or (ex-message e) e))}))))
-                         0)]
+        _ (js/setTimeout #(run-warm-hook! eng (:body/warm hooks/all)) 0)]
     (let [event-socket (event-api/create (path/join (:engine-dir cfg) "events.sock") eng
                                              {:died game/death-status :build build/status-extra})]
       (try
