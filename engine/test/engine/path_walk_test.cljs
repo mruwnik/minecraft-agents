@@ -725,8 +725,9 @@
     (is (not-any? #{[0 64 -1] [2 65 1]} (walk/orthogonal-landing-cells steps 1)) "no diagonal")))
 
 (deftest a-search-end-no-nearer-than-the-body-has-been-is-no-progress
-  (let [end-ok? (wsearch/nearer-than-closest {:closest (constantly 50)} [0 0 0])
-        no-record (wsearch/nearer-than-closest {} [0 0 0])]
-    (is (end-ok? {:px 30.5 :py 0 :pz 0.5}) "30 blocks from the goal, the body got to 50")
-    (is (not (end-ok? {:px 150.5 :py 0 :pz 0.5})) "150 blocks away: back over ground it turned away from")
-    (is (no-record {:px 150.5 :py 0 :pz 0.5}) "no walk record, no bound")))
+  (let [end-ok? (wsearch/nearer-than-closest {:closest (constantly 50)} [0 64 0])
+        no-record (wsearch/nearer-than-closest {} [0 64 0])
+        step #(executor/step-of #js {:x % :y 64 :z 0 :h 0 :move 0 :px (+ % 0.5) :pz 0.5})]
+    (is (end-ok? (step 30)) "30 blocks from the goal at its own height, the body got to 50")
+    (is (not (end-ok? (step 150))) "150 blocks away: back over ground it turned away from")
+    (is (no-record (step 150)) "no walk record, no bound")))

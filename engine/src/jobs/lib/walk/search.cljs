@@ -293,8 +293,8 @@
         [gx gy gz] to]
     (if-not closest
       (constantly true)
-      (fn [{:keys [px py pz]}]
-        (< (js/Math.hypot (- px gx 0.5) (- py gy) (- pz gz 0.5)) closest)))))
+      (fn [{:keys [px pz] :as step}]
+        (< (js/Math.hypot (- px gx 0.5) (- (executor/stand-y step) gy) (- pz gz 0.5)) closest)))))
 
 (defn unfinished-like
   "The body's unfinished search that plans the same walk as key k from the same cell, whatever its tolls and avoided cells
