@@ -385,6 +385,17 @@
             "finite, and dearer with the pillar's blocks to fetch")
         (is (= 0 (cost/unseen-fall-s :down 1 (assoc body :max-drop 0))) "a body that takes no drop never falls on")))))
 
+(deftest a-fall-deeper-than-sixteen-blocks-is-priced-at-its-depth-and-its-death
+  (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1} :drop {0 1} :drop-4 {0 1} :drop-8 {9 1 30 1}}}
+    (fn []
+      (let [body {:health 20 :equipment nil :max-drop 100 :carried 64 :share 0}
+            hp #(cost/hp-cost 20 (cost/fall-damage nil %))
+            out #(+ (hp %) (cost/pillar-s 0 % %))]
+        (is (= (* 0.5 (+ (out 17) (out 38))) (cost/unseen-fall-s :drop-8 8 body)) "the 30-block tail is its own fall, a lethal one")
+        (is (< (hp 17) (hp 38)) "a fall past 20 hp (death) is dearer than the 17-block one"))))
+  (let [tail (fn [k] (reduce + (map val (filter #(< 48 (key %)) (get (settings/get value/settings ::value/unseen-fall-counts) k)))))]
+    (is (< 0 (tail :drop-8)) "the measured histogram is kept to 48 blocks, with the rest in 49")))
+
 (deftest the-measured-fall-histograms-are-deeper-for-a-deeper-drop
   (let [counts (settings/get value/settings ::value/unseen-fall-counts)
         mean (fn [k] (let [c (counts k)] (/ (reduce + (map (fn [[b n]] (* b n)) c)) (reduce + (vals c)))))]
