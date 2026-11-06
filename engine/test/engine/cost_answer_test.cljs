@@ -669,3 +669,9 @@
     (is (= (:seconds (cost/flee-answer {:food 20 :mobs [drowned] :swim (reach [drowned]) :land 0 :caught 0}))
            (:seconds (cost/flee-answer {:food 20 :mobs [drowned] :swim 1000 :land 0 :caught 0})))
         "the flight past that length is priced the same")))
+
+(deftest a-stand-prices-an-hp-with-the-hunger-it-brings
+  (let [zombie (mob "zombie" 1)
+        stand #(cost/stand-loss (assoc (body 12) :food %) nil [zombie] here 4)]
+    (is (pos? (stand 20)))
+    (is (> (stand 7) (stand 20)) "a hungry body that loses hp falls further below its hungry line")))
