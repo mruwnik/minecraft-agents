@@ -14,14 +14,17 @@
 
 (use-fixtures :each {:before #(game/select! (fake/create {}))})
 
-(def unarmed {:health 20 :equipment nil :weapon nil :pos {:x 0 :y 64 :z 0}})
+;; :carried: a body with nothing to lose fist-fights a zombie (its death costs only the walk back)
+(def unarmed {:health 20 :equipment nil :weapon nil :pos {:x 0 :y 64 :z 0} :carried 1000})
 (def armed (assoc unarmed :weapon "diamond_sword"))
 
 (deftest stance-is-what-the-reflex-would-do
   (are [body mob stance] (= stance (cost/stance body mob))
     unarmed "zombie" :flee
     armed "zombie" :fight
-    armed "creeper" :flee))
+    (assoc armed :health 5) "zombie" :fight
+    unarmed "creeper" :flee
+    armed "creeper" :fight))
 
 (deftest a-drowned-with-a-trident-hurts-by-its-throw-not-its-bare-hands
   (is (> (cost/hurt-rate nil {:name "drowned" :held "trident"}) (cost/hurt-rate nil "drowned")))
@@ -32,11 +35,11 @@
     (is (= 4 (rate unarmed "zombie")) "3 dps x 4 (flee), capped at 4")
     (is (= 0.25 (rate armed "zombie")) "2.5 hp a second (a hit of 2.5 on easy) x 0.1 (fight)")
     (is (= 0.25 (rate (assoc armed :health 10) "zombie")) "health 10: still a fight; the dearer hp is the planner's damage weight")
-    (is (= 4 (rate (assoc armed :health 5) "zombie")) "health 5: the fight would leave too little, fled")
+    (is (= 0.25 (rate (assoc armed :health 5) "zombie")) "health 5: the fight is still the cheapest answer, no health held back")
     (is (= 0.16 (rate (assoc armed :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
                                               :feet {:name "iron_boots"}}) "zombie"))
         "10 iron points: vanilla's 8.5 effective points against a 2.5 hp hit take off more")
-    (is (= 4 (rate armed "creeper")) "a creeper is always fled")))
+    (is (= 4 (rate unarmed "creeper")) "a creeper the body cannot fight hit-and-back is fled")))
 
 (defn zombie [id x z] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
 

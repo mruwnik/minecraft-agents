@@ -82,9 +82,7 @@
 
 (deftest an-enderman-costs-a-full-iron-body-about-seven-health
   (let [cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "enderman" :distance 3 :health %}]})]
-    (is (< 6 (cost-of 40) 9) "7 swings of 6, 5 s of an enderman's 3.5 hp hits on easy, one a second, through the armour")
-    (is (cost/leaves-reserve? {:health 20 :reserve 4 :damage (cost-of 40)}) "a full-health body wins")
-    (is (not (cost/leaves-reserve? {:health 10 :reserve 4 :damage (cost-of 40)})) "at 10 it would end near 3")))
+    (is (< 6 (cost-of 40) 9) "7 swings of 6, 5 s of an enderman's 3.5 hp hits on easy, one a second, through the armour")))
 
 (deftest burning-bypasses-armour-points-but-not-fire-protection
   (let [burn #(cost/after-armour (cost/armour-stats %) :burning 10 1)]

@@ -1,7 +1,7 @@
 (ns jobs.lib.cost.danger
   "Danger of mobs the body knows (an input, e.g. jobs.lib.danger/known-hostiles; no world entity reads): route-danger, the
-  expected damage of walking a route past them (recover-drops' fetch cost), and danger-rate / threat-factor, what a
-  second within a known mob's reach costs go-to's planner (jobs.lib.threats/threat-tolls).
+  expected damage of walking a route past them (recover-drops' fetch cost), and the factors and cap of what a second
+  within a known mob's reach costs go-to's planner (jobs.lib.cost.mob-toll).
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
   after armour, at most the body's health, plus the death it can cause: the chance its fight kills the body (fight-death-chance, not
@@ -9,8 +9,7 @@
   weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
   outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
-  danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors and the
-  cap are settings, danger-opts); threat-factor prices it at the hp price of the body's health."
+  danger-opts: the stance factors (:flee x4, :fight x0.1) and max-rate, as settings."
   (:require [engine.args :as a]
             [engine.constants :as constants]
             [engine.path.planner.base :as base]
@@ -143,34 +142,10 @@
   [m]
   (threat/kind (if (map? m) m {:name m})))
 
-(defn stance
-  "How the planner prices mob m (a name, or {:name :held}) alone: :fight when a fight with it leaves fight/default-reserve health (never a creeper), else :flee."
-  [{:keys [health equipment weapon]} m]
-  (if (and (not= "creeper" (name-of m))
-           (fight/leaves-reserve? {:health health :reserve fight/default-reserve
-                                   :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name (name-of m) :held (:held m) :distance 0}]})}))
-    :fight
-    :flee))
-
 (defn hurt-rate
   "hp a second mob m (a name, or {:name :held}) takes off a body wearing equipment while it can reach it."
   [equipment m]
   (threat/mob-hurt (armour/armour-stats equipment) (mob-kind-of m) 1))
-
-(defn danger-rate
-  "hp a second near mob-name costs body {:health :equipment :weapon} (see the ns doc). opts: danger-opts (default none)."
-  ([body mob-name] (danger-rate body mob-name nil))
-  ([{:keys [equipment] :as body} mob-name opts]
-   (min (get opts :max-rate max-rate)
-        (* (hurt-rate equipment mob-name)
-           (get (merge stances (:stances opts)) (stance body mob-name))))))
-
-(defn threat-factor
-  "Seconds more each second within a known mob's reach costs body {:health :equipment :weapon}: mob-name's danger-rate x
-  weight (0-1: a fading memory, the cell's place in its field) at the hp price of the body's health (the planner's
-  options.tolls factor)."
-  [{:keys [health] :as body} mob-name weight]
-  (* weight (danger-rate body mob-name (danger-opts)) (health/hp-price (if (number? health) health 20))))
 
 (defn threat-factor-cap
   "The most threat-factor all known mobs together cost a cell for body: the danger cap (or a larger ::max-rate) at the hp

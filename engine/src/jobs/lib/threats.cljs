@@ -212,6 +212,13 @@
   [c]
   (let [p (:primitives c)] (merge (cost/death-body p (ctx/view c)) (body-of p))))
 
+(defn stances
+  "{mob stance} of threats ts (cost/mob-of-threat each) for c's body: cost/stance, the answer its reflex would take to the
+  mob met beside it, priced with what a death would cost it (death-body)."
+  [c ts]
+  (let [body (death-body c)]
+    (into {} (map (fn [m] [m (cost/stance body m)])) (distinct (map cost/mob-of-threat ts)))))
+
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee whose field weighs the cell in full
   (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance :toll :stay-loss}, else nil. :toll is what
@@ -219,12 +226,13 @@
   cost/threat-factor-cap. :stay-loss, a fn of seconds, is what standing there that long costs: cost/stand-loss of them all,
   each at its weight and distance from pos. Threats are read once."
   [c]
-  (let [body (body-of (:primitives c))
-        dying (delay (death-body c))
+  (let [body (death-body c)
         cap (cost/threat-factor-cap body)
-        ts (->> (threats-of c)
-                (filter #(= :flee (cost/stance body (cost/mob-of-threat %))))
-                (mapv #(assoc % :toll (cost/threat-factor body (cost/mob-of-threat %) (:weight %))))
+        ts (threats-of c)
+        st (stances c ts)
+        ts (->> ts
+                (filter #(= :flee (st (cost/mob-of-threat %))))
+                (mapv #(assoc % :toll (cost/threat-factor body (cost/mob-of-threat %) (:weight %) (st (cost/mob-of-threat %)))))
                 (filterv #(pos? (:toll %))))]
     (fn [{:keys [x y z] :as pos}]
       (let [in (filterv (fn [{:keys [reach]}] (= 1 (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z)))) ts)]
@@ -235,7 +243,7 @@
                            in)]
             {:mob (:mob t) :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
              :toll (min cap (reduce + (map :toll in)))
-             :stay-loss (fn [seconds] (cost/stand-loss @dying (:equipment body) mobs pos seconds))}))))))
+             :stay-loss (fn [seconds] (cost/stand-loss body (:equipment body) mobs pos seconds))}))))))
 
 (defn stay-danger-fn
   "(fn [pos stay-s worth]) of stay-danger over one reading of c's threats, for a caller pricing many positions."
@@ -266,24 +274,25 @@
   (mapv (fn [t] [(field/field-key t) (select-keys t [:held :key]) (round-weight (:weight t))]) threats))
 
 (defn body-inputs
-  "[health equipment weapon] of c's body: all tolls-of reads of it (cost/threat-factor, threat-factor-cap, stance)."
+  "[health equipment weapon] of c's body: what tolls-of reads of it besides the stances (cost/threat-factor, threat-factor-cap)."
   [c]
   (let [{:keys [health equipment weapon]} (body-of (:primitives c))]
     [health equipment weapon]))
 
 (defn toll-inputs
   "What tolls-of reads of threats ({:mob :pos :weight}): a map of their table-key less the weight to the highest weight
-  (round-weight), and the body-inputs (toll-inputs-no-worse?)."
+  (round-weight), the body-inputs and the stances (toll-inputs-no-worse?)."
   [c threats]
-  (into [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats))] (body-inputs c)))
+  (conj (into [(reduce (fn [m k] (update m (pop k) (fnil max 0) (peek k))) {} (table-key threats))] (body-inputs c))
+        (stances c threats)))
 
 (defn toll-inputs-no-worse?
-  "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, none at a higher weight, the same armour and weapon, health no
+  "Whether tolls priced from toll-inputs was are no cheaper than from now: the same threats, none at a higher weight, the same armour, weapon and stances, health no
   lower. A walk's kept search goes on only then; a weight that fades only cheapens, and health regained only cheapens."
   [now was]
   (or (= now was)
-      (let [[ts h eq w] now [ts0 h0 eq0 w0] was]
-        (and (= [eq w] [eq0 w0]) (= (set (keys ts)) (set (keys ts0))) (every? (fn [[k wt]] (<= wt (ts0 k))) ts)
+      (let [[ts h eq w st] now [ts0 h0 eq0 w0 st0] was]
+        (and (= [eq w st] [eq0 w0 st0]) (= (set (keys ts)) (set (keys ts0))) (every? (fn [[k wt]] (<= wt (ts0 k))) ts)
            (number? h) (number? h0) (>= h h0)))))
 
 (defn tolls-of
@@ -291,11 +300,12 @@
   cost/threat-factor (the mob, its weight to 1/20 x the cell's) more a second; the dearest of one mob where it is known twice (a
   kind with no :key counts as one mob), mobs of one :key each summed, at most cost/threat-factor-cap."
   [c threats]
-  (let [body (body-of (:primitives c))
+  (let [body (death-body c)
+        st (stances c threats)
         cap (cost/threat-factor-cap body)
         by-cell (js/Map.)]
     (doseq [{:keys [mob weight key] :as t} threats
-            :let [f (cost/threat-factor body (cost/mob-of-threat t) (round-weight weight))]
+            :let [f (cost/threat-factor body (cost/mob-of-threat t) (round-weight weight) (st (cost/mob-of-threat t)))]
             :when (pos? f)
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)
@@ -318,7 +328,7 @@
   [c ts]
   (if (empty? ts)
     []
-    (field/shared c [::threat-tolls (table-key ts) (body-inputs c)]
+    (field/shared c [::threat-tolls (table-key ts) (body-inputs c) (stances c ts)]
                   #(tolls-of c ts)
                   count)))
 

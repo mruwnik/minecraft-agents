@@ -715,12 +715,13 @@
   (assoc (cover-answers {:equipment equipment :mobs mobs :then (when fight [fight]) :fight fight :covers covers}) :fight fight))
 
 (defn threat-answers
-  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (or
-  a coll of names, met together) met :distance blocks off (default 0, beside it): the
+  "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim :distance} has to mob-name (a
+  name or {:name :held}, or a coll of them, met together) met :distance blocks off (default 0, beside it): the
   fight (in water with :swim, fight/fight-damage's wet?) and each of :covers {way {:open-s :seconds :fails}}
   (jobs.survival.shut-in/covers) as cornered-answers builds them, and the walk away (caught by its way at chance caught, nil none, and at the prior of :health; :swim, flee-answer's, for a body in water), as respond prices them."
   [{:keys [health food equipment weapon covers swim distance]} mob-name caught]
-  (let [ms (mapv (fn [n] {:name n :distance (or distance 0) :follow (threat/follow-range n)}) (if (string? mob-name) [mob-name] mob-name))
+  (let [ms (mapv (fn [n] (let [m (if (map? n) n {:name n})] (assoc m :distance (or distance 0) :follow (threat/follow-range (:name m)))))
+                 (if (or (string? mob-name) (map? mob-name)) [mob-name] mob-name))
         fight (fight-answer {:weapon weapon :equipment equipment :health health :mobs ms :wet? (some? swim)})]
     (assoc (cornered-answers {:equipment equipment :mobs ms :fight fight :covers covers})
            :flee (flee-answer {:health health :food food :equipment equipment :mobs ms :caught caught :later fight :swim swim}))))
