@@ -76,7 +76,7 @@
   (let [{:keys [limit steps]} (:args c)]
     (if limit (stair-time/steps-s :level (max 0 (- limit (or steps 0)))) (risk/work-s :long))))
 
-(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok torch-way work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit true)) stay-s true)))
+(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok torch-way work-place/ahead (ready/safe-at-or work-place/ahead ready/safe-if-lit)) stay-s true)))
 
 (declare quote-of trip-quote)
 

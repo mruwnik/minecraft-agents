@@ -84,7 +84,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok expect/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot true)) expect/stay-s true)))
+(def safe? (ready/unless-outmatched (price/with-stay (ready/dark-near-ok expect/torch-way work-place/dig-spot (ready/safe-at-or-roaming work-place/dig-spot)) expect/stay-s true)))
 
 (declare quote-of)
 

@@ -517,11 +517,10 @@
   "The checker of a job that goes to the place (f c): while a mob may spawn at the place (spawn-light/exposure's chance) safe-at it, by day or when body and place are both
   underground not threatened and not in a dark hall (hall-status; an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet with a seen solid block over it is
-  underground (Q345: a small dark cave counts only reachable hostiles, a hall its spawns); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through). hall? false: a dark hall underground is no exposure (a job that leads out of it). A walk that leaves the body's own sealed night shelter (:dug-in) waits :dark till the sky lights, whatever the place: the night job keeps the seal till day."
+  underground (Q345: a small dark cave counts only reachable hostiles, a hall its spawns); one above them, or with open sky over it (outside a hut), may be open ground. hall? false: a dark hall underground is no exposure (a job that leads out of it). A walk that leaves the body's own sealed night shelter (:dug-in) waits :dark till the sky lights, whatever the place: the night job keeps the seal till day."
   ([f] (safe-at-by-night f false))
-  ([f walk?] (safe-at-by-night f walk? false))
-  ([f walk? dug?] (safe-at-by-night f walk? dug? true))
-  ([f walk? dug? hall?]
+  ([f walk?] (safe-at-by-night f walk? true))
+  ([f walk? hall?]
   (let [at (safe-at f walk?)
         to-of (fn [c] (let [at (f c)] (cond (nil? at) (sh-sense/feet (:primitives c)) (:y at) (update-vals at js/Math.floor))))
         sealed (fn [c] (some->> (to-of c) (leaving-sealed-shelter c)))
@@ -533,7 +532,7 @@
                            (not (and to
                                      (or (and (sh-sense/buried? p) (sh-sense/buried-at? p to))
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet))
-                                              (if dug? true (and (sh-sense/buried? p) (roof-over? p to))))))))))
+                                              (and (sh-sense/buried? p) (roof-over? p to)))))))))
         threat (fn [c] (if walk? (threatened-walking c (f c)) (threatened c)))]
     (with-meta (fn [c] (cond
                          (sealed c) (contract/all [(threat c) (sealed c)])
@@ -602,7 +601,7 @@
 
 (def safe-at-from-out
   "safe-at-from for a job that leads out of the dark (a stair up): a dark hall underground is no exposure, only threats count."
-  (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args))))) false false false))
+  (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args))))) false false))
 
 (defn day-would-light?
   "Whether the day (weather aside) brings the feet cell enough light: false in a dim shaft or pit whose sky light never reaches
@@ -661,17 +660,16 @@
     {::exposure (fn [c] (contract/all [(dark-sky c) (sheltered-dark c)]))}))
 
 (defn safe-at-or
-  "The checker of a job that goes to the place (f c) when it has one, else (fallback c): safe-at-by-night there (dug?: the job digs to it)."
-  ([f fallback] (safe-at-or f fallback false))
-  ([f fallback dug?]
-   (let [at (safe-at-by-night f false dug?)]
-     (with-meta (fn [c] (if (f c) (at c) (fallback c)))
-       {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) ((::exposure (meta fallback)) c)))}))))
+  "The checker of a job that goes to the place (f c) when it has one, else (fallback c): safe-at-by-night there."
+  [f fallback]
+  (let [at (safe-at-by-night f)]
+    (with-meta (fn [c] (if (f c) (at c) (fallback c)))
+      {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) ((::exposure (meta fallback)) c)))})))
 
 (defn safe-at-or-roaming
   "The checker of a job that goes to the place (f c) when it has one, else leaves the room on its way: safe-at-by-night there, else safe-roaming."
-  ([f] (safe-at-or-roaming f false))
-  ([f dug?] (safe-at-or f safe-roaming dug?)))
+  [f]
+  (safe-at-or f safe-roaming))
 
 (defn quoted-s
   "Seconds `seconds-of` (a fn of c, a job's work-s) answers when positive, else nil: the stay a fit? prices before the category's."

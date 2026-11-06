@@ -124,7 +124,7 @@
   (let [t (target-of c)]
     (* (if t (cells-estimate (reach/standing-vec (:primitives c)) t) 0) (stair-time/cell-s))))
 
-(def safe? (price/with-stay (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true) work-s true))
+(def safe? (price/with-stay (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c))))) work-s true))
 
 (declare quote-of)
 
