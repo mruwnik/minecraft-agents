@@ -3,7 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [gathers? names-of shortfall]]
             [jobs.items.obtain.need :refer [climbs-first? explorable-needs gather-viable?]]
-            [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s loose-s]]
+            [jobs.items.obtain.plan :refer [chest-s craft-s gather-plan gathered-s look-cost loose-s]]
             [jobs.lib.cost :as cost]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.util :as u]
@@ -17,14 +17,16 @@
     (gathered-s c (gather-plan c names n))))
 
 (defn search-s
-  "A search for unseen raw needs: what getting them usually costs, their goal worth (cost/worth-to: the measured gathers,
-  search and walks in them; each walk is priced against the call's worth as it goes, go-to's quote with its risk), and
-  the stair up first when the gather climbs before searching (need/climbs-first?: a tree for a body under rock,
-  surface-up/climb-s)."
+  "A search for unseen raw needs: for each, the seconds the search is expected to spend per find (plan/look-cost: legs within
+  the call's search-worth, then the walk to what it saw), at most what getting one usually costs (cost/worth-to: the
+  measured gathers, search and walks in them; each walk is priced against the call's worth as it goes, go-to's quote with
+  its risk), which prices a need with no priced chance or no bound on the worth; and the stair up first when the gather
+  climbs before searching (need/climbs-first?: a tree for a body under rock, surface-up/climb-s)."
   [c names n]
   (when (gathers? c)
     (when-let [needs (seq (explorable-needs c names n))]
-      (+ (reduce + (map (fn [{:keys [key count]}] (* count (cost/worth-to nil (if (= "log" key) facts/log-names [key]) (u/self-pos c))))
+      (+ (reduce + (map (fn [{:keys [key count] :as need}]
+                          (* count (min (look-cost c need) (cost/worth-to nil (if (= "log" key) facts/log-names [key]) (u/self-pos c)))))
                         needs))
          (if (some #(climbs-first? c %) needs) (surface/climb-s c) 0)))))
 

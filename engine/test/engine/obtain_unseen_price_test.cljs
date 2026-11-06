@@ -201,7 +201,7 @@
 (deftest a-buried-bodys-search-pays-the-stair-up-only-when-the-gather-climbs-first
   (let [ore (:price (buried-search "raw_iron"))
         log (:price (buried-search "oak_log"))]
-    (is (= (cost/worth-to nil ["raw_iron"] nil) ore) "an unseen ore is tunnelled to: what one usually costs, no stair up")
+    (is (< 0 ore (cost/worth-to nil ["raw_iron"] nil)) "an unseen ore is tunnelled to: its expected search spend, under what one usually costs, no stair up")
     (is (< (cost/worth-to nil ["oak_log"] nil) log) "a tree is climbed toward before any search: the stair is in its price")))
 
 (deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-its-usual-cost-and-stair-but-not-its-ore-search

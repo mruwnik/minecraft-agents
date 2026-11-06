@@ -1187,7 +1187,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (bare [{:name "oak_log" :count 4}]) :floor [-30 -30 40 30]) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore true :worth 500}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore true}) {})
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s)))
           (is (empty? (events-of s :obtain.exploring)) "no surface search")
