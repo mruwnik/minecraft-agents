@@ -40,31 +40,30 @@
   "The cheapest cell (jobs.lib.cost seconds: the walk there, plus the walk on to goal along the straight line with its
   unseen cells at the unseen price, wworld/unseen-share, rest-s) other than feet and the cells in visited (already walked to)
   for which (take? cell g rest-s), g its walk's seconds, over the cells steps (level-steps) reaches from feet: tried
-  cheapest first, at most cap tried (nil: no cap). nil when none."
-  [p feet goal steps take? visited cap]
+  cheapest first, so the first taken is the cheapest; the search ends, nil, when the cheapest open cell's price is more than
+  bound-s affords (cost/affords?; nil: no bound). nil when none."
+  [p feet goal steps take? visited bound-s]
   (let [rest-s (rest-s-fn p goal)]
-    (loop [open (sorted-set [(rest-s feet) 0 0 feet]) best {feet 0} n 1 tried 0]
-      (when-let [[_ _ g cell :as top] (first open)]
-        (let [open (disj open top)
-              try? (and (= g (best cell)) (not= cell feet) (not (visited cell)))]
+    (loop [open (sorted-set [(rest-s feet) 0 0 feet]) best {feet 0} n 1]
+      (when-let [[f _ g cell :as top] (first open)]
+        (let [open (disj open top)]
           (cond
-            (< (best cell) g) (recur open best n tried)
-            (and try? (take? cell g rest-s)) cell
-            (and cap (>= tried cap)) nil
+            (and bound-s (not (cost/affords? f bound-s))) nil
+            (< (best cell) g) (recur open best n)
+            (and (not= cell feet) (not (visited cell)) (take? cell g rest-s)) cell
             :else (let [nbrs (keep #(let [g2 (+ g (walk-s cell %))] (when (< g2 (get best % js/Infinity)) [% g2])) (steps cell))]
                     (recur (into open (map-indexed (fn [i [c g2]] [(+ g2 (rest-s c)) (+ n i) g2 c]) nbrs))
-                           (into best nbrs) (+ n (count nbrs)) (cond-> tried try? inc)))))))))
+                           (into best nbrs) (+ n (count nbrs))))))))))
 
 (defn wall-spot
-  "The cheapest cell (priced-spot through standable cells) with a solid side: one whose side toward goal is solid
-  when there is one, else one with any. nil when none. Cells in visited (already walked to) do not count."
-  ([p feet goal] (wall-spot p feet goal #{}))
-  ([p feet goal visited]
-   (let [block-at (escape/block-at-of p)
-         steps (escape/level-steps p feet false)
-         toward? (fn [cell _ _] (when-let [d (escape/heading cell goal)] (escape/solid? (block-at (escape/ahead cell d 1)))))]
-     (or (priced-spot p feet goal steps toward? visited nil)
-         (priced-spot p feet goal steps (fn [cell _ _] (escape/walled-side? block-at cell)) visited nil)))))
+  "The cheapest cell (priced-spot through standable cells, within bound-s) with a solid side: one whose side toward goal is
+  solid when there is one, else one with any. nil when none. Cells in visited (already walked to) do not count."
+  [p feet goal visited bound-s]
+  (let [block-at (escape/block-at-of p)
+        steps (escape/level-steps p false)
+        toward? (fn [cell _ _] (when-let [d (escape/heading cell goal)] (escape/solid? (block-at (escape/ahead cell d 1)))))]
+    (or (priced-spot p feet goal steps toward? visited bound-s)
+        (priced-spot p feet goal steps (fn [cell _ _] (escape/walled-side? block-at cell)) visited bound-s))))
 
 (defn carried-build-n
   "How many blocks of the stair's floor fillers (choose/fillers :build) the body carries."
@@ -209,10 +208,6 @@
     (+ work (rest-s top)
        (if risk-s (risk-s (vec (dedupe (concat [feet] (if e (way-cells from e end) [from]) (map #(escape/up end %) (range 1 (inc (rise-left end goal)))) [top]))) goal work) 0))))
 
-(def way-spot-cap
-  "Standable cells way-spot tries choose from at most."
-  12)
-
 (defn way-end
   "Where way e (choose's) made from cell leaves the body: a pillar's top, a stair's last step; nil for any other step."
   [p cell goal {:keys [step height heading steps]}]
@@ -222,7 +217,7 @@
     nil))
 
 (defn way-spot
-  "The cheapest cell (priced-spot through standable cells a step up or down included, at most way-spot-cap tried) from
+  "The cheapest cell (priced-spot through standable cells a step up or down included, within the call's :bound-s) from
   which choose makes a way (a pillar or stair) toward goal: where to walk when no way can be made from feet
   itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to. A stair or pillar must
   leave the walk there and on from its end (way-end) cheaper than the walk from feet (a stair or pillar up toward a higher goal); one out of a pit or room counts as it is. nil when none."
@@ -234,7 +229,7 @@
                   (case (:step e)
                     (:stair :pillar) (or (<= (goal 1) (cell 1)) (< (+ g (rest-s end)) (rest-s feet)))
                     false)))]
-    (priced-spot p feet goal (escape/level-steps p feet true) take? visited way-spot-cap)))
+    (priced-spot p feet goal (escape/level-steps p true) take? visited (:bound-s opts))))
 
 (defn choose
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It digs
@@ -284,7 +279,7 @@
                               (range (escape/max-depth) 0 -1))))
          ledge (delay (when (and item (not (off :stair)) (pos? rise) (not (escape/walled-side? block-at feet)))
                         (escape/stair-heading block-at feet (remove #(contains? stands (escape/ahead feet % 1)) stair-dirs) rise may-dig? true)))
-         wall (delay (wall-spot p feet goal approached))
+         wall (delay (wall-spot p feet goal approached (:bound-s opts)))
          rim (when (and rim-n (>= count rim-n)) rim-n)
          ways (distinct (cond-> []
                           open-above? (conj {:step :pillar :height height :item item})

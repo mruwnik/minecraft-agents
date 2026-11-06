@@ -719,6 +719,8 @@
                                                       {:pos [152 64 2] :range 0}))]
               (is (<= @nodes slice) (pr-str @nodes (select-keys @out [:why :text])))
               ;; the void past the floor's edge holds no way a body without blocks can make: it gives up, not hangs
-              (is (= [:stair :dig-route] (mapv :step (events-of seen :go-to.escalated))) (pr-str @out))
+              (let [steps (mapv :step (events-of seen :go-to.escalated))]
+                (is (= [:stair :dig-route] (take 2 steps)) (pr-str @out))
+                (is (every? #{:approach :stair} (drop 2 steps)) "the walks along the floor to cells that can start a stair are all that follows"))
               (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out)))
             (finally (set! dig-route/search search))))))))

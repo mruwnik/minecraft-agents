@@ -30,10 +30,6 @@
 
 (defn max-depth [] (settings/get settings ::max-depth))
 
-(def wall-search-radius
-  "How far (blocks along x and along z) wall-spot looks."
-  24)
-
 (def cardinals [[1 0] [-1 0] [0 1] [0 -1]])
 
 (def heading-names {[1 0] :east [-1 0] :west [0 1] :south [0 -1] :north})
@@ -363,15 +359,13 @@
 
 (defn level-steps
   "(steps cell): the standable cells (seen, jobs.lib.reach/standable-cell?) beside cell, those a step up or down too
-  with climb?, within wall-search-radius of feet along x and z."
-  [p [hx _ hz] climb?]
-  (let [kind-at (reach/seen-lookup p)
-        near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
-                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))]
+  with climb?."
+  [p climb?]
+  (let [kind-at (reach/seen-lookup p)]
     (fn [cell]
       (->> cardinals
            (mapcat (fn [d] (map #(up (ahead cell d 1) %) (if climb? [0 -1 1] [0]))))
-           (filter #(and (near? %) (reach/standable-cell? p (zipmap [:x :y :z] %) kind-at)))))))
+           (filter #(reach/standable-cell? p (zipmap [:x :y :z] %) kind-at))))))
 
 (defn pillar-item
   "{:item :count}: the carried climb block (choose/fillers-for, so reserves and an :avoid apply) with the largest count, or nil."

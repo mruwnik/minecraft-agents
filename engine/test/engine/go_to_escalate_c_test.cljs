@@ -350,15 +350,23 @@
         door-seen (tu/fake {:blocks hall :self {:pos {:x 0.5 :y 64 :z 0.5}} :states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}})
         door-dark (tu/fake {:blocks hall :self {:pos {:x 0.5 :y 64 :z 0.5}} :states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}})
         _ (dark-at door-dark [[2 64 0]])]
-    (is (= [2 64 0] (escape-way/wall-spot seen [0 64 0] [9 64 0])))
-    (is (not= [2 64 0] (escape-way/wall-spot dark [0 64 0] [9 64 0])) "the cell it would stand in never seen: not offered")
+    (is (= [2 64 0] (escape-way/wall-spot seen [0 64 0] [9 64 0] #{} nil)))
+    (is (not= [2 64 0] (escape-way/wall-spot dark [0 64 0] [9 64 0] #{} nil)) "the cell it would stand in never seen: not offered")
     (is (true? (escape/open-door-beside? door-seen [0 64 0])))
     (is (false? (escape/open-door-beside? door-dark [0 64 0])) "the only way to the door runs through a cell never seen")))
 
 (deftest wall-spot-is-the-cheapest-wall-toward-the-goal-not-the-nearest
   (let [yard (merge (box -12 63 -8 12 63 8 "stone") (box -2 64 2 -2 65 2 "stone") (box 7 64 0 7 65 0 "stone"))
         p (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})]
-    (is (= [6 64 0] (escape-way/wall-spot p [0 64 0] [10 64 0])) "a wall 6 steps off on the way beats one 5 steps off behind the body")))
+    (is (= [6 64 0] (escape-way/wall-spot p [0 64 0] [10 64 0] #{} nil)) "a wall 6 steps off on the way beats one 5 steps off behind the body")))
+
+(deftest priced-spot-is-bounded-by-the-price-of-its-cells-not-by-a-count-or-radius
+  (let [p (tu/fake {:blocks (box -3 63 -3 45 63 3 "stone") :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        steps (escape/level-steps p false)
+        far (fn [cell _ _] (= 40 (first cell)))]
+    (is (= [40 64 0] (escape-way/priced-spot p [0 64 0] [45 64 0] steps far #{} nil)) "dozens of rejected cells and 40 blocks away: still found, no cap or radius ends it")
+    (is (= [40 64 0] (escape-way/priced-spot p [0 64 0] [45 64 0] steps far #{} 3600)))
+    (is (nil? (escape-way/priced-spot p [0 64 0] [45 64 0] steps far #{} 3)) "its price, the walk there and on, is more than the bound affords: the search ends")))
 
 (deftest go-to-fills-a-one-cell-gap-under-a-low-ceiling-with-a-carried-block
   (async done
