@@ -551,8 +551,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "far" :parts [{:id "post" :cells [[12 64 0]] :want "oak_fence"}]}
-              {:keys [eng p]} (start {:inventory kit :unloaded ["12,64,0"]} {"far" plan})
+        (let [plan {:id "far" :parts [{:id "post" :cells [[20 64 0]] :want "oak_fence"}]}
+              {:keys [eng p]} (start {:inventory kit :unloaded ["20,64,0"]} {"far" plan})
               result (await (child-outcome eng job {:plan "far"} 60))]
           (is (seq (tu/walk-calls p)))
           (is (= :not-done result) "a chunk that has not loaded is waited for, never given up"))))))
