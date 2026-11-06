@@ -468,6 +468,7 @@
                                             nearer? (update :fruitless (fn [n] (max 0 (dec (or n 0))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
+                          (and (= :dig-route step) (seq (:cells e))) (assoc :route-ahead (mapv :cell (:cells e)))
                           nxt (assoc :escalation (cond-> nxt (:own-cut e) (assoc :own-cut true)) :escalation-from feet :planned (planned-cells (:primitives c) nxt feet) :holes-before (count (own-holes c)))
                           ;; a cut of its own build (a pen open to the animals): put back at once, the walk on not waited for
                           (and (:own-cut e) (or (not= :dig-route step) (not done?))) (assoc :restore-now true)

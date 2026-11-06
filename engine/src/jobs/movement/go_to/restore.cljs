@@ -65,14 +65,18 @@
                   (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))))))
 
 (defn ahead-cell?
-  "Whether cell is held for the walk: the goal's feet or head cell, or a cell nearer the goal than the feet (the rest of a
-  dug route), while the body is outside the call's range of it. A refill would send the walk back to dig it again."
+  "Whether cell is held for the walk: the goal's feet or head cell, or a cell of the last dug route (memory :route-ahead,
+  in walking order) the body has not passed (at or after the route cell nearest its feet), while the body is outside
+  the call's range of the goal. A refill would send the walk back to dig it again."
   [c pos cell]
   (let [feet (end/feet-cell c)
-        at #(u/dist (zipmap [:x :y :z] (mapv + [0.5 0.5 0.5] %)) pos)]
+        route (mapv vec (:route-ahead (ctx/mem c)))
+        at (fn [x] (u/dist (zipmap [:x :y :z] (mapv + [0.5 0.5 0.5] x)) (zipmap [:x :y :z] (mapv + [0.5 0.5 0.5] feet))))
+        near (when (seq route) (apply min-key #(at (route %)) (range (count route))))
+        i (.indexOf route (vec cell))]
     (boolean (or (goal-cell? c pos cell)
                  (and (:y pos) (> (u/dist (zipmap [:x :y :z] feet) pos) (:range (:args c) 1))
-                      (< (at cell) (at feet)))))))
+                      near (>= i near))))))
 
 (defn ^:async restore-round!
   "Put back the next hole this job's escalations dug (own-holes, each in another's zone, claim or plan: undoing the
@@ -80,7 +84,7 @@
   child call each (ctx/call). It runs once the body got on past the escalation (restore-next!). A hole skip-why
   refuses, or the place child ends without placing (nothing to place), stays in the ledger for restore-broken (a
   :changed one is forgotten). A hole the body stands in is stepped off once (jobs.lib.step-off) before it is tried again.
-  A placed one is forgotten. A hole nearer the goal than the feet is held until the body is within range of the goal (:restore-held)."
+  A placed one is forgotten. A hole of the dug route the body has not passed is held until the body is within range of the goal (:restore-held)."
   [c pos]
   (let [p (:primitives c)
         seen (:restore-seen (ctx/mem c) #{})
