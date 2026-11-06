@@ -13,7 +13,6 @@
             [jobs.lib.stair-time :as stair-time]
             [jobs.lib.places :as places]
             [jobs.lib.price :as price]
-            [jobs.lib.escape :as escape]
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of headings]]
@@ -171,13 +170,12 @@
         stand (fn [[x y z]] [x (inc y) z])
         ways (for [e (ctx/entries c :stair-way)
                    :when (= dim (:dim (:data e)))
-                   :let [floors (sort-by second (map stand (:floors (:data e))))
-                         [bx by bz :as bottom] (first floors)
-                         [_ ty _] (last floors)]
+                   :let [{bottom :cell :as b} (smem/bottom-of (:data e))
+                         [_ by _] bottom
+                         [_ ty _] (stand (last (sort-by second (:floors (:data e)))))]
                    :when (and bottom
                               (<= (js/Math.abs (- ty (:y feet))) 4) (<= by (- (:y feet) 3)) (or (nil? level) (>= by level)))]
-               {:cell bottom :heading (let [[nx _ nz] (second floors)]
-                                        (some-> (get escape/heading-names [(- bx nx) (- bz nz)]) name))})]
+               {:cell bottom :heading (:heading b)})]
     (loop [[w & more] (sort-by (comp second :cell) ways)]
       (when w
         (let [worth (await (price/walk-back-worth? c (child/walk-back-args :stair-own (:cell w)) (stair-time/steps-s :down (- (:y feet) (second (:cell w))))))]

@@ -8,6 +8,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.access.record-stair :as rs]
+            [jobs.lib.stair-memory :as smem]
             [jobs.lib.world-files :as world]))
 
 (def job 'jobs.access.record-stair)
@@ -95,3 +96,11 @@
         (let [r (await (record! [6.5 65 0.5] {} []))]
           (is (= [:stopped :no-stair] [(:kind (:end r)) (:reason (:data (:end r)))]))
           (is (empty? (ways r))))))))
+
+(deftest a-ways-bottom-and-heading-come-from-its-record-or-else-its-two-lowest-floors
+  (are [data expected] (= expected (smem/bottom-of data))
+    {:floors [[1 64 0]] :heading "east"} {:cell [1 65 0] :heading "east"}
+    {:floors [[1 64 0] [2 64 0]] :heading "south"} {:cell [1 65 0] :heading "south"}
+    {:floors [[1 64 0]]} {:cell [1 65 0] :heading nil}
+    {:floors [[1 64 0] [2 63 0] [3 62 0]]} {:cell [3 63 0] :heading "east"}
+    {:floors []} nil))

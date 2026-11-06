@@ -74,28 +74,39 @@
 (defn remember-way!
   "Remember floors as one connected way (memory :stair-way) with every earlier way that holds ground or one of the floors:
   those are taken in, so a climb cut in many runs does not push the body's other stairs out of the memory. Past
-  ::max-ways the least recently used way not near home goes (make-room!). Returns the joined floors."
-  [c ground floors]
+  ::max-ways the least recently used way not near home goes (make-room!). A heading (name) is kept in the entry as the way
+  its lowest step goes down. Returns the joined floors."
+  ([c ground floors] (remember-way! c ground floors nil))
+  ([c ground floors heading]
   (let [dim (.-dimension (.self (:primitives c)))
         olds (keep #(when (= dim (:dim (:data %))) (:floors (:data %))) (ctx/entries c :stair-way))
         {:keys [floors gone]} (cells/joined-way olds ground floors)]
     (when (seq gone) (ctx/forget-where! c :stair-way #(and (= dim (:dim %)) (contains? gone (:floors %)))))
     (let [left (make-room! c)]
-      (ctx/remember! c :stair-way {:dim dim :floors floors} {:cap (inc left) :ttl :forever}))
-    floors))
+      (ctx/remember! c :stair-way (cond-> {:dim dim :floors floors} heading (assoc :heading heading)) {:cap (inc left) :ttl :forever}))
+    floors)))
+
+(defn bottom-of
+  "The lowest stand of a way (entry data) and the heading name its last step goes down: the recorded :heading, else read
+  from the two lowest floors; {:cell [x y z] :heading name-or-nil }, nil for a way without floors."
+  [{:keys [floors heading]}]
+  (let [[[bx by bz] [nx _ nz]] (sort-by second floors)]
+    (when bx
+      {:cell [bx (inc by) bz]
+       :heading (or heading
+                    (when nx (some (fn [[h step]] (when (= step [(- bx nx) (- bz nz)]) h)) look/headings)))})))
 
 (defn foot-heading
   "The heading name of the last step down of a stair this body cut (memory :stair-way) whose lowest stand is the feet cell
   [x y z]: the way that stair goes on from here; nil when none ends here."
   [c feet]
   (let [dim (.-dimension (.self (:primitives c)))]
-    (some (fn [{{:keys [floors] :as d} :data}]
-            (let [[[bx by bz] [nx _ nz]] (sort-by second floors)]
-              (when (and (= dim (:dim d)) nx (= feet [bx (inc by) bz]))
-                (some (fn [[h step]] (when (= step [(- bx nx) (- bz nz)]) h)) look/headings))))
+    (some (fn [{d :data}]
+            (let [b (bottom-of d)]
+              (when (and (= dim (:dim d)) (= feet (:cell b))) (:heading b))))
           (reverse (ctx/entries c :stair-way)))))
 
 (defn record-way!
   "Remember the steps walked (memory :stair-way, one entry a connected way: remember-way!)."
   [c origin dir heading steps]
-  (remember-way! c (shape/add origin [0 -1 0]) (cells/way-floors origin dir heading steps)))
+  (remember-way! c (shape/add origin [0 -1 0]) (cells/way-floors origin dir heading steps) (when (= :down dir) (some-> heading name))))
