@@ -61,6 +61,14 @@
            pick (surface/climb-s (buried-body 64 71 72 [{:name "stone_pickaxe" :count 1}]))]
        (is (> hand (* 3 pick)) (str "stone by hand is 7.5 s a cut, 0.6 s with a stone pickaxe: " hand " vs " pick)))))
 
+(deftest a-worn-pickaxe-prices-the-long-stair-between-a-fresh-one-and-the-bare-hand
+  (with-mem {}
+    #(let [q (fn [inv] (surface/climb-s (buried-body 64 80 82 inv)))
+           fresh (q [{:name "stone_pickaxe" :count 1 :durability 100}])
+           worn (q [{:name "stone_pickaxe" :count 1 :durability 3}])
+           hand (q [])]
+       (is (< fresh worn hand) (str "3 uses left on a long stair: " fresh " < " worn " < " hand)))))
+
 (deftest a-stair-cut-through-a-build-pays-its-put-back-but-natural-rock-is-free
   (let [buried (fn [block] {:primitives (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1} {:name "stone_axe" :count 1}]
                                                                                    :blocks (dissoc (box -3 63 -3 3 67 3 block) "0,64,0" "0,65,0")})))})]

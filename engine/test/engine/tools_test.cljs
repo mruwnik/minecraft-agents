@@ -74,3 +74,15 @@
     "iron_ore" ["stone_pickaxe"] false
     "obsidian" ["iron_pickaxe"] true
     "obsidian" ["diamond_pickaxe"] false))
+
+(deftest a-worn-pickaxe-cuts-long-run-dearer-than-a-fresh-one-and-no-dearer-than-the-hand
+  (let [run (fn [inv n] (tools/run-ms (tu/fake {:inventory inv}) "stone" n))
+        pick (fn [left] [{:name "stone_pickaxe" :count 1 :durability left :max-durability 131}])
+        one (fn [inv] (tools/clear-ms (tu/fake {:inventory inv}) "stone"))
+        tool-ms (one (pick 100))
+        hand-ms (one [])]
+    (is (< tool-ms hand-ms))
+    (is (= (* 30 tool-ms) (run (pick 100) 30)) "a fresh pick breaks nothing in 30 cuts")
+    (is (= (+ (* 3 tool-ms) (* 27 hand-ms)) (run (pick 3) 30)) "3 uses at the pick's rate, the rest by hand")
+    (is (< (run (pick 100) 30) (run (pick 3) 30) (inc (run [] 30))) "dearer than fresh, no dearer than the bare hand")
+    (is (= (/ (run (pick 3) 30) 30) (tools/avg-clear-ms (tu/fake {:inventory (pick 3)}) "stone" 30)))))

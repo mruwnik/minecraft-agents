@@ -165,6 +165,29 @@
         (map #(js/Number (.clearTime p block-name %)))
         (apply min))))
 
+(defn run-ms
+  "The least total ms n cuts of block-name take: each carried item (and extra, one to be got) cuts as many as its uses
+  left (:durability, whole when unknown), quickest first, the bare hand without end. Not clear-ms n times: a worn
+  pickaxe breaks and the cuts after it go by the next tool."
+  ([p block-name n] (run-ms p block-name n nil))
+  ([p block-name n extra]
+   (let [ms (fn [item] (js/Number (.clearTime p block-name item)))
+         options (->> (u/inventory p)
+                      (map (juxt :name #(or (:durability %) choose/whole)))
+                      (concat [[nil ##Inf] (when extra [extra choose/whole])])
+                      (remove nil?)
+                      (map (fn [[item uses]] [(ms item) uses]))
+                      (sort-by first))]
+     (loop [[[t uses] & more] options left n total 0]
+       (if (or (<= left 0) (nil? t)) total
+           (recur more (- left uses) (+ total (* t (min left uses)))))))))
+
+(defn avg-clear-ms
+  "run-ms over n cuts per cut (clear-ms for n under 2): the rate a run of n cuts of block-name goes at."
+  ([p block-name n] (avg-clear-ms p block-name n nil))
+  ([p block-name n extra]
+   (if (< n 2) (clear-ms p block-name extra) (/ (run-ms p block-name n extra) n))))
+
 (defn needs-tool-to-clear?
   "Whether a job that only needs block-name gone (stair, tunnel, build) must have a tool first: no carried tool
   harvests it (can-harvest?) and nothing carried breaks it within quick-clear-ms. Leaves, snow, glass, dirt go by

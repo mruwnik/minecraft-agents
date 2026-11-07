@@ -136,7 +136,7 @@
 (defn climb-s
   "Seconds the stair up from a buried body's feet to the sky takes: rise blocks, each a walk step with the cuts of its
   three cells (a seen open cell costs none, the rest stone), a step that cuts at least cw/stair-cost of one step; a cut takes
-  the quickest carried tool or the bare hand (tools/clear-ms, as dig-route prices it) and adds what it destroys (cost/destroyed-fn); 0 for a body that is not
+  the quickest carried tool or the bare hand, a worn tool's uses left spent first (tools/avg-clear-ms over the stair's cuts) and adds what it destroys (cost/destroyed-fn); 0 for a body that is not
   buried, has climbed out already (climbed?) or has a stair of its own to walk up (own-top)."
   [c]
   (let [p (:primitives c)]
@@ -145,9 +145,10 @@
       (let [leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
             feet (sh-sense/feet p)
             destroyed (cost/destroyed-fn (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
+            cuts (* 3 (rise c))
             cut-s (fn [n] (when-not (and (sh-sense/seen-cell? p n) (not (sh-sense/solid-at? p n)))
                             (let [name (u/seen-name p n)
-                                  dig-s (when (cost/dig-cost (or name "stone")) (/ (tools/clear-ms p (or name "stone")) 1000))]
+                                  dig-s (when (cost/dig-cost (or name "stone")) (/ (tools/avg-clear-ms p (or name "stone") cuts) 1000))]
                               (+ (if (and dig-s (js/isFinite dig-s)) dig-s ##Inf) (destroyed name [(:x n) (:y n) (:z n)] false)))))
             leg (fn [dy] (let [cells (map #(assoc feet :y (+ (:y feet) dy %)) (range 3))]
                            (leg-s (map cut-s cells) nil (some #(not (sh-sense/seen-cell? p %)) (cons (assoc feet :y (+ (:y feet) dy -1)) cells)))))]
