@@ -100,7 +100,7 @@
    ;; the sleep job itself (the night reflex prices a walk past a zombie in its own room dearer than staying, and does not sleep); sleep holds the monsters-near refusal in pauses (a :pause child each) and asks again, never ending :sleep-failed
    :expect [{:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}
-            ;; the sleep job must stay running (neither stopped nor completed); no reflex is registered here, the refire is the next case
+            ;; the sleep job must stay running (neither stopped nor completed); no reflex is registered here
             {:no-event {:source :job :kind #{:stopped :completed} :data {:name "jobs.survival.sleep"}} :for-s 75}]
    :limit-s 90}
   {:name "monster-outside-bed-room-night-reflex-fires-and-sleep-holds-in-pauses"
