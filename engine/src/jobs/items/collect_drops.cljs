@@ -415,6 +415,10 @@
                 ;; the failing cell's attempt is paid for too; the plan's price is the least the dig leg cost. The search's
                 ;; CPU is spent too: a replan's search is priced against what is left of the worth, not the whole of it
                 booked (fn [] (+ (cost/dig-leg-price c start (take (inc (:n d)) priced)) (:searched-s r 0)))]
+            (when-not (or (= :continue d) (= :continue (:out d)))
+              (reset! spent-box (+ spent (if (= :dug d)
+                                           (+ (cost/dig-leg-price c start priced) (:searched-s r 0))
+                                           (booked)))))
             (cond
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
