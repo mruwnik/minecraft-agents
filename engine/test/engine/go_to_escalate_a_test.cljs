@@ -706,20 +706,28 @@
     (tu/run-async done
       (fn ^:async t []
         (let [search dig-route/search
-              nodes (atom 0)
-              slice (settings/get dig-route/settings ::dig-route/max-nodes)]
-          (set! dig-route/search (fn [block-at from goal opts]
-                                   (let [run (search block-at from goal opts)]
+              searches (atom [])
+              slice (settings/get dig-route/settings ::dig-route/max-nodes)
+              goal [152 64 2]]
+          (set! dig-route/search (fn [block-at from to opts]
+                                   (let [run (search block-at from to opts)
+                                         i (count (swap! searches conj {:from from :to to :cells 0}))]
                                      (fn [n & [m]]
-                                       (let [[_ used :as r] (run n m)]
-                                         (when (> (swap! nodes + used) slice)
-                                           (throw (js/Error. (str "the call's route searches expanded " @nodes " cells, past one slice"))))
+                                       (let [[a used :as r] (run n m)
+                                             {:keys [cells]} (get (swap! searches update (dec i) #(-> % (update :cells + used) (assoc :problem (:problem a)))) (dec i))]
+                                         ;; a search with no price bound is one the call's worth does not end: kept within a slice
+                                         (when (and (nil? (:max-s opts)) (> cells slice))
+                                           (throw (js/Error. (str "an unbounded route search " from "->" to " expanded " cells " cells, past one slice"))))
                                          r)))))
           (try
             (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 40.5 :y 64 :z 2.5}} :seeing-all true
                                                        :floor [-5 -5 40 10] :blocks (box 150 63 0 154 63 4 "stone")}
-                                                      {:pos [152 64 2] :range 0}))]
-              (is (<= @nodes slice) (pr-str @nodes (select-keys @out [:why :text])))
+                                                      {:pos goal :range 0}))
+                  [whole legs] ((juxt filter remove) #(= goal (:to %)) @searches)]
+              ;; the whole way is searched only under the call's price, over as many slices as it takes to prove it dearer
+              (is (= [:dearer] (distinct (map :problem whole))) (pr-str whole))
+              (is (seq legs))
+              (is (every? #(<= (apply max (map (fn [a b] (js/Math.abs (- a b))) (:from %) (:to %))) ec/leg-blocks) legs) (pr-str legs))
               ;; the void past the floor's edge holds no way a body without blocks can make: it gives up, not hangs
               (let [steps (mapv :step (events-of seen :go-to.escalated))]
                 (is (= [:stair :dig-route] (take 2 steps)) (pr-str @out))

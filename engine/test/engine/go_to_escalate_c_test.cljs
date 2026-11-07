@@ -27,6 +27,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
+            [jobs.lib.look :as look]
             [jobs.lib.tools :as tools]
             [jobs.lib.near :as near]
             [jobs.movement.go-to.climb-route :as climb-route]
@@ -468,12 +469,17 @@
     (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))
     (is (< (:seconds route) (cw/stair-cost 3)) "a cut-free step is no dearer than a walk step")))
 
+(defn at-chance
+  "f run with every unseen cell solid at chance."
+  [chance f]
+  (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))] (f)))
+
 (deftest a-new-stair-step-is-priced-as-a-step-cut-through-stone-and-dearer-unseen
   (let [inv [{:name "iron_pickaxe" :count 1}]
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         seen (body 50)
         step {:step :stair :heading :east :steps 1}]
-    (is (= (escape-way/price (body 1) [0 64 0] step) (escape-way/new-stair-step-s seen)) "the climb route's price of one unseen stone step")
+    (is (= (escape-way/price (body 1) [0 64 0] step) (escape-way/new-stair-step-s seen)) "the price of one unseen stone step")
     (is (< (cw/stair-step-s) (escape-way/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
     (is (< (escape-way/price seen [0 64 0] step) (escape-way/new-stair-step-s seen)) "seen cells cost less")))
 
@@ -483,14 +489,25 @@
         p (body 4.2)
         unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
         stair {:step :stair :heading :east :steps 3}
-        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
-    (is (= (:seconds route) (escape-way/price p [0 64 0] stair)))
+        route-s #(:seconds (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {}))]
+    (is (= (at-chance 1 route-s) (escape-way/price p [0 64 0] stair)) "unseen rock sure to be solid")
     (is (< (escape-way/price (body 50) [0 64 0] stair) (escape-way/price p [0 64 0] stair)) "unseen cells cost more")
+    (is (< (route-s) (at-chance 1 route-s)) "the climb route digs an unseen cell at the chance it is solid")
     (are [r n] (let [q (body r)
                      roof-s (* n ((escape/dig-share-fn q) [0 67 0]) (/ (tools/clear-ms q "stone") 1000))]
                  (= (+ (cw/pillar-cost 2) (* n unseen-s) (escape/pillar-knock q [0 64 0] 2) roof-s) (escape-way/price q [0 64 0] {:step :pillar :height 2})))
       50 0
       2.9 1)))
+
+(deftest a-climb-dearer-as-rock-than-its-bound-is-found-at-the-chance-its-cells-are-solid
+  (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}) 2)
+        climb #(climb-route/climb-way p [0 64 0] [3 67 0] (constantly true) {:skip #{} :bound-s %})
+        rock-s (at-chance 1 #(:route-s (climb nil)))
+        share-s (:route-s (climb nil))
+        bound (/ (+ rock-s share-s) 2)]
+    (is (< share-s rock-s))
+    (is (nil? (at-chance 1 #(climb bound))) "as rock it costs past the bound")
+    (is (= [:stair share-s] ((juxt :step :route-s) (climb bound))) "its search is not cut by a bound its share price is under")))
 
 (deftest a-pillar-roof-over-seen-loose-ground-is-priced-as-the-measured-mix-of-loose-block-and-stone
   (let [inv [{:name "iron_pickaxe" :count 1}]
