@@ -15,13 +15,13 @@
  [{:name "a-roof-whose-shelter-is-worth-more-than-the-dirt-over-it-is-not-tunnelled"
    :blocks [[:set [16 3 16] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false :worth 10})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell #at [16 2 16]}}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:block [16 2 16] "stone"] [:block [16 3 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
   {:name "a-pillar-does-not-start-under-a-roof-whose-shelter-is-worth-more-than-the-dirt"
    :blocks [[:set [16 4 16] "dirt"]]
    :act [[:job (jobs.blocks.dig {:pos #at [16 4 16] :worth 10})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell [16 2 16]}}} :within-s 80 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :roof-kept {:cell #at [16 2 16]}}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:block [16 2 16] "stone"] [:block [16 4 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
   {:name "a-root-dig-with-no-other-way-digs-through-the-roof"
