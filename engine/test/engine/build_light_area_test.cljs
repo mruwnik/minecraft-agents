@@ -4,6 +4,7 @@
             [engine.blocks-dig-test :as bd]
             [engine.test-util :as tu]
             [jobs.build.light-area :as light-area]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.torch-plan :as tp]
             [jobs.lib.util :as u]))
 
@@ -50,12 +51,18 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plans (atom 0)
+              states (atom #{})
               plan tp/plan
-              [{:keys [p]} r] (with-redefs [tp/plan (fn [x] (swap! plans inc) (plan x))]
+              keyed check-cache/keyed
+              [{:keys [p]} r] (with-redefs [tp/plan (fn [x] (swap! plans inc) (plan x))
+                                            check-cache/keyed (fn [c tag inputs thunk]
+                                                                (when (= ::light-area/lighting tag) (swap! states conj inputs))
+                                                                (keyed c tag inputs thunk))]
                                 (await (run room (constantly false) {:boxes [[[0 64 0] [8 64 8]]]})))]
           (is (= :done (:status r)) (pr-str r))
           (is (= 1 (count (torch-cells p room))))
-          (is (>= 3 @plans) "before the torch, after it: the step's start check, quote and step read one plan, not one each"))))))
+          (is (< 1 (count @states)) "the body looked round and hung a torch: more than one state")
+          (is (= (count @states) @plans) "each state of the room (args, torches hung, places failed, cells looked at, body cell) is planned once, however often the step's checks ask"))))))
 
 (deftest powder-snow-lets-light-through-like-air
   (async done

@@ -110,7 +110,7 @@
   the places failed, the cells looked at and the body's cell stay."
   [c]
   (let [{:keys [torches failed viewed]} (ctx/mem c)]
-    (check-cache/cached c [::lighting (:args c) torches failed viewed (u/cell-vec (u/self-pos c))] #(plan-lighting c))))
+    (check-cache/keyed c ::lighting [(:args c) torches failed viewed (u/cell-vec (u/self-pos c))] #(plan-lighting c))))
 
 (defn half-seen?
   "An open cell whose floor or head cell the body has not seen yet: whether it is spawn ground is undecided."
