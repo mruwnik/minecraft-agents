@@ -477,9 +477,11 @@
 (deftest a-route-searched-for-a-pickaxe-fetch-digs-at-the-fetched-pickaxes-price
   (let [route-s (fn [inv fetch] (:seconds (choose/route-answer (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv})
                                                                [0 64 0] [3 67 0] (constantly true) (constantly false) false fetch {})))
-        wooden (route-s [{:name "wooden_pickaxe" :count 1}] false)]
-    (is (= wooden (route-s [] (delay 1))) "the fetch's own price is not the route's")
-    (is (< wooden (route-s [] false)) "bare-handed the same cuts cost more")))
+        wooden (route-s [{:name "wooden_pickaxe" :count 1}] false)
+        bare (route-s [] false)]
+    (is (= (+ wooden 1) (route-s [] (delay 1))) "the fetch is paid once, on top of the cuts at its pickaxe's price")
+    (is (< wooden bare) "bare-handed the same cuts cost more")
+    (is (= bare (route-s [] (delay 1e6))) "a fetch dearer than what it saves is not made: the cuts by hand")))
 
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
@@ -524,8 +526,12 @@
       2.9 1)))
 
 (deftest a-climb-dearer-as-rock-than-its-bound-is-found-at-the-chance-its-cells-are-solid
-  (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]}) 2)
-        climb #(climb-route/climb-way p [0 64 0] [3 67 0] (constantly true) {:skip #{} :bound-s %})
+  (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}) 2)
+        ;; searched over slices as go-to's rounds search it, each question under its own owner
+        climb (fn [bound] (let [id (gensym)]
+                            (try (loop [] (let [e (climb-route/climb-way p [0 64 0] [3 67 0] (constantly true) {:skip #{} :bound-s bound :slice (choose/route-slice id)})]
+                                            (if (= :searching (:step e)) (recur) e)))
+                                 (finally (choose/end-searches! id)))))
         rock-s (at-chance 1 #(:route-s (climb nil)))
         share-s (:route-s (climb nil))
         bound (/ (+ rock-s share-s) 2)]
@@ -683,7 +689,7 @@
           (is (= :dig-route (:step (first (events-of seen :go-to.escalated)))) "the riser is cut before any stair")
           (is (= "air" (block p [6 63 0])) "the step up beyond the gap is cut level with the takeoff"))))))
 
-(deftest go-to-digs-a-stair-up-instead-of-a-long-priced-walk
+(deftest go-to-digs-its-way-up-instead-of-a-long-priced-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -691,10 +697,8 @@
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
           (let [steps (map :step (events-of seen :go-to.escalated))]
-            ;; the dig route is searched at the pickaxe's prices, as the stair is: it may cut a cheaper way up than a stair
-            (is (some #{:stair :dig-route} steps) "a way dug up, not the loop")
-            (is (every? #{:approach :stair :dig-route} steps))
-            (is (<= (count (filter #{:approach} steps)) 1) "the approach walk is not repeated")))))))
+            ;; the dig route is searched at the pickaxe's prices, as a stair is: the cheapest way dug up is a route, not a stair
+            (is (= [:approach :dig-route] (vec steps)) "one approach walk, then a way dug up, not the loop")))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
   (async done

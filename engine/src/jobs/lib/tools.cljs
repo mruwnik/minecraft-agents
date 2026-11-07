@@ -156,13 +156,14 @@
 (defn quick-clear-ms [] (settings/get settings ::quick-clear-ms))
 
 (defn clear-ms
-  "The least time in ms the bare hand or any carried item takes to break block-name (primitive clearTime; a block name the registry does not know counts as 0, free)."
-  [p block-name]
-  (->> (map :name (u/inventory p))
-       distinct
-       (cons nil)
-       (map #(js/Number (.clearTime p block-name %)))
-       (apply min)))
+  "The least time in ms the bare hand or any carried item (and item extra, one to be got) takes to break block-name (primitive clearTime; a block name the registry does not know counts as 0, free)."
+  ([p block-name] (clear-ms p block-name nil))
+  ([p block-name extra]
+   (->> (map :name (u/inventory p))
+        (concat [nil extra])
+        distinct
+        (map #(js/Number (.clearTime p block-name %)))
+        (apply min))))
 
 (defn needs-tool-to-clear?
   "Whether a job that only needs block-name gone (stair, tunnel, build) must have a tool first: no carried tool
