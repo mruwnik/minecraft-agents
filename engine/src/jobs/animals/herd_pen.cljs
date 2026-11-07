@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
+            [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.near :as near]
@@ -207,11 +208,16 @@
 (defn ^:async unseen-cell!
   "The cell of answer's :unloaded leaks (never seen), not in looked ([x y z] set), the body walks cheapest to see from
   (walk-pick), or nil. Offered are the nearest cells a look pays for (sense/cell-looks: the animal's worth less its trip
-  against the walk, the earlier looks counted fruitless)."
+  against the walk, the earlier looks counted fruitless). A cell within look-range a look from here does not make out
+  (look/makes-out-fn) gains nothing, so no look past it pays from here: the caller tries the gate or ends."
   [c answer looked]
-  (let [cells (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
-        ks (u/nearest-first (u/self-pos c) identity (mapv cell cells))
-        price ((sense/find-price c (cost/animal-find-worth (:mob (:args c)))) nil {:cells ks})
+  (let [here (u/self-pos c)
+        cells (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
+        ks (u/nearest-first here identity (mapv cell cells))
+        made-out? (look/makes-out-fn (:primitives c))
+        blind? #(and (u/within? here (u/cell-pos %) (look-range)) (not (made-out? %)))
+        price (some-> ((sense/find-price c (cost/animal-find-worth (:mob (:args c)))) nil {:cells ks})
+                      (update :gap-at (fn [gap-at] #(if (blind? %) ##Inf (gap-at %)))))
         offered (set (take (sense/cell-looks price ks (count looked) 0) ks))]
     (await (pick/pick-walk! c (filter #(offered (cell %)) cells)
                             (fn [pos] {:pos pos :range (look-range) :doors :never :ways #{:walk :clear-seal}})))))

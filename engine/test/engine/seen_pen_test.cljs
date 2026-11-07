@@ -12,6 +12,7 @@
             [jobs.animals.herd-pen :as hp]
             [jobs.animals.herd-survey :as hs]
             [jobs.lib.cost :as cost]
+            [jobs.lib.look :as lib-look]
             [jobs.lib.cost.value :as value]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.memory-age :as memory-age]
@@ -129,12 +130,15 @@
     (tu/run-async done
       (fn ^:async t []
         (let [worth value/animal-worth
+              makes-out lib-look/makes-out-fn
               s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))]
           (set! value/animal-worth (constantly 240)) ; a cow's food points at food-point-worth
+          (set! lib-look/makes-out-fn (fn [p] (let [f (makes-out p)] (fn [[x :as cell]] (and (< x 10) (f cell))))))
           (try
             (ht/submit! s {:target 1})
             (await (ht/run-ticks s 60))
-            (finally (set! value/animal-worth worth)))
+            (finally (set! value/animal-worth worth)
+                     (set! lib-look/makes-out-fn makes-out)))
           (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings")
           (is (< 5 (count (distinct (map #(js->clj (.-args %)) (h/calls (:p s) "look"))))) "more than five distinct look directions: priced, not cut off after five cells"))))))
 
@@ -221,16 +225,23 @@
     (is (nil? (hs/unseen-approach {:primitives #js {:sensedAt (fn [_] #js {:unknown true})}} {:why :other :cell [5 64 5]})))))
 
 (defn ^:async looked-cell
-  "unseen-cell!'s pick for one unseen leak at [5 64 0] and an animal worth `worth` seconds."
-  [worth]
-  (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :args {:mob "cow"}}]
-    (with-redefs [cost/animal-find-worth (constantly worth)
-                  ctx/worth (constantly ##Inf)]
-      (await (hp/unseen-cell! c {:leaks [{:why :unloaded :pos [5 64 0]}]} #{})))))
+  "unseen-cell!'s pick for unseen leaks at cells (default one at [5 64 0]), an animal worth `worth` seconds and a look from
+  here making out the cells made-out? holds for (default none)."
+  ([worth] (looked-cell worth [[5 64 0]] (constantly false)))
+  ([worth cells made-out?]
+   (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :args {:mob "cow"}}]
+     (with-redefs [cost/animal-find-worth (constantly worth)
+                   ctx/worth (constantly ##Inf)
+                   lib-look/makes-out-fn (constantly made-out?)]
+       (some-> (await (hp/unseen-cell! c {:leaks (mapv (fn [[x y z]] {:why :unloaded :pos {:x x :y y :z z}}) cells)} #{}))
+               ((juxt :x :y :z)))))))
 
 (deftest the-look-at-an-unseen-pen-cell-is-priced-by-the-animals-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [5 64 0] (some-> (await (looked-cell 1e6)) vec)) "a dear animal: the cell is looked at")
-        (is (nil? (await (looked-cell 0))) "an animal worth under its trip: no look pays")))))
+        (is (= [5 64 0] (await (looked-cell 1e6))) "a dear animal: the cell is looked at")
+        (is (nil? (await (looked-cell 0))) "an animal worth under its trip: no look pays")
+        (is (= [3 64 0] (await (looked-cell 1e6 [[3 64 0]] (constantly true)))) "a cell in look range a look makes out is looked at")
+        (is (nil? (await (looked-cell 1e6 [[3 64 0] [5 64 0]] (constantly false))))
+            "the nearest cell in look range a look from here does not make out buys nothing, so no look past it pays from here")))))
