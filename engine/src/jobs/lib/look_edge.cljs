@@ -113,9 +113,9 @@
 
 (defn walkable-near-fn
   "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once, kept while the
-  world and memory stay the same (reach-room/kept)."
+  world, memory and room-roof-height stay the same (reach-room/kept)."
   [p {:keys [x y z] :as region}]
-  (reach-room/kept p (str "walkable-near|" x "|" y "|" z) (fn [_] (walkable-near-fn* p region))))
+  (reach-room/kept p (str "walkable-near|" (sh-sense/room-roof-height) "|" x "|" y "|" z) (fn [_] (walkable-near-fn* p region))))
 
 (defn walkable-near
   "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.

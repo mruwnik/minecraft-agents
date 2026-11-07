@@ -888,6 +888,19 @@
     (is (< (:x nearer) (:x farthest)))
     (is (nil? (far (constantly false))))))
 
+(deftest a-kept-walkable-near-is-read-again-when-the-room-roof-height-changes
+  (let [p (:primitives (remembering-ctx tunnel))
+        reads (atom 0)
+        orig look-edge/walkable-near-fn*
+        near #(with-redefs [look-edge/walkable-near-fn* (fn [p r] (swap! reads inc) (orig p r))] (look-edge/walkable-near p [6 64 0]))]
+    (near)
+    (near)
+    (reset! reads 0)
+    (near)
+    (is (zero? @reads) "same setting, same memory: kept")
+    (settings/with-settings {:jobs.lib.shelter.sense/room-roof-height 3} near)
+    (is (= 1 @reads) "another room-roof-height reads the stands anew")))
+
 (deftest the-stand-cells-of-a-room-are-read-once-while-its-memory-holds
   ;; each dig child of a dig route asks its night check, whose walk-look reads the stand cells of the room round the body
   (let [p (:primitives (remembering-ctx tunnel))
