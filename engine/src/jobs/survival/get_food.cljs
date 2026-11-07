@@ -568,7 +568,7 @@
                             (report/animals-text (animals/passed-over c (animal-opts c false)) (animals/nearby c (hunt-radius c))))
            :food (food-level c) :carry (animals/carry c) :have have)))
 
-(defn ^:async round
+(defn ^:async round*
   "One whole attempt: eat, then while hungry take the next way and eat again. A step that yields (:continue) is
   waited out in a reflex round (a reflex never yields), else the round yields :continue and keeps the child; a cut
   call starts again from the world."
@@ -602,3 +602,19 @@
                     (ctx/remember! c :food-too-dangerous {:why why} danger-policy)
                     (ctx/end c :condition-failed {:reason :too-dangerous :why why} {:food (food-level c)}))
                   :else (none! c)))))))
+
+(defn- log-food!
+  "One :get-food.food line (body food and saturation) at the call's start and end, so the food a hunt or cook gave is measured, not assumed."
+  [c at]
+  (let [self (.self (:primitives c))]
+    (ctx/emit! c :get-food.food :info {:at at :food (.-food self) :saturation (.-foodSaturation self)})))
+
+(defn ^:async round
+  "round*, with the body's food and saturation logged when the call starts and when it ends (a yield is not an end)."
+  [c]
+  (when-not (:food-logged (ctx/mem c))
+    (ctx/update-mem! c assoc :food-logged true)
+    (log-food! c :start))
+  (let [r (await (round* c))]
+    (when-not (= :continue r) (log-food! c :end))
+    r))

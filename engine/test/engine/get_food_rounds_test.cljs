@@ -1588,3 +1588,12 @@
     (with-redefs [get-food/hunt-reach (fn [_ kind] ({"chicken" 7 "cow" 50} kind))
                   get-food/keep-for (constantly 0)]
       (is (= 7 (:radius (second (get-food/kill-job {:primitives (tu/fake-on-floor {})} false {:entity animal}))))))))
+
+(deftest a-call-logs-the-body-food-and-saturation-at-its-start-and-its-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1 :foodSaturation 0}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (let [lines (mapv #(select-keys % [:at :food :saturation]) (events-of seen :get-food.food))]
+            (is (= [{:at :start :food 1 :saturation 0} {:at :end :food 1 :saturation 0}] lines))))))))
