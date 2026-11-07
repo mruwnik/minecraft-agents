@@ -4,6 +4,7 @@
             [engine.build-from-plan-test :as b]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.hostile-test :as h]
             [engine.events :as events]
@@ -193,6 +194,20 @@
               event (await (run-seeing {:at [3 64 2]} (assoc-in w [:self :pos] {:x 3 :y 64 :z 2}) 90 60))]
           (is (= {:closed? true :cells 24} (select-keys event [:closed? :cells])) "the body walks round the pillar to see the gate")
           (is (= [{:pos {:x -1 :y 64 :z 2} :open? false}] (:gates event))))))))
+
+(deftest an-unseen-cell-the-walk-did-not-reveal-is-not-walked-to-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (world {"-1,64,2" "oak_fence_gate" "1,64,2" "stone" "1,65,2" "stone" "1,66,2" "stone"} {"-1,64,2" {:open false}})
+              s (h/setup-seeing (assoc-in (assoc w :yaw 90 :rand (constantly 0.5)) [:self :pos] {:x 3 :y 64 :z 2}) nil)
+              walks (atom 0)
+              stay {:ways [:walk :clear-seal]
+                    :round (fn ^:async w [c] (swap! walks inc) (ctx/end c :done nil {:arrived true}))}
+              eng (assoc-in (:eng s) [:jobs 'jobs.movement.go-to] stay)]
+          (core/submit! eng (list job {:ways #{:check} :at [3 64 2]}) {})
+          (await (tu/run-ticks eng (:clock s) 14 700))
+          (is (= 1 @walks) "a walk that arrived and left the cell unseen changed nothing: no second walk to it"))))))
 
 (deftest a-pen-longer-than-three-looks-is-walked-end-to-end
   (async done

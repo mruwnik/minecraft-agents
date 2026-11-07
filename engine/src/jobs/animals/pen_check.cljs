@@ -82,7 +82,6 @@
   {::job-time-s {:default 30 :doc "Seconds a pen check may take besides the look at its cells; the default time spend is this plus ::cell-s a cell the fill may visit." :spec (a/num-in 0 nil)}
    ::cell-s {:default 0.03 :doc "Seconds of the default time spend per cell the fill may visit (::max-cells, or the footprint of a given :box when smaller)." :spec (a/num-in 0 nil)}
    ::max-cells {:default pen/default-max-cells :doc "Most cells the fill visits before it gives up with :unbounded." :spec (a/int-in 1 nil)}
-   ::max-walks {:default 3 :doc "Walks to the same unseen cell (no progress) before the answer is given." :spec (a/int-in 0 nil)}
    ::max-passes {:default 3 :doc "Patch passes (patch, then read again) before the leaks that remain are reported." :spec (a/int-in 1 nil)}
    ::patch-s {:default 120 :doc "Seconds of the default time spend for patching." :spec (a/num-in 0 nil)}
    ::animal-radius {:default 48 :doc "Blocks round the body within which animals on the pen's cells are listed." :spec (a/num-in 1 nil)}})
@@ -307,13 +306,11 @@
         final (when (= :unloaded (:reason checked))
                 (pen-read/read p (assoc opts :final? true)))
         unseen (when-not (proven-leak? p opts (or final checked) at) (unseen-leak checked at (u/self-pos c)))
-        {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
-        stuck (if (= unseen last-unseen) walks 0)
-        walk (when (and unseen (< stuck (settings/get settings ::max-walks)))
+        walk (when (and unseen (not= unseen (:last-unseen (ctx/mem c))))
                (await (near/go-near! c unseen 4 {:doors :never :see true :ways #{:walk :clear-seal}})))]
     (case walk
       :partial :continue
-      :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
+      :there (do (ctx/update-mem! c assoc :last-unseen unseen) :continue)
       (let [checked (or final checked)
             ;; a seen leak is the answer: the unseen ground beyond it is no extra finding
             checked (cond-> checked (= :leak (:reason checked)) (update :leaks #(vec (remove (comp #{:unloaded} :why) %))))
