@@ -255,11 +255,13 @@
 
 (defn worth-of
   "Seconds a root harvest is worth: one ripe hive's yield (apiary/yield-worth of the tool carried, else of wanted-tool)
-  for each hive it would work, :max at most."
+  for each hive it would work, :max at most, plus a part of the area never seen at the ripe share the hives seen give."
   [c]
   (let [{:keys [with max]} (:args c)
-        todo (count (:todo (classify c (hives c (apiary/center-of c) true))))]
-    (* (min (or max todo) todo) (apiary/yield-worth (or (tool-for with (u/inventory (:primitives c))) (wanted-tool with))))))
+        seen (classify c (hives c (apiary/center-of c) true))
+        todo (count (:todo seen))
+        yield (apiary/yield-worth (or (tool-for with (u/inventory (:primitives c))) (wanted-tool with)))]
+    (+ (* (min (or max todo) todo) yield) (apiary/unseen-worth c yield seen))))
 
 (defn done?
   "Later with the hives harvested and the ripe hives still to work: the run ends itself with the reason it stopped for."

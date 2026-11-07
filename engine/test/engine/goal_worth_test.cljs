@@ -125,6 +125,13 @@
     (is (= yield (worth 'jobs.apiary.guard open {:box am/box})) "one open fire")
     (is (zero? (worth 'jobs.apiary.guard carpeted {:box am/box})) "a carpeted fire needs no guard")))
 
+(deftest apiary-harvest-and-guard-of-an-area-never-seen-are-worth-one-hive-at-the-prior-ripe-share
+  (let [prior (* (cost/field-share :ripe 0 0) (:value (cost/goal-value [(item "honeycomb" 3)])))
+        unseen #(doto (tu/blind (tu/fake-on-floor (am/world {:inventory (am/inv "shears" 1)}))) (aset "sensedAt" (fn [_] #js {:unknown true})))]
+    (is (pos? prior))
+    (is (= prior (worth 'jobs.apiary.harvest (unseen) {:box am/box :with :either})) "no ripe hive known yet")
+    (is (= prior (worth 'jobs.apiary.guard (unseen) {:box am/box})) "no fire known yet")))
+
 (def field {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
 
 (deftest a-plant-is-worth-its-bare-cells-more-on-a-watered-field

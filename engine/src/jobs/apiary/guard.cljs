@@ -307,9 +307,12 @@
 
 (defn worth-of
   "Seconds a root guard is worth: one hive's shears yield (apiary/yield-worth) for each fire it would work, as the
-  apiary pass prices a guard."
+  apiary pass prices a guard, plus a part of the area never seen at the ripe share the hives seen give."
   [c]
-  (* (count (:todo (survey c (apiary/center-of c) true))) (apiary/yield-worth (apiary/tool-item :shears))))
+  (let [center (apiary/center-of c)
+        yield (apiary/yield-worth (apiary/tool-item :shears))]
+    (+ (* (count (:todo (survey c center true))) yield)
+       (apiary/unseen-worth c yield (apiary/classify c (apiary/hives c center true))))))
 
 (defn done?
   "Ok before any work, after a look round, when fires stand in the area and none needs work; later with the fires

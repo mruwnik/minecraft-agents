@@ -241,6 +241,20 @@
   [tool]
   (:value (cost/goal-value [(hive-yield tool)])))
 
+(defn unseen-cells
+  "The watched cells never seen, floored."
+  [c]
+  (let [p (:primitives c)]
+    (filterv #(look/unseen? p [%]) (map #(update-vals % js/Math.floor) (watched-cells c)))))
+
+(defn unseen-worth
+  "Seconds the part of the area never seen is worth: one hive's yield (seconds) at the ripe share the hives seen (a classify result) give
+  (cost/field-share, as farm tend prices unseen cells); 0 when every watched cell was seen."
+  [c yield seen]
+  (if (seq (unseen-cells c))
+    (* yield (cost/field-share :ripe (:ripe seen) (:hives seen)))
+    0))
+
 (defn classify
   "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
   [c hs]

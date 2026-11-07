@@ -189,13 +189,6 @@
   (let [f (facts c)]
     (boolean (some #(:call (decide % (need/args-with-ways c) f)) steps))))
 
-(defn unseen-cells
-  "The watched cells never seen, floored."
-  [c]
-  (let [p (:primitives c)]
-    (filterv #(look/unseen? p [%]) (map #(update-vals % js/Math.floor) (apiary/watched-cells c)))))
-
-
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}})
 
@@ -215,9 +208,7 @@
         stored (keep (fn [n] (let [over (- (reduce + 0 (map :count (filter #(= n (:name %)) carried))) (get (:carry args) n 0))]
                                (when (pos? over) {:name n :count over})))
                      (:stored f))]
-    (+ (if (seq (unseen-cells c))
-         (* yield (cost/field-share :ripe (:ripe (:hives f)) (:hives (:hives f))))
-         0)
+    (+ (apiary/unseen-worth c yield (:hives f))
        (if (runs? :harvest) (* (count (:todo (:hives f))) yield) 0)
        (if (runs? :guard) (* (count (:unsafe f)) yield) 0)
        (if (runs? :breed) yield 0)
@@ -242,7 +233,7 @@
         feet (sh-sense/feet p)
         looked (:skip (ready/walked-state c nil))]
     (check-cache/cached c [::look-leg (sense/known-memory p) (mapv js/Math.floor [(:x feet) (:y feet) (:z feet)]) looked]
-                        #(->> (unseen-cells c)
+                        #(->> (apiary/unseen-cells c)
                               (remove (fn [{:keys [x y z]}] (looked [x y z])))
                               (sort-by (fn [cell] (u/dist feet cell)))
                               (keep (fn [side] (when-let [to (stand-near p feet side)] {:side side :to to})))
@@ -270,7 +261,7 @@
   [c]
   (cond
     (would-run? c) (contract/ok :step "a step would run")
-    (empty? (unseen-cells c)) (contract/later :nothing-to-do "nothing to do at the apiary")
+    (empty? (apiary/unseen-cells c)) (contract/later :nothing-to-do "nothing to do at the apiary")
     (not (look/surveyed? c :near)) (contract/look :nothing-to-do "nothing to do at the apiary yet; part of it was never seen")
     :else (unseen-status c)))
 
@@ -377,7 +368,7 @@
       (not (in-order? (need/args-with-ways c) facts))
       (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
 
-      (seq (unseen-cells c))
+      (seq (apiary/unseen-cells c))
       (contract/later :unseen "part of the apiary was never seen" :units :steps :done ran :left left)
 
       :else
