@@ -200,3 +200,8 @@
         (let [z (js/Math.floor (/ 4.5 cost/least-block-s))]
           (is (< (* z cost/least-block-s) 5 (cost-planner/left-s z true)))
           (is (= :searching (await (cheapest-while-reaching [6 z 400])))))))))
+
+(deftest a-walks-least-seconds-are-cost-least-route-s-of-its-flat-blocks
+  ;; one formula for the straight-route bound (job-rules 9.6)
+  (with-redefs [cost/least-route-s (fn [blocks range] [blocks range])]
+    (is (= [5 1] (pick/walk-s {:x 0.5 :y 64 :z 0.5} {:pos {:x 3 :y 64 :z 4} :range 1})))))

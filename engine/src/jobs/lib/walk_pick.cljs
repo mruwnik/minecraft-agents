@@ -18,10 +18,10 @@
 
 (defn walk-s
   "Seconds a walk from `from` into :range of :pos (go-to args) takes at the least: the flat blocks between their cells
-  less the range (arrival is within the range of the goal cell), at cost/least-block-s. A lower bound of any plan's."
+  less the range (arrival is within the range of the goal cell), cost/least-route-s. A lower bound of any plan's."
   [from {:keys [pos range]}]
   (let [f js/Math.floor]
-    (* (max 0 (- (js/Math.hypot (- (f (:x from)) (f (:x pos))) (- (f (:z from)) (f (:z pos)))) (or range 0))) cost/least-block-s)))
+    (cost/least-route-s (js/Math.hypot (- (f (:x from)) (f (:x pos))) (- (f (:z from)) (f (:z pos)))) (or range 0))))
 
 (defn not-worth
   "{:reason :not-worth :worth :walk-s} while even the least walk from the body into walk (go-to args, nil: none) costs
