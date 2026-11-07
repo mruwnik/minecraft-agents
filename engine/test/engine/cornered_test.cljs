@@ -7,6 +7,8 @@
             [jobs.lib.pillar :as lpl]
             [jobs.lib.blocks :as lb]
             [jobs.lib.combat :as combat]
+            [jobs.lib.hostile-fight :as hostile-fight]
+            [jobs.survival.hide-out :as hide-out]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.world-files :as ew]
@@ -1402,16 +1404,34 @@
           (is (= 1 (count (calls p "steer"))) "the one step into the water, no flee step out of it once the enderman looks calm")
           (is (zero? (count (calls p "place")))))))))
 
-(deftest an-enderman-that-stays-ends-the-hold-in-water-and-the-next-option-comes
+(defn hold-pricer
+  "A job that prices the cornered answers (hostile-fight/weigh of cornered-answers) to the near hostiles, an angry
+  enderman among them, after each of held [holds held-s] (the memory a flight's holds leave), into out."
+  [out held]
+  {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+   :round (fn ^:async hold-pricer-round [c]
+            (let [hs (cornered/near-hostiles c)]
+              (reset! out (vec (for [[holds held-s] held]
+                                 (do (ctx/update-mem! c assoc :holds holds :held-s held-s)
+                                     (:prices (hostile-fight/weigh c hs (cornered/cornered-answers c hs false nil false true {:water 0}))))))))
+            (ctx/end c :done nil))})
+
+(deftest an-enderman-that-stays-makes-each-hide-held-in-water-dearer-until-the-walls-are-cheaper
+  ;; be0a68d8: the hold was priced by the holds left under a cap, so its price fell each hold and only that cap ended it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 0 64 0) "water"}
-                                      :entities [(enderman 2.5 64 0.5)]})]
-          (core/submit! eng retreat {})
-          (await (settings/with-settings {:jobs.survival.respond.options/hold-cap 2}
-                   (fn ^:async tick [] (await (core/tick! eng)))))
-          (is (pos? (count (calls p "place"))) "after the capped holds the body walls itself in"))))))
+        (let [out (atom nil)
+              hide (hide-out/hide-s)
+              {:keys [eng]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 0 64 0) "water"}
+                                    :entities [(enderman 2.5 64 0.5)]}
+                                   (assoc fj/jobs 'test.hold-prices (hold-pricer out [[0 0] [(quot hide 2) (/ hide 2)] [hide hide] [1000 (* 1000 hide)]])))]
+          (core/submit! eng '(test.hold-prices) {})
+          (await (core/tick! eng))
+          (let [[fresh half one long] @out]
+            (is (= (:water fresh) (:water half)) (str "within one hide nothing changed, nor does the hold's price: " (pr-str (map :water @out))))
+            (is (< (:water half) (:water one)) "a hide the enderman outlasted counts against the next")
+            (is (< (:plug long) (:water long)) (str "held on long enough, the walls are cheaper: " (pr-str long)))))))))
 
 (deftest a-body-with-an-enderman-near-and-no-water-walks-under-a-nearby-roof
   (async done
@@ -1427,6 +1447,12 @@
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
 
+(defn leaves-on-steer!
+  "The mobs of fake p leave once the body takes its first step: a test that reads the first cornered prices ends there,
+  not after the holds a staying enderman is priced for."
+  [p]
+  (.override (.-world p) "steer" (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))))
+
 (deftest a-farther-roof-is-priced-above-a-nearer-one
   (async done
     (tu/run-async done
@@ -1435,6 +1461,7 @@
                            (let [{:keys [eng p seen]} (setup {:inventory [{:name "dirt" :count 16}]
                                                               :blocks {(key-of x 66 0) "stone" (key-of x 63 0) "stone"}
                                                               :entities [(enderman -1.5 64 0.5)]})]
+                             (leaves-on-steer! p)
                              (core/submit! eng retreat {})
                              (await (core/tick! eng))
                              (-> (filter #(= :retreat.cornered (:kind %)) @seen) first :prices :roof)))
@@ -1447,11 +1474,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [prices (fn ^:async ps [inventory]
-                       (let [{:keys [eng seen]} (setup {:inventory inventory
-                                                        :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
-                                                        :entities [(enderman -1.5 64 0.5)]})]
+                       (let [{:keys [eng p seen]} (setup {:inventory inventory
+                                                          :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
+                                                          :entities [(enderman -1.5 64 0.5)]})]
+                         (leaves-on-steer! p)
                          (core/submit! eng retreat {})
-                         (await (settings/with-settings {:jobs.survival.respond.options/hold-cap 600}
+                         ;; a long hide: the hold, taken again, repeats dearer than what may follow it
+                         (await (settings/with-settings {:jobs.survival.hide-out/hide-s 600}
                                   (fn ^:async tick [] (await (core/tick! eng)))))
                          (-> (filter #(= :retreat.cornered (:kind %)) @seen) first :prices)))
               with-blocks (await (prices [{:name "dirt" :count 16}]))

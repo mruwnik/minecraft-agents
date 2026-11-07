@@ -67,7 +67,7 @@
                        :spec (a/map-of #{:beside :clear} (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
                        :doc "Of n pillars of a flight (built, or failed for a mob: a refused block or a knockback with a hostile near the cell, or a mob in the cell), k failed so, one per situation (a flight's feet cell and class), by the melee hostiles when it began (respond.pillar/mob-class): :beside, one whose box overlaps a cell the pillar fills, :clear none. The trial and probe bodies' logs on 2026-10-28 (a refusal is physics given the class, which staged scenes do not skew). Recount: node tools/event-counts.mjs wall-places."}
    ::pillar-s {:default 1 :doc "Seconds a cornered pillar takes to lift the body out of a melee mob's reach (a jump and a place a block): the blows it costs then are weighed against the fight's." :spec (a/num-in 0 nil)}
-   ::hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
+   ::hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes standing against a creeper it has no way out of before it tries the next option; 0: none." :spec (a/int-in 0 nil)}
    ::flight-timeout-s {:default 5 :doc "Seconds bounding one step of the flight: the mob moves, so the next step aims again." :spec (a/num-in 0 nil)}
    ::enderman-close {:default 3 :doc "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)." :spec (a/num-in 0 nil)}
    ::creeper-keep {:default 5 :doc "Blocks within which a creeper stops the fight walking toward a mob on its side: the fight swings from where the body stands, never a step nearer the creeper." :spec (a/num-in 0 nil)}})
@@ -274,15 +274,17 @@
   with a back-off step to take (back-off-of's :target; nil: none or tried), :back-off the walk away
   (hostile/cornered-answers) caught as its search says (:caught), and with swim? (afloat, a drowned near) :swim-out the
   swim to dry land and walk on (hostile/flee-answer, caught at the prior: no search runs from the shore); with enderman?
-  (an angry one near) :water and :roof not yet tried, the holds left (hold!) where hostiles but the enderman reach the
-  body (cost/hold-answer); home?: the body is in its home room."
+  (an angry one near) :water and :roof not yet tried, a hide's seconds (hide-out/hide-s, the window its stay chance is
+  counted over) held where hostiles but the enderman reach the body (cost/hold-answer), each whole hide this flight held
+  (memory :held-s) counted as one the danger outlasted: the hold lasts while it is the cheapest; home?: the body is in
+  its home room."
   ([c hostiles home? back-off swim? enderman?] (cornered-answers c hostiles home? back-off swim? enderman? nil))
   ([c hostiles home? back-off swim? enderman? walks]
   (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))
         p (:primitives c)
         hold (fn [o] (cost/hold-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) hostiles)
                                        :walk-s (get walks o 0) :then (vec (remove nil? (vals a)))
-                                       :seconds (/ (* (max 0 (- (settings/get settings ::hold-cap) (:holds (ctx/mem c) 0))) (flight/wait-ms)) 1000)}))]
+                                       :seconds (hide-out/hide-s) :stayed (quot (:held-s (ctx/mem c) 0) (hide-out/hide-s))}))]
     (cond-> (dissoc a :flee)
       (contains? a :flee) (assoc :back-off (:flee a))
       swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil))
@@ -388,7 +390,7 @@
       (do (flight/tried! c :back-off) (if moved? :again nil)))))
 
 (defn ^:async hold!
-  "One hold (a pause of flight/wait-ms) in a spot an enderman cannot use: :again, or nil once the flight has held
+  "One hold (a pause of flight/wait-ms) standing against a creeper: :again, or nil once the flight has held
   hold-cap times (the option is then tried! and the next one of the order comes)."
   [c option why]
   (if (>= (:holds (ctx/mem c) 0) (settings/get settings ::hold-cap))
@@ -409,14 +411,17 @@
 
 (defn ^:async stand!
   "Walk to and stand in a place of kind where (jobs.survival.stand-in: :water, :roof or :dry), a leg a step: :again while it
-  walks, and once it stands there a short hold (hold!, why; no hold without a why). nil when there is none or the walk is
-  blocked (the option is tried! then)."
+  walks, and once it stands there a pause of flight/wait-ms (why; none without a why), kept in memory :held-s: :again,
+  the next step prices the hold anew. nil when there is none or the walk is blocked (the option is tried! then)."
   [c option where why]
   (let [e (await (ctx/call c option 'jobs.survival.stand-in {:where where :leg-s (stand-leg-s (recently-hurt? c))}))]
     (cond
       (= :continue e) :again
       (not= :done (:kind e)) (do (flight/tried! c option) nil)
-      why (await (hold! c option why))
+      why (let [s (/ (flight/wait-ms) 1000)]
+            (await (child/pause! c s why))
+            (ctx/update-mem! c update :held-s (fnil + 0) s)
+            :again)
       :else :again)))
 
 (defn ^:async blocked!

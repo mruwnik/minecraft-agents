@@ -699,15 +699,16 @@
     (counted-chance {:k 0 :n 0 :prior [plantable unfit]})))
 
 (defn hide-stays
-  "The chance the danger is still about when a hide in a refuge ends: counted-chance of ::hide-stays."
-  []
-  (counted-chance (settings/get settings ::hide-stays)))
+  "The chance the danger is still about when a hide in a refuge ends: counted-chance of ::hide-stays, with stayed
+  (default 0) more hides counted that this danger outlasted."
+  ([] (hide-stays 0))
+  ([stayed] (counted-chance (-> (settings/get settings ::hide-stays) (update :k + stayed) (update :n + stayed)))))
 
 (defn stays-chance
   "The chance the danger is still about when a hide ends: 1 when a mob of mobs is known not to pass (:burns false: it
-  does not burn by day under open sky), so the cover only delays it; else hide-stays."
-  [mobs]
-  (if (some #(false? (:burns %)) mobs) 1 (hide-stays)))
+  does not burn by day under open sky), so the cover only delays it; else hide-stays (stayed: its hides it outlasted)."
+  ([mobs] (stays-chance mobs 0))
+  ([mobs stayed] (if (some #(false? (:burns %)) mobs) 1 (hide-stays stayed))))
 
 (defn exits
   "The answer besides the fight or flight owed that ends a stay on a cover: waiting dawn-s seconds for the sun to burn
@@ -744,14 +745,15 @@
   "The answer of walking walk-s seconds (default 0) to a spot no enderman reaches (water, under a 2-high roof) and holding there for
   seconds among mobs [flee-mob's] wearing equipment: an angry enderman's blows over the walk (it teleports to the body on the way),
   the blows of the rest over walk and hold (stand-answer), the walk and hold the body's seconds; then, by the chance
-  the mobs are still about (stays-chance, an enderman may still be angry), the answers of then."
-  [{:keys [mobs seconds walk-s then equipment] :as hold}]
+  the mobs are still about (stays-chance, an enderman may still be angry; stayed, default 0, the holds of seconds they
+  already outlasted), the answers of then."
+  [{:keys [mobs seconds walk-s then equipment stayed] :as hold}]
   (let [walk-s (or walk-s 0)
         {enders true others false} (group-by #(= "enderman" (:name %)) mobs)
         a (add-blows (stand-answer (assoc hold :mobs others :seconds (+ walk-s seconds)))
                      (blows-over (armour/armour-stats equipment) (map #(assoc % :distance 0 :start 0) enders) walk-s))]
     (cond-> (assoc a :seconds (+ walk-s seconds))
-      (seq then) (assoc :then (vec then) :stays (stays-chance mobs)))))
+      (seq then) (assoc :then (vec then) :stays (stays-chance mobs (or stayed 0))))))
 
 (defn home-work-share
   "The share of a hide in the body's own house that work fills: counted-chance of ::home-work-counts."
