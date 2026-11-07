@@ -851,7 +851,7 @@
 
 (defn group-parts
   "{:chance :death :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
-  threat-answers, its answer-death-chance and what that death costs (decide's :death), the hp taken in the outcomes the body lives through (lived-damage), and the seconds it holds the body
+  threat-answers, its answer-death-chance and what that death costs (decide's :death), the hp taken in the outcomes the body lives through (lived-damage, by the share of them that also live through the repeats :chance counts), and the seconds it holds the body
   at or near the place (its :near, a flight's way out; else its :seconds). A ranged mob gets to the body at its first hit
   (death/notice-prior's count): that blow has landed before the answer, whose blows are the ones after it."
   [body names caught at]
@@ -861,11 +861,13 @@
         struck (assoc body :absorption (max 0 (- shield first-hits)) :health (- (or (:health body) 20) (max 0 (- first-hits shield))))
         answers (threat-answers struck names caught)
         {k :answer death :death} (decide struck answers at)
-        a (get answers k)]
-    {:chance (if (pos? (life struck)) (answer-death-chance struck a at death) 1)
+        a (get answers k)
+        chance (if (pos? (life struck)) (answer-death-chance struck a at death) 1)]
+    {:chance chance
      :death death
      :hurt (if (pos? (life struck))
-             (let [{:keys [dies lived]} (blows-outcome struck a)] (+ (* first-hits (- 1 dies)) lived))
+             (let [{:keys [dies lived]} (blows-outcome struck a)]
+               (if (< dies 1) (* (+ (* first-hits (- 1 dies)) lived) (min 1 (/ (- 1 chance) (- 1 dies)))) 0))
              0)
      :near (or (:near a) (:seconds a) 0)}))
 

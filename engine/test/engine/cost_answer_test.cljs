@@ -438,7 +438,7 @@
 (deftest a-lethal-threat-costs-the-body-its-death-not-the-hp-it-would-have-lost-too
   ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected; the walk out of her range about 13
   (let [route (fn [weight & mobs] {:cells [(assoc here :s 60)] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
-    (doseq [r [(route 1 "witch") (route 0.3 "witch")]]
+    (doseq [r [(route 1 "witch") (route 0.3 "witch") (route 1 "zombie") (route 1 "zombie" "witch")]]
       (let [{:keys [chance hurt]} (cost/route-parts (body 8) r)]
         (is (and (< 0 hurt) (<= hurt (* (- 1 chance) 8))) "the hp are paid only where the body lives: under its life by the chance it lives")))
     (is (< 0.6 (:chance (cost/route-parts (body 8) (route 1 "witch")))) "60 s in her range: she seldom misses the body")
@@ -592,10 +592,12 @@
         met #(answer/group-parts (body %) ["skeleton"] nil here)
         flee (fn [h] (let [as (answer/threat-answers (body h) "skeleton" nil)] (get as (:answer (cost/decide (body h) as here)))))]
     (is (= 1 (:chance (met arrow))) "a body one arrow kills dies when the skeleton gets to it")
-    (is (< (js/Math.abs (- (:hurt (met 20)) (let [struck (body (- 20 arrow)) a (flee (- 20 arrow))]
-                                              (+ (* arrow (- 1 (answer/blows-chance struck a))) (answer/lived-damage struck a)))))
+    (is (< (js/Math.abs (- (:hurt (met 20)) (let [struck (body (- 20 arrow)) a (flee (- 20 arrow))
+                                                  dies (answer/blows-chance struck a)]
+                                              (* (+ (* arrow (- 1 dies)) (answer/lived-damage struck a))
+                                                 (/ (- 1 (:chance (met 20))) (- 1 dies))))))
            1e-9)
-        "the hurt is that arrow and the answer's blows after it, where the body lives through them")
+        "the hurt is that arrow and the answer's blows after it, where the body lives through them and the repeats the chance counts")
     (is (= (:near (met 20)) (:near (flee (- 20 arrow)))) "the answer starts at the hit")))
 
 (deftest a-skeleton-stands-and-shoots-while-the-body-walks-out-of-its-bow-range
