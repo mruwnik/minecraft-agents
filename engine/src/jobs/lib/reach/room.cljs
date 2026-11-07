@@ -372,7 +372,14 @@
   [p pos]
   (some? (unseen-room p pos)))
 
-(declare kept-flood)
+(declare kept-flood kept-flood?)
+
+(defn boundary-kept?
+  "Whether boundary's floods around pos are all kept: judging its look costs no flood."
+  [p {:keys [x y z]}]
+  (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
+        starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
+    (every? (fn [[sx sy sz]] (kept-flood? p sx sy sz in-door?)) starts)))
 
 (defn boundary
   "{:seen n :unseen [[x y z]]} of the room around pos {:x :y :z} (as unseen-room?): how many feet cells beside its room
@@ -477,10 +484,17 @@
   [p ck f]
   (kept-with p ck (fn [kind-at _] (f kind-at))))
 
+(defn flood-key [x y z entered?] (str "flood|" x "|" y "|" z "|" (boolean entered?)))
+
+(defn kept-flood?
+  "Whether kept-flood's answer for the cell is kept."
+  [p x y z entered?]
+  (kept? p (flood-key x y z entered?)))
+
 (defn kept-flood
   "room-flood from cell x y z within room-cells, kept as kept does: a check asks the same room's flood several times."
   [p x y z entered?]
-  (kept p (str "flood|" x "|" y "|" z "|" (boolean entered?)) #(room-flood p % x y z room-cells entered?)))
+  (kept p (flood-key x y z entered?) #(room-flood p % x y z room-cells entered?)))
 
 (defn room
   "room* kept per body (kept); not kept without a perception."

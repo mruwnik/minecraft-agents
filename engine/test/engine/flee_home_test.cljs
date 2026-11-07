@@ -192,14 +192,15 @@
                                     (assoc-in [:self :health] 4))
                           {:keys [eng seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)
                           chance cost/closed-chance
-                          pays? cost/refuge-search-pays?]
+                          pays? cost/refuge-search-pays?
+                          kept-fn reach-room/boundary-kept?]
                       (when home? (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever}))
                       (when closed-chance (set! cost/closed-chance closed-chance))
-                      ;; a look's one flood (rooms/flood-s) that the race does not pay for; survey's searches cost other sums
-                      (when-not flood-pays? (set! cost/refuge-search-pays? (fn [spent cost-s & more] (and (not= cost-s (rooms/flood-s)) (apply pays? spent cost-s more)))))
+                      ;; a look's one flood (rooms/flood-s), not kept, that the race does not pay for; survey's searches cost other sums
+                      (when-not flood-pays? (set! reach-room/boundary-kept? (constantly false)) (set! cost/refuge-search-pays? (fn [spent cost-s & more] (and (not= cost-s (rooms/flood-s)) (apply pays? spent cost-s more)))))
                       (try (core/submit! eng '(jobs.survival.respond-to-hostile) {})
                            (await (tu/run-until-empty eng 1))
-                           (finally (set! cost/closed-chance chance) (set! cost/refuge-search-pays? pays?)))
+                           (finally (set! cost/closed-chance chance) (set! cost/refuge-search-pays? pays?) (set! reach-room/boundary-kept? kept-fn)))
                       [(first (filter #(= :hostile.look-in (:kind %)) @seen)) (first (filter #(= :hostile.decided (:kind %)) @seen))]))
               [look] (await (run {}))
               [never decided] (await (run {:closed-chance (constantly 0)}))
@@ -906,3 +907,33 @@
                         (try (cover/building-looks c cut threats) (finally (set! cost/refuge-search-pays? pays))))]
           (is (some :own? (:dropped s)) "the hidden home is dropped unseen")
           (is (seq looks) "its door sides are looked into though no flood pays"))))))
+
+(deftest a-strangers-look-whose-boundary-flood-is-kept-is-not-gated-by-the-flood-price
+  ;; the look's floods cost nothing once kept, as survey's kept sides: a price that refuses a fresh flood does not refuse it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hidden (atom #{[5 64 0] [5 64 1]})
+              {:keys [eng p]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)]) :home false))
+              _ (seeing-all-but p (fn [cell] (contains? @hidden cell)))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 13.5)]
+              s (rooms/survey c nil {:threats threats})
+              pays cost/refuge-search-pays?
+              kept-fn reach-room/boundary-kept?
+              looks (fn [kept?]
+                      (set! cost/refuge-search-pays? (constantly false))
+                      (set! reach-room/boundary-kept? (constantly kept?))
+                      (try (cover/building-looks c s threats)
+                           (finally (set! cost/refuge-search-pays? pays) (set! reach-room/boundary-kept? kept-fn))))]
+          (is (some (comp #{:unseen} :why) (:dropped s)) "a stranger's building is dropped unseen")
+          (is (empty? (looks false)) "a fresh flood that does not pay is not looked into")
+          (is (seq (looks true)) "the same look once its floods are kept is free"))))))
+
+(deftest a-boundarys-floods-are-kept-once-it-is-read
+  (let [{:keys [p]} (ht/setup-seeing (dissoc (hut {:x 5.5 :y 64 :z 5.5} hs/door-states []) :floor) nil 1000)
+        door {:x 5 :y 64 :z 2}]
+    (is (false? (reach-room/boundary-kept? p door)))
+    (reach-room/boundary p door)
+    (is (true? (reach-room/boundary-kept? p door)))))

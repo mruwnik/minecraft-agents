@@ -170,7 +170,7 @@
   another's (room-lib/door-glances), each what it may show: the chance the room beyond the door side is closed
   (cost/closed-chance of its boundary's seen and unseen cells, reach-room/boundary) and then the run from the door into it
   at a flight's pace; its seconds room-lib/glance-s. Part of the step's one search, before the flee search: a door's
-  flood only while it pays as survey's door sides do (cost/refuge-search-pays? of room-lib/flood-s against threats' lead
+  flood only while it is kept or pays as survey's door sides do (room-lib/look-s, cost/refuge-search-pays? against threats' lead
   at the body and that door, the run it saves over survey's ways in won, and fire), the home's always, as survey judges it. respond prices each against the answers
   without it."
   [c s threats]
@@ -182,12 +182,13 @@
         here (room-lib/here-s p threats)
         best (reduce min ##Inf (keep (fn [{w :way-in :as r}] (when (and w (room-lib/race-won? p r w threats)) (:steps w))) (:rooms s)))
         fire (fire-on c threats)
-        pays? (fn [d] (let [blocks (u/dist me d)]
-                        (cost/refuge-search-pays? (reach/spent-s) (room-lib/flood-s) here (room-lib/lead-s p [d] threats blocks)
+        pays? (fn [{:keys [pos d]}]
+                (let [blocks (u/dist me d)]
+                  (cost/refuge-search-pays? (reach/spent-s) (room-lib/look-s p pos) here (room-lib/lead-s p [(room-lib/mid d)] threats blocks)
                                                   (cost/run-saved-s blocks best food) fire)))
         r (binding [reach/*search* m]
             (vec (for [g (room-lib/door-glances c s)
-                       :when (or (:home? g) (pays? (room-lib/mid (:d g))))
+                       :when (or (:home? g) (zero? (room-lib/look-s p (:pos g))) (pays? g))
                        :let [{:keys [seen unseen]} (reach-room/boundary p (:pos g))]]
                    {:at g :seconds (room-lib/glance-s c g) :closed (cost/closed-chance seen (count unseen))
                     :refuge-s (/ (u/dist (room-lib/mid (:d g)) (room-lib/mid (:pos g))) pace)})))]

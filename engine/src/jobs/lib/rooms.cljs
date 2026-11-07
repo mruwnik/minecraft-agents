@@ -201,6 +201,11 @@
   [p pos]
   (if (and (reach-room/kept? p (refuge-key pos)) (reach-room/kept? p (reach-room/look-key pos))) 0 (judge-s)))
 
+(defn look-s
+  "Seconds of CPU a look's boundary (reach-room/boundary) around pos costs now: none when its floods are kept, else one flood-s."
+  [p pos]
+  (if (reach-room/boundary-kept? p pos) 0 (flood-s)))
+
 (defn way-s
   "Seconds of CPU a walk search to a room's door (way-in) may cost: reach/node-budget cells at cost/walk-cell-s."
   []
