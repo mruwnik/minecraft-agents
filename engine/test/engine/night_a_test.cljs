@@ -241,6 +241,17 @@
                (is (= :shelter (:pick (first (st/emitted seen :night.answers)))) "lying there all night is priced above sheltering")
                (is (<= (Math/abs (:x (st/pos-of p))) 3) "where it stood, not by the bed")))))))))
 
+(deftest at-the-measured-spawn-rate-the-night-walks-to-an-open-bed-rather-than-shelter-where-it-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
+          ((status! 0 5) eng)
+          (st/know-bed! eng {:x 20 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 40))
+          (is (= :bed (:pick (first (st/emitted seen :night.answers)))) "the 20-block walk is priced below sheltering a night where it stands"))))))
+
 (deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
   (async done
     (tu/run-async done

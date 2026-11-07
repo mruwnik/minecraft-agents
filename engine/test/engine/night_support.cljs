@@ -191,8 +191,8 @@
                             (swap! log conj [k sym a])
                             (let [r (on-call c k sym a)]
                               (if (some? r) r (await (orig c k sym a))))))
-     (await (f))
-     (set! ctx/call orig)
+     (try (await (f))
+          (finally (set! ctx/call orig)))
      @log)))
 
 (def walled-home
