@@ -161,7 +161,8 @@
 (deftest a-body-held-at-an-edge-past-its-cell-centre-keeps-its-true-position
   (let [w {:blocks cut}]
     (is (= [27.5 64 0.75] (steer/sub-of w {:x 27.5 :y 64 :z 0.75})) "its cell [27 64 0] has no floor; its box is over z 1's")
-    (is (nil? (steer/sub-of w {:x 27.5 :y 64 :z 1.5})) "a body over its own cell's floor is kept as the cell")))
+    (is (nil? (steer/sub-of w {:x 27.5 :y 64 :z 1.5})) "a body over its own cell's floor is kept as the cell")
+    (is (nil? (steer/sub-of {:blocks (assoc cut [27 64 0] "water")} {:x 27.5 :y 64 :z 0.75})) "a swimmer beside a ledge stands on nothing")))
 
 (deftest a-body-cuts-a-corner-past-a-hole-with-no-floor-in-reach-while-its-box-is-over-a-floor
   (let [corner (steer/step-body {:blocks (dissoc cut [27 59 0])} {:x 27.4 :y 64 :z 1.05 :vy 0} {:forward true} (/ js/Math.PI 4))]
