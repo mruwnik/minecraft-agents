@@ -289,12 +289,20 @@
 
 (defn decide
   "{:answer key :prices {key seconds} :death :death-of}: the cheapest of answers {key answer-or-nil} (nil: not open to the body)
-  by answer-price, :death the seconds a death costs (meet-death), :death-of that at any health (meet-death-fn); nil when none is open."
-  [body answers at]
+  by answer-price, death (default meet-death-fn) what a death costs at a health (:death-of; :death at the body's); nil when none is open."
+  ([body answers at] (decide body answers at (meet-death-fn body at)))
+  ([body answers at death]
+   (let [prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at death)]))) answers)]
+     (when (seq prices)
+       {:answer (key (first (sort-by val prices))) :prices prices :death (death-at death (or (:health body) 20)) :death-of death}))))
+
+(defn struck-death
+  "meet-death-fn for struck, body once blows landed before its answer: the respawn refills only the hp missing before
+  them (a death's own hp are not paid, so not refilled either)."
+  [body struck at]
   (let [death (meet-death-fn body at)
-        prices (into {} (keep (fn [[k a]] (when a [k (answer-price* body a at death)]))) answers)]
-    (when (seq prices)
-      {:answer (key (first (sort-by val prices))) :prices prices :death (death (or (:health body) 20)) :death-of death})))
+        shift (- (or (:health body) 20) (or (:health struck) 20))]
+    #(death (+ % shift))))
 
 (defn fight-answer
   "The answer of fight (fight/fight-damage's argument, :health the body's, default 20): its damage and seconds, :hit the
@@ -810,7 +818,7 @@
   answers: what threat-parts and threat-hurt both read."
   [body mob-name caught at]
   (let [[struck answers hit] (woken body mob-name caught)]
-    [struck answers hit (decide struck answers at)]))
+    [struck answers hit (decide struck answers at (struck-death body struck at))]))
 
 (defn met-parts
   "threat-parts of a met answer."
@@ -876,7 +884,7 @@
         shield (or (:absorption body) 0)
         struck (assoc body :absorption (max 0 (- shield first-hits)) :health (- (or (:health body) 20) (max 0 (- first-hits shield))))
         answers (threat-answers struck names caught)
-        {k :answer death :death death-of :death-of} (decide struck answers at)
+        {k :answer death :death death-of :death-of} (decide struck answers at (struck-death body struck at))
         a (get answers k)
         chance (if (pos? (life struck)) (answer-death-chance struck a at death-of) 1)]
     {:chance chance

@@ -620,6 +620,14 @@
         "the hurt is that arrow and the answer's blows after it, where the body lives through them and the repeats the chance counts")
     (is (= (:near (met 20)) (:near (flee (- 20 arrow)))) "the answer starts at the hit")))
 
+(deftest a-whole-body-killed-by-a-packs-first-arrows-pays-its-death-with-nothing-refilled
+  (let [b (assoc (body 20) :respawn {:x 20 :y 64 :z 0})
+        pack (answer/group-parts b (vec (repeat 24 "skeleton")) nil here)]
+    (is (= 1 (:chance pack)) "the arrows that land before any answer kill it")
+    (is (< (js/Math.abs (- (death/death-cost b here) (:death pack))) 1e-9)
+        "the respawn refills only what was missing before the arrows: at 20 hp nothing, so the walk back is paid")
+    (is (< 0 (:death pack)))))
+
 (deftest a-skeleton-stands-and-shoots-while-the-body-walks-out-of-its-bow-range
   (let [v (danger/flee-walk-speed 20)
         walk (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 0)]})
