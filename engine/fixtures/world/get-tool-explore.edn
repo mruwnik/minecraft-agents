@@ -1,10 +1,11 @@
 ;; jobs.items.get-tool with nothing to gather in sight (card 07b0b3a5): it walks off to look (obtain.exploring) instead of waiting
-;; no-source for ever; with :explore false the wait names cobblestone, not cobbled_deepslate. Empty grass plot, empty-handed body.
+;; no-source for ever; with :explore false the wait names cobblestone, not cobbled_deepslate. Empty grass plot on the surface (a body
+;; underground pays the stair up before any log search), empty-handed body.
 ;; The walk itself is larger than the plot and is only started here, then cancelled with the run.
 ;; Should-succeed: obtain.exploring within 60 s. Should-fail: the :explore false wait waits no-source naming cobblestone.
 {:defaults
  {:tags [:items :get-tool :explore :jobs]
-  :plot {:height 8 :floor "grass_block"}
+  :plot {:height 8 :floor "grass_block" :light :sky}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 70}
  :cases

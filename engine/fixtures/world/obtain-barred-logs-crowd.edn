@@ -1,11 +1,11 @@
 ;; Card 84292004: items.obtain's gather reads the seen logs it may take, however many barred ones lie nearer. A wall of 72 logs
 ;; (two halves with a gap) is another body's plan footprint; one free tree stands beyond the gap, farther than every wall log.
 ;; Should-succeed: the free tree is felled (obtain.gathering, the whole 4-log tree carried) with no exploring first.
-;; Should-fail: the wall alone (no free tree) is not a source: the body explores, never gathers.
+;; Should-fail: the wall alone (no free tree) is not a source: the body explores, never gathers. On the surface: underground, a log search pays the stair up first.
 {:defaults
  {:tags [:items :obtain :access :zones :forestry]
   :time :any
-  :plot {:height 12 :floor "grass_block"}
+  :plot {:height 12 :floor "grass_block" :light :sky}
   :blocks [[:fill [5 0 12] [13 3 12] "oak_log"]
            [:fill [19 0 12] [27 3 12] "oak_log"]]
   :plans [{:id "wall" :metadata {:by "SomeoneElse"}

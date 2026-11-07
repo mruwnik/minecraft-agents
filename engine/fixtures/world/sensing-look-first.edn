@@ -1,9 +1,9 @@
 ;; Cards e30a76c6 (look :useful?), b1b8ded6 + a66e45de (search outward legs, :distance ending), a5dc9f4a (obtain.exploring notice).
-;; Flat grass plot 64 x 32, body at [8.5 0 16.5] facing east (yaw 270). The look cases put a crafting table 3 east and a furnace 5 south-east
+;; Flat grass plot 64 x 32 on the surface (underground, get-tool's log search pays the stair up first), body at [8.5 0 16.5] facing east (yaw 270). The look cases put a crafting table 3 east and a furnace 5 south-east
 ;; in view: :useful? lists the table first (nearest) and refuses :block-names together with :useful?.
 {:defaults
  {:tags [:explore :sensing :jobs]
-  :plot {:height 8 :floor "grass_block" :length 64 :width 32}
+  :plot {:height 8 :floor "grass_block" :length 64 :width 32 :light :sky}
   :body {:at [8.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
   :limit-s 90}
  :cases

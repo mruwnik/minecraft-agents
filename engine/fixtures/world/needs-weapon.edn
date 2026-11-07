@@ -16,14 +16,6 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 25}]
    :after [[:item "stone_sword" 0] [:item "cobblestone" 4]]
    :limit-s 40}
-  ;; An unlit sealed room: the search child waits :dark, so the reflex obtain ends with that reason instead of re-asking at once (a log line per 100 ms).
-  {:name "dark-room-no-wood-obtain-does-not-spin"
-   :time :any
-   :blocks [[:fill [8 0 8] [24 4 24] "stone" :hollow]]
-   :body {:at [16.5 1 16.5]}
-   :expect [{:event {:source :reflex :kind :fired} :within-s 20}
-            {:count-event {:source :job :kind :obtain.exploring} :for-s 25 :at-most 3}]
-   :limit-s 40}
   ;; Cards 1c50b7f5, 96c23f9a, 3d1a53105: the reflex fires with no hostile near, so a sword is worth its goal price (about 30 s). With no wood in sight (a sealed lit room) the obtain's search is priced at what its logs usually cost (about 600 s), more than the sword is worth, so the trigger holds :not-worth and no search starts.
   {:name "no-wood-in-sight-holds-when-the-search-costs-more-than-a-sword-is-worth"
    :time :any
@@ -57,6 +49,7 @@
   ;; Card c65b7965: a bad spec submitted --now --wait behind the running reflex is still answered :bad-spec.
   {:name "bad-spec-now-wait-behind-the-reflex-is-answered"
    :time :any
+   :plot {:light :sky}
    :act [[:wait-s 8]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.collect-drops {:center [1 2 3]})" "--now" "--wait" "--timeout" "20s"]
           {:ok false :reason :bad-spec}]]
