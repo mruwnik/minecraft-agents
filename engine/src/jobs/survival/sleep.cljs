@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -82,17 +83,26 @@
   (let [p (:primitives c)]
     (not (sh-beds/bed-sheltered? p (sh-sense/feet p)))))
 
-(defn bed-open
-  "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed and would lie in the open."
+(defn near-bed-unlooked?
+  "Whether the open-bed verdict still rests on cells the body has not looked at: it stands beside the bed, would lie in the
+  open as it has seen the room, and has not looked around this run (a room it just walked into is mostly unseen)."
   [c bed]
-  (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (open-bed? c))
-    {:reason :bed-open :pos bed :text "the bed is open (not shut in a spawn-free roofed room)"}))
+  (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed)
+       (not (look/surveyed? c)) (open-bed? c)))
+
+(defn bed-open
+  "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed and would lie in the open. Unless
+  as-seen?, only once the run has looked round (near-bed-unlooked?); the start check judges as seen."
+  ([c bed] (bed-open c bed false))
+  ([c bed as-seen?]
+  (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (or as-seen? (look/surveyed? c)) (open-bed? c))
+    {:reason :bed-open :pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})))
 
 (defn bed-status
   "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on) or :bed-open."
   [c]
   (let [bed (bed-of c)
-        open (when bed (bed-open c bed))]
+        open (when bed (bed-open c bed true))]
     (cond
       (sh-sense/sleeping? (:primitives c)) (contract/ok :asleep "asleep")
       (nil? bed) (contract/later :no-bed "no bed given or remembered within the bed radius")
@@ -268,6 +278,7 @@
                                            (not (priced-refusal? walk)))
                                     (give-up-unreachable-now! c bed (no-walk-text after))
                                     (give-up-unreachable! c bed walk)))
+      (near-bed-unlooked? c bed) (do (await (look/look-around! c)) :continue)
       (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})
       :else (await (sleep-at! c bed)))))
 

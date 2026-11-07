@@ -664,3 +664,15 @@
             (await (st/tick-n eng 12)))
           (is (some #{near} @asked) "the near bed, worth 100, is walked")
           (is (not-any? #{far-bed} @asked) "the far bed was refused at 50 and its own worth is 1: not asked again"))))))
+
+(deftest a-sleep-with-open-bed-false-looks-round-a-room-it-just-walked-into-before-judging-the-bed-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [light (into {} (for [x (range 9 16) y [64 65 66] z (range 9 16)] [[x y z] [0 14]]))
+              {:keys [eng raw]} (setup {:floor [0 0 20 20] :self {:pos {:x 13.5 :y 64 :z 13.5}} :time st/night
+                                        :blocks seven-hut :light light})]
+          (core/submit! eng '(jobs.survival.sleep {:bed {:x 10 :y 64 :z 12} :open-bed false}) {})
+          (await (st/tick-n eng 12))
+          (is (seq (st/calls raw "look")) "looked round the room")
+          (is (seq (st/calls raw "sleep")) "then lay down in the closed room"))))))
