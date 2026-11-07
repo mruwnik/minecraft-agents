@@ -616,7 +616,8 @@
           (is (empty? (gt/events-of s :go-to.escalated)) "nothing dug"))))))
 
 ;; A sealed pocket (x 0..2, feet 60, z 0) in a stone mass whose top (feet 78) holds the goal straight above; the body has
-;; seen only the pocket. A goal higher than it is across is climbed toward by a stair, not dug toward leg by leg.
+;; seen only the pocket. While the goal is higher above than it is across it is climbed toward by a stair, not dug toward
+;; leg by leg; once the stair has risen near its height, the rest may be dug.
 (def pocket (apply dissoc (box -10 50 -6 10 77 6 "stone") (for [x (range 3) y [60 61]] (str x "," y ",0"))))
 
 (deftest a-buried-body-cuts-a-stair-to-a-goal-steeply-above-not-dig-legs
@@ -627,7 +628,10 @@
                                                   :inventory [{:name "stone_pickaxe" :count 1}]}
                                                  {:pos [1 78 0]}))]
           (is (true? (:arrived @out)) (pr-str @out))
-          (is (= #{:approach :stair} (set (map :step (gt/events-of s :go-to.escalated)))) (pr-str (map #(select-keys % [:step :at]) (gt/events-of s :go-to.escalated)))))))))
+          (let [es (gt/events-of s :go-to.escalated)
+                steep (filter (fn [{[x y z] :at}] (> (- 78 y) (+ (js/Math.abs (- x 1)) (js/Math.abs z)))) es)]
+            (is (seq steep))
+            (is (every? #{:approach :stair} (map :step steep)) (pr-str (map #(select-keys % [:step :at]) es)))))))))
 
 ;; A chamber (x 0..2, feet 60, z 0) in a stone mass and a pocket (x 9..10, feet 57) the body has seen, the rock between
 ;; never seen: the leg that ends short of the goal is followed by a last one into it.

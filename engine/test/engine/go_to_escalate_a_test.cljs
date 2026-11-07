@@ -751,12 +751,12 @@
                                                        :floor [-5 -5 40 10] :blocks (box 150 63 0 154 63 4 "stone")}
                                                       {:pos goal :range 0}))
                   [whole legs] ((juxt filter remove) #(= goal (:to %)) @searches)]
-              ;; the whole way is searched only under the call's price, over as many slices as it takes to prove it dearer
               ;; a search with no price bound is one the call's worth does not end: kept within a slice
               (is (every? #(or (:bound %) (<= (:cells %) slice)) @searches) (pr-str @searches))
-              ;; the whole way is searched once, under the call's price, kept over the slices it takes to prove it dearer (about 2.8 s of priced CPU measured; capped at 4 s)
-              (is (= [:dearer] (map :problem whole)) (pr-str whole))
-              (is (<= (* (cost/search-cell-s) (reduce + (map :cells @searches))) 4.0) (pr-str @searches))
+              ;; the whole way is searched once (its lane, band, then everywhere), under the call's price, and holds no route
+              ;; at the 100 ms cut (701 cells measured, where the proof it went on with read 56k)
+              (is (= :too-big (:problem (last whole))) (pr-str whole))
+              (is (<= (* (cost/search-cell-s) (reduce + (map :cells whole))) dig-route/answer-s) (pr-str whole))
               (is (seq legs))
               (is (every? #(<= (apply max (map (fn [a b] (js/Math.abs (- a b))) (:from %) (:to %))) ec/leg-blocks) legs) (pr-str legs))
               ;; the void past the floor's edge holds no way a body without blocks can make: it gives up, not hangs

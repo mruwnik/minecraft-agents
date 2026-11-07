@@ -430,7 +430,6 @@
                          (aset l 6 (min z (aget l 6))) (aset l 7 (max z (aget l 7)))))
                      l))
         best (js/Map.) done (js/Set.) queue #js [] expanded (volatile! 0)
-        tick (volatile! 1)
         answer (volatile! nil)
         goal-key (key gx gy gz)
         end-key? (fn [k] (or (== (if (neg? k) (.get label-cell k) k) goal-key) (and r (end? k))))
@@ -501,9 +500,8 @@
                                        :else (let [^js old (.get best i)] (when (and (not (.has done i)) (or (nil? old) (< nd (aget old 0)))) i)))]
                          (.set best nk #js [nd k ck move placed (let [dug (aget from-node 5) ks (aget acc 2)] (if (zero? (alength ks)) dug (dug-link ks dug))) run (aget acc 3) (aget acc 4) sig (aget acc 5)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
-                         ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
-                         (heap-push! queue #js [(tie (+ nd (heuristic nx ny nz))) (if prior? (- nd) @tick) nk])
-                         (vswap! tick inc))))))
+                         ;; among equal bounds the farthest along first: the cells between two ends bound alike (Manhattan steps, the back bound's frontier)
+                         (heap-push! queue #js [(tie (+ nd (heuristic nx ny nz))) (- nd) nk]))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
         ;; stair that turns back over its own cut)
         ;; a link's box holds every cell before it: a cell outside it is dug by none of them
@@ -600,7 +598,7 @@
                       (priced (route-to ck))
                       (do (.forEach bad #(.add contested %))
                           (.clear best) (.clear done) (.clear wet-at) (.clear dry-at) (.clear dropped) (.clear label-cell)
-                          (set! (.-length queue) 0) (vreset! tick 1) (aset incumbent 0 ##Inf) (aset incumbent 1 nil)
+                          (set! (.-length queue) 0) (aset incumbent 0 ##Inf) (aset incumbent 1 nil)
                           (.set best start-key start-node)
                           (heap-push! queue #js [(heuristic fx fy fz) 0 start-key])
                           nil))))
@@ -715,8 +713,9 @@
                          (nil? top) (cond-> {:problem :no-route} @boxed (assoc :boxed true :searched-s (spent-s)))
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (or (ended) (recur))
-                         ;; past answer-s the route in hand answers, or the one the caller holds (:dearer)
-                         (and read-s (>= (metered-s) answer-s) (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s)))) (or (ended) (recur))
+                         ;; past answer-s the route in hand answers, or the one the caller holds (:dearer); with none, the search outgrew its bound
+                         (and read-s (>= (metered-s) answer-s))
+                         (if (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s))) (or (ended) (recur)) (priced {:problem :too-big}))
                          (or (.has done ck) (.has dropped ck)) (recur)
                          (end-key? ck) (or (checked ck) (recur))
                          ;; the popped cell goes back: the next run expands it first
@@ -878,6 +877,14 @@
                 (pos? k) (into column (walk-then-stair top goal 1 floor?)))]
     (vec (distinct (concat (walk-then-stair from goal 1 floor?) early)))))
 
+(defn lane
+  "The feet cells of the planned way from feet cell from to goal that seeded-search searches first: up, climb-lane (with
+  opts' :pillar-s, its :max-places blocks); else walk-then-stair, falling no more than stair-drop."
+  [from goal opts floor?]
+  (if (> (goal 1) (from 1))
+    (climb-lane from goal (when (:pillar-s opts) (:max-places opts)) floor?)
+    (walk-then-stair from goal (stair-drop opts))))
+
 (defn seeded-search
   "search, but first along the feet cells of :seed alone (the lane), then through them and their neighbours (one across,
   up or down: the band), and only then everywhere: each search bounded by the cheapest route the ones before found (its
@@ -954,7 +961,7 @@
   given: :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends, :only feet cells (none else is stepped onto), :seed the feet cells of a planned way searched round first (seeded-search); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
   :read-s seconds of CPU a cell read (priced-search; a cell expanded at cost/search-cell-s when that is more; past answer-s it answers with the cheapest route in hand, or ends :dearer
-  under :held-s, the price of a route the caller holds), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
+  under :held-s, the price of a route the caller holds, else :too-big), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; :unseen-digs {:low-y :low [s ..] :any [s ..]}
@@ -964,7 +971,7 @@
   through cells at other heights is priced in both bounds as a stair's step or a pillar block, and a cell read open at one is read as never seen, by :guess), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
   :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
-  {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
+  {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? or past answer-s with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first (((if (:seed opts) seeded-search search) block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
 
@@ -988,9 +995,11 @@
 
 (defn priced-search
   "search with its CPU priced (cost/search-read-s, cost/search-cell-s), the back search's bound in its heuristic (:back-h?), the unseen steps a
-  way must take priced in it (:prior-h?, with :seen-steps and :seen-cells), grown only while the heap has room (heap-full?). A fn of n as search's."
+  way must take priced in it (:prior-h?, with :seen-steps and :seen-cells), grown only while the heap has room (heap-full?), round :seed first (default lane: a route in hand
+  before the 100 ms cut). A fn of n as search's."
   [block-at from goal opts]
-  ((if (:seed opts) seeded-search search) block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?)))
+  (seeded-search block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?
+                                           :seed (or (:seed opts) (lane from goal opts #(when-let [n (block-at %)] (not (open? n))))))))
 
 (defn route-resumed
   "route, but a search that spends its nodes (:max-nodes) is kept under key and

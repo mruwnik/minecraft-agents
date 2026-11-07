@@ -548,7 +548,8 @@
     (is (= [] (remove #(< (js/Math.abs (- (:seconds %) (:seconds way))) 1e-9) answers)) (str "each bound finds its price, " (:seconds way) " s"))
     (is (= [[] [] []] (map own-cut-floors answers)))
     ;; each restart expands again cells the search read before: priced by the reads alone it cost 0.19 s for 0.47 s expanded
-    (let [[a cells reads] (to-end (dr/search (world seen) [0 -6 0] [6 2 2] (assoc opts :read-s (cost/search-read-s))))]
+    ;; (over the whole proof: the 100 ms cut would end it first)
+    (let [[a cells reads] (with-redefs [dr/answer-s ##Inf] (to-end (dr/search (world seen) [0 -6 0] [6 2 2] (assoc opts :read-s (cost/search-read-s)))))]
       (is (> (* (cost/search-cell-s) cells) (* (cost/search-read-s) reads)) (str cells " cells expanded, " reads " read"))
       (is (= (:searched-s a) (* (cost/search-cell-s) cells)) "its CPU priced by the cells it expanded"))))
 
@@ -610,10 +611,10 @@
     (is (every? lane (concat [[0 65 0] [0 66 0] [0 67 0] [0 68 0]] (dr/walk-then-stair [0 68 0] [3 74 0] 1)))
         "up more than across from the pillar's top: the pillar, then a spiral stair from it")))
 
-(deftest a-seeded-search-ends-its-proof-once-it-no-longer-pays-at-the-unbounded-price
+(deftest a-seeded-search-answers-the-unbounded-price-where-the-search-alone-outgrows-its-cut
   ;; a fall of 24 and 30 across through rock never seen, each cell's dig at the measured solid chance by its distance from
-  ;; the seen air: with no way in hand the search reads on until its proof ends; the way round the seed's walk and stair
-  ;; bounds it, so the proof stops once what it spent passes what it could still save
+  ;; the seen air: the search alone holds no way at the 100 ms cut; the way round the seed's walk and stair is in hand at
+  ;; once and is the cheapest
   (let [fy 64
         rock 0.6
         row (fn [dy-max] (mapv #(* rock (br/unseen-solid-least fy dy-max (js/Math.ceil (/ % 2)) nil)) (range 1 (inc (* 2 br/unseen-d-max)))))
@@ -625,10 +626,11 @@
               :unseen-digs tiers :unseen-dig-s (first (:any tiers)) :read-s (cost/search-read-s) :back-h? true :prior-h? true}
         at (fn [[_ y _]] (if (>= y 64) "air" "stone"))
         [from goal] [[0 64 0] [60 40 -30]]
-        [whole] (to-end (dr/search at from goal opts))
+        [whole] (to-end (dr/search at from goal (dissoc opts :read-s)))
+        [cut] (to-end (dr/search at from goal opts))
         [seeded] (to-end (dr/seeded-search at from goal (assoc opts :seed (dr/walk-then-stair from goal 3))))]
-    (is (< (js/Math.abs (- (:seconds whole) (:seconds seeded))) 1e-9) (str (:seconds seeded) " s, unbounded " (:seconds whole)))
-    (is (< (:searched-s seeded) (:searched-s whole)) (str (:searched-s seeded) " s of CPU, unbounded " (:searched-s whole)))))
+    (is (= :too-big (:problem cut)) (pr-str cut))
+    (is (< (js/Math.abs (- (:seconds whole) (:seconds seeded))) 1e-9) (str (:seconds seeded) " s, unbounded " (:seconds whole)))))
 
 ;; a fall of 104 and 5 across through rock never seen, each cell's dig at the measured solid chance by its distance from the seen air
 (def deep-drop
@@ -724,5 +726,6 @@
         within cost/flood-origin-within?
         [s dig cells] (run)
         [s0 dig0 cells0] (try (set! cost/flood-origin-within? =) (run) (finally (set! cost/flood-origin-within? within)))]
-    (is (= [s0 dig0] [s dig]))
+    ;; the pools lie mirrored about z 0: a way and its mirror tie
+    (is (= [s0 (count dig0)] [s (count dig)]))
     (is (< cells cells0) (str cells " cells, by equal origins " cells0))))

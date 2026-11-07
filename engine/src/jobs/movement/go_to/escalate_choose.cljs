@@ -511,7 +511,7 @@
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
   priced at the chance it is none (cost/floor-absent-chance of the step's kind) times the fall it adds past the step's own (cost/unseen-fall-s less its :fall-s), in the search and the straight dig. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
-  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; a climb is searched round dig-route/climb-lane first (seeded-search, the pillar part of the route-opts :max-places carried); every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; each is searched round dig-route/lane first (seeded-search; a climb's pillar part the route-opts :max-places carried), the unseen tolls in its bound (:prior-h?); every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. Each guess on it pays, at the chance it is not diggable (its class's risk, route-opts :guess-risk {class
   chance}: guess-class), a look and a replan round it, in the search; it is none over :worth-s seconds. Its :share-s is its
@@ -645,7 +645,7 @@
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
         allowed? (memoize #(escape/diggable? block-at may-dig? %))
-        seed (when (> gy fy) (dig-route/climb-lane from goal (when (:pillar-s route-opts) (:max-places route-opts)) #(when-let [n (seen-floor %)] (not (dig-route/open? n)))))
+        seed (dig-route/lane from goal (merge prices route-opts) #(when-let [n (seen-floor %)] (not (dig-route/open? n))))
         opts (fn [refused m spent lazy?] (merge prices
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent}
                                   (when seed {:seed seed})
