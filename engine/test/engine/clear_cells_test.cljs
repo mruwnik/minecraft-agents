@@ -482,10 +482,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks (rock-room) :self {:pos [8.5 64 3.5]}
+        (let [{:keys [eng p seen]} (setup {:blocks (rock-room) :self {:pos [8.5 64 3.5]}
                                       :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 20}]})
               result (await (child-outcome eng job {:area {:min {:x 5 :y 66 :z 5} :max {:x 11 :y 68 :z 11}}} 400))
               left (for [x (range 3 14) y (range 63 72) z (range 3 14) :when (= "cobblestone" (block-at p {:x x :y y :z z}))] [x y z])]
+          (let [unreachable (fn [job] (count (filter #(and (= job (:job %)) (= :unreachable (:reason %))) (kinds seen :child_ended))))]
+            (is (pos? (unreachable "j1/kid/dig")) "some cell is out of reach until another is dug")
+            (is (< (unreachable "j1/kid/dig/walk") (* 2 (unreachable "j1/kid/dig"))) "a dig whose walk failed does not walk the same walk again")
+            (is (< (count (kinds seen :go-to.retrying)) 120) "160 go-to re-plans when each dig walked twice"))
           (is (= {} (:skipped result)))
           (is (<= (count (calls p "jumpPlace")) 6) "one pillar of at most six blocks for the room, not one per cell: a failed walk does not dig its own pillar away")
           (is (empty? left) "the pillar the dig children climbed is taken back when the job ends"))))))
@@ -502,3 +506,21 @@
     (is (not (clear-cells/open-scaffold? (c "j3"))) "another tree's is not")
     (mem/write! store ledger/held-kind {:cells #{[0 64 0]}} ledger/held-policy)
     (is (not (clear-cells/open-scaffold? (c "j1"))) "a cell the cleanup holds is left to the scaffold-left trigger")))
+
+(deftest a-pillar-of-its-tree-the-cleanup-leaves-ends-the-cleanup-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"1,64,1" "dirt"}})
+              dig (fn ^:async pillar-dig [c]
+                    (let [{:keys [x y z]} (:pos (:args c))]
+                      (ledger/remember! c (ledger/intend (ledger/open-entries (ctx/view c)) {:cell [x 70 z] :item "dirt" :before "air" :job (:id c) :purpose :pillar}))
+                      (swap! (fake/state p) fake/put-block [x y z] "air")
+                      (ctx/end c :done nil {:reason :dug :dug true})))
+              eng (-> eng
+                      (update-in [:jobs 'jobs.blocks.dig] assoc :round dig)
+                      (update-in [:jobs 'jobs.access.cleanup] assoc :round (fn [c] (ctx/end c :done nil))))]
+          (core/submit! eng (list job {:area {:cells [[1 64 1]]}}) {})
+          (await (run-until-empty eng 20))
+          (is (= ["air"] [(block-at p {:x 1 :y 64 :z 1})]))
+          (is (some #(re-find #"cleanup-open" (str (:text %))) (kinds seen :cleanup_failed)) "the pillar still in the ledger is told, not ended :done"))))))

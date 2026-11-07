@@ -30,7 +30,6 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.keep :as shelter-keep]
             [jobs.lib.util :as u]
-            [jobs.lib.walk.world :as wworld]
             [jobs.lib.places :as places]
             [engine.game :as game]))
 
@@ -291,7 +290,6 @@
 
 (a/defargs settings
   {::enter-pens {:default false :doc "true: the walk of blocks.dig, place and use-on may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)." :spec boolean?}
-   ::max-walks {:default 2 :doc "Failed walks into reach of one blocks.dig, place or use-on call before it ends :unreachable." :spec (a/int-in 0 nil)}
    ::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :ways say: from a chest or by crafting, never by gathering in the field (the walk would enter the hole beside the lava); false seals only with a carried block." :spec boolean?}})
 
 (def low-floor-radius 4)
@@ -346,40 +344,18 @@
                   (ctx/end c :nothing-possible (if arrived? :out-of-reach (:why (:data r) :unreachable)) (:data r))
                   r)))))
 
-(defn max-walks [] (settings/get settings ::max-walks))
-
-(defn walk-key
-  "What a walk into reach of pos depends on: the cell, the body's feet, the sight rule and the body's memory epoch; nil without a perception."
-  [c pos see?]
-  (when-let [epoch (wworld/memory-epoch-fn (:primitives c))]
-    {:pos (cell pos) :feet (feet-cell c) :see (boolean see?) :epoch (epoch)}))
-
-(defn failed-before
-  "The failure {:why :text} remembered for the walk keyed k (the same walk under the same memory and feet failed: nothing changed to try again), else nil."
-  [c k]
-  (when k (some #(when (= k (:key (:data %))) (:data %)) (ctx/entries c :walk-failed))))
-
 (defn ^:async walk-into-reach!
   "One walk into reach of pos for blocks.dig, place and use-on: :continue (go-to waits), :again (arrived: the caller re-checks),
-  a child's ending that is not a failed walk (pass it up), else a failed walk, counted in the job memory across rounds:
-  :again until max-walks have failed, then {:unreachable why :text go-to's words}. A walk that failed before under the same
-  cell, feet and memory epoch (a shared :walk-failed entry) is not walked again: it counts as failed at once."
+  a child's ending that is not a failed walk (pass it up), else {:unreachable why :text go-to's words}: go-to's failure is
+  its answer after its own tries, so the same walk is not walked again with nothing changed."
   [c pos & [see? range]]
-  (let [k (walk-key c pos see?)
-        before (failed-before c k)
-        w (if before :remembered (await (walk!* c pos see? range)))]
+  (let [w (await (walk!* c pos see? range))]
     (cond
       (= :continue w) :continue
       (= :arrived w) :again
-      (and (not= :remembered w) (not (#{:nothing-possible :condition-failed} (:kind w)))) w
-      :else (let [n (inc (:walk-fails (ctx/mem c) 0))
-                  why (if before (:why before) (or (:why (:data w)) (when (map? (:cause w)) (:why (:cause w))) (contract/cause-key w)))
-                  text (if before (:text before) (get-in w [:data :text]))]
-              (when (and k (not before)) (ctx/remember! c :walk-failed {:key k :why why :text text} {:cap 20 :ttl :forever}))
-              (ctx/update-mem! c assoc :walk-fails n)
-              (if (< n (max-walks))
-                :again
-                {:unreachable why :text text})))))
+      (not (#{:nothing-possible :condition-failed} (:kind w))) w
+      :else {:unreachable (or (:why (:data w)) (when (map? (:cause w)) (:why (:cause w))) (contract/cause-key w))
+             :text (get-in w [:data :text])})))
 
 ;; ------------------------------------------------------------------ for parents
 

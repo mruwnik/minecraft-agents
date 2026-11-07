@@ -649,14 +649,14 @@
                (ctx/end c :done nil {:arrived false :why :no-path}))]
     (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))))
 
-(deftest a-walk-that-fails-twice-in-one-call-waits-unreachable
+(deftest a-failed-walk-is-not-walked-again-and-ends-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [walks (atom 0)
               env (failing-walks (setup {:self body :blocks {"12,64,0" "dirt"}}) walks)
               e (:ending (await (tu/child-outcome (:eng env) job {:pos [12 64 0]} 6)))]
-          (is (= 2 @walks) "one more try, then it ends")
+          (is (= 1 @walks) "go-to's failure is its answer after its own tries: the same walk is not walked again")
           (is (= :nothing-possible (:kind e)) "the walk ran: no route is not a fact to wait on")
           (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
 
@@ -1104,16 +1104,6 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
     {:eng eng :p p :seen seen :clock clock}))
-
-(deftest a-walk-that-failed-under-the-same-memory-is-not-walked-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [walks (atom 0)
-              env (failing-walks (setup-seeing {:self body :blocks {"12,64,0" "dirt"}}) walks)
-              e (:ending (await (tu/child-outcome (:eng env) job {:pos [12 64 0]} 6)))]
-          (is (= 1 @walks) "the second try would repeat the first: same cell, feet and memory")
-          (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
 
 (deftest with-no-block-carried-the-seal-fetches-one-from-a-seen-chest
   (async done

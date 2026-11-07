@@ -390,14 +390,14 @@
           (is (await (settings/with-settings {:jobs.blocks.place/max-steps 1}
                        #(bd/ended-in-one-tick? env (list job {:pos [12 64 0] :item "cobblestone"}))))))))))
 
-(deftest a-walk-that-fails-twice-in-one-call-ends-unreachable
+(deftest a-failed-walk-is-not-walked-again-and-ends-unreachable
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [walks (atom 0)
               env (bd/failing-walks (bd/setup {:self body :inventory cobble}) walks)
               e (await (ending-of env {:pos [12 64 0] :item "cobblestone"} 5))]
-          (is (= 2 @walks) "one more try, then it ends")
+          (is (= 1 @walks) "go-to's failure is its answer after its own tries: the same walk is not walked again")
           (is (= {:kind :nothing-possible :cause {:reason :unreachable :why :no-path}} e)))))))
 
 (deftest a-cell-in-reach-behind-a-wall-is-out-of-sight-not-a-walk-failure

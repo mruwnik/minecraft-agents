@@ -87,7 +87,7 @@
     [(if (and (bucket? item) (= :placed status)) :used status) r]))
 
 (defn ^:async attempt-block!
-  "One step: walk into reach (:again after a failed walk, until the limit), else click and end."
+  "One step: walk into reach (a failed walk ends :unreachable), else click and end."
   [c pos]
   (let [{:keys [item face range]} (:args c)
         see (or (:see (:args c)) (:needs-line (ctx/mem c)))

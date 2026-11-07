@@ -364,7 +364,7 @@
 
 (defn ^:async attempt!
   "One step of the place: fetch the item if due, clear a plant, walk into reach, or place. A walk that fails or leaves
-  the cell out of reach is tried once more, then the call ends :unreachable. :again, :continue or the ending."
+  the cell out of reach is not walked again: the call ends :unreachable. :again, :continue or the ending."
   [c pos items]
   (let [block (b/target-name (:primitives c) pos "air")
         far? (and (b/stale-target? c pos) (not (b/in-reach? c pos (:see (:args c)))))
