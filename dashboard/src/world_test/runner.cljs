@@ -2133,7 +2133,10 @@
                        (.then #(reset! plan-files %))
                        (.then #(seed-shared! opts origin c))
                        (.then #(reset! setup-cursor (log-cursor (events-file opts))))
-                       (.then #(rcon! (f/body-commands origin (:body opts) rc)))
+                       (.then (fn [] (let [cmds (f/body-commands origin (:body opts) rc)]
+                                       (.then (rcon! cmds)
+                                              (fn [replies] (when-let [errs (seq (f/command-errors cmds replies))]
+                                                              (throw (js/Error. (str "the body's setup was refused: " (str/join "; " errs))))))))))
                        (.then #(ensure-at-start! {:send rcon! :sleep sleep} origin (:body opts) rc))
                        (.then (fn [why] (when why (throw (js/Error. why)))))
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))

@@ -206,13 +206,19 @@
   [next-case]
   (not (and next-case (= :keep (body-start-plan next-case false)))))
 
+(defn respawn-cell
+  "The block the game respawns the body in: :spawnpoint, else the start, floored (/spawnpoint takes only integers; a
+  fractional one is refused and the body would respawn at the world spawn)."
+  [c]
+  (some->> (or (get-in c [:body :spawnpoint]) (get-in c [:body :at])) (mapv #(js/Math.floor %))))
+
 (defn memory-entries
   "A case's :memory entries, and for a night case (unless it names log-out or keeps memory) two entries for the other
   bodies online, which count as players: a :log-out \"unsupported\" one (they sleep in the same night, and the night job
   would log out for them instead of doing what the case tests) and, unless the case sleeps (:sleep-skip, :time-why
   :sleep) or names sleep-status, a :sleep-status needing more players than there are (the runner's skip rule, which
   shows only once someone lies down), so staying awake costs no skip and the awake ways are priced as before. Unless the
-  case keeps memory or seeds its own, a :respawned entry at the body's spawnpoint (else its start): the body knows
+  case keeps memory or seeds its own, a :respawned entry at respawn-cell: the body knows
   where it wakes, as after a death (body-commands sets the same point in the game); it is older than every seeded
   :died entry, so no seeded death reads as already respawned from."
   [c]
@@ -220,7 +226,7 @@
         night? (and (#{:night :night-x} (lease/time-phase c))
                     (not (:keep-memory c))
                     (not (str/includes? text "log-out")))
-        spawn (or (get-in c [:body :spawnpoint]) (get-in c [:body :at]))
+        spawn (respawn-cell c)
         death-age (some->> (:memory c) (filter #(= :died (:kind %))) (map #(or (:age-s %) 0)) seq (apply max) inc)
         sleeps? (or (:sleep-skip c) (= :sleep (:time-why c)) (str/includes? text "sleep-status"))]
     (cond-> (vec (:memory c))
@@ -933,10 +939,10 @@
 
 (defn body-commands
   "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down), still a spectator
-  (ensure-at-start! makes it survival once it stands there), healed and fed, its inventory and effects as the case says. Its respawn point is :spawnpoint, else the start (the world spawn is
+  (ensure-at-start! makes it survival once it stands there), healed and fed, its inventory and effects as the case says. Its respawn point is respawn-cell (the world spawn is
   far from every plot, which would price each death as a huge walk back)."
   [origin body c]
-  (let [{:keys [at yaw pitch inventory effects spawnpoint]} (:body c)]
+  (let [{:keys [at yaw pitch inventory effects]} (:body c)]
     (-> [(str "clear " body)
          (str "effect clear " body)]
         (into (for [slot worn-slots] (str "item replace entity " body " " slot " with minecraft:air")))
@@ -946,7 +952,13 @@
         (into (for [[item n] inventory] (str "give " body " " item " " (or n 1))))
         (into (for [[effect seconds amp] effects]
                 (str "effect give " body " " effect " " (or seconds 600) " " (or amp 0) " true")))
-        (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin (or spawnpoint at))))))))
+        (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin (respawn-cell c))))))))
+
+(defn command-errors
+  "The commands whose reply is a command parse error (the game's \"<--[HERE]\" marker), with their replies."
+  [commands replies]
+  (keep (fn [[cmd reply]] (when (str/includes? (str reply) "<--[HERE]") (str cmd " -> " (str/trim reply))))
+        (map vector commands replies)))
 
 (declare reply-pos)
 

@@ -409,8 +409,8 @@
       (is (< (.indexOf body "item replace entity ProbeFixture armor.head with minecraft:air")
              (.indexOf body "give ProbeFixture bread 3"))
           "the slots are emptied before the case's gear is given"))
-    (is (some #{"spawnpoint ProbeFixture 20016.5 150 20016.5"} (f/body-commands origin "ProbeFixture" glass))
-        "the respawn point defaults to the start: the world spawn is far from every plot and would price each death as a huge walk back")
+    (is (some #{"spawnpoint ProbeFixture 20016 150 20016"} (f/body-commands origin "ProbeFixture" glass))
+        "the respawn point defaults to the start's block: /spawnpoint refuses a fractional position, and the body would respawn at the world spawn")
     (is (some #{"spawnpoint ProbeFixture 20001 150 20002"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :spawnpoint] [1 0 2])))
         "a case's own :spawnpoint wins")
@@ -643,9 +643,14 @@
     (is (not (log-out? {:time :night :act [[:job '(jobs.survival.log-out)]]})))
     (is (= [:bed :log-out :sleep-status] (mapv :kind (f/memory-entries {:time :night :memory [{:kind :bed :data {}}]}))))))
 
+(deftest command-errors-name-the-refused-commands
+  (is (= ["spawnpoint P 1.5 2 3 -> Invalid integer '1.5' at position 12: ...int P <--[HERE]"]
+         (f/command-errors ["tp P 1 2 3" "spawnpoint P 1.5 2 3"]
+                           ["Teleported P to 1.0, 2.0, 3.0" "Invalid integer '1.5' at position 12: ...int P <--[HERE]"]))))
+
 (deftest memory-entries-tell-the-body-where-it-respawns
   (let [pos #(-> (f/memory-entries %) (->> (filter (comp #{:respawned} :kind))) first (get-in [:data :pos]) (f/resolve-tags [100 50 200]))]
-    (is (= {:x 103 :y 51 :z 202} (pos {:body {:at [3 1 2]}})) "the start")
+    (is (= {:x 103 :y 51 :z 202} (pos {:body {:at [3.5 1 2.5]}})) "the start's block, where body-commands sets the game's spawnpoint")
     (is (= {:x 101 :y 50 :z 205} (pos {:body {:at [3 1 2] :spawnpoint [1 0 5]}})) "the case's spawnpoint")
     (is (nil? (pos {:body {:at [3 1 2]} :keep-memory true})) "kept memory keeps its own")
     (is (= 401 (->> (f/memory-entries {:body {:at [0 0 0]} :memory [{:kind :died :age-s 400 :data {}} {:kind :died :age-s 30 :data {}}]})
