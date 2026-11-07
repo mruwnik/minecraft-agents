@@ -121,9 +121,11 @@
 
 (defn far-side
   "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the closed region round `region` whose walkable-near
-  cell `to` (not beside `from`: a look from there shows as much) shows the most unseen sides within look/near-of (the
+  cell `to` shows the most unseen sides within look/near-of (the
   farthest from `from` among equals), among those `to` that (affordable? to) accepts (default all: a nearer walk is
-  the one bought when the best is dear), and not within look/near-of of a `stands` cell ({:x :y :z}: a look from there showed what it could), nor with `to` beside one (a walk back there shows nothing new), nil when none. A side of
+  the one bought when the best is dear), and not within look/near-of of a `stands` cell's eye ({:x :y :z}: a look from there showed what it could; perception's
+  measure, eye to cell centre), nor with `to` beside `from` or one unless its eye shows the side and theirs does not (a step
+  closer shows what they could not), nil when none. A side of
   the region's flood with no seen open cell beside it lies inside rock (open-beside-fn): no walk shows it, so it is left to
   the unseen-rock prior (the spawn flood's :edge is kept). A walk to `to` and a look there shows `side` or the region past
   it, however far `to` lies from `side` (a tunnel seen without its floor has no stand cell nearer). The end of a dark
@@ -134,12 +136,12 @@
    (let [near-fn (delay (walkable-near-fn p region))
          near (or (look/near-of p) 4)
          edge (:edge (sh-inside/spawn-region p region (sh-sense/sky-subtract-now p)))
-         seen-from-stand? (fn [[sx sy sz]] (some #(<= (u/dist % {:x sx :y sy :z sz}) near) stands))
-         stood? (fn [to] (some #(u/within? % to 1) stands))
-         sides (remove #(or (looked %) (seen-from-stand? %)) (distinct (concat (some-> edge vector) (filter (open-beside-fn p) (reach-room/unseen-sides p region)))))
-         shown (fn [{:keys [x y z]}] (count (filter (fn [[sx sy sz]] (<= (u/dist {:x x :y y :z z} {:x sx :y sy :z sz}) near)) sides)))]
+         shows? (fn [{:keys [x y z]} [sx sy sz]] (<= (u/dist {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)} {:x (+ sx 0.5) :y (+ sy 0.5) :z (+ sz 0.5)}) near))
+         sides (remove #(or (looked %) (some (fn [at] (shows? at %)) stands)) (distinct (concat (some-> edge vector) (filter (open-beside-fn p) (reach-room/unseen-sides p region)))))
+         no-new-view? (fn [side to] (some #(and (u/within? % to 1) (or (shows? % side) (not (shows? to side)))) (cons from stands)))
+         shown (fn [to] (count (filter #(shows? to %) sides)))]
      (some->> (seq sides)
-              (keep (fn [side] (when-let [to (@near-fn side)] (when-not (or (u/within? from to 1) (stood? to)) {:side side :to to}))))
+              (keep (fn [side] (when-let [to (@near-fn side)] (when-not (no-new-view? side to) {:side side :to to}))))
               (sort-by (juxt #(if (= edge (:side %)) 0 1) #(- (shown (:to %))) #(- (u/dist from (:to %)))))
               (filter #(affordable? (:to %)))
               first))))

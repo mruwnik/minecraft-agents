@@ -77,6 +77,19 @@
                                  (rock-world (merge open trench {"6,64,0" "iron_ore"})) 60))]
           (is (some #{[6 64 0]} (dug-cells s)) (pr-str (dug-cells s))))))))
 
+(deftest a-dark-ore-a-tunnel-look-shows-past-a-deep-trench-is-dug-before-the-stop
+  ;; mine-wide-trench/dark-ore-3: dark, so the ore is out of sight at the start; the tunnel's walk to look at the trench
+  ;; shows it, then the tunnel stops at the trench (no block to bridge it: stone drops nothing). The seen ore is dug, not
+  ;; left behind by the tunnel's end.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (rock-world (merge (cells "stone" (range -9 10) (range 58 62) (range -9 10)) (cells "air" (range 1 4) [64 65] [0])
+                                           (cells "air" [4 5] (range 60 66) [0]) {"6,64,0" "iron_ore"}))
+                        (assoc :inventory bare-pickaxe :drops {"iron_ore" "raw_iron" "stone" []}))
+              s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :torches false} world 120 [0 0]))]
+          (is (some #{[6 64 0]} (dug-cells s)) (pr-str (dug-cells s))))))))
+
 (deftest a-torch-in-either-hand-lets-a-dark-ore-six-away-be-seen-and-dug
   (async done
     (tu/run-async done

@@ -149,7 +149,7 @@
 
 (deftest a-stand-already-looked-from-gets-no-second-leg
   ;; mine-wide-trench/dark-ore-3: a cut x 16..19 ends at a 2-wide 6-deep trench, ore in its far wall. Unseen from the cut,
-  ;; the trench may be a way on, so the cut's end is a doorway and the stand is the cell before it.
+  ;; the trench may be a way on, so the cut's end is a doorway and the stand is the cell before it, whose eye the dark ore is past.
   (let [air? (fn [x y z] (and (= z 16) (or (and (<= 16 x 19) (<= 64 y 65)) (and (<= 20 x 21) (<= 60 y 65)))))
         blocks (assoc (into {} (for [x (range 2 31) y (range 58 71) z (range 8 25) :when (not (air? x y z))] [(str x "," y "," z) "stone"])) "22,64,16" "iron_ore")
         eyes (atom [[16.5 65.6 16.5]])
@@ -158,8 +158,11 @@
     (with-redefs [look/near-of (constantly 4)]
       (is (= {:x 18 :y 64 :z 16} (:to (look-edge/far-side p cut cut #{}))) "the cell before the cut's end, beside the unseen trench, is the stand")
       (swap! eyes conj [18.5 65.6 16.5])
-      (is (nil? (look-edge/far-side p cut cut #{} (constantly true) #{{:x 18 :y 64 :z 16}}))
-          "looked from the edge: the far wall is not walked back to"))))
+      (is (= {:x 19 :y 64 :z 16} (:to (look-edge/far-side p cut cut #{} (constantly true) #{{:x 18 :y 64 :z 16}})))
+          "the trench seen a drop, the cut's end is a stand, and its eye is in reach of the ore the first eye was not (4.15 off)")
+      (swap! eyes conj [19.5 65.6 16.5])
+      (is (nil? (look-edge/far-side p cut cut #{} (constantly true) #{{:x 18 :y 64 :z 16} {:x 19 :y 64 :z 16}}))
+          "looked from the end: the far wall is not walked back to"))))
 
 (deftest a-side-inside-the-rock-gets-no-leg
   ;; The 1-wide tunnel's shell is seen but for one ceiling cell and the head-high wall beside it: the flood steps up into

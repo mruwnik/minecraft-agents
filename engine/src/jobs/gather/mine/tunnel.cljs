@@ -85,7 +85,8 @@
 (defn tunnel-reason [stop] (case stop :tunnel-length :tunnel-length :no-tool :no-tool :tunnel-stopped))
 
 (defn tunnel-end!
-  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending carries :stop :length :at :next-cell :walk :fluid :behind.
+  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending, one round on (a target
+  its looks brought into view is dug first), carries :stop :length :at :next-cell :walk :fluid :behind.
   walk: for :walk-failed, what stopped the walk (step-to!)."
   [c stop at & [next walk]]
   (let [{:keys [tunnel]} (ctx/mem c)
@@ -97,15 +98,15 @@
       :again
       (do
     (ctx/update-mem! c update :legs (fnil conj []) (cond-> {:heading heading :length steps :stop stop} (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))))
-    (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
+    (ctx/update-mem! c #(-> % (assoc-in [:tunnel :stop] stop)
+                            (assoc :tunnel-end (cond-> {:stop stop :length steps}
+                                                 at (assoc :at (access/cell at))
+                                                 fluid (assoc :fluid (keyword fluid))
+                                                 next (assoc :next-cell (access/cell next))
+                                                 (:behind %) (assoc :behind (:behind %))
+                                                 walk (assoc :walk walk)))))
     (stay/record-tunnel! c tunnel (headings heading))
-    (stop! c (tunnel-reason stop)
-           (cond-> {:stop stop :length steps}
-             at (assoc :at (access/cell at))
-             fluid (assoc :fluid (keyword fluid))
-             next (assoc :next-cell (access/cell next))
-             (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))
-             walk (assoc :walk walk)))))))
+    :again))))
 
 (defn result-of
   "A child's ending e as the result map the tunnel reads: its data with :status and the cause's :reason, nil while it
@@ -153,7 +154,7 @@
         {:keys [steps stop heading] :as t} (:tunnel m)
         args (:args c)]
     (if stop
-      (stop! c (tunnel-reason stop))
+      (stop! c (tunnel-reason stop) (:tunnel-end m))
       (let [_ (ctx/update-mem! c assoc :stepping true)
             r (waits/waiting-out c (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
                                {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (branch/segment-limit c (or steps 0) (- (:tunnel-length args) (:spent m 0)))
