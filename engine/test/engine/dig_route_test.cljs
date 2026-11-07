@@ -571,3 +571,20 @@
       (is (< (js/Math.abs (- plain-s tier-s)) 1e-9) (str from "->" goal ": " tier-s " s, plain " plain-s))
       (is (< (js/Math.abs (- plain-s flat-s)) 1e-9))
       (is (< tier-n flat-n) (str from "->" goal ": " tier-n " cells, " flat-n " at the least of all")))))
+
+(defn holed-climb
+  "Stone below y 30 with about one cell in eight air round a climb from [0 10 0], seeded: [block-at goal]."
+  [seed]
+  (let [state (atom seed)
+        rnd (fn [] (/ (swap! state #(mod (+ (* % 1103515245) 12345) 2147483648)) 2147483648))
+        holes (into #{} (for [x (range -3 12) y (range 8 26) z (range -3 4) :when (< (rnd) 0.12)] [x y z]))
+        goal [(js/Math.floor (* 9 (rnd))) (+ 14 (js/Math.floor (* 9 (rnd)))) (dec (js/Math.floor (* 3 (rnd))))]
+        open (into holes [[0 10 0] [0 11 0] goal (update goal 1 inc)])]
+    [(fn [[_ y _ :as c]] (if (or (open c) (>= y 30)) "air" "stone")) goal]))
+
+(deftest a-way-that-refuses-more-contested-floors-at-no-lower-price-is-not-searched-on
+  ;; each floor contested labels the ways that dug it apart; one that dug a superset of another's and costs no less is no
+  ;; better (without that the climb expanded over 100000 cells)
+  (let [[w goal] (holed-climb 13)
+        r (dr/route w [0 10 0] goal {:step-s 0.3 :dig-s (constantly 0.5) :stair-s 3 :margin 2 :max-fall 3 :max-nodes 20000})]
+    (is (< (js/Math.abs (- 33.3 (:seconds r))) 1e-9) (pr-str (dissoc r :steps :dig)))))
