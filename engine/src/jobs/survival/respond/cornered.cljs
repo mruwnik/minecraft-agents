@@ -3,7 +3,7 @@
   (:require [jobs.lib.shelter.fill :as fill]
             [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order by-price with-zone-pillar]]
-            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! hold! back-off-search! back-off! blocked! recently-hurt? hurt-window-s]]
+            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? cornered-answers shots-in stand! hold! back-off-search! back-off-of back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -210,9 +210,12 @@
 
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order (its covers and back-off by price, by-price) that it can
-  take and has not failed since the last start over (blocked!). home?: the body is in its home room."
+  take and has not failed since the last start over (blocked!). home?: the body is in its home room. ends: the step's
+  flee search (flee-search/search!), its back-off taken from its near ring (back-off-of); with none the back-off
+  searches (back-off-search!)."
   ([c why] (await (cornered! c why false)))
-  ([c why home?]
+  ([c why home?] (await (cornered! c why home? nil)))
+  ([c why home? ends]
   (let [weapons (combat/weapons c)
         max-fist-sweeps (fist-sweeps)
         hostiles (near-hostiles c)
@@ -227,7 +230,7 @@
         weighed-mobs (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)
         chasers (respond.goal/chasers c)
         back-off (when (and (seq chasers) (not (flight/tried? c :back-off)) (outrun? c hostiles))
-                   (await (back-off-search! c chasers)))
+                   (if-let [near (:near (meta ends))] (back-off-of c near) (await (back-off-search! c chasers))))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
         enderman? (angry-enderman? c hostiles)
         weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim? enderman? (when enderman? (hold-walks c))))

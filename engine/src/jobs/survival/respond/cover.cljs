@@ -159,11 +159,13 @@
 
 (defn ^:async judge!
   "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
-  (glance-away!), the homes kept as :homes."
+  (glance-away!), the homes kept as :homes; after a back-off (memory :backed-off) its search plans the ring of the next
+  one first (respond.options/back-off-reach): a body pressed so close backs off again, and that ring's plans come
+  before the meter runs out on the far ring."
   [c threats covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
   (let [hs (homes c rooms blast?)]
-    (assoc (await (respond.goal/judge! c threats hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c))) :homes hs)))
+    (assoc (await (respond.goal/judge! c threats hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c) (when (:backed-off (ctx/mem c)) (cornered/back-off-reach)))) :homes hs)))
 
 (defn building-looks
   "[{:at :seconds :closed :refuge-s}]: the looks through a door into a building survey s dropped :unseen, the home's or
@@ -224,7 +226,7 @@
                            rooms (:rooms s)
                            ;; before the flee search: the step's one search, its home floods first
                            looks (when (and s (not-any? combat/creeper? threats)) (building-looks c s threats))
-                           judged (await (respond.goal/judge! c threats (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))
+                           judged (await (respond.goal/judge! c threats (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs) nil))
                            r (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (respond.goal/closed-home judged)) glanced)]
                        (cond-> r (and (seq looks) (not (:refuge-s r))) (assoc :looks looks))))
             chance (cond-> chance (and chance scan) (assoc :way-scan scan) (:refuge-s chance) (assoc :hide-s (hide-out/quiet-s)))]
@@ -272,7 +274,7 @@
       (when took?
         (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
         (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
-        (assoc (await (respond.goal/judge! c threats (:homes judged) (:room judged) covered? (dead-end-covers c))) :homes (:homes judged))))))
+        (assoc (await (respond.goal/judge! c threats (:homes judged) (:room judged) covered? (dead-end-covers c) nil)) :homes (:homes judged))))))
 
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of

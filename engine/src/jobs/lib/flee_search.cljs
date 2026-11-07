@@ -220,8 +220,8 @@
 
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
-  doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
-  partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
+  doc): [{:target :found? :open? :cut? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
+  partial route ends where the chasers have given the body up: given-up?; :cut? a partial one whose nodes the meter, not its cap, ran out), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted :plan-ms :cut?} the nodes
   expanded, the targets planned and why the ones with no route had none (the planner's reason: count), plan-ms the
   milliseconds in its plans, :cut? when the search's meter (opts :meter, a jobs.lib.reach/meter: the flight step's one
@@ -284,6 +284,7 @@
                   r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
                           (conj out (assoc r :target t
+                                             :cut? (and (not (:found? r)) (< cap most) (= "budget" (.-reason res)))
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
                                                        (let [spawns (spawn-light/spawns-over p (:cells r) share)]
@@ -567,6 +568,12 @@
   [f]
   (fn [e] (boolean (or (f (:step e)) (f (:end e))))))
 
+(defn unjudged?
+  "Whether the meter cut search ends (cut?, or an end :cut?) before a ring way was planned whole: what lies round the
+  body is not known this step."
+  [ends]
+  (and (or (:cut? (meta ends)) (some :cut? ends)) (not-any? #(and (nil? (:pos (:target %))) (not (:cover? %)) (not (:cut? %))) ends)))
+
 (defn choose
   "The end entry a flee step takes among scored ends (scored, covers), its :step the cell the step walks to (step-of,
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
@@ -575,19 +582,23 @@
   out: each of marks ({:holds? (end entry -> bool) :s seconds}, e.g. at-step-or-end of a cell test) that holds of an
   end costs it its :s (a number, or a fn of the end entry), the death the mark risks (a negative :s credits the death a place removes: a closed room), off
   its :score. The end with the highest score so priced wins,
-  covers, homes and open ways alike. A pocket only when no open way is left uncut: open ways that every chaser cuts leave the pockets out, they are traps."
+  covers, homes and open ways alike. A pocket only when no open way is left uncut: open ways that every chaser cuts leave the pockets out, they are traps.
+  With no ring way planned whole (unjudged?), a ring way the meter cut short (:cut?) is no pocket: it stops where the
+  search stopped, not where the way does (with some planned whole it is one: what its cut part misses may catch it)."
   [ends {:keys [refused never? hazards marks]}]
-  (let [ok (->> ends
+  (let [short? (unjudged? ends)
+        on? #(or (:open? %) (and short? (:cut? %) (nil? (:pos (:target %)))))
+        ok (->> ends
                 (remove :caught?)
                 (filter #(or (:cover? %) (pos? (:gain %))))
-                (filter #(or (:open? %) (> (:gain %) (:s %))))
+                (filter #(or (on? %) (> (:gain %) (:s %))))
                 (keep #(when-let [step (step-of % (or refused #{}))] (assoc % :step step)))
                 (remove #(and never? ((at-step-or-end never?) %)))
                 (remove #(hazard-near? hazards (:cells %)))
                 (map (fn [e] (assoc e :net (- (:score e) (transduce (comp (filter (fn [m] ((:holds? m) e))) (map (fn [m] (let [s (:s m)] (if (fn? s) (s e) s))))) + 0 marks))))))
         ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
         traps? (and (seq ways) (every? :caught? ways))
-        open (filter :open? ok)
+        open (filter on? ok)
         pool (cond (seq open) open traps? nil :else ok)]
     (when (seq pool) (apply max-key :net (reverse pool)))))
 
@@ -607,19 +618,24 @@
 (defn ^:async search!
   "The flee search from where the body stands: the targets (named, {:pos :range :kind}) and the ring ends at reach
   (default: reach, where the chasers give the body up) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
-  their routes when covered? is given, the walks back from dead ends priced with :fire (scored). opts {:reach :y-margin
-  :covered? :covers :covers-key :fire :meter} (covers, meter: price!'s)."
-  [c chasers targets {:keys [covered? fire] :as opts}]
+  their routes when covered? is given, the walks back from dead ends priced with :fire (scored). opts {:reach :near :y-margin
+  :covered? :covers :covers-key :fire :meter} (covers, meter: price!'s); :near, blocks: a ring that near is planned too,
+  before the far one, and scored apart as the meta :near of the ends (a back-off step's)."
+  [c chasers targets {:keys [covered? fire near] :as opts}]
   (let [t0 (clock/now)
         self (.self (:primitives c))
         from (u/self-pos c)
         chasers (with-ways c chasers)
         ways-ms (js/Math.round (- (clock/now) t0))
         r (or (:reach opts) (reach from chasers (.-food self)))
-        priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
-        ends (scored chasers from priced nil fire)]
+        n (settings/get settings ::bearings)
+        priced (await (price! c (-> (vec targets) (into (when near (map #(assoc % :near? true) (ring from chasers near n)))) (into (ring from chasers r n)))
+                              (assoc opts :reach r :chasers chasers)))
+        near? (comp :near? :target)
+        ends (scored chasers from (remove near? priced) nil fire)]
     (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (clock/now) t0)) :ways-ms ways-ms :targets (count targets)))
-    (with-meta (cond-> ends covered? (into (covers chasers from covered? ends fire))) (meta priced))))
+    (with-meta (cond-> ends covered? (into (covers chasers from covered? ends fire)))
+      (cond-> (meta priced) near (assoc :near (scored chasers from (filterv near? priced)))))))
 
 (defn unseen-ahead
   "The first unseen cells ([x y z], nearest first) of ends' routes but those in glanced (looked at this flight already:
@@ -701,10 +717,12 @@
   (not (cost/wins-race? (/ (u/dist from (cost/centred pos)) (cost/flee-pace food)) (arrive-at chasers (cost/centred pos)))))
 
 (defn safe-why
-  "Why the walk to a named target is no safe run, its scored end e: :no-way (no route there, or only part of one),
-  :past-hostile (a chaser catches the route), :hostile-nearer (one gets there first: cost/wins-race? lost); nil when safe."
+  "Why the walk to a named target is no safe run, its scored end e: :unjudged (the meter ran out on its plan, :cut?: not
+  known this step), :no-way (no route there, or only part of one), :past-hostile (a chaser catches the route),
+  :hostile-nearer (one gets there first: cost/wins-race? lost); nil when safe."
   [e]
   (cond
+    (:cut? e) :unjudged
     (not (:found? e)) :no-way
     (:caught? e) :past-hostile
     (not (cost/wins-race? (:s e) (:arrive e))) :hostile-nearer))

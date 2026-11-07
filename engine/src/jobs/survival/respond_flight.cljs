@@ -158,9 +158,9 @@
         ;; a glance, this step's or respond's priced look, that took the body inside ran it home
         _ (when (and room inside? (or glanced? (seq (:door-glanced (ctx/mem c))))) (say-once! c room))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
-        stuck (fn ^:async stuck [why]
+        stuck (fn ^:async stuck [why ends]
                 (if (seq (cornered/near-hostiles c))
-                  (await (pick/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c))))))
+                  (await (pick/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c)))) ends))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
                       (if (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         (flight/end-flight! c :keeps-off {:text (flight/keeps-off-text p threats)})
@@ -179,7 +179,7 @@
                (flight/end-flight! c nil))
       :dodge (await (step/dodge-shot! c))
       :stuck (do (when (and reset-gain? (seq (cornered/near-hostiles c))) (ctx/update-mem! c assoc :since-gain 0))
-                 (await (stuck why)))
+                 (await (stuck why nil)))
       :cornered (await (pick/cornered! c why (home-now?)))
       :cornered-inside (await (pick/cornered! c why inside?))
       :shut-door (await (respond.doors/shut-door! c door))

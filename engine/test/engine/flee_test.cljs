@@ -1220,6 +1220,9 @@
                           [:no-way (run-end goal 4 9 :found? false) {}]
                           [:past-hostile (run-end goal 4 9 :caught? true) {}]
                           [:hostile-nearer (run-end goal 4 4.2) {}]
+                          [nil (run-end goal 4 9 :found? false :cut? true) {}]
+                          [:home-safer (run-end goal 4 9 :found? false :cut? true) {:home {:x 10 :y 64 :z 0}}]
+                          [:hostile-nearer (run-end goal 4 9 :found? false :cut? true) {:beaten? true}]
                           [:home-safer (run-end goal 4 9) {:home {:x 10 :y 64 :z 0}}]
                           [nil (run-end goal 4 9) {:home {:x -14 :y 64 :z 3}}]]]
       (is (= why (respond.goal/verdict goal e opts)) (pr-str e opts)))))
@@ -1240,6 +1243,8 @@
     (is (= :hostile-nearer (respond.goal/home-why [(run-end home 2 2.1)] home)))
     (is (= :past-hostile (respond.goal/home-why [(run-end home 2 6 :caught? true)] home)))
     (is (= :no-way (respond.goal/home-why [] home)))
+    (is (= :unjudged (respond.goal/home-why [(run-end home 2 6 :found? false :cut? true)] home)) "a plan the meter cut is not known")
+    (is (= :unjudged (respond.goal/home-why (with-meta [] {:cut? true}) home)) "nor one it left unplanned")
     (is (nil? (respond.goal/home-why [] nil)) "no home: nothing to explain")))
 
 (defn choice [seen] (first (events-of seen :retreat.choice)))

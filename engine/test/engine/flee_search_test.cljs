@@ -611,6 +611,15 @@
     (is (= {:chance 1 :cornered? false} (c [(end-of 4 0 1 :found? false :caught? false :caught-s 0 :gain 2)]))
         "a pocket the flight still runs to, with no way out to call free: a walk caught for certain")))
 
+(deftest a-way-the-meter-cut-short-is-no-pocket-while-no-way-was-planned-whole
+  (let [short (end-of 4 0 5 :found? false :caught? false :caught-s 0 :gain 2 :cut? true)
+        home (end-of 1 0 1 :target {:pos {:x 1 :y 64 :z 0}} :caught? false :gain 0.5)
+        caught (end-of 0 4 0 :caught? true)]
+    (is (search/unjudged? [short home]) "no ring way planned whole")
+    (is (= (:end short) (:end (search/choose [short home] {}))) "the cut way away beats an open home a block off")
+    (is (not (search/unjudged? [short home caught])) "one ring way planned whole")
+    (is (= (:end home) (:end (search/choose [short home caught] {}))) "then the cut one is a pocket: what its cut part misses may catch it")))
+
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
         chance #(:chance (search/caught-chance % {:k 10 :n 10} {} nil))]

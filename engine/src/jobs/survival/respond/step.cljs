@@ -77,7 +77,7 @@
                  (assoc choice
                         :hostiles (mapv #(str (.-name %) " " (.-id %) " " (at (danger-q/mob-pos p %))) (flight/known-chasers p))
                         :text (str "flee choice: " (if lean (str "leans to " lean) "no refuge or home to run to, runs straight away from the hostiles")
-                                   (when (:home-why choice) (str "; home " (at (cover/home-pos c)) " dropped (" (name (:home-why choice)) ")"))
+                                   (when (:home-why choice) (str "; home " (at (cover/home-pos c)) (if (= :unjudged (:home-why choice)) " not judged this step (search cut)" (str " dropped (" (name (:home-why choice)) ")"))))
                                    (when goal (str "; goal " goal (when (:why judged) (str " dropped (" (name (:why judged)) ")"))))
                                    (when (seq blast) (str "; no room is a refuge within blast reach of " (str/join ", " blast)))
                                    (when (seq rooms)
@@ -100,7 +100,7 @@
 
 (defn ^:async walk-away!
   "The flee step when the body outruns the chasers: eat a bite, then take the stairs up, the goal leg or the flight's
-  target (cover/flight-target! over judged, cover/judge!; stuck: the cornered fallback, called with its reason; a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first.
+  target (cover/flight-target! over judged, cover/judge!; stuck: the cornered fallback, called with its reason and the ends its back-off reads (nil: none); a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first.
   A search its meter cut with no end chosen holds the step once (retreat.search-cut): the next step searches again."
   [c threats judged covered? stuck]
   (let [p (:primitives c)
@@ -129,9 +129,9 @@
       (do (ctx/update-mem! c assoc :cut-held true)
           (ctx/emit! c :retreat.search-cut :debug {:nodes (:nodes (meta (:ends judged))) :planned (:planned (meta (:ends judged)))})
           :again)
-      (nil? target) (await (stuck "no open way away from the hostile"))
+      (nil? target) (await (stuck "no open way away from the hostile" (:ends judged)))
       :else
-      (let [_ (ctx/update-mem! c dissoc :cornered :cut-held)
+      (let [_ (ctx/update-mem! c dissoc :cornered :cut-held :backed-off)
             _ (say-target! c target threats covered?)
             _ (when leg (respond.goal/start-leg! c))
             from (u/self-pos c)
@@ -158,7 +158,7 @@
           (do (ctx/update-mem! c update :refused-steps (fnil inc 0)) :again)
           (and (not moved) (:leg-timed-out (ctx/mem c)) (< (:slow-steps (ctx/mem c) 0) (slow-step-cap)))
           (do (ctx/update-mem! c update :slow-steps (fnil inc 0)) :again)
-          (not moved) (await (stuck "the way away from the hostile is blocked"))
+          (not moved) (await (stuck "the way away from the hostile is blocked" nil))
           :else
           (let [gap (flight/nearest-gap p threats)]
             (ctx/update-mem! c flight/after-step gap)

@@ -271,7 +271,7 @@
 
 (defn cornered-answers
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),
-  with a back-off step to take (back-off-search!'s :target; nil: none or tried), :back-off the walk away
+  with a back-off step to take (back-off-of's :target; nil: none or tried), :back-off the walk away
   (hostile/cornered-answers) caught as its search says (:caught), and with swim? (afloat, a drowned near) :swim-out the
   swim to dry land and walk on (hostile/flee-answer, caught at the prior: no search runs from the shore); with enderman?
   (an angry one near) :water and :roof not yet tried, the holds left (hold!) where hostiles but the enderman reach the
@@ -340,18 +340,16 @@
 
 (defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))
 
-(defn ^:async back-off-search!
-  "The back-off step from chasers ({:name (mob-kind) :pos}) by a flee search (flee-search/search!, part of the step's one
-  search, room-lib/step-meter) ::back-off-reach off:
-  {:target :caught}, target the best scored end that gains on them over standing still, on a route none catches, clear of
-  :hazard places (nil: none, no back-off), caught the chance the step is caught (flee-search/caught-chance at the way
-  counts, wworld/way-scan), the one its price reads."
-  [c chasers]
+(defn back-off-reach [] (settings/get settings ::back-off-reach))
+
+(defn back-off-of
+  "The back-off step of near, the scored ends of a flee search's ring ::back-off-reach off (flee-search/search!'s :near,
+  or its ends when that ring is its only one): {:target :caught}, target the best scored end that gains on the chasers
+  over standing still, on a route none catches, clear of :hazard places (nil: none, no back-off), caught the chance the
+  step is caught (flee-search/caught-chance at the way counts, wworld/way-scan), the one its price reads."
+  [c near]
   (let [hazards (keep (comp :pos :data) (ctx/entries c :hazard))
-        m (room-lib/step-meter c)
-        ends (await (search/search! c chasers [] {:reach (settings/get settings ::back-off-reach) :meter m}))
-        _ (room-lib/spent-meter! c m)
-        target (some->> ends
+        target (some->> near
                         (remove :caught?)
                         (filter #(pos? (:gain %)))
                         (remove #(search/hazard-near? hazards (:cells %)))
@@ -360,14 +358,25 @@
                         :end)
         counts (or (some-> (wworld/way-scan (:primitives c)) (select-keys [:k :n])) {:k 0 :n 0})]
     {:target target
-     :caught (when target (search/caught-chance ends counts {:hazards hazards} (:glanced (ctx/mem c))))}))
+     :caught (when target (search/caught-chance near counts {:hazards hazards} (:glanced (ctx/mem c))))}))
+
+(defn ^:async back-off-search!
+  "back-off-of a flee search from chasers ({:name (mob-kind) :pos}) whose ring is back-off-reach off, part of the step's
+  one search (room-lib/step-meter): for a step whose search planned no near ring."
+  [c chasers]
+  (let [m (room-lib/step-meter c)
+        ends (await (search/search! c chasers [] {:reach (back-off-reach) :meter m}))]
+    (room-lib/spent-meter! c m)
+    (back-off-of c ends)))
 
 (defn ^:async back-off!
-  "Step back to target (back-off-search!'s): :again, nil when the walk is blocked or a chaser hit the body on it (the option is tried then:
-  a chaser that keeps up is not outrun, and the next step prices the covers and the fight instead)."
+  "Step back to target (back-off-of's): :again, nil when the walk is blocked or a chaser hit the body on it (the option is tried then:
+  a chaser that keeps up is not outrun, and the next step prices the covers and the fight instead). Memory :backed-off:
+  the next step's search plans a back-off's ring first (respond.cover/judge!)."
   [c target]
   (let [health0 (.-health (.self (:primitives c)))
         moved? (await (step! c :back-off target 0))]
+    (ctx/update-mem! c assoc :backed-off true)
     (if (and moved? (>= (.-health (.self (:primitives c))) health0))
       :again
       (do (flight/tried! c :back-off) (if moved? :again nil)))))

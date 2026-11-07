@@ -80,23 +80,31 @@
   [{:keys [home room]}]
   (when (and home (= home room)) home))
 
+(defn unplanned-why
+  "Pure: why a named target search ends did not plan is no run: :unjudged when the search's meter cut it
+  (flee-search/cut?), else :no-way."
+  [ends]
+  (if (search/cut? ends) :unjudged :no-way))
+
 (defn home-why
-  "Pure: why home (a position, or nil) is no safe run (flee-search/safe-why of its end in search ends; :no-way when it
+  "Pure: why home (a position, or nil) is no safe run (flee-search/safe-why of its end in search ends, unplanned-why when it
   was not planned); nil when it is safe or there is no home."
   [ends home]
   (when home
-    (if-let [e (search/named ends home)] (search/safe-why e) :no-way)))
+    (if-let [e (search/named ends home)] (search/safe-why e) (unplanned-why ends))))
 
 (defn verdict
   "Pure: why a flight does not go to goal, its end e in the flight's search, nil when it may: :hostile-nearer when
   beaten? (a chaser gets there first even against a straight walk: flee-search/beaten-to?), flee-search/safe-why
-  (:no-way: not planned whole, :past-hostile, :hostile-nearer); :home-safer: home (closed-home) lies elsewhere (farther than same-place from it)."
-  [goal e {:keys [home beaten?]}]
-  (cond
-    beaten? :hostile-nearer
-    (nil? e) :no-way
-    (search/safe-why e) (search/safe-why e)
-    (and home (> (u/dist home goal) (same-place))) :home-safer))
+  (:no-way: not planned whole, :past-hostile, :hostile-nearer), unplanned (default :no-way) when e is nil;
+  :home-safer: home (closed-home) lies elsewhere (farther than same-place from it). A plan the meter cut (:unjudged) is
+  unknown, no reason against the goal: the leg's own checks (off!) end the walk that loses ground."
+  [goal e {:keys [home beaten? unplanned] :or {unplanned :no-way}}]
+  (let [why (if e (search/safe-why e) unplanned)]
+    (cond
+      beaten? :hostile-nearer
+      (not (contains? #{nil :unjudged} why)) why
+      (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
 (declare under-floor? margin fire-price)
 
@@ -104,16 +112,17 @@
   "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, part of the step's one search, room-lib/step-meter, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
   cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only, the walks back
-  from dead ends priced with the fire of threats' shooters, fire-price): {:goal (active) :why (:given-up, else verdict; nil: it
-  may go there) :home (safe-home of homes) :room :home-why (of the last of homes) :ends (the search's scored ends)}."
-  [c threats homes room covered? covers]
+  from dead ends priced with the fire of threats' shooters, fire-price, near (blocks, nil none) the search's near ring):
+  {:goal (active) :why (:given-up, else verdict; nil: it may go there) :home (safe-home of homes) :room :home-why (of the
+  last of homes) :ends (the search's scored ends)}."
+  [c threats homes room covered? covers near]
   (let [goal (active c)
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
         m (room-lib/step-meter c)
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
-                                               :fire (:route (fire-price c threats covered?)) :meter m}))
+                                               :fire (:route (fire-price c threats covered?)) :meter m :near near}))
         _ (room-lib/spent-meter! c m)
         home (safe-home ends homes)]
     {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))
@@ -122,7 +131,7 @@
               (given-up? c goal) :given-up
               (under-floor? c goal) :under-floor
               :else (verdict goal (search/named ends goal)
-                             {:home (closed-home {:home home :room room})
+                             {:home (closed-home {:home home :room room}) :unplanned (unplanned-why ends)
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn block-at-fn
