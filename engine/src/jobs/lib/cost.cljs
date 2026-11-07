@@ -337,6 +337,11 @@
         d (+ (js/Math.abs (- hx lx)) (js/Math.abs (- hz lz)))]
     [hx hy hz (max (or he 0) (+ (or le 0) d))]))
 
+(defn flood-origin-within?
+  "Whether every cell water let in at origin a may reach (flood-reaches?) water let in at origin b may reach too, at any level."
+  [[ax ay az ae] [bx by bz be]]
+  (<= (+ (js/Math.abs (- ax bx)) (js/Math.abs (- az bz)) (or ae 0) (* water-spread (- ay by))) (or be 0)))
+
 (defn wet-dig-pace
   "How many times its dry seconds a dig takes with the head under water, standing on ground (vanilla): 5, or 1 with Aqua
   Affinity on the helmet. equipment: self's :equipment (cljs or JS)."

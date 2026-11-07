@@ -1165,6 +1165,17 @@
     (is (reaches? [-6 65 0]) "7 across from the first, still wet")
     (is (not (reaches? [16 65 0])) "past both reaches it is dry")))
 
+(deftest an-origin-is-within-another-when-its-water-reaches-no-cell-the-others-does-not
+  ;; a label whose flood is within another's is no worse on it: dominance by origin keeps the joined origins from multiplying labels
+  (is (cost/flood-origin-within? [0 66 0] [0 66 0]))
+  (is (cost/flood-origin-within? [0 66 0] [0 66 0 3]) "the same opening with less reach")
+  (is (not (cost/flood-origin-within? [0 66 0 3] [0 66 0])))
+  (is (cost/flood-origin-within? [2 66 0] [0 66 0 2]) "an opening 2 across lies inside a reach 2 wider")
+  (is (not (cost/flood-origin-within? [3 66 0] [0 66 0 2])))
+  (is (cost/flood-origin-within? [0 65 0] [0 66 0 0]) "a lower opening reaches 7 less across at each height, so it fits 7 under"
+      )
+  (is (not (cost/flood-origin-within? [0 67 0] [0 66 0 0])) "a higher opening reaches farther"))
+
 (deftest a-fast-swimmer-pays-no-negative-price-for-time-under-water
   ;; wet-s lost its floor: swimming faster than the dry walk it replaces priced the flood below nothing
   (let [hp-s (cost/hp-seconds)]

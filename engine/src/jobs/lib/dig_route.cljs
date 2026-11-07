@@ -453,11 +453,11 @@
                        wet? (some? level)
                        over? (fn [id] (let [^js a (.get best id)]
                                         (and (or (< (aget a 0) s) (and (== (aget a 0) s) (or wet? (= sig (aget a 9)))) (and (not wet?) (.has done id) (= sig (aget a 9))))
-                                             (or (not wet?) (and (<= (aget a 7) level) (<= (aget a 8) under) (= origin (aget a 10))))
+                                             (or (not wet?) (and (<= (aget a 7) level) (<= (aget a 8) under) (cost/flood-origin-within? (aget a 10) origin)))
                                              (sub-sig? (aget a 9) sig) (no-more? (aget a 4) (aget a 6) placed run))))
                        under? (fn [id] (let [^js a (.get best id)]
                                          (and (or (< s (aget a 0)) (and (== s (aget a 0)) (or wet? (= sig (aget a 9)))))
-                                              (or (not wet?) (and (<= level (aget a 7)) (<= under (aget a 8)) (= origin (aget a 10))))
+                                              (or (not wet?) (and (<= level (aget a 7)) (<= under (aget a 8)) (cost/flood-origin-within? origin (aget a 10))))
                                               (sub-sig? sig (aget a 9)) (no-more? placed run (aget a 4) (aget a 6)))))]
                    (when-not (.some ids over?)
                      (let [id (vswap! wet-n dec)
