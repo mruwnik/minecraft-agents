@@ -479,9 +479,9 @@
     (is (zero? floor) "the bare factor is the flat floor")
     (is (= unarmed (* (cost/spawn-rate 64) (cost/spawn-price bare nil)))
         "an unarmed body pays the price of the answer it takes to each mob of the spawn mix, at a near respawn")
-    (is (>= unarmed sword armed-armoured floor)
+    (is (>= unarmed sword armed-armoured)
         "at a near respawn a weapon or armour never adds to the dark: a sword body has every answer a bare one has")
-    (is (> unarmed armed-armoured) "an armed, armoured body pays less than a bare one")))
+    (is (> unarmed armed-armoured floor) "an armed, armoured body pays less than a bare one, never the floor alone")))
 
 (deftest a-kit-s-dark-factor-is-worked-out-once-while-the-settings-stay
   (let [kit {:weapon "stone_sword" :equipment nil :health 13}
