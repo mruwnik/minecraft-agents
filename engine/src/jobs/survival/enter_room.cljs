@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
@@ -41,7 +42,7 @@
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
-  Quote (a flee entry skips the room and race checks: the flight judged them this step): go-to's route seconds (dark cells priced in; ##Inf with no route), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
+  Quote (a flee entry skips the room and race checks: the flight judged them this step): go-to's route seconds (dark cells priced in; ##Inf with no route; a quote whose pick of the rooms seen searched this call prices the blocks to the room as a quote prices blocks not planned, cost.planner/left-s), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
   the place is not remembered, a creeper is near, or a melee hostile reaches a door of the room first (jobs.lib.rooms/race-won?).
   Picked by jobs.survival.shut-in as its :room way, and called by the night for a door, a doorway and the walk home to a bed.")
 
@@ -139,7 +140,7 @@
         (answer true priced best picks judged)
         (let [d (:door (first sides))
               j (get judged d)
-              spent (binding [reach/*search* m] (reach/spent-s))
+              spent (reach/spent-s m)
               lb (cost/least-route-s (u/flat-dist me (room-lib/mid d)) 0.7)
               cost (+ (if j 0 (reduce + (map #(room-lib/side-s p (:pos %)) sides))) (room-lib/way-s))]
           (cond
@@ -284,6 +285,8 @@
         prev (when (picks-seen? c0) (check-cache/kept-value c0 k))
         ;; a pick not done goes on at the next quote from the state it left
         pick (when (picks-seen? c0) (if (:done? prev) prev (let [r (await (pick-seen c0 (:state prev)))] (check-cache/keep! c0 k r) r)))
+        ;; a quote's searches are one (Q141): after the pick's floods or quote, the walk is priced as unplanned blocks
+        searched? (and pick (not (:done? prev)) (:searched? pick))
         c (cond-> c0 pick (assoc :room-pick (:pos (:pick pick))))
         p (:primitives c)
         t (target-of c)
@@ -294,7 +297,9 @@
       (not (here? c t))
       (if (or (nil? t) (and (not (:flee? (:args c))) (or (unclosable? (:primitives c) (:pos t)) (race-lost? c t))))
         (priced ##Inf)
-        (let [route (await (room-lib/route-cost c (walk-args t)))]
+        (let [route (if searched?
+                      (cost-planner/left-s (u/dist (u/self-pos c) (room-lib/mid (:pos t))) false)
+                      (await (room-lib/route-cost c (walk-args t))))]
           (priced (or route ##Inf))))
       :else
       (let [{:keys [door gap plug stop]} (judge c)]

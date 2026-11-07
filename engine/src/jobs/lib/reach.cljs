@@ -21,25 +21,34 @@
   nil)
 
 (defn meter
-  "A meter of budget-s seconds of CPU of which spent-s are spent: a flood's cell costs read-s, a walk search's cell-s."
-  [budget-s spent-s read-s cell-s]
-  {:budget budget-s :left (volatile! (- budget-s spent-s)) :cuts (volatile! 0) :read-s read-s :cell-s cell-s})
+  "A meter of budget-s seconds of CPU of which spent-s are spent: a flood's cell costs read-s, a walk search's cell-s, a
+  route planner's node node-s."
+  [budget-s spent-s read-s cell-s node-s]
+  {:budget budget-s :left (volatile! (- budget-s spent-s)) :cuts (volatile! 0) :read-s read-s :cell-s cell-s :node-s node-s})
 
 (defn metered-cap
-  "budget cells, at most those *search* has left at its price-k (:read-s or :cell-s) a cell."
+  "budget cells, at most those *search* has left at its price-k (:read-s, :cell-s or :node-s) a cell."
   [budget price-k]
   (if-let [m *search*] (min budget (max 0 (js/Math.floor (/ @(:left m) (price-k m))))) budget))
 
-(defn charge!
-  "Take n cells at *search*'s price-k off it; cut?: the part stopped where the meter ran out."
-  [n price-k cut?]
-  (when-let [m *search*]
-    (vswap! (:left m) - (* n (price-k m)))
+(defn spend!
+  "Take s seconds off meter m (none with m nil); cut?: the part stopped where the meter ran out."
+  [m s cut?]
+  (when m
+    (vswap! (:left m) - s)
     (when cut? (vswap! (:cuts m) inc))))
+
+(defn charge!
+  "Take n cells at *search*'s price-k off it (spend!)."
+  [n price-k cut?]
+  (when-let [m *search*] (spend! m (* n (price-k m)) cut?)))
 
 (defn cuts "Parts of *search* cut so far (0 with none bound)." [] (if-let [m *search*] @(:cuts m) 0))
 
-(defn spent-s "Seconds of CPU *search* has spent (0 with none bound)." [] (if-let [m *search*] (- (:budget m) @(:left m)) 0))
+(defn spent-s
+  "Seconds of CPU meter m (default *search*) has spent (0 with none)."
+  ([] (spent-s *search*))
+  ([m] (if m (- (:budget m) @(:left m)) 0)))
 
 (def max-drop 3)
 

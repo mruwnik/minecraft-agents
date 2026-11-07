@@ -222,15 +222,20 @@
 (declare way-in race-won?)
 
 (defn search-meter
-  "A reach/meter of the one search a flight step's or a quote's searches make (cost/search-budget-s, Q141), spent-s spent."
+  "A reach/meter of the one search a flight step's or a quote's searches make (cost/search-budget-s, Q141), spent-s spent:
+  a flood's cell at cost/room-read-s, a walk search's at cost/walk-cell-s, a flee search's planner node at cost/search-cell-s."
   [spent-s]
-  (reach/meter (cost/search-budget-s) spent-s (cost/room-read-s) (cost/walk-cell-s)))
+  (reach/meter (cost/search-budget-s) spent-s (cost/room-read-s) (cost/walk-cell-s) (cost/search-cell-s)))
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
 
 (defn spent! "Keep s as the flight step's searches' CPU." [c s] (ctx/update-mem! c assoc :search-s s))
 
 (defn new-step! "A new flight step: its searches start a fresh search-meter." [c] (spent! c 0))
+
+(defn step-meter "The flight step's search-meter, from what its searches have run (step-spent-s)." [c] (search-meter (step-spent-s c)))
+
+(defn spent-meter! "Keep what meter m has spent as the flight step's searches' CPU." [c m] (spent! c (reach/spent-s m)))
 
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start, :home? and, when its walk search

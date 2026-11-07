@@ -377,7 +377,7 @@
 (deftest a-flood-and-a-walk-search-stop-where-the-searchs-meter-runs-out
   ;; Q141: the parts of one search share its budget; each is cut as it runs, takes off the cells it ran and is counted cut
   (let [ground (fn [_ y _] (if (< y 64) :solid :open))
-        m (reach/meter 1 0 0.01 0.1)
+        m (reach/meter 1 0 0.01 0.1 0.1)
         [flood walk] (binding [reach/*search* m]
                        [(reach-room/flood-visit (partial reach/forward ground) [0 64 0] reach-room/room-cells)
                         (reach/search-steps (partial reach/forward ground) [0 64 0] [50 64 50])])]

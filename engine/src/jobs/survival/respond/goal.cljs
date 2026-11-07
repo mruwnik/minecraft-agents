@@ -11,6 +11,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.rooms :as room-lib]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -100,7 +101,7 @@
 (declare under-floor? margin fire-price)
 
 (defn ^:async judge!
-  "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, from
+  "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, part of the step's one search, room-lib/step-meter, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
   cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only, the walks back
   from dead ends priced with the fire of threats' shooters, fire-price): {:goal (active) :why (:given-up, else verdict; nil: it
@@ -110,8 +111,10 @@
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
+        m (room-lib/step-meter c)
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
-                                               :fire (:route (fire-price c threats covered?))}))
+                                               :fire (:route (fire-price c threats covered?)) :meter m}))
+        _ (room-lib/spent-meter! c m)
         home (safe-home ends homes)]
     {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))
      :why (when goal

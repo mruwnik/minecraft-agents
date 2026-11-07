@@ -28,6 +28,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as lreach]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.plan :as wplan]
@@ -221,13 +222,18 @@
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
   partial route ends where the chasers have given the body up: given-up?), the ones the planner found no way nearer to, and the ring ends
-  left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted :plan-ms} the nodes
-  expanded, the targets planned (the search ends with the best so far once the seconds it has taken on the clock reach the first chaser's time to contact (a cold search costs 50 times the measured cost/search-cell-s a node): a decision made after contact is no escape) and why the ones with no route had none (the planner's reason: count), plan-ms the milliseconds in its plans. opts {:y-margin :chasers :covers :covers-key}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
+  left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted :plan-ms :cut?} the nodes
+  expanded, the targets planned and why the ones with no route had none (the planner's reason: count), plan-ms the
+  milliseconds in its plans, :cut? when the search's meter (opts :meter, a jobs.lib.reach/meter: the flight step's one
+  search, Q141) ran out before every target was planned. Each plan's nodes stop at what the meter has left
+  (cost/search-cell-s a node) and take off it their seconds, the clock's or the nodes' price when more; the search ends
+  with the best so far once those seconds reach the first chaser's time to contact (a decision made after contact is no
+  escape). opts {:y-margin :chasers :covers :covers-key :meter}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
   unseen dead end, they corner the body: :trapped, the cheapest cornered answer to them (cost/cornered-answers: the fight,
   or a cover of (:covers) {way {:open-s :seconds :fails}}, a fn called at the first dead end only, those the cornered step
   would take where the body stands; :covers-key what they depend on past the body and its kit), with no mob known the death of
   being caught at its last seen cell, and :counts, wworld/way-counts, for dead-end). Kept for the body while it asks the same of the
-  same inputs (gather, priced-key)."
+  same inputs (gather, priced-key), but for a cut one."
   [c targets {:keys [chasers] :as opts}]
   (let [chased (set (map #(floor-cell (:pos %)) chasers))
         other? #(not (chased (floor-cell (:pos %))))
@@ -238,13 +244,13 @@
     (if (and k (= k (:k hit)) (wworld/landing-reads-hold? (:primitives c) (:landings hit)))
       (:v hit)
       (let [landings (js/Map.)
-            v (await (price-all! c in other? landings))]
-        (when st (.set kept-prices st {:k k :v v :landings landings}))
+            v (await (price-all! c in other? landings (:meter opts)))]
+        (when (and st (not (:cut? (meta v)))) (.set kept-prices st {:k k :v v :landings landings}))
         v))))
 
 (defn ^:async price-all!
   "price! without the kept result, over the inputs gathered (gather); the landings its plans asked about are kept in landings."
-  [c {:keys [targets chasers pos body covers others caught-by policy]} other? landings]
+  [c {:keys [targets chasers pos body covers others caught-by policy]} other? landings meter]
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
         cornered (delay (when-let [mobs (seq (keep #(when (:mob %) {:distance 0 :name (:mob %) :burns (:burns %)}) chasers))]
@@ -255,23 +261,27 @@
         spawn-kill (delay (cost/spawn-kill body pos))
         share (spawn-light/share-of p false nil)
         slow (pace)
-        t0 (clock/now)
         contact-s (arrive-at (remove (some-fn :calm? shooter?) chasers) pos)
         named-n (count (filter :pos targets))]
     (if (nil? ring-world)
       []
-      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {} plan-ms 0]
-        (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0))
-                (and (> planned named-n) (<= contact-s (/ (- (clock/now) t0) 1000))))
-          (with-meta out {:nodes nodes :planned planned :unrouted unrouted :plan-ms (js/Math.round plan-ms)})
-          (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
-                t1 (clock/now)
-                ^js res (await (plan-to! c pw policy (query c t)
-                                         (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))
-                                         landings))
-                plan-ms (+ plan-ms (- (clock/now) t1))
-                spent (or (.-expanded res) 0)
-                r (some->> (routed res slow) (seen-split p))]
+      (loop [[t & more] targets out [] nodes 0 ring-left (settings/get settings ::ring-nodes) planned 0 unrouted {} plan-ms 0 own-s 0]
+        (let [most (when t (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes))))
+              cap (when most (binding [lreach/*search* meter] (lreach/metered-cap most :node-s)))
+              cut? (and t (or (:pos t) (pos? ring-left)) (zero? cap))]
+          (if (or (nil? t) (and (nil? (:pos t)) (<= ring-left 0)) cut?
+                  (and (> planned named-n) (<= contact-s own-s)))
+            (do (when cut? (lreach/spend! meter 0 true))
+                (with-meta out (cond-> {:nodes nodes :planned planned :unrouted unrouted :plan-ms (js/Math.round plan-ms)} cut? (assoc :cut? true))))
+            (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
+                  t1 (clock/now)
+                  ^js res (await (plan-to! c pw policy (query c t) cap landings))
+                  ms (- (clock/now) t1)
+                  spent (or (.-expanded res) 0)
+                  ;; the clock's, or the nodes' price when more: a clock that does not move with the CPU (a fake's) still ends the search
+                  s (max (/ ms 1000) (* spent (cost/search-cell-s)))
+                  _ (lreach/spend! meter s false)
+                  r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
@@ -285,7 +295,8 @@
                    (cond-> ring-left (nil? (:pos t)) (- spent))
                    (inc planned)
                    (cond-> unrouted (nil? r) (update (.-reason res) (fnil inc 0)))
-                   plan-ms)))))))
+                   (+ plan-ms ms)
+                   (+ own-s s)))))))))
 
 (defn shooter?
   "Whether chaser ch only shoots: a shot spot (:shooter?, where an unseen shot came from) or a mob {:mob :held} that
@@ -597,7 +608,7 @@
   "The flee search from where the body stands: the targets (named, {:pos :range :kind}) and the ring ends at reach
   (default: reach, where the chasers give the body up) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
   their routes when covered? is given, the walks back from dead ends priced with :fire (scored). opts {:reach :y-margin
-  :covered? :covers :covers-key :fire} (covers: price!'s)."
+  :covered? :covers :covers-key :fire :meter} (covers, meter: price!'s)."
   [c chasers targets {:keys [covered? fire] :as opts}]
   (let [t0 (clock/now)
         self (.self (:primitives c))
@@ -622,12 +633,15 @@
   [e door?]
   (or (when door? (:t (first (filter door? (:cells e))))) (:s e)))
 
+(defn cut? "Whether search ends (search!) were cut by the search's meter before every target was planned." [ends] (boolean (:cut? (meta ends))))
+
 (defn boxed?
   "Whether the search planned routes and the planner found every one's region explored with no way on (price!'s meta:
-  all planned, all unrouted as exhausted): what is round the body is seen and shut, no unseen way left to hope for."
+  all planned, all unrouted as exhausted, none left by a cut, cut?): what is round the body is seen and shut, no unseen
+  way left to hope for."
   [ends]
   (let [{:keys [planned unrouted]} (meta ends)]
-    (boolean (and (pos? (or planned 0)) (= planned (get unrouted "exhausted" 0))))))
+    (boolean (and (pos? (or planned 0)) (= planned (get unrouted "exhausted" 0)) (not (cut? ends))))))
 
 (defn caught-chance
   "{:chance :seconds :blast-d} of a flight from where search ends (search!) ran: the chance it is caught
@@ -639,8 +653,9 @@
   with none caught), a creeper's blast landing at the least distance of them (:blast-d; nil none). The other headings only choose the way. With every way caught: chance 1, over the seconds of the way
   it gets away on least so (else of a ring route into the unseen; a closed pocket's: the whole flight), :cornered? when
   choose (with opts, the flight's own) takes none of the ends and no unseen cell is left to look at (unseen-ahead, glanced
-  the cells the flight looked at: the flight would be the cornered step, no walk away); with one, the flight looks first,
-  and a way may be there at way-on-chance: the chance is that of an unseen way (flight-caught-chance), with :look the cells to look at. Nothing routed:
+  the cells the flight looked at: the flight would be the cornered step, no walk away); with one, or headings a cut
+  search left unplanned (cut?), a way may be there at way-on-chance: the chance is that of an unseen way
+  (flight-caught-chance), with :look the cells to look at. Nothing routed:
   the prior with the unseen worse case, unless every route was exhausted (boxed?): cornered. A flight that takes the preferred end (a safe home) uncaught
   is a known route to a refuge: {:chance 0 :refuge-s seconds of the route up to its door}, priced as a cover (cost/refuge-answer)."
   [ends counts opts glanced]
@@ -660,9 +675,11 @@
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
       :else (let [timed (or (seq ways) (seq (filter :unseen ring)))
                   free? (some? (choose ends opts))
-                  look? (and (not free?) (unseen-ahead ends glanced))]
-              (cond-> {:chance (if look? (cost/flight-caught-chance {:way? true :unseen? true :counts counts}) 1)
-                       :cornered? (not (or free? look?))}
+                  look? (and (not free?) (unseen-ahead ends glanced))
+                  ;; headings a cut left unplanned may hold a way, at the unseen one's chance
+                  open? (or look? (cut? ends))]
+              (cond-> {:chance (if open? (cost/flight-caught-chance {:way? true :unseen? true :counts counts}) 1)
+                       :cornered? (not (or free? open?))}
                 look? (assoc :look look?)
                 timed (assoc :seconds (reduce min (map :caught-s timed)))
                 (some :blast-d timed) (assoc :blast-d (reduce min (keep :blast-d timed))))))))
@@ -678,10 +695,10 @@
   (first (filter #(= pos (:pos (:target %))) ends)))
 
 (defn beaten-to?
-  "Whether a chaser gets to pos before a body with food food at from could, walking straight there (cost/wins-race? lost
-  at cost/body-speed): no route there can be safe."
+  "Whether a chaser gets to pos before a body with food food at from could, walking straight there at a flight's pace
+  (cost/wins-race? lost at cost/flee-pace): no route there can be safe."
   [chasers from food pos]
-  (not (cost/wins-race? (/ (u/dist from (cost/centred pos)) (cost/body-speed food)) (arrive-at chasers (cost/centred pos)))))
+  (not (cost/wins-race? (/ (u/dist from (cost/centred pos)) (cost/flee-pace food)) (arrive-at chasers (cost/centred pos)))))
 
 (defn safe-why
   "Why the walk to a named target is no safe run, its scored end e: :no-way (no route there, or only part of one),

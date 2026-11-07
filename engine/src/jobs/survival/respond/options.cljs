@@ -333,13 +333,16 @@
 (defn step! [c slot target range] (leg-step! c slot target range (flight-timeout-s)))
 
 (defn ^:async back-off-search!
-  "The back-off step from chasers ({:name (mob-kind) :pos}) by a flee search (flee-search/search!) ::back-off-reach off:
+  "The back-off step from chasers ({:name (mob-kind) :pos}) by a flee search (flee-search/search!, part of the step's one
+  search, room-lib/step-meter) ::back-off-reach off:
   {:target :caught}, target the best scored end that gains on them over standing still, on a route none catches, clear of
   :hazard places (nil: none, no back-off), caught the chance the step is caught (flee-search/caught-chance at the way
   counts, wworld/way-scan), the one its price reads."
   [c chasers]
   (let [hazards (keep (comp :pos :data) (ctx/entries c :hazard))
-        ends (await (search/search! c chasers [] {:reach (settings/get settings ::back-off-reach)}))
+        m (room-lib/step-meter c)
+        ends (await (search/search! c chasers [] {:reach (settings/get settings ::back-off-reach) :meter m}))
+        _ (room-lib/spent-meter! c m)
         target (some->> ends
                         (remove :caught?)
                         (filter #(pos? (:gain %)))

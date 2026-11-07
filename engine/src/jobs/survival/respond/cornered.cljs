@@ -20,6 +20,7 @@
             [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pl]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -167,15 +168,18 @@
         close (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
                             (<= (danger-q/mob-distance p %) (close-radius)))
                       hostiles)
-        in-room? (fn [] (let [cells (:cells (reach-room/room p (sh-sense/feet p)))]
-                          (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
-                                          (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
-                                close)))]
+        ;; one flood (sh-sense/shut-in-hut?'s room) that stops at its own search budget (Q141), a cut one no room; not the
+        ;; step's: a doorway's flood of the open side alone spends it all, before the step's survey and flee search
+        room (fn [] (binding [reach/*search* (room-lib/search-meter 0)] (reach-room/room p (sh-sense/feet p))))
+        in-room? (fn [{:keys [cells]}]
+                   (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
+                                   (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
+                         close))]
     (boolean (and (seq close)
                   (nil? (combat/best-weapon p (combat/weapons c)))
                   (empty? (lb/carried c (flight/blocks c)))
-                  (sh-sense/shut-in-hut? p)
-                  (in-room?)))))
+                  (sh-sense/room-roofed? p (sh-sense/feet p))
+                  (let [r (room)] (and r (sh-sense/wide-room? r) (in-room? r)))))))
 
 (defn mob-in-corner-cell?
   "Whether a melee mob (hitters) stands in a diagonal cell the walls still have to fill: a placed block is refused

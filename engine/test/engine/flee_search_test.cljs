@@ -12,8 +12,11 @@
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.clock :as clock]
+            [jobs.lib.cost :as cost]
             [jobs.lib.flee-search :as search]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.rooms :as rooms]
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.util :as u]
@@ -100,6 +103,28 @@
           (is (= 12 (:planned far)) (pr-str far))
           (is (= 1 (:planned pressed)) (pr-str pressed))
           (is (= 12 (:planned shot-spot)) (str "where a shot came from lands no blow: no contact cuts the search " (pr-str shot-spot))))))))
+
+(deftest a-flee-search-under-a-steps-meter-stops-where-the-meter-runs-out
+  ;; Q141: the flee search is part of a flight step's one search: each plan's nodes stop at what the meter has left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async run [m]
+                    (await (search/search! (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+                                           [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {:meter m})))
+              budget (cost/search-budget-s)
+              free (await (run nil))
+              m (rooms/search-meter 0)
+              metered (await (run m))
+              spent (rooms/search-meter budget)
+              none (await (run spent))]
+          (is (> (* (:nodes (meta free)) (cost/search-cell-s)) budget) (str "the whole search is over the budget: " (meta free)))
+          (is (search/cut? metered) (pr-str (meta metered)))
+          (is (<= (reach/spent-s m) budget) (str (reach/spent-s m)))
+          (is (<= (* (:nodes (meta metered)) (cost/search-cell-s)) budget) (pr-str (meta metered)))
+          (is (pos? (:planned (meta metered))) "it plans while the meter lasts")
+          (is (= [0 true false] [(:planned (meta none)) (search/cut? none) (search/boxed? none)])
+              "a spent meter plans nothing, and that is no proof the body is boxed in"))))))
 
 (deftest a-pressed-body-plans-a-ring-route-whatever-named-targets-come-first
   ;; named targets are planned before the ring: a pressed body must not keep only a route toward the zombie

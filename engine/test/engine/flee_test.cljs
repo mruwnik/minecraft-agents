@@ -20,6 +20,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
+            [jobs.lib.rooms :as rooms]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
@@ -890,12 +891,15 @@
             (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors floors}))
         s (assoc-in s [:eng :jobs 'targeter]
                     {:round (fn ^:async r [c]
+                              ;; each a step of its own, its searches one (rooms/new-step!, as flee! and respond start them)
                               (loop [n 6]
                                 (let [glanced (:glanced (ctx/mem c))
+                                      _ (rooms/new-step! c)
                                       target (await (cover/flight-target! c (threats c)))]
                                   (if (and (pos? n) (not= glanced (:glanced (ctx/mem c))))
                                     (recur (dec n))
-                                    (reset! out {:target target :price (await (cover/caught-chance! c))}))))
+                                    (do (rooms/new-step! c)
+                                        (reset! out {:target target :price (await (cover/caught-chance! c))})))))
                               (ctx/end c :done nil))})]
     (.then (run-job! s 'targeter {:step 6}) (fn [_] @out))))
 
