@@ -1,0 +1,18 @@
+;; Card 1595711e: the body in a dark hut at night faces east only; the west walls are unseen, so the room may be open. get-seeds looks round (sheltered-dark's room-look) before judging, finds it closed and waits (:dark) instead of walking out.
+;; Needs night: run with --allow-time. Same world as get-seeds-waits-in-hut-at-night, but the body is not turned round first. Should-fail: no walk out, nothing completed.
+{:defaults
+ {:tags [:gather :get-seeds :night]
+  :time :night :time-why :dawn-decision
+  :plot {:light :sky :length 48 :width 32 :height 10 :floor "dirt"}
+  :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:fill [8 1 15] [8 2 19] "glass"]
+           [:set [8 1 17] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [8 2 17] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
+           [:fill [9 -1 2] [14 4 16] "stone" :hollow] [:fill [10 0 3] [13 3 15] "air"] [:fill [9 1 15] [9 2 16] "glass"] [:set [10 1 4] "torch"] [:fill [9 1 17] [9 2 17] "stone"]
+           [:set [10 -1 15] "sand"] [:set [11 -2 15] "stone"] [:set [11 -1 15] "water"] [:fill [10 0 15] [10 2 15] "sugar_cane"]]
+  :body {:at [5.5 1 17.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "unseen-walls-are-looked-at-before-the-hut-is-left"
+   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "sugar_cane"} 20] [:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 32})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
+   :after [[:block [10 0 15] "sugar_cane"] [:item "sugar_cane" 0]]}]}

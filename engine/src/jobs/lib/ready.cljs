@@ -665,11 +665,22 @@
   "The checker of a job that roams: not threatened, and no dark sky over it."
   (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c)])) {::exposure dark-sky}))
 
+(defn gap-chance
+  "The spawn chance per second a stay in the room round the body at `feet` rests on while its walls are unseen: the room's
+  own, or the chance an unseen wall holds a gap (cost/closed-chance of that many unseen) times that of the dark outside
+  it (spawn-light/chance-at the unseen cell), the larger: a torch-lit room still lets a mob in through a gap."
+  [c feet]
+  (let [p (:primitives c)
+        sides (seq (look-edge/pending c (sense/round-looked c)))
+        outside (reduce max 0 (map #(spawn-light/chance-at p % false) sides))]
+    (max (spawn-light/chance-at p feet false)
+         (* (- 1 (cost/closed-chance 0 (count sides))) outside))))
+
 (defn sheltered-dark
   "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) or in its own night shelter and a way
   out of its room (sh-inside/way-out-cells) is dark till dawn lights it (sh-sense/light-in): a walk that has no place (a
   search, a roam) leaves the room that way. A room in rock has no way out the day lights, so it holds nothing. Where no
-  way out holds it, the walls of the room round the body not looked at yet are looked at first when that pays (room-look)."
+  way out holds it, the walls of the room round the body not looked at yet are looked at first when that pays (room-look, at gap-chance)."
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -680,7 +691,7 @@
       (contract/later :dark "sheltered for the night, a walk with no place leaves the room into ground dark till dawn"
                       :recheck-after-ms (* 1000 (apply min waits)) :wait-ms (* 1000 (apply min waits)))
       (or (when (and (not (sh-sense/sleeping? p)) (sh-sense/dark-outside? p))
-            (room-look c "dark night, walls of the room round the body not all seen: a way out may be open" nil (spawn-light/chance-at p feet false)))
+            (room-look c "dark night, walls of the room round the body not all seen: a way out may be open" nil (gap-chance c feet)))
           (contract/ok :lit "no way out of the room that dawn lights")))))
 
 (def safe-roaming

@@ -1172,11 +1172,18 @@
     (assoc night-hut :time st/noon) nil :ok))
 
 (deftest a-night-room-with-unseen-walls-is-looked-round-before-a-roam-is-judged-free-to-leave
-  (let [check #(with-redefs [look-edge/pending (fn ([_] %) ([_ _] %))
-                             ready/stay-look-price (constantly {:gap 0 :delta ##Inf})]
-                 (first (ready/sheltered-dark (ctx-of mine-room))))]
-    (is (= :look (check [[1 64 0]])) "an unseen wall may be an open side")
-    (is (= :ok (check nil)) "every wall seen closed")))
+  (let [check (fn [walls delta] (with-redefs [look-edge/pending (fn ([_] walls) ([_ _] walls))
+                                              ready/stay-look-price (fn [_ chance] {:gap 0 :delta delta})]
+                                  (first (ready/sheltered-dark (ctx-of mine-room)))))]
+    (is (= :look (check [[1 64 0]] ##Inf)) "an unseen wall may be an open side")
+    (is (= :ok (check nil ##Inf)) "every wall seen closed")
+    (with-redefs [reach-room/unseen-sides (constantly [[1 64 0]]) sense/unknown? (constantly true)]
+      (is (= :ok (check [[1 64 0]] 0)) "a round of walls whose saving does not pay its looks is not taken"))))
+
+(deftest a-torch-lit-room-with-unseen-walls-is-looked-round-by-the-chance-a-wall-opens-onto-the-dark
+  (with-redefs [look-edge/pending (fn ([_] [[30 64 0]]) ([_ _] [[30 64 0]]))
+                ready/stay-look-price (fn [_ chance] {:gap 0 :delta (if (pos? chance) ##Inf 0)})]
+    (is (= :look (first (ready/sheltered-dark (ctx-of (assoc mine-room :light-default [0 14]))))) "the room's own spawn chance is 0, the dark outside is not")))
 
 (deftest mine-and-dig-for-given-only-an-item-wait-in-a-night-hut
   (doseq [safe? [mine/safe? dig-for/safe?]]
