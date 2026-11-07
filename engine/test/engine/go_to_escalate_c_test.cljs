@@ -514,6 +514,15 @@
     (is (< wooden bare) "bare-handed the same cuts cost more")
     (is (= bare (route-s [] (delay 1e6))) "a fetch dearer than what it saves is not made: the cuts by hand")))
 
+(deftest route-tool-spends-a-worn-picks-uses-across-the-whole-route
+  (let [cells (mapv #(vector % 64 0) (range 10))
+        price (fn [inv] (:s (choose/route-tool (tu/fake {:blocks stone-mass :inventory inv}) (constantly "stone") cells nil nil (constantly 1))))
+        pick (fn [left] [{:name "stone_pickaxe" :count 1 :durability left :max-durability 131}])
+        fresh (price (pick 100))
+        worn (price (pick 3))
+        bare (price [])]
+    (is (< fresh worn bare) "3 uses cut 3 of the 10 cells at the pick's rate, the other 7 by hand")))
+
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
   (apply dissoc stone-mass (map #(str (clojure.string/join "," %)) (escape/stair-cuts [0 64 0] [1 0] 3))))

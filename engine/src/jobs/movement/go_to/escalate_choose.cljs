@@ -311,9 +311,8 @@
 (defn search-clear-ms
   "(fn [name]) the ms a dig search prices a block's dig at: the quickest tool carried, or with fetch (pickaxe-fetch) the
   fetched-pickaxe too (its fetch priced once a route is found: route-tool)."
-  ([p fetch] (search-clear-ms p fetch 1))
-  ([p fetch cuts]
-   (if fetch #(tools/avg-clear-ms p % cuts fetched-pickaxe) #(tools/avg-clear-ms p % cuts))))
+  [p fetch]
+  (if fetch #(tools/clear-ms p % fetched-pickaxe) #(tools/clear-ms p %)))
 
 (defn route-tool
   "{:s :fetch? :searched}: the seconds digging cells ([x y z]) takes with the quickest tool carried, or with a wooden pickaxe got
@@ -322,9 +321,9 @@
   ([p cells own? fetch] (route-tool p (escape/block-at-of p) cells own? fetch (constantly 1)))
   ([p block-at cells own? fetch shares]
    (let [cells (remove #(and own? (own? % (block-at %))) cells)
-         sum (fn [ms] (transduce (map #(* (shares %) (/ (ms (block-at %)) 1000))) + 0 cells))
-         carried (sum (search-clear-ms p nil (count cells)))
-         fetched (when fetch (sum (search-clear-ms p fetch (count cells))))]
+         sum (fn [extra] (reduce + 0 (map (fn [cell ms] (* (shares cell) (/ ms 1000))) cells (tools/cuts-ms p (map block-at cells) extra))))
+         carried (sum nil)
+         fetched (when fetch (sum fetched-pickaxe))]
      (if (and fetched (< fetched carried) (< (+ @fetch fetched) carried))
        {:s (+ @fetch fetched) :fetch? true :searched fetched}
        {:s carried :fetch? false :searched (or fetched carried)}))))
@@ -541,7 +540,7 @@
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
         unseen? (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown)))
-        clear-ms (search-clear-ms p fetch? (reduce + (map #(js/Math.abs (- %1 %2)) from goal)))
+        clear-ms (search-clear-ms p fetch?)
         base (cond-> (dig-route/body-prices p unseen? {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s :max-damage max-damage :plugs plugs :clear-ms clear-ms})
                ;; the body's own blocks are dug out however long it takes: the search's bound holds the worth, so their dig is
                ;; not searched (route-s leaves it out too)

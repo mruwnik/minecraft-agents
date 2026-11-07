@@ -165,22 +165,27 @@
         (map #(js/Number (.clearTime p block-name %)))
         (apply min))))
 
+(defn cuts-ms
+  "The ms of each cut of block-names in order: a cut goes to the quickest carried item (and extra, one to be got) with
+  uses left (:durability, whole when unknown), else the bare hand, so a worn pickaxe's uses are spent across the run."
+  ([p block-names] (cuts-ms p block-names nil))
+  ([p block-names extra]
+   (let [items (->> (u/inventory p)
+                    (map (juxt :name #(or (:durability %) choose/whole)))
+                    (concat [[nil ##Inf] (when extra [extra choose/whole])])
+                    (remove nil?))]
+     (loop [[block & more] block-names left (reduce (fn [m [item uses]] (update m item (fnil + 0) uses)) {} items) out []]
+       (if-not block out
+               (let [[item t] (->> (keys (filter (comp pos? val) left))
+                                   (map (fn [item] [item (js/Number (.clearTime p block item))]))
+                                   (sort-by second)
+                                   first)]
+                 (recur more (update left item dec) (conj out t))))))))
+
 (defn run-ms
-  "The least total ms n cuts of block-name take: each carried item (and extra, one to be got) cuts as many as its uses
-  left (:durability, whole when unknown), quickest first, the bare hand without end. Not clear-ms n times: a worn
-  pickaxe breaks and the cuts after it go by the next tool."
+  "The total ms of n cuts of block-name (cuts-ms): a worn pickaxe breaks and the cuts after it go by the next tool."
   ([p block-name n] (run-ms p block-name n nil))
-  ([p block-name n extra]
-   (let [ms (fn [item] (js/Number (.clearTime p block-name item)))
-         options (->> (u/inventory p)
-                      (map (juxt :name #(or (:durability %) choose/whole)))
-                      (concat [[nil ##Inf] (when extra [extra choose/whole])])
-                      (remove nil?)
-                      (map (fn [[item uses]] [(ms item) uses]))
-                      (sort-by first))]
-     (loop [[[t uses] & more] options left n total 0]
-       (if (or (<= left 0) (nil? t)) total
-           (recur more (- left uses) (+ total (* t (min left uses)))))))))
+  ([p block-name n extra] (reduce + (cuts-ms p (repeat n block-name) extra))))
 
 (defn avg-clear-ms
   "run-ms over n cuts per cut (clear-ms for n under 2): the rate a run of n cuts of block-name goes at."
