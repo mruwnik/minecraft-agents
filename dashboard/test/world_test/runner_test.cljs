@@ -577,16 +577,16 @@
          (let [fix #(r/phase-time-fix %1 %2 r/default-day-limit)]
            [(fix :day 1000) (fix :day 8999) (fix :day 9000) (fix :day 18000)
             (fix :day 23500)
-            (fix :night 14000) (fix :night 12999) (fix :night 22500)
-            (fix :night-x 20000) (fix :any 18000)
+            (fix :night 14000) (fix :night 12999) (fix :night 20000)
+            (fix :night-x 19999) (fix :any 18000)
             (r/phase-time-fix :day 10999 11000) (r/phase-time-fix :day 11000 11000)]))
-      "day resets from the limit (default 9000), well before dusk"))
+      "day resets from the limit (default 9000), well before dusk; night from 20000, well before dawn"))
 
 (deftest a-case-starts-on-a-clock-its-own-phase-window-holds
   (is (= [nil 1000 1000 nil 14000 14000 nil]
          [(r/start-time-fix {:time :day} 1000) (r/start-time-fix {:time :day} 9000) (r/start-time-fix {} 18000)
           (r/start-time-fix {:time :night} 14000) (r/start-time-fix {:time :night} 9000)
-          (r/start-time-fix {:time :night-exclusive} 23500) (r/start-time-fix {:time :any} 9000)])
+          (r/start-time-fix {:time :night-exclusive} 21000) (r/start-time-fix {:time :any} 9000)])
       "a repeat after a :time-set 9000 step starts at 9000, still day by night?, past the window"))
 
 (deftest a-time-any-case-with-a-time-set-step-starts-on-its-phase-clock

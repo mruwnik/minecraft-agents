@@ -38,3 +38,7 @@
     (is (= (.join path sub "f__c__r1-a0.edn") p))
     (is (str/includes? (.readFileSync fs p "utf8") ":status :error"))
     (.rmSync fs dir #js {:recursive true :force true})))
+
+(deftest doc-carries-the-clock-the-case-started-at
+  (is (= 21500 (:start-ticks (t/trace-doc {:id "f/c" :start-ticks 21500}))))
+  (is (not (contains? (t/trace-doc {:id "f/c"}) :start-ticks))))

@@ -26,10 +26,11 @@
     {:events (vec (take-last kept events)) :dropped (- (count events) kept)}))
 
 (defn trace-doc
-  [{:keys [id run attempt status why events log steps]}]
+  [{:keys [id run attempt status why events log steps start-ticks]}]
   (let [{:keys [events dropped]} (cap-events events max-events-bytes)]
     (cond-> {:id id :run run :attempt attempt :status status}
       why (assoc :why why)
+      start-ticks (assoc :start-ticks start-ticks)
       steps (assoc :steps-tail (tail-text steps max-steps-bytes))
       :always (assoc :events events :events-dropped dropped :body-log-tail (tail-text (or log "") max-log-bytes)))))
 

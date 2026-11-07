@@ -1316,14 +1316,19 @@
   "The world time at which a held day phase is reset: natural hostiles spawn from dusk (12000) and stay."
   9000)
 
+(def night-limit
+  "The world time at which a held night phase is reset: as far before the night's end (23000) as day-limit is before dusk,
+  so a case that prices the hours left never starts near dawn."
+  20000)
+
 (defn phase-time-fix
   "The ticks to `time set` when the world time left the window of phase (:day, :night, :night-x), else nil. A held phase
   drifts with the clock (a day is 24000 ticks, ~10 real min at the sweep tick rate): day ends at day-limit, night spans
-  13000-22000."
+  13000 to night-limit."
   [phase ticks day-limit]
   (case phase
     :day (when (and ticks (<= day-limit ticks 22999)) 1000)
-    (:night :night-x) (when (and ticks (not (<= 13000 ticks 22000))) 14000)
+    (:night :night-x) (when (and ticks (not (<= 13000 ticks (dec night-limit)))) 14000)
     nil))
 
 (defn start-time-fix
@@ -2003,7 +2008,7 @@
     (try
       (let [attempt (+ (:trace-attempt opts 0) (or (:retry opts) 0))
             log-file (path/join (run-dir opts) "body.log")
-            doc (trace/trace-doc (assoc (select-keys r [:id :run :status :why])
+            doc (trace/trace-doc (assoc (select-keys r [:id :run :status :why :start-ticks])
                                         :attempt attempt
                                         :events (read-events-from (events-file opts) cursor)
                                         :steps (when (fs/existsSync (steps-file opts)) (str (fs/readFileSync (steps-file opts) "utf8")))
@@ -2166,7 +2171,7 @@
                                                                       (tick-rate-of rate-reply))))
                                 (mark-night-overran (night-overran? opts rc (daytime (or reply "")))))))
                    r)))
-        (.then (fn [r] (write-trace! opts r (or @setup-cursor start-cursor))))
+        (.then (fn [r] (write-trace! opts (cond-> r @t-start (assoc :start-ticks (:ticks @t-start))) (or @setup-cursor start-cursor))))
         (.then (fn [r]
                  (-> (run-cleanup! [#(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
                                     #(when (:stop-after-case? opts) (leave-and-stop! opts))
