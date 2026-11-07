@@ -651,6 +651,17 @@
     (is (<= (:seconds seeded) (:seconds lane)))
     (is (< reads (+ lane-reads (/ dr/answer-s (cost/search-read-s)))) (str reads " cells read, the seed's lane " lane-reads))))
 
+(deftest a-priced-search-with-no-route-under-its-bound-ends-dearer-at-the-search-ceiling
+  ;; Q141: the seed's route costs more than :max-s, so no route is in hand; the proof that none is under it read on for
+  ;; seconds of CPU. Past dr/answer-s none found is :dearer
+  (let [{:keys [at from goal opts]} deep-drop
+        seed (dr/walk-then-stair from goal 3)
+        [lane] (to-end (dr/search at from goal (assoc opts :only (cons from seed))))
+        [a _ reads] (to-end (dr/seeded-search at from goal (assoc opts :seed seed :max-s (* 0.9 (:seconds lane)))))]
+    (is (= :dearer (:problem a)) (pr-str a))
+    ;; the stages before the last count their CPU at the means: a few more reads than the ceiling's
+    (is (< reads (* 2 (/ dr/answer-s (cost/search-read-ceiling-s)))) (str reads " cells read"))))
+
 (def tolled-tunnel
   "Stone below y 10 with a tunnel x 0..10 at y 10..11, z 0, open."
   (world (into {} (for [x (range 0 11) y [10 11]] [[x y 0] "air"]))))

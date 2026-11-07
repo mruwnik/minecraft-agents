@@ -877,9 +877,11 @@
 (defn seeded-search
   "search, but first along the feet cells of :seed alone (the lane), then through them and their neighbours (one across,
   up or down: the band), and only then everywhere: each search bounded by the cheapest route the ones before found (its
-  price :max-s and :held-s, so past answer-s it answers with that route or its own cheaper one) and their CPU counted as
-  spent. With :read-s a lane or band with no answer once the CPU spent passes answer-s is left for the next. The cheapest
-  route found is the answer when the last ends dearer, too big or boxed. A fn of n as search's, n counting every search's cells."
+  price :max-s and :held-s, so past answer-s it answers with that route or its own cheaper one; a lane or band that ended
+  dearer than :max-s holds that, so past answer-s with no route the search ends :dearer: the climb a player digs costs more
+  than the worth, Q141) and their CPU counted as spent. With :read-s a lane or band with no answer once the CPU spent passes
+  answer-s is left for the next. The cheapest route found is the answer when the last ends dearer, too big or boxed. A fn
+  of n as search's, n counting every search's cells."
   [block-at from goal {:keys [seed max-s read-s searched-s] :as opts}]
   (let [opts (dissoc opts :seed)
         band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
@@ -887,6 +889,7 @@
         last-stage (dec (count stages))
         cell-s (when read-s (cost/search-cell-s))
         best (volatile! nil)
+        dearer? (volatile! false)
         ;; the CPU the searches before the running one spent, and the cells it expanded and read so far
         searched (volatile! (or searched-s 0))
         cells (volatile! 0) reads (volatile! 0)
@@ -897,7 +900,8 @@
         begin! (fn [i] (let [b @best]
                          (vreset! cells 0) (vreset! reads 0)
                          (.push runs (search block-at from goal (cond-> (assoc (nth stages i) :searched-s @searched)
-                                                                  (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)) :held-s (:seconds b)))))))
+                                                                  (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)) :held-s (:seconds b))
+                                                                  (and (nil? (:dig b)) @dearer? max-s) (assoc :held-s max-s))))))
         stale? (fn [] (.some stales #(%)))]
     (fn run
       ([n] (run n nil))
@@ -917,6 +921,7 @@
              (if (and (< n' n) (pos? ae)) (recur (- n ae) e r) [nil e stale? r])
              first?
              (do (vreset! searched (or (:searched-s a) (spent)))
+                 (when (= :dearer (:problem a)) (vreset! dearer? true))
                  (when (and (:dig a) (or (nil? @best) (< (:seconds a) (:seconds @best)))) (vreset! best a))
                  (begin! (inc i))
                  (recur (max 1 (- n ae)) e r))
