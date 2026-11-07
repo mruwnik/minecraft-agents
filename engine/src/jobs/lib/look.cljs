@@ -128,14 +128,17 @@
                     :else (recur (inc k) cell)))))))))
 
 (defn line-clear?
-  "Whether no seen solid lies on the segment from eye to pt before the cells beside pt's own: nothing hides pt from eye
-  but its own darkness (a solid so near would have been seen), so a walk would show no more of it. The cells beside pt are
-  left out: a wall cell is reached past its own wall's seen cells. False without a perception."
+  "Whether no seen solid lies on the segment from eye to pt before pt's own wall: nothing hides pt from eye but its own
+  darkness (a solid so near would have been seen), so a walk would show no more of it. pt's own wall is left out: the
+  cells beside pt level with it on an axis the eye is off (a wall cell is reached past its own wall's seen cells); a
+  solid beside pt in front of that wall (a block over a bed's head) hides it. False without a perception."
   [p eye pt]
   (let [n (inc (int (* 4 (js/Math.hypot (- (:x pt) (:x eye)) (- (:y pt) (:y eye)) (- (:z pt) (:z eye))))))
         at (fn [k] (let [t (/ k n)] (mapv #(js/Math.floor (+ (% eye) (* t (- (% pt) (% eye))))) [:x :y :z])))
         end (at n)
-        beside? (fn [cell] (every? #(<= (js/Math.abs (- (cell %) (end %))) 1) [0 1 2]))]
+        eye-cell (at 0)
+        beside? (fn [cell] (and (every? #(<= (js/Math.abs (- (cell %) (end %))) 1) [0 1 2])
+                                (some #(and (== (cell %) (end %)) (not= (eye-cell %) (end %))) [0 1 2])))]
     (and (some? (.-sensedAt p))
          (not-any? (fn [cell] (let [b (u/seen-block p (zipmap [:x :y :z] cell))]
                                 (and b (keyword-identical? :solid (reach/kind-of b)))))

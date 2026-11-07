@@ -200,10 +200,11 @@
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
   looked at; what the look shows is read on the next pass, once the sight has settled. A side it did not show (a far wall
-  of a long tunnel) is walked towards, on foot (walkable-near, edge-stride) and looked at again, as a player would; :again.
+  of a long tunnel) is walked towards, on foot (walkable-near, edge-stride; the cell's own nearest stand when the stride's
+  hides it in range) and looked at again, as a player would; :again.
   A cell begun stays the one worked on while it is still pending, however the walk reorders the nearest-first list. A walk is priced once, at its start, with the seconds the job's walks spent before it (:edge-spent), so walks one after
   another are bought from what the call's worth leaves.
-  A cell the first look left unseen is tried at once when a walk shows no more of it: it is in sight range in a clear line from the feet, or in range but hidden by a wall that no stand cell sees past, or the stand cell nearest it is where the body stands.
+  A cell the first look left unseen is tried at once when a walk shows no more of it: it is in sight range in a clear line from the feet, or the stand cell nearest it has no clear line to it either while that cell is a step away or the cell is in range.
   The cell counts as tried when that second look has been read and the cell is still unseen. `to`: the cell to walk to, in
   place of walkable-near's. `worth`: what the walks are bought from, the call's (ctx/worth) unless given. `home`: where
   the tour of walks began, which the walk back goes to (walk-price)."
@@ -226,9 +227,11 @@
                    feet (sh-sense/feet p)
                    eye-at (fn [{:keys [x y z]}] {:x (+ 0.5 x) :y (+ y game/eye-height) :z (+ 0.5 z)})
                    in-range? (fn [at] (some-> (look/near-of p) (>= (eye-dist-from at cell))))
-                   near (or to ((walkable-near-fn p feet) reach-to))
                    shown-from? (fn [at] (and (in-range? at) (look/line-clear? p (eye-at at) target)))
-                   no-new-view? (or (shown-from? feet) (and near (u/within? feet near 1)) (and (in-range? feet) near (not (shown-from? near))))
+                   near-of-cell (walkable-near-fn p feet)
+                   stride (near-of-cell reach-to)
+                   near (or to (if (and stride (in-range? stride) (not (shown-from? stride))) (or (near-of-cell cell) stride) stride))
+                   no-new-view? (or (shown-from? feet) (and near (not (shown-from? near)) (or (u/within? feet near 1) (in-range? feet))))
                    near (when-not no-new-view? near)
                    _ (when no-new-view? (ctx/update-mem! c assoc :edge-close true))
                    spent (:edge-spent (ctx/mem c) 0)

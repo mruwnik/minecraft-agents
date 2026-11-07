@@ -293,3 +293,24 @@
           (is (seq (:looks near)) "two sides a few blocks off: the look is bought")
           (is (every? #(< 0 % 600) (:looks near)) "its walks are bought from the worth less the looks, not less the tour as well")
           (is (empty? (:looks far)) "sides 2000 blocks apart: the walk to both costs more than the worth, no look"))))))
+
+(def three-high-world
+  {:time st/night
+   :self {:pos {:x 20.5 :y 64 :z 0.5}}
+   :inventory [{:name "cobblestone" :count 16}]
+   :states {"18,64,0" {:open true :half "lower" :facing "west" :hinge "left"} "18,65,0" {:open true :half "upper" :facing "west" :hinge "left"}}
+   :blocks (merge (apply dissoc (box 18 64 -2 22 67 2 "stone") (for [x (range 19 22) y (range 64 67) z (range -1 2)] (str x "," y "," z)))
+                  {"18,64,0" "oak_door" "18,65,0" "oak_door" "19,64,-1" "red_bed" "20,64,-1" "red_bed" "20,65,-1" "stone"})})
+
+(deftest a-three-high-room-whose-walls-hide-behind-the-block-over-a-beds-head-is-looked-at-and-its-door-shut
+  ;; From the room's middle the stone over the bed's head hides the wall behind the bed and the wall cell beside the bed's
+  ;; head: each is looked at from the stand cell that shows it, the room proves closed and its door is shut, nothing dug.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (seeing-setup three-high-world)]
+          (core/submit! eng '(jobs.survival.night {:ways #{:shelter}}) {})
+          (await (tu/run-until-empty eng 30))
+          (is (false? (:open (js->clj (.-properties (.blockAt p (tu/pos 18 64 0))) :keywordize-keys true))) "the door is shut")
+          (is (= [] (st/calls p "dig")) "nothing dug")
+          (is (= [] (st/calls p "place")) "nothing placed"))))))
