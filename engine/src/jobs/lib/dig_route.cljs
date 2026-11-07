@@ -285,6 +285,32 @@
                           span (fn [a lo hi] (if (< hi lo) 0 (- (upto a hi) (upto a (dec lo)))))]
                       (fn [k m y] (let [a (max 0 (min m (- low-y y lead -1)))]
                                     (+ (span lows (inc (- k a)) k) (span anys (inc (- k m)) (- k a)))))))
+        ;; the i-th last cell a way opens is within i + 2 of the goal, at most i + 1 over it: seen-cells e - i - 2 off at
+        ;; least, so its dig at least that tier's (low where that height is low-y or under); (end-sum n) the n last digs'.
+        ;; Consistent alone (a step that leaves d - j digs opened j cells, each within d + 2 of the goal), so it is maxed
+        ;; with the lead's sum, never added to it: a cell priced as the end's at one cell and the lead's at the next lowers
+        ;; the bound by more than its dig
+        end-sum (if-let [{:keys [low-y low any]} (when prior? unseen-digs)]
+                  (let [e (- (seen-cells px py pz) pm)
+                        prefix (fn [ws] (let [a (js/Float64Array. (inc (count ws)))] (dotimes [i (count ws)] (aset a (inc i) (+ (aget a i) (nth ws i)))) a))
+                        lows (prefix low) anys (prefix any)
+                        ;; the sum over i in [a, b] of row ws (prefix sums pre) at index clamp(e - i - 3, 0, its last)
+                        tiers-sum (fn [ws ^js pre a b]
+                                    (if (< b a)
+                                      0
+                                      (let [n-row (count ws)
+                                            top (max 0 (inc (- (min b (- e 2 n-row)) a)))
+                                            lo (max a (- e 1 n-row)) hi (min b (- e 4))
+                                            mid (if (< hi lo) 0 (- (aget pre (- e lo 2)) (aget pre (- e hi 3))))
+                                            bottom (max 0 (inc (- b (max a (- e 3) (- e 1 n-row)))))]
+                                        (+ (* top (nth ws (dec n-row))) mid (* bottom (nth ws 0))))))
+                        l (- low-y py pm 1)]
+                    (fn [n] (if (js/isFinite n)
+                              (+ (tiers-sum low lows 1 (min n l)) (tiers-sum any anys (max 1 (inc l)) n))
+                              (* n (nth any 0)))))
+                  (fn [n] (* unseen-dig-s n)))
+        end-s (when prior? (end-sum end-digs))
+        last-s (when prior? (end-sum last-digs))
         ;; a stair's step or pillar block over a step on top: the unseen's tolls and digs are paid besides it
         prior-h (fn [x y z] (let [n (steps-to x y z)]
                               (+ (* least-step n)
@@ -293,10 +319,10 @@
                                  ;; from a seen cell every way meets the seen: the count of a way that never does is no bound there
                                  (let [sc (seen-cells x y z) k (max 0 (- sc lead))]
                                    (if lead-digs
-                                     (let [meets (max (+ (lead-digs k k y) (* unseen-dig-s end-digs)) (* unseen-dig-s last-digs))]
+                                     (let [meets (max (+ (lead-digs k k y) end-s) last-s)]
                                        (if (zero? sc)
                                          meets
-                                         (let [d (digs-to x y z) m (min k d)] (min (+ (lead-digs k m y) (* unseen-dig-s (- d m))) meets))))
+                                         (let [d (digs-to x y z) m (min k d)] (min (max (+ (lead-digs k m y) (* unseen-dig-s (- d m))) (end-sum d)) meets))))
                                      (* unseen-dig-s (let [b (max (+ k end-digs) last-digs)] (if (zero? sc) b (min (digs-to x y z) b)))))))))
         heuristic (let [h (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)]
                     (if prior? (fn [x y z] (max (h x y z) (prior-h x y z))) h))
@@ -732,7 +758,7 @@
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; :unseen-digs {:low-y :low [s ..] :any [s ..]}
   the least by its seen-cells distance, 1 the first, the last for any past, where it lies at low-y or under and at any
-  height, each row non-decreasing and low no less than any, for the cells a way opens before it meets the seen; a cell seen since the search began read
+  height, each row non-decreasing and low no less than any, for the cells a way opens before it meets the seen and, by their distance from the goal, after it last leaves it; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default access/hidden-guess), :open-ys (an array of the heights at which block-at may read a cell open, default every height: a rise
   through cells at other heights is priced in both bounds as a stair's step or a pillar block, and a cell read open at one is read as never seen, by :guess), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
