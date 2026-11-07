@@ -623,35 +623,37 @@
         straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
-        opts (fn [refused m spent] (merge prices
+        allowed? (memoize #(escape/diggable? block-at may-dig? %))
+        opts (fn [refused m spent lazy?] (merge prices
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent}
                                   ;; a cell seen-floor reads nameless (not seen, under a cell seen open: no floor) is still dug at its guess
-                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
+                                  {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell) (or (not lazy?) (allowed? cell)))
                                                             ((:dig-s prices) (or name (block-at cell)) cell)))}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
-        search (fn [refused spent]
+        search (fn [refused spent lazy?]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (route-epoch p)
-                                         {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent) :max-s nil :read-s nil :searched-s 0 :back-h? false)) :max-drop max-fall})
-                           (dig-route/route seen-floor from goal (opts refused m spent)))]
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused lazy? worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(dig-route/search seen-floor from goal (assoc (opts refused m spent lazy?) :full? dig-route/heap-full?)) m (route-epoch p)
+                                         {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent lazy?) :max-s nil :read-s nil :searched-s 0 :back-h? false)) :max-drop max-fall})
+                           (dig-route/route seen-floor from goal (opts refused m spent lazy?)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, each search counting the CPU the ones before it spent
-        ;; (:searched-s), so the rounds end on the route's price (dearer than the best in hand or max-s)
+        ;; (:searched-s). The rounds end on the route's price (dearer than max-s) or, with no bound, in the second: once a
+        ;; route has been refused may-dig? is asked of each cell the search weighs (allowed?), so no route it finds is refused again
         a (when-not (contains? spent [from goal])
             ;; with a :range the goal is worked from a stand within it, never dug away
-            (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) spent (:searched-s route-opts 0)]
-            (let [a (search refused spent)
+            (loop [refused (if (>= (:range route-opts 0) 1) #{(:near route-opts goal)} #{}) spent (:searched-s route-opts 0) lazy? false]
+            (let [a (search refused spent lazy?)
                   ;; the straight dig needs no search: when the search prices its own expansions past it, it is the route
                   a (if-let [st (when (= :dearer (:problem a)) (some-> (straight refused) (as-> st (when (<= (:seconds st) (or (:bound-s route-opts) ##Inf)) st))))] st a)
-                  bad (when (map? a) (remove #(escape/diggable? block-at may-dig? %) (:dig a)))]
+                  bad (when (map? a) (remove allowed? (:dig a)))]
               (cond (= :searching a) a
                     (nil? (:dig a)) (when dearer? (cond (= :dearer (:problem a)) :dearer (:boxed a) a))
                     (empty? bad) a
-                    (map? a) (recur (into refused bad) (:searched-s a spent))))))]
+                    (map? a) (recur (into refused bad) (:searched-s a spent) true)))))]
     (cond
       (or (nil? a) (#{:searching :dearer} a) (:boxed a)) a
       (not (cost/affords? (route-s p (escape/block-at-of p) (:dig a) own? fetch? solid-share) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil

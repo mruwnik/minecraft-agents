@@ -450,6 +450,19 @@
   "Solid stone x -1..12, y 60..80, z -2..2 with the body's cell [0 64 0] and the cell over it open."
   (dissoc (box -1 60 -2 12 80 2 "stone") "0,64,0" "0,65,0"))
 
+(deftest a-route-refused-cell-by-cell-with-no-bound-is-searched-at-most-twice
+  ;; no :bound-s or :worth-s: only the zone's refusals end the rounds. The first route is refused; the next search asks
+  ;; may-dig? of the cells it weighs, so the route it finds is never refused again
+  (let [blocks (-> stone-mass (assoc "5,64,2" "air" "5,65,2" "air"))
+        p (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+        refused? (fn [[x _ z]] (and (<= 1 x 4) (< z 2)))
+        rounds (atom 0) route dig-route/route
+        answer (with-redefs [dig-route/route (fn [& args] (swap! rounds inc) (apply route args))]
+                 (choose/route-answer p [0 64 0] [5 64 2] #(not (refused? %)) (constantly false) false false {:worth-s ##Inf}))]
+    (is (seq (:dig answer)))
+    (is (not-any? refused? (:dig answer)))
+    (is (<= @rounds 2) (str @rounds " searches"))))
+
 (deftest a-stair-is-priced-as-the-climb-route-prices-it-with-the-tool-carried
   (are [inv] (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv})
                    route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
