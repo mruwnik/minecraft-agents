@@ -687,6 +687,20 @@
             (await (run-until-empty eng 20))
             (is (= :collected (:decision (recovered eng))))))))))
 
+;; pile of 43 s: over the 34 s safe trip by more than a hold needs, under the 45 s trip with the drowned
+(def drowned-pile-values {"raw_iron" 1.4 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 3})
+
+(deftest the-same-pile-without-a-drowned-at-it-is-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
+          (die-noted! eng {:pos dt/death-pos :inventory pile} 5000)
+          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides drowned-pile-values}) {})
+          (await (run-until-empty eng 20))
+          (is (= :collected (:decision (recovered eng))) "without the drowned the safe trip is worth the pile"))))))
+
 (deftest a-drowned-unseen-at-the-pile-still-keeps-it-declined-when-the-hold-runs-out
   (async done
     (tu/run-async done
@@ -694,8 +708,8 @@
         (let [pile dt/death-pile-of-the-field-report
               wet (into {} (for [x (range 18 23) y [64 65] z (range -2 3)] [(str x "," y "," z) "water"]))
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :blocks wet :entities (vec (pile-drops pile))})
-              ;; the body respawned 20 blocks off, so a death costs the short walk back and the drowned costs ~11 s: the pile is worth 40 s, over the 34 s safe trip, under its 45 s
-              dear (list 'jobs.survival.recover-drops {:value-overrides {"raw_iron" 1.4 "cobblestone" 0.05 "oak_planks" 0.05}})]
+              ;; the body respawned 20 blocks off, so a death costs the short walk back and the drowned costs ~11 s: the pile (43 s) is over the 34 s safe trip, under its 45 s
+              dear (list 'jobs.survival.recover-drops {:value-overrides drowned-pile-values})]
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "drowned"} 5000)
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
