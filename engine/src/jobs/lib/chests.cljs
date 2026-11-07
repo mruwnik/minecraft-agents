@@ -63,7 +63,7 @@
   :again)
 
 (defn walk-args "The go-to args of the walk into reach of the chest at pos." [c pos]
-  {:pos pos :range 3 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})
+  {:pos pos :range 3 :ignore-zones? (boolean (:ignore-zones? (:args c)))})
 
 (defn ^:async walk!
   "Within 3 of the chest: nil. Else one go-to call (walk-args): :continue while it waits on the world, :again once there,

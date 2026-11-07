@@ -37,7 +37,7 @@
   1. The storage chest whose walk go-to quotes cheapest (jobs.lib.walk-pick; not marked :chest-unusable), when that walk costs no more than the
      stacks it saves from the toss are worth or the tidy-walk-s setting (10) seconds (all of them when the toss cannot free enough), takes what jobs.storage.deposit may put
      away: low-value names (worth under the toss-below setting) first, the biggest surplus above the keep first, then the dearer names, cheapest first;
-     ties go to the one picked up longest ago. A chest that fails (full, gone, unreachable, refused) is remembered as
+     ties go to the one picked up longest ago. The walk is an ordinary priced go-to: a body walled in digs out to the chest unless the walls stand in a zone or claim. A chest that fails (full, gone, unreachable, refused) is remembered as
      :chest-unusable for the unusable-ttl-s setting (600) seconds and the job goes on without it.
   2. With no slot free and an item lying within the swap-radius setting (8) that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.

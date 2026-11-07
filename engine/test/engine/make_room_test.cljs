@@ -632,17 +632,40 @@
             (await (run-reflex eng {:free 2 :toss-from from} {}))
             (is (= [{:x x :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look"))))))))))
 
+(def walled
+  "Stone at head height on all four sides, with floor under it (the fake lays none under a built column)."
+  (into {} (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]] [y b] [[65 "stone"] [63 "stone"]]] [(str x "," y "," z) b])))
+
 (deftest a-body-walled-in-on-all-four-sides-tosses-nothing-since-the-items-would-come-straight-back
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [chest? [false true]]
-          (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"40,64,0" []}
-                                        :blocks {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"}})]
-            (when chest? (know-chest! eng {:x 40 :y 64 :z 0}))
-            (await (run-reflex eng {:free 2} {}))
-            (is (zero? (count (calls p "toss"))))
-            (is (zero? (count (calls p "transfer"))) "walled in, the chest is out of reach too: no digging out just to tidy")))))))
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :blocks walled})]
+          (await (run-reflex eng {:free 2} {}))
+          (is (zero? (count (calls p "toss")))))))))
+
+(deftest a-walled-in-body-with-a-chest-nearby-digs-out-to-it-when-the-walls-are-no-one-s-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (conj (many "junk" 34) {:name "iron_pickaxe" :count 1}) :containers {"40,64,0" []}
+                                      :blocks walled})]
+          (know-chest! eng {:x 40 :y 64 :z 0})
+          (await (run-reflex eng {:free 2} {}))
+          (is (zero? (count (calls p "toss"))))
+          (is (pos? (count (calls p "transfer"))) "Q149: walls outside a protected zone are dug through to reach the chest"))))))
+
+(deftest a-walled-in-body-inside-another-s-zone-does-not-dig-out-to-the-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (conj (many "junk" 34) {:name "iron_pickaxe" :count 1}) :containers {"40,64,0" []}
+                                      :blocks walled}
+                                     [{:name "cell" :owner "Miles" :min [-3 60 -3] :max [3 70 3]}])]
+          (know-chest! eng {:x 40 :y 64 :z 0})
+          (await (run-reflex eng {:free 2} {}))
+          (is (zero? (count (calls p "transfer"))) "the walls stand in another's zone: no dig (Q67)")
+          (is (zero? (count (calls p "toss")))))))))
 
 (deftest a-body-with-one-free-cell-then-stone-tosses-nothing-and-uses-the-known-chest
   (async done

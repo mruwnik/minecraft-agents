@@ -1,0 +1,25 @@
+;; Walled in with a full bag and a chest in the cave beyond the wall: make-room digs out to the chest unless the walls stand in another's zone (owner Q149, Q67).
+{:defaults
+ {:tags [:make-room :jobs :storage :zones]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [14 0 14] [26 3 18] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:fill [18 0 16] [23 1 16] "air"]
+           [:set [24 0 16] "chest[facing=west]"]]
+  :memory [{:kind :chest :data {:pos #xyz [24 0 16]} :policy {:cap 1 :ttl :forever}}]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]
+         :inventory [["poppy" 1] ["dandelion" 1] ["azure_bluet" 1] ["oxeye_daisy" 1] ["cornflower" 1] ["allium" 1] ["blue_orchid" 1] ["lily_of_the_valley" 1] ["red_tulip" 1] ["orange_tulip" 1] ["white_tulip" 1] ["pink_tulip" 1] ["granite" 1] ["diorite" 1] ["andesite" 1] ["tuff" 1] ["gravel" 1] ["sand" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["bone" 1] ["string" 1] ["spider_eye" 1] ["rotten_flesh" 1] ["feather" 1] ["gunpowder" 1] ["paper" 1] ["stick" 1] ["snowball" 1] ["glowstone_dust" 1] ["redstone" 1] ["lapis_lazuli" 1] ["quartz" 1] ["ink_sac" 1] ["stone_pickaxe" 1]]}
+  :limit-s 180}
+ :cases
+ [;; should succeed: the walls are no one's zone, the chest walk digs out and the junk goes in the chest
+  {:name "walled-in-digs-out-to-the-chest"
+   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :make-room.tossed} :for-s 5 :until {:source :job :kind :completed}}]
+   :limit-s 180}
+  ;; should fail: the walls stand in another's zone, nothing is dug and nothing is put away
+  {:name "walled-in-inside-another-s-zone-stays-put"
+   :zones [{:name "cell" :min [14 0 14] :max [18 3 18] :owner "Other"}]
+   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-to-go}} :within-s 150 :of-job true}]
+   :after [[:item "poppy" 1]]
+   :limit-s 180}]}
