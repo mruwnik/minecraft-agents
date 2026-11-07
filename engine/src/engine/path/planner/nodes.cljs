@@ -226,18 +226,12 @@
   ;; certain damage `dmg`
   (lethalCount [s closed run dmg] (+ closed (drowned-hp (.-drown-slack s) run) dmg))
 
-  ;; the seconds drowning hp costs: drown-prices (the first k hp cost drown-prices[k], between and past them linear; nil:
-  ;; damage-weight each), and lethal-s more, and lethal-s each counted hp past it (`counted`, lethalCount, the refusal's
+  ;; the seconds drowning hp costs: damage-weight each, and lethal-s more, and lethal-s each counted hp past it (`counted`, lethalCount, the refusal's
   ;; count), from lethal-hp on (a lethal plan loses to any other); below it the price is of the hp itself. 0 without drowning.
   (drownCost [s hp counted]
     (if-not (pos? hp)
       0
-      (let [^js p (.-drown-prices s)
-            n (if (some? p) (dec (.-length p)) 0)
-            price (if (< n 1)
-                    (* hp (.-damage-weight s))
-                    (let [k (js/Math.min (dec n) (js/Math.floor hp))]
-                      (+ (aget p k) (* (- hp k) (- (aget p (inc k)) (aget p k))))))]
+      (let [price (* hp (.-damage-weight s))]
         (if (>= counted (.-lethal-hp s))
           (+ price (.-lethal-s s) (* (.-lethal-s s) (- counted (.-lethal-hp s))))
           price))))
