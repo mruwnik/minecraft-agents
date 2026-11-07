@@ -158,6 +158,11 @@
     (is (:on-ground (steer/pose-of w corner 0)))
     (is (= 60 (:y over)) "the whole box over the hole: it falls")))
 
+(deftest a-body-held-at-an-edge-past-its-cell-centre-keeps-its-true-position
+  (let [w {:blocks cut}]
+    (is (= [27.5 64 0.75] (steer/sub-of w {:x 27.5 :y 64 :z 0.75})) "its cell [27 64 0] has no floor; its box is over z 1's")
+    (is (nil? (steer/sub-of w {:x 27.5 :y 64 :z 1.5})) "a body over its own cell's floor is kept as the cell")))
+
 (deftest a-ladder-climbs-with-jump-and-does-not-climb-without-it
   (async done
     (tu/run-async done

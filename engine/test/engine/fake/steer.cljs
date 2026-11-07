@@ -6,7 +6,7 @@
   controls and turns the head (world :yaw/:pitch) to its yaw and pitch, then moves 0.2 blocks (0.26 sprinting, 0.06 sneaking) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
   next floor once its box (half-width) has left the floor it is on (supported?), and climbs or descends a ladder. A
   move into a cell holding a fence, gate, wall, pane or bamboo is
-  judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
+  judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post or over a drop's edge (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
   -> body. A tick budget of timeout-s * 20 (at most 2400) stands in for the real time bound.
 
   steer! runs the loop against a world atom. It resolves to {:status :done :result r :ticks n}, {:status :timeout
@@ -254,8 +254,8 @@
      :t (js/Date.now)}))
 
 (defn sub-pos
-  "Non-hitbox mode: the body's true [x y z] where its cell's centre is inside a block (beside a fence post, against a shut
-  gate), kept while the body is still in that cell; nil else."
+  "Non-hitbox mode: the body's true [x y z] where its cell's centre is no place for it (sub-of), kept
+  while the body is still in that cell; nil else."
   [w]
   (let [[x y z :as sub] (:sub-pos w)]
     (when (and sub (= [(floor x) y (floor z)] (get-in w [:self :pos]))) sub)))
@@ -459,10 +459,12 @@
 ;; --- the tick loop
 
 (defn sub-of
-  "The :sub-pos to keep for body (sub-pos): its true position when its cell's centre is not clear for it, else nil."
+  "The :sub-pos to keep for body (sub-pos): its true position when its cell's centre is not clear for it, or is over no
+  floor while its box is (at a drop's edge, its centre past it), else nil."
   [w {:keys [x y z]}]
   (let [[cx cy cz] [(floor x) (floor y) (floor z)]]
-    (when (and (narrow-cell? w cx cy cz) (not (body-clear? w (+ cx 0.5) y (+ cz 0.5))))
+    (when (or (and (narrow-cell? w cx cy cz) (not (body-clear? w (+ cx 0.5) y (+ cz 0.5))))
+              (and (supported? w x y z) (not (supported? w (+ cx 0.5) y (+ cz 0.5)))))
       [x cy z])))
 
 (defn decide-safely [decide pose]
