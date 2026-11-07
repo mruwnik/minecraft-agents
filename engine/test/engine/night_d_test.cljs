@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.job-api :as job-api]
+            [jobs.lib.cost :as cost]
             [engine.events :as events]
             [engine.hut-shelter-test :as hut]
             [engine.fake.raw-world :as fake-raw]
@@ -128,7 +129,9 @@
               hurt (await (prices 2))
               more #(- (% hurt) (% calm))]
           (is (pos? (more :exposed)) (pr-str calm hurt))
-          (is (< (js/Math.abs (- (more :flee) (more :exposed))) 0.5) "the same fight adds as much at the target as here"))))))
+          (is (<= (- (cost/hp-cost 20 2) 0.1) (more :flee) (+ (more :exposed) 0.1))
+              "the fight adds its hp once at the target: at least its bare hp-cost, no more than here, where more hurt is already counted (hp-cost rises with the hurt)")
+          (is (< (more :flee) (cost/hp-cost 20 4)) "not twice"))))))
 
 (deftest a-flee-search-still-going-walks-nowhere-until-it-answers
   (async done

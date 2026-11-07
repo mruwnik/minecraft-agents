@@ -114,13 +114,10 @@
       {:layout layout :cells cells :seconds (* (count cells) (way/place-s (night-c c)))})))
 
 (defn exposed-price
-  "Seconds secs in the open at `at` cost: the hp the spawns at chance hurt (price/stay-parts) and the fight with the hostiles
-  known near `at` (price/way-fight-hp), each at cost/hp-price, plus the death they risk at what cost/route-death says
-  it costs (chance x seconds: a death is not scaled by health again)."
+  "Seconds secs in the open at `at` cost (price/stay-risk-s): the hp the spawns at chance hurt (price/stay-parts) and the fight with
+  the hostiles known near `at` (price/way-fight-hp), and the death they risk."
   [c chance secs at]
-  (let [{:keys [hurt dies death]} (price/stay-parts c chance secs)]
-    (+ (* (cost/hp-price (or (.-health (.self (:primitives c))) 20)) (+ hurt (price/way-fight-hp c at)))
-       (if (pos? dies) (* dies death) 0))))
+  (price/stay-risk-s c chance secs (price/way-fight-hp c at)))
 
 (defn open-price
   "exposed-price of secs in the open at the worst of cells, each at its night-chance."
@@ -140,7 +137,7 @@
 
 (defn worth-of
   "The loss the night averts: the night left in the open where the body stands less the same by day (open-gain of
-  stand-cells), its hurt and death at cost/hp-price, plus the night left itself when the body's own sleep skips it (sleepers-short 0: the time that
+  stand-cells), its hurt and death at cost/risk-s, plus the night left itself when the body's own sleep skips it (sleepers-short 0: the time that
   skip saves), plus the skip the other players online wait for while it stays awake (sh-sleepers/skip-wait-s)."
   [c]
   (let [p (:primitives c)
