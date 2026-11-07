@@ -404,7 +404,7 @@
           (core/submit! eng '(jobs.survival.sleep) {})
           (is (< (await (run-until-empty eng 20)) 20))
           (is (= [] (calls p "sleep")))
-          (is (= 9 (count (tu/walked-to eng))) "each of the three tries walks go-to afresh: three blocked walks at the bed's cell re-aimed one up before any walk")
+          (is (= 3 (count (tu/walked-to eng))) "each of the three tries walks go-to afresh: one walk each, go-to does not plan the same exhausted search again")
           (is (= 1 (count (emitted seen :bed_unreachable)))))))))
 
 (def walled-bed-hut
