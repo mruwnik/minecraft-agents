@@ -37,7 +37,15 @@
 
 (def held-values
   "pile-values with the diamonds worth 40 s: over the 26 s of the safe trip by more than a hold of the zombie's flight costs, under the 53 s of the trip with the zombie (the body respawned at the start, a death costs the short walk back)."
-  (assoc pile-values "diamond_pickaxe" 25 "diamond_sword" 15))
+  (assoc pile-values "diamond_pickaxe" 35 "diamond_sword" 20))
+
+(def far-respawn
+  "A respawn 5000 blocks from the pile: a death costs the long walk back, so a zombie near the pile makes it dear."
+  {:x 5000 :y 64 :z 0})
+
+(def far-held-values
+  "pile-values with the diamonds worth 80 s: over the 29 s of the safe trip, under the trip with a zombie when the body respawned at far-respawn."
+  (assoc pile-values "diamond_pickaxe" 50 "diamond_sword" 30))
 
 (def death-pile-of-the-field-report
   [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}
@@ -154,13 +162,14 @@
 (defn die!
   "A death that happened 5 s ago and a respawn 3 s ago: the body is alive again and settled."
   ([eng data] (die! eng data 5000))
-  ([eng data ago-ms]
+  ([eng data ago-ms] (die! eng data ago-ms {:x 0 :y 64 :z 0}))
+  ([eng data ago-ms respawn-pos]
    (let [store (:store eng)
          now ((:now @store))
          entry (fn [t d] {:t t :wt ((:world-time @store)) :data d})]
      (swap! store update :data
             #(-> % (mem/add-entry :died (entry (- now ago-ms) data) nil)
-                 (mem/add-entry :respawned (entry (- now (- ago-ms 2000)) {:pos {:x 0 :y 64 :z 0}}) nil))))))
+                 (mem/add-entry :respawned (entry (- now (- ago-ms 2000)) {:pos respawn-pos}) nil))))))
 
 (defn recovered-trip [eng] (:data (mem/latest (mem/view (:store eng)) :recover-trip)))
 
@@ -540,9 +549,9 @@
       (fn ^:async t []
         (let [zombie {:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos [4 64 2]}
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory sword :entities drops})]
-          (die! eng {:pos death-pos :inventory diamonds})
+          (die! eng {:pos death-pos :inventory diamonds} 5000 far-respawn)
           (appear-after-first-leg! p clock zombie)
-          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides held-values}) {})
+          (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides far-held-values}) {})
           (await (run-until-empty eng 3))
           (is (re-find #"zombie" (:text (danger-remembered eng))) "a mob that turned up on the way makes the trip dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open")
