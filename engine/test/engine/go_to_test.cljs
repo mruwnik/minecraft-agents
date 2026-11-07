@@ -243,8 +243,8 @@
         (let [{:keys [out eng p]} (await (go! {:blocks flat} {:pos [120 64 0]}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (> (first (at p)) 30) "the first round walked a long way")
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
-              "a round that gets closer is progress and resets the count"))))))
+          (is (= ["partial" "blocked"] (mapv :status (moved eng)))
+              "a round that gets closer is progress and resets the count; the same blocked search from the same cell and memory is not repeated"))))))
 
 (deftest go-to-goes-down-a-cliff-whose-foot-runs-into-unloaded-land
   (async done

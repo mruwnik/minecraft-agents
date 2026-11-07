@@ -732,7 +732,7 @@
                 rock-start? (and (not progress?) (not edge-start?) (= :exhausted (some-> (:reason result) keyword)) (not (:rock-edge (ctx/mem c)))
                                  (not (ways/escalating? c)) (wworld/rock-guess? (:primitives c) (:unknown c)))
                 edge-start? (or edge-start? rock-start?)
-                tries (cond edge-start? 0 looped? (max-blocked) (and (not progress?) (not learned?) (#{:exhausted :goal-not-standable :abilities} (some-> (:reason result) keyword)) (= key0 (plan-key c))) (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
+                tries (cond edge-start? 0 looped? (max-blocked) (and (not progress?) (not learned?) (#{:exhausted :goal-not-standable :abilities :start-enclosed} (some-> (:reason result) keyword)) (= key0 (plan-key c))) (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
             (when-not edge-start? (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress))))
             (ctx/update-mem! c assoc :blocked tries :starts starts :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
