@@ -1100,7 +1100,7 @@
       (fn ^:async t []
         (let [pos {:x 5.5 :y 64 :z 0.5}
               w (merge (hs/hut-world pos {"40,64,0" "furnace"})
-                       {:self {:food 2 :health 8 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
+                       {:self {:food 2 :health 7 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
               night (setup (assoc w :time 15000) :step-ms 5)
               day (setup (assoc w :time 6000) :step-ms 5)]
           (await (one-round! (:eng night) {:explore false}))
