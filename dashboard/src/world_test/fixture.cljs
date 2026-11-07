@@ -213,17 +213,20 @@
   :sleep) or names sleep-status, a :sleep-status needing more players than there are (the runner's skip rule, which
   shows only once someone lies down), so staying awake costs no skip and the awake ways are priced as before. Unless the
   case keeps memory or seeds its own, a :respawned entry at the body's spawnpoint (else its start): the body knows
-  where it wakes, as after a death (body-commands sets the same point in the game)."
+  where it wakes, as after a death (body-commands sets the same point in the game); it is older than every seeded
+  :died entry, so no seeded death reads as already respawned from."
   [c]
   (let [text (pr-str (dissoc c :id :file))
         night? (and (#{:night :night-x} (lease/time-phase c))
                     (not (:keep-memory c))
                     (not (str/includes? text "log-out")))
         spawn (or (get-in c [:body :spawnpoint]) (get-in c [:body :at]))
+        death-age (some->> (:memory c) (filter #(= :died (:kind %))) (map #(or (:age-s %) 0)) seq (apply max) inc)
         sleeps? (or (:sleep-skip c) (= :sleep (:time-why c)) (str/includes? text "sleep-status"))]
     (cond-> (vec (:memory c))
       (and spawn (not (or (:keep-memory c) (some #(= :respawned (:kind %)) (:memory c)))))
-      (conj {:kind :respawned :data {:pos {::rel (vec spawn) ::as :map}}})
+      (conj (cond-> {:kind :respawned :data {:pos {::rel (vec spawn) ::as :map}}}
+              death-age (assoc :age-s death-age)))
       night? (conj {:kind :log-out :data {:status "unsupported"}})
       (and night? (not sleeps?)) (conj {:kind :sleep-status :data {:sleeping 0 :needed 100}}))))
 

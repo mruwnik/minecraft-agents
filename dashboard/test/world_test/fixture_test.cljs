@@ -648,6 +648,8 @@
     (is (= {:x 103 :y 51 :z 202} (pos {:body {:at [3 1 2]}})) "the start")
     (is (= {:x 101 :y 50 :z 205} (pos {:body {:at [3 1 2] :spawnpoint [1 0 5]}})) "the case's spawnpoint")
     (is (nil? (pos {:body {:at [3 1 2]} :keep-memory true})) "kept memory keeps its own")
+    (is (= 401 (->> (f/memory-entries {:body {:at [0 0 0]} :memory [{:kind :died :age-s 400 :data {}} {:kind :died :age-s 30 :data {}}]})
+                    (filter (comp #{:respawned} :kind)) first :age-s)) "older than the oldest seeded death")
     (is (= 1 (count (filter (comp #{:respawned} :kind) (f/memory-entries {:body {:at [0 0 0]} :memory [{:kind :respawned :data {:pos {:x 1 :y 2 :z 3}}}]})))) "the case's own entry stands")))
 
 (deftest memory-entries-tell-night-cases-no-skip-is-possible-unless-the-case-sleeps
