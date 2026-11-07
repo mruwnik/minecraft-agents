@@ -31,7 +31,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
 
 ;; ------------------------------------------------------------------ the job
 (deftest mines-a-patch-and-leaves-the-ground-alone
@@ -300,6 +300,27 @@
           (is (= 1 (count (events-of s :mine.unreachable))) "then it was skipped, no failure")
           (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
           (is (finished? s)))))))
+
+;; a glass wall from floor to roof and wall to wall of a room shelled in bedrock, its floor one dirt layer on bedrock: the
+;; dig route first guesses rock under the floor and finds bedrock
+(deftest seen-ore-behind-a-full-glass-wall-over-a-bedrock-floor-is-cut-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shell (merge (cells "bedrock" (range -3 13) [62 76] (range -5 6))
+                           (cells "bedrock" (range -3 13) (range 63 76) [-5 5])
+                           (cells "bedrock" [-3 12] (range 63 76) (range -5 6))
+                           (cells "dirt" (range -2 12) [63] (range -4 5)))
+              wall (cells "glass" (range 3 8) (range 64 76) (range -4 5))
+              ore (cells "iron_ore" [9] [64] [0])
+              s (await (scenario-lit {:trip true :torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 12 :ways #{:seen}}
+                                     {:blocks (merge shell wall ore) :drops {"iron_ore" "raw_iron"} :inventory [{:name "stone_pickaxe" :count 1}]} 1500 [0 15]))]
+          (is (= 1 (get (inv s) "raw_iron")) (pr-str (last (done-events s))))
+          (is (some #(= "glass" (get wall (clojure.string/join "," %))) (dug-cells s)) "the wall was cut")
+          (let [looks (events-of s :go-to.guess-look)]
+            (is (seq looks) "the way under the floor was guessed rock and looked at")
+            (is (every? :class looks) "each look counts for its guess's class, so the next guess learns from it")
+            (is (= :placed (:class (second looks))) "beside the bedrock the first look found, above the layer: a build")))))))
 
 (deftest a-short-first-walk-is-partial-and-the-job-ends-without-digging
   (async done

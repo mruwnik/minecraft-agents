@@ -5,6 +5,7 @@
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
+            [jobs.lib.util :as u]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.route-ways :as route-ways]))
 
@@ -35,7 +36,9 @@
       (cond
         (= :searching a) {:step :searching}
         (seq (:steps a))
-        (let [[e & then] (map #(cond-> % (= :pillar (:step %)) (assoc :item (:item pillar-item)))
+        (let [sensed #(u/sensed p (zipmap [:x :y :z] %))
+              classed (fn [cells] (mapv #(cond-> % (:guess %) (assoc :class (choose/guess-class sensed (:cell %)))) cells))
+              [e & then] (map #(cond-> % (= :pillar (:step %)) (assoc :item (:item pillar-item)) (= :dig-route (:step %)) (update :cells classed))
                               (route-ways/segments (escape/block-at-of p) #(dig-look/unknown? p %) feet (:steps a)))]
           ;; a first way that failed here before (skip-key) would fail again: the other ways are tried instead
           (when (and e (not (skip (if (= :stair (:step e)) [:stair (:heading e)] (:step e)))))

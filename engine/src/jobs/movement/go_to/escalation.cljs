@@ -698,7 +698,7 @@
   (route-tool); else the cell is dug with what is carried, the drop not needed.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
   was planned over rock that is not there), or :not-diggable. A guess is counted a look (note-guess!) unless :looked."
-  [c {:keys [cell guess block beside looked] :as planned} todo]
+  [c {:keys [cell guess block class looked] :as planned} todo]
   (let [p (:primitives c)]
     (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
     (let [block-at (escape/block-at-of p)
@@ -706,7 +706,7 @@
           pos (zipmap [:x :y :z] cell)
           undiggable? (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c (own-cut? c)) cell)))]
       (cond
-        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (when-not looked (note-guess! c cell beside (not undiggable?))) :replan)
+        (and guess (not (dig-look/unknown? p cell)) (not= n block)) (do (when-not looked (note-guess! c cell class (not undiggable?))) :replan)
         (bs/passable? n) :open
         undiggable? :not-diggable
         :else
@@ -729,7 +729,7 @@
             (forget-dug-own! c [dug])
             (note-holes! c [dug])
             (charge-dug! c (cost/dig-cells-s [(tools/clear-ms p n)])))
-          (when (and guess (not looked)) (note-guess! c cell beside (not= :not-diggable o)))
+          (when (and guess (not looked)) (note-guess! c cell class (not= :not-diggable o)))
           (if (and guess (= :not-diggable o)) :replan o))))))
 
 (defn replans-spent?
