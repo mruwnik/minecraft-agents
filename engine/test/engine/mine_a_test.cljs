@@ -606,18 +606,19 @@
 
 (defn walk-texts [s] (keep #(get-in % [:ending :data :text]) (events-of s :child_ended)))
 
-(deftest a-drop-of-thirteen-blocks-to-a-seen-ore-is-refused-for-its-health-cost
+;; shut in by the pit's wall, the body refuses the drop for its hp cost at full health and digs a stair down the platform instead
+(deftest a-drop-of-thirteen-blocks-to-a-seen-ore-is-refused-for-its-health-cost-and-dug-down
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (drop-to-ore 77 true {}))
               e (done-event s)]
-          (is (= [:stopped 0] ((juxt :status :got) e)))
-          (is (= [[6 63 0]] (:unreached e)))
-          (is (= :damage-budget (get-in e [:because :cause :why])) "at full health: healing cannot help")
-          (is (< (get-in e [:because :data :hp-budget]) (get-in e [:because :data :hp-cost])))
+          (is (= [:completed 1] ((juxt :status :got) e)))
+          (is (seq (events-of s :go-to.escalated)))
+          (is (= 20 (.-health (.self (:p s)))) "no drop hurt the body")
+          (is (every? (fn [[x y z]] (and (<= -5 x 13) (<= 63 y 76) (<= -5 z 5))) (dug-cells s)) "a stair down inside the pit and its wall, never out of it")
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
-          (is (= "iron_ore" (block-at s 6 63 0))))))))
+          (is (= "air" (block-at s 6 63 0))))))))
 
 (deftest an-open-platform-over-unseen-floor-tries-the-unseen-sides-then-digs-a-stair-to-the-ore-with-or-without-a-cap
   ;; a look is the way to learn a floor, so the sides are tried whether the budget or a cap refuses the 13 drop; the

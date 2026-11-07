@@ -55,11 +55,33 @@
     (is (false? (ok? {:reason :abilities :kind :break} :never)))
     (is (false? (ok? {:reason :stuck} :never)))))
 
-(deftest a-one-way-end-at-a-refused-drop-or-a-damage-budget-end-is-dug-down-but-a-closed-door-one-is-not
+(deftest a-one-way-end-at-a-refused-drop-is-dug-down-but-a-closed-door-one-is-not
   (is (true? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :drop :at [0 70 0]}}))))
-  (is (true? (boolean (choose/refused-drop? {:status :no-path :reason :damage-budget :hp-cost 10 :hp-budget 7}))))
+  (is (true? (choose/damage-refused? {:status :no-path :reason :damage-budget :hp-cost 10 :hp-budget 7})))
+  (is (false? (choose/damage-refused? {:status :no-path :reason :needs-health})))
   (is (false? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :door}}))))
   (is (false? (boolean (choose/refused-drop? {:reason :exhausted :one-way {:kind :drop}})))))
+
+;; a free body (a wide floor) across a 5-wide chasm from a level goal: the only walk drops 13 (10 hp, over the 7 a
+;; body at full health may spend) and climbs the far wall's stair; the dig down the near face is priced against the call's worth
+(def level-chasm
+  (merge (tu/floor -40 -20 0 20) (box -6 50 -20 0 62 20 "stone") (box 1 50 -20 5 50 20 "stone") (box 6 50 -20 20 63 20 "stone")
+         (into {} (for [k (range 1 14)] [(str "5," (+ 50 k) "," k) "stone"]))))
+
+(deftest a-level-goal-across-a-damaging-drop-is-dug-to-by-price-never-dropped-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:pos {:x -0.5 :y 64 :z 0.5} :health 20 :food 20} :blocks level-chasm :inventory [{:name "stone_pickaxe" :count 1}]}
+              {rich :out rp :p rseen :seen} (await (run-job! world {:pos [10 64 0] :range 0}))
+              {poor :out pp :p seen :seen} (await (run-job! world {:pos [10 64 0] :range 0 :worth 5}))]
+          (is (true? (:arrived @rich)) (pr-str @rich))
+          (is (= 20 (.-health (.self rp))) "no drop hurt the body")
+          (is (= [[:dig-route :damage-budget]] (map (juxt :step :why) (events-of rseen :go-to.escalated))) "the walk ended :damage-budget: a stair is dug down the near face")
+          (is (false? (:arrived @poor)) (pr-str @poor))
+          (is (= [0 64] (pop (feet pp))) "a way dearer than the goal is worth is neither dug nor dropped")
+          (is (= 20 (.-health (.self pp))))
+          (is (empty? (events-of seen :go-to.escalated)) (pr-str @poor)))))))
 
 (deftest an-exhausted-search-above-a-goal-deeper-than-a-survivable-fall-is-dug-down
   (let [p (tu/fake {})

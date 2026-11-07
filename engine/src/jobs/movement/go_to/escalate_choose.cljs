@@ -220,14 +220,17 @@
   (boolean (and (= :exhausted (some-> (:reason result) keyword)) (goal-aim/see-cell c))))
 
 (defn refused-drop?
-  "Whether a give-up with result is a :one-way end whose refused step is a fall (the goal is seen below and the only
-  nearer way is a drop the walk will not take), or a :damage-budget one (at full health the only whole way costs more hp
-  than the body may spend): a free body digs down to it as a player who won't jump does."
+  "Whether a give-up with result is a :one-way end whose refused step is a fall: the goal is seen below and the only
+  nearer way is a drop the walk will not take, so a free body digs down to it as a player who won't jump does."
   [result]
-  (let [reason (some-> (:reason result) keyword)]
-    (or (= :damage-budget reason)
-        (and (= :one-way reason)
-             (= :drop (some-> (:one-way result) :kind keyword))))))
+  (and (= :one-way (some-> (:reason result) keyword))
+       (= :drop (some-> (:one-way result) :kind keyword))))
+
+(defn damage-refused?
+  "Whether a give-up with result is a :damage-budget end: at full health the only whole way costs more hp than the body
+  may spend, so any body, free or shut in, digs or climbs to the goal by price instead, as a player who won't jump does."
+  [result]
+  (= :damage-budget (some-> (:reason result) keyword)))
 
 (defn drop-stranded?
   "Whether a give-up with result is a search that ran out of land (:exhausted) for a body above the goal pos by more than
@@ -1059,6 +1062,7 @@
              (sprint-only? result)
              (dive? c result)
              (goal-walled? c result shut?)
+             (damage-refused? result)
              (and (refused-drop? result) (not @shut?))
              (some? (drop-fill c result (skips c) (end/feet-cell c)))
              (air-pocket? c result)
