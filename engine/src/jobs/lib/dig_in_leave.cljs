@@ -234,7 +234,7 @@
         hurt (danger-of 0)
         with-death (danger-of (cost/death-s p (ctx/view c) at))]
     {:price (+ (cost/opening-price body hurt {:spawns (spawn-light/spawns-over p (spawn-light/walked at cells) nil)} at)
-               (* (- with-death hurt) (cost/walk-hp-seconds)))
+               (* (- with-death hurt) (cost/hp-seconds)))
      :hurt with-death}))
 
 (defn level-exit

@@ -222,7 +222,7 @@
         mobs (merge passive weapon/mob-max-health)]
     (reduce (fn [acc [mob hp]]
               (let [kill (weapon/kill-seconds weapon hp)
-                    hurt (if (passive mob) 0 (* (health/walk-hp-seconds) hurt-hp-per-hp hp (get danger mob 1)))
+                    hurt (if (passive mob) 0 (* (health/hp-seconds) hurt-hp-per-hp hp (get danger mob 1)))
                     cost (+ kill hurt (if (passive mob) (:passive find) (:hostile find)))]
                 (reduce (fn [acc e]
                           (let [n (* (.-dropChance e) (mean-range (.-stackSizeRange e)))]
@@ -416,7 +416,7 @@
                            (set! (.-ms builds) (+ (.-ms builds) (- (js/performance.now) t0)))
                            table)))]
     (fn [version overrides basis]
-      (built version overrides basis (health/walk-hp-seconds) (health/max-scale) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
+      (built version overrides basis (health/hp-seconds) (health/max-scale) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
 
 (defn groups-of
   "The override groups item name belongs to."

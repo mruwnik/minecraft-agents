@@ -808,7 +808,7 @@
 (defn sleep-inputs
   "What staying asleep is priced on, read now (bed-down/answers): who else must still lie down (sh-sleepers/sleepers-short),
   whether the bed is sheltered, the spawn chance at the feet and at the cell the body gets up to, the fight with the
-  hostiles known near each (price/way-fight-hp), the hp price (cost/hp-price) only while some of those can hurt, and
+  hostiles known near each (price/way-fight-hp), the health only while some of those can hurt, and
   whether a log-out is open (sh-sleepers/log-out-open?) and then what its quote reads of the body's health
   (log-out/back-death-cost, hurt-past-healing?)."
   [c]
@@ -827,7 +827,7 @@
      :wake-chance wake-chance
      :fight fight
      :wake-fight wake-fight
-     :hp-price (when (some pos? [chance wake-chance fight wake-fight]) (cost/hp-price (.-health (.self p))))
+     :health (when (some pos? [chance wake-chance fight wake-fight]) (.-health (.self p)))
      :log-out open?
      :log-out-risk (when open? {:back (price/round1 (log-out/back-death-cost c)) :hurt (log-out/hurt-past-healing? (.self p))})}))
 

@@ -111,12 +111,11 @@
   (js/Math.floor (/ (breath/air-left-s (.self (:primitives c))) (cost/wet-move-s {} :swim-up))))
 
 (defn flood-factor
-  "Times its own seconds a roofed water cell costs more to swim: a drowning to death (cost/drown-prices of the body's health and
-  absorption at cost/hp-seconds) spread over the body's breath (breath/air-left-s), so crossing a breath's worth of it costs one death."
+  "Times its own seconds a roofed water cell costs more to swim: a drowning to death (cost/death-s) spread over the body's
+  breath (breath/air-left-s), so crossing a breath's worth of it costs one death."
   [c]
-  (let [self (.self (:primitives c))
-        pool (+ (.-health self) (or (.-absorption self) 0))]
-    (/ (peek (cost/drown-prices pool (cost/hp-seconds))) (breath/air-left-s self))))
+  (let [p (:primitives c)]
+    (/ (cost/death-s p (ctx/view c)) (breath/air-left-s (.self p)))))
 
 (def air-names #{"air" "cave_air" "void_air"})
 

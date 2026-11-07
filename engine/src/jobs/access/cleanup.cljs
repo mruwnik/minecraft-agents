@@ -196,7 +196,7 @@
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (floor-at c l) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :lava-near? (let [items (into {} (map (juxt :cell :item)) entries)]
-                          (memoize #(> (* (lava-risk/hp (:primitives c) %) (cost/walk-hp-seconds)) (worth-s (items %)))))
+                          (memoize #(> (* (lava-risk/hp (:primitives c) %) (cost/hp-seconds)) (worth-s (items %)))))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
             :hostile-near? (and (some (comp stay/shelter-purposes :purpose) entries) (hostile-near? (:primitives c) l)) :opens-dark? (stay/opens-dark? (:primitives c)) :threat-at? (threat-at-fn c) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)

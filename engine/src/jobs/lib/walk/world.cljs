@@ -621,11 +621,11 @@
               known)))))))
 
 (defn- drowning
-  "{:health :drown-prices}: the hp (health and absorption) drowning to which is lethal, and the price of each hp of it."
-  [^js self hp-s]
+  "{:health}: the hp (health and absorption) drowning to which is lethal."
+  [^js self]
   (let [pool (+ (.-health self) (or (.-absorption self) 0))]
     (when (and (number? pool) (js/isFinite pool))
-      {:health pool :drown-prices (cost/drown-prices pool hp-s)})))
+      {:health pool})))
 
 (defn dive-paused?
   "Whether a breathe reflex fired within ::dive-pause-near blocks of the body in the last ::dive-pause-s seconds (the :breathe entries); breathe's own walks set the pause to 0."
@@ -643,27 +643,26 @@
 
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
-  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health, and the mean hunger an hp of the budget brings, cost/hunger-s over the budget: it is a hinge, so not the first hp's)
-  price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is) (the job's :hp-seconds arg: the seconds an hp costs at full health, default jobs.lib.cost/hp-seconds);
+  a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs, jobs.lib.cost/hp-seconds)
+  price the damage of a walk, :danger-cap the total hp a second its known dangers cost (jobs.lib.cost/danger-cap, more when the job's :danger-max-rate is);
   :max-drop and :fall-factor follow its fall enchantments and the longest drop it survives (the survivable-budget under the job's :max-damage,
   whatever the budget: a drop the budget refuses is a refusal the planner reports as :damageRefused, jobs.lib.cost/fall-profile).
   :air-drain and :air-grace follow the helmet (jobs.lib.cost/air-profile), :swim-h Depth Strider on the boots (swim-profile); with the head under water, or the breath not yet full, :air-used is the air
   its oxygen says it has used, and under water there is no turtle grace (it may be spent on this dive), only Water Breathing's seconds left; :health is the hp drowning to which
-  is lethal, :drown-prices the price of each hp of drowning (jobs.lib.cost/drown-prices), :air-seen (known-fn) which air counts;
+  is lethal (each hp of it at :damage-weight), :air-seen (known-fn) which air counts;
   c's :budget-near (go-to's) is :budget-near."
   [c]
   (let [self (.self (:primitives c))
         food (food-of c)
         under? (breath/head-under? (:primitives c))
-        budget (damage-budget c)
-        hp (max 1 budget)]
+        budget (damage-budget c)]
     (cond-> (merge executor/policy
                    (cost/fall-profile {:damage-budget (cost/survivable-budget (damage-body c) (select-keys (walk-settings c) [:max-damage]))
                                        :equipment (cost/equipment-of (.-equipment self))})
                    (cost/air-profile (.-equipment self) (array-seq (.-effects self)))
                    (cost/swim-profile (.-equipment self))
                    {:damage-budget budget
-                    :damage-weight (cost/hp-weight food (.-health self) hp)
+                    :damage-weight (cost/hp-seconds)
                     :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
                    (when-some [landing (cost/walk-landing)] {:landing landing})
                    {:drop-cost (cost/walk-drop-cost)}
@@ -673,7 +672,7 @@
                    (when-some [d (:descent-s c)] {:costs (assoc (cost/walk-costs) :descent d)})
                    (when-some [n (:budget-near c)] {:budget-near n}))
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
-                                               (merge (drowning self (cost/walk-hp-seconds)))
+                                               (merge (drowning self))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
       (or (dive-paused? c) (false? (settings/get settings ::dive))) (assoc :air-limit 0)
       (and (number? food) (<= food 6)) (assoc :sprint false)

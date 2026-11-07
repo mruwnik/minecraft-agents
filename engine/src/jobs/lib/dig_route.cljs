@@ -703,7 +703,7 @@
          health (.-health self)
          equipment (cost/equipment-of (.-equipment self))
          max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {:args (when max-damage {:max-damage max-damage})}))
-         fall-s (fn [blocks] (cost/hp-cost health (cost/fall-damage equipment blocks)))
+         fall-s (fn [blocks] (cost/hp-cost (cost/fall-damage equipment blocks)))
          clear-ms (or clear-ms #(tools/clear-ms p %))
          dig-cost (memoize (fn [name] (when (cost/dig-cost name) (let [s (/ (clear-ms name) 1000)] (when (js/isFinite s) s)))))
          sensed (or sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
@@ -723,15 +723,15 @@
       :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell))))
       :flood {:level level
               :plugs plugs
-              :open (delay [(cost/flood-dig-s @wet health (cost/walk-hp-seconds)) (cost/flood-under-s @wet)])
+              :open (delay [(cost/flood-dig-s @wet health (cost/hp-seconds)) (cost/flood-under-s @wet)])
               :dig (fn [under-s name] (let [d (or (dig-cost name) 0)]
-                                        [(cost/wet-dig-s @wet health (cost/walk-hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))
-              :step (fn [under-s] [(cost/wet-step-s @wet health (cost/walk-hp-seconds) under-s) (+ under-s (cost/wet-move-s @wet :walk))])}
+                                        [(cost/wet-dig-s @wet health (cost/hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))
+              :step (fn [under-s] [(cost/wet-step-s @wet health (cost/hp-seconds) under-s) (+ under-s (cost/wet-move-s @wet :walk))])}
       :step-s (cost/walk-step-s)
       :stair-s (cw/stair-cost 1)
       :unseen? unseen?
       :unseen-step-s (cost/unseen-step-s (wworld/unseen-share p))
-      :lava-s (fn [faces] (+ (* faces (cw/fill-cost 1)) (* (lava-risk/hp-from [[1 0 0]] [0 0 0]) (cost/walk-hp-seconds))))})))
+      :lava-s (fn [faces] (+ (* faces (cw/fill-cost 1)) (* (lava-risk/hp-from [[1 0 0]] [0 0 0]) (cost/hp-seconds))))})))
 
 (defn by-share
   "prices with each cell's dig priced at (share cell) of its price (escape/dig-share-fn: an unseen cell is dug only at the chance it is solid)."

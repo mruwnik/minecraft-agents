@@ -35,7 +35,7 @@
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within the ::step setting (4) blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
-     Cells are priced in seconds: the walk (cost/walk-step-s a block) and an hp (cost/walk-hp-seconds) beside a hazard level with the cell or above it (lava does not climb), falling to none at ::hazard-reach (4) blocks.
+     Cells are priced in seconds: the walk (cost/walk-step-s a block) and an hp (cost/hp-seconds) beside a hazard level with the cell or above it (lava does not climb), falling to none at ::hazard-reach (4) blocks.
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
   places one (a jobs.blocks.fill-cells child) on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
@@ -151,12 +151,12 @@
              (and (some? below) (not (contains? unsafe-floor below)))))))
 
 (defn price
-  "Seconds a cell costs, lower is better: the walk to it from `from` (cost/walk-step-s a block) and one hp (cost/walk-hp-seconds) at the side of a hazard level with it or above (lava does not climb), falling to none at the hazard-reach setting."
+  "Seconds a cell costs, lower is better: the walk to it from `from` (cost/walk-step-s a block) and one hp (cost/hp-seconds) at the side of a hazard level with it or above (lava does not climb), falling to none at the hazard-reach setting."
   [from hazard-poss cell]
   (let [near (transduce (comp (filter #(<= (:y cell) (:y %))) (map #(u/dist cell %))) min (hazard-reach) hazard-poss)
         beside (if (pos? (hazard-reach)) (/ (- (hazard-reach) near) (hazard-reach)) 0)]
     (+ (* (u/dist from cell) (cost/walk-step-s))
-       (* beside (cost/walk-hp-seconds)))))
+       (* beside (cost/hp-seconds)))))
 
 (defn best-cell
   "The standable cell within step blocks of from with the lowest price, never

@@ -6,7 +6,7 @@
   totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too; with :stays only by that chance, the
   answer itself again one of them: its mobs may still be there when it ends; :at-once, at the health it leaves) and,
   for a walk away, the chance its mobs catch it and the blows they then land. answer-price: the hp at the health each
-  leaves in the outcomes it lives through (lived-damage, health/hp-cost and the hunger it brings, value/hunger-s: an hp priced as a walk's planner does), the death the blows risk (death-chance x
+  leaves in the outcomes it lives through (lived-damage, at health/hp-cost: the food that heals them), the death the blows risk (death-chance x
   death/death-cost), the seconds, and the cheapest :then at full health.
 
   death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
@@ -167,12 +167,12 @@
 
 (defn answer-price*
   "answer-price with death the seconds each death costs."
-  [{:keys [health food] :as body} {:keys [seconds then outcomes stays] :as answer} at death]
+  [{:keys [health] :as body} {:keys [seconds then outcomes stays] :as answer} at death]
   (let [health (or health 20)
         {:keys [dies lived]} (blows-outcome body answer)
         lives (- 1 dies)
         hurt (if (pos? lives) (min (/ lived lives) health) 0)
-        own (+ (if (pos? lives) (* lives (+ (health/hp-cost health hurt) (if (number? food) (value/hunger-s food health hurt) 0))) 0)
+        own (+ (if (pos? lives) (* lives (health/hp-cost hurt)) 0)
                (if (pos? dies) (* dies death) 0)
                seconds)
         base (if (seq outcomes)
@@ -1091,7 +1091,7 @@
   "The hp a death {:chance :death} (route-death's) weighs beside the hp it risks: chance x death, at the hp-seconds
   setting an hp."
   [{:keys [chance death]}]
-  (if (pos? chance) (/ (* chance death) (health/walk-hp-seconds)) 0))
+  (if (pos? chance) (/ (* chance death) (health/hp-seconds)) 0))
 
 (defn route-death-cost
   "What a route adds to its cost for the death it risks at `at` (where it would die): route-death's chance x death."

@@ -13,9 +13,9 @@
     danger   route-danger: the danger of a walk past mobs; danger-opts, threat-factor-cap: go-to's
              planner danger factors and cap; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; reach-s: the seconds it is within its blow of a timed route; arrival-s: a chaser's seconds to a point (over its way when given); lead-s, run-saved-s: the lead a chaser leaves a body at a place, the run a nearer refuge saves; search-pays?, refuge-search-pays?: whether a search's CPU fits a budget, a refuge search's the chasers' lead, the run it saves or the shooters' fire; body-speed; flee-walk-speed, flee-stop-s: a flight's measured pace, its steps and the stops between them (jobs.lib.cost.danger).
     mob-toll answered-together ({:stance :price :near} of mobs met together), threat-factor (its meet rate x that price): go-to's planner dangers, a mob priced by the answer the reflex would take to it (answer/decide) (jobs.lib.cost.mob-toll).
-    health   hp-seconds, health-scale, hp-price, risk-s (a walk's hurt and death chance in seconds), commute-s (a walk there and back against sheltering here), night-lost-s (the work a way through the night costs), night-way-s (the one price of a way through the night), night-walk-bound-s (the longest walk that price could still take), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
+    health   hp-seconds (the food that heals an hp again), hp-cost, risk-s (a walk's hurt and death chance in seconds), commute-s (a walk there and back against sheltering here), night-lost-s (the work a way through the night costs), night-way-s (the one price of a way through the night), night-walk-bound-s (the longest walk that price could still take), damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; outlasts, trip-points, carry-points: the food a trip carries, priced against the chance the trip outlasts it, at least that reserve less the home food; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
-    value    item-value, survived-worth (a find's worth times the chance the trip does not end in death), chance-times (p x s, 0 at p 0 though s be ##Inf), affords? (a price within a worth, never ##Inf), quote-gain (the seconds a walk quote is expected to save), reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, turn-back-cost (an unseen floor's look and, not there, the walk back), food-worth, animal-worth (its meat's food points at food-point-worth), animal-find-worth (an animal's worth less one trip, a search's worth), hunger-s (the hunger an hp lost brings, in seconds), hp-weight (an hp's price with that hunger), crop-worth (a ripe crop's food points at food-point-worth): a tour of
+    value    item-value, survived-worth (a find's worth times the chance the trip does not end in death), chance-times (p x s, 0 at p 0 though s be ##Inf), affords? (a price within a worth, never ##Inf), quote-gain (the seconds a walk quote is expected to save), reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, turn-back-cost (an unseen floor's look and, not there, the walk back), food-worth, animal-worth (its meat's food points at food-point-worth), animal-find-worth (an animal's worth less one trip, a search's worth), crop-worth (a ripe crop's food points at food-point-worth): a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; wear-saved: the wear of a dear tool a spare's digs save; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; dark-or-lit: a dark stay against lighting it; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark) and spawn-rate at its height, spawn-share its share of cells that spawn.
@@ -159,17 +159,13 @@
 (def mob-kind danger/mob-kind)
 (def chase-speed danger/chase-speed)
 
-(def hp-seconds health/walk-hp-seconds)
-(def walk-hp-seconds health/walk-hp-seconds)
-(def health-scale health/health-scale)
-(def hp-price health/hp-price)
+(def hp-seconds health/hp-seconds)
 (def hp-cost health/hp-cost)
 (def risk-s health/risk-s)
 (def commute-s health/commute-s)
 (def night-lost-s health/night-lost-s)
 (def night-way-s health/night-way-s)
 (def night-walk-bound-s health/night-walk-bound-s)
-(def drown-prices health/drown-prices)
 (def damage-budget health/damage-budget)
 (def survivable-budget health/survivable-budget)
 
@@ -246,7 +242,7 @@
   ([kit] (by-kit ::dark-factor
                  #(+ (value/dark-factor)
                      (* (value/spawn-rate (get-in % [:at :y]))
-                        (+ (* (answer/spawns-hurt % 1 nil) (health/walk-hp-seconds))
+                        (+ (* (answer/spawns-hurt % 1 nil) (health/hp-seconds))
                            (answer/route-death-cost % {:spawns 1} nil))))
                  kit)))
 
@@ -318,10 +314,10 @@
 
 (defn drown-s
   "Seconds under-s seconds with the head under water cost a body under policy at health: past the air it has (air-left-s)
-  it drowns, 2 hp a second (vanilla), each hp at drown-prices from health (hp-s at full); ##Inf when that kills it."
+  it drowns, 2 hp a second (vanilla), each hp at hp-s; ##Inf when that kills it."
   [policy health hp-s under-s]
   (let [hp (* 2 (js/Math.ceil (max 0 (- under-s (planner/air-left-s policy)))))]
-    (if (>= hp health) ##Inf (nth (health/drown-prices health hp-s) hp))))
+    (if (>= hp health) ##Inf (* hp hp-s))))
 
 (defn flood-under-s
   "Seconds the head stays under water while a flood let into the way crosses it: water-spread cells past the opened one,
@@ -379,7 +375,7 @@
   "Seconds of hp the n-th block of a pillar costs in expectation: value/pillar-knock-chance, times the open share (0..1)
   of the column's sides there, that a blow shoves the body off it, a fall of n blocks (fall-damage at hp-cost from health)."
   [health equipment n open]
-  (* (value/pillar-knock-chance) open (health/hp-cost health (fall-damage equipment n))))
+  (* (value/pillar-knock-chance) open (health/hp-cost (fall-damage equipment n))))
 
 (defn pillar-knock-s
   "Seconds of hp a pillar costs in expectation: the sum of pillar-knock-block-s of its blocks, opens their open shares."
@@ -407,7 +403,7 @@
       (reduce-kv (fn [s below n]
                    (let [fall (+ drop-by below)
                          taken? (and (<= fall max-drop) (or (nil? else-s) (<= fall see-depth)))
-                         fall-s #(+ (health/hp-cost health (fall-damage equipment fall)) (pillar-s share fall fall (max 0 (- fall carried))))
+                         fall-s #(+ (health/hp-cost (fall-damage equipment fall)) (pillar-s share fall fall (max 0 (- fall carried))))
                          cost (cond (not taken?) (or else-s 0) else-s (min (fall-s) else-s) :else (fall-s))]
                      (+ s (value/chance-times (/ n total) cost))))
                  0 counts)
@@ -491,8 +487,6 @@
 (def crop-worth value/crop-worth)
 (def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)
-(def hunger-s value/hunger-s)
-(def hp-weight value/hp-weight)
 (def food-search-worth value/food-search-worth)
 (defn trip [] (value/trip))
 (def field-share farm/share)
@@ -670,15 +664,15 @@
 
 (defn opening-price
   "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :danger of the way),
-  at most its health, at hp-price of its health, and the death it risks (route-death-cost of route {:cells :threats
+  at most its health, at hp-cost, and the death it risks (route-death-cost of route {:cells :threats
   :spawns} at `at`)."
   [body hurt route at]
-  (+ (* (min hurt (:health body)) (hp-price (:health body))) (route-death-cost body route at)))
+  (+ (hp-cost (min hurt (:health body))) (route-death-cost body route at)))
 
 (defn hold-price
-  "Seconds a hold has cost: the seconds held and the hp lost meanwhile (hunger), each at hp-price of the health left."
-  [{:keys [held-s hp-lost health]}]
-  (+ held-s (* (max 0 hp-lost) (hp-price health))))
+  "Seconds a hold has cost: the seconds held and the hp lost meanwhile (hunger) at hp-cost."
+  [{:keys [held-s hp-lost]}]
+  (+ held-s (hp-cost hp-lost)))
 
 (defn leg-start
   "The clock and health of the body now, for leg-price once a walk or dig leg ends."

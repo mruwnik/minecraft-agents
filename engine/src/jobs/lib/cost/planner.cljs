@@ -1,6 +1,6 @@
 (ns jobs.lib.cost.planner
   "The prices go-to's :costs may override, in seconds: the planner's per-move costs (engine.path.planner.base/DEFAULT-COSTS
-  holds the defaults, which apply to every price left out). A drop's price is go-to's :drop-cost, a hurt hp's :hp-seconds.
+  holds the defaults, which apply to every price left out). A drop's price is go-to's :drop-cost, a hurt hp's cost/hp-seconds.
   :lethal-air is no price: 1 lets a swim to air drown the body to death when no other way exists (breathe's), 0 refuses it (:air-lethal); :drown-slack is the seconds of margin in its count of 2 hp hits (ceil(seconds + slack)). Left out: airSupply, airLimit and airUsed (the body's breath, a fact, not a price), airDrain and airGrace (its helmet, see air-profile) and dropFactor (:drop-cost)."
   (:require [engine.args :as a]
             [engine.path.blocks :as blocks]

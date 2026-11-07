@@ -75,10 +75,10 @@
 
 (defn drown-loss-s
   "Seconds a body ({:health :absorption}) whose breath lasts air-s more seconds loses when it reaches air after s
-  seconds, by the game's drowning (breath/drown-hp): its death at death-s once the hp reach its life, else the hp at hp-price."
+  seconds, by the game's drowning (breath/drown-hp): its death at death-s once the hp reach its life, else the hp at hp-cost."
   [{:keys [health absorption]} air-s death-s s]
   (let [hp (breath/drown-hp (- s air-s))]
-    (if (>= hp (+ health absorption)) death-s (cost/hp-cost health (max 0 (- hp absorption))))))
+    (if (>= hp (+ health absorption)) death-s (cost/hp-cost (max 0 (- hp absorption))))))
 
 (defn other-air-s
   "Seconds to air by the job's other ways from pos: the swim (breath/swim-ms a block) to the seen surface go-air! takes

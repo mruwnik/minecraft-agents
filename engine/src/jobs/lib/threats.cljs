@@ -125,14 +125,14 @@
 (defn sightings
   "The hostiles c's body saw and lost (the perception's fadedMobs; none without one), [{:mob :pos :key :weight
   :remembered :sighted}], weight death-spot/sighting-share; none whose place the body has seen clear since (death-spot/seen-clear?),
-  nor any whose weight costs under ::negligible-toll at the dearest a mob can cost any body (cost/threat-factor-cap at no health)."
+  nor any whose weight costs under ::negligible-toll at the dearest a mob can cost any body (cost/threat-factor-cap)."
   [c]
   (when-let [f (.-fadedMobs (:primitives c))]
     (for [^js m (array-seq (.call f (:primitives c)))
           :let [s {:mob (.-name m) :pos (u/pos-of (.-pos m)) :age-ms (.-ageMs m)}]
           :when (not (death-spot/seen-clear? c (assoc s :mob? true)))
           :let [w (death-spot/sighting-share c s)]
-          :when (<= (settings/get settings ::negligible-toll) (* w (cost/threat-factor-cap {:health 0})))]
+          :when (<= (settings/get settings ::negligible-toll) (* w (cost/threat-factor-cap)))]
       {:mob (:mob s) :pos (:pos s) :key (or (.-uuid m) (.-id m)) :weight w :remembered true :sighted true})))
 
 (defn planner-dangers
@@ -245,21 +245,27 @@
   [t]
   (or (death/notice-factor (threat/kind (cost/mob-of-threat t)) (:pos t)) (constantly 1)))
 
+(defn capped-sum
+  "Seconds a second of tolls [rest death] (mob-toll/threat-parts) cost together: their rests summed, at most cap, and
+  their deaths summed on top."
+  [cap parts]
+  (+ (min cap (reduce + 0 (map first parts))) (reduce + 0 (map second parts))))
+
 (defn danger-near-fn
   "A fn of a cell pos: the nearest known threat (threats-of c) the body would flee (stances) whose field weighs the cell in
   full (within threat-field ::close steps of its way), as {:mob :mob-pos :mob-distance :toll :stay-loss}, else nil. :toll is
-  what each second walked there costs more: mob-toll/threat-factor of every such threat at its weight and its notice-at
-  the cell, summed, at most cost/threat-factor-cap. :stay-loss, a fn of seconds, is what standing there that long costs:
+  what each second walked there costs more: mob-toll/threat-parts of every such threat at its weight and its notice-at
+  the cell, summed, the rest at most cost/threat-factor-cap, the death on top (capped-sum). :stay-loss, a fn of seconds, is what standing there that long costs:
   cost/stand-loss of them all, each at its weight and distance from pos. Threats are read once."
   [c]
   (let [body (death-body c)
-        cap (cost/threat-factor-cap body)
+        cap (cost/threat-factor-cap)
         ts (threats-of c)
         st (stances c ts)
         ts (->> ts
                 (filter #(= :flee (:stance (st (threat-id %)) :flee)))
-                (mapv #(assoc % :toll (mob-toll/threat-factor body (cost/mob-of-threat %) (:weight %) (st (threat-id %))) :notice (notice-at %)))
-                (filterv #(pos? (:toll %))))]
+                (mapv #(assoc % :parts (mob-toll/threat-parts (cost/mob-of-threat %) (:weight %) (st (threat-id %))) :notice (notice-at %)))
+                (filterv #(pos? (reduce + (:parts %)))))]
     (fn [{:keys [x y z] :as pos}]
       (let [fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)
             in (filterv (fn [{:keys [reach]}] (= 1 (reach fx fy fz))) ts)]
@@ -269,7 +275,7 @@
                              {:name mob :distance (u/dist pos (:pos m)) :speed (cost/chase-speed (or chaser mob)) :weight weight})
                            in)]
             {:mob (:mob t) :mob-pos (select-keys (:pos t) [:x :y :z]) :mob-distance (js/Math.round (u/dist pos (:pos t)))
-             :toll (min cap (reduce + (map #(* (:toll %) ((:notice %) fx fy fz)) in)))
+             :toll (capped-sum cap (map (fn [{:keys [parts notice]}] (mapv #(* % (notice fx fy fz)) parts)) in))
              :stay-loss (fn [seconds] (cost/stand-loss body (:equipment body) mobs pos seconds))}))))))
 
 (defn stay-danger-fn
@@ -332,31 +338,31 @@
 
 (defn tolls-of
   "go-to's tolls (cost.tolls/packed, seqs as {:x :y :z :factor} each) for threats ({:mob :pos :weight}) of c: every cell of each one's field costs
-  mob-toll/threat-factor (its stance's price, its weight to 1/20 x the cell's x its notice-at the cell) more a second; the dearest of one mob where it is known twice (a
-  kind with no :key counts as one mob), mobs of one :key each summed, at most cost/threat-factor-cap."
+  mob-toll/threat-parts (its stance's price, its weight to 1/20 x the cell's x its notice-at the cell) more a second; the dearest of one mob where it is known twice (a
+  kind with no :key counts as one mob), mobs of one :key each summed (capped-sum at cost/threat-factor-cap)."
   ([c threats] (tolls-of c threats (stances c threats)))
   ([c threats st]
-  (let [body (death-body c)
-        cap (cost/threat-factor-cap body)
+  (let [cap (cost/threat-factor-cap)
         by-cell (js/Map.)]
     (doseq [{:keys [mob weight key] :as t} threats
-            :let [f (mob-toll/threat-factor body (cost/mob-of-threat t) (round-weight weight) (st (threat-id t)))
+            :let [f (mob-toll/threat-parts (cost/mob-of-threat t) (round-weight weight) (st (threat-id t)))
                   notice (notice-at t)]
-            :when (pos? f)
+            :when (pos? (reduce + f))
             ^js cell (:cells (field/field-of c t))]
       (let [x (aget cell 0) y (aget cell 1) z (aget cell 2)
             k (base/cell-key x y z)
             ^js row (or (.get by-cell k) (let [r #js {:x x :y y :z z :mobs (js/Map.)}] (.set by-cell k r) r))
             ^js mobs (.-mobs row)
             mk (str (or key mob))
-            v (* f (aget cell 3) (notice x y z))]
-        (when-not (>= (or (.get mobs mk) 0) v) (.set mobs mk v))))
+            w (* (aget cell 3) (notice x y z))
+            v (mapv #(* w %) f)]
+        (when-not (>= (reduce + (or (.get mobs mk) [0 0])) (reduce + v)) (.set mobs mk v))))
     (let [^js rows (js/Array.from (.values by-cell))]
       (cost-tolls/packed (.-length rows)
                     (fn [i xs ys zs factors]
                       (let [^js r (aget rows i)]
                         (aset xs i (.-x r)) (aset ys i (.-y r)) (aset zs i (.-z r))
-                        (aset factors i (min cap (reduce + 0 (es6-iterator-seq (.values (.-mobs r)))))))))))))
+                        (aset factors i (capped-sum cap (es6-iterator-seq (.values (.-mobs r))))))))))))
 
 (defn shared-tolls
   "tolls-of threats ts of c, each at its stance among known threats all (stances-of), read once per check-cache window for

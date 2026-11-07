@@ -13,7 +13,7 @@
                  except :natural ones (granite, clay ...); a block that is no item (redstone_wire) is none.
     crop         A block with an age state: (:farm-s + :find :crop) / the age-7 yield.
     mob          entityLoot of the mobs in weapon/mob-max-health and passive-max-health: (kill + hurt + find) / expected
-                 drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/walk-hp-seconds, find by hostile or passive.
+                 drops; kill = the stone sword's hits, hurt = :hurt-hp-per-hp x health x :danger hp, each at health/hp-seconds, find by hostile or passive.
     made         The cheapest recipe: the ingredients plus :craft-step, divided by the result count; or smelting by
                  name rule (raw_X -> X_ingot, X -> cooked_X, ancient_debris -> netherite_scrap, cobblestone -> stone,
                  sand -> glass, clay_ball -> brick): the input plus :smelt-step and the cheapest fuel's share (fuel-each). The table is a fixpoint, then each tool
@@ -454,7 +454,7 @@
   "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block
   (jobs.lib.cost/dark-factor adds a kit's spawn hurt)."
   [] (/ (per-dark) (per-block)))
-(defn per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." [] (health/walk-hp-seconds))
+(defn per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." [] (health/hp-seconds))
 (defn own-place-blocks [] (settings/get settings ::own-place-blocks))
 (defn walk-blocks-per-s
   "Blocks of straight line a second a walk covers: fight/walk-speed over ::detour-factor."
@@ -531,21 +531,6 @@
   "Seconds one hunger point of food is worth while the pack lacks the food reserve."
   []
   (settings/get settings ::food-worth-per-point))
-
-(defn hunger-s
-  "Seconds the hunger that losing damage hp from health brings a body with food costs: each food point its hungry line
-  (jobs.lib.foods/hungry-line) rises over the food it is short already, at food-point-worth."
-  [food health damage]
-  (let [short #(max 0 (- (foods/hungry-line % {}) food))]
-    (* (food-point-worth) (- (short (- health damage)) (short health)))))
-
-(defn hp-weight
-  "Seconds one hp costs a body at health with food, spending up to hp: its hp-price and the mean hunger an hp of the
-  spend brings (hunger-s over hp: a hinge, so not the first hp's). The one price of an hp a walk's planner and the hp a
-  worth buys (jobs.lib.price/allowed-hp) share. Without a food (not a number): the hp-price alone."
-  [food health hp]
-  (+ (health/hp-price health)
-     (if (and (number? food) (pos? hp)) (/ (hunger-s food health hp) hp) 0)))
 
 (defn food-search-worth
   "Seconds a search for food is worth while the pack lacks `short` hunger points: food-point-worth each, less one trip."

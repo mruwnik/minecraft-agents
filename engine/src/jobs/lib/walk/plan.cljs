@@ -109,7 +109,6 @@
     (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]
                        ["health" :health] ["budgetNear" :budget-near]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))
-    (when-some [p (:drown-prices policy)] (unchecked-set options "drownPrices" (js/Float64Array.from (clj->js p))))
     (when-some [f (:air-seen policy)] (unchecked-set options "airSeen" f))
     (unchecked-set options "gapMissJumps" (clj->js (cost/gap-miss-jumps)))
     (unchecked-set options "landing" (cost/planner-landing (:landing policy) gait))

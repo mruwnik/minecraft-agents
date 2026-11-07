@@ -1,9 +1,10 @@
 (ns jobs.lib.cost.health
   "What an hp costs and how many a walk may spend, the one place. Pure.
 
-  hp-seconds: an hp is about 10 s: healing it takes 6 exhaustion, 60 blocks sprinted (0.1 each), 10 s at 5.6 blocks/s.
-  health-scale: the price rises x20/health (at most 4) near zero health (the danger rate's scale too); hp-price: the two together; hp-cost: the price of losing some hp; gain-worth: the worth of gaining some; heal-worth?: whether one more hp is worth the wait and food it costs; risk-s: a walk's risk in seconds.
-  drown-prices: the planner's drownPrices, the cumulative price of each hp of drowning at the health it leaves.
+  hp-seconds: what regaining a lost hp takes, the same at any health: the food it eats (Q142). A death is no hp: it is priced
+  apart, in seconds, by its chance, so low health weighs through the death chance. hp-cost: the price of losing some hp; risk-s: a walk's risk in seconds.
+  heal-price: the hp price that rises x20/health (at most max-scale) near zero health, left only to whether a hurt body
+  heals first (heal-worth?, gain-worth) until Q140 prices that by the death chance too.
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
   and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; 0 while burning, poisoned or withered,
   or with a health or absorption that is not a number.
@@ -15,13 +16,18 @@
 (a/defargs settings
   {::default-min-health {:default 12 :doc "Health a walk does not spend below." :spec (a/int-in 0 nil)}
    ::margin {:default 1 :doc "hp left over the floor." :spec (a/int-in 0 nil)}
-   ::hp-seconds {:default 10 :doc "Seconds one hp costs at full health when the planner weighs a drop, a plant's prick or a danger against a longer way (more at low health)." :spec a/pos-num?}
-   ::max-scale {:default 4 :doc "The most the price of an hp rises near zero health." :spec (a/int-in 1 nil)}
+   ::fill-point-s {:default 6.66 :spec a/pos-num?
+                   :doc "Seconds a point of food or saturation (what exhaustion drains) got in the field takes: 15444.7 s of 612 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1106 points and 1214.2 saturation their food gave, 2026-11-07. Recount: node tools/event-counts.mjs food-gets (:fill-s)."}
+   ::max-scale {:default 4 :doc "The most heal-price rises near zero health." :spec (a/int-in 1 nil)}
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
                     :doc "Seconds a body that can heal takes to regain an hp by waiting (natural regeneration at 18+ food: 80 ticks)."}})
 
-(defn walk-hp-seconds "Seconds an hp costs a walk at full health: the setting ::hp-seconds." []
-  (settings/get settings ::hp-seconds))
+(def exhaustion-per-hp "Exhaustion natural regeneration spends on an hp." 6)
+
+(def exhaustion-per-point "Exhaustion that drains a point of saturation or food." 4)
+
+(defn hp-seconds "Seconds an hp costs: the food that heals it again, exhaustion-per-hp at ::fill-point-s a point." []
+  (* (/ exhaustion-per-hp exhaustion-per-point) (settings/get settings ::fill-point-s)))
 
 (def spend-down
   "A call's :floor that lets go-to spend all but 1 hp (survivable-budget). 0, not 1: a body under 1 hp is below a floor of 1, so its call would fail at once."
@@ -38,38 +44,34 @@
   [health]
   (min (max-scale) (/ 20 (max 1 health))))
 
-(defn hp-price
-  "Seconds one hp costs at health: walk-hp-seconds x health-scale."
+(defn heal-price
+  "Seconds an hp is worth to a hurt body at health when it weighs healing first: hp-seconds x health-scale."
   [health]
-  (* (walk-hp-seconds) (health-scale health)))
+  (* (hp-seconds) (health-scale health)))
 
 (defn heal-worth?
-  "Whether healing one more hp at health is worth its cost: the hp's hp-price is more than the heal-s seconds of waiting
-  for it plus its food (6 exhaustion, the walk-hp-seconds an hp is priced at full health). Never at 20."
+  "Whether healing one more hp at health is worth its cost: its heal-price is more than the heal-s seconds of waiting
+  for it plus its food (hp-seconds). Never at 20."
   [health heal-s]
-  (and (< health 20) (> (hp-price health) (+ (walk-hp-seconds) heal-s))))
+  (and (< health 20) (> (heal-price health) (+ (hp-seconds) heal-s))))
 
 (defn heal-s-per-hp [] (settings/get settings ::heal-s-per-hp))
 
-(defn hp-cost
-  "Seconds losing damage hp from health costs: each hp at the hp-price of the health it leaves, a part hp pro rata."
-  [health damage]
-  (let [whole (js/Math.floor (max 0 damage))]
-    (+ (reduce + 0 (map #(hp-price (- health %)) (range whole)))
-       (* (- damage whole) (hp-price (- health whole))))))
+(defn hp-cost "Seconds losing damage hp costs: hp-seconds each, a part hp pro rata." [damage]
+  (* (max 0 damage) (hp-seconds)))
 
 (defn gain-worth
-  "Seconds gaining `gain` (whole) hp from health is worth: each at the hp-price of the health it brings, but while the body
-  heals by waiting (heals?) at most what waiting costs an hp: heal-s-per-hp and its food (walk-hp-seconds)."
+  "Seconds gaining `gain` (whole) hp from health is worth: each at the heal-price of the health it brings, but while the body
+  heals by waiting (heals?) at most what waiting costs an hp: heal-s-per-hp and its food (hp-seconds)."
   [health gain heals?]
-  (let [cap (if heals? (+ (walk-hp-seconds) (heal-s-per-hp)) js/Infinity)]
-    (reduce + 0 (map #(min cap (hp-price (+ health % 1))) (range gain)))))
+  (let [cap (if heals? (+ (hp-seconds) (heal-s-per-hp)) js/Infinity)]
+    (reduce + 0 (map #(min cap (heal-price (+ health % 1))) (range gain)))))
 
 (defn risk-s
   "Seconds a walk's risk costs a body at health: the hurt hp it expects at hp-cost (at most the health: past it is the
   death) and its death chance in hp (lethal hp, jobs.lib.cost/lethal-hp) at hp-seconds, the rate lethal-hp divided by."
   [health hurt lethal]
-  (+ (hp-cost health (min (max 0 hurt) health)) (* (walk-hp-seconds) lethal)))
+  (+ (hp-cost (min (max 0 hurt) health)) (* (hp-seconds) lethal)))
 
 (defn commute-s
   "Seconds a walk of secs away costs over sheltering where the body stands, which takes shelter-s: for a body in the ground
@@ -99,13 +101,6 @@
     (not in-ground?) (if (<= left price) ##Inf -1)
     (<= (/ price 2) left) (/ price 2)
     :else (- price left)))
-
-(defn drown-prices
-  "The seconds the first k hp of drowning cost a body with hp left, k from 0 to n (default: hp, rounded up): each hp at
-  hp-seconds x health-scale of the health it is taken from, so the price rises as the hp runs out."
-  ([hp hp-s] (drown-prices hp hp-s (js/Math.ceil hp)))
-  ([hp hp-s n]
-   (vec (reductions + 0 (map #(* hp-s (health-scale (- hp %))) (range n))))))
 
 (def ticking-effects "Effects that keep costing hp." #{"poison" "wither"})
 

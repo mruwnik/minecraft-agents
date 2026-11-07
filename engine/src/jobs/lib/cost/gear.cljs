@@ -55,8 +55,8 @@
         ref-mob-hp (get weapon/mob-max-health ref-mob)]
     (max 0
          (cond
-           (= "elytra" item) (* (health/walk-hp-seconds) (armour/fall-damage {} armour/ref-fall))
-           (pos? (armour/piece-points item)) (* (health/walk-hp-seconds) (hit-saved item ref-hit))
+           (= "elytra" item) (* (health/hp-seconds) (armour/fall-damage {} armour/ref-fall))
+           (pos? (armour/piece-points item)) (* (health/hp-seconds) (hit-saved item ref-hit))
            (weapon? item) (- (weapon/kill-seconds "stone_sword" ref-mob-hp) (weapon/kill-seconds item ref-mob-hp))
            :else (dig-saved basis item)))))
 

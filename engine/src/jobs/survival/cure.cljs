@@ -7,6 +7,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
@@ -16,7 +17,7 @@
   the effect itself runs out later), one item per call. Only a poisoned or withered body needs it.
   Done? means no hp-costing effect. Poisoned, it needs a cure carried, else condition-failed :no-cure (a listed job waits), unless
   the call's :ways allow a fetch and the cheapest fetch of milk or a golden apple (jobs.lib.need/item-price) is cheaper than
-  waiting the effect out (cost.health/hp-cost of ticking-hp): then it is fetched (need/item!) and taken.
+  waiting the effect out (wait-cost): then it is fetched (need/item!) and taken.
   Ends :done {:used item} after the item was taken; a failed attempt is nothing-possible :cure-failed.
   Quote: one drink or bite, the cure as the item used.")
 
@@ -48,12 +49,14 @@
     (checks/goal d [:cured "no poison or wither effect"] [:poisoned "poisoned or withered"] {:units :effects :left (if d 0 1)})))
 
 (defn wait-cost
-  "Seconds waiting the poison out costs: the hp it takes (cost.health/ticking-hp) at the price of an hp."
+  "Seconds waiting the poison out costs: the hp it takes (cost.health/ticking-hp) at cost.health/hp-cost, or the death
+  (cost/death-s) when they are all the body has."
   [c]
-  (let [self (.self (:primitives c))]
-    (cost-health/hp-cost (.-health self)
-                         (cost-health/ticking-hp (map (fn [e] {:name (.-name e) :amplifier (.-amplifier e) :duration (.-duration e)}) (array-seq (.-effects self)))
-                                                 (.-health self)))))
+  (let [p (:primitives c)
+        self (.self p)
+        hp (cost-health/ticking-hp (map (fn [e] {:name (.-name e) :amplifier (.-amplifier e) :duration (.-duration e)}) (array-seq (.-effects self)))
+                                   (.-health self))]
+    (if (>= hp (.-health self)) (cost/death-s p (ctx/view c)) (cost-health/hp-cost hp))))
 
 (defn fetch-plan
   "{:item :price} of the fetchable cure the call's ways bring at the least price, when that is less than waiting the poison out; else nil."
