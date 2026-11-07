@@ -1,6 +1,7 @@
 (ns engine.ready-test
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
-  (:require [jobs.survival.get-food.sources :as get-food-sources]
+  (:require [clojure.string :as str]
+            [jobs.survival.get-food.sources :as get-food-sources]
             [jobs.forestry.harvest-wood :as harvest-wood]
             [jobs.animals.herd :as herd]
             [jobs.farm.maintain :as farm-maintain]
@@ -315,7 +316,10 @@
     (is (= [:ok :later :later] (mapv status [:click :work :long])))))
 
 (deftest a-dark-furnace-is-exposed-for-a-whole-stack-but-not-for-one-item
-  (let [world (assoc open-night :inventory [{:name "furnace" :count 1}])
+  ;; from the hut, 8 cobblestone carried: a furnace of its own costs them (21.9 s) and a stay in the hut's light. One item's
+  ;; 10 s at the dark furnace cost 5.7 s, a stack's 640 s 335.7 s (a death there among them), which beat waiting for light
+  ;; (475 s) but not the furnace of its own
+  (let [world (assoc night-hut :inventory [{:name "cobblestone" :count 8}])
         exposed? (fn [n] (lit 0 15 #(smelt/exposed-furnace? (assoc (under (ctx-of world) 'jobs.items.obtain {:item "iron_ingot" :count n}) :args {:item "raw_iron" :count n}) outside)))]
     (is (= [false true] (mapv exposed? [1 64])))))
 
@@ -352,10 +356,13 @@
 (deftest a-smelt-puts-its-own-furnace-down-instead-of-walking-to-a-chosen-dark-one
   (let [world (assoc night-hut :inventory [{:name "cobblestone" :count 8}])
         chosen {:furnace outside}
-        verdict (fn [world mem] (with-redefs [ctx/mem (constantly mem)] (first (smelt/safe? (under (ctx-of world) 'jobs.items.obtain {:item "iron_ingot" :count 4})))))]
-    (is (= :ok (lit 0 15 #(verdict world chosen))) "an unloaded choice 10 blocks out in the dark is dropped")
-    (is (= :later (lit 0 15 #(verdict world (assoc chosen :owed {:count 4})))) "a load in it still calls for the walk")
-    (is (= :later (lit 0 15 #(verdict (assoc night-hut :inventory []) chosen))) "no cobblestone to make one: the walk stays")))
+        verdict (fn [world mem] (with-redefs [ctx/mem (constantly mem)]
+                                  (let [[k text] (smelt/safe? (under (ctx-of world) 'jobs.items.obtain {:item "iron_ingot" :count 4}))] [k (str/includes? text "exposed, but")])))]
+    ;; a stack's cook at the chosen dark furnace costs about 339 s (a death there among it), less than the 475 s wait for
+    ;; light and within the 942 s the ingots are worth, more than the 8 cobblestone of a furnace of its own in the hut
+    (is (= [:ok false] (lit 0 15 #(verdict world chosen))) "an unloaded choice 15 blocks out in the dark is dropped: the hut is not exposed")
+    (is (= [:ok true] (lit 0 15 #(verdict world (assoc chosen :owed {:count 4})))) "a load in it still calls for the walk, at its price")
+    (is (= [:ok true] (lit 0 15 #(verdict (assoc night-hut :inventory []) chosen))) "no cobblestone to make one: the walk stays, at its price")))
 
 ;; plain safe-at counts darkness by day too (it broke set-spawn); the debug probe wraps it, so it is not caught
 (deftest no-job-binds-plain-safe-at

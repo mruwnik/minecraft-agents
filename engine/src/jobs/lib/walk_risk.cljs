@@ -11,7 +11,7 @@
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
   Seen lava within jobs.lib.lava-risk/radius of a cell the way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Walked now while that costs less than waiting for dawn or healing first (status: ways chosen by cost alone), within the hp the call's worth buys (price/allowed; none for a goal worth arrival, ##Inf)."
+  Walked now while that costs less than waiting for dawn or healing first (status: ways chosen by cost alone), within the hurt and the price the call's worth buys (bought?: price/allowed, the death in seconds; no hp bound for a goal worth arrival, ##Inf)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -322,36 +322,45 @@
       (sh-beds/place-wanted? c) {:bed nil})))
 
 (defn wait-way
-  "{:wait kind :secs :health :hp :s} of waiting secs where the body stands, healed to `healed`, then acting with `after`
-  (an estimate: :hp, :lethal-hp): s the seconds, what staying put over them risks (stay-estimate of stay-in) and the act
+  "{:wait kind :secs :health :hp :lethal-hp :s} of waiting secs where the body stands, healed to `healed`, then acting with `after`
+  (an estimate: :hp, :lethal-hp, both kept): s the seconds, what staying put over them risks (stay-estimate of stay-in) and the act
   after, at the healed health (risk-s)."
   [c kind secs stay-in healed after]
   (let [s-in (assoc stay-in :secs secs)
         stay (check-cache/keyed c ::wait-stay s-in #(stay-estimate c s-in))]
-    {:wait kind :secs secs :health healed :hp (:hp after) :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))
+    {:wait kind :secs secs :health healed :hp (:hp after) :lethal-hp (:lethal-hp after 0) :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))
 
 (defn buys-hp
-  "The hp a walk may cost at health and food on a call worth `worth`: price/allowed-hp, but without end for a goal worth
+  "The hp of hurt a walk may cost at health and food on a call worth `worth`: price/allowed-hp, but without end for a goal worth
   arrival (##Inf), which no hp refuses; only a cheaper way (a wait) is chosen over walking it."
   [health food worth]
   (if (infinite? worth) ##Inf (price/allowed-hp health food worth true)))
 
+(defn hurt "hp an estimate's :hp takes off a body that lives: less its death's share (:lethal-hp)." [est] (- (:hp est 0) (:lethal-hp est 0)))
+
+(defn bought?
+  "Whether estimate est (:hp, :lethal-hp) is within what `worth` buys a body at health and food: its hurt within buys-hp,
+  and its price (risk-s, the death in seconds) within the worth."
+  [c est health food worth]
+  (and (<= (hurt est) (buys-hp health food worth))
+       (or (not (number? worth)) (cost/affords? (risk-s c est 0 health) worth))))
+
 (defn look-cost
-  "Seconds the walk to look `way` (look-way) costs c's body: its hp priced (risk-s) plus its seconds; nil while the hp are
+  "Seconds the walk to look `way` (look-way) costs c's body: its hp priced (risk-s) plus its seconds; nil while its hurt is
   more than the call's worth (or `worth`) buys (buys-hp)."
   ([c way] (look-cost c way (ctx/worth c)))
   ([c way worth]
    (let [self (.self (:primitives c))]
-     (when (<= (:hp way) (buys-hp (.-health self) (.-food self) worth))
+     (when (<= (hurt way) (buys-hp (.-health self) (.-food self) worth))
        (+ (risk-s c way) (:secs way))))))
 
 (defn cheapest-affordable
-  "The way of ways with the least :s plus :rest-s (the night left at the goal, night-rest-s) whose hp the call's worth buys at the way's health (buys-hp) and whose
+  "The way of ways with the least :s plus :rest-s (the night left at the goal, night-rest-s) whose hurt the call's worth buys at the way's health (buys-hp) and whose
   seconds it affords, or nil."
   [c ways]
   (let [food (.-food (.self (:primitives c)))
         worth (ctx/worth c)]
-    (first (sort-by #(+ (:s %) (:rest-s % 0)) (filter #(and (<= (:hp %) (buys-hp (:health %) food worth)) (cost/affords? (:s %) worth)) ways)))))
+    (first (sort-by #(+ (:s %) (:rest-s % 0)) (filter #(and (<= (hurt %) (buys-hp (:health %) food worth)) (cost/affords? (:s %) worth)) ways)))))
 
 (defn wait-ways
   "The ways of waiting where the body stands, then walking the way of estimate-inputs `in` (stay-inputs stay-in): until dawn
@@ -403,8 +412,8 @@
 (defn status
   "Ok while walking to `goal` on plan (go-to's, else the one its round held on, planned) now is the cheapest affordable way
   there, by cost alone whatever the worth: its risk (risk-s) against each of wait-ways (wait, then walk). A way is affordable
-  while its walk's hp is within what the call's worth (ctx/worth) buys at the health it walks at (price/allowed-hp) and its
-  seconds within the worth. Later :risky, with both prices, while an affordable wait is cheaper than walking now, rechecked
+  while its walk's hurt (hp less the death's share) is within what the call's worth (ctx/worth) buys at the health it walks at
+  (price/allowed-hp) and its seconds, the death's price among them, within the worth (bought?). Later :risky, with both prices, while an affordable wait is cheaper than walking now, rechecked
   every recheck-ms; ok :acceptable while walking now is affordable; ok :cheaper-than-staying while it costs no more hp than
   staying put; later :risky while only a wait is affordable; never :stranded when staying costs and the body cannot heal
   (seal in or go to a nearer refuge), else never :risky. Ok :unplanned with no plan: go-to's round
@@ -416,24 +425,26 @@
      (let [in (estimate-inputs c goal {:plan plan})
            {:keys [hp spawn-hp hostile-hp death-hp lethal-hp lava-hp dark-s hostiles] :as est} (check-cache/keyed c ::risk (dissoc in :cells :catchers :remembered) #(estimate-of c in))
            worth (ctx/worth c)
-           allowed (buys-hp (.-health (.self (:primitives c))) (.-food (.self (:primitives c))) worth)
-           stay-in (stay-inputs c goal hp)
+           self (.self (:primitives c))
+           allowed (buys-hp (.-health self) (.-food self) worth)
+           hurt-hp (hurt est)
+           stay-in (stay-inputs c goal hurt-hp)
            stay (check-cache/keyed c ::stay stay-in #(stay-estimate c stay-in))
            now-s (risk-s c est)
-           now? (<= hp allowed)
+           now? (bought? c est (.-health self) (.-food self) worth)
            rested (fn [w] (cond-> w (= :heal (:wait w)) (assoc :rest-s (night-rest-s c goal plan in now-s (:secs w)))))
            best (when (pos? hp) (cheapest-affordable c (mapv rested (wait-ways c goal plan in stay-in))))
            parts (str (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                       hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")
-           over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: " parts)
+           over (str "route risk " (price/round1 hurt-hp) " hp hurt (" (price/round1 now-s) " s with its death) over the " (price/round1 allowed) " hp or " (price/round1 worth) " s the call affords: " parts)
            wait (fn [{:keys [secs s] :as w}]
-                  (contract/later :risky (str "route risk " (price/round1 hp) " hp (" parts ") costs " (if now? (str (price/round1 now-s) " s now") (str "over the " (price/round1 allowed) " affordable now"))
+                  (contract/later :risky (str "route risk " (price/round1 hp) " hp (" parts ") costs " (if now? (str (price/round1 now-s) " s now") (str "over the " (price/round1 allowed) " hp or " (price/round1 worth) " s affordable now"))
                                               "; waiting " (price/round1 secs) " s " (case (:wait w) :dawn "for dawn" :sleep "to sleep the night away" "to heal") " and walking then costs " (price/round1 s) " s")
-                                  :risk hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
+                                  :risk hurt-hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
        (cond
          (and best (< (+ (:s best) (:rest-s best 0)) (+ now-s (night-rest-s c goal plan in now-s 0)))) (wait best)
-         now? (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
+         now? (contract/ok :acceptable (str "route risk " (price/round1 hurt-hp) " hp hurt, within " (price/round1 allowed) ", " (price/round1 now-s) " s with its death"))
          (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
          best (wait best)
-         (and (pos? (:hp stay)) (:cannot-heal? stay-in)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
-         :else (contract/never :risky (str over "; no wait makes it affordable") :risk hp :allowed allowed))))))
+         (and (pos? (:hp stay)) (:cannot-heal? stay-in)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hurt-hp :allowed allowed :stay-hp (:hp stay))
+         :else (contract/never :risky (str over "; no wait makes it affordable") :risk hurt-hp :allowed allowed))))))

@@ -1094,18 +1094,23 @@
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the clock alone is no reason to skip the cook"))))))
 
-(deftest a-hurt-body-in-a-roofed-hut-at-night-does-not-carry-raw-chicken-to-a-far-furnace
+(deftest a-hurt-body-in-a-roofed-hut-at-night-carries-raw-chicken-to-a-far-furnace-only-when-waiting-for-light-costs-more
+  ;; hungry (food 2: it cannot heal), 8 hp: the 47 s dark walk and cook at 40 costs 70 s, its 4.4% death among them, within the
+  ;; 960 s the cook is worth. At 15000 light comes in 425 s: it goes; at 22500 in 50 s: it waits for light
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pos {:x 5.5 :y 64 :z 0.5}
               w (merge (hs/hut-world pos {"40,64,0" "furnace"})
-                       {:self {:food 2 :health 7 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
+                       {:self {:food 2 :health 8 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}]})
               night (setup (assoc w :time 15000) :step-ms 5)
+              late (setup (assoc w :time 22500) :step-ms 5)
               day (setup (assoc w :time 6000) :step-ms 5)]
           (await (one-round! (:eng night) {:explore false}))
+          (await (one-round! (:eng late) {:explore false}))
           (await (one-round! (:eng day) {:explore false}))
-          (is (= [] (calls (:p night) "furnace")) "the walk and cook in the dark cost more than the cook is worth to the hurt body")
+          (is (seq (calls (:p night) "furnace")) "the walk costs less than the night's wait for light")
+          (is (= [] (calls (:p late) "furnace")) "the light comes for less than the walk costs")
           (is (seq (calls (:p day) "furnace")) "by day it goes"))))))
 
 (deftest raw-chicken-with-no-furnace-touches-no-furnace

@@ -140,16 +140,20 @@
   ([c f] (update c ::own-ways (fnil conj []) f))
   ([c f stay-f] (update (own-way c f) ::own-stays (fnil conj []) stay-f)))
 
+(defn stay-price
+  "Seconds the stay of price/stay-s at spawn chance `chance` costs acted on now: price/stay-parts at cost/risk-s."
+  [c chance]
+  (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))]
+    (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death}))))
+
 (defn stay-look-price
   "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on, paid at P(closed): unlooked, an unseen
-  wall is an open side, so the job takes the cheapest of the stay's exposure (price/stay-parts acted on now, cost/risk-s),
-  its own answers to a stay at that chance (own-way's stay-f) and giving the goal up (ctx/worth); a room seen closed spares that,
-  gap 0."
+  wall is an open side, so the job takes the cheapest of the stay's exposure (stay-price), its own answers to a stay at
+  that chance (own-way's stay-f) and giving the goal up (ctx/worth); a room seen closed spares that, gap 0."
   [c chance]
-  (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))
-        own (keep #(% (dissoc c ::own-ways ::own-stays) chance) (::own-stays c))]
+  (let [own (keep #(% (dissoc c ::own-ways ::own-stays) chance) (::own-stays c))]
     {:gap 0
-     :delta (apply min (ctx/worth c) (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death})) own)}))
+     :delta (apply min (ctx/worth c) (stay-price c chance) own)}))
 
 (defn room-look
   "A :look at the unseen walls of the room round the body (look-edge/pending) not looked at yet, and at `extra`: the ones
@@ -288,8 +292,8 @@
   first, by cost alone whatever the worth: until light (light-s, nil: no wait lights it), the act then risking light-after
   ({:hp :lethal-hp}, default nothing), and
   until healed to full while the body can heal, the same risk then at full health. A wait costs its seconds, staying put
-  over them (walk-risk/stay-estimate) and the act after it (cost/risk-s). now? while the hp are within what the call's worth
-  (ctx/worth) buys (walk-risk/buys-hp); best the cheapest wait {:wait :secs :s} whose hp and seconds the worth affords."
+  over them (walk-risk/stay-estimate) and the act after it (cost/risk-s). now? while the hurt and the price are within what
+  the call's worth (ctx/worth) buys (walk-risk/bought?); best the cheapest wait {:wait :secs :s} whose hurt and seconds the worth affords."
   ([c hurt lethal light-s] (act-price c hurt lethal light-s {:hp 0}))
   ([c hurt lethal light-s light-after]
    (let [health (.-health (.self (:primitives c)))
@@ -302,7 +306,7 @@
                 light-s (conj (light-way c light-s light-after))
                 heal-s (conj (walk-risk/wait-way c :heal heal-s stay-in 20 {:hp hp :lethal-hp lethal})))]
      {:now-s (cost/risk-s health hurt lethal)
-      :now? (<= hp (walk-risk/buys-hp health (.-food (.self (:primitives c))) worth))
+      :now? (walk-risk/bought? c {:hp hp :lethal-hp lethal} health (.-food (.self (:primitives c))) worth)
       :best (walk-risk/cheapest-affordable c ways)})))
 
 (defn priced

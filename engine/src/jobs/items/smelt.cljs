@@ -20,6 +20,8 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.cost :as cost]
             [jobs.lib.price :as price]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -93,10 +95,20 @@
         n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))]
     (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)))
 
+(defn own-s
+  "Seconds a furnace of its own put down where the body stands costs: sf/make-cost and the cook's stay at the feet by their
+  light (ready/stay-price)."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)]
+    (+ (sf/make-cost c 0) (ready/stay-price c (spawn-light/chance-at p (update-vals feet js/Math.floor) false)))))
+
 (defn exposed-furnace?
-  "Whether a seen furnace at pos is one a player would not walk to: it lies in the dark (readiness :exposed, priced by the whole cook there) and the body can put one down where it stands."
+  "Whether a seen furnace at pos is one a player would not walk to: it lies in the dark (readiness :exposed, priced by the
+  whole cook there, a furnace of its own where the body stands one of the ways: own-s) and the body can put one down."
   [c pos]
-  (and (sf/own-possible? c) (not= :ok (first (ready/exposed (assoc c ::price/stay-s (cook-s c)) pos)))))
+  (and (sf/own-possible? c)
+       (not= :ok (first (ready/exposed (-> c (assoc ::price/stay-s (cook-s c)) (ready/own-way (fn [c _] (own-s c)))) pos)))))
 
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen seen, still that block now, that

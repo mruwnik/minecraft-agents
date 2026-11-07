@@ -278,7 +278,7 @@
           (is (empty? (tu/walk-calls (:p s))) "no walk out")
           (is (some #(#{:risky :exposed} (:reason %)) (f/events-of s :waiting)) "the priced dark at the tree is over what the body can afford"))))))
 
-(deftest a-craft-the-dark-prices-too-high-makes-the-obtain-wait-not-end-no-source
+(deftest a-craft-in-the-dark-at-1-hp-is-priced-and-made-not-ended-no-source
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -289,7 +289,8 @@
             (perception/pass! (aget (:p s) "perception")))
           (await (settings/with-settings {:jobs.lib.cost.risk/risk-share 0} #(obtain! s {:item "stone_pickaxe" :count 1 :ways #{:craft}} 8)))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "logs are carried: not no-source")
-          (is (some #(#{:dark :exposed} (:reason %)) (f/events-of s :waiting))))))))
+          ;; at 1 hp the craft's stays cost no hurt the body lives through and about 3 s for their 0.2% death, within the 41 s it is worth
+          (is (= 1 (get (f/inv s) "stone_pickaxe")) "made at its price"))))))
 
 (deftest a-table-fetch-whose-logs-wait-out-the-night-waits-once-and-is-not-restarted
   (async done

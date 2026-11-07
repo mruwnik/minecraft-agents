@@ -98,14 +98,13 @@
   (boolean (and (:dive-stair c) (ways/way? c :stair) (= :way-dives (some-> (:reason result) keyword)))))
 
 (defn night-leave-bought?
-  "Whether the call's worth buys the hp the walk to its goal risks from here, leaving the shelter at a dark sky included
+  "Whether the call's worth buys the walk to its goal from here (walk-risk/bought?), leaving the shelter at a dark sky included
   (walk-risk/estimate prices the way out by its light; ##Inf worth: arrive, no hp refuses)."
   [c]
   (let [target (goal-aim/target c)
         self (.self (:primitives c))]
     (boolean (and (not (:reason target))
-                  (<= (:hp (walk-risk/estimate c (:pos target)))
-                      (walk-risk/buys-hp (.-health self) (.-food self) (ctx/worth c)))))))
+                  (walk-risk/bought? c (walk-risk/estimate c (:pos target)) (.-health self) (.-food self) (ctx/worth c))))))
 
 (defn night-dug-in?
   "Whether the body is shut in its shelter at a night it is dug in for (sh-inside/night-sheltered)."

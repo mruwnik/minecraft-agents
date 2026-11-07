@@ -403,8 +403,9 @@
     (is (nil? (check plan true)) "the first plan, no hostile known")
     (is (nil? (check plan false)) "no new hostile")
     (fake/add-entity! (:primitives c) {:id 7 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0}})
-    (is (= :never (first (:risk (check plan false)))) "a zombie ahead on the way costs more hp than the body can afford: the rest of the walk is held")
-    (is (= :never (first (with-redefs [ctx/mem (fn [_] @m)] (reprice/status c goal)))) "the start check holds on the plan the round held on")
+    ;; at 3 hp the walk past it costs 800 s (a 53% death), over the 400 s worth; healed (68 s) it costs 360 s in all
+    (is (= [:later :heal] ((juxt first #(:wait (nth % 2))) (:risk (check plan false)))) "a zombie ahead on the way: the rest of the walk is held to heal first")
+    (is (= [:later :heal] ((juxt first #(:wait (nth % 2))) (with-redefs [ctx/mem (fn [_] @m)] (reprice/status c goal)))) "the start check holds on the plan the round held on")
     (let [kept (atom false)]
       (is (:searching ((reprice/check c goal nil) {:status "partial" :steps (take 10 straight-cells) :r #js {:reason "searching"} :search-on #(reset! kept true)} true))
           "an unfinished search searches on")
@@ -684,14 +685,15 @@
 
 (deftest a-hurt-body-that-can-heal-waits-for-a-walk-it-cannot-afford-until-healed
   ;; a skeleton death 2 min ago, 75 blocks off: most likely it has not despawned; no bed, so a death there walks back
-  ;; from world spawn. At 10 hp its death share is over the 9 hp a walk may risk, healed to 20 it is within 19.
+  ;; from world spawn. At 10 hp the walk costs 147 s (a 9% death), healing first 106 s: it heals; with nothing to eat no wait
+  ;; heals it and the walk, 137 s, is within the 400 s worth.
   (let [status-for (fn [health inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health health :food 5} :inventory inventory))
                                                       (with-death {:x 80 :y 64 :z 5} "skeleton" 120000))]
                                             (in-lit-cave #(let [[k _ {:keys [reason wait]}] (planned-status c far-goal)] [k reason wait]))))
         bread [{:name "bread" :count 3}]]
     (is (= [:ok :acceptable nil] (status-for 20 [])))
     (is (= [:later :risky :heal] (status-for 10 bread)))
-    (is (= [:never :risky nil] (status-for 10 [])) "nothing to eat: waiting never lowers the risk")))
+    (is (= [:ok :acceptable nil] (status-for 10 [])) "nothing to eat: waiting never lowers the risk, and the worth buys the walk")))
 
 (deftest a-goal-worth-sets-the-risk-a-walk-may-take
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
@@ -781,20 +783,23 @@
                  (:hp (risk/estimate (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "creeper" 60000 respawned-far) far-goal))))
         "nor any death it risks")))
 
-(deftest a-goal-worth-arrival-walks-a-risk-over-all-but-one-hp-when-no-wait-is-cheaper
-  ;; the death share alone is over all but 1 hp; with worth 400 it is refused (below), with none said (a plain go-to) it walks
+(deftest a-goal-worth-arrival-walks-a-risk-a-finite-worth-refuses-when-no-wait-is-cheaper
+  ;; the walk costs 231 s, 199 s of it the 13% death of meeting the killer: with none said (a plain go-to) it walks, a
+  ;; call worth 150 s refuses it
   (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 10000)
         status #(with-redefs [look/seen-block (constantly {:unknown true})] (risk/status c far-goal (straight-plan c far-goal)))]
-    (is (> (:lethal-hp (estimate-unseen c far-goal)) (price/allowed c 400)))
+    (is (> (risk/risk-s c (estimate-unseen c far-goal)) 150))
     (is (= [:ok :acceptable] ((juxt first #(:reason (nth % 2))) (status))))
-    (is (= :never (first (planned-status (assoc c :worth worth-400) far-goal))))))
+    (is (= :never (first (planned-status (assoc c :worth (constantly 150)) far-goal))))))
 
 (deftest a-walk-for-an-unseen-fresh-death-spot-risks-the-death-of-meeting-its-killer
-  ;; a fist body with no bed; the death risk alone is over half its health
+  ;; a fist body with no bed: the death, a long walk back from world spawn, is most of the walk's 231 s; worth 400 buys it, 150 not
   (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 10000)
-        {:keys [lethal-hp]} (estimate-unseen c far-goal)]
-    (is (> lethal-hp (price/allowed c)))
-    (is (= :never (first (with-redefs [look/seen-block (constantly {:unknown true})] (planned-status c far-goal)))) "no wait lowers a death spot's price")))
+        est (estimate-unseen c far-goal)
+        status #(with-redefs [look/seen-block (constantly {:unknown true})] (planned-status (assoc c :worth (constantly %)) far-goal))]
+    (is (> (* (cost/hp-seconds) (:lethal-hp est)) (* 0.5 (risk/risk-s c est))))
+    (is (= :ok (first (status 400))))
+    (is (= [:never :risky] ((juxt first #(:reason (nth % 2))) (status 150))) "no wait lowers a death spot's price")))
 
 (deftest a-drowned-death-spot-holds-while-the-body-stays-near-its-water-and-goes-once-it-went-far
   ;; 3 h old, past the 2 h fade of a walker's spot; 25 blocks from the body
@@ -906,8 +911,9 @@
   (let [zombies (for [[i x] (map-indexed vector [-4 -5 -6 -7])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
         c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
         s (planned-status c far-goal)]
+    ;; the walk's hurt about 0 hp and its price 39 s, within the 400 s worth: staying (151 hp) is not asked
     (is (= :ok (first s)))
-    (is (= :cheaper-than-staying (:reason (nth s 2))))))
+    (is (= :acceptable (:reason (nth s 2))))))
 
 (deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))
@@ -949,8 +955,9 @@
         real u/seen-block
         hidden? (fn [{:keys [x y z]}] (and (<= cx x (inc cx)) (<= 63 y 65) (<= 15 z 17)))
         s (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
-            (planned-status c {:x 27.5 :y 64 :z 18.5}))]
-    (is (= :never (first s)) "its death share is over all but 1 hp, and no wait lowers a death spot's price")
+            (planned-status (assoc c :worth (constantly 150)) {:x 27.5 :y 64 :z 18.5}))]
+    ;; the walk costs 212 s, 182 s of it the death of meeting the killer, over the 150 s worth
+    (is (= :never (first s)) "its death is priced over the worth, and no wait lowers a death spot's price")
     (is (= :risky (:reason (nth s 2))))))
 
 
