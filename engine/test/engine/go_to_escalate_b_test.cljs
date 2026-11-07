@@ -115,6 +115,14 @@
         p (tu/fake {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks wall-world})]
     (is (= {:step :stair :heading :east :steps 2} (escape-way/choose p [-1 64 0] [8 64 0])))))
 
+(deftest a-stair-does-not-stop-at-a-rim-whose-floor-the-body-has-not-seen
+  (let [wall-world (merge (box -10 63 -10 14 63 10 "stone") (box 0 64 -10 3 65 10 "stone"))
+        p (tu/fake {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks wall-world})
+        block-at (escape/block-at-of p)
+        steps (fn [unseen?] (escape/rim-steps block-at unseen? [-1 64 0] [1 0] 8))]
+    (is (= 2 (steps (constantly false))) "a seen floor under the second step is the rim")
+    (is (= 8 (steps #(= [1 65 0] (vec %)))) "an unseen floor is not known to be solid")))
+
 (deftest escape-choose-stair-checks-every-step
   (let [ba-pit (assoc pit "2,63,0" "bricks")]
     (is (not= :east (:heading (escape-way/choose (tu/fake (merge in-pit {:blocks ba-pit})) [0 61 0] [10 64 0] #(not= [2 63 0] (vec %)))))
