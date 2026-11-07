@@ -29,11 +29,11 @@
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]
    :limit-s 40}
-  ;; Card 6c727565: the zombie is fought first; the creeper comes 2 s after the reflex starts and the next call weighs it: fled, named after it.
+  ;; Card 6c727565: the zombie (100 health, so it outlasts the creeper's arrival) is fought first; the creeper comes 2 s after the reflex starts and the next call weighs it: fled, named after it.
   {:name "a-creeper-that-joins-a-zombie-fight-is-fled"
    :register []
    :body {:at [14.5 0 16.5] :yaw 270 :inventory [["iron_sword" 1]]}
-   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,Health:100f,attributes:[{id:\"minecraft:max_health\",base:100}],equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:cli "triggers" ["$body" "--world" "$world" "put" "hostile-near" "--trigger" "hostile-near" "--by" "world-test"]]
          [:wait-s 2]
          [:summon "creeper" [12.5 0 17.5] "{NoAI:1b}"]]
