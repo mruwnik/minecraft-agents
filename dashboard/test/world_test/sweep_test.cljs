@@ -123,6 +123,7 @@
                          (is (re-find #"pool spawn failed" (:message (second @evs))))))))]
       (-> (check (fn [_] (js/Promise.reject (js/Error. "pool spawn failed"))))
           (.then #(check (fn [_] (throw (js/Error. "pool spawn failed")))))
+          (.catch (fn [e] (is (nil? e) "the check itself rejected")))
           (.then done)))))
 
 (deftest a-failed-pass-names-its-failing-fixtures

@@ -638,13 +638,22 @@
       (fn ^:async t []
         (doseq [chest? [false true]]
           (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"40,64,0" []}
-                                        :blocks (if chest? ; a chest walk needs a way out: one free cell ahead, then stone, is still no toss
-                                                  {"2,65,0" "stone" "-2,65,0" "stone" "0,65,2" "stone" "0,65,-2" "stone"}
-                                                  {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"})})]
+                                        :blocks {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"}})]
             (when chest? (know-chest! eng {:x 40 :y 64 :z 0}))
             (await (run-reflex eng {:free 2} {}))
             (is (zero? (count (calls p "toss"))))
-            (is (= chest? (pos? (count (calls p "transfer")))) "no toss to compare with: a known chest is used at any walk")))))))
+            (is (zero? (count (calls p "transfer"))) "walled in, the chest is out of reach too: no digging out just to tidy")))))))
+
+(deftest a-body-with-one-free-cell-then-stone-tosses-nothing-and-uses-the-known-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"40,64,0" []}
+                                      :blocks {"2,65,0" "stone" "-2,65,0" "stone" "0,65,2" "stone" "0,65,-2" "stone"}})]
+          (know-chest! eng {:x 40 :y 64 :z 0})
+          (await (run-reflex eng {:free 2} {}))
+          (is (zero? (count (calls p "toss"))))
+          (is (pos? (count (calls p "transfer")))))))))
 
 (deftest a-body-that-has-seen-no-cell-yet-looks-around-before-judging-itself-walled-in
   (async done
