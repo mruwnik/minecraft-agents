@@ -50,7 +50,7 @@
   without a swing; a ranged one that, with another in range, is better left than walked to (hostile-fight/too-far-to-chase?: the
   priced answer says flee) ends :too-far; a creeper is a target only alone in range (hostile-fight/targets) and ends :creeper-unsafe when
   it cannot be fought hit-and-back (hostile-fight/hit-and-back-ok?) or only creepers are left: the parent, not each step, weighs fight against flight. No
-  hostile in range: :done :cleared. When the body lost health since the call began the job yields (:continue). Every ending
+  hostile in range: :done :cleared. When the body lost health since the call began, or a creeper not there before is in range, the job yields (:continue). Every ending
   but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
 (a/defargs args
@@ -437,6 +437,15 @@
   [c cause]
   (ctx/end c :nothing-possible cause (assoc (fight-data c cause) :struck (hostile/struck (ctx/mem c)))))
 
+(defn new-creeper?
+  "Whether a creeper not there at the last check is in range now (noted, so each is yielded for once): the parent weighs
+  the fight against a flight again with it."
+  [c]
+  (let [ids (set (map #(.-id %) (filter combat/creeper? (hostile/in-range c))))
+        known (:creepers (ctx/mem c))]
+    (ctx/update-mem! c assoc :creepers ids)
+    (boolean (and known (seq (remove known ids))))))
+
 (defn ^:async hostile-step
   "One step of a :hostiles fight: decline (hold ran out, ranged mob too far, only heard, all given up), yield when the body was hurt,
   look at a heard mob, wait out the swing gap, or swing once. :again, :continue or an ending."
@@ -446,6 +455,7 @@
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c) :started-at (ctx/now c)))
     (cond
+      (new-creeper? c) :continue
       (and target (hostile/held-idle? c (hostile/held? c target))) (declined c :hold-timeout)
       (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)
       (and target (combat/creeper? target) (not (hostile/hit-and-back-ok? c (hostile/in-range c)))) (declined c :creeper-unsafe)

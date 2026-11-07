@@ -98,7 +98,7 @@
       (:value hit)
       (let [own? (ledger/own-placed view)
             built? (built-fn w now)
-            v (blast-s* p (fn [cell n] (or (own? cell n) (built? (vec cell)))))]
+            v (blast-s* p (fn [cell n] (or (own? cell n) (built? cell))))]
         (reset! blast-memo {:p p :key key :sources sources :value v})
         v))))
 

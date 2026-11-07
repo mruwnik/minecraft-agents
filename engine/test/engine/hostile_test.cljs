@@ -1223,6 +1223,22 @@
         (lost 60)
         (is (empty? (blasts)) "one lost 60 blocks off does not reach the fight before it ends")))))
 
+(deftest a-creeper-that-joins-a-running-fight-makes-the-next-call-weigh-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 9 0 4)]})]
+          (let [swing (.-attack p)]
+            (aset p "attack" (fn [& a]
+                               (when-not (:creeper-came @(fake/state p))
+                                 (swap! (fake/state p) assoc :creeper-came true)
+                                 (fake/add-entity! p {:id 20 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}))
+                               (.apply swing p (to-array a)))))
+          (core/submit! eng '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}}) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [["zombie" :fight] ["creeper" :flee]] (mapv (juxt :mob :decision) (decided seen)))
+              "the zombie is fought alone; the creeper 3 off, seen mid-fight, makes the next call a flight named after it"))))))
+
 (deftest a-creeper-with-company-is-never-swung-at-and-a-lone-one-backed-off-from-is-still-fought
   (async done
     (tu/run-async done
@@ -1337,7 +1353,6 @@
     (is (< 0 (loss [(assoc (z 2) :weight 0.5)]) (loss [(z 2)])) "a mob as likely there as not lands some of its blows")
     (is (= (/ (+ (loss [(z 2)] nil 1) (loss [(z 2)] nil 20)) 2) (loss [(z 2)] nil [1 20])) "a spread of stays costs their mean")))
 
-;; the shot's skeleton stands for a shooter not seen: one seen is that shooter, not a second
 (deftest a-creepers-blast-prices-what-the-worlds-files-hold-as-built
   (let [p (tu/seeing-all (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (tu/box -6 63 -6 6 63 6 "stone") :entities []}))
         around {:min [-2 63 -2] :max [2 65 2]}
@@ -1349,6 +1364,7 @@
     (is (pos? (blast claimed)) "an active claim's area too")
     (is (zero? (hostile-loss/blast-s (ctx-of p claimed) {:now 6000})) "an expired claim holds nothing, and the kept price of the claim is not served")))
 
+;; the shot's skeleton stands for a shooter not seen: one seen is that shooter, not a second
 (deftest a-seen-skeleton-and-its-shot-count-once
   (let [p (tu/fake-on-floor {:entities [(assoc (skeleton 1 14 0) :visible true)]})
         quiet {:data mem/empty-data :now 2000}
