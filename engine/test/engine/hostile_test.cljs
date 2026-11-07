@@ -2221,16 +2221,19 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
-(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-on-hard
-  ;; the fight's hp cost the food that heals them (Q142), so closing on it is a little cheaper than the walk away (met again by cost.answer ::flee-meets)
+(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-close-and-flees-it-hurt
+  ;; both sides by a wide margin (fight 292 vs flee 324 s unhurt at 3 blocks; fight 693 vs flee 454 s at 8 hp from 10): a near skeleton is cheaper closed on than walked away from (the fight's hp cost the food that heals them, Q142), a hurt body cannot pay the arrows of the approach
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
-              {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 3} #(flight-round respond world)))
-              [e] (filter #(= :hostile.decided (:kind %)) @seen)]
-          (is (= :fight (:decision e)) (str "the fight is the cheaper: " (:prices e)))
-          (is (= {:fight 301 :flee 304} (select-keys (:prices e) [:fight :flee])) "the prices, whole seconds"))))))
+        (let [decide (fn ^:async decide* [health x]
+                       (let [world {:self {:health health} :inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 x 0) :visible true)]}
+                             {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 3} #(flight-round respond world)))]
+                         (first (filter #(= :hostile.decided (:kind %)) @seen))))
+              near (await (decide 20 3))
+              hurt (await (decide 8 10))]
+          (is (= :fight (:decision near)) (str "unhurt and near: fight " (:prices near)))
+          (is (= :flee (:decision hurt)) (str "hurt: flee " (:prices hurt))))))))
 
 
 (def lit-room
