@@ -2,7 +2,7 @@
   "go-to's adjacent reads (escalation, escape, pass, near, reach, retreat, vehicle) answer from what the
   body feels, sees or remembers, never from the raw blockAt: behind stone a cell is unknown, a dig lays it open. The
   primitives are wrapped; their blockAt throws."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-support :as gts]
@@ -453,6 +453,16 @@
     (is (true? (second (rounds [20 20 20 20]))))
     (is (true? (second (rounds [20 19.5 20 19.5]))) "under a block of gain")
     (is (false? (second (rounds [20 20 18 18]))) "a block nearer is progress")))
+
+;; sweep 225f36316: a looped round's :exhausted and :needs-health were relabelled :no-progress, so reach never spanned
+;; and health-stop never ended :needs-health
+(deftest a-looped-round-keeps-the-planner-s-reason-for-finding-no-way
+  (are [result enclosed? why] (= why (gwalk/looped-reason result enclosed?))
+    {:status :no-path :reason :exhausted} false :exhausted
+    {:status :no-path :reason :needs-health :damage-refused true} false :needs-health
+    {:status :no-path :reason :exhausted} true :start-enclosed
+    {:status :no-path :reason :budget} false :no-progress
+    {:status :stuck} false :no-progress))
 
 ;; live twin: walkway-stair-out-of-view/stair-100-east-arrives (b3c99e64). Down the stair and west on the ground, a search
 ;; cut by its budget got nearest at the walkway's dead end over the goal, where the body had stood 13 off: the walk swung

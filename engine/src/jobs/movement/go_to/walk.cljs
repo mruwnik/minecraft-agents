@@ -341,6 +341,17 @@
     [(assoc starts cell (assoc seen :n n))
      (and (>= n loop-starts) (>= best (dec (:best seen))))]))
 
+(defn looped-reason
+  "The give-up reason of a looped round (note-start) whose result is result: :start-enclosed for a body walled in
+  (enclosed?), else the planner's own reason for finding no way (:exhausted, :needs-health: a caller acts on it), else
+  :no-progress (a budget-cut search, a partial walk back and forth)."
+  [result enclosed?]
+  (let [reason (some-> (:reason result) keyword)]
+    (cond
+      (or (= :start-enclosed reason) enclosed?) :start-enclosed
+      (and reason (not= :budget reason) (= :no-path (some-> (:status result) keyword))) reason
+      :else :no-progress)))
+
 (defn ^:async clear-goal-seal!
   "A goal the walk could not reach (ledger/seal-blocked-whys)
   with blocks of the body's own ledger within ledger/seal-clear-radius of the goal (a dig-in's seal beside a gate, a plug in a stair
@@ -705,7 +716,7 @@
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
                 looped? (and looped? (not learned-floor?) (not reach-new?))
                 result (cond-> result
-                         looped? (assoc :status :no-path :reason (if (or (= :start-enclosed (some-> (:reason result) keyword)) (escape/walk-enclosed? c)) :start-enclosed :no-progress))
+                         looped? (assoc :status :no-path :reason (looped-reason result (escape/walk-enclosed? c)))
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 learned? (learned-round? result)
                 progress? (and (not looped?) (or (< left (dec best)) explored? nearer? learned-floor? reach-new? (and learned? (learned-near? result pos best))))
