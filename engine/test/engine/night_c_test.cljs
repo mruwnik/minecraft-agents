@@ -420,7 +420,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0}))]
-          (await (core/tick! eng))
+          (await (with-child-log #(core/tick! eng) (fn [_ k _ _] (when (= :enter-room k) {:kind :nothing-possible :data {}}))))
           (let [{:keys [prices]} (first (st/emitted seen :night.answers))]
             (is (number? (:home prices)) "the walk into the home carries the bed there")
             (is (not (contains? prices :bed)) "no second answer for the same walk-in, priced with no walk")))))))
