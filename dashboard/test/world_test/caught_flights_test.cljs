@@ -24,8 +24,9 @@
       (let [rows (map #(assoc % :group :zombie)
                       (concat (repeat 10 {:health 20 :died? false :hits 0}) (repeat 3 {:health 20 :died? false :hits 4})
                               (repeat 4 {:health 4 :died? true :hits 2})))
-            {:keys [flights fit]} (s/report rows [])]
-        (is (= {:zombie {:lived [[20 0 10] [20 4 3]] :died [[4 2 4]]}} flights) "4 hp dies of 2 blows of 2.5")
+            {:keys [flights fit]} (s/report (conj rows {:group :bow :health 6 :died? true :hits 1}) [])]
+        (is (= {:zombie {:lived [[20 0 10] [20 4 3]] :died [[4 2 4]]} :bow {:lived [] :died [[6 3 1]]}} flights)
+            "4 hp dies of 2 blows of 2.5; 6 hp of 3 arrows of 2.94")
         (is (= (s/r3 (:blows (caught/posterior (:zombie flights)))) (get-in fit [:zombie :blows])))))))
 
 (deftest an-episode-is-counted-by-the-most-chasers-of-its-group-a-decision-names

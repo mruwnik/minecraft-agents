@@ -78,7 +78,7 @@
   fight rows (episodes'), at the ::threat/difficulty setting."
   [rows fights]
   (let [counts-of (fn [rows] (into (sorted-map) (for [[g rs] (group-by :group rows) :when (blow-of g)]
-                                                  [g (flights rs (threat/difficulty-scale (get threat/mob-hit (blow-of g))))])))
+                                                  [g (flights rs (threat/difficulty-scale (threat/mob-blow (blow-of g))))])))
         fit-of (fn [counts] (into (sorted-map) (for [[g c] counts :let [{:keys [blows shape]} (caught/posterior c)]]
                                                  [g {:blows (r3 blows) :shape (some-> shape r3) :chance (into (sorted-map) (for [h [2 5 10 15 20]] [h (r3 (caught/chance c h))]))}])))
         counts (counts-of rows)
