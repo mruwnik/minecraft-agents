@@ -58,6 +58,9 @@ test('mobFields', async t => {
     ['idle creeper', 'creeper', { metadata: { 16: -1 } }, { fusing: false }],
     ['angry enderman', 'enderman', { metadata: { 17: true } }, { angry: true }],
     ['calm enderman', 'enderman', { metadata: { 17: false } }, { angry: false }],
+    ['librarian shows its level', 'villager', { metadata: { 18: { villagerProfession: 9, level: 3 } } }, { profession: 'librarian', level: 3 }],
+    ['nitwit wears no badge', 'villager', { metadata: { 18: { villagerProfession: 11, level: 1 } } }, { profession: 'nitwit' }],
+    ['default-data villager is unemployed', 'villager', {}, { profession: 'unemployed' }],
     ['uuid passes through', 'zombie', { uuid: 'abc-123' }, { uuid: 'abc-123' }]
   ]
   for (const [label, name, extra, expected] of rows) {

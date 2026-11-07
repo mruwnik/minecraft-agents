@@ -12,7 +12,7 @@
   - a :heard row has no :pos, only :direction (8 compass points) and :band (:near or :far); :seen and :remembered keep
     the exact place.
   - a sound after a sighting does not replace the row: it stays and ages to :remembered at the place it was seen
-  - a baby mob (the sample's `fields`, interact.mjs mobFields) carries :baby true; a villager carries :profession; a sheep carries :color and, when sheared, :sheared true.
+  - a baby mob (the sample's `fields`, interact.mjs mobFields) carries :baby true; a villager carries :profession (and :level when it has a profession, the badge a player sees); a sheep carries :color and, when sheared, :sheared true.
   - the body itself is :self.
   Mineflayer tracks far more (mobs deep in the rock under the body). Those are never listed."
   (:require [engine.args :as a]
@@ -144,6 +144,7 @@
            (when-let [username (short-text (.-username e) 64)] {:username username})
            (when (some-> fields (#(% e)) .-baby true?) {:baby true})
            (when-let [p (some-> fields (#(% e)) .-profession)] {:profession p})
+           (when-let [l (some-> fields (#(% e)) .-level)] {:level l})
            (when-let [col (some-> fields (#(% e)) .-color)] {:color col})
            (when (some-> fields (#(% e)) .-sheared true?) {:sheared true})
            (when (identical? e (.-entity source)) {:self? true}))))

@@ -25,11 +25,18 @@ export const sheepDye = (bot, e) => e.name === 'sheep' ? (e.metadata?.[metaIndex
 
 const DYE_COLORS = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
 
+// The robe shows the profession; the badge (level) only on a villager that has one (a nitwit and an unemployed one wear none).
+const villagerFields = (bot, e) => {
+  const { villagerProfession, level } = villagerData(bot, e)
+  const profession = professionOf(villagerProfession)
+  return ['unemployed', 'nitwit', 'unknown'].includes(profession) ? { profession } : { profession, level }
+}
+
 // What a mob shows that a use can change: identity, age, (villager) profession and (sheep) colour and shearing. Keys appear only when they apply.
 export const mobFields = (bot, e) => ({
   ...(typeof e.uuid === 'string' && { uuid: e.uuid }),
   ...(hasMetaKey(bot, e, 'baby') && { baby: e.metadata?.[metaIndex(bot, e, 'baby', -1)] === true }),
-  ...(e.name === 'villager' && { profession: professionOf(villagerData(bot, e).villagerProfession) }),
+  ...(e.name === 'villager' && villagerFields(bot, e)),
   ...(e.name === 'enderman' && { angry: e.metadata?.[metaIndex(bot, e, 'creepy', 17)] === true }),
   ...(e.name === 'creeper' && { fusing: e.metadata?.[metaIndex(bot, e, 'swell_dir', 16)] === 1 }),
   ...(e.name === 'sheep' && { color: DYE_COLORS[sheepDye(bot, e)] }),
