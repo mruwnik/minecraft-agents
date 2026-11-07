@@ -996,6 +996,25 @@
     (is (= [[1 64 0] [2 64 0]] (run! {:step :stair :then [{:step :dig-route :cells (cells 1 2)}]})) "a later way's route is held")
     (is (= [[1 64 0] [2 64 0] [3 64 0]] (run! {:step :dig-route :cells (cells 3)})) "a later route adds to the earlier route's unentered cells")))
 
+(deftest a-climb-s-next-stair-over-a-guessed-floor-seen-to-be-air-is-not-started-and-the-ways-are-chosen-again
+  (let [{:keys [eng seen]} (gt/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (assoc (box -1 62 -1 4 63 1 "stone") "2,63,0" "air")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        run! (fn [floor]
+               (ctx/update-mem! c #(-> % (dissoc :escalate-now) (assoc :escalation {:step :approach :then [{:step :stair :heading :east :steps 1 :from [0 64 0] :guessed [floor]}]})))
+               (reset! seen [])
+               (esc/escalated! c [0 64 0] (:escalation (ctx/mem c)) true)
+               (ctx/mem c))]
+    (.setOwner (:primitives eng) "tx")
+    (let [m (run! [2 63 0])]
+      (is (= [[2 63 0]] (map :floor (events-of seen :go-to.climb-replanned))) "the guessed floor is seen to be air")
+      (is (empty? (events-of seen :go-to.escalated)) "the stair is not started")
+      (is (nil? (:escalation m)) "the rest of the climb is dropped")
+      (is (true? (:escalate-now m)) "the ways are chosen again at once"))
+    (let [m (run! [1 63 0])]
+      (is (empty? (events-of seen :go-to.climb-replanned)) "a floor that held: the climb goes on")
+      (is (= :stair (:step (:escalation m))))
+      (is (nil? (:escalate-now m))))))
+
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})

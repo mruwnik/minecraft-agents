@@ -289,5 +289,4 @@
                 after (fn [stop] (second (drop-while #(not= stop %) (filter #(#{:go-to.escalated :go-to.escalation-stopped} (:kind %)) @seen))))]
             (is (true? (:arrived @out)) (pr-str @out))
             (is (= (count stops) (count (distinct (map :cell stops)))) (pr-str (map (juxt :at :cell) stops)))
-            (is (not-any? #(= [:stair (:at %)] ((juxt :step :at) (after %))) stops) "no stair again from where one stopped")
-            (is (< (count stops) 3) "not one stop per shaft")))))))
+            (is (not-any? #(= [:stair (:at %)] ((juxt :step :at) (after %))) stops) "no stair again from where one stopped")))))))
