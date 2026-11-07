@@ -15,6 +15,7 @@
             [engine.memory :as mem]
             [jobs.lib.pass :as pass]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.flight-job :as fj]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -616,6 +617,18 @@
               _ (.setOwner (:primitives eng) "t8")
               rooms (:rooms (rooms/survey c (cover/home-pos c)))]
           (is (= [false true] (mapv :home? rooms)) (str "the room 7 blocks off, then the home 20 off: " (mapv :start rooms))))))))
+
+(deftest a-home-with-more-rooms-nearer-than-max-rooms-is-still-surveyed
+  ;; the count bounds the rooms by the door, never the home: it is priced like any room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [near-hut (shifted (merge hs/walls hs/roof hs/door hut-floor) -20)
+              {:keys [eng]} (setup (hut {:x -14.5 :y 64 :z 6.5} (merge hs/door-states (shifted hs/door-states -20)) [] near-hut))
+              c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "t8")
+              rooms (:rooms (settings/with-settings {:jobs.lib.rooms/max-rooms 1} #(rooms/survey c (cover/home-pos c))))]
+          (is (= [false true] (mapv :home? rooms)) (str "the room by the door, then the home past the count: " (mapv :start rooms))))))))
 
 (deftest a-home-past-64-blocks-is-still-the-flights-home
   ;; its run is priced by the flight's search like a near one's, not cut by a range

@@ -33,7 +33,7 @@
   {::door-radius {:default 32 :doc "Blocks from the body within which a seen door or gate may lead into a closed building to flee to." :spec (a/num-in 0 64)}
    ::max-doors {:default 8 :doc "Seen doors and gates, nearest first, whose two sides a flight checks for a closed room." :spec (a/int-in 0 nil)}
    ::door-looks {:default 4 :doc "Looks a flight takes from a building's doorway at the unseen sides of its room before it drops it as unseen." :spec (a/int-in 0 nil)}
-   ::max-rooms {:default 3 :doc "Closed rooms, nearest first, a flight step races for." :spec (a/int-in 1 nil)}
+   ::max-rooms {:default 3 :doc "Closed rooms, nearest first, a flight step races for (the home's room besides)." :spec (a/int-in 1 nil)}
    ::judge-per-step {:default 2 :doc "Door sides not judged before that a flight step floods for a closed room (an open one reads up to room-cells cells), nearest first; none while a melee chaser is within cover-gap. The home is always judged." :spec (a/int-in 0 nil)}})
 (defn door-radius [] (settings/get settings ::door-radius))
 (defn max-doors [] (settings/get settings ::max-doors))
@@ -173,7 +173,7 @@
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, nearest cell first (the home
-  on a tie); and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
+  on a tie), and the home's room besides when more are nearer; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
   flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones
   it may flood now; the home is always judged). A home with a bare doorway gap counts as a room (doorway-room: its :gap; :fill? when a
   block is carried to fill it). keep? false: the judgements are kept nowhere (closed?), so the flee price surveys what the
@@ -206,7 +206,7 @@
                   (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
                   ;; home first only so the home's room keeps its :home? start over its door side's
                   (sort-by (fn [{:keys [cells home?]}] [(apply min ##Inf (map (fn [[x y z]] (u/dist me (mid {:x x :y y :z z}))) cells)) (if home? 0 1)]))
-                  (take (max-rooms))
+                  (#(into (vec (take (max-rooms) %)) (filter :home?) (drop (max-rooms) %)))
                   vec)})))
 
 (defn reaches-first?
