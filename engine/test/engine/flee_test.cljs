@@ -972,14 +972,18 @@
                                           ahead (fn ^:async ahead [dead-end] (some? (await (cover/look-ahead! c [] covered? judged {:dead-end dead-end}))))]
                                       (with-redefs [sense/look-at-unknown! (fn ([_c _cells _n] (swap! looks inc) (js/Promise.resolve nil)) ([_c _cells _n _stop?] (swap! looks inc) (js/Promise.resolve nil)))
                                                     respond.goal/judge! (fn [& _] (js/Promise.resolve {}))]
-                                        (reset! out [price (await (ahead (* 0.9 (:s price)))) @looks (await (ahead (* 1.1 (:s price)))) @looks])))
+                                        (reset! out [price (await (ahead (* 0.9 (:s price)))) @looks (await (ahead (* 1.1 (:s price)))) @looks
+                                                     (cover/look-price c [] covered? judged nil [[3 64 0]])
+                                                     (some? (await (cover/look-ahead! c [] covered? {:ends [{:unseen [4 64 0] :s 1 :trapped 50}]} nil)))])))
                                     (ctx/end c :done nil))})]
           (mem/write! (:store (:eng s)) :hurt {:damageType "minecraft:arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
           (await (run-job! s 'looker {}))
-          (let [[price cheap cheap-looks dear dear-looks] @out]
+          (let [[price cheap cheap-looks dear dear-looks no-pick looked-no-pick] @out]
             (is (> (:s price) (cost/look-s 1)) (str "in the shot spot's line: the look's seconds and the fire on them " (pr-str price)))
             (is (= [false 0] [cheap cheap-looks]) "a dead end that costs less than the look: no look")
-            (is (= [true 1] [dear dear-looks]) "one that costs more: the look, then the search again")))))))
+            (is (= [true 1] [dear dear-looks]) "one that costs more: the look, then the search again")
+            (is (= 50 (:saving no-pick)) "with no pick, the cheapest trapped answer at an unseen dead end is what it may spare")
+            (is looked-no-pick "no pick and a trap worth more than the look: the flight looks for a way")))))))
 
 (deftest the-flee-price-runs-from-the-chasers-the-flight-runs-from
   ;; a zombie standing 13 blocks off, beyond the danger radius, chases neither: both step away from it as a bystander

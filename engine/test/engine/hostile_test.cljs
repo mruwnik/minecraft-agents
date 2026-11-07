@@ -1094,8 +1094,14 @@
                                                  [0 14] 1000)]
             (core/submit! eng respond {})
             (dotimes [_ 3] (await (core/tick! eng)))
-            (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))]
-              (is (and (< 16 x) (= 16 z)) (str "yaw " yaw ": the first step is east along the tunnel's row: " x " " z)))))))))
+            (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))
+                  {:keys [ends picked]} (first (filter #(= :retreat.search (:kind %)) @seen))
+                  best (apply max-key :score (remove :unseen ends))
+                  unseen (filter :unseen ends)]
+              (is (and (< 16 x) (= 16 z)) (str "yaw " yaw ": the first step is east along the tunnel's row: " x " " z))
+              (is (= picked (:at best)) (str "yaw " yaw ": the best seen end is picked"))
+              (is (and (seq unseen) (every? #(< (:score %) (:score best)) unseen))
+                  (str "yaw " yaw ": each cover in the unseen rock pays its dead end, so scores under the seen way: " (mapv (juxt :score :dead-end) unseen) " vs " (:score best))))))))))
 
 
 ;; Wicken j3766: at 13 hp with a wooden sword the fight walked to a seen skeleton, beside a zombie heard further on
