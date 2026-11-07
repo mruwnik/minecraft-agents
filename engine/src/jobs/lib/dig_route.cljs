@@ -24,6 +24,11 @@
    ::heap-full {:default 0.75 :spec (a/num-in 0 1)
                 :doc "The share of the heap's limit used past which a kept search grows no more: past it V8 collects ever more often and the body runs out of memory (a 1.4 GB heap did, 2026-10-30)."}})
 
+(def answer-s
+  "Seconds of CPU (the search's price of itself, :read-s) past which a priced search answers with the cheapest route in
+  hand: the owner's ceiling of about 100 ms a search (Q141). The proof that no cheaper route is left goes on only within it."
+  0.1)
+
 (def falling #{"sand" "red_sand" "gravel"})
 
 (defn open?
@@ -153,7 +158,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s held-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -677,6 +682,8 @@
                          (nil? top) (cond-> {:problem :no-route} @boxed (assoc :boxed true :searched-s (spent-s)))
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (or (ended) (recur))
+                         ;; past answer-s the route in hand answers, or the one the caller holds (:dearer)
+                         (and read-s (>= (spent-s) answer-s) (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s)))) (or (ended) (recur))
                          (or (.has done ck) (.has dropped ck)) (recur)
                          (end-key? ck) (or (checked ck) (recur))
                          ;; the popped cell goes back: the next run expands it first
@@ -765,7 +772,7 @@
 (defn seeded-search
   "search, but the cheapest route through the feet cells of :seed and their neighbours (one across, up or down) is
   searched for first and the whole search proves on only while that pays: bounded by that route's price, its CPU counted
-  as spent (with :read-s, the proof goes on while what it spent stays under that price less its bound). The seed's
+  as spent (with :read-s, the proof goes on while what it spent stays under that price less its bound, and within answer-s). The seed's
   route is the answer when the proof ends dearer, too big or boxed. A fn of n as search's, n counting both searches' cells."
   [block-at from goal {:keys [seed max-s] :as opts}]
   (let [opts (dissoc opts :seed)
@@ -774,7 +781,7 @@
         found (volatile! nil)
         whole (delay (let [b @found]
                        (search block-at from goal (cond-> opts
-                                                    (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)))
+                                                    (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)) :held-s (:seconds b))
                                                     (:searched-s b) (assoc :searched-s (:searched-s b))))))]
     (fn run
       ([n] (run n nil))
@@ -805,7 +812,8 @@
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends, :only feet cells (none else is stepped onto), :seed the feet cells of a planned way searched round first (seeded-search); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
-  :read-s seconds of CPU a cell read (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
+  :read-s seconds of CPU a cell read (priced-search; past answer-s it answers with the cheapest route in hand, or ends :dearer
+  under :held-s, the price of a route the caller holds), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; :unseen-digs {:low-y :low [s ..] :any [s ..]}

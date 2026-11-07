@@ -609,6 +609,31 @@
     (is (< (js/Math.abs (- (:seconds whole) (:seconds seeded))) 1e-9) (str (:seconds seeded) " s, unbounded " (:seconds whole)))
     (is (< (:searched-s seeded) (:searched-s whole)) (str (:searched-s seeded) " s of CPU, unbounded " (:searched-s whole)))))
 
+;; a fall of 104 and 5 across through rock never seen, each cell's dig at the measured solid chance by its distance from the seen air
+(def deep-drop
+  (let [fy 64
+        rock 0.6
+        row (fn [dy-max] (mapv #(* rock (br/unseen-solid-least fy dy-max (js/Math.ceil (/ % 2)) nil)) (range 1 (inc (* 2 br/unseen-d-max)))))
+        tiers {:low-y (+ fy br/unseen-low-dy) :low (row br/unseen-low-dy) :any (row nil)}
+        unseen? (fn [[_ y _]] (< y 63))]
+    {:at (fn [[_ y _]] (if (>= y 64) "air" "stone"))
+     :from [0 64 0] :goal [5 -40 5]
+     :opts {:dig-s (fn [_ [_ y _ :as c]] (* rock (if (unseen? c) (br/unseen-solid fy (- y fy) (max 1 (min 8 (- 63 y))) false nil) 1)))
+            :step-s (cost/walk-step-s) :stair-s (cw/stair-cost 1) :unseen? unseen? :unseen-step-s (cost/unseen-step-s (cost/unseen-share nil nil)) :max-fall 3
+            :seen-steps (fn [_ y _] (max 0 (- 64 y))) :seen-cells (fn [_ y _] (max 0 (- 63 y))) :guess (constantly "stone")
+            :unseen-digs tiers :unseen-dig-s (first (:any tiers)) :read-s (cost/search-read-s) :back-h? true :prior-h? true}}))
+
+(deftest a-seeded-search-answers-with-the-seed-s-route-once-its-cpu-passes-the-search-ceiling
+  ;; Q141: about 100 ms a search. The proof that no cheaper way is left read 240k cells here (3.5 s); past dr/answer-s the
+  ;; route in hand answers
+  (let [{:keys [at from goal opts]} deep-drop
+        seed (dr/walk-then-stair from goal 3)
+        band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
+        [way _ way-reads] (to-end (dr/search at from goal (assoc opts :only band)))
+        [seeded _ reads] (to-end (dr/seeded-search at from goal (assoc opts :seed seed)))]
+    (is (= (:seconds way) (:seconds seeded)))
+    (is (< reads (+ way-reads (/ dr/answer-s (cost/search-read-s)))) (str reads " cells read, the seed's way " way-reads))))
+
 (defn holed-climb
   "Stone below y 30 with about one cell in eight air round a climb from [0 10 0], seeded: [block-at goal]."
   [seed]
