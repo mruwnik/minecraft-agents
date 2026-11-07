@@ -18,6 +18,7 @@
             [jobs.apiary.guard :as guard]
             [jobs.apiary.harvest :as harvest]
             [jobs.apiary.maintain :as apiary-maintain]
+            [jobs.lib.price :as price]
             [jobs.lib.world-files :as world]
             [jobs.village.breed :as village-breed]
             [jobs.items.give :as give]
@@ -87,7 +88,7 @@
 
 (deftest by-day-a-place-whose-light-is-unseen-is-no-reason-to-wait
   (let [c (-> (rt/ctx-of (assoc rt/open-night :time st/noon))
-              (assoc :args {:box far-box})
+              (assoc :args {:box far-box} ::price/stay-s 60)
               (assoc-in [:engine :world] (world/of-data plans {})))]
     (is (= :ok (first (maintain/safe? c))))
     (is (= :ok (first (unleash/safe? c))))))
