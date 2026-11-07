@@ -471,14 +471,16 @@
 (def spawn-far "A respawn far off: a death costs the walk back." {:x 5000 :y 64 :z 0})
 
 (deftest dark-factor-grows-with-the-danger-to-the-kit
-  (let [floor (cost/dark-factor)
-        unarmed (cost/dark-factor {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}})
-        sword (cost/dark-factor {:weapon "iron_sword" :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}})
-        armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set :respawn spawn-far :at {:x 0 :y 64 :z 0}})]
+  (let [bare {:weapon nil :equipment nil :at {:x 0 :y 64 :z 0}}
+        floor (cost/dark-factor)
+        unarmed (cost/dark-factor {:weapon nil :equipment nil :at {:x 0 :y 64 :z 0}})
+        sword (cost/dark-factor {:weapon "iron_sword" :equipment nil :at {:x 0 :y 64 :z 0}})
+        armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set :at {:x 0 :y 64 :z 0}})]
     (is (zero? floor) "the bare factor is the flat floor")
-    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}} 1 nil) (cost/spawn-rate 64) (cost/hp-seconds)))
-        "an unarmed body pays the hurt of the spawn mix, the one spawn price walk-risk uses")
-    (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
+    (is (= unarmed (* (cost/spawn-rate 64) (+ (* (cost/spawns-hurt bare 1 nil) (cost/hp-seconds)) (cost/route-death-cost bare {:spawns 1} nil))))
+        "an unarmed body pays the hurt of the spawn mix and the death it risks, at a near respawn")
+    (is (> unarmed armed-armoured floor) "at a near respawn a bare body pays more than an armed, armoured one, never below the floor")
+    (is (> sword floor) "a sword alone still pays the hurt of the spawns it fights")))
 
 (deftest a-kit-s-dark-factor-is-worked-out-once-while-the-settings-stay
   (let [kit {:weapon "stone_sword" :equipment nil :health 13}
@@ -504,8 +506,8 @@
     (is (= 0 (cost/spawns-hurt body 0 nil)) "no spawns take nothing")))
 
 (deftest a-lit-way-pays-its-seconds-once-and-its-torches-and-a-dark-one-its-spawns-over-its-seconds
-  (let [bare {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}}
-        armed {:weapon "iron_sword" :equipment iron-set :respawn spawn-far :at {:x 0 :y 64 :z 0}}
+  (let [bare {:weapon nil :equipment nil}
+        armed {:weapon "iron_sword" :equipment iron-set}
         n cost/torch-gap
         dark (fn [s kit] (settings/with-settings {:jobs.lib.cost.value/per-dark 0.3} #(cost/dark-way-s s n kit)))]
     (is (= 100 (- (cost/lit-way-s 100 n nil) (cost/lit-way-s 0 n nil))) "the seconds a lit way takes to dig bear no dark price")
@@ -526,7 +528,7 @@
     (is (= :dark (:way (cost/dark-or-lit 50 nil))) "a job that hangs no torches stays dark")))
 
 (deftest an-unseen-way-is-priced-by-how-often-the-seen-ways-near-it-go-on
-  (let [kit {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}}
+  (let [kit {:weapon nil :equipment nil}
         open {:k 98 :n 100}
         closed {:k 50 :n 100}]
     (is (= 0.5 (cost/way-on-chance {:k 0 :n 0})) "nothing seen: the uniform prior")
@@ -537,7 +539,7 @@
     (is (= 0.6 (cost/way-on-chance {:k 100 :n 100 :under? :unknown})) "unknown never takes the open ground's near-certain way on")
     (is (> (cost/unseen-share closed kit) (cost/unseen-share open kit) (cost/dark-factor kit))
         "seen dead ends round it make an unseen way dearer, open ground cheaper, never below a dark cell's price")
-    (is (< (cost/unseen-share open {:weapon "iron_sword" :equipment iron-set :respawn spawn-far :at {:x 0 :y 64 :z 0}}) (cost/unseen-share open kit)) "an armed, armoured body fears the dark less")
+    (is (< (cost/unseen-share open {:weapon "iron_sword" :equipment iron-set}) (cost/unseen-share open kit)) "an armed, armoured body fears the dark less")
     (is (< 0 (cost/dead-end-cost open 30) (cost/dead-end-cost closed 30) 30) "the chasers met on the way back, at the dead end's chance")))
 
 (deftest a-dead-end-costs-the-walk-back-out-priced-smoothly-by-the-race-on-it

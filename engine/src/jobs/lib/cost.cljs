@@ -239,12 +239,15 @@
 
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): value/dark-factor, the
-  floor; with a kit {:weapon :equipment :health :food :at} the hurt of a mob spawned beside it (spawns-hurt) times
-  spawn-rate at the kit's :at height (the feet's 16-block floor) and hp-seconds on top: a bare body pays more than an
-  armed, armoured one (by-kit)."
+  floor; with a kit {:weapon :equipment :health :food :at} the hurt of a mob spawned beside it (spawns-hurt, at hp-seconds)
+  and the death it risks (answer/route-death-cost of one spawn), times spawn-rate at the kit's :at height (the feet's
+  16-block floor), on top: a bare body pays more than an armed, armoured one at the same respawn (by-kit)."
   ([] (value/dark-factor))
   ([kit] (by-kit ::dark-factor
-                 #(+ (value/dark-factor) (* (answer/spawns-hurt % 1 nil) (value/spawn-rate (get-in % [:at :y])) (health/walk-hp-seconds)))
+                 #(+ (value/dark-factor)
+                     (* (value/spawn-rate (get-in % [:at :y]))
+                        (+ (* (answer/spawns-hurt % 1 nil) (health/walk-hp-seconds))
+                           (answer/route-death-cost % {:spawns 1} nil))))
                  kit)))
 
 (defn unseen-cell-share
