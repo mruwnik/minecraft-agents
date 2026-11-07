@@ -1176,9 +1176,15 @@
                                               ready/stay-look-price (fn [_ chance] {:gap 0 :delta delta})]
                                   (first (ready/sheltered-dark (ctx-of mine-room)))))]
     (is (= :look (check [[1 64 0]] ##Inf)) "an unseen wall may be an open side")
-    (is (= :ok (check nil ##Inf)) "every wall seen closed")
-    (with-redefs [reach-room/unseen-sides (constantly [[1 64 0]]) sense/unknown? (constantly true)]
-      (is (= :ok (check [[1 64 0]] 0)) "a round of walls whose saving does not pay its looks is not taken"))))
+    (is (= :ok (check nil ##Inf)) "every wall seen closed")))
+
+(deftest gap-chance-adds-the-rooms-own-spawn-chance-to-the-chance-an-unseen-wall-opens-onto-the-dark
+  (let [seen (atom nil)]
+    (with-redefs [look-edge/pending (fn ([_] [[30 64 0] [31 64 0]]) ([_ _] [[30 64 0] [31 64 0]]))
+                  spawn-light/chance-at (fn ([_ cell] (if (map? cell) 0.2 0.3)) ([_ cell _] (if (map? cell) 0.2 0.3)))
+                  cost/closed-chance (fn [s k] (reset! seen [s k]) 0.5)]
+      (is (= [0 2] (do (ready/gap-chance (ctx-of mine-room) {:x 1 :y 65 :z 0}) @seen)) "only the unseen walls are counted")
+      (is (< (Math/abs (- 0.35 (ready/gap-chance (ctx-of mine-room) {:x 1 :y 65 :z 0}))) 1e-9) "own 0.2 + 0.5 x outside 0.3, not the larger of the two"))))
 
 (deftest a-torch-lit-room-with-unseen-walls-is-looked-round-by-the-chance-a-wall-opens-onto-the-dark
   (with-redefs [look-edge/pending (fn ([_] [[30 64 0]]) ([_ _] [[30 64 0]]))

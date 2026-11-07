@@ -667,14 +667,14 @@
 
 (defn gap-chance
   "The spawn chance per second a stay in the room round the body at `feet` rests on while its walls are unseen: the room's
-  own, or the chance an unseen wall holds a gap (cost/closed-chance of that many unseen) times that of the dark outside
-  it (spawn-light/chance-at the unseen cell), the larger: a torch-lit room still lets a mob in through a gap."
+  own plus the chance an unseen wall holds a gap (cost/closed-chance of that many unseen) times that of the dark outside
+  it (spawn-light/chance-at the unseen cell): the two are rates of separate processes, so they add; a torch-lit room still lets a mob in through a gap."
   [c feet]
   (let [p (:primitives c)
         sides (seq (look-edge/pending c (sense/round-looked c)))
         outside (reduce max 0 (map #(spawn-light/chance-at p % false) sides))]
-    (max (spawn-light/chance-at p feet false)
-         (* (- 1 (cost/closed-chance 0 (count sides))) outside))))
+    (+ (spawn-light/chance-at p feet false)
+       (* (- 1 (cost/closed-chance 0 (count sides))) outside))))
 
 (defn sheltered-dark
   "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) or in its own night shelter and a way

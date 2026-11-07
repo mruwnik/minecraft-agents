@@ -15,4 +15,11 @@
    :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "sugar_cane"} 20] [:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 32})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
+   :after [[:block [10 0 15] "sugar_cane"] [:item "sugar_cane" 0]]},
+  {:name "torch-lit-hut-unseen-walls-are-looked-at-before-the-hut-is-left"
+   ;; a torch lights the room (its own spawn chance 0): the unseen west walls may still hold a gap onto the dark, so the look round still comes first and the body waits instead of walking out
+   :blocks [[:set [3 1 19] "torch"]]
+   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "sugar_cane"} 20] [:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 32})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:block [10 0 15] "sugar_cane"] [:item "sugar_cane" 0]]}]}
