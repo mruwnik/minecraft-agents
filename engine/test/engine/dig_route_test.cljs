@@ -521,3 +521,14 @@
     (is (= [] (own-cut-floors way)) "the way through those cells stands on no floor it dug")
     (is (= [] (remove #(< (js/Math.abs (- (:seconds %) (:seconds way))) 1e-9) answers)) (str "each bound finds its price, " (:seconds way) " s"))
     (is (= [[] [] []] (map own-cut-floors answers)))))
+
+(deftest a-cell-read-open-at-a-height-the-rise-bound-read-closed-is-read-as-never-seen
+  ;; open-ys is the memory as the search began: a cell seen open since, at a height it held none at, would make a rise
+  ;; there cut-free while the bounds price it a stair's step
+  (let [opts {:dig-s (constantly 0.5) :step-s 0.3 :stair-s 3 :open-ys #js [10 11] :margin 2}
+        rock (fn [open] (fn [[_ y _ :as c]] (cond (open c) "air" (< y 30) "stone" :else "air")))
+        own #{[0 10 0] [0 11 0]}
+        seen (dr/route (rock (conj own [2 12 0])) [0 10 0] [4 14 0] opts)
+        never (dr/route (rock own) [0 10 0] [4 14 0] opts)]
+    (is (seq (:dig never)))
+    (is (= (select-keys never [:seconds :dig]) (select-keys seen [:seconds :dig])))))
