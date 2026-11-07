@@ -3,6 +3,7 @@
   body feels, sees or remembers, never from the raw blockAt: behind stone a cell is unknown, a dig lays it open. The
   primitives are wrapped; their blockAt throws."
   (:require [cljs.test :refer [deftest is are async]]
+            [clojure.string :as str]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.go-to-support :as gts]
@@ -1191,6 +1192,14 @@
     (is (true? (shut? (wworld/unknown-spec))) "buried: the unseen rock is rock")
     (is (false? (no-guess #(shut? (wworld/unknown-spec)))) "no rock guess: unseen cells are open, as the plans read them")
     (is (true? (no-guess #(shut? looked))) "walls looked at and not seen read stone, as the plans read them")))
+
+(deftest a-shut-in-verdict-over-the-rock-guess-keeps-the-floods-that-settle-it
+  ;; the guess is a fresh fn each ask, so its own flood is never kept: the keyword floods bounding it are (a quote asks it every time)
+  (let [{:keys [p w]} (sensed-only {:self {:pos {:x 0.5 :y 55 :z 0.5}} :blocks (dissoc (box -8 50 -8 8 60 8 "stone") "0,55,0" "0,56,0")})
+        keys-kept #(filter (fn [k] (str/starts-with? k "enclosed|")) (js/Array.from (.keys ^js (.-roomMemo ^js (:st (aget w "perception"))))))]
+    (swap! (fake/state p) assoc :light-default [0 0])
+    (is (true? (escape/walk-enclosed? {:primitives w :args {} :unknown (wworld/unknown-spec)})))
+    (is (seq (keys-kept)) "a verdict over the rock guess leaves a kept flood")))
 
 (deftest a-walk-spec-spares-the-cells-round-the-goal-from-the-rock-guess
   (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 55 :z 0.5}} :blocks (dissoc (box -8 50 -8 8 60 8 "stone") "0,55,0" "0,56,0")})

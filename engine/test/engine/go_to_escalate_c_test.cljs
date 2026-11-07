@@ -1770,15 +1770,21 @@
     (.setOwner (:primitives eng) "tx")
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
       (fn []
-        (is (= :budget (choose/dig-price c [38 64 0])) "a slice spent: not known, no estimate to wait on")
-        (is (= :budget (choose/dig-price c [38 64 0])))
+        (is (= :budget (choose/dig-price c [38 64 0] nil)) "a slice spent: not known, no estimate to wait on")
+        (is (= :budget (choose/dig-price c [38 64 0] nil)))
         (is (empty? @choose/kept-routes) "nothing is kept: asked at no time cost, a kept search would grow with every quote")))))
+
+(deftest a-dig-quote-bounded-by-the-walk-on-ends-nil-when-every-dig-costs-more
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+    (.setOwner (:primitives eng) "tx")
+    (is (nil? (choose/dig-price c [38 64 0] 0.1)) "dearer than walking on: priced and dropped, not :budget")))
 
 (deftest a-dig-quote-of-no-running-call-that-ended-keeps-no-search
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
     (.setOwner (:primitives eng) "tx")
-    (is (not= :budget (choose/dig-price c [4 64 0])) "the search ended within its slice")
+    (is (not= :budget (choose/dig-price c [4 64 0] nil)) "the search ended within its slice")
     (is (empty? @choose/kept-routes) "an ended quote's answer is not kept under the job's quote key")))
 
 (deftest a-dig-quote-of-a-running-call-goes-on-searching
@@ -1788,7 +1794,7 @@
     (ctx/update-mem! c assoc :route-owner "j9")
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
       (fn []
-        (is (= :searching (choose/dig-price c [38 64 0])) "the call's search goes on at its next quote")
+        (is (= :searching (choose/dig-price c [38 64 0] nil)) "the call's search goes on at its next quote")
         (is (seq (get @choose/kept-routes "j9")))
         (choose/forget-routes! "j9")))))
 
@@ -1800,7 +1806,7 @@
     (.setOwner (:primitives eng) "tx")
     (ctx/update-mem! c assoc :guess-looks {:placed {:all 3 :bad 3}} :spent-routes #{[1 2]})
     (with-redefs [choose/dig-way (fn [p from goal may-dig? opts] (reset! seen opts) (real p from goal may-dig? opts))]
-      (choose/dig-price c [10 64 0]))
+      (choose/dig-price c [10 64 0] nil))
     (let [feet (vec (map #(js/Math.floor %) [0 64 0]))
           way (choose/way-opts c feet false nil)]
       (is (every? #(contains? @seen %) [:spent :own-s :risk-s :guess-risk :worth-s]) (pr-str (keys @seen)))

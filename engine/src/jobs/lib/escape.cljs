@@ -199,7 +199,15 @@
   plans read (wworld/unseen-kind): the verdict must agree with the way the walk could not find."
   ([c] (walk-enclosed? (:primitives c) (:args c) (:unknown c)))
   ([p args spec]
-   (enclosed? p (some-> (:doors args) keyword) (wworld/unseen-kind p (when-not (false? (:unknown args)) (or spec #js {}))))))
+   (let [doors (some-> (:doors args) keyword)
+         unseen (wworld/unseen-kind p (when-not (false? (:unknown args)) (or spec #js {})))]
+     (if (keyword? unseen)
+       (enclosed? p doors unseen)
+       ;; the rock guess reads each unseen cell between :ground and :solid and a flood only grows with open cells, so
+       ;; the two kept verdicts settle it unless they differ; the guess is a fresh fn each call, its own flood never kept
+       (cond (not (enclosed? p doors :solid)) false
+             (enclosed? p doors :ground) true
+             :else (enclosed? p doors unseen))))))
 
 (defn shut-in-blockers
   "The solid cells [[x y z]] that keep the best step up out of the body's walkable room from being a step: of every wall

@@ -1048,15 +1048,17 @@
   way walked as a quote prices it, and no more than the call's worth; nil when the call may not dig a route or none is found.
   A running call (route-owner) has its search go on, :searching, at its next quote; a quote of no running call asks one
   slice and gets :budget when that spent its nodes (no search is kept: each quote ask would otherwise grow it for ever, at
-  no time spent). A quote asks this when the walk's planner found no walk."
-  [c goal]
+  no time spent). A quote asks this when the walk's planner found no walk. walk-s, given when that walk was cut by its
+  budget (a partial to walk on): a dig route dearer than walking on is no use, so the search ends by that price (nil)."
+  [c goal walk-s]
   (when (ways/way? c :dig-route)
     (let [p (:primitives c)
           feet (end/feet-cell c)
           owner (:route-owner (ctx/mem c))
           quote-id (str (:id c) "/quote")
           slice (route-slice (or owner quote-id))
-          opts (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :read-s (cost/search-read-s))
+          opts (cond-> (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :read-s (cost/search-read-s))
+                 walk-s (update :bound-s min walk-s))
           e (dig-way p feet goal (may-dig-fn c) opts)]
       (keep-routes! slice)
       (when-not owner (forget-routes! quote-id))
