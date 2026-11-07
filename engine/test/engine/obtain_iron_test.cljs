@@ -295,9 +295,10 @@
           (is (= 1 (get (f/inv s) "stone_pickaxe")) "made at its price"))))))
 
 (deftest a-table-fetch-whose-logs-wait-out-the-night-waits-once-and-is-not-restarted
+  ;; a dear death: a body with nothing to lose near its bed walks the night out for the logs (Q145)
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (let [s (f/start (assoc (ore-world (merge f/tree-blocks {"0,66,0" "stone"}) []) :time st/night) [f/own-zone])]
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
@@ -307,7 +308,21 @@
           (await (f/run-ticks s 30))
           (is (= [:exposed] (distinct (map :reason (f/events-of s :waiting)))) "harvest-wood judges the tree it walks to, not the room")
           (is (= 1 (count (f/events-of s :waiting))) "one wait, not one per round")
-          (is (empty? (filter #(= :stopped (:kind %)) @(:seen s)))))))))
+          (is (empty? (filter #(= :stopped (:kind %)) @(:seen s)))))))))))
+
+(deftest a-stone-pickaxe-at-night-with-a-cheap-death-goes-on-to-the-stone-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[s rounds] (stub-mine (f/start (assoc (ore-world (merge f/tree-blocks {"1,64,4" "stone" "2,64,4" "stone" "3,64,4" "stone" "1,64,2" "crafting_table"}) []) :time st/night) [f/own-zone]))]
+          (look-round! s)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (await (f/run-ticks s 60))
+          (is (empty? (f/events-of s :waiting)) "a cheap death does not wait the night out")
+          (is (zero? (get (f/inv s) "stone_pickaxe" 0)))
+          (is (= 1 (get (f/inv s) "wooden_pickaxe" 0)) "the logs were fetched at night and made into the pickaxe")
+          (is (pos? @rounds) "the stone is gathered: the mine child ran")
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :stopped)))))))))
 
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
