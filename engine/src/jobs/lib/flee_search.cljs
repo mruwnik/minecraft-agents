@@ -86,7 +86,7 @@
 
 (defn timed-cells
   "The cells {:x :y :z :t :g} of planner steps, :t the seconds into the route: its seconds spread over its length, plus
-  cost/flee-stop-s for each ::step-s walked before (a flight stops to choose its next step); :g the planner's price to the cell."
+  cost/flee-stop-s for each ::step-s walked before (a flight stops to choose its next step), :stops how many; :g the planner's price to the cell."
   [steps seconds]
   (let [cells (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s) :g (.-g s)}) steps)
         legs (map u/dist cells (rest cells))
@@ -94,9 +94,16 @@
         at (reductions + 0 legs)
         step (settings/get settings ::step-s)
         stop (cost/flee-stop-s)]
-    (mapv (fn [cell d] (let [walk (if (pos? total) (* seconds (/ d total)) 0)]
-                         (assoc cell :t (+ walk (* stop (js/Math.floor (/ walk step)))))))
+    (mapv (fn [cell d] (let [walk (if (pos? total) (* seconds (/ d total)) 0)
+                             stops (js/Math.floor (/ walk step))]
+                         (assoc cell :t (+ walk (* stop stops)) :stops stops)))
           cells at)))
+
+(defn unstopped
+  "Timed cells (timed-cells) re-timed as one walk with no stops between steps (a cover end is walked to whole)."
+  [cells]
+  (let [stop (cost/flee-stop-s)]
+    (mapv #(-> % (update :t - (* stop (:stops % 0))) (dissoc :stops)) cells)))
 
 (defn pace
   "How much longer than the planner's seconds a flight's steps take on a route: the planner times the gait the body's food
@@ -476,12 +483,12 @@
 
 (defn covers
   "Ends on the routes of scored where cover first holds (covered?: a cell -> whether it is out of every ranged mob's line
-  of fire): each route cut there and scored again against chasers, its dead end against the ways of ends, :cover? true."
+  of fire): each route cut there, timed with no stops (unstopped: walked whole) and scored again against chasers, its dead end against the ways of ends, :cover? true."
   [chasers from covered? ends]
   (scored chasers from
           (keep (fn [{:keys [cells s price priced dead-end] :as e}]
                   (when-let [i (first (keep-indexed #(when (and (pos? %1) (covered? (select-keys %2 [:x :y :z]))) %1) cells))]
-                    (let [part (subvec cells 0 (inc i))
+                    (let [part (unstopped (subvec cells 0 (inc i)))
                           share (if (pos? s) (/ (:t (peek part)) s) 1)]
                       (assoc e :end (select-keys (peek part) [:x :y :z]) :cells part :cover? true :found? true :open? true
                                :s (:t (peek part)) :price (* share (- price dead-end)) :priced (* share priced)))))

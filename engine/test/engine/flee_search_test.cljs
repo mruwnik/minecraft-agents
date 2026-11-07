@@ -255,6 +255,15 @@
     (is (pos? (get (cover-at {:x 4 :y 64 :z 0}) {:x 4 :y 64 :z 0})) "the cover lies past the unseen cell")
     (is (zero? (get (cover-at {:x 1 :y 64 :z 0}) {:x 1 :y 64 :z 0})) "the cover lies in what the body has seen")))
 
+(deftest a-cover-is-timed-as-one-walk-without-the-stops-between-flight-steps
+  ;; a flight walks to a cover end whole (step-of), so the stops timed-cells puts on the way's route are not made there
+  (let [from {:x 0.5 :y 64 :z 0.5}
+        cells (search/timed-cells (mapv (fn [x] #js {:x x :y 64 :z 0 :g 0}) (range 5)) 4)
+        ends (search/scored [] from [(assoc east :cells cells :s (:t (peek cells)) :seen-n 5)])
+        [cover] (search/covers [] from #(= {:x 3 :y 64 :z 0} %) ends)]
+    (is (< 3 (:t (nth cells 3))) "the way's route stops as it goes")
+    (is (= 3 (:s cover)) "a second a cell, no stop")))
+
 (def field (box -32 63 -32 32 63 32 "stone"))
 
 (deftest a-chaser-faster-than-the-flight-catches-every-way-away
