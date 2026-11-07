@@ -258,7 +258,7 @@
         body (assoc (hostile/body-of c) :meet (mapv #(.-name %) hostiles))
         at (u/self-pos c)
         answer #(cost/cover-answer {:equipment equipment :mobs mobs} (merge (exits-of c) %))
-        death (cost/meet-death body at)
+        death (cost/meet-death-fn body at)
         price #(cost/answer-price* body (answer %) at death)
         cheaper (fn [ways] (some->> (keep specs ways) seq (apply min-key price)))
         pillar (when (open? :pillar) (if given (:pillar given) (pillar-cover c hostiles)))]

@@ -109,6 +109,7 @@
 (def answer-price answer/answer-price)
 (def answer-price* answer/answer-price*)
 (def meet-death answer/meet-death)
+(def meet-death-fn answer/meet-death-fn)
 (def counted-chance value/counted-chance)
 (def decide answer/decide)
 (def look-answer glance/look-answer)

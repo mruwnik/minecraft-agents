@@ -187,7 +187,11 @@
         hurt (assoc bed :health 18 :food 16)
         price (fn [b] (cost/answer-price b {:damage 100 :hit 5 :blasts [100] :seconds 1} here))]
     (is (< 0 (death/death-cost hurt here) (death/death-cost bed here)) "dearer than nothing, cheaper than the healed one's")
-    (is (< (price hurt) (price bed)) "the answer that ends in a death is priced with the refill")))
+    (is (< (price hurt) (price bed)) "the answer that ends in a death is priced with the refill")
+    (is (< (js/Math.abs (- (+ 1 1 (death/death-cost (assoc hurt :health 20) here))
+                           (cost/answer-price hurt {:damage 0 :seconds 1 :then [{:damage 100 :hit 5 :blasts [100] :seconds 1}]} here)))
+           0.01)
+        "a death in what follows, met healed, refills no hp: priced at the health of that round")))
 
 (deftest a-creepers-blast-costs-what-it-breaks-about-the-body-on-top-of-its-hurt
   (is (< 0.6 (answer/blast-break-chance 1 6) 0.8) "stone a block off: most of the blast's strengths break it")

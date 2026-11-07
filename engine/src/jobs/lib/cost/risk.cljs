@@ -92,31 +92,26 @@
   [health]
   (heal-s health))
 
-(defn death-at
-  "Seconds a death costs a body at health h: (death h) for a fn (a respawn refills less the more healed, cost.death/refill-s), else death."
-  [death h]
-  (if (fn? death) (death h) death))
-
 (defn hurry-s
   "Seconds going now to a job's work of category costs a body at health over going healed (at 20): work-price-s at both, over
-  `seconds` (default stay-of at health), its death at each (death-at), plus (present h), what the dangers about the body
+  `seconds` (default stay-of at health), its death at each (answer/death-at), plus (present h), what the dangers about the body
   cost it at health h (nil: none)."
   [health category death {:keys [seconds present]}]
   (let [s (or seconds (stay-of category health))
-        at #(+ (work-price-s category % (death-at death %) s) (if present (present %) 0))]
+        at #(+ (work-price-s category % (answer/death-at death %) s) (if present (present %) 0))]
     (- (at health) (at 20))))
 
 (defn too-hurt?
   "Whether a body at health should heal before a job's work of category (:long, a mine's or a build's; :heal, the riskiest
   work over the heal wait, for a caller with no job): going now costs more over going healed (hurry-s, opts :seconds
-  :present) than the heal wait does (heal-wait-s). `death` seconds a death costs (cost/death-s), or a fn of the health (death-at)."
+  :present) than the heal wait does (heal-wait-s). `death` seconds a death costs (cost/death-s), or a fn of the health (answer/death-at)."
   ([health category death] (too-hurt? health category death nil))
   ([health category death opts]
    (> (hurry-s health category death opts) (heal-wait-s health))))
 
 (defn averted-fn
   "fn of a health h: the seconds of death the hp from h to h + 1 averts on the riskiest work over the heal wait from health
-  (work-death-chance of :heal), at `death` seconds (death-at)."
+  (work-death-chance of :heal), at `death` seconds (answer/death-at)."
   [health death]
   (let [s (stay-of :heal health)]
-    (fn [h] (* (death-at death h) (- (work-death-chance :heal h s) (work-death-chance :heal (inc h) s))))))
+    (fn [h] (* (answer/death-at death h) (- (work-death-chance :heal h s) (work-death-chance :heal (inc h) s))))))

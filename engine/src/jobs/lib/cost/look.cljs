@@ -125,7 +125,7 @@
   the look's price (its blows and seconds, and the outcomes paid at the health they leave). 0 value when the look
   changes nothing; decide takes the look exactly when the value is over the cost."
   [body now {:keys [outcomes] :as look} at]
-  (let [death (death/death-cost body at)
+  (let [death #(death/death-cost (assoc body :health %) at)
         price #(answer/answer-price* body % at death)
         best (apply min (map price (filter some? (vals now))))
         after (reduce + (map (fn [[chance a]] (* chance (price a))) outcomes))]
