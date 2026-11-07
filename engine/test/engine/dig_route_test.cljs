@@ -629,15 +629,15 @@
             :unseen-digs tiers :unseen-dig-s (first (:any tiers)) :read-s (cost/search-read-s) :back-h? true :prior-h? true}}))
 
 (deftest a-seeded-search-answers-with-the-seed-s-route-once-its-cpu-passes-the-search-ceiling
-  ;; Q141: about 100 ms a search. The proof that no cheaper way is left read 240k cells here (3.5 s); past dr/answer-s the
-  ;; route in hand answers
+  ;; Q141: about 100 ms a search. The proof that no cheaper way is left read 240k cells here (3.5 s), the band round the
+  ;; seed alone 6.8k; the seed's own cells are a route in hand at once, and past dr/answer-s the cheapest in hand answers
   (let [{:keys [at from goal opts]} deep-drop
         seed (dr/walk-then-stair from goal 3)
-        band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
-        [way _ way-reads] (to-end (dr/search at from goal (assoc opts :only band)))
+        [lane _ lane-reads] (to-end (dr/search at from goal (assoc opts :only (cons from seed))))
         [seeded _ reads] (to-end (dr/seeded-search at from goal (assoc opts :seed seed)))]
-    (is (= (:seconds way) (:seconds seeded)))
-    (is (< reads (+ way-reads (/ dr/answer-s (cost/search-read-s)))) (str reads " cells read, the seed's way " way-reads))))
+    (is (seq (:dig lane)))
+    (is (<= (:seconds seeded) (:seconds lane)))
+    (is (< reads (+ lane-reads (/ dr/answer-s (cost/search-read-s)))) (str reads " cells read, the seed's lane " lane-reads))))
 
 (defn holed-climb
   "Stone below y 30 with about one cell in eight air round a climb from [0 10 0], seeded: [block-at goal]."

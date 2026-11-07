@@ -243,6 +243,8 @@
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
         only-keys (when only (let [s (js/Set.)] (doseq [[x y z] only] (.add s (key x y z))) s))
+        ;; the columns of only's cells: a step into any other is refused unread
+        only-cols (when only (let [s (js/Set.)] (doseq [[x _ z] only] (.add s (key x fy z))) s))
         ;; without a body's own, the drops a body with no hp to spend takes
         max-fall (or (:max-fall opts) (:max-drop (armour/fall-profile {})))
         fall-prices (let [a #js []] (dotimes [dy (inc max-fall)] (.push a (if (and fall-s (pos? dy)) (fall-s dy) 0))) a)
@@ -508,29 +510,31 @@
                                    (relax! ck node acc nx ny nz move
                                            (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
                                            face-s))))]
-                    (when-let [pf (and pillar-s (placeable mx my mz))]
+                    (when-let [pf (and pillar-s (or (nil? only-keys) (.has only-keys (key mx (inc my) mz))) (placeable mx my mz))]
                       (try! mx (inc my) mz :pillar (pillar-at node mx my mz) true 0 1 (= :unseen pf)))
                     (loop [i 0]
                       (when (< i 8)
-                        (let [nx (+ mx (aget dirs i)) nz (+ mz (aget dirs (inc i)))
-                              ny (inc my) ^js f (at nx my nz)
-                              dug? (and (.-floor f) (refused? ck nx my nz))]
-                          ;; up: the head cell over m, n and its head
-                          (cond
-                            (and (.-floor f) (not dug?)) (try! nx ny nz :walk (base-s :walk) true (inc ny) ny false)
-                            (and place-s (or dug? (and (.-open f) (not (.-fluid f)))))
-                            (when-let [pf (placeable nx my nz)]
-                              (try! nx ny nz :laid (base-s :laid) true (inc ny) ny (= :unseen pf))))
-                          ;; down by up to max-fall, through the cells it falls by, and level: n and its head
-                          (loop [dy 0 clear? (and (.-open ^js (at nx (inc my) nz)) (.-open ^js (at nx my nz)))]
-                            (when (<= dy max-fall)
-                              (let [ny (- my dy)
-                                    below-open? (.-open ^js (at nx (dec ny) nz))]
-                                (when (and (.-floor ^js (at nx (dec ny) nz)) (not (refused? ck nx (dec ny) nz)))
-                                  (try! nx ny nz :walk (+ (base-s :walk) (aget fall-prices dy)) false (if (zero? dy) (inc ny) (inc my)) ny false))
-                                (when (or (< (inc dy) free-fall) (and clear? below-open?))
-                                  (recur (inc dy) (and clear? below-open?))))))
-                          (recur (+ i 2)))))))
+                        (let [nx (+ mx (aget dirs i)) nz (+ mz (aget dirs (inc i)))]
+                          (if (and only-cols (not (.has only-cols (key nx fy nz))))
+                            (recur (+ i 2))
+                            (let [ny (inc my) ^js f (at nx my nz)
+                                  dug? (and (.-floor f) (refused? ck nx my nz))]
+                              ;; up: the head cell over m, n and its head
+                              (cond
+                                (and (.-floor f) (not dug?)) (try! nx ny nz :walk (base-s :walk) true (inc ny) ny false)
+                                (and place-s (or dug? (and (.-open f) (not (.-fluid f)))))
+                                (when-let [pf (placeable nx my nz)]
+                                  (try! nx ny nz :laid (base-s :laid) true (inc ny) ny (= :unseen pf))))
+                              ;; down by up to max-fall, through the cells it falls by, and level: n and its head
+                              (loop [dy 0 clear? (and (.-open ^js (at nx (inc my) nz)) (.-open ^js (at nx my nz)))]
+                                (when (<= dy max-fall)
+                                  (let [ny (- my dy)
+                                        below-open? (.-open ^js (at nx (dec ny) nz))]
+                                    (when (and (.-floor ^js (at nx (dec ny) nz)) (not (refused? ck nx (dec ny) nz)))
+                                      (try! nx ny nz :walk (+ (base-s :walk) (aget fall-prices dy)) false (if (zero? dy) (inc ny) (inc my)) ny false))
+                                    (when (or (< (inc dy) free-fall) (and clear? below-open?))
+                                      (recur (inc dy) (and clear? below-open?))))))
+                              (recur (+ i 2)))))))))
         start-key (key fx (from 1) fz)
         route-to (fn [ck]
                    (let [ks (vec (reverse (take-while some? (iterate #(aget (.get best %) 3) ck))))
@@ -576,7 +580,7 @@
                           (.set best start-key start-node)
                           (heap-push! queue #js [(heuristic fx fy fz) 0 start-key])
                           nil))))
-        ended (fn [] (if (<= (aget incumbent 0) @max-s) (checked (aget incumbent 1)) (priced {:problem :dearer})))
+        ended (fn [] (if (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s)) (checked (aget incumbent 1)) (priced {:problem :dearer})))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too, a stair's step when it cuts; down: the cell entered; a pillar: the cell over the head), up and a
@@ -598,7 +602,7 @@
         ;; the end cells of a range search, nearest the start first: one enters the back search only once its bound is the
         ;; cheapest there (a farther one cannot change what is popped before), so the block reads of the many stay unread
         seeds (volatile! ())
-        back-over (volatile! false)
+        back-over (volatile! (some? only-keys))
         back-relax! (fn [g x y z]
                       (let [k (key x y z) old (.get back-best k)]
                         (when (and (not (.has back-done k)) (or (nil? old) (< g old)))
@@ -775,31 +779,56 @@
           (recur nx ny nz zig (conj out [nx ny nz])))))))
 
 (defn seeded-search
-  "search, but the cheapest route through the feet cells of :seed and their neighbours (one across, up or down) is
-  searched for first and the whole search proves on only while that pays: bounded by that route's price, its CPU counted
-  as spent (with :read-s, the proof goes on while what it spent stays under that price less its bound, and within answer-s). The seed's
-  route is the answer when the proof ends dearer, too big or boxed. A fn of n as search's, n counting both searches' cells."
-  [block-at from goal {:keys [seed max-s] :as opts}]
+  "search, but first along the feet cells of :seed alone (the lane), then through them and their neighbours (one across,
+  up or down: the band), and only then everywhere: each search bounded by the cheapest route the ones before found (its
+  price :max-s and :held-s, so past answer-s it answers with that route or its own cheaper one) and their CPU counted as
+  spent. With :read-s a lane or band with no answer once the CPU spent passes answer-s is left for the next. The cheapest
+  route found is the answer when the last ends dearer, too big or boxed. A fn of n as search's, n counting every search's cells."
+  [block-at from goal {:keys [seed max-s read-s searched-s] :as opts}]
   (let [opts (dissoc opts :seed)
         band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
-        first-way (search block-at from goal (assoc opts :only band))
-        found (volatile! nil)
-        whole (delay (let [b @found]
-                       (search block-at from goal (cond-> opts
-                                                    (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)) :held-s (:seconds b))
-                                                    (:searched-s b) (assoc :searched-s (:searched-s b))))))]
+        stages [(assoc opts :only (cons from seed)) (assoc opts :only band) opts]
+        last-stage (dec (count stages))
+        cell-s (when read-s (cost/search-cell-s))
+        best (volatile! nil)
+        ;; the CPU the searches before the running one spent, and the cells it expanded and read so far
+        searched (volatile! (or searched-s 0))
+        cells (volatile! 0) reads (volatile! 0)
+        spent (fn [] (+ @searched (if read-s (max (* read-s @reads) (* cell-s @cells)) 0)))
+        runs #js []
+        stales #js []
+        begin! (fn [i] (let [b @best]
+                         (vreset! cells 0) (vreset! reads 0)
+                         (.push runs (search block-at from goal (cond-> (assoc (nth stages i) :searched-s @searched)
+                                                                  (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)) :held-s (:seconds b)))))))
+        stale? (fn [] (.some stales #(%)))]
     (fn run
       ([n] (run n nil))
       ([n max-s']
-       (let [[b be b-stale? br] (first-way (if @found 0 n) max-s')]
-         (if-not b
-           [nil be b-stale? br]
-           (let [_ (vreset! found b)
-                 [a e stale? r] (@whole (max 1 (- n be)) max-s')
-                 a (if (and a (:dig b) (not (:dig a)) (or (nil? max-s') (<= (:seconds b) max-s')))
-                     (cond-> b (:searched-s a) (assoc :searched-s (:searched-s a)))
-                     a)]
-             [a (+ e be) (fn [] (or (b-stale?) (stale?))) (+ r br)])))))))
+       (loop [n n e 0 r 0]
+         (when (zero? (alength runs)) (begin! 0))
+         (let [i (dec (alength runs))
+               first? (< i last-stage)
+               ;; a lane or band runs on no further than answer-s
+               n' (if (and first? read-s) (min n (max 1 (js/Math.ceil (/ (- answer-s (spent)) cell-s)))) n)
+               [a ae st ar] ((aget runs i) n' max-s')
+               e (+ e ae) r (+ r ar)]
+           (aset stales i st)
+           (vswap! cells + ae) (vswap! reads + ar)
+           (cond
+             (and (nil? a) (or (not first?) (not read-s) (< (spent) answer-s)))
+             (if (and (< n' n) (pos? ae)) (recur (- n ae) e r) [nil e stale? r])
+             first?
+             (do (vreset! searched (or (:searched-s a) (spent)))
+                 (when (and (:dig a) (or (nil? @best) (< (:seconds a) (:seconds @best)))) (vreset! best a))
+                 (begin! (inc i))
+                 (recur (max 1 (- n ae)) e r))
+             :else
+             (let [b @best
+                   a (if (and (:dig b) (not (:dig a)) (or (nil? max-s') (<= (:seconds b) max-s')))
+                       (cond-> b (:searched-s a) (assoc :searched-s (:searched-s a)))
+                       a)]
+               [a e stale? r]))))))))
 
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
