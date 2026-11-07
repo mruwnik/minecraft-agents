@@ -108,7 +108,7 @@
 (deftest a-mob-tolls-its-meet-rate-times-its-meeting-s-price
   (let [a (answered armed "zombie")
         {:keys [shape rate]} (jobs.lib.cost.death/notice-prior "zombie")]
-    (is (= (* 0.5 (* (/ shape rate) (:price a))) (cost/threat-factor {:name "zombie"} 0.5 a)) "the first term of the met chance, at the weight")
+    (is (< (Math/abs (- (* 0.5 (* (/ shape rate) (:price a))) (cost/threat-factor {:name "zombie"} 0.5 a))) 1e-9) "the first term of the met chance, at the weight")
     (is (= (* 4 (jobs.lib.cost.health/hp-seconds)) (cost/threat-factor {:name "zombie"} 1 {:price ##Inf}) (cost/threat-factor-cap))
         "at most ::max-rate hp a second, the same cap at any health")))
 

@@ -9,7 +9,7 @@
             [jobs.lib.walk.world :as wworld]))
 
 (deftest an-hp-costs-the-food-that-heals-it-the-same-at-any-health
-  (is (= (* 1.5 6.66) (health/hp-seconds)) "6 exhaustion, 1.5 points of food or saturation at the measured field price")
+  (is (= (* 1.5 7.17) (health/hp-seconds)) "6 exhaustion, 1.5 points of food or saturation at the measured field price")
   (is (= 15 (settings/with-settings {:jobs.lib.cost.health/fill-point-s 10} health/hp-seconds)))
   (is (= (* 4.5 (health/hp-seconds)) (health/hp-cost 4.5)) "a part hp pro rata")
   (is (zero? (health/hp-cost 0)))

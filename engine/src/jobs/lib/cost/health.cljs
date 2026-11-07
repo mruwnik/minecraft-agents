@@ -16,8 +16,8 @@
 (a/defargs settings
   {::default-min-health {:default 12 :doc "Health a walk does not spend below." :spec (a/int-in 0 nil)}
    ::margin {:default 1 :doc "hp left over the floor." :spec (a/int-in 0 nil)}
-   ::fill-point-s {:default 6.66 :spec a/pos-num?
-                   :doc "Seconds a point of food or saturation (what exhaustion drains) got in the field takes: 15444.7 s of 612 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1106 points and 1214.2 saturation their food gave, 2026-11-07. Recount: node tools/event-counts.mjs food-gets (:fill-s)."}
+   ::fill-point-s {:default 7.17 :spec a/pos-num?
+                   :doc "Seconds a point of food or saturation (what exhaustion drains) got in the field takes: 15444.7 s of 612 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1106 points and 1047.2 saturation their food gave (a body hungry at 7 food eating the most points first: the bar stops at 20 and saturation at the food level), 2026-11-07. Recount: node tools/event-counts.mjs food-gets (:fill-s)."}
    ::max-scale {:default 4 :doc "The most heal-price rises near zero health." :spec (a/int-in 1 nil)}
    ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
                     :doc "Seconds a body that can heal takes to regain an hp by waiting (natural regeneration at 18+ food: 80 ticks)."}})

@@ -593,10 +593,10 @@
         spot {:x 80 :y 64 :z 5}
         hp-of #(:death-hp (estimate-unseen (with-hits c %) far-goal))]
     (is (zero? (hp-of [[3.5 spot]])) "a hit that leaves 3.5 hp is no near-death")
-    (is (pos? (hp-of [[3 spot]])))
+    (is (pos? (hp-of [[2 spot]])))
     (is (pos? (hp-of [[3.5 spot 5]])) "hungry, the same 3.5 hp is too hurt for risky work: a near-death")
     (is (= 1 (count (death-spot/recent (with-hits c (for [h (range 5 0 -1)] [h (update spot :x + h)]))))) "a fight's hits are one spot")
-    (is (= 2 (count (death-spot/recent (with-hits c [[3 spot] [3 (update spot :x + 30)]])))))))
+    (is (= 2 (count (death-spot/recent (with-hits c [[2 spot] [2 (update spot :x + 30)]])))))))
 
 (deftest a-near-death-fades-over-the-hurt-memory-ttl-and-counts-once-with-a-death
   (let [c (ready-test/ctx-of day-world)
@@ -605,7 +605,7 @@
         view (fn [hurt-ttl deaths]
                (assoc c :view (fn [] {:now now
                                       :data {:policies {:hurt {:cap 50 :ttl hurt-ttl} :deaths core/deaths-policy}
-                                             :entries {:hurt [{:t (- now 1800000) :data {:health 3 :pos spot :attacker {:name "skeleton"}}}]
+                                             :entries {:hurt [{:t (- now 1800000) :data {:health 2 :pos spot :attacker {:name "skeleton"}}}]
                                                        :deaths deaths}}})))
         weights #(mapv :weight (death-spot/recent %))]
     (is (< 0.49 (first (weights (view 3600000 []))) 0.51) "half the 1 h hurt ttl gone")
@@ -882,7 +882,7 @@
       2 (died-with "skeleton" 60000 ["iron_boots"]) 0.5544
       1 (died "zombie" 60000) 0.0049
       2 (died "creeper" 60000) 0
-      2 {:hurt [{:t (- 36000000 60000) :data {:health 3 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} 0.0049)))
+      2 {:hurt [{:t (- 36000000 60000) :data {:health 2 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} 0.0049)))
 
 (deftest a-death-spot-counts-as-lit-only-when-seen
   (let [p (:primitives (ready-test/ctx-of day-world))

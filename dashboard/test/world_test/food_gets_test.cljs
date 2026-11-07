@@ -12,7 +12,8 @@
   (let [rows (keep t/scan-line [(ended "j1" "done" 60 {"chicken" 2 "cooked_chicken" 2 "wheat_seeds" 3})
                                 (ended "j2" "dropped" 30 nil)
                                 (took "j3") (ended "j3" "done" 5 {"bread" 3})
-                                (ended "j4" "done" 10 {"beef" 1})])]
-    (is (= {:n 3 :s 100 :points 15 :point-s 6.67 :saturation 16.2 :fill-s 3.21} (t/report rows))
-        "two chickens cooked count once at 6 each (7.2 saturation), a beef at 3 (1.8), the chest call left out, the cut call's seconds kept")
+                                (ended "j4" "done" 10 {"beef" 1})
+                                (ended "j5" "done" 20 {"cooked_beef" 3})])]
+    (is (= {:n 4 :s 120 :points 39 :point-s 3.08 :saturation 36.2 :fill-s 1.6} (t/report rows))
+        "two chickens cooked count once at 6 each (7.2 saturation), a beef at 3 (1.8), the chest call left out, the cut call's seconds kept; three cooked beef from a hungry body fill the bar at the second (20 held of 38.4 saturation)")
     (is (nil? (t/report [])))))

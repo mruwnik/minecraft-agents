@@ -1,21 +1,33 @@
 (ns world-test.food-gets
   "tools/event-counts.mjs food-gets: counts the measured prior behind jobs.lib.cost.food ::field-point-s from the bodies'
   logs alone: each hungry reflex's get-food ending (any outcome, fruitless and cut ones too), its :wall-time and the
-  hunger points and saturation of the food its report yields (a raw food it cooked counted once, as the cooked), left out when the call
+  hunger points and held saturation (held-saturation: capped at the food level) of the food its report yields (a raw food it cooked counted once, as the cooked), left out when the call
   took food from a chest (food.took-from-chest: home food, not the field's). :fill-s (seconds a point of hunger or saturation, what
   exhaustion drains) is cost.health ::fill-point-s. Pure parts: scan-line, report."
   (:require [jobs.lib.foods :as foods]))
 
 (defn- field [line re] (second (re-find re line)))
 
+(defn meals
+  "The foods of yields {item count}, one name for each eaten: a raw food whose cooked food is among them counts once, as the cooked."
+  [yields]
+  (mapcat (fn [[n k]] (repeat (- k (min k (get yields (foods/cooked-of n) 0))) n))
+          (filter (comp foods/food? key) yields)))
+
 (defn yield-points
-  "Hunger points (by default; or (of item), e.g. foods/saturation) of yields {item count}: each food at its points, a raw food
-  whose cooked food is among them once, as the cooked."
+  "Hunger points (by default; or (of item), e.g. foods/saturation) of yields' meals."
   ([yields] (yield-points yields foods/points))
-  ([yields of]
-   (- (reduce + 0 (for [[n k] yields :when (foods/food? n)] (* k (of n))))
-      (reduce + 0 (for [[raw cooked] foods/cooked-of :when (and (yields raw) (yields cooked))]
-                    (* (min (yields raw) (yields cooked)) (of raw)))))))
+  ([yields of] (reduce + 0 (map of (meals yields)))))
+
+(defn held-saturation
+  "The saturation the meals of yields leave a body that starts hungry (foods/default-food) and eats the most points first: the bar
+  stops at full-food and saturation at the food level, so what overflows is lost."
+  [yields]
+  (second (reduce (fn [[food sat] n]
+                    (let [food (min foods/full-food (+ food (foods/points n)))]
+                      [food (min food (+ sat (foods/saturation n)))]))
+                  [foods/default-food 0]
+                  (sort-by (comp - foods/points) (meals yields)))))
 
 (defn scan-line
   "{:call [gen job] :chest? true} of a food.took-from-chest line, {:call :s :points} of a hungry get-food ending, else nil
@@ -30,7 +42,7 @@
       {:call (call)
        :s (js/parseFloat (or (field line #":wall-time ([\d.]+)") "0"))
        :points (yield-points @yields)
-       :saturation (yield-points @yields foods/saturation)})))
+       :saturation (held-saturation @yields)})))
 
 (defn report
   "{:n :s :points :point-s :saturation :fill-s} of the scanned rows' endings whose call took nothing from a chest, nil with none."

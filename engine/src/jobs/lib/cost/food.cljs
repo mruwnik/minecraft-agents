@@ -24,8 +24,8 @@
 (def points-per-s "Hunger points a second: points-per-day over day-s." (/ points-per-day day-s))
 
 (a/defargs settings
-  {::field-point-s {:default 13.61 :spec (a/num-in 0 nil)
-                    :doc "Seconds a hunger point of food got in the field takes (a hunt, crops, a cook): 15783 s of 746 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1160 points their food gave, 2026-10-30. Recount: node tools/event-counts.mjs food-gets (:point-s)."}})
+  {::field-point-s {:default 13.96 :spec (a/num-in 0 nil)
+                    :doc "Seconds a hunger point of food got in the field takes (a hunt, crops, a cook): 15444.7 s of 612 hungry get-food calls of the trial bodies that took nothing from a chest, cut and fruitless ones counted, over the 1106 points their food gave, 2026-11-07. Recount: node tools/event-counts.mjs food-gets (:point-s)."}})
 
 (defn field-point-s [] (settings/get settings ::field-point-s))
 
