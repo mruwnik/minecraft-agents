@@ -1620,7 +1620,7 @@
 (deftest combat-fight-damage-weighs-weapon-mobs-and-armour
   (let [z {:name "zombie" :distance 3}]
     (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z]})) "4 swings, 2.5 s at 0.6 hits/s of 2.5 (a zombie hit on easy)")
-    (is (= 65 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits, one landed every 1.3 s, the zombie hitting once a second (the measured rate is for swords)")
+    (is (= 39 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits, one landed every 1.3 s, the zombie at its measured 0.6 hits/s whatever the weapon")
     (is (= 18.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too; a group is hit once a second per mob, not at the lone-mob rate")
     (is (= 1.69 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
         "iron armour: vanilla's 13.5 effective points against 2.5 hp hits")

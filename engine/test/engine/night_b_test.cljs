@@ -404,7 +404,7 @@
           (let [[s & more] (st/emitted seen :stopped)]
             (is (empty? more))
             (is (= :exposed (:reason s)) "a night with no shelter is no success")
-            (is (= [:roof-failed] (take 1 (mapv :reason (:sites s)))) "the first site's reason is dig-in's")
+            (is (every? #{:roof-failed :failed-steps :no-floor} (mapv :reason (:sites s))) "every site tried failed in dig-in's own steps, whichever the cap kept")
           (is (= (inc (sites/max-sites)) (count (:sites s))) "max-sites sites tried, then exposed"))
           (is (= [] (:list (core/state eng)))))))))
 

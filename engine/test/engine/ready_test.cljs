@@ -337,12 +337,13 @@
     5 st/night :ok))
 
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
-  (are [check args caller] (= :later (lit 0 15 #(first (check (assoc (caller (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"}))) :args args)))))
+  ;; late in the night: the light comes for less than the stay at the place costs
+  (are [check args caller] (= :later (lit 0 15 #(first (check (assoc (caller (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"} :time 22500))) :args args)))))
     smelt/safe? {:furnace outside} #(under % 'jobs.items.obtain {:item "iron_ingot" :count 1})
     pick-up-loose/safe? {} for-a-log)
-  (testing "a kitchen's stay at a furnace 100 blocks off in the open night is weighed against the pass it serves (its root worth-of): 64 loaves' worth goes ahead, a loaf's waits"
+  (testing "a kitchen's stay at a furnace 200 blocks off in the open night is weighed against the pass it serves (its root worth-of): 64 loaves' worth goes ahead, a loaf's waits"
     (let [world (assoc open-night :blocks {"1,64,0" "red_bed"})
-          check (fn [bread] (let [args {:furnace {:x 100 :y 64 :z 0} :stock {"bread" bread} :reserve {"wheat" 2}}]
+          check (fn [bread] (let [args {:furnace {:x 200 :y 64 :z 0} :stock {"bread" bread} :reserve {"wheat" 2}}]
                               (lit 0 15 #(kitchen/safe? (assoc (under (ctx-of world) 'jobs.items.kitchen args) :args args)))))]
       (is (= [:ok :later] (mapv (comp first check) [64 1]))))))
 
@@ -809,13 +810,13 @@
                                reach-room/unseen-sides (constantly sides)
                                sh-inside/dark-hall (constantly :roofed)
                                sh-sense/buried? (constantly true)]
-                   (lit 0 0 #(let [c (assoc (for-iron (ctx-of (assoc long-tunnel :time st/noon))) ::price/stay-s 300)]
+                   (lit 0 0 #(let [c (assoc (for-iron (ctx-of (assoc long-tunnel :time st/noon))) ::price/stay-s 600)]
                                (ready/hall-status (-> c
                                                       (ready/own-way (constantly 120))
                                                       (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:root (:root c) :spent {[0 64 0] spent}}} walk-look/walked-policy)})))
                                                   nil)))))
         worth (:worth (second (:look-first (nth (status 0) 2))))]
-    ;; a 300 s stay costs ~158 s at the hall's chance; shown open (0.81) it is past health, so the job's own 120 s torches
+    ;; a 600 s stay at the hall's chance, shown open (0.81), is past health, so the job's own 120 s torches
     ;; answer it: the look spares about 120 - 0.81 x 120 = 23 s
     (is (< 0 worth 30) "the walk-look child is bought with what the look may spare as its worth, not the goal's")
     (is (nil? (:look-first (nth (status worth) 2))) "legs that spent what the look may spare buy no more")))
@@ -1410,8 +1411,8 @@
         world (assoc open-night :blocks (tu/box 30 63 -5 50 63 5 "stone"))
         kind-of (fn [check] (first (check (assoc (dissoc (ctx-of world) ::price/stay-s) :worth (constantly 300)))))]
     (is (= [:later :ok]
-           (lit 0 15 #(mapv kind-of [(ready/safe-at-build far (constantly 600)) (ready/safe-at-build far (constantly 1))])))
-        "a one-second job at a dark far place goes ahead; a 600 s one waits")))
+           (lit 0 15 #(mapv kind-of [(ready/safe-at-build far (constantly 1200)) (ready/safe-at-build far (constantly 1))])))
+        "a one-second job at a dark far place goes ahead; a 1200 s one waits")))
 
 (deftest a-dark-hall-near-the-body-refused-on-the-stay-s-price-is-not-lifted-to-ok
   (let [near {:x 3 :y 64 :z 0}
@@ -1458,7 +1459,7 @@
       (is (= :ok (kind plant-sapling/safe? night-hut)) "a debt inside the hut is planted"))))
 
 
-(deftest a-ten-second-stay-at-a-spawn-chance-of-0-005-risks-about-3-hp-for-a-bare-body
+(deftest a-ten-second-stay-at-a-spawn-chance-of-0-005-risks-about-1-5-hp-for-a-bare-body
   ;; 0.05 mobs expected, each hurting and killing as one spawned beside the body (spawns-hurt, spawn-kill); the death the
   ;; 5000-block walk from world spawn, 1510 s at 10 s an hp
   (let [c (ctx-of open-night)
@@ -1469,7 +1470,7 @@
     (is (= dies (- 1 (js/Math.exp (- (* 0.05 (:chance (cost/spawn-kill body at))))))) "each kills at its own chance, a Poisson count")
     (is (= 1510 (js/Math.round death)))
     (is (= (price/stay-hp c 0.005 10) (+ hurt (/ (* dies death) (cost/hp-seconds)))) "the death in hp at an hp's seconds")
-    (is (< 2.5 (price/stay-hp c 0.005 10) 3.2) "about 3 hp: a fifth of an hp of hurt, the rest the death")))
+    (is (< 1.2 (price/stay-hp c 0.005 10) 1.8) "about 1.5 hp: a fifth of an hp of hurt, the rest the death")))
 
 (deftest stays-at-several-chances-at-one-place-price-a-spawn-there-once
   ;; a check prices the stay at its chance, the chance left after dawn and after a dark look: one spawn's hurt and death

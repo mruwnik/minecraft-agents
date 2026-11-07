@@ -695,3 +695,15 @@
         stand #(cost/stand-loss (assoc (body 12) :food %) nil [zombie] here 4)]
     (is (pos? (stand 20)))
     (is (> (stand 7) (stand 20)) "a hungry body that loses hp falls further below its hungry line")))
+
+(deftest one-mob-met-beside-a-bare-body-at-full-health-kills-at-its-measured-rates
+  ;; spawn-kill's terms at the fake world's easy difficulty: a lone mob fought with a fist hits at its measured rate; a creeper
+  ;; met beside the body swells and blows there
+  (let [f (fight nil (mob "spider" 0))]
+    (is (< (js/Math.abs (- (fight/fight-damage f) (threat/mob-hurt (armour/armour-stats nil) "spider" (fight/fight-seconds f) identity (threat/lone-hit-rate "spider")))) 1e-9)))
+  (are [m lo hi] (< lo (answer/threat-chance (body 20) m nil here) hi)
+    "spider" 0.15 0.25
+    "creeper" 0.04 0.12
+    "skeleton" 0.03 0.05
+    "zombie" 0.25 0.33)
+  (is (< 0.12 (:chance (cost/spawn-kill (body 20) here)) 0.18) "the measured dark meets kill 0.16, all lights 0.11"))

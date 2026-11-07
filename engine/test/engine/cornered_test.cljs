@@ -1730,7 +1730,8 @@
   (is (= {:tried #{:plug} :fire-cell [0 64 0]} (pick/retry-covers {:tried #{:plug} :fire-cell [0 64 0]} [0 64 0]))
       "the same cell: a failed plug stays failed"))
 
-(deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
+(deftest an-unarmed-body-at-full-health-punches-a-lone-spider-instead-of-running-or-sealing-in
+  ;; 16 punches under the spider's measured 0.35 blows a second: about 15 hp, a death of about 0.2 against the walls' long hide
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1739,10 +1740,9 @@
                                    {:self {:health 20 :food 20} :inventory [{:name "cobblestone" :count 20}]
                                     :entities [{:id 9 :name "spider" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 16}]}
                                    120000 (fn [_] nil)))]
-          (is (zero? (count (calls p "attack"))) "no fist fight")
-          (is (zero? (count (calls p "steer"))) "no walk: a spider outruns the body")
-          (is (pos? (count (calls p "place"))) "it walls itself in")
-          (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen)))))))))
+          (is (= [:fight] (keep #(when (= :hostile.decided (:kind %)) (:decision %)) @seen)) "the fist fight")
+          (is (pos? (count (calls p "attack"))))
+          (is (zero? (count (calls p "place"))) "no walls"))))))
 
 (def pool
   "Water x -4..8, y 64..65, z -4..4 over the floor: dry land beyond it, nearest at x -5."

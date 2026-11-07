@@ -365,7 +365,7 @@
   (* (shot-rate) (arrow-hit-chance)))
 
 (defn lone-hit-rate
-  "Hits a second of a lone sword fight: the measured rates of the zombie family and spiders, a skeleton's bow-hit-rate, else one a second."
+  "Hits a second of a lone fight: the measured rates of the zombie family and spiders, a skeleton's bow-hit-rate, else one a second."
   [kind-name]
   (cond (= trident-kind kind-name) (settings/get settings ::trident-rate)
         (contains? bow-mobs kind-name) (bow-hit-rate)

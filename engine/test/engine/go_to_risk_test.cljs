@@ -217,7 +217,7 @@
                     (select-keys (nth (risk/status c goal (straight-plan c goal)) 2) [:wait :wait-s]))))
         roofs (into {} (for [x [48 52 56]] [(str x ",66,3") "stone"]))]
     (is (= :dawn (:wait (wait-of {}))) "zombies on open ground burn at sunrise: waiting for dawn beats walking past them")
-    (is (> (:wait-s (wait-of roofs)) (:wait-s (wait-of {}))) "zombies under a roof stay by day: the dawn walk still meets them (it is only the night at the goal that dawn saves)")))
+    (is (nil? (:wait (wait-of roofs))) "zombies under a roof stay by day: the dawn walk still meets them, so the wait saves only the night at the goal, less than it costs: it walks now")))
 
 (def hut-bed {"4,64,-1" "red_bed"})
 
