@@ -8,7 +8,8 @@
   danger.
   Nothing ages: a remembered torch or roof lights its cells until the cell is seen again, as a player would think;
   memory-age prices only fire, doors and fluids, the one measured kinds, and no change rate of torches or roofs is
-  measured. Flooded per section over the 27 sections round it, kept until a cell in them changes."
+  measured. Flooded per section over the 27 sections round it, kept until a cell in them changes; an opaque cell and the
+  sky light of a cell seen at full sky need no flood."
   (:require [engine.perception.store :as store]))
 
 (def ^:private max-kept "Sections whose light is kept per body, past which the kept ones are dropped." 1024)
@@ -67,22 +68,32 @@
              ^js store (store/store-of st dim)
              ^js by-dim (or (.get kept st) (let [m (js/Map.)] (.set kept st m) m))
              k (if block-only? (str dim " block") dim)
-             ^js secs (or (.get by-dim k) (let [m (js/Map.)] (.set by-dim k m) m))]
+             ^js secs (or (.get by-dim k) (let [m (js/Map.)] (.set by-dim k m) m))
+             ^js emit (.-emit table)
+             ^js filter (.-filter table)
+             block (when-not block-only? (light-fn p true))
+             flooded (fn [cx sy cz key i]
+                       (let [^js hit (.get secs key)
+                             writes (.-writes st)]
+                         (if (and hit (== writes (.-at hit)))
+                           (aget (.-light hit) i)
+                           (let [^js now (neighbours-mask store cx sy cz)]
+                             (if (and hit (== (aget now 0) (.-mask hit)) (<= (aget now 1) (.-at hit)))
+                               (do (set! (.-at hit) writes) (aget (.-light hit) i))
+                               (let [light (section-light table store cx sy cz block-only?)]
+                                 (when (>= (.-size secs) max-kept) (.clear secs))
+                                 (.set secs key #js {:at writes :mask (aget now 0) :light light})
+                                 (aget light i)))))))]
          (fn [x y z]
            (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
                  key (store/section-key cx sy cz)
                  ^js sec (.get store key)
-                 i (store/cell-index x y z)]
-             (if (or (nil? sec) (zero? (aget (.-ids sec) i)))
-               -1
-               (let [^js hit (.get secs key)
-                     writes (.-writes st)]
-                 (if (and hit (== writes (.-at hit)))
-                   (aget (.-light hit) i)
-                   (let [^js now (neighbours-mask store cx sy cz)]
-                     (if (and hit (== (aget now 0) (.-mask hit)) (<= (aget now 1) (.-at hit)))
-                       (do (set! (.-at hit) writes) (aget (.-light hit) i))
-                       (let [light (section-light table store cx sy cz block-only?)]
-                         (when (>= (.-size secs) max-kept) (.clear secs))
-                         (.set secs key #js {:at writes :mask (aget now 0) :light light})
-                         (aget light i))))))))))))))
+                 i (store/cell-index x y z)
+                 v (if sec (aget (.-ids sec) i) 0)]
+             (cond
+               (zero? v) -1
+               ;; the flood lights no opaque cell: its own light is all it has
+               (== 15 (aget filter (dec v))) (aget emit (dec v))
+               ;; the flood seeds a cell seen at full sky at sky 15, the most there is: only its block light is flooded
+               (and block (store/full-sky? sec i)) (bit-or 0xF0 (block x y z))
+               :else (flooded cx sy cz key i)))))))))

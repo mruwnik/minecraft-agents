@@ -4,6 +4,9 @@
             [clojure.string :as str]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
+            [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
@@ -169,3 +172,20 @@
     (is (= open-night-chance (chance 0)) "dark floor seen round the cell")
     (is (pos? (chance 4)) "a dim cell is no spawn cell, but the floor round it may be dark past what is seen")
     (is (= (chance 14) (chance 4)))))
+
+(deftest a-night-spawn-price-over-open-ground-seen-at-full-sky-relights-no-section
+  ;; the memory's light of open ground seen at full sky is sky 15 and, with no light source, block 0, and of the ground
+  ;; under it its own: no section is flooded for the dark-hall flood, its unseen floors' frontier nor a full day's guess
+  (let [raw-p (tu/fake {:floor [-16 -16 48 48] :time st/night :self {:pos {:x 4.5 :y 64 :z 16.5}}})
+        _ (swap! (fake/state raw-p) merge {:light-default [15 0]})
+        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000) :rand (constantly 0.5)})
+        p (perception/wrap raw-p per)
+        ^js table @fake-raw/light-table
+        floods (atom 0)]
+    (doseq [yaw [0 90 180 270]]
+      (swap! (fake/state raw-p) assoc :yaw yaw)
+      (perception/pass! per))
+    (set! (.-lightTable ^js (:st per)) (js/Object.assign #js {} table #js {:sectionLight (fn [t ids bits] (swap! floods inc) (.sectionLight table t ids bits))}))
+    (is (= open-night-chance (spawn-light/chance-at p {:x 30 :y 64 :z 16} false)) "dark open ground")
+    (is (pos? (look/unseen-lit-chance p {:x 4 :y 64 :z 90} 0)) "full day may light the ground past the seen field")
+    (is (zero? @floods))))
