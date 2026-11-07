@@ -2127,3 +2127,10 @@
     [{:name "stick" :count 3}] 3
     [{:name "oak_planks" :count 2} {:name "stick" :count 1}] 5
     [{:name "coal" :count 9}] 0))
+
+(deftest a-bed-is-set-down-on-a-glowstone-floor-but-not-on-a-chest-or-fluid
+  (are [floor-block laid?] (= laid? (some? (sh-beds/bed-layout {:view (constantly {:data {} :now 0}) :primitives (tu/fake-on-floor {:floor-block floor-block :self {:pos [0.5 64 0.5]}})} false)))
+    "glowstone" true
+    "stone" true
+    "chest" false
+    "water" false))

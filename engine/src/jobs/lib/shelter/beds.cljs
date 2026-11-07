@@ -358,6 +358,12 @@
 (defn refused-twice? [c {:keys [x y z]}]
   (<= 2 (get (:bed-refused (ctx/mem c)) [x y z] 0)))
 
+(defn floor-ok?
+  "A bed lies on any floor but a fluid, container, owned block or flame: a full light block (glowstone) is a plain floor."
+  [n]
+  (let [why (tidy-rules/keep-why n)]
+    (or (nil? why) (and (= :light why) (contains? #{"glowstone" "sea_lantern" "shroomlight"} n)))))
+
 (defn bed-layout
   "{:stand :foot :head} for a bed set down beside the body: three cells in a row, the body standing at one end (a placed
   bed faces away from the body), the foot next to it, the head after it. All three free (air, with a solid floor that is no container, bed or other kept block, and
@@ -373,7 +379,7 @@
         in (access/rules-input c)
         air? #(bs/air (u/seen-name p %))
         free? (fn [pos] (and (air? pos) (sh-sense/solid-at? p (update pos :y dec))
-                             (nil? (tidy-rules/keep-why (u/seen-name p (update pos :y dec))))))
+                             (floor-ok? (u/seen-name p (update pos :y dec)))))
         covered? (fn [pos] (or (not roofed?) (some #(sh-sense/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))
         permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh-sense/doorway? p %)))
         stands (sort-by (fn [[dx dz]] (+ (js/Math.abs dx) (js/Math.abs dz)))
