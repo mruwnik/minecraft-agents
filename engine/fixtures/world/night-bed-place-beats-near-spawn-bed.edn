@@ -15,7 +15,7 @@
  [{:name "the-bed-place-is-slept-in-though-an-old-spawn-bed-is-nearer"
    :memory [{:kind :bed :data {:pos #xyz [40 0 6]} :policy {:cap 1 :ttl :forever}}
             {:kind :spawn-bed :data {:pos #xyz [14 0 6]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 100]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 100}]
    :after [[:body-near [40.5 0 6.5] 3]]}]}

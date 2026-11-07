@@ -269,16 +269,17 @@
 (def dark-world (dissoc lit-world :lit-route))
 
 (defn flee-home-night
-  "night-at-home in the dark with a home at x 10 the time left does not cover (home-walk-margin-s 0), no placing or digging, nothing but the home to see: the
+  "night-at-home in the dark with a home at x 10 (or home) the time left does not cover (home-walk-margin-s 0), no placing or digging, nothing but the home to see: the
   shut-in fails everywhere, so the night has to flee to the roof. {:eng :p}."
-  [world args]
+  ([world args] (flee-home-night world args {:x 10 :y 64 :z 0}))
+  ([world args home]
   (js/Promise.resolve
-   (.then (night-at-home world {:x 10 :y 64 :z 0} (update args :settings #(merge {:jobs.survival.night.sites/home-walk-margin-s 0} %)))
+   (.then (night-at-home world home (update args :settings #(merge {:jobs.survival.night.sites/home-walk-margin-s 0} %)))
           (fn [{:keys [p] :as r}]
             (st/refuse-placing! p)
             (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "failed"}))
             (aset p "seenBlocks" (fn [_] #js []))
-            r))))
+            r)))))
 
 (def stone-and-dirt-patch
   "Dirt four deep at x 28..32 (a pit fits), the floor elsewhere."

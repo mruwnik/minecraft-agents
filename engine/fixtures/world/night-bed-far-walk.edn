@@ -13,7 +13,7 @@
  [{:name "a-bed-114-blocks-over-dark-open-ground-is-not-walked-to"
    :blocks [[:set [120 0 6] "red_bed[facing=east,part=foot]"] [:set [121 0 6] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :bed :data {:pos #xyz [120 0 6]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 100}]
    :after [[:body-near [6.5 0 6.5] 4]]}]}

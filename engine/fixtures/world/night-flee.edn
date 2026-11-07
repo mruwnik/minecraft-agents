@@ -1,4 +1,4 @@
-;; Card 173c5390: a night that cannot dig in (no pickaxe on stone, no site) flees somewhere safer within the flee-radius setting, never
+;; Card 173c5390: a night that cannot dig in (no pickaxe on stone, no site) flees somewhere safer, never
 ;; fetches a pickaxe in the dark. Stone pad y -6..-1 (the plot floor is over void), torches around; the body has no tools.
 ;; the walk-radius setting 5 makes the roofed home a flee target instead of the lit roof walk. Needs night: --allow-time --time-log <the
 ;; shared time log>, one case per call. The three flee cases thin the floor near the start (one block over air, x 0..18) so no
@@ -64,13 +64,13 @@
   {:name "walled-home-flee-fails-honestly"
    :blocks [[:fill [0 -6 0] [31 -1 31] "bedrock"] [:fill [28 0 14] [31 4 18] "bedrock" :hollow] [:set [28 4 16] "air"] [:set [27 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [29 1 16]})]
-         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/home-walk-margin-s 0 :jobs.survival.night.sites/flee-radius 26}})]]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/home-walk-margin-s 0}})]]
    :expect [{:event {:source :job :kind :shelter.flee_failed} :within-s 150}
             {:event {:source :job :kind :shelter.exposed} :within-s 200}]
    :limit-s 230}
   {:name "stone-hillside-no-pickaxe-fetches-nothing"
    :blocks [[:fill [10 0 10] [20 5 22] "stone"]]
-   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]]
    :expect [{:event {:source :job :kind :shelter.exposed :message [:contains "cannot harvest stone"]} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :fetch}} :for-s 60}]
    :limit-s 90}]}

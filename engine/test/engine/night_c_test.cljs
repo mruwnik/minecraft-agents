@@ -271,7 +271,7 @@
 
 (def no-flee
   "A flight from the far home would follow a walk that does not shelter; without one the walk's end is seen."
-  {:jobs.survival.night.sites/flee-radius 0})
+  {:ways #{:bed :shelter}})
 
 (deftest a-home-beyond-the-time-left-before-dark-is-not-walked-to
   (async done
@@ -286,7 +286,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:settings no-flee}))]
+        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} no-flee))]
           (await (tu/run-until-empty eng 60))
           (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked home with no bed to use or carry"))))))
 
@@ -631,6 +631,18 @@
           (is (seq (st/emitted seen :shelter.exposed)) "a bare roof is no shelter: the body holds exposed under it")
           (let [fled (st/emitted seen :shelter.fled)]
             (is (= [:roofed-place] (mapv :target fled)))))))))
+
+(deftest with-nothing-to-dig-the-night-flees-to-a-roofed-home-past-the-perception-radius
+  ;; 80 blocks out: a home past the 64 blocks perception keeps is a known place, priced by its walk like a near one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shift (fn [blocks] (into {} (map (fn [[k v]] [(let [[x y z] (map #(js/parseInt %) (.split k ","))] (str (+ x 80) "," y "," z)) v])) blocks))
+              world (-> dark-world (assoc :floor [-30 -10 100 10]) (assoc :blocks (merge wide-ground (shift (assoc home-roof "10,66,0" "stone")))))
+              {:keys [eng p seen]} (await (flee-home-night world {} {:x 90 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 80))
+          (is (= [90 64 0] (mapv #(js/Math.floor (% (st/pos-of p))) [:x :y :z])) "walked to the far roofed home")
+          (is (= [:roofed-place] (mapv :target (st/emitted seen :shelter.fled)))))))))
 
 (deftest a-night-with-no-way-to-shut-in-logs-out-before-ending-exposed
   (async done

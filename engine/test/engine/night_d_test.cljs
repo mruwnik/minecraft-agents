@@ -37,11 +37,11 @@
             [jobs.survival.night.sites :as sites]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home with-walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
-(deftest with-flee-radius-0-the-night-holds-exposed
+(deftest without-the-flee-way-the-night-holds-exposed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {:settings {:jobs.survival.night.sites/flee-radius 0}}))]
+        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {:ways #{:bed :shelter}}))]
           (st/dawn-after! p 4)
           (await (tu/run-until-empty eng 80))
           (is (empty? (st/emitted seen :shelter.fled)))

@@ -242,7 +242,6 @@
  :jobs.survival.get-food/eat-bad-food
  :jobs.survival.hide-out/hide-s
  :jobs.survival.hide-out/quiet-s
- :jobs.survival.night.sites/flee-radius
  :jobs.survival.night.sites/home-walk-margin-s
  :jobs.survival.plug-way/night-place-s
  :jobs.survival.recover-drops.config/collect-radius

@@ -53,7 +53,7 @@
   when its turn comes."
   [p solids]
   (let [roof-height (sh-sense/roof-height)
-        ;; cells less than 1024 apart on each axis (a flee-radius sphere and the roofs over it) key apart
+        ;; cells less than 1024 apart on each axis (a memory-radius sphere and the roofs over it) key apart
         key-of (fn [x y z] (bit-or (bit-shift-left (bit-and x 1023) 20) (bit-shift-left (bit-and y 1023) 10) (bit-and z 1023)))
         ^js solid (js/Set.)
         _ (doseq [{{:keys [x y z]} :pos} solids] (.add solid (key-of x y z)))
@@ -106,19 +106,18 @@
 
 (defn ^:async flee-target
   "The place not yet tried tonight, somewhere safer than here (see the doc), whose walk go-to quotes cheapest (jobs.lib.walk-pick/
-  cheapest!: every candidate within flee-radius is ranked by the least its straight walk takes and quoted best-first, as the flight itself
+  cheapest!: every candidate is ranked by the least its straight walk takes and quoted best-first, as the flight itself
   will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
-  :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none with
-  the flee-radius setting 0 or after sites/max-flees). Candidates: the home, caves, ground (a bed is the night's bed way, priced there)."
+  :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none
+  after sites/max-flees). Candidates: the home at any distance, caves and ground seen within look/memory-radius (a bed is the night's bed way, priced there)."
   [c survey?]
   (let [m (ctx/mem c)
         p (:primitives c)
-        flee-radius (sites/flee-radius)
         tried (set (:flee-failed m))]
-    (when (and (pos? flee-radius) (< (or (:flees m) 0) (sites/max-flees)))
+    (when (< (or (:flees m) 0) (sites/max-flees))
       (let [here (sh-sense/feet p)
-            places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] flee-radius))
-            cands (->> (concat places (sites p flee-radius))
+            places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] ##Inf))
+            cands (->> (concat places (sites p look/memory-radius))
                        (remove #(contains? tried (:pos %))))
             needed (atom {})
             ok? (fn [{:keys [kind pos] :as x}]

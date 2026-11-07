@@ -105,7 +105,7 @@
   {:name "stone-pad-no-pickaxe-starts-no-pit"
    :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
-   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
+   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 90]
          [:await {:source :job :kind :stopped :data {:reason :exposed}} 120]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
