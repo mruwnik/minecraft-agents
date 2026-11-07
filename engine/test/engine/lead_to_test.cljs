@@ -288,7 +288,7 @@
           (is (= :unleashed (:reason (done-event s))))
           (is (false? (:gathered (done-event s))))
           (is (= 1 (count (events-of s :lead-to.gather-short))))
-          (is (= [30 32 32 32 22] (take-last 5 (mapv :x (tu/walked-to (:eng s))))) "the walk to the spot, one pull that go-to gives up after its three fruitless rounds, no second pull, then the body goes to the cow to take the lead off"))))))
+          (is (= [25 28 30 32 22] (take-last 5 (mapv :x (tu/walked-to (:eng s))))) "the walk to the spot, one pull that go-to gives up after its one round (a search that found no way, over the same cell and memory, answers the same), no second pull, then the body goes to the cow to take the lead off"))))))
 
 (deftest a-lead-that-breaks-during-the-pull-is-reported
   (async done
