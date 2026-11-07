@@ -164,14 +164,15 @@
 
 (defn pool-scene
   "A search through a stone mass x -15..15, y 60..63, z -8..8 (bedrock round it) from an air cell at its west end to a goal in the bedrock,
-  with water pools at x in xs on the rows z -4, 0, 4 (y 62): digs beside a pool let its water in to y 62. Run to its end: {:cells :reads :s}."
+  with water pools at x in xs on the rows z -4, 0, 4 (y 62): digs beside a pool let its water in to y 62. Run to its end,
+  the back search's bound in the heuristic as every caller's: {:cells :reads :s}."
   [xs]
   (let [pools (set (for [x xs z [-4 0 4]] [x 62 z]))
         beside? (fn [[x y z]] (some pools [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)] [x (inc y) z] [x (dec y) z]]))
         in-box? (fn [[x y z]] (and (<= -15 x 15) (<= 60 y 63) (<= -8 z 8)))
         w (fn [c] (cond (#{[-15 62 0] [15 62 0]} c) "air" (pools c) "water" (in-box? c) "stone" :else "bedrock"))
         flood {:level (fn [c] (when (beside? c) 62)) :open (delay [2 0]) :dig (fn [under _] [1 (inc under)]) :step (fn [under] [0 under])}
-        run (dr/search w [-15 62 0] [15 62 0] {:step-s 1 :flood flood})]
+        run (dr/search w [-15 62 0] [15 62 0] {:step-s 1 :flood flood :back-h? true})]
     (to-end run 60)))
 
 (deftest recount-prints-the-pool-origin-join-cost
