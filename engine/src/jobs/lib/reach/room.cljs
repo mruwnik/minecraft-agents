@@ -394,14 +394,16 @@
 (defn unroofed-cell
   "{:cell :closed?}: the first cell a walker flood from pos {:x :y :z} (doors shut, within room-cells) reaches with no
   block seen within room-roof cells over it ({:x :y :z}, nil when every cell is roofed), and whether the flood closed.
-  shut, a set of [x y z] cells, counts as solid."
+  shut, a set of [x y z] cells, counts as solid. first?: the flood stops at that cell (the same cell; :closed? then false)."
   ([p pos] (unroofed-cell p pos nil))
-  ([p {:keys [x y z]} shut]
+  ([p pos shut] (unroofed-cell p pos shut false))
+  ([p {:keys [x y z]} shut first?]
    (let [kind-at (fn [cx cy cz]
                    (if (contains? shut [cx cy cz]) :solid (shut-kind (u/seen-block p {:x cx :y cy :z cz}))))
          roofed? (fn [cx cy cz] (some #(let [b (u/seen-block p {:x cx :y (+ cy %) :z cz})] (and b (not= :open (kind-of b))))
                                       (range 2 7)))
-         {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells)
+         {:keys [cells closed?]} (flood-visit (fn [cx cy cz] (forward kind-at cx cy cz)) [x y z] room-cells
+                                              (when first? (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2))))))
          c (.find cells (fn [c] (not (roofed? (aget c 0) (aget c 1) (aget c 2)))))]
      {:cell (when c {:x (aget c 0) :y (aget c 1) :z (aget c 2)}) :closed? closed?})))
 
@@ -445,6 +447,18 @@
   "room* kept per body (kept); not kept without a perception."
   [p {:keys [x y z] :as pos}]
   (kept p (str x "|" y "|" z) (partial room* p pos)))
+
+(defn look
+  "{:room (room*'s answer) :unseen (a delay of unseen-room's)} of the cell pos from one flood a start, kept per body as
+  room is: a judge that asks both floods once."
+  [p {:keys [x y z] :as pos}]
+  (kept p (str "look|" x "|" y "|" z)
+        (fn [kind-at]
+          (let [in-door? (some-> (u/seen-block p pos) .-name openable?)
+                starts (if in-door? (mapv (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])
+                floods (mapv (fn [[sx sy sz]] (delay (room-flood p kind-at sx sy sz room-cells in-door?))) starts)]
+            {:room (some (fn [f] (let [{:keys [cells unseen?]} @f] (when (and cells (not unseen?)) (room-of p cells)))) floods)
+             :unseen (delay (some (fn [f] (when (:unseen? @f) (room-of p (:cells @f)))) floods))}))))
 
 (def wall-cells
   "Cells the flood of walled-region may hold: a closed cave bigger than room-cells is still judged."

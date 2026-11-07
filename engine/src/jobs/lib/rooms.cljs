@@ -80,15 +80,17 @@
     (some? (reach-room/flood-cells next-cells (first cells) reach-room/room-cells))))
 
 (defn flood-refuge?
-  "Whether cell pos holds a closed room (jobs.lib.reach.room/room) that stays closed past the edge of sight (closed-past-sight?)."
-  [p pos]
-  (boolean (some->> (reach-room/room p pos) (closed-past-sight? p))))
+  "Whether cell pos holds a closed room (jobs.lib.reach.room/room, or look's :room when given) that stays closed past the
+  edge of sight (closed-past-sight?)."
+  [p pos look]
+  (boolean (some->> (if look (:room look) (reach-room/room p pos)) (closed-past-sight? p))))
 
 (defn refuge-room?
   "flood-refuge? of cell pos, kept per body while the world near it stays the same (reach-room/kept-with: a flight asks for
   each door side from its price, its survey and every enter-room quote); not kept without a perception."
-  [p {:keys [x y z] :as pos}]
-  (reach-room/kept p (str "refuge|" x "|" y "|" z) (fn [_] (flood-refuge? p pos))))
+  ([p pos] (refuge-room? p pos nil))
+  ([p {:keys [x y z] :as pos} look]
+   (reach-room/kept p (str "refuge|" x "|" y "|" z) (fn [_] (flood-refuge? p pos look)))))
 
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
@@ -101,12 +103,12 @@
      (cond
        (some? known) known
        (known-open? c pos) false
-       :else (let [p (:primitives c) v (refuge-room? p pos)]
+       :else (let [p (:primitives c) look (reach-room/look p pos) v (refuge-room? p pos look)]
                (cond
-                 (and (not v) (reach-room/unseen-room? p pos)) :unseen
+                 (and (not v) (some? @(:unseen look))) :unseen
                  (not keep?) v
                  :else (do (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
-                           (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
+                           (when-not (or v (:room look)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
                            v)))))))
 
 (defn world-key
@@ -135,31 +137,49 @@
 
 (declare shut-by)
 
+(defn gap-known?
+  "Whether doorway-room at cell pos answers from what is kept: body memory :refuge-no-gap, or the room kept in mem
+  :refuge-gap-rooms while the world-key stays the same."
+  [c pos]
+  (let [k (cell-key pos)]
+    (boolean (or (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-no-gap))
+                 (= (world-key (:primitives c)) (:key (get (:refuge-gap-rooms (ctx/mem c)) k)))))))
+
+(defn gap-room
+  "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled (doorway-room), nil when none."
+  [c pos]
+  (let [p (:primitives c)
+        e (:cell (reach-room/unroofed-cell p pos nil true))
+        d (when e (shut-by p pos e any?))]
+    (when-not d (mem/write! (:store (:engine c)) :refuge-no-gap {:cell (cell-key pos)} open-policy))
+    (when d
+      (let [head (update d :y inc)
+            plug? #{[(:x d) (:y d) (:z d)] [(:x head) (:y head) (:z head)]}
+            base (reach-room/shut-kind-at p)
+            kind-at (reach-room/room-kind-at p (reach-room/memo-kind-at (fn [x y z] (if (plug? [x y z]) :solid (base x y z)))))
+            room (reach-room/room-from p kind-at (:x pos) (:y pos) (:z pos))
+            inside (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                                :let [cell [(+ (:x d) dx) (:y d) (+ (:z d) dz)]]
+                                :when (contains? (:cells room) cell)]
+                            (zipmap [:x :y :z] cell)))]
+        (when (and room inside)
+          (assoc room :doors (conj (:doors room) {:cell d :inside inside}) :gap [d head]))))))
+
 (defn doorway-room
   "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled, as reach-room/room's answer plus
   :doors [{:cell gap-feet :inside}], :gap [feet head] and :fill? (a block is carried to fill it; else the room stays open
   to one mob at a time); nil when it is none or a cell of it is unseen. A cell with no doorway that shuts it is kept in body
-  memory :refuge-no-gap (open-policy) so a flight does not flood open ground again."
+  memory :refuge-no-gap (open-policy) so a flight does not flood open ground again; the room in mem :refuge-gap-rooms
+  while the world-key stays the same (gap-known?)."
   [c pos]
-  (let [p (:primitives c)
-        k (cell-key pos)]
+  (let [k (cell-key pos)
+        wk (world-key (:primitives c))
+        kept (get (:refuge-gap-rooms (ctx/mem c)) k)]
     (when-not (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-no-gap))
-      (let [e (:cell (reach-room/unroofed-cell p pos))
-            d (when e (shut-by p pos e any?))]
-        (when-not d (mem/write! (:store (:engine c)) :refuge-no-gap {:cell k} open-policy))
-        (when d
-          (let [head (update d :y inc)
-                plug? #{[(:x d) (:y d) (:z d)] [(:x head) (:y head) (:z head)]}
-                base (reach-room/shut-kind-at p)
-                kind-at (reach-room/room-kind-at p (reach-room/memo-kind-at (fn [x y z] (if (plug? [x y z]) :solid (base x y z)))))
-                room (reach-room/room-from p kind-at (:x pos) (:y pos) (:z pos))
-                inside (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                                    :let [cell [(+ (:x d) dx) (:y d) (+ (:z d) dz)]]
-                                    :when (contains? (:cells room) cell)]
-                                (zipmap [:x :y :z] cell)))]
-            (when (and room inside)
-              (assoc room :doors (conj (:doors room) {:cell d :inside inside}) :gap [d head]
-                     :fill? (boolean (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build))))))))))))))
+      (when-let [room (if (= wk (:key kept))
+                        (:room kept)
+                        (let [r (gap-room c pos)] (ctx/update-mem! c assoc-in [:refuge-gap-rooms k] {:key wk :room r}) r))]
+        (assoc room :fill? (boolean (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build)))))))))))
 
 (defn judge-s
   "Seconds of CPU a door side judged afresh may cost: its room's flood and closed-past-sight?'s, each reading up to
@@ -223,7 +243,7 @@
   none: :run-failed (a run to it failed this flight), :not-closed, :unseen (a cell of the room not seen yet), or
   :unjudged (a door side not judged this step: fresh? false, or its judge-s does not pay, pays?, against threats' lead
   at its door, lead-s straight, or fire, and the run it saves over a room with a run on, save-s). The home and the sides
-  judged before cost nothing and come first; each closed room found gets its walk search (way-s) as verdicts prices it. :spent-s the CPU the step's searches may have cost. A home with a bare doorway
+  judged before come first, the home always judged; each closed room found gets its walk search (way-s) as verdicts prices it. :spent-s the CPU the step's searches may have cost, the home's fresh judgements (judge-s each: closed?, and doorway-room unless gap-known?) and walk search included. A home with a bare doorway
   gap counts as a room (doorway-room: its :gap; :fill? when a block is carried to fill it). keep? false: the
   judgements are kept nowhere (closed?), so the flee price surveys what the flight's step then surveys. Defaults: no
   threats, no fire, keep? and fresh? true."
@@ -244,7 +264,8 @@
                    (cond
                      (some? k) (when-not k :not-closed)
                      (and (not home?) (known-open? c pos)) :not-closed
-                     home? (case (closed? c pos keep?) true nil :unseen :unseen :not-closed)
+                     home? (do (when-not (known-open? c pos) (vswap! spent + (judge-s)))
+                               (case (closed? c pos keep?) true nil :unseen :unseen :not-closed))
                      (not fresh?) :unjudged
                      (pays? @spent (judge-s) here (lead-s p [at] threats (u/dist me at)) (save-s p (u/dist me at) @best) fire)
                      (do (vswap! spent + (judge-s))
@@ -269,7 +290,7 @@
                      (sort-by (fn [[i s]] [(if (free? s) 0 1) i]))
                      (mapv (fn [[i {:keys [pos home?] :as s}]]
                              (let [why (if (failed (cell-key pos)) :run-failed (judge s))
-                                   gap-room (when (and home? (#{:not-closed :unseen} why)) (doorway-room c pos))
+                                   gap-room (when (and home? (#{:not-closed :unseen} why)) (when-not (gap-known? c pos) (vswap! spent + (judge-s))) (doorway-room c pos))
                                    s (cond-> (assoc s :why (if gap-room nil why)) gap-room (assoc :gap-room gap-room))]
                                [i (cond-> s (nil? (:why s)) (assoc :room (room-of s)))])))
                      (sort-by first)
@@ -455,7 +476,7 @@
   room: the flood from the feet has no unroofed cell once they are solid. An overhang beside a gap has one."
   [p feet e ok?]
   (first (filter #(and (not= feet %) (sh-sense/doorway? p %) (ok? %)
-                       (nil? (:cell (reach-room/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]}))))
+                       (nil? (:cell (reach-room/unroofed-cell p feet #{[(:x %) (:y %) (:z %)] [(:x %) (inc (:y %)) (:z %)]} true))))
                  (around e))))
 
 (defn closed-home?

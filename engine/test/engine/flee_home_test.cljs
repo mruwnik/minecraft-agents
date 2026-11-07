@@ -425,7 +425,7 @@
                 (with-redefs [reach-room/steady-key (fn [_] @key)
                               reach-room/room-kind-at (fn [_ _] nil)
                               reach-room/shut-kind-at (fn [_] nil)
-                              rooms/flood-refuge? (fn [_ _] (swap! floods inc) true)]
+                              rooms/flood-refuge? (fn [_ _ _] (swap! floods inc) true)]
                   (doseq [k keys] (reset! key k) (rooms/refuge-room? p home))))
               @floods)]
     (is (= 1 (ask "near world unchanged" "near world unchanged")) "the same key keeps the answer")
@@ -566,6 +566,26 @@
           (is (:exposed? (cover/fire-on c skeleton)) "the body stands in the skeleton's line of fire")
           (is (< (:spent-s r) cover) (str "the step's CPU within the time to cover: " (:spent-s r)))
           (is (pos? unjudged) (str "the doors past it wait for a later step: " (:dropped r))))))))
+
+(deftest the-homes-judgements-count-in-the-steps-cpu-and-its-doorway-room-is-judged-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 6.5} {} [] no-door))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              counts (atom {})
+              restore (counting! counts :unroofed #(identity reach-room/unroofed-cell) #(set! reach-room/unroofed-cell %))
+              threats [(seen-zombie 5.5 20.5)]
+              [a first-floods b] (try (let [a (rooms/survey c home {:threats threats}) n (:unroofed @counts)]
+                                        [a n (rooms/survey c home {:threats threats})])
+                                      (finally (restore)))
+              gap? (fn [r] (some :gap (:rooms r)))]
+          (is (and (gap? a) (gap? b)) "the doorless home is a room both steps")
+          (is (< (js/Math.abs (- (:spent-s a) (:spent-s b) (* 2 (rooms/judge-s)))) 1e-9)
+              (str "the first step pays the home's flood and its doorway room, the next neither: " [(:spent-s a) (:spent-s b)]))
+          (is (pos? first-floods))
+          (is (= first-floods (:unroofed @counts)) (str "the doorway room's floods are not run again: " first-floods " " @counts)))))))
 
 (deftest an-open-home-is-flooded-once-across-flights
   (async done
