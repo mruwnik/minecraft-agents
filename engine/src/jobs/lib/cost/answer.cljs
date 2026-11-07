@@ -477,6 +477,7 @@
         priors (map #(caught-prior/prior (:name %) health) mobs)
         prior (when (seq priors) (apply max-key :chance priors))
         way (or caught 0)
+        ;; the prior carries the residual r the search misses (low-health flights are caught likelier than it judges), so an open way stays at the prior
         caught (- 1 (* (- 1 (:chance prior 0)) (- 1 way)))
         v (danger/flee-walk-speed (or food 20))
         wet {:swim swim :land land :sv (* (planner/swim-speed equipment) (/ v (danger/body-speed (or food 20))))
