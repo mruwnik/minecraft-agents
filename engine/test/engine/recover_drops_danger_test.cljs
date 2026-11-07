@@ -694,7 +694,8 @@
         (let [pile dt/death-pile-of-the-field-report
               wet (into {} (for [x (range 18 23) y [64 65] z (range -2 3)] [(str x "," y "," z) "water"]))
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :blocks wet :entities (vec (pile-drops pile))})
-              dear (list 'jobs.survival.recover-drops {:value-overrides {"raw_iron" 20 "cobblestone" 0.5 "oak_planks" 0.5}})]
+              ;; the body respawned 20 blocks off, so a death costs the short walk back and the drowned costs ~11 s: the pile is worth 40 s, over the 34 s safe trip, under its 45 s
+              dear (list 'jobs.survival.recover-drops {:value-overrides {"raw_iron" 1.4 "cobblestone" 0.05 "oak_planks" 0.05}})]
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "drowned"} 5000)
           (core/submit! eng dear {})
           (await (run-until-empty eng 5))
