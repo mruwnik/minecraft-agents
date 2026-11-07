@@ -203,7 +203,9 @@
                                                             (step 3500 "j1" 20 [["zombie" 7 4]])]))))
         "a stop in which the flight ended (another answer's step) is no part of a flight")
     (is (= [3 1] (map :blocks (c/closing-pieces (c/flee-steps [(step 1000 "j4" 20 [["skeleton" 11 12] ["zombie" 12 7]]) (step 2000 "j4" 20 [])]))))
-        "a shooter lost counts as at least its kind's fire range away (skeleton 15), a melee mob its hostile radius (8)")))
+        "a shooter lost counts as at least its kind's fire range away (skeleton 15), a melee mob its hostile radius (8)")
+    (is (= [[2 2]] (map (juxt :blocks :s) (c/closing-pieces (c/flee-steps [(step 1000 "j5" 20 [["zombie" 7 5]]) (step 2000 "j5" 20 []) (step 3000 "j5" 20 [["zombie" 7 7]])]))))
+        "a chaser missing from one step start but seen at the next is not lost: measured start to start across the gap")))
 
 (deftest a-gap-in-which-the-flight-ended-is-no-stop
   (let [step (fn [t slot] (rec t :step :job "j1" :slot slot :s 1 :blocks 4))

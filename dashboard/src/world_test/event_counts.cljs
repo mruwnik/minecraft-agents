@@ -403,17 +403,23 @@
 (defn closing-pieces
   "Pieces [{:mob :sprint :blocks :s}] of the flights among rows (flee-steps, sorted or not) with gaps kept: from one step's start
   to the next one's (the step and the stop after it; not to an :off? one), the gap to each chaser seen at the first start: :blocks
-  its growth, :s the seconds (a chaser not seen at the next start is out of sight, outrun or dead: its gap there at least
-  the radius it is a danger within, jobs.lib.danger/kind-radius), :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
+  its growth, :s the seconds (a chaser missing from the next start but seen at a later one of the flight, sight flickering, is
+  measured to that one; one not seen again is out of sight, outrun or dead: its gap there at least the radius it is a danger
+  within, jobs.lib.danger/kind-radius), :sprint whether the body could sprint (danger/sprints? of its food at the first start)."
   [rows]
   (let [start #(- (:t %) (* 1000 (:s %)))]
     (mapcat (fn [steps]
-              (for [[a b] (partition 2 1 (sort-by :t steps)) :when (not (:off? b))
-                    :let [s (/ (- (start b) (start a)) 1000)
-                          gaps (into {} (map (fn [[_ id g]] [id g])) (:chasers b))]
-                    :when (pos? s)
-                    [mob id g] (:chasers a) :let [g1 (or (gaps id) (max g (danger-q/kind-radius {:name mob} (danger-q/hostile-radius) :fire-range)))]]
-                {:mob mob :sprint (danger/sprints? (:food a)) :blocks (- g1 g) :s s}))
+              (let [steps (vec (sort-by :t steps))]
+                (for [i (range (dec (count steps))) :let [a (steps i) b (steps (inc i))] :when (not (:off? b))
+                      [mob id g] (:chasers a)
+                      :let [seen-in (fn [st] (some (fn [[_ cid cg]] (when (= cid id) cg)) (:chasers st)))
+                            later (first (filter #(seen-in (steps %)) (range (inc i) (count steps))))
+                            [e g1] (if (and later (not-any? :off? (subvec steps (inc i) (inc later))))
+                                     [(steps later) (seen-in (steps later))]
+                                     [b (max g (danger-q/kind-radius {:name mob} (danger-q/hostile-radius) :fire-range))])
+                            s (/ (- (start e) (start a)) 1000)]
+                      :when (pos? s)]
+                  {:mob mob :sprint (danger/sprints? (:food a)) :blocks (- g1 g) :s s})))
             (vals (group-by :flight (filter #(and (:food %) (:chasers %)) rows))))))
 
 (defn closing-report
