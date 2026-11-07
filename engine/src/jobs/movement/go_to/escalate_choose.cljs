@@ -538,8 +538,7 @@
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
-        solid-at (look/unseen-solid-at-fn p)
-        solid-share (fn [[x y z :as cell]] (if (true? (some-> (sensed x y z) .-unknown)) (solid-at cell) 1))
+        solid-share (escape/dig-share-fn p unseen?)
         ;; an unseen cell is dug at the chance it is solid, as a way's price reads it (escape/dig-share-fn), so a bound
         ;; cuts no route that would win on those prices; a guess is dug again till it holds: over the chance it does
         prices (dig-route/by-share base (if (every? zero? (vals guess-risk)) solid-share #(/ (solid-share %) (- 1 (risk %)))))

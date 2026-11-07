@@ -53,11 +53,11 @@
 
 (defn dig-share-fn
   "(fn [cell]) what share of a rock dig an unsensed cell is expected to cost: the measured chance it is solid
-  (look/unseen-solid-at-fn), 1 for a sensed cell."
-  [p]
-  (let [unseen? (unseen-of p)
-        solid-at (look/unseen-solid-at-fn p)]
-    (fn [cell] (if (unseen? cell) (solid-at cell) 1))))
+  (look/unseen-solid-at-fn), 1 for a sensed cell; unseen? (default unseen-of) tells the two apart."
+  ([p] (dig-share-fn p (unseen-of p)))
+  ([p unseen?]
+   (let [solid-at (look/unseen-solid-at-fn p)]
+     (fn [cell] (if (unseen? cell) (solid-at cell) 1)))))
 
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
 
