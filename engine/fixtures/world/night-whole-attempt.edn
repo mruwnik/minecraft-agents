@@ -46,14 +46,15 @@
    :time :night-exclusive
    :time-why :dawn-decision
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]
+   :act [[:time-set 21000]
+         [:job (jobs.survival.night {:ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 60]
-         [:await {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} 520]]
-   ;; the log-out lasts until the morning: up to a whole night (10000 ticks, 500 s) from a night that has just begun
+         [:await {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} 130]]
+   ;; the log-out lasts until the morning: from 21000 that is 2000 ticks (100 s)
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
             {:event {:source :job :kind :child_started :data {:slot :log-out}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} :within-s 520 :of-job true}]
-   :limit-s 560}
+            {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} :within-s 130 :of-job true}]
+   :limit-s 170}
   ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :shut-in-failed entry) and ends roofed; the entries are
   ;; forgotten then, so night 2 (water gone) digs at the start again instead of skipping it: the start's descent cell is dug.
   {:name "failed-site-forgotten-when-the-night-ends-roofed"

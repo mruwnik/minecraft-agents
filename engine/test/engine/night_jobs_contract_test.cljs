@@ -174,6 +174,10 @@
           (is (= [:bed-open] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end"))))))
 
+(deftest the-start-check-of-an-open-bed-false-sleep-beside-an-unlooked-room-is-unknown-not-open
+  (let [status (fn [_] (first (sleep/bed-status {:view (constantly {:data {} :now 0}) :root "x" :slots [] :primitives (spawn-world {:blocks {"1,64,0" "red_bed"}}) :args {:bed {:x 1 :y 64 :z 0} :open-bed false}})))]
+    (is (= :look (status nil)) "the room is not looked at: the round's look decides")))
+
 (deftest day-coming-mid-call-makes-sleep-and-bed-down-wait
   (let [bed {:bed {:x 6 :y 64 :z 0}}
         status (fn [can-run? world args] (let [[k _ d] (can-run? {:primitives (spawn-world world) :args args})] [k (:reason d)]))]

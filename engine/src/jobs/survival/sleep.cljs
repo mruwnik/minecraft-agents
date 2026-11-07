@@ -25,7 +25,7 @@
   "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed, else the live :spawn-bed, at any distance (go-to prices the walk).
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
-  the bed, a roofed room, else :bed-open. A body already asleep is done.
+  the bed, a roofed room, else :bed-open (unknown, :look, while the body has not looked round this run: the round looks once, then decides). A body already asleep is done.
   A reflex run never holds on an occupied bed: it remembers the bed in :bed-unreachable (ten minutes) and ends nothing-possible :bed-occupied {:pos}, the night then takes the next bed. Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
   occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   The walk only walks (go-to :ways #{:walk :clear-seal}): it never builds or pillars, and digs only out of the shelter it is shut in (:dig-out; at night go-to leaves it when the call's worth buys the walk's night risk), so a bed behind someone's wall is :bed-unreachable. A walk go-to refuses on the dug-in night's price (:night-risk) ends nothing-possible :bed-unreachable at once but remembers nothing: the next call prices it again.
@@ -91,23 +91,23 @@
        (not (look/surveyed? c)) (open-bed? c)))
 
 (defn bed-open
-  "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed and would lie in the open. Unless
-  as-seen?, only once the run has looked round (near-bed-unlooked?); the start check judges as seen."
-  ([c bed] (bed-open c bed false))
-  ([c bed as-seen?]
-  (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (or as-seen? (look/surveyed? c)) (open-bed? c))
-    {:reason :bed-open :pos bed :text "the bed is open (not shut in a spawn-free roofed room)"})))
+  "The cause :bed-open when :open-bed is false, the body stands within 3 blocks of its bed, has looked round this run and would lie in the open."
+  [c bed]
+  (when (and (false? (:open-bed (:args c))) (<= (u/dist (u/self-pos c) bed) 3) (bed-block? c bed) (look/surveyed? c) (open-bed? c))
+    {:reason :bed-open :pos bed :text "the bed is open (not shut in a spawn-free roofed room)"}))
 
 (defn bed-status
-  "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on) or :bed-open."
+  "Ok when asleep already or with a bed to sleep in, else later :no-bed, :bed-unreachable (given up on) or :bed-open; :look
+  :bed-open while the room beside the bed is unlooked (the round's look decides)."
   [c]
   (let [bed (bed-of c)
-        open (when bed (bed-open c bed true))]
+        open (when bed (bed-open c bed))]
     (cond
       (sh-sense/sleeping? (:primitives c)) (contract/ok :asleep "asleep")
       (nil? bed) (contract/later :no-bed "no bed given or remembered within the bed radius")
       (unreachable-bed? c bed) (contract/later :bed-unreachable "the bed was given up on as unreachable" :pos bed)
       open (contract/later :bed-open (:text open) :pos bed)
+      (near-bed-unlooked? c bed) (contract/look :bed-open "the room beside the bed is not looked at yet" :pos bed)
       :else (contract/ok :bed "a bed" :pos bed))))
 
 (def night (cond/because :not-night "not night" (cond/not (cond/daytime))))

@@ -99,7 +99,9 @@
          [:job (jobs.survival.sleep {:bed #at [10 0 12]})]]
    ;; the sleep job itself (the night reflex prices a walk past a zombie in its own room dearer than staying, and does not sleep); sleep holds the monsters-near refusal in pauses (a :pause child each) and asks again, never ending :sleep-failed
    :expect [{:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 40}
-            {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}]
+            {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}
+            ;; no refire: the reflex's job would end sleep-failed and the trigger fire again; the sleep job must stay running (neither stopped nor completed)
+            {:no-event {:source :job :kind #{:stopped :completed} :data {:name "jobs.survival.sleep"}} :for-s 75}]
    :limit-s 90}
   {:name "far-known-bed-kept-carried-bed-placed"
    :sleep-skip true
