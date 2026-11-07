@@ -1,5 +1,5 @@
 ;; A death the server deals while the body's client hangs is reported once, when the fresh bot logs in dead (:died :atJoin),
-;; and recover-drops then fetches the pile. A zombie stands at the body; the runner SIGSTOPs the body 35 s (the server times it out).
+;; and recover-drops then fetches the pile. A zombie stands at the body (killed after the respawn, so only the one death counts); the runner SIGSTOPs the body 35 s (the server times it out).
 {:defaults
  {:tags [:survival :death :jobs]
   :time :any
@@ -11,6 +11,7 @@
    :act [[:summon "zombie" [11.5 0 10.5] "{PersistenceRequired:1b}"]
          [:freeze-body 35]
          [:await {:source :body :kind :respawned} 60]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
          [:job (jobs.survival.recover-drops)]]
    :expect [{:event {:source :body :kind :died :data {:atJoin true}} :within-s 100}
             {:count-event {:source :body :kind :died} :for-s 100 :at-least 1 :at-most 1}
