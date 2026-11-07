@@ -259,7 +259,10 @@
       (fn ^:async t []
         (let [[out st shown] (await (pit-escape 0))]
           (is (= {:arrived true} out) shown)
-          ;; with no block to pillar, the climb turns inside the pit's dirt
+          ;; with no block to pillar, the cheapest climb route (51.08 s, one search) steps south inside the pit's dirt, east up
+          ;; its side, then on along the surface: route-ways cuts it into these legs, each climbed on from that route
+          ;; (next-way), with no search or escalation again. Before 8c9e4d6a5 the search lost this way to a dearer one that
+          ;; dug a floor it then stood on (d5f1eac0) and took the straight stair east
           (is (= [:stair :stair :approach :dig-route] st)))))))
 
 (deftest go-to-pillars-then-stairs-out-of-a-pit-with-one-block
