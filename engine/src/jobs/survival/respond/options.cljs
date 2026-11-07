@@ -209,7 +209,7 @@
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
       {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
        :fails (- 1 (* (- 1 refused) (- 1 climb)))
-     :reached (boolean (some combat/enderman? hostiles))})))
+       :reached (boolean (some combat/enderman? hostiles))})))
 
 (defn covers-in
   "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its
@@ -281,7 +281,7 @@
   (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))
         p (:primitives c)
         hold (fn [o] (cost/hold-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) hostiles)
-                                       :walk-s (get walks o 0) :then (when (:fight a) [(:fight a)])
+                                       :walk-s (get walks o 0) :then (vec (remove nil? (vals a)))
                                        :seconds (/ (* (max 0 (- (settings/get settings ::hold-cap) (:holds (ctx/mem c) 0))) (flight/wait-ms)) 1000)}))]
     (cond-> (dissoc a :flee)
       (contains? a :flee) (assoc :back-off (:flee a))

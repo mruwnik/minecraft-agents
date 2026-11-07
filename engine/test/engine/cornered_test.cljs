@@ -1427,6 +1427,21 @@
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
 
+(deftest a-farther-roof-is-priced-above-a-nearer-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [roof-price (fn ^:async rp [x]
+                           (let [{:keys [eng p seen]} (setup {:inventory [{:name "dirt" :count 16}]
+                                                              :blocks {(key-of x 66 0) "stone" (key-of x 63 0) "stone"}
+                                                              :entities [(enderman -1.5 64 0.5)]})]
+                             (core/submit! eng retreat {})
+                             (await (core/tick! eng))
+                             (-> (filter #(= :retreat.cornered (:kind %)) @seen) first :prices :roof)))
+              near (await (roof-price 3))
+              far (await (roof-price 6))]
+          (is (< near far) "the walk to the roof is in its price"))))))
+
 (deftest a-body-with-an-enderman-and-a-zombie-near-walls-itself-in-rather-than-hold-under-a-roof
   (async done
     (tu/run-async done
