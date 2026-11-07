@@ -215,12 +215,12 @@
 
 (deftest a-search-key-ignores-the-health-a-drowning-body-loses
   (let [c {:primitives (tu/fake {:self {:pos [4.5 64 8.5]}})}
-        policy {:sprint true :air-used 15 :health 10 :drown-prices [0 1 2] :damage-weight 4 :damage-budget 6 :max-drop 6}]
+        policy {:sprint true :air-used 15 :health 10 :damage-weight 4 :damage-budget 6 :max-drop 6}]
     (is (= (wsearch/search-key c [18 70 8] 1 1 policy nil)
-           (wsearch/search-key c [18 70 8] 1 1 (assoc policy :health 8 :drown-prices [0 2] :damage-weight 5 :damage-budget 4 :max-drop 5) nil))
+           (wsearch/search-key c [18 70 8] 1 1 (assoc policy :health 8 :damage-weight 5 :damage-budget 4 :max-drop 5) nil))
         "one drowning hit does not make the search key new")
-    (is (not= (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :health :drown-prices) nil)
-              (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :health :drown-prices :damage-budget) nil))
+    (is (not= (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :health) nil)
+              (wsearch/search-key c [18 70 8] 1 1 (dissoc policy :air-used :health :damage-budget) nil))
         "with the head out the damage budget stays in the key")))
 
 (deftest a-resumed-search-ends-once-the-body-lost-more-than-one-drowning-hit

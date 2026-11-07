@@ -690,11 +690,11 @@
            (:seconds (cost/flee-answer {:food 20 :mobs [drowned] :swim 1000 :land 0 :caught 0})))
         "the flight past that length is priced the same")))
 
-(deftest a-stand-prices-an-hp-with-the-hunger-it-brings
+(deftest a-stand-prices-an-hp-at-the-food-that-heals-it-hungry-or-not
   (let [zombie (mob "zombie" 1)
         stand #(cost/stand-loss (assoc (body 12) :food %) nil [zombie] here 4)]
     (is (pos? (stand 20)))
-    (is (> (stand 7) (stand 20)) "a hungry body that loses hp falls further below its hungry line")))
+    (is (= (stand 7) (stand 20)) "the food that heals the hp is its price already: no hunger on top")))
 
 (deftest one-mob-met-beside-a-bare-body-at-full-health-kills-at-its-measured-rates
   ;; spawn-kill's terms at the fake world's easy difficulty: a lone mob fought with a fist hits at its measured rate; a creeper

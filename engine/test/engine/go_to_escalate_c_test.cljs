@@ -1075,7 +1075,7 @@
 
 (deftest a-dig-beside-water-is-priced-as-its-flood-and-a-goal-ringed-by-water-is-dug-to
   ;; KitOak94: the only way to the ore went beside water; a refused dig there left the ore unreachable
-  (let [hp-s (cost/walk-hp-seconds)
+  (let [hp-s (cost/hp-seconds)
         p (tu/fake {:blocks {"0,65,0" "water"} :inventory [{:name "stone_pickaxe" :count 1}]})
         flood-s (partial dig-route/flood-s (:flood (dig-route/body-prices p (constantly false))))
         open-s (cost/flood-dig-s {} 20 hp-s)
@@ -1116,7 +1116,7 @@
 
 (deftest a-flooded-way-swims-its-steps-under-the-water-and-breathes-where-its-head-is-over-it
   ;; card 8b609f09: a walked step inside the flood was priced dry and the time under water never fell
-  (let [hp-s (cost/walk-hp-seconds)
+  (let [hp-s (cost/hp-seconds)
         flood-s (partial dig-route/flood-s (:flood (dig-route/body-prices (tu/fake {:blocks {"1,66,0" "water"}}) (constantly false))))
         open [:dig [1 65 0] "stone"]
         swum [:step [1 64 0]]
@@ -1131,7 +1131,7 @@
 
 (deftest a-fast-swimmer-pays-no-negative-price-for-time-under-water
   ;; wet-s lost its floor: swimming faster than the dry walk it replaces priced the flood below nothing
-  (let [hp-s (cost/walk-hp-seconds)]
+  (let [hp-s (cost/hp-seconds)]
     (is (zero? (cost/wet-s {} 20 hp-s 0 10 1)) "a wet leg quicker than the dry one adds nothing")
     (is (not (neg? (cost/flood-dig-s {} 20 hp-s))))))
 
@@ -1592,7 +1592,7 @@
 (deftest an-ended-route-is-re-priced-as-the-health-rises-not-searched-again
   (let [{:keys [kept fresh starts]} (health-run (tu/fake ledge) [0 69 0] [8 64 0] (range 12 21))]
     (is (= 1 starts) "the health is no new question: the memory holds")
-    (is (apply > kept) "the fall off the ledge costs less hp's worth as the health rises")
+    (is (= 1 (count (distinct kept))) "a fall the body lives through costs its hp at the one price an hp, at any health")
     (is (= fresh kept) "the kept route's price is a fresh search's at each health")))
 
 (deftest a-kept-route-follows-the-health-down-and-a-no-route-a-deeper-drop-up
@@ -1633,7 +1633,7 @@
 
 (deftest a-plug-with-an-unseen-neighbour-is-dug-at-its-flood-price
   ;; card f043195e: the unseen neighbour of a plug may be the pool; it is priced as water, not banned
-  (let [hp-s (cost/walk-hp-seconds)
+  (let [hp-s (cost/hp-seconds)
         plug [10 64 0]
         stone (into {} (map (fn [d] [(apply str (interpose "," (map + plug d))) "stone"])) rules/neighbour-deltas)
         p (tu/seeing-all (tu/fake {:blocks (assoc stone "10,64,0" "stone") :unloaded ["11,64,0"] :inventory [{:name "stone_pickaxe" :count 1}]}))

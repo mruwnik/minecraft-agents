@@ -8,25 +8,13 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]))
 
-(deftest an-hp-costs-ten-seconds-more-the-nearer-the-floor
-  (is (= 10 (health/walk-hp-seconds)))
-  (are [hp scale] (= scale (health/health-scale hp))
-    20 1
-    10 2
-    5 4
-    1 4
-    0 4)
-  (is (= 10 (cost/per-danger)) "the fetch price of a point of damage is the same figure"))
-
-(deftest drowning-prices-each-hp-at-the-health-it-leaves
-  (is (= [0 20 42 67 96] (mapv js/Math.round (health/drown-prices 10 10 4))) "20/10, 20/9, 20/8, 20/7 x 10 s")
-  (is (= [0 40 80] (vec (health/drown-prices 4 10 2))) "at most max-scale")
-  (is (= 21 (count (health/drown-prices 20 10))) "every hp the body has, by default"))
-
-(deftest losing-hp-costs-each-at-the-hp-price-of-the-health-it-leaves
-  (is (= (peek (health/drown-prices 10 10 4)) (health/hp-cost 10 4)) "whole hp: as drowning prices them")
-  (is (= (+ (health/hp-cost 10 4) (* 0.5 (health/hp-price 6))) (health/hp-cost 10 4.5)) "a part hp pro rata")
-  (is (zero? (health/hp-cost 20 0))))
+(deftest an-hp-costs-the-food-that-heals-it-the-same-at-any-health
+  (is (= (* 1.5 6.66) (health/hp-seconds)) "6 exhaustion, 1.5 points of food or saturation at the measured field price")
+  (is (= 15 (settings/with-settings {:jobs.lib.cost.health/fill-point-s 10} health/hp-seconds)))
+  (is (= (* 4.5 (health/hp-seconds)) (health/hp-cost 4.5)) "a part hp pro rata")
+  (is (zero? (health/hp-cost 0)))
+  (is (= (* 4 (health/hp-seconds)) (health/risk-s 5 4 0) (health/risk-s 20 4 0)) "a hurt body pays no more an hp: its death chance carries low health")
+  (is (= (cost/per-danger) (health/hp-seconds)) "the fetch price of a point of damage is the same figure"))
 
 (deftest the-budget-is-the-health-over-the-floor-less-a-margin
   (are [body settings budget] (= budget (health/damage-budget body settings))
@@ -51,20 +39,11 @@
 (deftest the-budget-does-not-depend-on-food
   (is (= #{7} (set (for [food [0 5 6 7 8 12 18 20]] (health/damage-budget {:health 20 :food food} {}))))))
 
-(deftest the-hunger-an-hp-brings-is-priced-and-falls-smoothly-as-the-food-rises
-  (let [hunger (fn [damage food] (cost/hunger-s food 20 damage))
-        foods (range 5 12)]
-    (are [damage] (apply >= (map #(hunger damage %) foods)) 1 3 7)
-    (is (zero? (cost/hunger-s 20 20 7)) "fed: nothing")
-    (is (= 3 (/ (hunger 3 5) (cost/food-point-worth))) "far below the line, each hp costs a point")
-    (is (= (* 4 (cost/food-point-worth)) (hunger 7 10)) "a drop that crosses the line prices the points past it")))
-
 (deftest the-walk-policy-carries-the-budget-weight-and-the-longest-drop-it-survives
   (let [policy (fn [self args] (wworld/body-policy {:primitives (tu/fake {:self self}) :args args}))]
-    (is (= [7 10 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 20 :food 20} {}))))
-    (is (= [7 (+ 10 (cost/food-point-worth))] ((juxt :damage-budget :damage-weight) (policy {:health 20} {:food 7}))) "food 7: an hp brings hunger, priced")
-    (is (= [3 12.5 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 16 :food 20} {}))))
-    (is (< 10 (:damage-weight (policy {:health 20} {:food 10}))) "food 10: the budget's drop crosses the hungry line, so the mean hp brings hunger")
+    (is (= [7 (cost/hp-seconds) 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 20 :food 20} {}))))
+    (is (= [7 (cost/hp-seconds)] ((juxt :damage-budget :damage-weight) (policy {:health 20} {:food 7}))) "food 7: the food that heals an hp is its price already")
+    (is (= [3 (cost/hp-seconds) 16] ((juxt :damage-budget :damage-weight :max-drop) (policy {:health 16 :food 20} {}))) "hurt: the same price an hp")
     (is (= [1 16] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:min-health 18}))) "a floor of 18: the drops it refuses are the budget's to refuse")
     (is (= [3 6] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:max-damage 3}))))))
 
@@ -88,11 +67,11 @@
     {:health 1 :food 20} {} 0
     {:health nil :food 20} {} 0))
 
-(deftest the-walk-policys-hp-price-is-the-settings-seconds-an-hp
+(deftest the-walk-policys-hp-price-is-the-food-that-heals-it
   (let [policy (fn [overrides health] (settings/with-settings overrides #(wworld/body-policy {:primitives (tu/fake {:self {:health health :food 20}}) :args {}})))]
-    (is (= 10 (:damage-weight (policy {} 20))) "default")
-    (is (= 25 (:damage-weight (policy {:jobs.lib.cost.health/hp-seconds 25} 20))))
-    (is (= 25 (:damage-weight (policy {:jobs.lib.cost.health/hp-seconds 12.5} 10))) "the price still rises with low health")))
+    (is (= (cost/hp-seconds) (:damage-weight (policy {} 20))) "default")
+    (is (= 15 (:damage-weight (policy {:jobs.lib.cost.health/fill-point-s 10} 20))))
+    (is (= 15 (:damage-weight (policy {:jobs.lib.cost.health/fill-point-s 10} 5))) "the same at low health")))
 
 (deftest a-max-rate-above-the-default-raises-the-planners-total-cap
   (let [cap (fn [overrides] (settings/with-settings overrides #(.-dangerCap (wplan/with-drops #js {} (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20}}) :args {}})))))]
@@ -125,7 +104,6 @@
         turtle {:head {:name "turtle_helmet"}}]
     (is (= 11.625 (:air-used (policy {:inWater true :oxygen 5} column))) "mineflayer rounds the air: 0.375 s more")
     (is (= 10 (:health (policy {:inWater true :oxygen 5 :health 10} column))) "drowning to it is lethal")
-    (is (= 11 (count (:drown-prices (policy {:inWater true :oxygen 5 :health 10 :absorption 0} column)))) "priced to the last hp")
     (is (true? ((:air-seen (policy {:inWater true :oxygen 5} column)) 0 66 0)) "air it has seen counts")
     (is (nil? (:air-grace (policy {:inWater true :oxygen 20} column turtle))) "under water: no grace")
     (is (= 15 (:air-grace (policy {:inWater true :oxygen 20 :effects [{:name "water_breathing" :left 300}]} column turtle))) "under water: Water Breathing's pool stays, the turtle grace goes")
@@ -134,9 +112,8 @@
     (is (nil? (:air-used (policy {:inWater true :oxygen 20} surface))))
     (is (nil? (:air-used (policy {:inWater false :oxygen 20} {}))))
     (is (= 11.25 (.. (wplan/with-drops #js {} {:air-used 11.25}) -costs -airUsed)) "go-to hands it to the planner")
-    (let [o (wplan/with-drops #js {} {:air-used 11.25 :health 10 :drown-prices [0 20]})]
-      (is (= 10 (.-health o)))
-      (is (= [0 20] (vec (.-drownPrices o)))))))
+    (let [o (wplan/with-drops #js {} {:air-used 11.25 :health 10})]
+      (is (= 10 (.-health o))))))
 
 ;; a walk cut by the breathe reflex would plan the same dive again at once: for a while near the spot it plans none (airLimit 0), anywhere else or later it does
 (deftest a-recent-breathe-reflex-near-the-body-bars-the-walk-from-planning-a-dive
@@ -159,11 +136,11 @@
     true 5 -2
     false 30 0))
 
-(deftest the-hp-seconds-setting-prices-every-death-term
+(deftest the-hp-price-converts-every-death-term
   (let [body {:health 20 :food 20 :level 0 :carried 0}
-        lethal #(settings/with-settings {:jobs.lib.cost.health/hp-seconds %} (fn [] (cost/lethal-hp {:chance 0.5 :death (cost/death-cost body {:x 0 :y 64 :z 0})})))]
+        lethal #(settings/with-settings {:jobs.lib.cost.health/fill-point-s %} (fn [] (cost/lethal-hp {:chance 0.5 :death (cost/death-cost body {:x 0 :y 64 :z 0})})))]
     (is (< (js/Math.abs (- (lethal 10) (* 2 (lethal 20)))) 1e-9) "a dearer hp makes the same death fewer hp")
-    (is (= 20 (settings/with-settings {:jobs.lib.cost.health/hp-seconds 20} cost/per-danger)))))
+    (is (= 30 (settings/with-settings {:jobs.lib.cost.health/fill-point-s 20} cost/per-danger)))))
 
 (deftest waiting-out-poison-takes-an-hp-per-25-ticks-down-to-one-hp-and-wither-down-to-none
   (are [effects health hp] (= hp (health/ticking-hp effects health))

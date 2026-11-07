@@ -1297,21 +1297,22 @@
           (is (= :done (:status @out)) (pr-str @out))
           (is (false? @walked-under) "the body stayed out of the cut while gravel stood over it"))))))
 
-(deftest a-stair-up-cuts-its-top-cell-from-beside-under-seen-gravel-or-an-unseen-cell-at-low-health
+(deftest a-stair-up-cuts-its-top-cell-from-beside-under-seen-gravel-or-an-unseen-cell-a-landing-would-kill
   (let [cut [[0 67 0] [1 66 0] [1 65 0]]]
     (are [over unseen health dir cuts-beside?]
-         (= cuts-beside? (some? (stair/undermine-cell (fn [c] (if (= c [0 68 0]) over "stone")) (fn [c] (and unseen (= c [0 68 0]))) health [0 65 0] dir cut)))
+         (= cuts-beside? (some? (stair/undermine-cell (fn [c] (if (= c [0 68 0]) over "stone")) (fn [c] (and unseen (= c [0 68 0]))) health 1000 [0 65 0] dir cut)))
       "gravel" false 20 :up true
-      "stone" true 6 :up true
+      "stone" true 2 :up true
+      "stone" true 6 :up false
       "stone" true 20 :up false
-      "stone" false 6 :up false
-      "gravel" false 20 :down false
-      "stone" true 12 :up false)))
+      "stone" false 2 :up false
+      "gravel" false 20 :down false)))
 
 (deftest an-unseen-cell-over-the-column-is-cut-from-beside-while-the-side-cut-is-cheaper-than-its-risk
-  (is (true? (stair/undermine-worth? 6)) "6 hp: 0.1 hp expected at 33 s an hp is 3.3 s, over the 2.1 s the side cut adds")
-  (is (false? (settings/with-settings {:jobs.lib.cost.health/hp-seconds 1} #(stair/undermine-worth? 6))) "a cheap hp is not worth the side cut")
-  (is (false? (with-redefs [stair/undermine-settle-ms 3000] (stair/undermine-worth? 6))) "a longer settle makes the side cut dearer"))
+  (is (true? (stair/undermine-worth? 2 1000)) "2 hp: a landing kills, 0.05 x a 1000 s death is over the 2.1 s the side cut adds")
+  (is (false? (stair/undermine-worth? 6 1000)) "6 hp: a landing's 2 hp at the food that heals them, 0.05 x 20 s, is under the side cut")
+  (is (true? (stair/undermine-worth? 2 50)))
+  (is (false? (with-redefs [stair/undermine-settle-ms 3000] (stair/undermine-worth? 2 50))) "a longer settle makes the side cut dearer"))
 
 (deftest gravel-over-the-bodys-own-column-is-cut-from-beside-so-it-falls-into-the-empty-column
   (async done

@@ -158,7 +158,7 @@
           (is (= 61 (y-of p)) "down the ledge"))))))
 
 (deftest the-walk-price-settings-refuse-bad-values
-  (doseq [[k bad] [[:jobs.lib.cost.health/hp-seconds [0 -1 "x" js/Infinity]]
+  (doseq [[k bad] [[:jobs.lib.cost.health/fill-point-s [0 -1 "x" js/Infinity]]
                    [:jobs.lib.cost.danger/max-rate [0 -1 "x" js/Infinity]]]
           v bad]
     (is (string? (a/setting-problem k v)) (pr-str k v))))

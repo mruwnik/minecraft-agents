@@ -337,7 +337,7 @@
         {:keys [hurt dies death]} (price/stay-parts ctx chance (settings/get wall-in/settings ::wall-in/job-time-s))]
     (is (pos? (* dies death)))
     (is (< (abs (- (cost/risk-s 5 hurt (cost/lethal-hp {:chance dies :death death})) (wall-in/half-built-s ctx 10))) 1e-6)
-        "the death at hp-seconds a hp, only the hurt at the hp-price of the health")))
+        "the death at hp-seconds a hp, the hurt at hp-cost")))
 
 (deftest a-half-built-wall-prices-the-unseen-by-the-light-at-the-feet-not-as-dark
   (let [ctx (plan-ctx (sky/with-sky (tu/seeing-all (tu/fake {:time st/night :inventory [{:name "dirt" :count 3}] :entities []}))))

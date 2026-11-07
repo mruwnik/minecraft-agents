@@ -197,7 +197,7 @@
   (let [[kind text] (with-redefs [sh-sense/light-in (constantly nil)]
                       (lit 0 15 (fn [] ((ready/safe-at (constantly outside)) (ctx-of open-night)))))]
     (is (= :ok kind) "##Inf (a means job at the root), no light within a day: the dark stay is no reason to refuse")
-    (is (< 20 (js/Number (second (re-find #"cost (\d+) hp" text)))) "a stay that costs more hp than the body has")))
+    (is (< 20 (js/Number (second (re-find #"cost ([\d.]+) hp" text)))) (str "a stay that costs more hp than the body has: " text))))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
   (are [world to expected] (= expected (showing #(kind (ready/safe-at (constantly to)) world)))
@@ -415,7 +415,7 @@
         {:keys [now-s now? best]} (ready/act-price hurt 4 0 nil)]
     (is now? "4 hp of 6 is within all but 1, an arrive-worth's allowance")
     (is (= :heal (:wait best)))
-    (is (< (:s best) now-s) "4 hp lost at 6 health cost more than healing to full first and losing them then")
+    (is (< now-s (:s best)) "4 hp the body lives through cost the food that heals them at any health: healing first only adds the wait")
     (is (= [false nil] ((juxt :now? :best) (ready/act-price (assoc hurt :worth (constantly 0)) 4 0 nil))) "a worth of 0 affords neither")))
 
 (deftest the-long-dig-jobs-wait-while-outmatched

@@ -32,7 +32,7 @@
     unarmed "creeper" :flee
     armed "creeper" :fight))
 
-(defn toll [body mob] (cost/threat-factor body {:name mob} 1 (answered body mob)))
+(defn toll [body mob] (cost/threat-factor {:name mob} 1 (answered body mob)))
 
 (deftest toll-falls-with-a-weapon-and-armour-and-follows-the-fights-own-price
   (let [wooden (assoc unarmed :weapon "wooden_sword")
@@ -97,8 +97,9 @@
 (deftest a-mob-tolls-its-meet-rate-times-its-meeting-s-price
   (let [a (answered armed "zombie")
         {:keys [shape rate]} (jobs.lib.cost.death/notice-prior "zombie")]
-    (is (= (* 0.5 (* (/ shape rate) (:price a))) (cost/threat-factor armed {:name "zombie"} 0.5 a)) "the first term of the met chance, at the weight")
-    (is (= (* 4 (jobs.lib.cost.health/hp-price 20)) (cost/threat-factor armed {:name "zombie"} 1 {:price ##Inf})) "at most ::max-rate hp a second")))
+    (is (= (* 0.5 (* (/ shape rate) (:price a))) (cost/threat-factor {:name "zombie"} 0.5 a)) "the first term of the met chance, at the weight")
+    (is (= (* 4 (jobs.lib.cost.health/hp-seconds)) (cost/threat-factor {:name "zombie"} 1 {:price ##Inf}) (cost/threat-factor-cap))
+        "at most ::max-rate hp a second, the same cap at any health")))
 
 (deftest a-sensed-zombie-tolls-its-way-dear-to-flee-cheap-to-fight
   (let [bare (tolls {:entities [(zombie 1 6 0)]})
@@ -128,8 +129,9 @@
     (is (= ["skeleton" "stone_sword" "skeleton"] ((juxt :mob :held :chaser) fled)))))
 
 (deftest max-rate-caps-one-danger
-  (is (= (* 0.1 (jobs.lib.cost.health/hp-price 20))
-         (settings/with-settings {:jobs.lib.cost.danger/max-rate 0.1} (fn [] (toll unarmed "zombie")))))
+  (let [[rest death] (settings/with-settings {:jobs.lib.cost.danger/max-rate 0.1} (fn [] (mob-toll/threat-parts {:name "zombie"} 1 (answered unarmed "zombie"))))]
+    (is (= (* 0.1 (jobs.lib.cost.health/hp-seconds)) rest) "the mob's hurt at most max-rate hp a second")
+    (is (pos? death) "its death on top, uncapped"))
   (is (= {:max-rate 3} (settings/with-settings {:jobs.lib.cost.danger/max-rate 3} cost/danger-opts))))
 
 (defn fled-view

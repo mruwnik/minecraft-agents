@@ -97,7 +97,7 @@
 
 (deftest an-enchanted-worn-chestplate-lowers-the-danger-rate
   (let [body {:health 20 :weapon "diamond_sword"}
-        rate #(let [b (assoc body :equipment {:torso %})] (cost/threat-factor b {:name "zombie"} 1 (cost/answered-together b ["zombie"] nil)))
+        rate #(let [b (assoc body :equipment {:torso %})] (cost/threat-factor {:name "zombie"} 1 (cost/answered-together b ["zombie"] nil)))
         plain {:name "iron_chestplate"}]
     (is (< (rate (assoc plain :enchants [{:name "protection" :level 4}])) (rate plain)))))
 
@@ -372,7 +372,7 @@
   (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1 5 1 30 2} :drop {0 1} :drop-4 {1 1} :drop-8 {2 1}}}
     (fn []
       (let [body {:health 20 :equipment nil :max-drop 8 :carried 64 :share 0}
-            out #(+ (cost/hp-cost 20 (cost/fall-damage nil %)) (cost/pillar-s 0 % %))]
+            out #(+ (cost/hp-cost (cost/fall-damage nil %)) (cost/pillar-s 0 % %))]
         (is (= (+ (* 0.25 (out 1)) (* 0.25 (out 6))) (cost/unseen-fall-s :down 1 body))
             "a 1-block step: each depth under it by its share, the 31-block fall past max-drop never taken")
         (is (= (out 3) (cost/unseen-fall-s :drop 3 body)))
@@ -392,7 +392,7 @@
   (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1} :drop {0 1} :drop-4 {0 1} :drop-8 {9 1 30 1}}}
     (fn []
       (let [body {:health 20 :equipment nil :max-drop 100 :carried 64 :share 0}
-            hp #(cost/hp-cost 20 (cost/fall-damage nil %))
+            hp #(cost/hp-cost (cost/fall-damage nil %))
             out #(+ (hp %) (cost/pillar-s 0 % %))]
         (is (= (* 0.5 (+ (out 17) (out 38))) (cost/unseen-fall-s :drop-8 8 body)) "the 30-block tail is its own fall, a lethal one")
         (is (< (hp 17) (hp 38)) "a fall past 20 hp (death) is dearer than the 17-block one"))))
@@ -407,7 +407,7 @@
 (deftest a-pillar-prices-the-fall-of-a-knock-off-at-each-block-by-its-chance
   (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock 1 :kept 1}}
     (fn []
-      (let [hp #(cost/hp-cost 20 (cost/fall-damage nil %))]
+      (let [hp #(cost/hp-cost (cost/fall-damage nil %))]
         (is (= 0 (cost/pillar-knock-s 20 nil [])))
         (is (= (* 0.5 (+ (hp 1) (hp 2) (hp 3))) (cost/pillar-knock-s 20 nil [1 1 1])) "each block's height is a fall, at the chance")
         (is (< 0 (cost/pillar-knock-s 20 nil (repeat 4 1)) (cost/pillar-knock-s 20 nil (repeat 8 1))) "a taller pillar falls farther")
@@ -523,7 +523,7 @@
 (deftest a-dark-stay-is-lit-when-its-torches-cost-less-than-its-hurt
   (let [way {:blocks 20 :carried 4}]
     (is (< (abs (- (cost/torch-way-s 20 0) (cost/torch-way-s 20 4) (cost/trip))) 1e-6) "one trip for all the torches when none is carried")
-    (is (= :lit (:way (cost/dark-or-lit (* 5 (cost/walk-hp-seconds)) way))) "five hp of hurt cost more than three torches")
+    (is (= :lit (:way (cost/dark-or-lit (* 5 (cost/hp-seconds)) way))) "five hp of hurt cost more than three torches")
     (is (= :dark (:way (cost/dark-or-lit 0 way))) "a dark that hurts nothing costs less than any torch")
     (is (= :dark (:way (cost/dark-or-lit 50 nil))) "a job that hangs no torches stays dark")))
 
@@ -658,9 +658,9 @@
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
         route {:spawns 0.5}]
     (is (= 100 (cost/hold-price {:held-s 100 :hp-lost 0 :health 3})))
-    (is (= (+ 100 (* 2 (cost/hp-price 3))) (cost/hold-price {:held-s 100 :hp-lost 2 :health 3})) "hunger's hp at the price of the health left")
+    (is (= (+ 100 (* 2 (cost/hp-seconds))) (cost/hold-price {:held-s 100 :hp-lost 2 :health 3})) "hunger's hp at an hp's price, the same at low health")
     (is (= (cost/route-death-cost body route far) (cost/opening-price body 0 route far)) "no hurt: the death risk alone")
-    (is (< (cost/opening-price (assoc body :health 20) 2 route far) (cost/opening-price body 2 route far)) "the same hurt is dearer to a weaker body")
+    (is (< (cost/opening-price (assoc body :health 20) 2 route far) (cost/opening-price body 2 route far)) "the same hurt is dearer to a weaker body: the death it risks")
     (is (= (cost/opening-price body 3 route far) (cost/opening-price body 300 route far)) "no more hp than the body has")))
 
 (deftest a-death-by-terrain-costs-plans-near-its-spot-fading-with-age
@@ -906,9 +906,9 @@
     (is (zero? (chance tunnel)) "walls the body cut itself tell nothing of the rock a search leg sees")))
 
 (deftest a-kill-is-priced-by-the-fight-and-drops-by-the-loot-table
-  (let [body {:health 20 :level 0 :carried 0 :weapon "stone_sword" :equipment {}}]
+  (let [body {:health 20 :level 0 :carried 0 :weapon "stone_sword" :equipment {} :respawn {:x 5000 :y 64 :z 0}}]
     (is (< (cost/kill-price body "spider" {:x 0 :y 64 :z 0}) (cost/kill-price (assoc body :health 4) "spider" {:x 0 :y 64 :z 0}))
-        "the same blows cost a hurt body more")
+        "the same blows cost a hurt body more: the death they risk")
     (is (< (cost/kill-price body "spider" {:x 0 :y 64 :z 0}) (cost/kill-price (dissoc body :weapon) "spider" {:x 0 :y 64 :z 0}))
         "a fist fight lasts longer")
     (is (= 1 (cost/kill-drops "spider" "string")) "0 to 2 string")

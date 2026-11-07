@@ -138,7 +138,7 @@
                 chance (spawn-light/night-chance p target)
                 ht (->> @stays (filter #(and (= chance (first %)) (pos? (second %)))) (sort-by second) first last)]
             (is (some? ht) (pr-str @stays))
-            (is (< (js/Math.abs (- (more :flee) (- (cost/hp-cost 20 (+ ht 2)) (cost/hp-cost 20 ht)))) 0.15)
+            (is (< (js/Math.abs (- (more :flee) (cost/hp-cost 2))) 0.15)
                 "the fight adds its hp once, on top of the target's own hurt")))))))
 
 (deftest a-flee-search-still-going-walks-nowhere-until-it-answers

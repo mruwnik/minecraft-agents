@@ -2220,16 +2220,16 @@
       (hostile-fight/swim-out c [{:name "zombie"}]))
     (is (= 1 @runs) "one stand, one walk of its land, from both cells")))
 
-(deftest a-body-in-full-iron-with-a-sword-walks-away-from-a-lone-skeleton-at-10-on-hard
-  ;; arrows that hit only at the measured chance leave the walk away (met again only by cost.answer ::flee-meets) a little cheaper than closing on it
+(deftest a-body-in-full-iron-with-a-sword-fights-a-lone-skeleton-at-10-on-hard
+  ;; the fight's hp cost the food that heals them (Q142), so closing on it is a little cheaper than the walk away (met again by cost.answer ::flee-meets)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world {:inventory sword :equipment iron-armour :entities [(assoc (skeleton 1 10 0) :visible true)]}
               {:keys [seen]} (await (settings/with-settings {:jobs.lib.cost.threat/difficulty 3} #(flight-round respond world)))
               [e] (filter #(= :hostile.decided (:kind %)) @seen)]
-          (is (= :flee (:decision e)) (str "the walk away is the cheaper: " (:prices e)))
-          (is (= {:fight 319 :flee 307} (select-keys (:prices e) [:fight :flee])) "the prices, whole seconds"))))))
+          (is (= :fight (:decision e)) (str "the fight is the cheaper: " (:prices e)))
+          (is (= {:fight 301 :flee 304} (select-keys (:prices e) [:fight :flee])) "the prices, whole seconds"))))))
 
 
 (def lit-room

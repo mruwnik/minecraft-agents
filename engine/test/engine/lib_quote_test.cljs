@@ -21,13 +21,12 @@
     (is (:estimate q))
     (is (nil? (:death (quote/then {:uses {:job-time [1 1 1]}}))) "no child risks a death")))
 
-(deftest risk-s-prices-the-summed-hurt-at-the-health-so-children-are-folded-in-hp
+(deftest risk-s-prices-the-summed-hurt-at-one-price-an-hp-so-children-add
   (let [child {:uses {:health [0 5 5]}}
         both (quote/then child child)]
-    (is (= (health/hp-cost 20 10) (quote/hp-s 20 both)))
-    (is (> (quote/hp-s 20 both) (* 2 (quote/hp-s 20 child)))
-        "the second child's hp are lost from a lower health: summing seconds priced at the same start undercounts")
-    (is (> (quote/hp-s 8 child) (quote/hp-s 20 child)) "the same hurt costs more to a hurt body")
+    (is (= (health/hp-cost 10) (quote/hp-s 20 both)))
+    (is (= (quote/hp-s 20 both) (* 2 (quote/hp-s 20 child))) "an hp costs the food that heals it from any health: the children's seconds add")
+    (is (= (quote/hp-s 8 child) (quote/hp-s 20 child)) "the same hurt costs a hurt body the same: its death chance is priced apart")
     (is (= (+ (quote/hp-s 20 child) (* 0.01 900))
            (quote/hp-s 20 (assoc child :death {:chance 0.01 :death 900})))
         "a death adds its chance times its price")))

@@ -73,7 +73,7 @@
         hardness (get-in basis [:gear :ref-hardness])
         stone-speed (weapon/tool-speed "stone_pickaxe")
         saved #(gear/use-saved basis %)
-        hp-s (health/walk-hp-seconds)]
+        hp-s (health/hp-seconds)]
     (is (pos? hardness) "the reference block's hardness is read from the data")
     (is (= (* hp-s (gear/hit-saved "iron_chestplate" 3)) (saved "iron_chestplate")) "a zombie's 3 hp hit")
     (is (= (* hp-s (armour/fall-damage {} armour/ref-fall)) (saved "elytra")) "the fall fall-profile reads")
@@ -97,7 +97,7 @@
 (deftest the-item-table-follows-the-settings-the-hp-price-reads
   (let [worth #(ord/item-worth {:name "enchanted_golden_apple" :count 1})
         base (worth)]
-    (is (not= base (settings/with-settings {:jobs.lib.cost.health/hp-seconds 2} worth))
+    (is (not= base (settings/with-settings {:jobs.lib.cost.health/fill-point-s 2} worth))
         "a cheaper hp makes the same apple worth less, not the memoised table")))
 
 (deftest the-item-table-is-not-rebuilt-for-a-setting-it-does-not-read

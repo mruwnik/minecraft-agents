@@ -710,8 +710,8 @@
         starving {:pos inside :health 10 :food 3}]
     (is (= 5 (allowed fed nil [])) "no worth said: half the health")
     (is (= 9 (allowed starving nil [])) "no worth, cannot heal: all but 1")
-    (is (< (allowed fed 5 []) 0.5) "a goal worth little buys little, under the share of health")
-    (is (< (allowed starving 5 []) 0.5) "a body that cannot heal is no freer with a worthless goal")
+    (is (= (/ 5 (cost/hp-seconds)) (allowed fed 5 [])) "a goal worth little buys little: its seconds of hp at an hp's price")
+    (is (= (allowed fed 5 []) (allowed starving 5 [])) "a body that cannot heal is no freer with a worthless goal")
     (is (= 9 (allowed fed 100000 [])) "a goal worth a lot: all but 1")
     (is (= 9 (allowed fed ##Inf [])) "arrive: all but 1; walking now or waiting is a choice of ways (walk-risk/status)")
     (is (zero? (allowed fed 0 [])) "a goal worth nothing buys no risk")))
@@ -719,8 +719,8 @@
 (deftest a-worth-buys-hp-at-the-price-a-walk-plans-them-at
   (let [allowed (fn [food worth] (price/allowed (ready-test/ctx-of (assoc day-world :self {:pos inside :health 10 :food food} :inventory [])) worth))
         worth 60]
-    (is (< (allowed 15 worth) (allowed 20 worth)) "hunger an hp brings makes it dearer: fewer hp bought")
-    (is (= (/ worth (cost/hp-weight 15 10 9)) (allowed 15 worth)) "the planner's :damage-weight is the allowance's price")))
+    (is (= (allowed 15 worth) (allowed 20 worth)) "the food that heals an hp is its price, hungry or not")
+    (is (= (/ worth (cost/hp-seconds)) (allowed 15 worth)) "the planner's :damage-weight is the allowance's price")))
 
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]

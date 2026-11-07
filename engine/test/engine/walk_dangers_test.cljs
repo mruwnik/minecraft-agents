@@ -56,7 +56,7 @@
           (is (seq steps))
           (is (>= (nearest steps) 8) (str "nearest " (nearest steps))))))))
 
-(deftest the-danger-options-change-the-plan-and-the-defaults-keep-it
+(deftest the-danger-cap-bounds-a-mobs-hurt-not-its-death-and-the-defaults-keep-the-plan
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -64,7 +64,7 @@
               default (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/max-rate 4}))
               capped (await (plan-past {:entities [zombie]} [] true {:jobs.lib.cost.danger/max-rate 0.2}))]
           (is (= (mapv (juxt :x :z) plain) (mapv (juxt :x :z) default)) "today's values as options: the same plan")
-          (is (< (nearest capped) (nearest plain)) "a lower cap passes nearer"))))))
+          (is (= (nearest capped) (nearest plain)) "an unarmed body's toll is the death the zombie risks, which no cap clips (Q142)"))))))
 
 ;; a zombie met costs an unarmoured body its blows (some 3 hp at 10 s an hp) even with a sword: only armour makes the
 ;; meeting cheap enough to pass near

@@ -249,7 +249,7 @@
           (is (every? #(< 1 (:factor %)) dry) "a price, not a wall")
           (is (nil? swimmer) "a body already in water may swim out"))))))
 
-(deftest the-roof-reach-and-the-toll-follow-the-bodys-breath-and-health
+(deftest the-roof-reach-and-the-toll-follow-the-bodys-breath-not-its-health
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -258,7 +258,7 @@
               hurt (await (probe {:self {:health 4}}))
               winded (await (probe {:self {:oxygen 4}}))]
           (is (< 1 (:factor whole)) "swimming roofed water costs more than its seconds")
-          (is (< (:factor hurt) (:factor whole)) "a hurt body has less to lose to the drowning")
+          (is (< (js/Math.abs (- (:factor hurt) (:factor whole))) 0.1) "a drowning costs the one death at any health")
           (is (< (:reach winded) (:reach whole)) "a body low on breath surfaces from fewer blocks")
           (is (<= 1 (:reach winded)) (pr-str winded)))))))
 

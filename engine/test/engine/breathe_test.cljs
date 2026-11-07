@@ -1217,9 +1217,9 @@
 (deftest the-drowning-loss-follows-the-games-drowning
   (let [body {:health 20 :absorption 0} death-s 5000 loss (partial air/drown-loss-s body 3 death-s)]
     (is (= 0 (loss 2.5)) "air reached within the breath")
-    (is (= (cost/hp-cost 20 4) (loss 5.5)) "2 hp a second once the breath is gone")
+    (is (= (cost/hp-cost 4) (loss 5.5)) "2 hp a second once the breath is gone")
     (is (= death-s (loss 13)) "the life gone: the death")
-    (is (= (cost/hp-cost 20 16) (air/drown-loss-s (assoc body :absorption 4) 3 death-s 13)) "absorption takes the first hp")))
+    (is (= (cost/hp-cost 16) (air/drown-loss-s (assoc body :absorption 4) 3 death-s 13)) "absorption takes the first hp")))
 
 (defn judge-of
   "air/judge-fn's verdict on an own-build glass cap (its dig drops nothing: the put-back costs) over the capped column of extra blocks, a body with full breath; self-extra amends the body, entities are in the world."
@@ -1242,13 +1242,13 @@
 
 (deftest opening-a-cap-costs-the-hurt-of-the-hostile-that-would-come-through
   (let [price (fn [health entities]
-                (let [p (tu/seeing-all (tu/fake {:self {:health health} :entities entities :blocks sealed-pocket}))
+                (let [p (tu/seeing-all (tu/fake {:self {:health health} :entities entities :blocks sealed-pocket :inventory [{:name "stone_sword" :count 1}]}))
                       c {:primitives p :view (fn [] {:now 0 :data {}}) :root "breathe" :slots [] :args {}}]
                   (:price (dig-leave/opening-price c [[0 66 0] [0 67 0]]))))
         zombie [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0.5 :y 67 :z 0.5} :health 20}]]
     (is (zero? (price 20 [])) "no hostile known: the opening costs nothing")
     (is (pos? (price 20 zombie)) "a zombie over the cap hurts the body once it is open")
-    (is (> (price 6 zombie) (price 20 zombie)) "a weaker body pays more")))
+    (is (> (price 6 zombie) (price 20 zombie)) "a weaker armed body pays more: the death it risks")))
 
 (deftest an-own-build-cap-is-too-dear-when-opening-it-costs-more-than-the-drowning-it-averts
   (is (nil? (judge-of {})) "no other way, no hostile: dug")

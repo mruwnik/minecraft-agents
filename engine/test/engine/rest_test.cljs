@@ -50,7 +50,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [worked-at p]} (await (run! {:food 12} [{:name "bread" :count 4}] 1))]
-          (is (= 15 worked-at) "the listed job started once the next hp cost more than it is worth (hp-price under 10 s of food and 4 s of waiting)")
+          (is (= 15 worked-at) "the listed job started once the next hp cost more than it is worth (heal-price under 10 s of food and 4 s of waiting)")
           (is (<= 2 (count (ct/calls p "eat"))) "food under 18 is eaten up before the rest; a bite keeps it at 20")
           (is (empty? (ct/calls p "place")) "already shut in: nothing placed"))))))
 
