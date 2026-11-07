@@ -731,6 +731,5 @@
         within cost/flood-origin-within?
         [s dig cells] (run)
         [s0 dig0 cells0] (try (set! cost/flood-origin-within? =) (run) (finally (set! cost/flood-origin-within? within)))]
-    ;; the pools lie mirrored about z 0: a way and its mirror tie
-    (is (= [s0 (count dig0)] [s (count dig)]))
+    (is (= [s0 dig0] [s dig]))
     (is (< cells cells0) (str cells " cells, by equal origins " cells0))))
