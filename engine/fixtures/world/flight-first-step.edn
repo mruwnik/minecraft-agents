@@ -11,10 +11,11 @@
   :limit-s 60}
  :cases
  [{:name "close-zombie-among-seven-gates-gets-a-flight-choice-at-once"
+   :plot {:length 64}
    :blocks [[:set [6 0 6] "oak_fence_gate[facing=south]"] [:set [10 0 6] "oak_fence_gate[facing=south]"] [:set [22 0 6] "oak_fence_gate[facing=south]"]
             [:set [26 0 6] "oak_fence_gate[facing=south]"] [:set [6 0 26] "oak_fence_gate[facing=south]"] [:set [10 0 26] "oak_fence_gate[facing=south]"]
             [:set [26 0 26] "oak_fence_gate[facing=south]"]]
-   :act [[:summon "zombie" [20.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "zombie" [12.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 4}
             {:event {:source :job :kind :retreat.choice} :within-s 4}
             {:no-event {:source :body :kind :died} :for-s 30}]

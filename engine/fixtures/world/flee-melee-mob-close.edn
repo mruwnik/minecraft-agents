@@ -1,6 +1,6 @@
 ;; Card 7a416a5f: a bare body with a melee mob 2 blocks off on open ground walks away: a flight is priced by the blows the
 ;; race lets the mob land while it is within reach, not blows over the whole flight, so the fist fight (certain death) never wins.
-;; An evenly lit underground plot. The zombie is NoAI and helmeted (it never hurts, no sun burn).
+;; An evenly lit underground plot, 64 long: the zombie stands west of the body, so the open ground lies east (a flight needs a way out). The zombie is NoAI and helmeted (it never hurts, no sun burn).
 ;; Should-succeed: the body decides :flee, walks off, and never fights the zombie (still alive).
 ;; Should-fail (control): an iron-sword body with the zombie beside it kills it (every way is caught, so the flight is cornered
 ;; and its fight wins).
@@ -11,16 +11,16 @@
  {:tags [:hostile :survival :flee]
   :time :any
   :register [{:trigger :hostile-near}]
-  :plot {:light :lit}
+  :plot {:light :lit :length 64}
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "bare-body-walks-from-a-zombie-two-blocks-off"
-   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "zombie" [14.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :hostile.decided :data {:decision :flee}} 15]
          [:wait-s 8]]
    :expect [{:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]
-   :after [[:body-far [16.5 0 16.5] 3] [:entities "type=zombie,tag=wt" [[3 -1 3] [30 6 30]] 1]]}
+   :after [[:body-far [16.5 0 16.5] 3] [:entities "type=zombie,tag=wt" [[3 -1 3] [62 6 30]] 1]]}
   {:name "armed-body-fights-a-zombie-beside-it"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "zombie" [17.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -29,7 +29,7 @@
   {:name "low-food-body-and-zombie"
    :act [[:rcon "effect give $BODY minecraft:hunger 6 226 true"]
          [:until-effect-gone "hunger" 30]
-         [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "zombie" [14.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "zombie" :decision :flee}} :within-s 30}
             {:no-event {:source :job :kind :hostile.decided :data {:mob "zombie" :decision :fight}} :for-s 30}
             {:no-event {:source :body :kind :died} :for-s 30}]}]}
