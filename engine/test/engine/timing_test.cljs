@@ -56,14 +56,13 @@
 (def last-ended (atom nil))
 
 (defn flush-between!
-  "Reports the between-tests throws as their own failed result (named by the test that ended last) and fails the run; returns the message, nil if none."
+  "Reports the between-tests throws as their own failed result (named by the test that ended last) and counts it as a failure; returns the message, nil if none."
   []
   (when (seq @between)
     (let [after (or @last-ended "no test")
           msg (str "a guarded check threw between tests, after " after " (a timer or promise it started?): " (pr-str @between))]
       (reset! between [])
-      (set! (.-exitCode js/process) 1)
-      (.error js/console msg)
+      (t/do-report {:type :fail :message "a guarded check threw between tests" :expected "no 'threw' warn" :actual msg})
       (when ev/enabled? (ev/emit! {:event "result" :name (str "between-tests-after " after) :outcome "error" :message msg}))
       msg)))
 
@@ -71,7 +70,8 @@
 
 ;; After install! so it runs before the @@test result line is built and the failure shows in it.
 (ev/hook! :begin-test-var (fn [m] (flush-between!) (reset! current (ev/var-name (:var m))) (reset! base/guard-warned {}) (reset! throws []) (reset! allowed [])))
-(.on js/process "beforeExit" flush-between!)
+;; Shadow's node-test runner ends with process.exit (no beforeExit) and reads the failure counters before :summary, so the last chance to count a throw is the end of each namespace (after its :once fixtures).
+(ev/hook! :end-test-ns (fn [_] (flush-between!)))
 (ev/hook! :end-test-var
           (fn [m]
             (reset! current nil)
