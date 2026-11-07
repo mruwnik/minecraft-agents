@@ -1515,10 +1515,10 @@
           (is (not-any? #(re-find #"cannot-escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
 (deftest escape-order-by-situation
-  (is (= [:water :roof :plug :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
-      "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds")
+  (is (= [:water :roof :plug :pillar :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
+      "no walk away, no back-off; the pillar is priced (an enderman reaches its top); a fight only last, whatever the odds")
   (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true}))))
-  (is (= [:roof :plug :water :plug-dig :fight] (choose/by-price (choose/escape-order {:enderman? true}) {:water 90 :roof 10 :plug 20 :plug-dig 99}))
+  (is (= [:roof :plug :water :plug-dig :pillar :fight] (choose/by-price (choose/escape-order {:enderman? true}) {:water 90 :roof 10 :plug 20 :plug-dig 99}))
       "the holds from an enderman take their places by price")
   (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (choose/escape-order {:swim? true})))
   (is (= [:fight] (choose/escape-order {:swim? true :win? true})) "an armed body that wins still fights")

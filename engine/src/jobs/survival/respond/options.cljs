@@ -208,7 +208,8 @@
           refused (wall-in/mob-fails (flight/with-seen-fails c :pillar (settings/get settings ::pillar-mob-fails))
                                      (= :beside (pillar/mob-class (:primitives c) (pl/feet-cell c))))]
       {:open-s (if (some #(or (combat/ranged? %) (combat/creeper? %)) hostiles) seconds s) :seconds seconds
-       :fails (- 1 (* (- 1 refused) (- 1 climb)))})))
+       :fails (- 1 (* (- 1 refused) (- 1 climb)))
+     :reached (boolean (some combat/enderman? hostiles))})))
 
 (defn covers-in
   "What shut-in/covers reads past the ways: the body's feet cell, the cells the hostiles near fill and their kinds, its

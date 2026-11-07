@@ -721,6 +721,11 @@
   [mobs dawn-s]
   (if (and dawn-s (seq mobs) (every? #(true? (:burns %)) mobs)) [{:damage 0 :hit 0 :seconds dawn-s}] []))
 
+(defn add-blows
+  "answer with the blows {:damage :hit} added."
+  [a {:keys [damage hit]}]
+  (-> a (update :damage + damage) (update :hit #(max (or % 0) hit))))
+
 (defn cover-answer
   "The answer of shutting the body in against mobs [flee-mob's] wearing equipment by a cover {:open-s :seconds :fails :dawn-s}
   (jobs.survival.shut-in/covers: the seconds a side stays open, the seconds it takes with the quiet after it, the chance
@@ -728,12 +733,14 @@
   when the hide ends (stays-chance: all of them unless every mob is known to burn by day), the cheapest of then and the same cover again (:stays). A cover that fails is the
   blows over open-s and then at once the cheapest of failed (the answers left: the fight, the other covers). A creeper
   blasts as stand-answer's over open-s (one that reaches its swell start before the side shuts); shut in, the body is out
-  of its sight and it does not swell."
-  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s]}]
+  of its sight and it does not swell. With :reached (a pillar: an enderman teleports to its top) an enderman's blows
+  land at once over all of seconds."
+  [{:keys [equipment mobs then failed]} {:keys [open-s seconds fails run dawn-s reached]}]
   (let [then (concat then (exits mobs dawn-s))
         blasts (:blasts (stand-answer {:equipment equipment :mobs (filter #(= "creeper" (:name %)) mobs) :seconds open-s}))
         a (cond-> (or run (start-build-answer {:equipment equipment :mobs mobs :seconds open-s}))
-            (seq blasts) (-> (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max (or % 0) (map blast-hp blasts))) (assoc :blasts blasts)))
+            (seq blasts) (-> (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max (or % 0) (map blast-hp blasts))) (assoc :blasts blasts))
+            reached (add-blows (blows-over (armour/armour-stats equipment) (map #(assoc % :distance 0 :start 0) (filter (fn [m] (= "enderman" (:name m))) mobs)) seconds)))
         fails (if (seq failed) (or fails 0) 0)]
     (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))
       (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]

@@ -781,3 +781,11 @@
     "skeleton" 0.03 0.05
     "zombie" 0.25 0.33)
   (is (< 0.12 (:chance (cost/spawn-kill (body 20) here)) 0.18) "the measured dark meets kill 0.16, all lights 0.11"))
+
+(deftest a-pillar-against-an-enderman-pays-its-blows-over-the-whole-hide
+  (let [ender (mob "enderman" 6)
+        pillar #(cost/cover-answer {:mobs % :then [{:damage 0 :hit 0 :seconds 0}]} {:open-s 2 :seconds 32 :reached (boolean (some (fn [m] (= "enderman" (:name m))) %))})
+        walls (cost/cover-answer {:mobs [ender] :then [{:damage 0 :hit 0 :seconds 0}]} {:open-s 2 :seconds 32})]
+    (is (zero? (:damage walls)) "walls keep a 3-tall enderman out")
+    (is (pos? (:damage (pillar [ender]))) "on a pillar's top it is reached the whole hide")
+    (is (> (:damage (pillar [ender])) (:damage (cost/cover-answer {:mobs [ender] :then [{:damage 0 :hit 0 :seconds 0}]} {:open-s 2 :seconds 32 :reached false}))))))
