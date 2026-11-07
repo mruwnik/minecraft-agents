@@ -514,6 +514,23 @@
     (is (nil? (q "x=1&y=64")))
     (is (nil? (q "x=1&y=a&z=3")))))
 
+(deftest box-view-lists-remembered-blocks-by-name-and-marks-unseen-cells
+  (let [world {[0 0 0] #js {:name "stone"} [1 0 0] #js {:name "air"} [0 0 1] #js {:unknown true}}
+        eng {:primitives #js {:isOffline (fn [] false)
+                              :sensedAt (fn [p] (get world [(.-x p) (.-y p) (.-z p)]))}}]
+    (is (= {:ok true :box [[0 0 0] [1 0 1]]
+            :blocks {"air" [[1 0 0]] "stone" [[0 0 0]]}
+            :unseen [[0 0 1] [1 0 1]]}
+           (event-api/box-view eng {:from {:x 1 :y 0 :z 1} :to {:x 0 :y 0 :z 0}})))
+    (is (= {:ok false :reason :box-too-big :cells 4913 :max 4096}
+           (event-api/box-view eng {:from {:x 0 :y 0 :z 0} :to {:x 16 :y 16 :z 16}})))))
+
+(deftest box-query-needs-six-integers
+  (let [q #(event-api/box-query (js/URLSearchParams. %))]
+    (is (= {:from {:x 1 :y 2 :z 3} :to {:x 4 :y 5 :z 6}} (q "x=1&y=2&z=3&x2=4&y2=5&z2=6")))
+    (is (nil? (q "x=1&y=2&z=3&x2=4&y2=5")))
+    (is (nil? (q "x=1&y=2&z=3&x2=4&y2=5&z2=a")))))
+
 (deftest seen-view-lists-remembered-blocks-nearest-first-with-name-pos-and-distance
   (let [calls (atom [])
         rows [{:name "chest" :pos {:x 1 :y 64 :z 2} :distance 3.04 :age-ms 5}

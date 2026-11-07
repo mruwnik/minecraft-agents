@@ -267,6 +267,36 @@
     (when (and (= 3 (count given)) (every? js/Number.isSafeInteger nums))
       (zipmap [:x :y :z] nums))))
 
+(defn box-query
+  "The validated box /cell query as {:from {:x :y :z} :to {:x :y :z}} (corners in any order), or nil when malformed
+  (x y z and x2 y2 z2, all integers)."
+  [params]
+  (let [given (keep #(.get params %) ["x" "y" "z" "x2" "y2" "z2"])
+        nums (map js/Number given)]
+    (when (and (= 6 (count given)) (every? js/Number.isSafeInteger nums))
+      {:from (zipmap [:x :y :z] (take 3 nums)) :to (zipmap [:x :y :z] (drop 3 nums))})))
+
+(def box-max-cells "One chunk section: the largest box a query may ask for." 4096)
+
+(defn box-view
+  "Read-only: what the body senses in a box (never x-ray; memory and sight only): {:box [[x y z] [x2 y2 z2]] :blocks {name [[x y z] ...]}
+  :unseen [[x y z] ...]}. A box over box-max-cells answers :reason :box-too-big."
+  [eng {:keys [from to]}]
+  (let [[[x1 x2] [y1 y2] [z1 z2]] (mapv (fn [k] [(min (k from) (k to)) (max (k from) (k to))]) [:x :y :z])
+        volume (* (inc (- x2 x1)) (inc (- y2 y1)) (inc (- z2 z1)))]
+    (cond
+      (core/offline? eng) {:ok false :reason :offline :offline (core/away eng)}
+      (> volume box-max-cells) {:ok false :reason :box-too-big :cells volume :max box-max-cells}
+      :else
+      (let [^js prim (:primitives eng)
+            rows (for [x (range x1 (inc x2)) y (range y1 (inc y2)) z (range z1 (inc z2))
+                       :let [^js b (some-> (.-sensedAt prim) (.call prim (clj->js {:x x :y y :z z})))]]
+                   [(if (or (nil? b) (.-unknown b)) nil (.-name b)) [x y z]])
+            by-name (group-by first rows)]
+        {:ok true :box [[x1 y1 z1] [x2 y2 z2]]
+         :blocks (into (sorted-map) (for [[n cs] by-name :when n] [n (mapv second cs)]))
+         :unseen (mapv second (get by-name nil))}))))
+
 (defn cell-view
   "Read-only: one cell as the body senses it (never x-ray): {:cell [x y z] :seen? :name :properties (the block's state, e.g.
   waterlogged, level, facing) :live? (in sight or felt now, else remembered) :age-ms}; {:seen? false} for a cell never seen."
@@ -614,9 +644,13 @@
                           (bad! res 400 :bad-query))
 
                         (and (= method "GET") (= pathname "/cell"))
-                        (if-let [q (cell-query (.-searchParams url))]
-                          (respond! res 200 (cell-view eng q))
-                          (bad! res 400 :bad-query))
+                        (if (.has (.-searchParams url) "x2")
+                          (if-let [q (box-query (.-searchParams url))]
+                            (respond! res 200 (box-view eng q))
+                            (bad! res 400 :bad-query))
+                          (if-let [q (cell-query (.-searchParams url))]
+                            (respond! res 200 (cell-view eng q))
+                            (bad! res 400 :bad-query)))
 
                         (and (= method "GET") (= pathname "/light"))
                         (if-let [q (light-query (.-searchParams url))]

@@ -159,6 +159,13 @@
                           [["cell" "1" "2" "3" "--radius" "2"] #"--radius"]]]
     (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
+(deftest cells-is-a-read-only-observe-query-of-a-box
+  (is (= "/cell?x=1&y=2&z=3&x2=4&y2=-5&z2=6" (:path (request "--world" "w" "ProbeBody" "cells" "1" "2" "3" "4" "-5" "6"))))
+  (doseq [[argv pattern] [[["cells" "1" "2" "3"] #"x1 y1 z1 x2 y2 z2"]
+                          [["cells" "1" "2" "3" "4" "5" "a"] #"integers"]
+                          [["cells" "1" "2" "3" "4" "5" "6" "7"] #"x1 y1 z1"]]]
+    (is (re-find pattern (:error (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
+
 (deftest light-is-a-read-only-observe-query-of-a-cell-or-the-feet
   (doseq [[argv path] [[["light"] "/light"]
                        [["light" "--radius" "2"] "/light?radius=2"]
