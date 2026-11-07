@@ -1142,25 +1142,28 @@
 
 (deftest a-body-shut-in-on-a-plateau-far-from-a-sealed-pocket-gets-off-at-the-edge-nearest-it
   ;; world case go-to-far-enclosed-goal: a plateau 6 high on a stone mass, the pocket 70 across and 9 down too far for one
-  ;; dig route; no stair, pillar or wall leads off the top, so it walks to the edge nearest the pocket, looks over it and
-  ;; gets down to the plain (the old approaches round the top, each no nearer, gave up after 3) and digs the short way from
-  ;; there; the far search from the top outgrows the heap (stubbed: test-util turns the real check off) and goes on across rounds as one search
+  ;; dig route; no stair, pillar or wall leads off the top, and it gets there without a tour round the top (the old
+  ;; approaches round it, each no nearer, gave up after 3); the far search from the top outgrows the heap (stubbed:
+  ;; test-util turns the real check off) and goes on across rounds as one search. Whether it digs from the plain: card 870a079a
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [blocks (merge (box 0 50 0 99 54 63 "stone") (box 0 55 0 20 60 20 "stone") {"80,51,56" "air" "80,52,56" "air"})
-              ;; the far search outgrows the heap (test-util stubs the real heap check off): each search is full after a few slices
-              asks (atom 0)
+              ;; the far search outgrows the heap (test-util stubs the real heap check off): each search to the pocket is full
+              ;; after a few slices, every other (a leg, a way off the edge) never
+              asks (atom nil)
               search dig-route/search
-              {:keys [out seen p]} (try (set! dig-route/heap-full? #(< 4 (swap! asks inc)))
-                                        (set! dig-route/search (fn [& args] (reset! asks 0) (apply search args)))
+              {:keys [out seen p]} (try (set! dig-route/heap-full? #(some-> @asks (swap! inc) (> 4)))
+                                        (set! dig-route/search (fn [& args]
+                                                                 (let [run (apply search args)
+                                                                       n (when (= [80 51 56] (nth args 2)) (atom 0))]
+                                                                   (fn [& r] (reset! asks n) (apply run r)))))
                                         (await (run-go-to {:self {:pos {:x 10.5 :y 61 :z 10.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
                                                           {:pos [80 51 56] :range 0}))
                                         (finally (set! dig-route/heap-full? (constantly false))
                                                  (set! dig-route/search search)))]
           (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) (map (juxt :step :at) (filter #(= :go-to.escalated (:kind %)) seen))))
           (is (<= (count (filter #(and (= :approach (:step %)) (= 61 (second (:at %)))) (filter #(= :go-to.escalated (:kind %)) seen))) 2) "no tour round the top")
-          (is (some #(and (= :dig-route (:step %)) (< (second (:at %)) 61)) (filter #(= :go-to.escalated (:kind %)) seen)) "the short dig is taken from the plain, not the top")
           (is (= [80 51 56] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos (.self p))))))))))))
 
 (deftest a-dig-route-over-guessed-rock-is-tried-from-the-top-when-its-search-can-end
