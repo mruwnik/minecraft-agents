@@ -2,7 +2,7 @@
 ;; (the caller's :worth, else a log's worth to the body, which pays for a few blocks only) until the tree is seen, then fells it.
 ;; Plot 220 x 64, open sky over a glowstone floor (lit at any hour); body at the west end, tree at x 40 z 32.
 ;; Should-succeed: with a :worth that pays for the walk the log is got; a kit (iron pickaxe, no stone or tree in sight) prices the
-;; search of its pickaxe's logs at the kit's worth, so the tree is felled and the wooden pickaxe for the stone is next. Should-fail: a log is cheap, 40 blocks off is past what it pays for, so obtain stops no-source.
+;; search of its pickaxe's logs at the kit's worth, so the tree is felled and the wooden pickaxe for the stone is next. Should-fail: a log is cheap, 40 blocks off is past what it pays for, so obtain waits :not-worth (the search priced above the log's worth) and does not walk.
 {:defaults
  {:tags [:items :obtain :explore :large :jobs]
   :time :any
@@ -17,7 +17,8 @@
    :after [[:item "oak_log" 4]]}
   {:name "cheap-tree-far-off-is-not-searched-for"
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 200 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30 :until {:source :job :kind :waiting :data {:reason :not-worth}}}]
    :after [[:item "oak_log" 0]]}
   {:name "kit-with-no-tree-in-sight-walks-to-the-far-tree"
    :body {:inventory [["iron_axe" 1] ["stone_sword" 1]]}
