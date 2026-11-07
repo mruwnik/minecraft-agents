@@ -186,10 +186,12 @@
 
 (defn rim-steps
   "How many of the n steps of a stair up along dir from feet to cut: those up to and including the first one that stands on
-  seen open ground (all its cuts open and seen, a seen solid floor under it), the rim of a wall; n when none does."
+  open ground (its cuts and the cell ahead on its level open over solid floors, all seen), the rim of a wall; n when
+  none does. A cut stair's own steps are no rim: the next tread is ahead."
   [block-at unseen? feet dir n]
-  (let [done? (fn [[a b c]] (let [floor (add c [0 -1 0])]
-                              (and (not-any? unseen? [a b c floor]) (every? #(bs/passable? (block-at %)) [a b c]) (solid? (block-at floor)))))
+  (let [done? (fn [[a b c]] (let [floor (add c [0 -1 0]) on (ahead c dir 1) on-floor (add on [0 -1 0])]
+                              (and (not-any? unseen? [a b c floor on on-floor]) (every? #(bs/passable? (block-at %)) [a b c on])
+                                   (solid? (block-at floor)) (solid? (block-at on-floor)))))
         k (count (take-while (complement done?) (partition 3 (stair-cuts feet dir n))))]
     (min n (inc k))))
 

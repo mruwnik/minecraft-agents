@@ -683,7 +683,9 @@
               pen-cells (filter pen? (map #(mapv js/parseInt (.split % ",")) (keys blocks)))]
           (is (= {:arrived true} @out))
           (is (seq (events-of seen :go-to.restored)))
-          (is (= [] (filterv #(= "air" (block p %)) pen-cells)) "every cell of the pen's wall and floor is whole again"))))))
+          (is (= [] (filterv #(= "air" (block p %)) pen-cells)) "every cell of the pen's wall and floor is whole again")
+          ;; the rim 2 above is unseen when the stair is chosen (sight 3): the stair ends on it once seen, not stopped needing a floor in the air past it
+          (is (= [] (filterv #(= :stair (:step %)) (events-of seen :go-to.escalation-stopped)))))))))
 
 (deftest go-to-takes-back-the-own-blocks-that-shut-the-body-in-when-the-goal-is-farther-than-the-clear-radius
   ;; a seal beside the feet, the goal 6 blocks past it: the cleanup takes back every own block near the feet, also the one behind
