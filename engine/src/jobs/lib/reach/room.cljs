@@ -258,15 +258,18 @@
                 {:cell cell :inside {:x cx :y cy :z cz}})]
     {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))}))
 
+(defn closed-room
+  "room-of the cells of a room-flood answer, nil when it is open or any cell of it is an unseen-edge?."
+  [p {:keys [cells unseen?]}]
+  (when (and cells (not unseen?))
+    (room-of p cells)))
+
 (defn room-from
   "The closed room a walker at cell [x y z] reaches (room*'s answer), nil when it is no closed room or any cell of it is
   an unseen-edge?."
   ([p kind-at x y z] (room-from p kind-at x y z room-cells))
   ([p kind-at x y z budget] (room-from p kind-at x y z budget false))
-  ([p kind-at x y z budget entered?]
-   (let [{:keys [cells unseen?]} (room-flood p kind-at x y z budget entered?)]
-     (when (and cells (not unseen?))
-       (room-of p cells)))))
+  ([p kind-at x y z budget entered?] (closed-room p (room-flood p kind-at x y z budget entered?))))
 
 (defn shut-kind
   "kind-of block b with a door, gate or trapdoor shut: :solid, a gate :tall (a walker cannot step onto it)."
@@ -285,6 +288,8 @@
   [p]
   (memo-kind-at (fn [x y z] (kind-of (u/seen-block p {:x x :y y :z z})))))
 
+(declare room-with)
+
 (defn room*
   "The closed room around cell pos {:x :y :z}: the cells a walker there reaches with every door, gate and trapdoor shut,
   fewer than room-cells (flood over the blocks the body has seen, room-kind-at; no closed room where it meets an unseen
@@ -294,11 +299,15 @@
   a pos in one is judged by the first closed room beside it. `kind-at`: room-kind-at of shut-kind-at p, or one kept for a while."
   ([p pos] (room* p pos (room-kind-at p (shut-kind-at p))))
   ([p pos kind-at] (room* p pos kind-at room-cells))
-  ([p {:keys [x y z]} kind-at budget]
-   (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
-     (if in-door?
-       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz) budget true)) [[1 0] [-1 0] [0 1] [0 -1]])
-       (room-from p kind-at x y z budget)))))
+  ([p pos kind-at budget] (room-with p pos (fn [x y z entered?] (room-flood p kind-at x y z budget entered?)))))
+
+(defn room-with
+  "room*'s answer over (flood x y z entered?), a room-flood from that cell."
+  [p {:keys [x y z]} flood]
+  (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
+    (if in-door?
+      (some (fn [[dx dz]] (closed-room p (flood (+ x dx) y (+ z dz) true))) [[1 0] [-1 0] [0 1] [0 -1]])
+      (closed-room p (flood x y z false)))))
 
 (defn enterable?
   "Whether a walker on seen ground outside the room (room*'s answer) steps into one of its cells: a pit under a roof is open
@@ -347,15 +356,16 @@
   [p pos]
   (some? (unseen-room p pos)))
 
+(declare kept-flood)
+
 (defn boundary
   "{:seen n :unseen [[x y z]]} of the room around pos {:x :y :z} (as unseen-room?): how many feet cells beside its room
   cells the body has seen (its walls and doors, as the flood closed over them) and those it has not seen (with the flood's
   :edge cells but a head cell over another, which an up or down step leaves off the same-level sides), what a look into the room has to show."
   [p {:keys [x y z]}]
-  (let [kind-at (room-kind-at p (shut-kind-at p))
-        in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
+  (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
         starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])
-        floods (keep (fn [[sx sy sz]] (room-flood p kind-at sx sy sz room-cells in-door?)) starts)
+        floods (keep (fn [[sx sy sz]] (kept-flood p sx sy sz in-door?)) starts)
         cells (set (map vec (mapcat :cells floods)))
         edge (into #{} (mapcat :edge) floods)
         sides (->> cells
@@ -443,10 +453,15 @@
   [p ck f]
   (kept-with p ck (fn [kind-at _] (f kind-at))))
 
+(defn kept-flood
+  "room-flood from cell x y z within room-cells, kept as kept does: a check asks the same room's flood several times."
+  [p x y z entered?]
+  (kept p (str "flood|" x "|" y "|" z "|" (boolean entered?)) #(room-flood p % x y z room-cells entered?)))
+
 (defn room
   "room* kept per body (kept); not kept without a perception."
   [p {:keys [x y z] :as pos}]
-  (kept p (str x "|" y "|" z) (partial room* p pos)))
+  (kept p (str x "|" y "|" z) (fn [_] (room-with p pos (partial kept-flood p)))))
 
 (defn look
   "{:room (room*'s answer) :unseen (a delay of unseen-room's)} of the cell pos from one flood a start, kept per body as

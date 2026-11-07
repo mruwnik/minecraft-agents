@@ -75,7 +75,7 @@
          feet (sh-sense/feet p)]
      (when (covered? p)
        (let [kind-at (reach-room/room-kind-at p (reach-room/shut-kind-at p))
-             {raw :cells edge :edge} (reach-room/room-flood p kind-at (:x feet) (:y feet) (:z feet))
+             {raw :cells edge :edge} (reach-room/kept-flood p (:x feet) (:y feet) (:z feet) false)
              flood (map vec raw)
              unseen? (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))
              head-sides (keep #(when (reach-room/unseen-edge? p kind-at % unseen?) (sh-inside/unseen-beside unseen? %)) raw)

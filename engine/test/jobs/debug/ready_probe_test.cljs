@@ -3,7 +3,10 @@
   (:require [cljs.test :refer [deftest are is]]
             [engine.ready-test :as rt]
             [engine.registry :as registry]
-            [jobs.debug.ready-probe :as probe]))
+            [engine.shelter-support :as st]
+            [engine.test-util :as tu]
+            [jobs.debug.ready-probe :as probe]
+            [jobs.lib.reach.room :as reach-room]))
 
 (defn kind [args world]
   (first ((:safe? (get registry/jobs 'jobs.debug.ready-probe)) (assoc (rt/ctx-of world) :args args))))
@@ -25,3 +28,18 @@
       (let [s (probe/safe? c)]
         (is (= s (:status (probe/report c))))
         (is (= 1 @runs))))))
+
+(deftest a-night-check-floods-the-room-round-the-body-once-while-its-memory-holds
+  (let [c (assoc (rt/remembering-ctx {:time st/night :floor [-40 -40 40 40] :self {:pos {:x 6.5 :y 64 :z 0.5}}
+                                      :blocks (tu/box 10 64 -4 10 68 4 "stone")})
+                 :args {:at [11 64 0] :stay-s 3600})
+        floods (atom [])
+        flood reach-room/room-flood
+        note! (fn [p args] (swap! floods conj (conj args (reach-room/steady-key (aget p "perception")))))]
+    (with-redefs [reach-room/room-flood (fn ([p k x y z] (note! p [x y z]) (flood p k x y z))
+                                          ([p k x y z budget] (note! p [x y z budget]) (flood p k x y z budget))
+                                          ([p k x y z budget entered?] (note! p [x y z budget entered?]) (flood p k x y z budget entered?)))]
+      (dotimes [_ 2] (is (= :later (first (probe/safe? (assoc c :id (str (random-uuid)))))))))
+    (is (seq @floods))
+    (is (= (distinct (map #(vector (take 3 %) (last %)) @floods)) (map #(vector (take 3 %) (last %)) @floods))
+        "each start cell is flooded once per memory epoch, by every reader of the room (look-edge/pending, boundary, room)")))
