@@ -281,9 +281,10 @@
                                                    (fn [{:keys [p]}]
                                                      (.override (.-world p) "dig" (fn [token args impl] (swap! digs conj (js->clj args)) (impl token args))))))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          ;; the look at the rim shows the pit's wall seen, so the step the two blocks leave short is the one rim cell dug
+          ;; two pillars then a jump onto the rim (10.98 s): the surface cells past it, not seen, under cells seen open, are
+          ;; passed at their guess, not read as walls that left only a tunnel through the rim (14.40 s)
           (is (= :pillar (first (steps seen))))
-          (is (= [{"pos" {"x" 1, "y" 63, "z" 0}}] @digs) "only the rim cell at the top of the pit wall is dug"))))))
+          (is (empty? @digs) "no cell is dug on the way out"))))))
 
 (def deep-pit
   "A 5-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..65; stone ground east of it (x 3..14) topped at the rim."
@@ -298,7 +299,8 @@
                                                     :inventory [{:name "dirt" :count 5}]}
                                                    {:pos [10 66 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          ;; the search's cheapest climb route over the rim the look saw, its five blocks enough
+          ;; four pillars, a jump onto the rim the look saw and the surface past it (13.35 s; over the memory before the
+          ;; look, with the rim unseen, 24.7 s: [:pillar :dig-route :dig-route :approach :pillar :dig-route])
           (is (= [:pillar :approach :dig-route] (steps seen)) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))
 
 (defn ^:async run-step-off

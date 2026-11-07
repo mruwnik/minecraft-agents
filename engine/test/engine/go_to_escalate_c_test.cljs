@@ -826,8 +826,10 @@
 (deftest a-dig-route-does-not-step-on-a-floor-the-body-has-not-seen-under-seen-air
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
         p (hiding-with-pickaxe world #(= [2 63 0] %))
-        cells (choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
-    (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))
+        stands (map :to (:steps (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) false false nil)))]
+    ;; it may dig down into the unseen cell, onto the seen rock under it
+    (is (seq stands))
+    (is (not-any? #{[2 64 0]} stands) "no step stands on the unseen floor under the seen-open cell")))
 
 (deftest a-far-walled-in-goal-is-searched-for-a-slice-a-call-and-reached
   ;; a body in a walled yard on a stone mass, the goal a sealed pocket 80 across and 12 down: each escalate! call's dig
@@ -1159,9 +1161,9 @@
 (deftest a-pocket-floor-seen-only-from-inside-is-no-bar-when-floors-unseen-are-ok
   (let [world (apply dissoc (box 0 60 -1 6 70 1 "stone") (for [x (range 3) y [64 65]] (str x "," y ",0")))
         p (hiding-with-pickaxe world #(= [2 63 0] %))
-        cells #(choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false) %)]
-    (is (some #(= 1 (nth (:cell %) 2)) (cells false)))
-    (is (not-any? #(= 1 (nth (:cell %) 2)) (cells true)) "it goes straight over the unseen floor")))
+        stands #(map :to (:steps (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) % false nil)))]
+    (is (not-any? #{[2 64 0]} (stands false)))
+    (is (some #{[2 64 0]} (stands true)) "it goes straight over the unseen floor")))
 
 (deftest a-dig-route-walks-on-into-a-pocket-whose-floor-is-seen-only-from-inside
   ;; the pocket [3 60 0] [3 61 0] reads as rock until [3 62 0] is dug, then shows open; its floor [3 59 0] never shows: the

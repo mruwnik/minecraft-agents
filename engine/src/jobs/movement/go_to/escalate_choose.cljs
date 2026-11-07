@@ -621,8 +621,9 @@
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
         opts (fn [refused m spent] (merge prices
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent}
+                                  ;; a cell seen-floor reads nameless (not seen, under a cell seen open: no floor) is still dug at its guess
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell))
-                                                            ((:dig-s prices) name cell)))}
+                                                            ((:dig-s prices) (or name (block-at cell)) cell)))}
                                   route-opts
                                   (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
