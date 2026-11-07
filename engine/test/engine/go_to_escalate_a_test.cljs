@@ -754,9 +754,9 @@
               ;; the whole way is searched only under the call's price, over as many slices as it takes to prove it dearer
               ;; a search with no price bound is one the call's worth does not end: kept within a slice
               (is (every? #(or (:bound %) (<= (:cells %) slice)) @searches) (pr-str @searches))
-              ;; the whole way is searched once, under the call's price, kept over the slices it takes to prove it dearer (76 measured)
+              ;; the whole way is searched once, under the call's price, kept over the slices it takes to prove it dearer (76 slices measured at 0.1 ms a cell: 4 s of CPU)
               (is (= [:dearer] (map :problem whole)) (pr-str whole))
-              (is (<= (reduce + (map :cells @searches)) (* 80 slice)) (pr-str @searches))
+              (is (<= (* (cost/search-cell-s) (reduce + (map :cells @searches))) (* 80 slice 0.1)) (pr-str @searches)) 
               (is (seq legs))
               (is (every? #(<= (apply max (map (fn [a b] (js/Math.abs (- a b))) (:from %) (:to %))) ec/leg-blocks) legs) (pr-str legs))
               ;; the void past the floor's edge holds no way a body without blocks can make: it gives up, not hangs

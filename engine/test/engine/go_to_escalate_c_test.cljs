@@ -1510,7 +1510,7 @@
 
 (deftest a-flood-is-charged-to-the-slice-at-its-measured-cpu-against-a-search-node
   (let [p (tu/fake {:blocks (box -20 63 -20 20 63 20 "stone")})
-        slice (choose/route-slice "nearest-flood")
+        slice (assoc (choose/route-slice "nearest-flood") :floor 0)
         before @(:left slice)
         per-node (/ (cost/search-cell-s) (cost/flood-cell-s))]
     (choose/nearest-stand p [10 64 10] 0 slice)

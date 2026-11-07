@@ -190,6 +190,16 @@
 (def least-route-s planner/least-route-s)
 (def search-cell-s planner/search-cell-s)
 (def search-read-s planner/search-read-s)
+(def search-cell-ceiling-s planner/search-cell-ceiling-s)
+(def search-read-ceiling-s planner/search-read-ceiling-s)
+
+(defn search-cpu-s
+  "Seconds of CPU a route search has spent: the larger of its cells read and its cells expanded at their per-cell prices
+  (the CPU grows with both; each price is the whole CPU over one count at the measured mix, so the larger bounds a cost
+  linear in both from above, exact at that mix). With the mean prices it is the search's price, with the ceiling prices
+  the meter of a wall-time limit."
+  [read-s cell-s reads cells]
+  (max (* read-s reads) (* cell-s cells)))
 (def walk-cell-s planner/walk-cell-s)
 (def room-read-s planner/room-read-s)
 (def flood-cell-s planner/flood-cell-s)

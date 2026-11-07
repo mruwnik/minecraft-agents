@@ -206,10 +206,14 @@
   {:peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
 
 (a/defargs settings
-  {::search-cells-timed {:default [0.37 3676] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
-                         :doc "Measured CPU of route searches, [seconds cells] (search-cell-s is their quotient): dig-route's priced-search to its end over four scenes read through a fake body's primitives as a cut reads the world, 2026-10-30 (0.37 s over 3676 cells = 0.10 ms a cell; the same scenes read bare run 0.03 to 0.07 ms, mine-a's glass cut 0.103). Recount: run engine.search-recount-test, add the seconds and cells of its RECOUNT :pooled-search line to these."}
-   ::search-reads-timed {:default [1.59 34428] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
-                         :doc "Measured CPU of dig-route searches by the cells they read, [seconds cells] (search-read-s is their quotient; the search's own price, as a cell expanded reads 3 to 9 as the scene goes): engine.search-recount-test's RECOUNT :pooled-reads line, two runs 2026-11-07 at load ~17 (0.046 ms a cell; go-to-sensed's plateau search reads at 0.045 to 0.07 ms, where its 0.1 to 0.5 ms a cell expanded is 1 to 5 times the scenes'). Recount: add that line's seconds and cells to these."}
+  {::search-cells-timed {:default [4.557 93792] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                         :doc "Measured CPU of route searches, [seconds cells] (search-cell-s, the price of a search's CPU in a cost, is their quotient, the mean): dig-route's priced-search to its end over four scenes read through a fake body's primitives as a cut reads the world, three runs 2026-11-07 at load ~5 (0.049 ms a cell pooled). Recount: run engine.search-recount-test, add the seconds and cells of its RECOUNT :pooled-search line to these."}
+   ::search-reads-timed {:default [4.557 314925] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                         :doc "Measured CPU of dig-route searches by the cells they read, [seconds cells] (search-read-s is their quotient, the mean; as a cell expanded reads 3 to 9 as the scene goes): the same runs' :pooled-reads line (0.0145 ms a cell). Recount: add that line's seconds and cells to these."}
+   ::search-cells-ceiling {:default [0.060 501] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                           :doc "CPU of the slowest scene's cells, [seconds cells] (search-cell-ceiling-s is their quotient): the price the meter of dig-route's 100 ms answer cut charges a cell expanded, an upper bound where search-cell-s is the mean (the owner's ceiling is on wall time, so a meter at the mean lets a slow scene run past it). Three runs 2026-11-07, :diagonal 0.12 ms a cell against 0.04 to 0.06 for the others. Recount: the worst scene's seconds and cells of the RECOUNT lines, summed over runs."}
+   ::search-reads-ceiling {:default [1.839 117177] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                           :doc "As ::search-cells-ceiling for the cells read (search-read-ceiling-s): the slowest scene per read, :deep-shell, 0.0157 ms against 0.0145 pooled."}
    ::walk-cells-timed {:default [5.984 42000] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
                        :doc "Measured CPU of the refuge walk search (reach-room/walk-steps to a goal with no way, reach/node-budget cells), [seconds cells] (walk-cell-s is their quotient): two runs 2026-11-07 at load ~13 over a slab and a pillared slab (0.135 and 0.150 ms a cell; 0.18 to 0.29 at load 29). Recount: engine.search-recount-test's RECOUNT :pooled-walk line, add its seconds and cells to these."}
    ::room-cells-timed {:default [2.053 34846] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
@@ -313,6 +317,10 @@
 (defn search-cell-s "Seconds of CPU one cell of a route search costs (::search-cells-timed)." [] (timed-cell-s ::search-cells-timed))
 
 (defn search-read-s "Seconds of CPU one cell a dig-route search reads costs (::search-reads-timed)." [] (timed-cell-s ::search-reads-timed))
+
+(defn search-cell-ceiling-s "Upper-bound seconds of CPU one cell of a route search costs (::search-cells-ceiling): what the meter of a wall-time ceiling charges." [] (timed-cell-s ::search-cells-ceiling))
+
+(defn search-read-ceiling-s "Upper-bound seconds of CPU one cell a dig-route search reads costs (::search-reads-ceiling)." [] (timed-cell-s ::search-reads-ceiling))
 
 (defn walk-cell-s "Seconds of CPU one cell of a refuge walk search expands costs (::walk-cells-timed)." [] (timed-cell-s ::walk-cells-timed))
 

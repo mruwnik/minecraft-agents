@@ -26,7 +26,8 @@
 
 (def answer-s
   "Seconds of CPU (the search's price of itself, :read-s) past which a priced search answers with the cheapest route in
-  hand: the owner's ceiling of about 100 ms a search (Q141). The proof that no cheaper route is left goes on only within it."
+  hand: the owner's ceiling of about 100 ms a search (Q141), metered at the upper-bound prices (cost/search-cell-ceiling-s,
+  search-read-ceiling-s), the price :searched-s carries at the means. The proof that no cheaper route is left goes on only within it."
   0.1)
 
 (def falling #{"sand" "red_sand" "gravel"})
@@ -557,7 +558,9 @@
         ;; and each measured price is the whole CPU over one count at the recount's mix: the larger of the two bounds a
         ;; cost linear in both from above, exact at that mix
         cell-s (when read-s (cost/search-cell-s))
-        spent-s (fn [] (+ searched-s (if read-s (max (* read-s (.-size read)) (* cell-s @expanded)) 0)))
+        spent-s (fn [] (+ searched-s (if read-s (cost/search-cpu-s read-s cell-s (.-size read) @expanded) 0)))
+        ;; the answer cut meters the wall-time ceiling: this search's CPU at the upper-bound prices, earlier searches' as priced
+        metered-s (fn [] (+ searched-s (if read-s (cost/search-cpu-s (cost/search-read-ceiling-s) (cost/search-cell-ceiling-s) (.-size read) @expanded) 0)))
         max-s (volatile! (or max-s ##Inf))
         priced (fn [r] (cond-> r read-s (assoc :searched-s (spent-s))))
         bound-s (fn [] (min @max-s (aget incumbent 0)))
@@ -695,7 +698,7 @@
                          ;; the heuristic is a lower bound: every route left costs more
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (or (ended) (recur))
                          ;; past answer-s the route in hand answers, or the one the caller holds (:dearer)
-                         (and read-s (>= (spent-s) answer-s) (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s)))) (or (ended) (recur))
+                         (and read-s (>= (metered-s) answer-s) (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s)))) (or (ended) (recur))
                          (or (.has done ck) (.has dropped ck)) (recur)
                          (end-key? ck) (or (checked ck) (recur))
                          ;; the popped cell goes back: the next run expands it first
@@ -797,7 +800,8 @@
         ;; the CPU the searches before the running one spent, and the cells it expanded and read so far
         searched (volatile! (or searched-s 0))
         cells (volatile! 0) reads (volatile! 0)
-        spent (fn [] (+ @searched (if read-s (max (* read-s @reads) (* cell-s @cells)) 0)))
+        spent (fn [] (+ @searched (if read-s (cost/search-cpu-s read-s cell-s @reads @cells) 0)))
+        metered (fn [] (+ @searched (if read-s (cost/search-cpu-s (cost/search-read-ceiling-s) (cost/search-cell-ceiling-s) @reads @cells) 0)))
         runs #js []
         stales #js []
         begin! (fn [i] (let [b @best]
@@ -813,13 +817,13 @@
          (let [i (dec (alength runs))
                first? (< i last-stage)
                ;; a lane or band runs on no further than answer-s
-               n' (if (and first? read-s) (min n (max 1 (js/Math.ceil (/ (- answer-s (spent)) cell-s)))) n)
+               n' (if (and first? read-s) (min n (max 1 (js/Math.ceil (/ (- answer-s (metered)) (cost/search-cell-ceiling-s))))) n)
                [a ae st ar] ((aget runs i) n' max-s')
                e (+ e ae) r (+ r ar)]
            (aset stales i st)
            (vswap! cells + ae) (vswap! reads + ar)
            (cond
-             (and (nil? a) (or (not first?) (not read-s) (< (spent) answer-s)))
+             (and (nil? a) (or (not first?) (not read-s) (< (metered) answer-s)))
              (if (and (< n' n) (pos? ae)) (recur (- n ae) e r) [nil e stale? r])
              first?
              (do (vreset! searched (or (:searched-s a) (spent)))

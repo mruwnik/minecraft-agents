@@ -34,7 +34,7 @@
   so a clock that does not move with the CPU (a fake's) still ends the searches."
   [c since cells]
   (max (/ (- (ctx/now c) since) 1000)
-       (* (cost-planner/search-cell-s) (- (choose/searched-cells-of (:route-owner (ctx/mem c))) (or cells 0)))))
+       (cost/search-cpu-s 0 (cost-planner/search-cell-s) 0 (- (choose/searched-cells-of (:route-owner (ctx/mem c))) (or cells 0)))))
 
 (defn stood-s
   "Seconds standing still since `since` with `cells` searched (stood-secs) has cost the body: the time and what staying

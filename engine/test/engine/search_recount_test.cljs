@@ -63,7 +63,7 @@
   (let [rows (doall (for [[k mk] scenes] [k (to-end (mk) 20)]))
         pooled (reduce (fn [a [_ r]] (-> a (update :cells + (:cells r)) (update :reads + (:reads r)) (update :s + (:s r)))) {:cells 0 :reads 0 :s 0} rows)
         flood (flood-scene 30)]
-    (doseq [[k r] rows] (line k r))
+    (doseq [[k r] rows] (line k r) (line (str k " reads") (assoc r :cells (:reads r))))
     (line :pooled-search pooled)
     (line :pooled-reads (assoc pooled :cells (:reads pooled)))
     (line :flood flood)
