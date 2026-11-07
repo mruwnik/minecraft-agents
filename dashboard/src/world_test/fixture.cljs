@@ -212,15 +212,13 @@
   reads the straight distance from the respawn point). Fixed, so it stays under build height (its air reaches 252)."
   250)
 
-(declare light-of)
-
 (defn far-spawn?
   "Whether the case asks for a far respawn point (:spawnpoint :far)."
   [c]
   (= :far (get-in c [:body :spawnpoint])))
 
 (defn respawn-cell
-  "The block the game respawns the body in: :spawnpoint (:far: far-spawn-rise above the start), else the start, floored
+  "The block the game respawns the body in: :spawnpoint (:far: at far-spawn-y, absolute), else the start, floored
   (/spawnpoint takes only integers; a fractional one is refused and the body would respawn at the world spawn)."
   [c]
   (let [{:keys [spawnpoint at]} (:body c)
