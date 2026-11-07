@@ -1127,3 +1127,13 @@
   (is (risk/too-hurt? 2.4 :heal 100000) "a dear death: it heals first")
   (is (risk/too-hurt? 2.4 :heal 1000 {:present #(if (< % 3) 400 100)}) "a danger about that costs the hurt body 300 s more: it heals first")
   (is (not (risk/too-hurt? 14 :heal 1000 {:present (constantly 400)})) "a danger that costs as much healed: no reason to wait"))
+
+;; going now beats the wait while the death's extra chance at the hurt health (over the healed one's) costs less than the wait
+;; saves: the flip is at (wait - hurry with a free death) / (the two chances' difference)
+(deftest a-hurt-body-flips-to-healing-first-at-the-death-price-where-the-extra-death-chance-costs-the-wait
+  (let [h 5
+        s (risk/stay-of :heal h)
+        flip (/ (- (risk/heal-wait-s h) (risk/hurry-s h :heal 0 nil))
+                (- (risk/work-death-chance :heal h s) (risk/work-death-chance :heal 20 s)))]
+    (is (not (risk/too-hurt? h :heal (* 0.98 flip))) "a death just under the flip: goes")
+    (is (risk/too-hurt? h :heal (* 1.02 flip)) "a death just over: heals first")))
