@@ -348,7 +348,7 @@
                              (or-climb w (climb-route/climb-way (:primitives c) feet goal may-dig?
                                                                 (cond-> o (#{:dig-route :stair :pillar} (:step w)) (update :bound-s #(min (or % ##Inf) (total w)))))
                                        total
-                                       (if-let [since (:since (:route-search (ctx/mem c)))] (search-bound/stood-s c since) 0))))))
+                                       (if-let [{:keys [since cells]} (:route-search (ctx/mem c))] (search-bound/stood-s c since cells) 0))))))
         choose-by (cond into? #(goal-way c feet goal %1 %2)
                      ;; a goal too far for one dig route, no stair or pillar out (a plateau top): a dig off the land's edge
                      dig-in? (priced #(let [d (dig-toward c feet goal %1 %2)]
