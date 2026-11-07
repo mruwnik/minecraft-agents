@@ -34,6 +34,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.game :as game]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
@@ -626,10 +627,12 @@
   (+ s (* (dark-factor) (:cost (walk-cost {:distance n}))) (* (- (dark-factor kit) (dark-factor)) s)))
 
 (defn respawn-of
-  "Where a death of the body of p would wake: the live spawn bed (sh-spawn/spawn-bed-pos; view nil: none), else the world
-  spawn the game gives every player; nil until the game has sent it."
+  "Where a death of the body of p would wake: the live spawn bed (sh-spawn/spawn-bed-pos; view nil: none), else where it
+  last respawned (the latest :respawned entry's :pos, kept an hour), else the world spawn the game gives every player;
+  nil until the game has sent it."
   [p view]
-  (or (when view (sh-spawn/spawn-bed-pos p view)) (some-> (.self p) .-worldSpawn u/pos-of)))
+  (or (when view (or (sh-spawn/spawn-bed-pos p view) (:pos (:data (mem/latest view :respawned)))))
+      (some-> (.self p) .-worldSpawn u/pos-of)))
 
 (defn goal-value
   "value/made-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of

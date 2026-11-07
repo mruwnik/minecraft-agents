@@ -768,7 +768,7 @@
 
 (deftest a-death-spot-costs-while-its-killer-may-still-be-there-or-a-like-one-spawn-there
   ;; the spot seen before the death (so not seen-clear?), 75 blocks from the body a minute ago; dark-spot-world has no light data: all dark
-  (let [respawned-far {:respawned [{:t (- 36000000 50000) :data {:pos {:x 300 :y 64 :z 5}}}]}
+  (let [respawned-far {:respawned [{:t (- 36000000 50000) :data {:pos {:x 5000 :y 64 :z 5}}}]}
         hp (fn [world cause more] (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
                                     (:death-hp (risk/estimate (with-death (ready-test/ctx-of world) {:x 80 :y 64 :z 5} cause 60000 more) far-goal))))
         dark (hp dark-spot-world "skeleton" {})]
@@ -776,7 +776,7 @@
     (is (< (* 0.5 (hp dark-spot-world "creeper" {})) (hp day-world "creeper" {})) "a creeper does not burn by day")
     (is (zero? (hp day-world "zombie" {})) "a zombie burns under the day sky")
     (is (pos? (hp day-world "creeper" {})))
-    (is (zero? (hp day-world "creeper" respawned-far)) "the body went 128 blocks off: it despawned")
+    (is (zero? (hp day-world "creeper" respawned-far)) "the body went far off: it despawned")
     (is (pos? (hp (assoc day-world :entities [{:id 50 :name "Other" :kind "player" :pos {:x 82 :y 64 :z 5}}]) "creeper" respawned-far))
         "another player stands by the spot: the nearest player never went far")
     (is (zero? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
@@ -823,7 +823,7 @@
 
 (defn died [cause age-ms] {:deaths [{:t (- 36000000 age-ms) :data {:pos {:x 80 :y 64 :z 5} :cause cause :death-t (- 36000000 age-ms)}}]})
 (defn pct [x] (js/Math.round (* 1000 x)))
-(def respawned-far {:respawned [{:t (- 36000000 50000) :data {:pos {:x 300 :y 64 :z 5}}}]})
+(def respawned-far {:respawned [{:t (- 36000000 50000) :data {:pos {:x 5000 :y 64 :z 5}}}]})
 
 (defn with-sighting
   "ctx c whose body saw a `name` at pos age-ms ago and lost it (the perception's fadedMobs), remembering the entries
@@ -842,7 +842,7 @@
     (is (zero? (:death-hp (estimate-unseen (ready-test/ctx-of day-world) far-goal))) "none seen")
     (is (pos? fresh) "seen 10 s ago, the body far off since: it stands where it was")
     (is (< (hp "creeper" 120000 stayed-by) (* 0.5 fresh)) "two minutes with the body near: it likely wandered off")
-    (is (zero? (hp "creeper" 60000 respawned-far)) "the body went 128 blocks off since: it despawned")
+    (is (zero? (hp "creeper" 60000 respawned-far)) "the body went far off since: it despawned")
     (is (zero? (hp "zombie" 10000 {})) "a zombie burns under the day sky")
     (is (zero? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 5000})]
                  (:death-hp (risk/estimate (with-sighting (ready-test/ctx-of day-world) "creeper" at 10000 {}) far-goal))))

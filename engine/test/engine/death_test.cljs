@@ -36,8 +36,8 @@
   {"raw_iron" 3 "cobblestone" 0.05 "oak_planks" 0.05 "stone_pickaxe" 1 "diamond_pickaxe" 20 "diamond_sword" 14})
 
 (def held-values
-  "pile-values with the diamonds worth 80 s: over the 29 s of the safe trip by more than a hold of the zombie's flight costs, under the 133 s of the trip with the zombie."
-  (assoc pile-values "diamond_pickaxe" 50 "diamond_sword" 30))
+  "pile-values with the diamonds worth 40 s: over the 26 s of the safe trip by more than a hold of the zombie's flight costs, under the 53 s of the trip with the zombie (the body respawned at the start, a death costs the short walk back)."
+  (assoc pile-values "diamond_pickaxe" 25 "diamond_sword" 15))
 
 (def death-pile-of-the-field-report
   [{:name "raw_iron" :count 4 :slot 17} {:name "raw_iron" :count 20 :slot 18}

@@ -638,6 +638,19 @@
     (is (= {:x 100 :y 70 :z -40} (:respawn (cost/death-body (body [100 70 -40]) none))) "no bed: world spawn")
     (is (nil? (:respawn (cost/death-body (body nil) none))) "a spawn the game has not sent")))
 
+(deftest a-death-wakes-where-the-body-last-respawned-before-the-world-spawn
+  (let [body (fake/create {:self {:pos [40 64 3] :worldSpawn [100 70 -40]}})
+        bed {:x 7 :y 64 :z 7}
+        woke {:x 20000 :y 64 :z 5}
+        view #(hash-map :data {:entries %} :now 2)
+        respawned {:respawned [{:t 1 :data {:pos woke}}]}
+        with-bed (assoc respawned :spawn-bed [{:t 1 :data {:pos bed}}])]
+    (is (= woke (:respawn (cost/death-body body (view respawned)))) "no bed: where it respawned, not the world spawn")
+    (is (= bed (:respawn (cost/death-body body (view with-bed)))) "a bed it slept in wins")
+    (is (= woke (:respawn (cost/death-body body (view (assoc with-bed :spawn-lost [{:t 2 :data {}}])))))
+        "a lost bed is lost: the respawned point answers")
+    (is (= {:x 100 :y 70 :z -40} (:respawn (cost/death-body body (view {})))) "never respawned: world spawn")))
+
 (deftest a-death-prices-the-carried-items-at-their-replacement-cost
   (let [items [{:name "raw_iron" :count 3}]
         p (fake/create {:self {:pos [40 64 3]} :inventory items})

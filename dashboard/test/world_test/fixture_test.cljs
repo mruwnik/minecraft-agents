@@ -643,6 +643,13 @@
     (is (not (log-out? {:time :night :act [[:job '(jobs.survival.log-out)]]})))
     (is (= [:bed :log-out :sleep-status] (mapv :kind (f/memory-entries {:time :night :memory [{:kind :bed :data {}}]}))))))
 
+(deftest memory-entries-tell-the-body-where-it-respawns
+  (let [pos #(-> (f/memory-entries %) (->> (filter (comp #{:respawned} :kind))) first (get-in [:data :pos]) (f/resolve-tags [100 50 200]))]
+    (is (= {:x 103 :y 51 :z 202} (pos {:body {:at [3 1 2]}})) "the start")
+    (is (= {:x 101 :y 50 :z 205} (pos {:body {:at [3 1 2] :spawnpoint [1 0 5]}})) "the case's spawnpoint")
+    (is (nil? (pos {:body {:at [3 1 2]} :keep-memory true})) "kept memory keeps its own")
+    (is (= 1 (count (filter (comp #{:respawned} :kind) (f/memory-entries {:body {:at [0 0 0]} :memory [{:kind :respawned :data {:pos {:x 1 :y 2 :z 3}}}]})))) "the case's own entry stands")))
+
 (deftest memory-entries-tell-night-cases-no-skip-is-possible-unless-the-case-sleeps
   (let [status? #(some (comp #{:sleep-status} :kind) (f/memory-entries %))]
     (is (status? {:time :night}))
