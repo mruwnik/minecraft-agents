@@ -1434,6 +1434,22 @@
     (is (= 2 @starts) "the world changed: searched again")
     (choose/forget-routes! (:id slice))))
 
+(deftest an-ended-search-with-no-route-answers-no-larger-bound-and-no-other-memory
+  (let [slice (choose/route-slice "ended-none")
+        k #(vector [0 64 0] [9 64 0] false {:bound-s %} {} #{})
+        starts (atom 0)
+        start #(do (swap! starts inc) (fn [_ _] [{:problem :no-route} 5 (fn [] false)]))
+        ask (fn [bound epoch] (vreset! (:asked slice) {}) (choose/sliced-answer slice (k bound) start bound epoch))]
+    (is (= {:problem :no-route} (ask 20 1)))
+    (ask 10 1)
+    (ask 15 1)
+    (is (= 1 @starts) "a bound no larger than the one it ran under finds no route it did not")
+    (ask 25 1)
+    (is (= 2 @starts) "a larger bound: searched again")
+    (ask 25 2)
+    (is (= 3 @starts) "the memory changed: searched again")
+    (choose/forget-routes! (:id slice))))
+
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))
     [8 60 0] 12 false true

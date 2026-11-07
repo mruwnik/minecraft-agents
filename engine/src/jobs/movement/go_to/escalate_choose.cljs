@@ -378,18 +378,22 @@
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
   slice has left under max-s when given (a kept search goes on under the call's bound as it falls); :searching while it
-  has not ended. An ended search keeps its answer only (its cell maps are freed) and the route-epoch it was last run at:
-  its route answers k under k's bound while that epoch holds, as the cheapest there is."
+  has not ended. An ended search keeps its answer only (its cell maps are freed), the route-epoch it was last run at and
+  the max-s it ran under: while that epoch holds, its route answers k under k's bound (the cheapest there is), and its
+  no route answers a max-s no larger."
   ([slice k start epoch] (sliced-answer slice k start nil epoch))
   ([{:keys [id left asked]} k start max-s epoch]
    (if-let [a (get @asked k)]
      a
      (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (same-question-kept id k))
-           kept (when-not (and (:dig (:a kept)) (not= epoch (:epoch kept))) kept)
+           kept (when-not (and (:ended? kept)
+                               (or (not= epoch (:epoch kept))
+                                   (and (nil? (:dig (:a kept))) (> (or max-s ##Inf) (or (:max-s kept) ##Inf)))))
+                  kept)
            run (or (:run kept) (start))
            [a used] (if (pos? @left) (run @left max-s) [nil 0])]
        (vswap! left - used)
-       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :epoch epoch :ended? (or (some? a) (:ended? kept) false)})))
+       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :epoch epoch :max-s (if (:ended? kept) (:max-s kept) (or max-s (:max-s kept))) :ended? (or (some? a) (:ended? kept) false)})))
        (let [a (if (and (:dig a) max-s (> (:seconds a) max-s)) {:problem :dearer} a)]
          (vswap! asked assoc k (or a :searching))
          (or a :searching))))))
