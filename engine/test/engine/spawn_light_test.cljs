@@ -7,9 +7,11 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.test-util :as tu]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.seen-light :as seen-light]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]))
@@ -189,3 +191,45 @@
     (is (= open-night-chance (spawn-light/chance-at p {:x 30 :y 64 :z 16} false)) "dark open ground")
     (is (pos? (look/unseen-lit-chance p {:x 4 :y 64 :z 90} 0)) "full day may light the ground past the seen field")
     (is (zero? @floods))))
+
+(deftest the-memory-light-shortcuts-equal-the-full-relight-of-every-cell-by-day-and-night
+  ;; the opaque-cell and full-sky shortcuts of seen-light/light-fn read what light.mjs's sectionLight gives: a wrong
+  ;; shortcut (an opaque cell read as sky, a full-sky cell given the wrong block light) differs on some cell here
+  (let [^js table @fake-raw/light-table
+        id (fn [block] (inc (fake-raw/state-of block)))
+        put! (fn [^js sec x y z block] (aset (.-ids sec) (store/cell-index x y z) (id block)))
+        sky! (fn [^js bits x y z] (let [i (store/cell-index x y z)] (aset bits (bit-shift-right i 3) (bit-or (aget bits (bit-shift-right i 3)) (bit-shift-left 1 (bit-and i 7))))))
+        ids (js/Uint16Array. 4096)
+        bits (js/Uint8Array. 512)
+        sec #js {:ids ids :sky bits :wrote 1}
+        cells (for [x (range 16) y (range 16) z (range 16)] [x y z])]
+    (.fill ids (id "air"))
+    (doseq [[x y z] cells]
+      (when (or (>= y 11) (>= x 8)) (sky! bits x y z))
+      (when (= y 0) (put! sec x y z "stone"))
+      (when (and (= y 10) (< x 8)) (put! sec x y z "stone"))
+      (when (and (<= 1 y 2) (<= 2 x 5) (<= 2 z 5)) (put! sec x y z "water"))
+      (when (and (<= 12 y 13) (<= 9 x 12) (<= 4 z 8)) (put! sec x y z "oak_leaves"))
+      (when (and (= y 12) (= x 11) (= z 6)) (sky! bits x y z))
+      (when (and (= y 1) (= x 6) (= z 8)) (put! sec x y z "torch"))
+      (when (and (= y 5) (= x 13) (= z 13)) (put! sec x y z "glowstone"))
+      (when (and (= y 3) (= x 14)) (sky! bits x y z))
+      (when (and (= y 11) (= x 3) (= z 3)) (put! sec x y z "stone"))
+      (when (and (= y 6) (= x 1) (= z 1)) (aset ids (store/cell-index x y z) 0)))
+    (let [st #js {:stores (js/Map.) :dim "overworld" :writes 1 :lightTable table}
+          p #js {:perception {:st st}}
+          key (store/section-key 0 0 0)
+          full (fn [with-sky?] (.sectionLight table table
+                                              (let [a (js/Array. 27)] (.fill a nil) (aset a 13 ids) a)
+                                              (let [a (js/Array. 27)] (.fill a nil) (when with-sky? (aset a 13 bits)) a)))
+          day (full true)
+          night (full false)
+          f-day (do (.set (store/store-of st "overworld") key sec) (seen-light/light-fn p))
+          f-night (seen-light/light-fn p true)
+          wrong (fn [expected f] (for [[x y z] cells
+                                       :let [want (if (zero? (aget ids (store/cell-index x y z))) -1 (aget expected (store/cell-index x y z)))]
+                                       :when (not= want (f x y z))]
+                                   [x y z want (f x y z)]))]
+      (is (= [] (take 5 (wrong day f-day))) "day: sky and block light")
+      (is (= [] (take 5 (wrong night f-night))) "night: block light alone")
+      (is (< 0 (aget day (store/cell-index 10 14 5))) "the scene is lit"))))
