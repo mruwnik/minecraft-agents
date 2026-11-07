@@ -80,7 +80,7 @@
   (tu/run-ticks eng clock n 700))
 
 (defn submit! [s args]
-  (core/submit! (:eng s) (tu/order (:eng s) (list job (merge {:mob "cow" :box box} args))) {})
+  (core/submit! (:eng s) (tu/order (list job (merge {:mob "cow" :box box} args))) {})
   s)
 
 (defn ^:async scenario [args w n]
@@ -267,7 +267,7 @@
         (let [s (setup (world {:self {:pos {:x 7 :y 64 :z 3}}
                                  :entities [(cow 1 5 3 {:leashed true :leashedToMe true})]
                                  :states {gate-key {:open true}}}))]
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.movement.go-to {:pos {:x 14 :y 64 :z 3} :range 0 :doors :leave-open})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.movement.go-to {:pos {:x 14 :y 64 :z 3} :range 0 :doors :leave-open})) {})
           (await (run-ticks s 30))
           (is (>= (self-x s) 14) "the body walked in")
           (is (not (in-pen? (cow-of s 1))) "the cow was dragged straight and stopped at the gate"))))))
@@ -576,7 +576,7 @@
         (doseq [[label w args] unsafe-cases]
           (let [s (submit! (setup (world w)) args)
                 log (watch-notify! s)]
-            (core/submit! (:eng s) (tu/order (:eng s) '(repeat (jobs.debug.notify {:text "between"}))) {})
+            (core/submit! (:eng s) (tu/order '(repeat (jobs.debug.notify {:text "between"}))) {})
             (await (run-ticks s 400))
             (is (= :brought (:reason (done-event s))) label)
             (is (< 1 (count @log)) (str label ": the other job still gets rounds (round-robin, no hold)"))
@@ -590,7 +590,7 @@
     (.override (.-world p) act
                (fn [token a impl]
                  (if (= n (swap! k inc))
-                   (do (core/do-now! eng (tu/order eng '(jobs.debug.notify {:text "cut"})))
+                   (do (core/do-now! eng (tu/order '(jobs.debug.notify {:text "cut"})))
                        (js/Promise.reject (core/cut-error)))
                    (impl token a))))))
 
@@ -624,7 +624,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (world {:entities [(cow 1 4 3)]}))]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.debug.notify {:text "first"})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.debug.notify {:text "first"})) {})
           (submit! s {:target 1})
           (await (run-ticks s 400))
           (let [kinds (mapv :kind @(:seen s))]

@@ -73,7 +73,7 @@
   [args spec & [n before]]
   (let [s (setup spec (some-> (:max-distance args) (+ 8)))]
     (when before (before s))
-    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.explore.search (child/search-args args))) {})
+    (core/submit! (:eng s) (tu/order (list 'jobs.explore.search (child/search-args args))) {})
     (await (run-until-done s (or n 400)))))
 
 (defn event-of [{:keys [seen]} kind] (first (filter #(= kind (:kind %)) @seen)))
@@ -295,7 +295,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:blocks diamond})]
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.explore.search {:target "diamond_block"})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.explore.search {:target "diamond_block"})) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (finished? s) "legs walked and the ore found in one round")
@@ -426,12 +426,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [ending (atom nil)
-              parent {:worth-of (constantly 12)
-                      :round (fn ^:async parent-round [c]
+              parent {:round (fn ^:async parent-round [c]
                                (let [r (await (ctx/call c :kid 'jobs.explore.search {:target "diamond_block"}))]
                                  (if (= :continue r) r (do (reset! ending (tu/outcome r)) (ctx/end c :done nil)))))}
               s (with-redefs [registry/jobs (assoc registry/jobs 'worth-parent parent)] (setup {}))
-              _ (core/submit! (:eng s) (tu/order (:eng s) '(worth-parent)) {})
+              _ (core/submit! (:eng s) (tu/order '(worth-parent) 12) {})
               _ (await (run-until-done s 400))
               outcome (juxt :why #(get-in % [:coverage :legs]) :text)
               arg (outcome (not-found-of (await (search! {:target "diamond_block" :worth 12} {}))))]
@@ -512,7 +511,7 @@
           (is (not= :price (:why (not-found-of state)))))))))
 
 (deftest the-spiral-legs-nearest-the-body-come-first
-  (let [c {:args {:pattern :spiral :worth 1e7 :within 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :worth 6000 :within 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}
         order (search/candidates c m)]
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
@@ -526,7 +525,7 @@
     (try [(f) @n] (finally (set! js/Math.hypot h)))))
 
 (deftest a-priced-search-plans-legs-past-the-max-distance-setting
-  (let [c {:args {:pattern :spiral :worth 1e7} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :worth 6000} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
         dist #(js/Math.hypot (% 0) (% 1))
         far (fn [c] (hypots #(first (filter (fn [pt] (> (dist pt) 96)) (search/candidates c {:origin [0 0 0]})))))
         [leg work] (far c)]
@@ -649,7 +648,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:unloaded ring-1-cells} 28)]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :within 20})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.explore.search {:target "diamond_block" :within 20})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
@@ -664,7 +663,7 @@
       (fn ^:async t []
         (let [cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [300 0] 16 23))
               s (setup {:unloaded cells} 28)]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :within 20})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :within 20})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (seq (walks s)) "a walk started")
           (is (every? #(> (:x %) 200) (walks s)) "toward the centre"))))))
@@ -675,7 +674,7 @@
       (fn ^:async t []
         (let [cells (into ["0,63,0"] (map (fn [[x z]] (str x ",63," z))) (search/spiral-points [0 0] 16 100))
               s (setup {:unloaded cells} 28)]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :within 100})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.explore.search {:target "diamond_block" :within 100})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for its own chunks")
           (is (= [] (walks s))))))))
@@ -1061,7 +1060,7 @@
         counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
-        c {:args {:pattern :spiral :worth 1e7 :within 128} :primitives counting}
+        c {:args {:pattern :spiral :worth 6000 :within 128} :primitives counting}
         r (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4}
             #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
@@ -1073,7 +1072,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {} 0)]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :within 40 :settings {:jobs.lib.cost.find/leg-spacing 4}})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.explore.search {:target "diamond_block" :within 40 :settings {:jobs.lib.cost.find/leg-spacing 4}})) {})
           (await (run-until-done s 400))
           (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")
@@ -1117,7 +1116,7 @@
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
         choose (fn [use-notes? ns]
                  (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth 1e7 :within 8} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
+                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth 6000 :within 8} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
     (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
     (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
     (is (nil? (:leg (choose false [(note 150)]))) "a note this job made still covers")))
@@ -1126,7 +1125,7 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
                              (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                               #(search/choose-leg {:args {:pattern :spiral :worth 1e7 :within 8} :primitives p} {:origin [0 64 0]} names []))))]
+                               #(search/choose-leg {:args {:pattern :spiral :worth 6000 :within 8} :primitives p} {:origin [0 64 0]} names []))))]
     (is (nil? (:leg (choose ["cow" "pig"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))
@@ -1134,7 +1133,7 @@
 (deftest a-leg-for-farm-animals-never-stands-in-a-pit-below-the-feet-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (tu/box -36 45 -36 36 45 36 "grass_block") :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
         choose (fn [names] (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                             #(search/choose-leg {:args {:pattern :spiral :worth 1e7 :within 8} :primitives p} {:origin [0 64 0]} names [])))]
+                             #(search/choose-leg {:args {:pattern :spiral :worth 6000 :within 8} :primitives p} {:origin [0 64 0]} names [])))]
     (is (nil? (:leg (choose ["chicken"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["chicken"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))

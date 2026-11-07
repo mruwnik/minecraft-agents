@@ -38,7 +38,7 @@
   "Submit the job with args in a world over plans and tick it n times: the start map."
   [spec plans args n]
   (let [s (start spec plans)]
-    (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
+    (core/submit! (:eng s) (tu/order (list job args)) {})
     (with-redefs [child/pause! (fn ^:async pause [_ _ _] :continue)]
       (await (ticks (:eng s) n)))
     s))
@@ -149,7 +149,7 @@
                        (let [r (await (impl token args))]
                          (swap! (fake/state (:p s)) assoc :inventory [])
                          r)))
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
+          (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
           (await (ticks (:eng s) 20))
           (is (= [[3 64 0]] (digs (:p s))))
           (is (= 1 (count (h/events-of (:seen s) :tool.broke))))
@@ -319,7 +319,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! (:w s) {"forest" two-cells "other" stone-plan} {})
                        (await (impl token args))))
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
+          (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
           (await (ticks (:eng s) 40))
           (is (= [[3 64 0]] (digs (:p s))) "the first dig goes, then the other plan's claim stops the second"))))))
 
@@ -340,7 +340,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! (:w s) {"forest" far-plan "other" claim} {})
                        (await (impl token args))))
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
+          (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
           (await (ticks (:eng s) 30))
           (is (= [] (digs (:p s))) "asked again after the walk, right before the dig"))))))
 
@@ -393,7 +393,7 @@
                                        [{"crops" crops} {:plan "crops"} nil]
                                        [{"forest" one-cell} {:plan "forest" :part "zz"} nil]]]
             (let [s (start (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) plans)]
-              (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
+              (core/submit! (:eng s) (tu/order (list job args)) {})
               (await (ticks (:eng s) 5))
               (is (= [0 reason]
                      [(calls-made (:p s)) (some :why (reverse (deref (:seen s))))])
@@ -405,7 +405,7 @@
       (fn ^:async t []
         (let [{:keys [p seen w eng]} (start (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) {})]
           (reset! (:state w) (assoc @(:state w) :plans {"forest" {:error "unreadable EDN: eof"}}))
-          (core/submit! eng (tu/order eng (list job {:plan "forest"})) {})
+          (core/submit! eng (tu/order (list job {:plan "forest"})) {})
           (await (ticks eng 4))
           (is (= 0 (calls-made p)))
           (is (= "the plan cannot be read: unreadable EDN: eof" (some :why (reverse (deref seen))))))))))
@@ -449,7 +449,7 @@
         (let [{:keys [p eng result]} (await (outcome (world {"3,64,0" "short_grass" "4,63,0" "stone"} (item "dirt" 1) (item "oak_sapling" 2) (item "stone_pickaxe" 1)) {"forest" two-cells}))
               before (calls-made p)]
           (is (= (expect {:cleared 1 :soiled 1}) result))
-          (core/submit! eng (tu/order eng (list job {:plan "forest"})) {})
+          (core/submit! eng (tu/order (list job {:plan "forest"})) {})
           (await (ticks eng 40))
           (is (= before (calls-made p)) "no act in 40 ticks")
           (is (not (listed? eng)) "done: a prepared field is the goal"))))))
@@ -463,7 +463,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! (:w s) {} {})
                        (await (impl token args))))
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
+          (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
           (await (ticks (:eng s) 40))
           (is (= [[3 64 0]] (digs (:p s))) "the dig under way ends, nothing after it")
           (is (= [] (places (:p s))))
@@ -484,7 +484,7 @@
               dir (tu/tmp-dir)
               p (tu/seeing-all (tu/fake-on-floor spec))
               first-run (start spec {"forest" one-cell} dir p)]
-          (core/submit! (:eng first-run) (tu/order (:eng first-run) (list job {:plan "forest"})) {})
+          (core/submit! (:eng first-run) (tu/order (list job {:plan "forest"})) {})
           (loop [i 0]
             (when (< i 30)
               (let [{:keys [eng]} (start spec {"forest" one-cell} dir p)]
@@ -632,7 +632,7 @@
         (let [pauses (atom [])
               s (start (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell})]
           (with-redefs [child/pause! (fn ^:async pause [_ seconds why] (swap! pauses conj [seconds why]) :continue)]
-            (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
+            (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
             (await (ticks (:eng s) 6)))
           (is (seq @pauses) "pauses while the flow recedes")
           (is (every? #{[2 :receding]} @pauses))
@@ -680,7 +680,7 @@
               real field/assessments
               s (start (world {"3,64,0" "stone"} (item "oak_sapling" 2)) {"forest" one-cell})]
           (with-redefs [field/assessments (fn [c f] (swap! n inc) (real c f))]
-            (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
+            (core/submit! (:eng s) (tu/order (list job {:plan "forest"})) {})
             (await (ticks (:eng s) 10)))
           (is (< 0 @n 10) "ten ticks, fewer than ten assessments")
           (set-block! (:p s) 3 64 0 "short_grass")

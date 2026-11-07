@@ -29,7 +29,7 @@
   ([w] (obtain w {:worth 300}))
   ([w args]
    (let [{:keys [eng p]} (lt/setup w)
-         res (await (tu/child-outcome eng 'jobs.items.obtain (second (tu/order eng (list 'jobs.items.obtain (merge {:item "obsidian" :count 1} args)))) 300))]
+         res (await (tu/child-outcome eng 'jobs.items.obtain (second (tu/at-own-worth eng (list 'jobs.items.obtain (merge {:item "obsidian" :count 1} args)))) 300))]
      {:res res :p p})))
 
 (defn carried [p name] (reduce + (map #(.-count %) (filter #(= name (.-name %)) (array-seq (.-inventory (.self p)))))))
@@ -150,7 +150,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world ground [pick {:name "water_bucket" :count 1}]))]
-          (core/submit! eng (tu/order eng '(jobs.gather.cast-obsidian {:count 1})) {})
+          (core/submit! eng (tu/order '(jobs.gather.cast-obsidian {:count 1})) {})
           (await (tu/run-until-empty eng 6))
           (is (pos? (sense/looks p))))))))
 

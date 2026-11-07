@@ -133,7 +133,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (et/setup {:blocks (et/floor 8)})]
-          (core/submit! eng (tu/order eng '(jobs.survival.extinguish {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "the goal holds: done, not queued")
           (is (= [] (vec (.-calls (.-world p))))))))))
@@ -158,7 +158,7 @@
         (let [{:keys [eng p]} (et/setup {:self {:onFire true}
                                         :inventory [{:name "cobblestone" :count 4} {:name "netherrack" :count 4}]
                                         :blocks (merge (et/floor 8) {"1,64,0" "lava"})})]
-          (core/submit! eng (tu/order eng '(jobs.survival.extinguish {:use {:blocks ["netherrack"]}})) {})
+          (core/submit! eng (tu/order '(jobs.survival.extinguish {:use {:blocks ["netherrack"]}})) {})
           (await (core/tick! eng))
           (is (= ["netherrack"] (mapv :item (map et/call-args (et/calls p "place"))))))))))
 

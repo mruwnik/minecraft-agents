@@ -29,7 +29,7 @@
       (fn ^:async t []
         (let [p (tu/fake {:self {:health 6 :effects poison} :inventory (conj milk {:name "golden_apple" :count 1})})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)})]
-          (core/submit! eng (tu/order eng '(jobs.survival.cure {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.cure {})) {})
           (await (core/tick! eng))
           (is (not (body/poisoned? p)))
           (is (= [] (:list (core/state eng))))

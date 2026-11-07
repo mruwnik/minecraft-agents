@@ -49,7 +49,7 @@
   ([args w n tweak-jobs]
    (let [s (doto (h/setup w) (-> :p tu/seeing-all) (-> :p bt/calf-per-pair!))
          s (update s :eng #(update % :jobs tweak-jobs))]
-     (core/submit! (:eng s) (tu/order (:eng s) (spec args)) {})
+     (core/submit! (:eng s) (tu/order (spec args)) {})
      (await (tu/run-ticks (:eng s) (:clock s) n 700))
      s)))
 
@@ -203,7 +203,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory kit})) (-> :p tu/seeing-after-look))]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {})) {})
+          (core/submit! (:eng s) (tu/order (spec {})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (calls s "look")))
           (is (= 1 (:harvested (step s :harvest))))
@@ -227,7 +227,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-after-look))]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:ways #{:carried}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:ways #{:carried}})) {})
           (is (= [1 1] (await (look-rounds s 10))) "one look round, not one per run")
           (is (= [:nothing-to-do] (reasons s)))
           (is (nil? (done-event s))))))))
@@ -238,7 +238,7 @@
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true}))
                   (-> :p (doto tu/blind (aset "sensedAt" (fn [_] #js {:unknown true})))))]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:ways #{:carried}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:ways #{:carried}})) {})
           (is (= [1 1] (await (look-rounds s 10))) "one look round, not one per run")
           (is (= [:nothing-to-do] (reasons s)) "no seen cell to stand on: no walk to look is left")
           (is (nil? (done-event s)) "an unseen part is not in order: not done :already")
@@ -256,7 +256,7 @@
   "An apiary of radius 1 round the cell center, nothing in it, the cell itself never seen: s after 30 ticks."
   [center]
   (let [s (doto (h/setup (assoc (world {:inventory (inv "shears" 1)}) :floor [-5 -5 (+ (:x center) 5) 5])) (-> :p tu/seeing-all) (-> :p (unseen-at center)))]
-    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.apiary.maintain {:center center :radius 1 :ways #{:carried}})) {})
+    (core/submit! (:eng s) (tu/at-own-worth (:eng s) (list 'jobs.apiary.maintain {:center center :radius 1 :ways #{:carried}})) {})
     (await (tu/run-ticks (:eng s) (:clock s) 30 700))
     s))
 
@@ -285,7 +285,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (doto (h/setup (world {:inventory (inv "shears" 1) :raised? true})) (-> :p tu/seeing-all))]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:ways #{:carried}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:ways #{:carried}})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 10 700))
           (is (empty? (calls s "look")) "every cell of the area is already seen")
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting))))))))))

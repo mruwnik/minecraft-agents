@@ -14,7 +14,7 @@
   "Submit farm.maintain with args in a world; run n ticks 700 ms apart; the setup map."
   [args spec n]
   (let [s (ft/setup spec)]
-    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.maintain (merge {:area ft/box} args))) {})
+    (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain (merge {:area ft/box} args))) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
@@ -47,7 +47,7 @@
       (fn ^:async t []
         (let [s (ft/setup goods-world)
               _ (mem/write! (:store (:eng s)) :reserve {:id "wheat" :item "wheat" :count :all} {:cap 100 :ttl :forever})
-              _ (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.maintain {:area ft/box :chest ft/chest})) {})
+              _ (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area ft/box :chest ft/chest})) {})
               _ (await (tu/run-ticks (:eng s) (:clock s) 40 700))]
           (is (= {} (ft/chest-items s)))
           (is (= 5 (get (ft/inv s) "wheat"))))))))
@@ -172,7 +172,7 @@
                                     {:blocks (into {} (map (fn [[x z]] [(ft/k (+ x 60) 64 z) "wheat"])) ft/all-cells)
                                      :ages (into {} (map (fn [[x z]] [(ft/k (+ x 60) 64 z) 7])) ft/all-cells)}
                                     ft/wheat-drops))
-              _ (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.maintain {:area field-60})) {})
+              _ (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area field-60})) {})
               _ (await (tu/run-ticks (:eng s) (:clock s) 60 700))]
           (is (pos? (get (ft/inv s) "wheat" 0)) "the ripe wheat 60 blocks off was cut")
           (is (true? (ft/finished? s))))))))
@@ -212,7 +212,7 @@
       (fn ^:async t []
         (let [plans {"cane" (stalk-plan "cane" {:crop "sugar_cane"})}
               s (fp/setup (stalk-world "sugar_cane" 1 3) plans [])]
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.maintain {:area {:plan "cane"} :ignore-zones? true})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area {:plan "cane"} :ignore-zones? true})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= #{[3 65 2]} (fp/dug s)) "only the block above the base of the tall stalk")
           (is (= "sugar_cane" (fp/block-at s 3 64 2)) "the base stays")
@@ -224,7 +224,7 @@
       (fn ^:async t []
         (let [plans {"bamboo" (stalk-plan "bamboo" [:any "bamboo" "bamboo_sapling"])}
               s (fp/setup (stalk-world "bamboo" 4 1) plans [])]
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.maintain {:area {:plan "bamboo"} :ignore-zones? true})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area {:plan "bamboo"} :ignore-zones? true})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= #{[2 65 2]} (fp/dug s)))
           (is (= "bamboo" (fp/block-at s 2 64 2))))))))

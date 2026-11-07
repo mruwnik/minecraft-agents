@@ -81,7 +81,7 @@
         eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-tunnel! raw p))
-    (core/submit! eng (tu/order eng (list 'test.flight args)) {})
+    (core/submit! eng (tu/order (list 'test.flight args)) {})
     (leave-at-first-hold! raw clock)
     (await (core/tick! eng))
     p))
@@ -181,7 +181,7 @@
         eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-plain! raw p))
-    (core/submit! eng (tu/order eng (list 'test.flight args)) {})
+    (core/submit! eng (tu/order (list 'test.flight args)) {})
     (leave-at-first-hold! raw clock)
     (await (core/tick! eng))
     {:p p :kinds (set (map :kind @seen)) :stood @stood :feet-y (js/Math.floor (second (:pos (fake/self raw))))}))

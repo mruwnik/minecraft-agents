@@ -54,7 +54,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'work work) :triggers triggers/all :dir (tu/tmp-dir)
                           :now (tu/act-clock clock p 1000)})]
     (core/load-scenario! eng (scenario/parse "{:register [{:trigger :low-health}]}"))
-    (core/submit! eng (tu/order eng '(work)) {})
+    (core/submit! eng (tu/order '(work)) {})
     (await (tu/run-until-empty eng 10))
     {:worked-at @worked-at :p p :eng eng}))
 

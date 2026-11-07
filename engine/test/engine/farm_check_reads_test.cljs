@@ -29,7 +29,7 @@
               p (:p s)
               seen-blocks (aget p "seenBlocks")]
           (aset p "seenBlocks" (fn [q] (swap! reads inc) (.call seen-blocks p q)))
-          (core/submit! eng (tu/order eng '(repeat (seq (jobs.farm.maintain {:area {:plan "w"}}) (jobs.time.noop {})))) {})
+          (core/submit! eng (tu/order '(repeat (seq (jobs.farm.maintain {:area {:plan "w"}}) (jobs.time.noop {})))) {})
           (await (tu/run-ticks eng (:clock s) 1 700))
           (let [id (first (:list (core/state eng)))
                 before @reads]

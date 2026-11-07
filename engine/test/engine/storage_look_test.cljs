@@ -22,7 +22,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}] "12,64,0" [{:name "emerald" :count 3}]}})]
-          (core/submit! eng (tu/order eng '(jobs.storage.look {:chests [[10 64 0] [12 64 0]]})) {})
+          (core/submit! eng (tu/order '(jobs.storage.look {:chests [[10 64 0] [12 64 0]]})) {})
           (await (run-until-empty eng 12))
           (is (= {[10 64 0] {"bread" 5} [12 64 0] {"emerald" 3}}
                  (stock/stock-of (mem/view (:store eng)))) "the chests list in observe chests")
@@ -36,7 +36,7 @@
         (let [{:keys [eng]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}] "12,64,0" [{:name "emerald" :count 3}]}})]
           (doseq [cell [[10 64 0] [12 64 0]]]
             (mem/write! (:store eng) stock/stock-kind {:pos cell :items {"stale" 1}} stock/stock-policy))
-          (core/submit! eng (tu/order eng '(jobs.storage.look {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.look {})) {})
           (await (run-until-empty eng 12))
           (is (= {[10 64 0] {"bread" 5} [12 64 0] {"emerald" 3}} (stock/stock-of (mem/view (:store eng))))
               "booked chests are outside the storage group, and the default look still refreshed them"))))))
@@ -48,7 +48,7 @@
         (let [{:keys [eng]} (setup {:containers {"12,64,0" [{:name "emerald" :count 3}]}})]
           (doseq [cell [[10 64 0] [12 64 0]]]
             (mem/write! (:store eng) stock/stock-kind {:pos cell :items {"stale" 1}} stock/stock-policy))
-          (core/submit! eng (tu/order eng '(jobs.storage.look {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.look {})) {})
           (await (run-until-empty eng 12))
           (is (= {[12 64 0] {"emerald" 3}} (stock/stock-of (mem/view (:store eng))))
               "the chest that is gone is forgotten, the other one was still opened"))))))

@@ -103,7 +103,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup (assoc world :unloaded ["21,64,12"]))]
-          (core/submit! eng (tu/order eng '(jobs.movement.boat-land {:pos [21 64 12]})) {})
+          (core/submit! eng (tu/order '(jobs.movement.boat-land {:pos [21 64 12]})) {})
           (await (tu/run-until-empty eng 30))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
           (is (= [:no-shore] (mapv :reason (filterv #(= :stopped (:kind %)) @seen))))
@@ -218,7 +218,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup (assoc (world-with 18.5 10.5 {:x 21 :y 64 :z 10}) :self {:pos [21.5 64 10.5]}))
-              _ (core/submit! eng (tu/order eng '(jobs.movement.boat-land {:recover true})) {})
+              _ (core/submit! eng (tu/order '(jobs.movement.boat-land {:recover true})) {})
               id "j1"] ; the first job of a fresh engine
           (mem/write! (:store eng) boat-land/landed-kind {:job id :land {:x 21 :y 64 :z 10} :boat 9} boat-land/landed-policy)
           (await (tu/run-until-empty eng 90))

@@ -5,7 +5,7 @@
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
-            [engine.core.list-edits :refer [require-worth! submit!]]
+            [engine.core.list-edits :refer [submit!]]
             [engine.core.cleanup :as cleanup]
             [engine.core.ending :as ending]
             [engine.core.limits :as limits]
@@ -189,7 +189,7 @@
                      (fn [q] (when (and token (owner? eng token)) (limits/check! eng base)) q)))
      :next-way quote/next-way
      :child-ending child-ending
-     :submit (fn [spec opts] (check!) (require-worth! eng spec) (submit! eng spec (assoc opts :by id)))
+     :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
      :request-attention (fn [kind reason data message]
                           (check!)
                           (request-attention! eng {:job-id root :reason reason :kind kind

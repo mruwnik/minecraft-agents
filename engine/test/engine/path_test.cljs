@@ -77,7 +77,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks four})]
-          (core/submit! eng (tu/order eng (list job (assoc box :ways #{:carried}))) {})
+          (core/submit! eng (tu/order (list job (assoc box :ways #{:carried}))) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (= [:no-tool] (map :reason (kinds seen :waiting))))
           (is (empty? (filter #(= :need (:slot %)) (kinds seen :child_started))) "fetch false: no fetch child")
@@ -88,7 +88,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory [{:name "stone_shovel" :count 1 :durability 0 :max-durability 131}] :blocks four})]
-          (core/submit! eng (tu/order eng (list job (assoc box :ways #{:carried}))) {})
+          (core/submit! eng (tu/order (list job (assoc box :ways #{:carried}))) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (= [:no-tool] (map :reason (kinds seen :waiting))))
           (is (empty? (calls p "useOn"))))))))
@@ -98,7 +98,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four})]
-          (core/submit! eng (tu/order eng (list job {:from {:x 0 :y 63 :z 0} :to {:x 30 :y 63 :z 30}})) {})
+          (core/submit! eng (tu/order (list job {:from {:x 0 :y 63 :z 0} :to {:x 30 :y 63 :z 30}})) {})
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "impossible: it leaves the queue")
           (is (empty? (calls p "useOn"))))))))
@@ -141,7 +141,7 @@
               out (atom nil)
               parent (tu/recording-parent job box out #(dissoc (tu/outcome %) :status))
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (.hold world "useOn")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
@@ -159,7 +159,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} [(zone [1 60 1] [2 70 2])]))]
-          (core/submit! eng (tu/order eng (list job box)) {})
+          (core/submit! eng (tu/order (list job box)) {})
           (is (nil? (core/tick! eng)))
           (is (= [:refused] (map :reason (kinds seen :waiting))))
           (is (empty? (calls p "useOn"))))))))
@@ -169,7 +169,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory shovel :blocks four} (ew/of-data {} {} nil))]
-          (core/submit! eng (tu/order eng (list job box)) {})
+          (core/submit! eng (tu/order (list job box)) {})
           (is (nil? (core/tick! eng)))
           (is (= [:no-zones] (map :reason (kinds seen :waiting))))
           (is (empty? (calls p "useOn"))))

@@ -21,7 +21,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (fm/start oak-world {"forest" oak-cell})]
-          (core/submit! eng (tu/order eng (list fm/job {:plan "forest"})) {})
+          (core/submit! eng (tu/order (list fm/job {:plan "forest"})) {})
           (await (fm/ticks eng 1))
           (is (= 1 (count (h/events-of seen :completed))) "done after one tick")
           (is (= [[3 64 0 "oak_sapling"]] (places p))))))))
@@ -33,7 +33,7 @@
         (let [{:keys [eng p seen]} (fm/start {:blocks (merge (fm/ground [[3 0]]) {"3,64,0" "short_grass"})
                                               :inventory [(item "oak_sapling" 1)]}
                                              {"forest" oak-cell})]
-          (core/submit! eng (tu/order eng '(jobs.forestry.prepare {:plan "forest"})) {})
+          (core/submit! eng (tu/order '(jobs.forestry.prepare {:plan "forest"})) {})
           (await (fm/ticks eng 1))
           (is (= 1 (count (h/events-of seen :completed))) "done after one tick")
           (is (= [[3 64 0]] (digs p))))))))

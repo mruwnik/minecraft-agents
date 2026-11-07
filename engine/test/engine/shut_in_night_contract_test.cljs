@@ -27,7 +27,7 @@
     (.override (.-world p) "wait" (fn ^:async f [token a impl]
                                     (swap! clock + (.-ms a))
                                     (await (impl token a))))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     {:eng eng :p p :clock clock :out out}))
 
 (defn ending-of [e] [(:kind e) (contract/cause-key e)])

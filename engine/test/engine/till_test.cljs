@@ -160,7 +160,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks four})]
-          (core/submit! eng (tu/order eng (list job (assoc box :ways #{:carried}))) {})
+          (core/submit! eng (tu/order (list job (assoc box :ways #{:carried}))) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (empty? (calls p "useOn"))))))))
 
@@ -214,7 +214,7 @@
               out (atom nil)
               parent (tu/recording-parent job box out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (.hold world "useOn")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
@@ -300,7 +300,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory hoe :blocks four} (ew/of-data {} {} nil))]
-          (core/submit! eng (tu/order eng (list job box)) {})
+          (core/submit! eng (tu/order (list job box)) {})
           (await (run-until-empty eng 10))
           (is (empty? (calls p "useOn")))
           (is (empty? (kinds seen :till.declined))))))))
@@ -311,7 +311,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory hoe :blocks four}
                                           (ew/of-data {} {} [{:name "farm" :min [1 60 1] :max [2 70 2] :owner "Miles"}]))]
-          (core/submit! eng (tu/order eng (list job box)) {})
+          (core/submit! eng (tu/order (list job box)) {})
           (await (run-until-empty eng 5))
           (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
           (is (empty? (calls p "useOn")))
@@ -401,7 +401,7 @@
   [extra n]
   (let [s (h/setup-seeing {:blocks (assoc four hoe-chest "chest") :containers {hoe-chest [{:name "stone_hoe" :count 1}]}} nil)]
     (perception/pass! (aget (:p s) "perception"))
-    (core/submit! (:eng s) (tu/order (:eng s) (list job (merge box {:ignore-zones? true} extra))) {})
+    (core/submit! (:eng s) (tu/order (list job (merge box {:ignore-zones? true} extra))) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
@@ -428,7 +428,7 @@
       (fn ^:async t []
         (let [s (h/setup-seeing {:blocks four} nil)
               _ (perception/pass! (aget (:p s) "perception"))
-              _ (core/submit! (:eng s) (tu/order (:eng s) (list job (merge box {:ignore-zones? true}))) {})
+              _ (core/submit! (:eng s) (tu/order (list job (merge box {:ignore-zones? true}))) {})
               _ (await (tu/run-ticks (:eng s) (:clock s) 25 700))]
           (is (some #(= :explore (:slot %)) (kinds (:seen s) :child_started))))))))
 

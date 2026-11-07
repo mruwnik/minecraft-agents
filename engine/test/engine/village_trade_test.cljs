@@ -286,7 +286,7 @@
                              (await (js/Promise. (fn [_ _]))))
 
                          :else (await (impl token args)))))
-          (core/submit! (:eng a) (tu/order (:eng a) (list job {:villager "v-1" :buy "bread" :count 3})) {})
+          (core/submit! (:eng a) (tu/order (list job {:villager "v-1" :buy "bread" :count 3})) {})
           (swap! clock + 700)
           (core/tick! (:eng a))
           (loop [i 0]
@@ -344,7 +344,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:world {:entities [(villager [(bread {})] {:pos {:x 30 :y 64 :z 0}})] :inventory [{:name "emerald" :count 5}]}})]
-          (core/submit! eng (tu/order eng (list job {:villager "v-1" :buy "bread" :count 2})) {})
+          (core/submit! eng (tu/order (list job {:villager "v-1" :buy "bread" :count 2})) {})
           (swap! clock + 700)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "walk, offers and both buys in one round")
@@ -355,7 +355,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (start {:world {:entities [(villager [(bread {})] {:busy true})] :inventory [{:name "emerald" :count 3}]}})]
-          (core/submit! eng (tu/order eng (list job {:villager "v-1" :buy "bread"})) {})
+          (core/submit! eng (tu/order (list job {:villager "v-1" :buy "bread"})) {})
           (swap! clock + 700)
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng)))))))))

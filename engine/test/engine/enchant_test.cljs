@@ -85,7 +85,7 @@
   (let [out (atom :not-done)
         parent (tu/recording-parent (first job-form) (second job-form) out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (run-until-empty eng n))
     @out))
 
@@ -260,7 +260,7 @@
       (fn ^:async t []
         (let [world (assoc table-world :inventory [(assoc sword :enchants [{:name "sharpness" :level 2}]) (lapis 6)])
               {:keys [eng p seen]} (start world)
-              id (core/submit! eng (tu/order eng '(jobs.items.enchant {:item "diamond_sword"})) {})
+              id (core/submit! eng (tu/order '(jobs.items.enchant {:item "diamond_sword"})) {})
               _ (mem/update-job! (:store eng) id [] #(assoc % :attempt {:slot 3 :level-cost 5 :xp 30 :lapis 9}))
               _ (await (run-until-empty eng 10))]
           (is (not (some #{"enchant"} (ops p))))
@@ -280,7 +280,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start (assoc table-world :self {:experience {:level 5}}))
-              id (core/submit! eng (tu/order eng '(jobs.items.enchant {:item "diamond_sword"})) {})
+              id (core/submit! eng (tu/order '(jobs.items.enchant {:item "diamond_sword"})) {})
               held (atom nil)
               _ (override! p (fn ^:async f [token args impl]
                                (when (= "enchant" (.-op args)) (reset! held (core/job-memory eng id)))

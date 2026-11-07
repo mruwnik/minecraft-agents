@@ -104,7 +104,7 @@
                                     [{:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"} {:ignore-zones? true} ["bread"]]]]
           (let [{:keys [eng p]} (setup {:self {:food 0} :containers {"20,64,0" [{:name "bread" :count 4}]}} [zone])]
             (know-source! eng {:x 20 :y 64 :z 0} :chest)
-            (core/submit! eng (tu/order eng (list 'jobs.survival.get-food extra)) {})
+            (core/submit! eng (tu/order (list 'jobs.survival.get-food extra)) {})
             (await (run-until-empty eng 20))
             (is (= taken (mapv #(.-item (.-args %)) (calls p "transfer"))) (pr-str [zone extra]))))))))
 
@@ -116,7 +116,7 @@
               {:keys [eng p]} (setup {:self {:food 0} :containers two-chests} [pantry])]
           (know-source! eng {:x 30 :y 64 :z 0} :chest)
           (know-source! eng {:x 20 :y 64 :z 0} :chest)
-          (core/submit! eng (tu/order eng '(jobs.survival.get-food {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.get-food {})) {})
           (await (run-until-empty eng 30))
           (is (= ["apple"] (mapv #(.-item (.-args %)) (calls p "transfer")))))))))
 
@@ -129,7 +129,7 @@
         (let [pantry {:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"}
               {:keys [eng p]} (setup {:self {:food 0} :containers two-chests} [pantry] pantry-plan)]
           (mem/write! (:store eng) :fetch/stock {:pos [20 64 0] :items {"bread" 4}} {:cap 5 :ttl :forever})
-          (core/submit! eng (tu/order eng '(jobs.survival.get-food {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.get-food {})) {})
           (await (run-until-empty eng 30))
           (is (empty? (calls p "transfer"))))))))
 
@@ -146,7 +146,7 @@
                                        [{:name "forge" :min [0 60 -1] :max [2 70 1] :owner "Miles" :allow #{:take}} {} false]]]
           (let [{:keys [eng p seen]} (setup {:blocks {"1,64,0" "furnace"}
                                              :inventory [{:name "raw_iron" :count 5} {:name "coal" :count 3}]} [zone])]
-            (core/submit! eng (tu/order eng (list 'jobs.items.smelt (merge {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3} extra))) {})
+            (core/submit! eng (tu/order (list 'jobs.items.smelt (merge {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 3} extra))) {})
             (await (run-until-empty eng 3))
             (is (= touched? (pos? (count (calls p "furnace")))) (pr-str [zone extra]))
             (is (= touched? (empty? (filter #(and (= :waiting (:kind %)) (= :refused (:reason %))) @seen))) (pr-str [zone extra]))))))))

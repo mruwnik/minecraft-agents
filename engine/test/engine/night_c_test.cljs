@@ -43,7 +43,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (st/setup {:time night :inventory st/wall-stack :blocks breached-room})
               _ (mem/write! (:store eng) :bed-open {:pos {:x 6 :y 64 :z 0}} sh-beds/bed-open-policy)
-              _ (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+              _ (core/submit! eng (tu/order '(jobs.survival.night {})) {})
               log (await (with-child-log #(tu/run-until-empty eng 40)))
               args (nth (first (filter #(= :enclose (first %)) log)) 2)]
           (is (< 0 (:worth args) ##Inf) "a price (what the other answers cost more), not the unbounded shortcut and not the night's open-gain"))))))
@@ -557,7 +557,7 @@
         (let [{:keys [eng p filled]} (await (doorway-shut-early))]
           (is (seq filled) "the doorway was shut")
           (is (dawn-holds-now? eng p) "by day the dawn trigger holds for the shut doorway")
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "air" (block-at p %)) filled) "leave-shelter opened it"))))))
 
@@ -568,7 +568,7 @@
         (let [{:keys [eng p seen filled]} (await (doorway-shut-early))
               failing? (atom true)]
           (.override (.-world p) "dig" (fn ^:async f [tok a impl] (if @failing? #js {:status "timeout"} (await (impl tok a)))))
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (tu/run-until-empty eng 40))
           (is (seq filled))
           (is (not-any? #(= "air" (block-at p %)) filled) "the digs failed, nothing opened")
@@ -577,7 +577,7 @@
           (mem/forget! (:store eng) ledger/held-kind)
           (is (dawn-holds-now? eng p) "once the hold lapses the trigger holds for it again")
           (reset! failing? false)
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "air" (block-at p %)) filled) "and the next try opens it"))))))
 
@@ -588,7 +588,7 @@
         (let [{:keys [eng p seen]} (await (doorway-shut-early))
               try-once! (fn ^:async once []
                           (mem/forget! (:store eng) ledger/held-kind)
-                          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+                          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
                           (await (tu/run-until-empty eng 40)))]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "timeout"}))
           (await (try-once!))
@@ -608,7 +608,7 @@
           (fake/swap-self! p assoc :pos [7 64 0]) ; outside the room, looking at the filled cells in its west wall
           (look-round!)
           (is (not (dawn-holds-now? eng p)) "no doorway of its own to open")
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "oak_planks" (block-at p %)) filled) "the planks someone put there stay"))))))
 
@@ -619,7 +619,7 @@
         (let [{:keys [eng p]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2]})
               _ (st/refuse-cell! p [0 63 0])
               _ (st/dawn-after! p 4)
-              _ (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+              _ (core/submit! eng (tu/order '(jobs.survival.night {})) {})
               log (await (with-child-log #(core/tick! eng)))]
           (is (empty? (filter #(= 'jobs.items.get-tool (second %)) log)) "no tool fetched in the dark"))))))
 
@@ -651,7 +651,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:time night :blocks (update-vals wide-ground (constantly "obsidian")) :inventory [] :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-              log (do (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+              log (do (core/submit! eng (tu/order '(jobs.survival.night {})) {})
                       (await (with-child-log #(tu/run-until-empty eng 80))))]
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (is (some #(= 'jobs.survival.log-out (second %)) log) "the owner's fallback: no shelter, so log out"))))))

@@ -37,7 +37,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir) :now now
                           :world (world/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now now})})]
-    (core/submit! eng (tu/order eng spec) {})
+    (core/submit! eng (tu/order spec) {})
     (loop [i 0]
       (when (and (< i 80) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 700)
@@ -94,7 +94,7 @@
         now (tu/act-clock clock p 20)
         eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir) :now now :world (world/of-data {} {} [])
                           :events (events/make {:sinks [(fn [_])] :now now})})]
-    (core/submit! eng (tu/order eng (list 'jobs.combat.attack args)) {})
+    (core/submit! eng (tu/order (list 'jobs.combat.attack args)) {})
     (dotimes [_ 3] (swap! clock + 700) (await (core/tick! eng)))
     (core/shutdown! eng)
     (some-> (first (h/calls p "equip")) .-args .-item)))
@@ -119,7 +119,7 @@
         eng (core/create {:primitives (:p s) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng (list 'jobs.explore.search (child/search-args args))) {})
+    (core/submit! eng (tu/order (list 'jobs.explore.search (child/search-args args))) {})
     (loop [i 0]
       (when (and (< i (or n 400)) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 700)

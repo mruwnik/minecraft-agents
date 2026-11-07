@@ -28,7 +28,7 @@
         eng (core/create {:primitives p :jobs (merge registry/jobs {'jobs.movement.go-to stub 'recording-parent (tu/recording-parent job args out identity)})
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 10) (= :not-done @out))
         (swap! clock + 500)

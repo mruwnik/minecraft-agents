@@ -91,7 +91,7 @@
          out (atom :not-done)
          returns (atom [])
          eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args seed)))]
-     (core/submit! eng (tu/order eng '(returns-parent)) {})
+     (core/submit! eng (tu/order '(returns-parent)) {})
      (assoc s :eng eng :out out :returns returns))))
 
 (defn ^:async tick-out!
@@ -719,7 +719,7 @@
         (let [{:keys [eng p seen clock]} (setup {:inventory (vec (concat [{:name "coal" :count 30}
                                                                           {:name "cobbled_deepslate" :count 64} {:name "granite" :count 64}]
                                                                          (same "diamond_pickaxe" 33 1)))})]
-          (core/submit! eng (tu/order eng '(jobs.storage.make-room {:free 2 :carry-blocks 0})) {})
+          (core/submit! eng (tu/order '(jobs.storage.make-room {:free 2 :carry-blocks 0})) {})
           (await (tu/run-ticks eng clock 12 700))
           (is (seq (of-kind seen :completed)) "done is emitted, not a wait for not-ready")
           (is (empty? (:list (core/state eng))) "the job ended"))))))
@@ -873,7 +873,7 @@
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to
                                           'returns-parent (returns-parent (atom nil) returns {} nil)))]
-          (core/submit! eng (tu/order eng '(returns-parent)) {})
+          (core/submit! eng (tu/order '(returns-parent)) {})
           (await (tick-out! eng 30))
           (is (= [:done] @returns) "a reflex never yields: the walk is waited out inside the call")
           (is (= 2 @walks))
@@ -962,7 +962,7 @@
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
           (mem/write! (:store eng) :make-room-tossed {:at {:x 400 :y 64 :z 400} :dir [1 0]} mr/tossed-policy)
-          (core/submit! eng (tu/order eng '(jobs.storage.make-room {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.make-room {})) {})
           (await (tick-out! eng 10))
           (is (zero? @walks) "the old toss site is not walked back to")
           (is (empty? (spots))))))))
@@ -978,7 +978,7 @@
               spots #(mem/entries (mem/view (:store eng)) :make-room-tossed)
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
           (mem/write! (:store eng) :make-room-tossed {:at {:x 2 :y 64 :z 0} :dir [1 0]} mr/tossed-policy)
-          (core/submit! eng (tu/order eng '(jobs.storage.make-room {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.make-room {})) {})
           (await (tick-out! eng 10))
           (is (= 1 @walks) "the items thrown in the last 2 minutes may still lie there: step away once")
           (is (empty? (spots))))))))
@@ -994,7 +994,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
           (tu/seeing-all p)
           (mem/write! (:store eng) :make-room-tossed {:at {:x 2 :y 64 :z 0} :dir [1 0]} mr/tossed-policy)
-          (core/submit! eng (tu/order eng '(jobs.storage.make-room {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.make-room {})) {})
           (await (tick-out! eng 10))
           (is (= [{:x -1 :y 64 :z 0}] @goals) "four blocks back is the wall: the farthest open cell is aimed at"))))))
 
@@ -1010,7 +1010,7 @@
               omniscient (.-sensedAt (tu/seeing-all p))]
           (aset p "sensedAt" (fn [pos] (if (< (.-x pos) 0) #js {:unknown true} (omniscient pos))))
           (mem/write! (:store eng) :make-room-tossed {:at {:x 2 :y 64 :z 0} :dir [1 0]} mr/tossed-policy)
-          (core/submit! eng (tu/order eng '(jobs.storage.make-room {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.make-room {})) {})
           (await (tick-out! eng 10))
           (is (= [{:x 0 :y 64 :z 0}] @goals) "x -2 and -1 were never seen: the farthest seen cell is aimed at"))))))
 
@@ -1055,7 +1055,7 @@
         clock (atom t0)
         eng (core/create {:primitives (tu/fake-on-floor world) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng (list 'jobs.storage.make-room args)) {})
+    (core/submit! eng (tu/order (list 'jobs.storage.make-room args)) {})
     (await (tu/run-ticks eng clock 12 700))
     (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
       (core/shutdown! eng)
@@ -1095,7 +1095,7 @@
                                           (let [r (await (impl token a))]
                                             (core/cancel! eng (first (:list (core/state eng))))
                                             r)))
-          (core/submit! eng (tu/order eng '(jobs.storage.make-room {})) {})
+          (core/submit! eng (tu/order '(jobs.storage.make-room {})) {})
           (await (tick-out! eng 10))
           (is (= 1 @walks) "the walk away ran after the cut")
           (is (empty? (spots))))))))

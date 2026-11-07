@@ -245,7 +245,7 @@
   "Submit the job with args over world w, tick n times; the setup map."
   [w args n]
   (let [s (setup w)]
-    (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
+    (core/submit! (:eng s) (tu/order (list job args)) {})
     (dotimes [_ n]
       (await (core/tick! (:eng s))))
     s))

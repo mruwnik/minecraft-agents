@@ -159,7 +159,7 @@
 (defn ^:async run-dig!
   "Submit one more coal dig on s (a fresh job, same body) in direction dir; run it out."
   [s dir]
-  (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "coal_ore" :count 1 :direction dir :tunnel-length 4 :radius 8 :torches false :trip true})) {})
+  (core/submit! (:eng s) (tu/order (m/spec {:block "coal_ore" :count 1 :direction dir :tunnel-length 4 :radius 8 :torches false :trip true})) {})
   (await (m/run-ticks s 300)))
 
 (defn ^:async with-price

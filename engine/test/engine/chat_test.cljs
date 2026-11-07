@@ -31,7 +31,7 @@
   (let [out (atom nil)
         job {:round (fn ^:async r [c] (reset! out (await (round c))) (ctx/end c :done nil))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'chat-job job))]
-    (core/submit! eng (tu/order eng '(chat-job)) {})
+    (core/submit! eng (tu/order '(chat-job)) {})
     (await (core/tick! eng))
     @out))
 

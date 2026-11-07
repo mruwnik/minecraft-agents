@@ -69,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:inventory [boat-item]})]
-          (core/submit! eng (tu/order eng '(jobs.movement.boat-launch {})) {})
+          (core/submit! eng (tu/order '(jobs.movement.boat-launch {})) {})
           (await (tu/run-until-empty eng 3))
           (is (= 1 (count (:list (core/state eng)))) "still queued")
           (is (= [:no-water] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
@@ -137,7 +137,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks pond :inventory [boat-item]})
               _ (tu/seeing-after-look p)]
-          (core/submit! eng (tu/order eng '(jobs.movement.boat-launch {:board false})) {})
+          (core/submit! eng (tu/order '(jobs.movement.boat-launch {:board false})) {})
           (await (tu/run-until-empty eng 30))
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (empty? (:list (core/state eng)))))))))
@@ -151,7 +151,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks channel :inventory [boat-item]})]
-          (core/submit! eng (tu/order eng '(jobs.movement.boat-launch {})) {})
+          (core/submit! eng (tu/order '(jobs.movement.boat-launch {})) {})
           (await (tu/run-until-empty eng 3))
           (is (= [:no-room] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
 

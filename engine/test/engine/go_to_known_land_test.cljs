@@ -44,7 +44,7 @@
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (reset! wsearch/searches {})
     (reset! wsearch/known-land {})
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (assoc s :eng eng :out out :ticks (await (tick-out! eng 200)))))
 
 (defn go! [world args] (go-on! world (tu/fake world) args))

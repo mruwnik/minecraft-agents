@@ -33,7 +33,7 @@
 (defn ^:async run-walls! [world]
   (let [{:keys [eng p seen]} (st/setup (assoc world :time st/night))
         _ (needs-support! p)]
-    (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
+    (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
     (await (run-until-empty eng 30))
     {:p p :seen seen}))
 
@@ -70,7 +70,7 @@
                                 :world (world-files/of-data {} {} [{:name "keep-out" :min [-1 62 -1] :max [1 63 1]}])
                                 :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now #(deref clock)})})
               _ (needs-support! p)]
-          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty eng 30))
           (is (every? #(contains? #{nil "air"} (some-> (.blockAt p (clj->js %)) .-name)) [{:x 1 :y 63 :z 0} {:x 1 :y 62 :z 0} {:x 0 :y 63 :z 1} {:x -1 :y 63 :z 0}])
               "nothing is placed under the wall cells inside the zone"))))))
@@ -92,7 +92,7 @@
         (let [{:keys [eng p seen]} (st/setup {:inventory [{:name "dirt" :count 40}] :blocks pillar :floor [0 0 0 0] :time st/night})
               _ (swap! (fake/state p) assoc-in [:self :pos] [0.15 64 0.5])
               _ (refuses-under-the-body! p)]
-          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty eng 30))
           (is (empty? (st/emitted seen :shut-in.unsealed)))
           (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))

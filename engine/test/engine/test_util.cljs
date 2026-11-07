@@ -6,10 +6,10 @@
             ["path" :as path]
             [engine.contract :as contract]
             [engine.core :as core]
-            [engine.core.round :as round]
-            [engine.expr :as expr]
             [engine.core.ending :as ending]
+            [engine.core.schedule :as schedule]
             [engine.ctx :as ctx]
+            [engine.expr :as expr]
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
             [engine.fake.raw-world :as fake-raw]
@@ -24,21 +24,26 @@
 
 (def require-here node/require-here)
 
-(def order-worth "The :worth a test's hand order of a job with no worth-of gives, as an agent's submit gives one." 1200)
+(def order-worth "The :worth of a hand order: what an agent's submit gives a goal it names no worth for." 1200)
 
 (defn order
-  "Job spec form as an agent orders it by hand, each goal priced as its job prices it: a job without a :worth gets its
-  worth-of over eng (one that reads the caller's worth reads order-worth), else (none, or nil) order-worth."
+  "Job spec form as an agent orders it by hand: each job without a :worth in its args gets worth (default order-worth)."
+  ([form] (order form order-worth))
+  ([form worth]
+   (let [[head & parts] form]
+     (case head
+       (seq any until) (apply list head (map #(order % worth) parts))
+       repeat (apply list head (concat (butlast parts) [(order (last parts) worth)]))
+       (if (number? (:worth (first parts)))
+         form
+         (list head (assoc (first parts) :worth worth)))))))
+
+(defn at-own-worth
+  "form (one job) as a trigger fires it, for a test of what the job's own worth decides: its :worth is the job's
+  worth-of over eng (core.schedule/priced)."
   [eng form]
-  (let [[head & parts] form]
-    (case head
-      (seq any until) (apply list head (map #(order eng %) parts))
-      repeat (apply list head (concat (butlast parts) [(order eng (last parts))]))
-      (if (number? (:worth (first parts)))
-        form
-        (let [f (:worth-of (get (:jobs eng) head))]
-          (list head (assoc (first parts) :worth (or (when f (f (assoc (round/check-ctx eng {:id "order"} (:args (expr/parse (:jobs eng) form))) :worth (constantly order-worth))))
-                                                     order-worth))))))))
+  (let [node (schedule/priced eng {:id "own" :reflex :test} (expr/parse (:jobs eng) form))]
+    (list (:job node) (:args node))))
 
 (defn kind-reason "A status [kind text data] as [kind reason]." [[kind _ data]] [kind (:reason data)])
 

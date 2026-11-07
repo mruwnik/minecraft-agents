@@ -175,7 +175,7 @@
             (doseq [seed [0 1 5 7]]
               (set! js/Math.random (lcg seed))
               (let [{:keys [eng p raw]} (setup (lit-tunnel))]
-                (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+                (core/submit! eng (tu/order '(jobs.survival.night {})) {})
                 (await (st/tick-n eng 12))
                 (is (= {:x 5 :y 64 :z 0} (update-vals (st/pos-of p) js/Math.floor)) (str "the body stays in the tunnel, seed " seed))
                 (is (empty? (st/calls raw "sleep")))
@@ -197,7 +197,7 @@
         (let [{:keys [eng p raw clock]} (setup overdue-in-open-lit-tunnel)]
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (is (= far-bed (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))) "overdue: the far bed is the bed to use")
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= [far-bed] (map :pos (st/entries eng :bed-walk-unsafe))) "the dark walk was priced unsafe")
           (is (empty? (st/calls raw "sleep")))
@@ -221,7 +221,7 @@
                                 {:estimate true}
                                 (do (when-not @unsafe-when-answered (reset! unsafe-when-answered [(count (st/entries eng :bed-walk-unsafe))]))
                                     (await (quote! c args))))))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (try (await (core/tick! eng))
                (finally (set! pick/quote! quote!)))
           (is (= [0] @unsafe-when-answered) "no route yet is not no route: the bed is not written off while the search goes on")
@@ -239,7 +239,7 @@
       (fn ^:async t []
         (let [{:keys [eng raw clock]} (setup on-open-ground)]
           (swap! clock + (* 4 sh-clock/ms-per-day))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out here costs as much as the walk")
           (is (seq (st/calls raw "sleep")) "it walks to the bed and sleeps"))))))
@@ -257,7 +257,7 @@
               {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {} :inventory [{:name "cobblestone" :count 32}]))]
           (remember-spawn-bed! eng bed)
           (swap! clock + (* 4 sh-clock/ms-per-day))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
           (is (empty? (st/calls raw "sleep"))))))))
@@ -270,7 +270,7 @@
               {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 330 5] :blocks {"320,64,0" "red_bed"} :inventory [{:name "cobblestone" :count 32}]))]
           (st/know-bed! eng bed)
           (swap! clock + (* 4 sh-clock/ms-per-day))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
           (is (empty? (st/calls raw "sleep")))
@@ -284,7 +284,7 @@
               {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"120,64,0" "red_bed"}))]
           (st/know-bed! eng bed)
           (swap! clock + (* 4 sh-clock/ms-per-day))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out all night costs more than the walk's dark")
           (is (= [bed] (mapv st/arg-pos (st/calls raw "sleep")))))))))
@@ -307,7 +307,7 @@
           (set! pick/quote-once! (fn ^:async q [c args]
                                    (let [q (await (quote-once! c args))]
                                      (if (and (= bed (:pos args)) (get-in q [:route :found])) (cut q) q))))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (try (await (st/tick-n eng 12))
                (finally (set! pick/quote-once! quote-once!)))
           (is (empty? (st/entries eng :bed-walk-unsafe)) "no whole way known yet is not no way: the walk is priced, not refused")
@@ -326,7 +326,7 @@
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (is (not (sh-sense/dark-outside? p)))
           (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= [{:x 8 :y 64 :z 0}] (mapv st/arg-pos (st/calls raw "sleep"))) "the night does not end on the light before the bed"))))))
 
@@ -416,7 +416,7 @@
               _ (stale-until-looked p raw [6 64 1])
               holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
           (is (true? (holds)) "the trigger holds to look round the hut")
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (seq (st/calls raw "look")) "looked")
           (is (= [{:x 6 :y 64 :z 1}] (mapv st/arg-pos (st/calls raw "sleep"))) "slept in the bed it then saw"))))))
@@ -440,7 +440,7 @@
       (fn ^:async t []
         (let [{:keys [eng p raw]} (setup (unseen-hut-world {} {:inventory [{:name "red_bed" :count 1}]}))]
           (is (true? (sh/night-holds? p (mem/view (:store eng)) {} (constantly true))) "the trigger holds to look")
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (seq (st/calls raw "look")) "looked")
           (is (seq (st/calls raw "place")) "the bed is put down"))))))
@@ -451,14 +451,14 @@
       (fn ^:async t []
         (let [{:keys [eng p raw]} (setup (assoc (dissoc (lit-tunnel) :sees-all) :inventory [{:name "red_bed" :count 1}]))
               holds #(sh/night-holds? p (mem/view (:store eng)) {} (constantly true))]
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (let [looks (count (st/calls raw "look"))]
             (is (pos? looks) "looked once")
             (is (false? (holds)) "no hold after the look, whatever stays unseen")
             (st/teleport! raw 6 64 0)
             (is (false? (holds)) "nor on the next cell of the tunnel")
-            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.night {})) {})
             (await (st/tick-n eng 12))
             (is (= looks (count (st/calls raw "look"))) "no second look pass")))))))
 
@@ -613,7 +613,7 @@
                                                (assoc :floor tu/walk-floor :light {} :offlineScale 0.0001)))]
           (st/know-bed! eng {:x 10 :y 64 :z 0})
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 10))
           (is (= [{:x 10 :y 64 :z 0}] (mapv st/arg-pos (st/calls raw "sleep"))) "dug in under the roof, it still goes to the bed its sleep ends the night in"))))))
 
@@ -642,7 +642,7 @@
               priced (fn [& _] (swap! refusals inc) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (with-redefs [child/call-walk* priced]
-            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.night {})) {})
             (await (st/tick-n eng 12)))
           (is (= 1 @refusals) "the refused bed is asked once, not on every pass")
           (is (number? (:worth (first (st/entries eng :bed-walk-unsafe)))) "the refusal carries the worth it was priced at"))))))
@@ -660,7 +660,7 @@
           (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 50 :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
           (with-redefs [child/call-walk* priced
                         night/bed-worth (fn ^:async [_ bed _] (if (= bed near) 100 1))]
-            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.night {})) {})
             (await (st/tick-n eng 12)))
           (is (some #{near} @asked) "the near bed, worth 100, is walked")
           (is (not-any? #{far-bed} @asked) "the far bed was refused at 50 and its own worth is 1: not asked again"))))))
@@ -672,7 +672,7 @@
         (let [light (into {} (for [x (range 9 16) y [64 65 66] z (range 9 16)] [[x y z] [0 14]]))
               {:keys [eng raw]} (setup {:floor [0 0 20 20] :self {:pos {:x 13.5 :y 64 :z 13.5}} :time st/night
                                         :blocks seven-hut :light light})]
-          (core/submit! eng (tu/order eng '(jobs.survival.sleep {:bed {:x 10 :y 64 :z 12} :open-bed false})) {})
+          (core/submit! eng (tu/order '(jobs.survival.sleep {:bed {:x 10 :y 64 :z 12} :open-bed false})) {})
           (await (st/tick-n eng 12))
           (is (seq (st/calls raw "look")) "looked round the room")
           (is (seq (st/calls raw "sleep")) "then lay down in the closed room"))))))

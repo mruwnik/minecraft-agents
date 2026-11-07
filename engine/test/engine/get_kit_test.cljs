@@ -51,9 +51,7 @@
         raw (tu/fake-on-floor (assoc w :floor-block "andesite"))
         p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
         out (atom :not-done)
-        ;; at the root's worth: the job's own worth-of for args, as when an agent submits it
-        parent {:worth-of (fn [c] (if-let [f (:worth-of (get registry/jobs job))] (f (assoc c :args args))))
-                :round (fn ^:async recording-round [c]
+        parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (when-not (= :continue e)
                              (reset! out (merge (:data e) (when (map? (:cause e)) (dissoc (:cause e) :reason))
@@ -65,7 +63,7 @@
                           :dir (tu/tmp-dir) :now #(deref clock) :world (ew/of-data {} {} [f/own-zone])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     {:eng eng :p p :seen seen :clock clock :out out})))
 
 (defn worn [{:keys [p]}]
@@ -548,7 +546,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (treeless-world) :inventory [{:name "bread" :count 12}]) {:items ["stick"] :food false :wear false})]
+        (let [s (start (assoc (treeless-world) :inventory [{:name "bread" :count 12}]) {:items ["stick"] :food false :wear false :worth (cost/items-find-worth {"stick" 1})})]
           (await (run-kit! s 3000))
           (is (= :stopped (:status @(:out s))))
           (is (= "oak_log" (get-in @(fake/state (:p s)) [:blocks [40 64 5]])) "the tree 40 blocks off is not walked to for a stick"))))))

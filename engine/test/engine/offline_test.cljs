@@ -53,7 +53,7 @@
       (fn ^:async t []
         (reset! probes 0)
         (let [{:keys [eng p seen]} (setup {:offlineScale 0.01 :self {:health 5}})]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (core/register-reflex! eng {:trigger :probe})
           (let [{:keys [round]} (await (tick-until-offline eng p))
                 before @probes]
@@ -69,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:offlineScale 0.01 :self {:health 5}})]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (let [{:keys [round]} (await (tick-until-offline eng p))]
             (core/register-reflex! eng {:trigger :hurt})
             (core/tick! eng)
@@ -84,7 +84,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:offlineScale 0.5})]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (let [{:keys [round]} (await (tick-until-offline eng p))]
             (core/cancel! eng "j1")
             (is (true? (.isOffline p)) "still away until the reconnect is done")
@@ -128,7 +128,7 @@
         (let [{:keys [eng p seen]} (setup {})
               world (.-world p)]
           (.override world "eat" (fn [_ _ _] (js/Promise.resolve #js {:status "offline"})))
-          (core/submit! eng (tu/order eng '(eat)) {})
+          (core/submit! eng (tu/order '(eat)) {})
           (await (core/tick! eng))
           (is (= 1 (count (kinds-of seen :cut))) "the round is cut, not failed or done")
           (is (= [] (kinds-of seen :completed)))
@@ -146,7 +146,7 @@
           (.override world "eat" (fn [_ _ _]
                                    (swap! (fake/state p) assoc :offline true)
                                    (js/Promise.reject (js/TypeError. "Cannot read properties of undefined (reading 'x')"))))
-          (core/submit! eng (tu/order eng '(eat)) {})
+          (core/submit! eng (tu/order '(eat)) {})
           (await (core/tick! eng))
           (is (= 1 (count (kinds-of seen :cut))) "cut, not failed")
           (is (= {} (:failed (core/state eng))))

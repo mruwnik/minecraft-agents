@@ -37,7 +37,7 @@
                            (if (= :continue r) (do (swap! continues inc) (when-not @digs-at-first (reset! digs-at-first (count (ct/calls p "dig")))) :continue) (do (reset! out r) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :world (world-files/of-data {} {} (or zones [])) :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
                           :now now :events (events/make {:body "Fake" :sinks [sink] :now now})})]
-    (core/submit! eng (tu/order eng '(caller)) {})
+    (core/submit! eng (tu/order '(caller)) {})
     (loop [i 0]
       (when (and (= :not-done @out) (< i 40))
         (await (core/tick! eng))

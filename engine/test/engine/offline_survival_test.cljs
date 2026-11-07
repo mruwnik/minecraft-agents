@@ -45,7 +45,7 @@
       (fn ^:async t []
         (let [clock (atom 1000000)
               {:keys [eng p seen]} (let [p (tu/fake {:offlineScale 0.01})] (assoc (engine-with-sink p clock) :p p))]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (let [{:keys [round]} (await (go-offline eng p))]
             (is (number? (events/emit! (:events eng) {:source :system :kind :probe :level :info})))
             (is (nil? (:pos (last @seen))) "no pos while away")
@@ -58,7 +58,7 @@
         (let [clock (atom 1000000)
               p (tu/fake {:offlineScale 0.01})
               {:keys [eng seen]} (engine-with-sink p clock)]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (let [{:keys [round]} (await (go-offline eng p))]
             (is (nil? (core/tick! eng)))
             (core/report-tick-failure! eng (js/Error. "boom"))
@@ -73,7 +73,7 @@
         (let [clock (atom 1000000)
               p (tu/fake {:offlineScale 0.01 :time 5000})
               {:keys [eng]} (engine-with-sink p clock)]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (let [{:keys [round]} (await (go-offline eng p))
                 entry (mem/write! (:store eng) :probe {:x 1})]
             (is (nil? (:wt entry)))
@@ -87,7 +87,7 @@
         (let [clock (atom 1000000)
               p (tu/fake {:offlineScale 0.01})
               {:keys [eng seen]} (engine-with-sink p clock)]
-          (core/submit! eng (tu/order eng '(away)) {})
+          (core/submit! eng (tu/order '(away)) {})
           (let [{:keys [round]} (await (go-offline eng p))]
             (core/report-tick-failure! eng (js/Error. "mid-offline"))
             (await round)
@@ -110,7 +110,7 @@
               eng (core/create {:primitives p :jobs {'night {:round night-round}}
                                 :triggers {} :dir (tu/tmp-dir) :now #(deref clock) :body "Fake"})
               _ (swap! (:events eng) update :sinks conj sink)
-              id (core/submit! eng (tu/order eng '(night)) {})
+              id (core/submit! eng (tu/order '(night)) {})
               {:keys [round]} (await (go-offline eng p))
               away (core/away eng)
               status (event-api/status eng nil)]

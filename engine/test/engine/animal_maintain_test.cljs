@@ -2,6 +2,8 @@
   "jobs.animals.maintain against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.core.schedule :as schedule]
+            [engine.expr :as expr]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -46,7 +48,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world 50)]
-    (core/submit! (:eng s) (tu/order (:eng s) (spec args)) {})
+    (core/submit! (:eng s) (tu/order (spec args)) {})
     (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) n 700)))
     s))
 
@@ -135,7 +137,7 @@
         (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 50)]
           (.override (.-world (:p s)) "interact"
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "out-of-reach"})))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:target 4})) {})
+          (core/submit! (:eng s) (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 30 700))
           (is (= {:ended :nothing-possible :cause :unreachable :fed 0 :reason :unreachable}
                  (get-in (done-event s) [:steps :breed])))
@@ -262,7 +264,7 @@
   "True when the job is submitted, the tick after its first look does nothing and nothing is walked to, fed or attacked."
   [args entities]
   (let [{:keys [eng p] :as s} (h/setup {:inventory [(wheat 4) {:name "iron_sword" :count 1}] :entities entities})]
-    (core/submit! eng (tu/order eng (list 'jobs.animals.maintain args)) {})
+    (core/submit! eng (tu/order (list 'jobs.animals.maintain args)) {})
     (core/tick! eng)
     (and (nil? (core/tick! eng))
          (empty? (interacts s))
@@ -323,6 +325,17 @@
     (is (= {:plan "pen" :worth (maintain/mend-worth args facts)} (get-in (maintain/decide :mend args facts) [:call :args]))
         "the mend is built at the pass's worth")))
 
+(deftest a-trigger-fired-maintain-is-priced-at-its-own-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng clock]} (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)] :time 1000} 50)
+              _ (core/submit! eng (tu/order (spec {:target 4 :checks {:safe? '(always)}})) {})
+              _ (await (tu/run-ticks eng clock 1 700))
+              node (schedule/priced eng {:id "t1" :reflex :animals} (expr/parse (:jobs eng) (spec {:target 4 :checks {:safe? '(always)}})))]
+          (is (= (cost/animal-worth "cow") (get-in node [:args :worth]))
+              "a pair below a target of 4: the pass breeds one calf, worth that calf"))))))
+
 (deftest a-fence-gap-and-carried-produce-add-to-the-pass-worth
   (let [args {:mob "cow" :target 4 :chest {:x 0 :y 64 :z 0}}
         at-target {:adults 4 :babies 0 :drops [] :shearable 0 :gaps [] :stored-items []}
@@ -377,7 +390,7 @@
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 40 :y 64 :z 0}} :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 5)]} 50)]
           (track-range! s 20)
-          (core/submit! eng (tu/order eng (spec {:target 4})) {})
+          (core/submit! eng (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks eng clock 60 700))
           (is (true? (finished? s)))
           (is (= 4 (:adults (done-event s)))))))))
@@ -388,7 +401,7 @@
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 20 :y 64 :z 0}} :entities [(cow 1 2) (cow 2 3) (cow 3 4) (cow 4 8)]} 50)]
           (track-range! s 14)
-          (core/submit! eng (tu/order eng (spec {:target 4})) {})
+          (core/submit! eng (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks eng clock 60 700))
           (is (true? (finished? s)))
           (is (= 4 (:adults (done-event s)))))))))
@@ -398,7 +411,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (h/setup {:self {:pos {:x 40 :y 64 :z 0}} :entities []} 50)]
-          (core/submit! eng (tu/order eng (spec {:target 4})) {})
+          (core/submit! eng (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks eng clock 60 700))
           (is (true? (finished? s)))
           (is (< (.-x (.-pos (.self (:p s)))) 12) "it walked to the box to look")
@@ -410,7 +423,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (h/setup {:floor [30 -3 45 3] :self {:pos {:x 40 :y 64 :z 0}} :entities []} 50)]
-          (core/submit! eng (tu/order eng (spec {:target 4})) {})
+          (core/submit! eng (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks eng clock 80 700))
           (is (true? (finished? s)))
           (is (nil? (:steps (done-event s))) "no step ran on an uncounted pen")
@@ -423,7 +436,7 @@
   "Submit form over a world whose plans are plans; run n ticks 700 ms apart; the setup map."
   [form plans world n]
   (let [s (h/setup world 50 (ew/of-data plans {} []))]
-    (core/submit! (:eng s) (tu/order (:eng s) form) {})
+    (core/submit! (:eng s) (tu/order form) {})
     (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) n 700)))
     s))
 
@@ -484,8 +497,8 @@
               world {:inventory [(wheat 4)] :entities [(cow 1 (+ d 2)) (cow 2 (+ d 3))] :time 1000}
               far (h/setup world 50)
               farther (h/setup world 50)]
-          (core/submit! (:eng far) (tu/order (:eng far) (spec {:box {:min {:x d :y 60 :z -5} :max {:x (+ d 8) :y 70 :z 5}} :checks {:safe? '(always)}})) {})
-          (core/submit! (:eng farther) (tu/order (:eng farther) (spec {:box {:min {:x (* 4 d) :y 60 :z -5} :max {:x (+ (* 4 d) 8) :y 70 :z 5}} :checks {:safe? '(always)}})) {})
+          (core/submit! (:eng far) (tu/order (spec {:box {:min {:x d :y 60 :z -5} :max {:x (+ d 8) :y 70 :z 5}} :checks {:safe? '(always)}})) {})
+          (core/submit! (:eng farther) (tu/order (spec {:box {:min {:x (* 4 d) :y 60 :z -5} :max {:x (+ (* 4 d) 8) :y 70 :z 5}} :checks {:safe? '(always)}})) {})
           (await (tu/run-ticks (:eng far) (:clock far) 3 700))
           (await (tu/run-ticks (:eng farther) (:clock farther) 3 700))
           (is (seq (events-of far :round_started)) "a walk of one cow's worth is worth the pair a pass adds")
@@ -501,7 +514,7 @@
           (let [p (:p s) entities (.-entities p)]
             (aset p "entities" (fn [q] (let [me (.-pos (.self p))]
                                          (.filter (.call entities p q) (fn [e] (<= (js/Math.hypot (- (.-x (.-pos e)) (.-x me)) (- (.-z (.-pos e)) (.-z me))) 24)))))))
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (spec {:box {:min {:x 40 :y 63 :z -3} :max {:x 46 :y 66 :z 3}} :target 2 :checks {:safe? (quote (always))}}))) {})
+          (core/submit! (:eng s) (tu/order (list 'repeat (spec {:box {:min {:x 40 :y 63 :z -3} :max {:x 46 :y 66 :z 3}} :target 2 :checks {:safe? (quote (always))}}))) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (seq (tu/walk-calls (:p s))) "the body goes to the pen"))))))
 
@@ -511,6 +524,6 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 50)]
           (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:target 4})) {})
+          (core/submit! (:eng s) (tu/order (spec {:target 4})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 20 700))
           (is (= ["wheat" "wheat"] (mapv #(.-item (.-args %)) (interacts s)))))))))

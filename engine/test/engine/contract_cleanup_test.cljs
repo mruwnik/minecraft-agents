@@ -36,7 +36,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'tidy tidy})]
-          (core/submit! eng (tu/order eng '(tidy)) {})
+          (core/submit! eng (tu/order '(tidy)) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= [:round [:cleanup :done]] (:log @world)))
@@ -63,7 +63,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'stuck stuck 'parent parent})]
-          (core/submit! eng (tu/order eng '(parent)) {})
+          (core/submit! eng (tu/order '(parent)) {})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= [[:cleanup :nothing-possible :stuck] :parent-continue
                   [:cleanup :nothing-possible :stuck] :parent-continue
@@ -81,7 +81,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'fails fails})]
-          (core/submit! eng (tu/order eng '(fails)) {})
+          (core/submit! eng (tu/order '(fails)) {})
           (await (core/tick! eng))
           (is (= {:kind :done :cleanup {:kind :nothing-possible :cause :gate-stuck}}
                  (select-keys (:data (first (job-ev seen :completed))) [:kind :cleanup :gate])))
@@ -98,7 +98,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'overruns overruns})]
-          (core/submit! eng (tu/order eng '(overruns)) {})
+          (core/submit! eng (tu/order '(overruns)) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:cleanup] (:log @world)))
           (is (= {:kind :nothing-possible :cause :stuck :cleanup {:kind :limit-reached :cause {:line :job-time :spend 1}}}
@@ -118,7 +118,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'slow slow})]
-          (core/submit! eng (tu/order eng '(slow)) {})
+          (core/submit! eng (tu/order '(slow)) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [[:slow-cleanup :limit-reached {:line :job-time :spend 5}]] (:log @world)))
           (is (= 1 (looks p)) "cleanup acts though the job's time is spent")
@@ -140,7 +140,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'boss boss 'runner runner})]
-          (core/submit! eng (tu/order eng '(boss)) {})
+          (core/submit! eng (tu/order '(boss)) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [[:runner-cleanup :cut-off] [:boss-cleanup :limit-reached]] (:log @world)))
           (is (= :limit-reached (:kind (:data (first (job-ev seen :stopped)))))))))))
@@ -156,7 +156,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'endless endless})
-              id (core/submit! eng (tu/order eng '(endless)) {})]
+              id (core/submit! eng (tu/order '(endless)) {})]
           (await (core/tick! eng))
           (core/cancel! eng id)
           (is (= [] (job-ev seen :cancelled)) "not gone before its cleanup")
@@ -180,7 +180,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'self-cancelling self-cancelling})
-              id (core/submit! eng (tu/order eng '(self-cancelling)) {})]
+              id (core/submit! eng (tu/order '(self-cancelling)) {})]
           (swap! world assoc :eng eng :job id)
           (await (core/tick! eng))
           (core/cancel! eng id)
@@ -194,7 +194,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'endless endless})
-              id (core/submit! eng (tu/order eng '(endless)) {})]
+              id (core/submit! eng (tu/order '(endless)) {})]
           (await (core/tick! eng))
           (core/cancel! eng id :death)
           (await (core/tick! eng))
@@ -208,7 +208,7 @@
         (let [{:keys [eng]} (setup {'boom {:round (fn [_] (log! :round) (throw (js/Error. "boom")))
                                            :cleanup (fn [c e] (log! [:cleanup (:kind e) (get-in e [:cause :reason])])
                                                       (ctx/end c :done nil {}))}})
-              id (core/submit! eng (tu/order eng '(boom)) {})]
+              id (core/submit! eng (tu/order '(boom)) {})]
           (await (core/tick! eng))
           (is (= [:round [:cleanup :nothing-possible :error]] (:log @world)))
           (is (= "Error: boom" (get-in (core/state eng) [:failed id :error]))))))))
@@ -265,7 +265,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'yields yields})]
-          (core/exclusive-run! eng (tu/order eng '(yields)))
+          (core/exclusive-run! eng (tu/order '(yields)))
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
           (is (= [] (:list (core/state eng)))))))))
@@ -280,7 +280,7 @@
 (defn slot-cleanup-ends-with [end!]
   (fn ^:async t []
     (let [{:keys [eng]} (setup {'yields (ends-slot-mid-cleanup end!)})]
-      (core/exclusive-run! eng (tu/order eng '(yields)))
+      (core/exclusive-run! eng (tu/order '(yields)))
       (dotimes [_ 4] (await (core/tick! eng)))
       (is (= [:round [:cleanup :cut-off] [:cleanup :cut-off] [:cleanup :cut-off]] (:log @world)))
       (is (= [] (:list (core/state eng)))))))
@@ -373,7 +373,7 @@
                                                                         (if (= :continue e)
                                                                           :continue
                                                                           (do (swap! world assoc :kid e) (ctx/end c :done nil))))))})]
-          (core/submit! eng (tu/order eng '(parent)) {})
+          (core/submit! eng (tu/order '(parent)) {})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= {:kind :limit-reached :cause {:line :wall-time :spend 5}}
                  (select-keys (:kid @world) [:kind :cause]))))))))
@@ -394,6 +394,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'late late 'cleanup-kid cleanup-kid})]
-          (core/submit! eng (tu/order eng '(late)) {})
+          (core/submit! eng (tu/order '(late)) {})
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= [:kid-round [:kid-ended :done]] (:log @world))))))))

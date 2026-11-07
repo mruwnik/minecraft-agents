@@ -30,7 +30,7 @@
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (run-until-empty eng n))
     @out)))
 
@@ -151,7 +151,7 @@
               sensed-at (.-sensedAt p)]
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
           (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
-          (core/submit! eng (tu/order eng '(jobs.forestry.prepare {:plan "forest"})) {})
+          (core/submit! eng (tu/order '(jobs.forestry.prepare {:plan "forest"})) {})
           (await (tu/run-until-empty eng 40))
           (is (= [[3 64 0]] (fm/digs p))))))))
 

@@ -114,7 +114,7 @@
   "Submit the job as a top-level job, tick a few times: the places made and the events of each kind named."
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (if (= :none zones) nil (or zones [])))]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     (await (tu/run-ticks eng h/clock 4 700))
     {:places (count (h/calls p "place"))
      :waits (mapv #(select-keys % [:reason :why :text :short]) (h/events-of seen :waiting))
@@ -173,7 +173,7 @@
                 {:keys [eng p seen]} (b/start {:inventory (kit {}) :blocks (built-world plan "stone")
                                                :self {:pos pos}}
                                               {"line" plan} [])
-                _ (core/submit! eng (tu/order eng (list job {:plan "line"})) {})]
+                _ (core/submit! eng (tu/order (list job {:plan "line"})) {})]
             (await (tu/run-ticks eng h/clock 6 700))
             (is (= 1 (count (h/events-of seen :completed))) (str "ended by done? before any round " (pr-str pos)))
             (is (= 0 (count (h/calls p "place"))) (pr-str pos))
@@ -282,7 +282,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])
               release (.hold (.-world p) "place")]
-          (core/submit! eng (tu/order eng (list job {:plan "line"})) {})
+          (core/submit! eng (tu/order (list job {:plan "line"})) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (core/cut! eng (core/holder eng) :test nil)
@@ -539,7 +539,7 @@
         (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])]
           (await (outcome eng job {:plan "line"} 900))
           (fake/remove-block! p [19 64 0])
-          (core/submit! eng (tu/order eng (list job {:plan "line" :least 1})) {})
+          (core/submit! eng (tu/order (list job {:plan "line" :least 1})) {})
           (await (tu/run-ticks eng h/clock 6 700))
           (is (= [{:pos [19 64 0] :why :gap}] (:breaks (:data (await (ending-of {:eng eng} job {:plan "line" :least 1} 700)))))))))))
 
@@ -559,7 +559,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])
               release (.hold (.-world p) "place")]
-          (core/submit! eng (tu/order eng (list job {:plan "line"})) {})
+          (core/submit! eng (tu/order (list job {:plan "line"})) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (core/cut! eng (core/holder eng) :test nil)

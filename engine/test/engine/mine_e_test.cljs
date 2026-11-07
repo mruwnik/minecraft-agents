@@ -51,7 +51,7 @@
         (let [s (start {:world {:blocks {"15,64,0" "sand"}}})
               opts (atom [])]
           (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
-            (fn ^:async b [] (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :ways #{:seen}})) {})
+            (fn ^:async b [] (core/submit! (:eng s) (tu/order (spec {:block "sand" :ways #{:seen}})) {})
             (await (run-ticks s 6)))))
           (is (seq @opts))
           (is (zero? (:jobs.lib.util/failures (job-mem s) 0)) "a waiting walk is no failure")
@@ -89,7 +89,7 @@
                                 :inventory [{:name "cobblestone" :count 2}]}})
               ys (atom [])]
           (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true :mend true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen} :trip true :mend true})) {})
           (await (run-ticks s 30))
           (is (= "cobblestone" (block-at s 0 62 0)) "the lava the dig laid open is sealed from the rim")
           (is (= [[0 63 0]] (dug-cells s)) "the sand is dug, from beside")
@@ -201,7 +201,7 @@
                                (swap! (.. world -state) assoc-in [:self :inWater] true)
                                r)))
               s (start {:p p})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 6})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 6})) {})
           (await (run-ticks s 40))
           (is (= 1 (dig-count s)) "nothing is dug once the head is wet")
           (is (= :flooded (:reason (done-event s)))))))))
@@ -216,7 +216,7 @@
         (doseq [why [:off-plan :needs-health :damage-budget]]
           (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why why} {:arrived false}))}
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-            (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}})) {})
+            (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 4 :ways #{:seen}})) {})
             (await (run-ticks s 60))
             (is (= [4] (map :cluster (events-of s :mine.unreachable))) (str why))))))))
 
@@ -227,7 +227,7 @@
         (let [walks (atom 0)
               stub {:round (fn [c] (swap! walks inc) (ctx/end c :nothing-possible {:reason :unreachable :why :start-not-standable} {:arrived false}))}
               s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 4 :ways #{:seen}})) {})
           (await (run-ticks s 3))
           (is (= 3 @walks) "one walk a round: the round is given back until the body lands")
           (is (empty? (events-of s :mine.walk-failed)))
@@ -240,7 +240,7 @@
       (fn ^:async t []
         (let [waiting {:round (fn ^:async w [_] :continue)}
               s (start {:world {:blocks {"15,64,0" "sand"}} :jobs (assoc registry/jobs 'jobs.movement.go-to waiting)})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 60))
           (is (= 1 (count (events-of s :mine.stalled))))
           (is (finished? s)))))))
@@ -271,7 +271,7 @@
                          (when (= 3 (swap! n inc))
                            (swap! (.. world -state) assoc :inventory []))
                          r)))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true})) {})
           (await (run-ticks s 120))
           (is (= 1 (count (events-of s :tool.broke))))
           (is (= 1 (count (events-of s :tool.none)))))))))
@@ -309,7 +309,7 @@
                                    (ctx/end c :nothing-possible {:reason :unreachable :why :off-plan} {:arrived false})))
               s (start {:world {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand"}} :shared (ew/of-data {} {} [home-zone])
                         :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen} :trip true})) {})
           (await (run-ticks s 200))
           (is (= [:zone-exit "home" [0 64 0]] [(:reason (:cause (done-event s))) (:zone (:cause (done-event s))) (:cell (:cause (done-event s)))])
               (pr-str (done-event s)))
@@ -355,7 +355,7 @@
                                 :self {:pos [0.5 64 0.5]}}
                         :shared (ew/of-data {"hut" {:id "hut" :parts [{:id "p" :box [[-5 64 0] [-5 64 0]] :want "sand"}]}} {} [])})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false :trip true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false :trip true})) {})
           (await (run-ticks s 400))
           (is (seq (events-of s :mine.left-zone)))
           (is (= [[4 60 0]] (map :own-stair (events-of s :mine.stair-plan)))))))))
@@ -368,7 +368,7 @@
                                 :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
                                 :self {:pos [-4.5 64 0.5]}}})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false})) {})
           (await (run-until s 120 #(seq (events-of % :mine.stair-plan))))
           (is (= [4 60 0] (:own-stair (first (events-of s :mine.stair-plan)))) "the walk down the old stair is priced as a route through the cliff"))))))
 
@@ -512,7 +512,7 @@
       (fn ^:async t []
         (let [s (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2} :submitted-at [-6 64 0]})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2} :submitted-at [-6 64 0]})) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 
@@ -555,12 +555,12 @@
         (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why :no-progress} {:arrived false}))}
               world {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)}
               first-run (start world)
-              _ (core/submit! (:eng first-run) (tu/order (:eng first-run) (spec {:block "sand" :count 4 :ways #{:seen}})) {})
+              _ (core/submit! (:eng first-run) (tu/order (spec {:block "sand" :count 4 :ways #{:seen}})) {})
               _ (await (run-ticks first-run 60))
               gave-up (:skipped (done-event first-run))
               s (start world)]
           (is (= 4 (count gave-up)))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :skip gave-up})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 4 :ways #{:seen} :skip gave-up})) {})
           (await (run-ticks s 60))
           (is (empty? (events-of s :mine.walk-failed))))))))
 

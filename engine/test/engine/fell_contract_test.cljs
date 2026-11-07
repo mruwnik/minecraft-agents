@@ -96,7 +96,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (fm/start {:blocks {}} {})]
-          (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:at {:x 30 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order '(jobs.forestry.fell-tree {:at {:x 30 :y 64 :z 0}})) {})
           (await (core/tick! eng))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)) "not held back by a look-first no-tree"))))))
 
@@ -183,7 +183,7 @@
                                          (reset! dug (seq (open)))
                                          (core/cancel! eng (first (:list (core/state eng)))))
                                        (await (apply dig! args)))]
-            (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
+            (core/submit! eng (tu/order '(jobs.forestry.fell-tree {:radius 10})) {})
             (await (tu/run-until-empty eng 200)))
           (is (seq @dug) "the cut came while the pillar stood")
           (is (= [] (open)) "the cleanup took the pillar back"))))))
@@ -205,7 +205,7 @@
                                    (when (= :tcollect0 k)
                                      (swap! open-at-collect conj (boolean (seq (ledger/open-entries (mem/view (:store eng)))))))
                                    (apply call! c k job more))]
-            (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
+            (core/submit! eng (tu/order '(jobs.forestry.fell-tree {:radius 10})) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [true] @open-at-collect) "one collect, made while the pillar still stood"))))))
 
@@ -216,7 +216,7 @@
         (let [spec {:blocks (merge (lt/tree 3 0 "oak" 3) {"2,64,0" "oak_leaves" "2,65,0" "oak_leaves"})}
               s (fm/start spec {})]
           (ft/eye-reach! (:p s) (:lose-logs? spec))
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.forestry.fell-tree {:radius 10})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.forestry.fell-tree {:radius 10})) {})
           (await (tu/run-until-empty (:eng s) 200))
           (is (some #{[2 64 0] [2 65 0]} (take 2 (fm/digs (:p s)))) "a leaf in the line is the first dig")
           (is (empty? (lt/calls (:p s) "walk")) "no walk round the tree to a sight of the log"))))))
@@ -235,7 +235,7 @@
                         ctx/call (fn [c k job & [args :as more]]
                                    (when (= :lower0 k) (swap! lowered conj (:pos args)))
                                    (apply call! c k job more))]
-            (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
+            (core/submit! eng (tu/order '(jobs.forestry.fell-tree {:radius 10})) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "no drop in sight, yet the support found for the hidden cut log was dug"))))))
 
@@ -264,7 +264,7 @@
                                    (if (= :tcollect0 k)
                                      {:kind :nothing-possible :data {:left [{:pos {:x 8 :y 71 :z 2} :reason :unreachable}]}}
                                      (apply call! c k job more)))]
-            (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
+            (core/submit! eng (tu/order '(jobs.forestry.fell-tree {:radius 10})) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "the leaf under the drop was dug"))))))
 
@@ -287,7 +287,7 @@
                                    (when (= 'jobs.access.cleanup job)
                                      (swap! levels conj (activity/section-level eng (:token c))))
                                    (apply call! c k job more))]
-            (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
+            (core/submit! eng (tu/order '(jobs.forestry.fell-tree {:radius 10})) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [:cut :urgent] (take 2 @levels))))))))
 

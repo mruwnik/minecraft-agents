@@ -19,7 +19,7 @@
   "Run the job in the hut with the target outside; check the body went out by the walker, the door is shut again."
   [world job]
   (let [{:keys [eng p]} (ut/setup (merge (hut/hut-world inside {}) world))]
-    (core/submit! eng (tu/order eng job) {})
+    (core/submit! eng (tu/order job) {})
     (await (st/tick-n eng 8))
     (is (= [] (ut/calls p "moveTo")) "no raw pathfinder walk")
     (is (<= 3 (.-z (.-pos (.self p)))) "the body is outside, past the door")
@@ -73,7 +73,7 @@
                                             (update :blocks merge (h/field "wheat" 7 [5] [8]))
                                             (assoc :ages (h/ages 7 [5] [8]) :drops h/wheat-drops)))
               _ (tu/seeing-all p)]
-          (core/submit! eng (tu/order eng '(jobs.farm.harvest {:area {:pos {:x 5 :y 64 :z 8} :radius 3}})) {})
+          (core/submit! eng (tu/order '(jobs.farm.harvest {:area {:pos {:x 5 :y 64 :z 8} :radius 3}})) {})
           (await (st/tick-n eng 40))
           (is (= [] (ut/calls p "moveTo")) "no raw pathfinder walk")
           (is (seq (ut/calls p "dig")) "the crop outside was cut")

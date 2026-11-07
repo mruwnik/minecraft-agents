@@ -83,15 +83,9 @@
 
        :else (drop-cancelled! eng id by report (:data e))))))
 
-(defn require-worth!
-  "Throw engine.expr/worth-problem of job spec when it has one: every submit from outside the engine (an agent, a job,
-  a scenario) gives each of its jobs a :worth."
-  [eng spec]
-  (when-let [p (expr/worth-problem (expr/parse (:jobs eng) spec))]
-    (throw (ex-info p {:spec spec}))))
-
 (defn submit!
-  "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec.
+  "Put a job spec (an expression, see engine.expr) on the list. Returns the instance id; throws on a bad spec or one
+  whose job gives no :worth (engine.expr/worth-problem).
   opts:
     :next?    list it directly after the current job, so it gets the next round
     :now?      list it directly before the current job (do-now!)
@@ -101,6 +95,7 @@
   An exclusive run is listed at the end (:next? and :now? ignored)."
   [eng spec {:keys [next? now? by] :as opts}]
   (let [node (expr/parse (:jobs eng) spec)
+        _ (when-let [p (expr/worth-problem node)] (throw (ex-info p {:spec spec})))
         run? (boolean (:exclusive? opts))
         args (second (job-of eng {:spec node}))
         next? (and next? (not run?))

@@ -55,7 +55,7 @@
       (fn ^:async t []
         (let [s (start {:world (update (rock-world {"0,65,-1" "glass" "0,65,-2" "glass" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2}})) {})
           (await (run-ticks s 500))
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)))))))))
 
@@ -68,7 +68,7 @@
                         :dir dir})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
           (let [cut? (shutdown-at-cell! s #{[1 64 -1] [1 65 -1]})]
-            (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2}})) {})
+            (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 2}})) {})
             (await (run-until! s cut? 500)))
           (let [again (start {:p (:p s) :dir dir})]
             (is (:side-cut (core/job-memory (:eng again) "j1")) "cut in the side cut")
@@ -84,7 +84,7 @@
           (let [dir (tu/tmp-dir)
                 s (start {:world (rock-world {}) :dir dir})]
             (let [cut? (shutdown-at-cell! s #{[2 65 0]})]
-              (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways ways})) {})
+              (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways ways})) {})
               (await (run-until! s cut? 40)))
             (let [again (start {:p (:p s) :dir dir})]
               (is (:stepping (core/job-memory (:eng again) "j1")) "cut while the stair child dug")
@@ -106,7 +106,7 @@
                            (swap! landed inc)
                            (swap! (fake/state (:p s)) assoc-in [:blocks [2 64 0]] "gravel"))
                          (await (impl token a)))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}})) {})
           (await (run-ticks s 200))
           (is (= 1 @landed))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
@@ -127,7 +127,7 @@
                              (swap! landed inc)
                              (swap! st #(-> % (fake/put-block [2 64 0] "gravel") (assoc-in [:self :pos] [2.5 65 (+ z 0)]))))
                            r))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}})) {})
           (await (run-ticks s 250))
           (is (= 1 @landed))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
@@ -136,7 +136,7 @@
   "A stay-level 7-block tunnel east in rock, ore at the 4th cell of the branch north of the third junction; branches as given."
   [branches]
   (let [s (start {:world (update (rock-world {"3,64,-4" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
-    (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches branches
+    (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches branches
                                   :settings {:jobs.gather.mine-stay/branch-every 3 :jobs.gather.mine-stay/branch-length 4}})) {})
     (await (run-ticks s 900))
     s))
@@ -156,7 +156,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[s go-tos] (spy-go-to (start {:world (update (rock-world {"3,64,-4" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])}))]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches true
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches true
                                         :settings {:jobs.gather.mine-stay/branch-every 3 :jobs.gather.mine-stay/branch-length 4}})) {})
           (await (run-ticks s 900))
           (let [backs (filter :stay-s @go-tos)]
@@ -169,7 +169,7 @@
       (fn ^:async t []
         (let [[s go-tos] (spy-go-to (start {:world (update (rock-world {"0,65,-1" "air" "0,65,-2" "air" "1,65,-2" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])}))]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 -1] :delta [0 -1] :steps 0})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 3}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :settings {:jobs.gather.mine-stay/ore-reach 3}})) {})
           (await (run-ticks s 500))
           (is (some #(and (zero? (:range %)) (:stay-s %)) @go-tos) (pr-str @go-tos)))))))
 
@@ -183,7 +183,7 @@
                                    (do (swap! started inc) (ctx/end c :condition-failed {:reason reason} {:reason reason}))
                                    (await ((:round dig) c)))))
         s (start {:world (update (rock-world {}) :inventory into [{:name "cobblestone" :count 5}]) :jobs (assoc registry/jobs 'jobs.gather.dig-for stub)})
-        id (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches true
+        id (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :ways #{:seen :strip-tunnel} :branches true
                                          :settings {:jobs.gather.mine-stay/branch-every 3 :jobs.gather.mine-stay/branch-length 4}})) {})]
     (await (run-ticks s 300))
     (assoc s :id id :started started)))
@@ -260,7 +260,7 @@
         (let [s (start-lit (deep-rock {"9,58,1" "iron_ore"}) [0 0])
               ;; the fake's light is fixed, so the tunnel's torches are given as lit cells about the ore: the ore's drop is not in a dark hall
               _ (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range 5 15) y [58 59 60] z (range -1 3)] [[x y z] [0 8]])))
-              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :level 58 :trip true})) {})
+              _ (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :level 58 :trip true})) {})
               _ (await (run-ticks s 400))
               e (done-event s)]
           (is (= 1 (get (inv s) "raw_iron")))
@@ -276,7 +276,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start {:world (deep-rock {"9,58,1" "iron_ore" "0,64,1" "air" "0,65,1" "air" "0,64,2" "air" "0,65,2" "air"})})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :level 58})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :level 58})) {})
           (await (run-until s 400 #(<= 2 (count (filter (fn [e] (= :stair (:slot e))) (events-of % :child_ended))))))
           (swap! (.. (:p s) -world -state) assoc-in [:self :pos] [0.5 64 2.5])
           (await (run-ticks s 400))
@@ -295,7 +295,7 @@
                      :drops {"stone" "cobblestone"}
                      :inventory (into pickaxe [{:name "torch" :count 8}])}
               s (start {:world world})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :level 58 :tunnel-length 3})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :level 58 :tunnel-length 3})) {})
           (await (run-ticks s 600))
           (is (= "south" (:from (first (events-of s :mine.turned)))) (pr-str (map :text (events-of s :mine.turned))))
           (is (empty? (events-of s :mine.descent-stopped)) (pr-str (map :text (events-of s :mine.descent-stopped))))
@@ -342,7 +342,7 @@
       (fn ^:async t []
         (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
               _ (set-pos! s 0.5 64 0.5)
-              _ (core/submit! (:eng s) (tu/order (:eng s) (spec (assoc via-shaft :count 2))) {})
+              _ (core/submit! (:eng s) (tu/order (spec (assoc via-shaft :count 2))) {})
               _ (await (run-ticks s 400))
               e (second (done-events s))]
           (is (= 2 (get (inv s) "raw_iron")))
@@ -357,7 +357,7 @@
               _ (doseq [y [60 61]] (fake/set-block! (:p s) [7 y 0] "bedrock"))
               _ (set-pos! s 0.5 64 0.5)
               _ (swap! (fake/state (:p s)) assoc :yaw 0)
-              _ (core/submit! (:eng s) (tu/order (:eng s) (spec (assoc via-shaft :count 2))) {})
+              _ (core/submit! (:eng s) (tu/order (spec (assoc via-shaft :count 2))) {})
               _ (await (run-ticks s 400))
               [no] (events-of s :mine.no-shaft)
               second-done (second (done-events s))]
@@ -373,7 +373,7 @@
         (let [walled (into {} (for [y (range 58 68)] [(str "2," y ",0") "bedrock"]))
               s (await (shafted (assoc via-shaft :tunnel-length 3) (merge ore-east walled) [] 400))
               _ (set-pos! s 0.5 64 0.5)
-              _ (core/submit! (:eng s) (tu/order (:eng s) (spec (assoc via-shaft :tunnel-length 3))) {})
+              _ (core/submit! (:eng s) (tu/order (spec (assoc via-shaft :tunnel-length 3))) {})
               _ (await (run-until s 400 #(<= 2 (count (events-of % :mine.no-shaft)))))
               [first-no second-no] (events-of s :mine.no-shaft)]
           (is (= "s" (:shaft first-no)))
@@ -470,7 +470,7 @@
                                         (swap! refills dec)
                                         (swap! (.-state world) fake/put-block [2 65 0] "gravel")))
                                     r)))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :level false})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 4 :level false})) {})
           (await (run-ticks s 120))
           (is (= :tunnel-length (:reason (done-event s))))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))))
@@ -525,7 +525,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
           (drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 20))
           (is (= 1 (get (inv s) "raw_iron")) "counted by what the inventory gained")
           (is (= :count (:reason (done-event s))))
@@ -551,7 +551,7 @@
                        (when (and (< (js/Math.abs (- 3.5 (.. a -pos -x))) 0.1) (< (js/Math.abs (- 63.5 (.. a -pos -y))) 0.1))
                          (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es))))
                        (impl token a)))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")) "the drop under the dug cell was looked for, seen and collected"))))))
 
@@ -562,7 +562,7 @@
         (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
                                 :unreachable ["5,64,2"]}})]
           (drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 20))
           (is (nil? (get (inv s) "raw_iron")))
           (is (= 0 (:got (done-event s))))
@@ -575,7 +575,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
           (hide-drop-until-beside! (:p s) [3 64 0])
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")) "the body walked beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s)))))))))
@@ -590,7 +590,7 @@
               show! (fn [] (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible @leaned) es))))]
           (.override (.-world p) "dig" (fn [token args impl] (.then (impl token args) (fn [r] (show!) r))))
           (.override (.-world p) "steer" (fn [token args impl] (.then (impl token args) (fn [r] (reset! leaned true) (show!) r))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 40))
           (is (= 1 (get (inv s) "raw_iron")) "the body leaned over its cell's edge and picked the drop up")
           (is (empty? (events-of s :mine.drop-lost))))))))
@@ -611,7 +611,7 @@
               cheapest {:west [[1 64 0]] :east [[3 65 0] [3 64 0]] :north [[2 65 -1] [2 64 -1]] :south [[2 65 1] [2 64 1]]}
               side (fn [[x _ z]] (get {[-1 0] :west [1 0] :east [0 -1] :north [0 1] :south} [(compare x 2) (compare z 0)]))]
           (hide-drop-until-beside! (:p s) [2 64 0] stands)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 40))
           ;; which side the cut starts from follows where go-to's tours of unseen land left the body
           (is (= [2 64 0] (first (dug-cells s))) "dug from behind the wall")
@@ -821,7 +821,7 @@
                      (fn [token args impl]
                        (swap! (fake/state (:p s)) assoc :entities [])
                        (impl token args)))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 20))
           (is (empty? (events-of s :mine.left-behind)))
           (is (nil? (:left (done-event s)))))))))
@@ -862,7 +862,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
           (drop-away! (:p s) [8 64 0])
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen} :settings {:jobs.gather.mine.targets/collect-radius 3}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen} :settings {:jobs.gather.mine.targets/collect-radius 3}})) {})
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")))
           (is (empty? (events-of s :mine.left-behind))))))))
@@ -874,7 +874,7 @@
         (let [s (start {:world {:blocks {"5,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
                                 :unreachable ["8,62,0"]}})]
           (drop-away! (:p s) [8 62 0])
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen} :settings {:jobs.gather.mine.targets/collect-radius 3}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen} :settings {:jobs.gather.mine.targets/collect-radius 3}})) {})
           (await (run-ticks s 30))
           (is (nil? (get (inv s) "raw_iron")))
           (is (= [{:pos [8 62 0] :count 1}] (:left (done-event s)))))))))
@@ -903,7 +903,7 @@
         ;; seed 5's rand sequence ends the walk to the drop :unseen-floor-dark (8 and 9 do the same)
         (let [s (start {:world {:blocks walled-ore :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} :rand (seeded-rand 5)})]
           (hide-drop-until-beside! (:p s) [2 64 0] (atom []))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}})) {})
           (await (run-until s 40 #(= 1 (get (inv %) "raw_iron"))))
           (is (= 1 (get (inv s) "raw_iron")) "the drop is cut to and picked up"))))))
 

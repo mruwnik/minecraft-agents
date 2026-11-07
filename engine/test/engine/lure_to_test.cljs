@@ -30,7 +30,7 @@
 (defn ^:async scenario [args world n]
   (let [{:keys [eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} (dissoc world :seeing)) 50)]
     (when (:seeing world) (tu/seeing-all (:p s)))
-    (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to (merge {:mob "cow" :pos goal} args))) {})
+    (core/submit! eng (tu/order (list 'jobs.animals.lure-to (merge {:mob "cow" :pos goal} args))) {})
     (dotimes [_ n]
       (swap! clock + 700)
       (await (core/tick! eng)))
@@ -72,7 +72,7 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
               release (.hold (.-world p) "steer")]
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (swap! clock + 700)
           (let [round (core/tick! eng)]
             (dotimes [_ 20] (await (js/Promise. (fn [resolve] (js/setTimeout resolve 5)))))
@@ -184,7 +184,7 @@
                      (fn [token a impl]
                        (when (= 3 (swap! moves inc)) (swap! (fake/state p) assoc-in [:self :held] nil))
                        (impl token a)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (tu/run-ticks eng clock 12 700))
           (is (<= 3 @moves) "the food was knocked out of the hand during the walk")
           (is (= :arrived (:reason (done-event s))))
@@ -200,7 +200,7 @@
                      (fn [token a impl]
                        (when (= 3 (swap! moves inc)) (swap! (fake/state p) #(-> % (assoc :inventory []) (assoc-in [:self :held] nil))))
                        (impl token a)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (tu/run-ticks eng clock 12 700))
           (is (<= 3 @moves))
           (is (= :no-food (:reason (done-event s)))))))))
@@ -221,7 +221,7 @@
         (doseq [[reason args hook] end-reasons]
           (let [{:keys [p eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} {:inventory wheat :entities [(cow 1 3)]}) 50)]
             (hook p (atom 0))
-            (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to (merge {:mob "cow" :pos goal} args))) {})
+            (core/submit! eng (tu/order (list 'jobs.animals.lure-to (merge {:mob "cow" :pos goal} args))) {})
             (await (tu/run-ticks eng clock 14 700))
             (is (finished? s) (name reason))
             (is (= reason (:reason (done-event s))) (name reason))
@@ -233,7 +233,7 @@
       (fn ^:async t []
         (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
           (.override (.-world p) "steer" (fn [token a impl] (swap! clock + 25000) (impl token a)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :spend {:job-time 30}})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :spend {:job-time 30}})) {})
           (await (tu/run-ticks eng clock 14 700))
           (is (finished? s))
           (is (= [:job-time] (mapv :reason (stopped s))) "the engine's limit ends it")
@@ -251,7 +251,7 @@
                          (swap! (fake/state p) assoc :entities [])
                          (fake/add-entity! p (cow 2 (inc (first (:pos (fake/self p)))))))
                        (impl token a)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (tu/run-ticks eng clock 14 700))
           (is (finished? s))
           (is (= :arrived (:reason (done-event s))))
@@ -275,7 +275,7 @@
                      (fn [token a impl]
                        (when (= 3 (swap! steers inc)) (swap! (fake/state p) assoc :entities []))
                        (impl token a)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (tu/run-ticks eng clock 14 700))
           (let [lost (:lost (done-event s))]
             (is (= "u1" (:tracked lost)))
@@ -308,7 +308,7 @@
                                (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [26 64 0]) es))))
                                r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act hold!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box})) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
           (is (= :animal-outside (:reason (done-event s))) (str "the cow stalled outside the box " (pr-str (done-event s))))
@@ -328,7 +328,7 @@
                                  (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [26 64 0] :onGround false) es))))
                                r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act drop!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box})) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s))))))))
 
@@ -345,7 +345,7 @@
                                   (when (>= bx 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [(- bx 2.4) 64 0]) es)))))
                                 r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act trail!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box})) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
           (is (in-pen-box? (cow-of s 1))))))))
@@ -363,7 +363,7 @@
                                (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [25 64 0]) es))))
                                r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act hold!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
           (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s)))
@@ -380,7 +380,7 @@
                                  (when (>= (.. p self -pos -x) 27) (swap! (fake/state p) assoc :entities []))
                                  r)))]
           (.override (.-world p) "steer" vanish!)
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
           (is (= :lost (:reason (done-event s))) (pr-str (done-event s)))
@@ -404,7 +404,7 @@
                                 (when (>= (.. p self -pos -x) 24) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [27.5 64 0.5]) es))))
                                 r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act stall!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (finished? s))
           (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s))))))))
@@ -449,7 +449,7 @@
                      (fn [token a impl]
                        (when (= 3 (swap! steers inc)) (swap! (fake/state p) update :entities (fn [es] (filterv #(= 2 (:id %)) es))))
                        (impl token a)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :uuid "u1"})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :uuid "u1"})) {})
           (await (tu/run-ticks eng clock 20 700))
           (is (= :lost (:reason (done-event s))))
           (is (= "u1" (:tracked (:lost (done-event s)))))
@@ -481,7 +481,7 @@
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
           (after-acts! p (fn [p _] (set-cow-x! p 3.5)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 60))
           (let [e (done-event s)]
             (is (= :animal-stalled (:reason e)))
@@ -502,7 +502,7 @@
                              (when (and (< 8 x) (not= :back @turned)) (reset! turned :gone))
                              (when (and (= :gone @turned) (< x 7)) (reset! turned :back))
                              (set-cow-x! p (if (= :back @turned) (- x 2) 3.5)))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 120))
           (is (= :arrived (:reason (done-event s))) (pr-str (:stalled (done-event s)))))))))
 
@@ -512,7 +512,7 @@
       (fn ^:async t []
         (let [{:keys [p eng seen] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)]
           (after-acts! p (fn [p _] (set-cow-x! p 3.5)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 60))
           (let [w (first (filter #(= :escort.waiting (:kind %)) @seen))]
             (is (some? w))
@@ -531,7 +531,7 @@
                            (when @cow-x
                              (when (= "wait" act) (swap! cow-x + 0.1))
                              (set-cow-x! p @cow-x))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 400))
           (is (some? @cow-x) "the cow fell behind")
           (is (= :arrived (:reason (done-event s)))))))))
@@ -553,7 +553,7 @@
                              ;; once the body has turned back to it, it keeps up
                              (when (< (- (self-x p) @cow-x) 5) (reset! cow-x (- (self-x p) 2)))
                              (set-cow-x! p @cow-x))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 60))
           (is (some? @cow-x) "the cow fell behind")
           (is (< 30 @waits) "the body waited for it")
@@ -570,7 +570,7 @@
                            (when (and (nil? @hid-at) (= "wait" act))
                              (reset! hid-at (self-x p))
                              (swap! (fake/state p) assoc :entities []))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 120))
           (is (some? @hid-at) "the cow went out of sight")
           (is (= :lost (:reason (done-event s))))
@@ -610,7 +610,7 @@
           ;; the cow stays put and is out of sight from 9 blocks on: the body walks on, loses it, walks back to see it, and so on
           (after-acts! p (fn [p _]
                            (swap! (fake/state p) assoc :entities (if (< (self-x p) 9) herd []))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 400))
           (is (= :lost (:reason (done-event s)))))))))
 
@@ -668,7 +668,7 @@
                                   (when (> bx 8) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [(- bx 2.4) 64 (if (<= 13 @out-x) 0 -4)]) es)))))
                                 r)))]
           (doseq [act ["steer" "wait"]] (.override (.-world p) act trail!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 8 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 8 :y 64 :z 0}})) {})
           (loop [i 0] (when (and (< i 200) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (<= 13 @out-x) "the body went out through the gate to lead the cow in")
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
@@ -704,7 +704,7 @@
                                                     :states {"8,64,2" {:open false :facing "south"}}} 50)
               min-z (atom 99)]
           (doseq [act ["steer"]] (.override (.-world p) act (fn [token a impl] (.then (impl token a) (fn [r] (swap! min-z min (.. p self -pos -z)) r)))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 11 :y 64 :z 1} :box {:min {:x 4 :y 64 :z -1} :max {:x 11 :y 64 :z 1}}})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 11 :y 64 :z 1} :box {:min {:x 4 :y 64 :z -1} :max {:x 11 :y 64 :z 1}}})) {})
           (loop [i 0] (when (and (< i 60) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (not= :unreachable (:reason (done-event s))) (pr-str (done-event s))))))))
 
@@ -725,7 +725,7 @@
                                 r)))]
           (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [13.5 64 0]) es)))
           (doseq [act ["steer" "wait"]] (.override (.-world p) act trail!))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 8 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 8 :y 64 :z 0}})) {})
           (loop [i 0] (when (and (< i 200) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (<= 13 @out-x) "the body went out through the gate")
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
@@ -740,7 +740,7 @@
                                                     :states {"12,64,0" {:open false :facing "east"}}} 50)
               out-x (atom 0)]
           (.override (.-world p) "steer" (fn [token a impl] (.then (impl token a) (fn [r] (swap! out-x max (.. p self -pos -x)) r))))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :radius 14 :pos {:x 8 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :radius 14 :pos {:x 8 :y 64 :z 0}})) {})
           (loop [i 0] (when (and (< i 60) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
           (is (<= 13 @out-x) (str "the body went out through the shut gate toward the cow " (pr-str (done-event s)))))))))
 
@@ -818,7 +818,7 @@
         (let [{:keys [p eng] :as s} (h/setup (gate-world) 50)
               opened (watch-gate! s identity)]
           (tu/seeing-all p)
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (tick-n s 40))
           (is (true? @opened) "the legs opened the gate")
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
@@ -831,7 +831,7 @@
         (let [plan {"pen" {:id "pen" :parts [{:id "gate" :cells [[15 64 0]] :want "oak_fence_gate"}]}}
               {:keys [p eng] :as s} (h/setup (assoc-in (gate-world) [:states "15,64,0" :open] true) 50 (ew/of-data plan {} []))]
           (tu/seeing-all p)
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 22 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 22 :y 64 :z 0}})) {})
           (await (tick-n s 60))
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
           (is (false? (gate-open? s)) "the lure shut the gate it held open, so the cow cannot walk out"))))))
@@ -847,7 +847,7 @@
               opened (watch-gate! s #(core/cancel! eng (first (:list (core/state eng)))))]
           (tu/seeing-all p)
           (swap! store update :data mem/add-entry :opened {:t ((:now @store)) :data {:cell {:x -20 :y 64 :z 0} :by "other-job/1" :shut? false :until (+ ((:now @store)) 600000)}} nil)
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (tick-n s 40))
           (is (true? @opened) "the legs opened the gate")
           (is (finished? s))
@@ -879,7 +879,7 @@
                                r)))]
           (.override (.-world p) "steer" hide!)
           (.override (.-world p) "look" show!)
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
           (await (run-until-done s 150))
           (is (not= :lost (:reason (done-event s))) (pr-str (done-event s))))))))
 
@@ -889,7 +889,7 @@
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 10)]} 50)]
           (hunt-test/hear-passives-until! p (fn [{:keys [x]}] (<= 3 x)))
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 24})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 24})) {})
           (await (run-until-done s 150))
           (is (= :arrived (:reason (done-event s)))))))))
 
@@ -910,7 +910,7 @@
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 12)]} 50)]
           (hide-until-seen-from! p 8)
-          (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20})) {})
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20})) {})
           (await (run-until-done s 150))
           (is (not= :no-animal (:reason (done-event s)))))))))
 
@@ -922,7 +922,7 @@
           (fn ^:async f []
             (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 12)]} 50)]
                   (hide-until-seen-from! p 8)
-              (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20})) {})
+              (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :radius 20})) {})
               (await (run-until-done s 150))
               (is (= :no-animal (:reason (done-event s)))))))))))
 
@@ -932,7 +932,7 @@
       (fn ^:async t []
         (doseq [[zone-x declined] [[3 [:refused]] [12 []]]]
           (let [{:keys [eng clock seen] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50 (h/zone-store zone-x "Miles"))]
-            (core/submit! eng (tu/order eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
+            (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal})) {})
             (dotimes [_ 6]
               (swap! clock + 700)
               (await (core/tick! eng)))

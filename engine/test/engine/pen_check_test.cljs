@@ -54,7 +54,7 @@
   "Submit the job with args in a world and run two ticks; the ending event, or nil."
   [args w]
   (let [s (h/setup w)]
-    (core/submit! (:eng s) (tu/order (:eng s) (list job (merge {:ways #{:check}} args))) {})
+    (core/submit! (:eng s) (tu/order (list job (merge {:ways #{:check}} args))) {})
     (await (tu/run-ticks (:eng s) (:clock s) 2 700))
     {:event (ending-event @(:seen s))
      :listed (:list (core/state (:eng s)))}))
@@ -157,7 +157,7 @@
   "run-job with the body seeing through perception (sight jitter pinned to rand, default 0.5) and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
   [args w yaw & [ticks rand]]
   (let [s (h/setup-seeing (assoc w :yaw yaw :rand (or rand (constantly 0.5))) nil)]
-    (core/submit! (:eng s) (tu/order (:eng s) (list job (merge {:ways #{:check}} args))) {})
+    (core/submit! (:eng s) (tu/order (list job (merge {:ways #{:check}} args))) {})
     (dotimes [_ (or ticks 6)]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
@@ -205,7 +205,7 @@
               stay {:ways [:walk :clear-seal]
                     :round (fn ^:async w [c] (swap! walks inc) (ctx/end c :done nil {:arrived true}))}
               eng (assoc-in (:eng s) [:jobs 'jobs.movement.go-to] stay)]
-          (core/submit! eng (tu/order eng (list job {:ways #{:check} :at [3 64 2]})) {})
+          (core/submit! eng (tu/order (list job {:ways #{:check} :at [3 64 2]})) {})
           (await (tu/run-ticks eng (:clock s) 14 700))
           (is (= 1 @walks) "a walk that arrived and left the cell unseen changed nothing: no second walk to it"))))))
 
@@ -226,7 +226,7 @@
   [args]
   (let [s (h/setup-seeing (assoc (world {}) :yaw 0) nil)
         run (fn ^:async run [] 
-              (core/submit! (:eng s) (tu/order (:eng s) (list job (merge {:ways #{:check}} args))) {})
+              (core/submit! (:eng s) (tu/order (list job (merge {:ways #{:check}} args))) {})
               (await (tu/run-ticks (:eng s) (:clock s) 6 700))
               (ending-event @(:seen s) last))
         _ (await (run))
@@ -362,7 +362,7 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                                 :events (events/make {:body "Fake" :sinks [sink] :now now})
                                 :world (world-files/of-data {"pen" plan} {} [])})]
-          (core/submit! eng (tu/order eng (list job {:plan "pen" :ways #{:check}})) {})
+          (core/submit! eng (tu/order (list job {:plan "pen" :ways #{:check}})) {})
           (dotimes [_ 10]
             (swap! clock + 700)
             (await (core/tick! eng)))
@@ -383,7 +383,7 @@
     (set! (.-sensedAt p) (fn [pos]
                            (when (= floor [(.-x pos) (.-y pos) (.-z pos)]) (swap! fills inc))
                            (orig pos)))
-    (core/submit! (:eng s) (tu/order (:eng s) (list job (merge {:ways #{:check}} args))) {})
+    (core/submit! (:eng s) (tu/order (list job (merge {:ways #{:check}} args))) {})
     (dotimes [_ 12]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
@@ -407,7 +407,7 @@
       (fn ^:async t []
         (let [w (assoc (world {"2,64,-1" "oak_fence_gate"} {"2,64,-1" {:open true}}) :blocks (merge plain fence-ring {"2,64,-1" "oak_fence_gate"}) :floor [-60 -60 65 65])
               s (h/setup-seeing (assoc w :yaw 180 :rand (constantly 0.5)) nil)]
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:ways #{:check} :at [2 64 2]})) {})
+          (core/submit! (:eng s) (tu/order (list job {:ways #{:check} :at [2 64 2]})) {})
           (dotimes [_ 6]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -424,7 +424,7 @@
               divider (into {} (for [z (range 0 5)] [(str "5,64," z) (if (= z 2) "oak_fence_gate" "oak_fence")]))
               w (assoc (world {}) :blocks (merge plain outer divider) :states {"5,64,2" {:open true}} :floor [-60 -60 65 65])
               s (h/setup-seeing (assoc w :yaw -90 :rand (constantly 0.5)) nil)]
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:ways #{:check} :at [2 64 2]})) {})
+          (core/submit! (:eng s) (tu/order (list job {:ways #{:check} :at [2 64 2]})) {})
           (dotimes [_ 30]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -437,7 +437,7 @@
         (let [paddock (into {} (for [x (range -10 31) z (range -10 31) :when (or (#{-10 30} x) (#{-10 30} z))] [(str x ",64," z) "oak_fence"]))
               w (assoc (world {} {"2,64,-1" {:open true}}) :blocks (merge plain fence-ring paddock {"2,64,-1" "oak_fence_gate"}) :floor [-60 -60 65 65])
               s (h/setup-seeing (assoc w :yaw 180 :rand (constantly 0.5)) nil)]
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:ways #{:check} :at [2 64 2]})) {})
+          (core/submit! (:eng s) (tu/order (list job {:ways #{:check} :at [2 64 2]})) {})
           (dotimes [_ 40]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -449,7 +449,7 @@
       (fn ^:async t []
         (let [s (h/setup-seeing (assoc (world {"2,64,-1" "air"}) :yaw 180) nil)]
           (perception/pass! (aget (:p s) "perception") {:effort 1})
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:at [2 64 2]})) {})
+          (core/submit! (:eng s) (tu/order (list job {:at [2 64 2]})) {})
           (dotimes [_ 12]
             (swap! (:clock s) + 700)
             (await (core/tick! (:eng s))))
@@ -532,7 +532,7 @@
         (doseq [yaw [0 180]]
           (let [blocks (-> (ring "stone" 3) (dissoc "5,64,2" "5,65,2"))
                 s (h/setup-seeing {:floor floor-box :self {:pos {:x 5.5 :y 64 :z 5.5}} :blocks blocks :states {} :yaw yaw :rand (constantly 0.5)} nil)]
-            (core/submit! (:eng s) (tu/order (:eng s) (list job {:at [5 64 5]})) {})
+            (core/submit! (:eng s) (tu/order (list job {:at [5 64 5]})) {})
             (dotimes [_ 10]
               (swap! (:clock s) + 700)
               (await (core/tick! (:eng s))))
@@ -556,7 +556,7 @@
   "Run pen-check (patching allowed) in a world carrying 3 oak fences; {:event :p}."
   [args w]
   (let [s (h/setup (merge {:inventory [{:name "oak_fence" :count 3}]} w))]
-    (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
+    (core/submit! (:eng s) (tu/order (list job args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) 10 700))
     {:event (or (ending-event @(:seen s)) {:all (mapv #(select-keys % [:source :kind :text]) @(:seen s))}) :p (:p s)}))
 

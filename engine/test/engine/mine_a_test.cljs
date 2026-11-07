@@ -102,7 +102,7 @@
         (let [s (start-shaded {"6,64,0" "sand" "-12,64,0" "sand"})
               now @(:clock s)]
           (mem/write! (:store (:eng s)) :deaths {:pos {:x 5 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
           (is (finished? s)))))))
@@ -115,7 +115,7 @@
         (let [s (start {:world {:blocks (merge floor {"6,64,0" "sand" "-12,64,0" "sand"})}})
               now @(:clock s)]
           (mem/write! (:store (:eng s)) :deaths {:pos {:x 5 :y 64 :z 0} :cause "creeper" :death-t (- now 60000)} core/deaths-policy)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 30))
           (is (= [6 64 0] (first (dug-cells s))))
           (is (finished? s)))))))
@@ -127,7 +127,7 @@
       (fn ^:async t []
         (let [s (start-shaded {"6,64,0" "sand" "-12,64,0" "sand"})]
           (mem/write! (:store (:eng s)) :hurt {:health 4 :amount 3 :attacker {:name "spider"} :pos {:x 5 :y 64 :z 0}})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
           (is (finished? s)))))))
@@ -158,7 +158,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks floor}})]
           (tu/shutdown-at! s "dig" 1)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "dirt" :count 4 :track-ground true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "dirt" :count 4 :track-ground true})) {})
           (await (run-ticks s 1))
           (let [m (job-mem s)]
             (is (= {:x 0 :y 64 :z 0} (:start m)))
@@ -174,7 +174,7 @@
         (let [dir (tu/tmp-dir)
               s (start {:world {:blocks floor} :dir dir})]
           (tu/shutdown-at! s "dig" 3)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "dirt" :count 4 :track-ground true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "dirt" :count 4 :track-ground true})) {})
           (await (run-ticks s 1))
           (is (pos? (dig-count s)))
           (is (not (finished? s)))
@@ -188,7 +188,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:world {:blocks sand-patch}})]
-          (core/submit! eng (tu/order eng (spec {})) {})
+          (core/submit! eng (tu/order (spec {})) {})
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))))
           (is (zero? (count (.-calls (.-world p))))))))))
@@ -264,7 +264,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks (cells "sand" [3 4 5 6 7 8] [64] [0])}})]
           (.override (.-world (:p s)) "dig" (fn ^:async f [_ _ _] #js {:status "cannot"}))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :ways #{:seen}})) {})
           (await (run-ticks s 30))
           (is (= :none (:reason (done-event s))))
           (is (zero? (:jobs.lib.util/failures (job-mem s) 0)))
@@ -347,7 +347,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks {"15,64,0" "sand"}}})]
           (tu/short-walks! (:p s) 7)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :ways #{:seen}})) {})
           (await (run-ticks s 1))
           (await (run-ticks s 20))
           (is (= "partial" (:status (first (moved s)))) "the first walk is cut short")
@@ -364,7 +364,7 @@
                  ["stone" ["wooden_pickaxe" "stone_pickaxe"] "wooden_pickaxe"]
                  ["oak_log" ["iron_axe" "diamond_pickaxe"] "iron_axe"]]]
           (let [s (start {:world {:blocks {"3,64,0" block} :inventory (mapv #(hash-map :name % :count 1) carried)}})]
-            (core/submit! (:eng s) (tu/order (:eng s) (spec {:block block :count 1})) {})
+            (core/submit! (:eng s) (tu/order (spec {:block block :count 1})) {})
             (await (run-ticks s 10))
             (is (= expected (.-held (.self (:p s)))) block)
             (is (= 1 (count (calls s "equip"))) block)))))))
@@ -391,7 +391,7 @@
               out (atom nil)
               parent (tu/recording-parent 'jobs.gather.dig-for {:block "sand" :count 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'mining-parent parent))]
-          (core/submit! eng (tu/order eng '(mining-parent)) {})
+          (core/submit! eng (tu/order '(mining-parent)) {})
           (await (tu/run-ticks eng clock 120 700))
           (is (= :count (:reason @out)))
           (is (>= (:got @out) 2)))))))
@@ -434,7 +434,7 @@
                                 (swap! (fake/state (:p s)) assoc :entities []) ; nothing left to collect
                                 (set-pos! s 3 64 0)
                                 r))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "dirt" :count 1 :trip true :mend true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "dirt" :count 1 :trip true :mend true})) {})
           (await (run-ticks s 80))
           (is (= 2 (count (calls s "place"))) "fill-cells gives the cell up after its max-refusals, the mend does not retry")
           (is (= 1 (count (events-of s :mine.mend-failed))))
@@ -449,7 +449,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks floor}})]
           (tu/shutdown-at! s "dig" 1)
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "dirt" :count 2 :trip true})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "dirt" :count 2 :trip true})) {})
           (await (run-ticks s 1))
           (is (empty? (:ground (job-mem s))) "no ground is recorded")
           (await (run-ticks s 60))
@@ -481,7 +481,7 @@
                        (fn [token args impl]
                          (swap! distance-at-place #(or % (let [[x _ z] (:pos (:self @(fake/state p)))] (max (js/Math.abs (- x 0.5)) (js/Math.abs (- z 0.5))))))
                          (impl token args)))
-            (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "dirt" :count 1 :trip true :mend true})) {})
+            (core/submit! (:eng s) (tu/order (spec {:block "dirt" :count 1 :trip true :mend true})) {})
             (await (run-ticks s 40))
             (is (<= @distance-at-place 4) "the body is within reach of the owed cell when it places"))
           (let [names (mapv #(.-name %) (.-calls (.-world p)))
@@ -609,7 +609,7 @@
               out (atom nil)
               parent (tu/recording-parent 'jobs.gather.dig-for {:block "stone" :count 2} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'mining-parent parent))]
-          (core/submit! eng (tu/order eng '(mining-parent)) {})
+          (core/submit! eng (tu/order '(mining-parent)) {})
           (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
 ;; stones on 8-high pillars: seen from the floor, no stand beside them. go-to walks nearer and looks before it gives up, so the body may end facing away from a stone and never see it: the listed ones are a seen subset.
@@ -640,7 +640,7 @@
                   :sight {:radius 24} :rand (constantly 0.5)})]
     (dotimes [_ 20] (perception/pass! (aget (:p s) "perception")))
     (set-pos! s 0.5 top 0.5)
-    (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 1 :radius 16 :ways #{:seen} :settings settings})) {})
+    (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 1 :radius 16 :ways #{:seen} :settings settings})) {})
     (await (run-ticks s 120))
     s))
 
@@ -712,7 +712,7 @@
         now @(:clock s)]
     (when age-ms
       (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now age-ms)} core/deaths-policy))
-    (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count n :ways #{:seen}})) {})
+    (core/submit! (:eng s) (tu/order (spec {:block "sand" :count n :ways #{:seen}})) {})
     (assoc s :go-tos go-tos))))
 
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds
@@ -735,7 +735,7 @@
       (fn ^:async t []
         (let [walk-worth (fn ^:async walk-worth* [cells]
                            (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge floor (zipmap cells (repeat "sand")))}}))]
-                             (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+                             (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
                              (await (settings/with-settings cheap-sand (fn ^:async run [] (await (run-ticks s 30)))))
                              (:worth (first (filter :worth @go-tos)))))
               one (await (walk-worth ["-12,64,0"]))

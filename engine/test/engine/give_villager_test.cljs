@@ -50,7 +50,7 @@
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
     (prepare (:p s))
     (when prepare-eng (prepare-eng eng))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i n) (seq (:list (core/state eng))))
         (swap! (:clock s) + 700)
@@ -224,7 +224,7 @@
               {:keys [eng p clock]} s]
           (taking p (all-taken "v-1"))
           (perception/pass! (aget p "perception"))
-          (core/submit! eng (tu/order eng (list job {:to "v-1" :count 2})) {})
+          (core/submit! eng (tu/order (list job {:to "v-1" :count 2})) {})
           (loop [i 0]
             (when (and (< i 120) (seq (:list (core/state eng))))
               (swap! clock + 700)

@@ -132,7 +132,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (ticks s eng 10))
           (is (= [[:pillar :urgent]] (->> @seen (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))))))))
 
@@ -141,7 +141,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (await (ticks s eng 10))
           (is (finished? eng))
           (is (= [0 70 0] (feet p)))
@@ -161,7 +161,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:height 4})) {})
+          (core/submit! eng (tu/order (list job {:height 4})) {})
           (await (ticks s eng 1))
           (is (finished? eng) "one round is the whole pillar")
           (is (= [0 68 0] (feet p)))
@@ -172,7 +172,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,68,0" "bedrock"}})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (await (ticks s eng 8))
           (is (finished? eng))
           (is (= [0 66 0] (feet p)) "two blocks: a third would put the head in the ceiling")
@@ -189,7 +189,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "dirt"}})]
-          (core/submit! eng (tu/order eng (list job {:height 4})) {})
+          (core/submit! eng (tu/order (list job {:height 4})) {})
           (await (ticks s eng 12))
           (is (finished? eng))
           (is (= [0 68 0] (feet p)))
@@ -211,7 +211,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "dirt"} :zones [{:name "base" :min [0 65 0] :max [0 65 0] :allow #{:place}}]})]
-          (core/submit! eng (tu/order eng (list job {:height 4 :ignore-zones? true})) {})
+          (core/submit! eng (tu/order (list job {:height 4 :ignore-zones? true})) {})
           (await (ticks s eng 12))
           (is (= "dirt" (block p [0 65 0])) "the zoned roof stays")
           (is (= :ceiling (:reason (first (of-kind seen :stopped))))))))))
@@ -221,7 +221,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks (into {} (map (fn [y] [(str "0," y ",0") "dirt"]) (range 65 73)))})]
-          (core/submit! eng (tu/order eng (list job {:height 8})) {})
+          (core/submit! eng (tu/order (list job {:height 8})) {})
           (await (ticks s eng 60))
           (is (finished? eng))
           (is (= [0 72 0] (feet p)))
@@ -232,7 +232,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks (into {} (map (fn [y] [(str "0," y ",0") "gravel"]) (range 66 74)))})]
-          (core/submit! eng (tu/order eng (list job {:height 4})) {})
+          (core/submit! eng (tu/order (list job {:height 4})) {})
           (await (ticks s eng 40))
           (is (finished? eng))
           (is (= [0 68 0] (feet p)))
@@ -259,7 +259,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks (into {} (map (fn [y] [(str "0," y ",0") "gravel"]) (range 66 74)))})]
-          (core/submit! eng (tu/order eng (list job {:height 4})) {})
+          (core/submit! eng (tu/order (list job {:height 4})) {})
           (await (settings/with-settings {:jobs.access.pillar/fall-wait-ms 100000000} #(ticks s eng 40)))
           (is (finished? eng) "the head cell is dug and refilled gravel dug at once: no wait while the body's head is in it")
           (is (empty? (of-kind seen :stopped))))))))
@@ -269,7 +269,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "sand"}})]
-          (core/submit! eng (tu/order eng (list job {:height 2})) {})
+          (core/submit! eng (tu/order (list job {:height 2})) {})
           (await (ticks s eng 12))
           (is (finished? eng))
           (is (= [0 66 0] (feet p)))
@@ -280,7 +280,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory []})
-              id (core/submit! eng (tu/order eng (list job {:height 6 :ways #{:carried}})) {})]
+              id (core/submit! eng (tu/order (list job {:height 6 :ways #{:carried}})) {})]
           (await (ticks s eng 3))
           (is (not (finished? eng)) "still listed: it waits for blocks")
           (is (empty? (calls p "jumpPlace")))
@@ -299,7 +299,7 @@
       (fn ^:async t []
         (let [got (atom [])
               {:keys [eng p] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (await (ticks s eng 3))
           (is (empty? (calls p "jumpPlace")))
           (is (= {:any-of ["dirt" "cobblestone"] :count 6} (first @got))))))))
@@ -309,7 +309,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (await (ticks s eng 1))
           (is (finished? eng) "one call: it does not hold the body waiting for blocks")
           (is (= [0 66 0] (feet p)))
@@ -321,7 +321,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:zones [{:name "keep-out" :min [-3 66 -3] :max [3 66 3]}]})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (await (ticks s eng 4))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
@@ -333,7 +333,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:zones nil})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (await (ticks s eng 4))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
@@ -363,7 +363,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (let [k (stall-at! p 3 false)]
             (core/tick! eng)
             (await (until-calls k 3)))
@@ -388,7 +388,7 @@
                        (let [r (impl token args)]
                          (swap! (fake/state p) update :blocks dissoc cell)
                          r)))
-          (core/submit! eng (tu/order eng (list job {:height 1})) {})
+          (core/submit! eng (tu/order (list job {:height 1})) {})
           (await (ticks s eng 6))
           (is (finished? eng))
           (is (= [[cell :placed]] (mapv (juxt :cell :state) (the-ledger eng)))))))))
@@ -398,7 +398,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:height 6})) {})
+          (core/submit! eng (tu/order (list job {:height 6})) {})
           (let [k (stall-at! p 3 true)]
             (core/tick! eng)
             (await (until-calls k 3)))
@@ -447,7 +447,7 @@
                        (if (pos? (swap! refused dec))
                          (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})
                          (impl token args))))
-          (core/submit! eng (tu/order eng (list job {:height 2})) {})
+          (core/submit! eng (tu/order (list job {:height 2})) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (= [0 66 0] (feet p)))
@@ -458,9 +458,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:height 2})) {})
+          (core/submit! eng (tu/order (list job {:height 2})) {})
           (await (ticks s eng 5))
-          (core/submit! eng (tu/order eng (list job {:height 1})) {})
+          (core/submit! eng (tu/order (list job {:height 1})) {})
           (await (ticks s eng 5))
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))
@@ -488,7 +488,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,63,0" "stone"}})]
           (knock! p 4 [1 64 0] false)
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (empty? (of-kind seen :stopped)))
@@ -502,7 +502,7 @@
         (let [{:keys [eng p seen] :as s} (setup {:hitbox true})]
           (fake/swap-self! p assoc :pos [0.5 64 0.5])
           (knock! p 3 [1.1 64 0.5] false)
-          (core/submit! eng (tu/order eng (list job {:height 2})) {})
+          (core/submit! eng (tu/order (list job {:height 2})) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (empty? (of-kind seen :stopped)))
@@ -519,7 +519,7 @@
                      (fn [_token _args _impl]
                        (fake/swap-self! p assoc :pos [0 64 0] :onGround true)
                        (js/Promise.resolve #js {:status "ok"})))
-          (core/submit! eng (tu/order eng (list job {:height 2})) {})
+          (core/submit! eng (tu/order (list job {:height 2})) {})
           (await (ticks s eng 12))
           (is (finished? eng))
           (is (empty? (of-kind seen :stopped)))
@@ -570,7 +570,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
           (refuse-while-a-mob-stands-in! p 5)
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (ticks s eng 20))
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))
@@ -583,7 +583,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
           (refuse-while-a-mob-stands-in! p nil)
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (ticks s eng 20))
           (is (finished? eng))
           (let [g (first (of-kind seen :stopped))]
@@ -643,7 +643,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:entities [cow]})]
           (refuse-while-a-mob-stands-in! p 5)
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (settings/with-settings {:jobs.access.pillar/mob-waits 0} #(ticks s eng 20)))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")))
@@ -677,7 +677,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,63,0" "stone" "0,64,1" "stone"}})]
           (shove-after-place! p [[1 -1 0] [0 -1 1]])
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (ticks s eng 40))
           (is (finished? eng))
           (is (empty? (of-kind seen :stopped)))
@@ -696,7 +696,7 @@
                      (fn [_ a _] (swap! looked conj [(js/Math.floor (.-x (.-pos a))) (js/Math.floor (.-y (.-pos a))) (js/Math.floor (.-z (.-pos a)))])
                        (js/Promise.resolve #js {:status "ok"})))
           (shove-after-place! p [[1 0 0]])
-          (core/submit! eng (tu/order eng (list job {:height 3})) {})
+          (core/submit! eng (tu/order (list job {:height 3})) {})
           (await (ticks s eng 40))
           (is (empty? (of-kind seen :stopped)) "an unlooked cell over the column is no ceiling")
           (is (finished? eng)))))))
@@ -725,7 +725,7 @@
                           :world (world/of-data {} {} (or zones [])) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         ended #(first (filter (comp #{:completed :stopped} :kind) @seen))]
     (when before (before p))
-    (core/submit! eng (tu/order eng spec) {})
+    (core/submit! eng (tu/order spec) {})
     (loop [i 0]
       (when (and (< i 10) (nil? (ended)))
         (swap! clock + 500)
@@ -777,11 +777,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:y 64})) {})
+          (core/submit! eng (tu/order (list job {:y 64})) {})
           (await (ticks s eng 2))
           (is (finished? eng))
           (is (empty? (calls p "jumpPlace")) "the feet are at :y already")
-          (core/submit! eng (tu/order eng (list job {:y 67})) {})
+          (core/submit! eng (tu/order (list job {:y 67})) {})
           (await (ticks s eng 5))
           (is (finished? eng))
           (is (= [0 67 0] (feet p)))

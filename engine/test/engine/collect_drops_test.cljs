@@ -41,7 +41,7 @@
     (when drop (drop! p [4 64 0] drop) (drop! p [5 64 0] drop))
     (if (:worth args)
       (await (tu/child-outcome eng job args 10))
-      (do (core/submit! eng (tu/order eng (list job args)) {}) (await (tu/run-until-empty eng 10))))
+      (do (core/submit! eng (tu/order (list job args)) {}) (await (tu/run-until-empty eng 10))))
     (first @worths)))
 
 (defn seen-from-above!
@@ -755,7 +755,7 @@
         (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "air"}})
               held #(mem/entries (mem/view (:store eng)) loose/hold-kind)]
           (drop! p [0 63 0] "dirt")
-          (core/submit! eng (tu/order eng '(jobs.items.collect-drops {:radius 6 :holes [[0 63 0]]})) {})
+          (core/submit! eng (tu/order '(jobs.items.collect-drops {:radius 6 :holes [[0 63 0]]})) {})
           (await (core/tick! eng))
           (is (seq (held)) "held while it waits")
           (core/cancel! eng (first (:list (core/state eng))))

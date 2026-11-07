@@ -213,7 +213,7 @@
                                   :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                            (contains? spec :zones) (assoc :world (world-files/of-data {} {} (:zones spec)))))]
     (when before (before eng))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (with-redefs [dig-route/search (search-clock clock)]
       (loop [i 0]
         (when (and (< i 1000) (seq (:list (core/state eng))))
@@ -322,7 +322,7 @@
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 40) (seq (:list (core/state eng))))
         (swap! clock + 700)
@@ -723,7 +723,7 @@
               w (sensed-only {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks ground :inventory [{:name "torch" :count 4}]})
               eng (core/create {:primitives (:w w) :jobs (assoc registry/jobs 'jobs.access.stair child 'torch-parent parent)
                                 :triggers {} :dir (tu/tmp-dir) :now (constantly 1000000) :backoff false})]
-          (core/submit! eng (tu/order eng '(torch-parent)) {})
+          (core/submit! eng (tu/order '(torch-parent)) {})
           (loop [i 0] (when (and (< i 20) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (= 4 @torches) "all four torches are in the inventory while the child runs"))))))
 
@@ -782,7 +782,7 @@
         eng (core/create {:primitives w :jobs (assoc registry/jobs 'door-poll job) :triggers {} :dir (tu/tmp-dir)
                           :now #(deref clock) :backoff false
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng '(door-poll)) {})
+    (core/submit! eng (tu/order '(door-poll)) {})
     (loop [i 0]
       (when (and (< i 200) (seq (:list (core/state eng))))
         (swap! clock + 100)

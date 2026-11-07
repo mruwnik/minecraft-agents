@@ -56,7 +56,7 @@
                           (let [e (await (ctx/call c :kid 'jobs.movement.go-to args))]
                             (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-     (core/submit! eng (tu/order eng '(recording-parent {})) {})
+     (core/submit! eng (tu/order '(recording-parent {})) {})
      (await (tick-out! eng clock 40))
      (assoc s :eng eng :out out))))
 
@@ -608,7 +608,7 @@
                                    (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
-            (core/submit! eng (tu/order eng '(recording-parent {})) {})
+            (core/submit! eng (tu/order '(recording-parent {})) {})
             (await (tick-out! eng clock 60))
             (is (= arrives? (boolean (:arrived @out))) (pr-str label @out))))))))
 
@@ -633,7 +633,7 @@
                                    (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
-            (core/submit! eng (tu/order eng '(recording-parent {})) {})
+            (core/submit! eng (tu/order '(recording-parent {})) {})
             (await (tick-out! eng clock 60))
             (is (= arrives? (boolean (:arrived @out))) (pr-str label (select-keys @out [:arrived :why])))))))))
 
@@ -653,7 +653,7 @@
                                    (if (= :continue e) :continue (do (reset! out (gts/result-of e)) (ctx/end c :done nil)))))}
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
             (ledger/write! (:store eng) entries)
-            (core/submit! eng (tu/order eng '(recording-parent {})) {})
+            (core/submit! eng (tu/order '(recording-parent {})) {})
             (await (tick-out! eng clock 60))
             (is (= arrives? (boolean (:arrived @out))) (pr-str label (select-keys @out [:arrived :why])))))))))
 
@@ -712,7 +712,7 @@
                               (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'twice twice))]
           (with-redefs [pen/check (fn [o] (swap! checks inc) (check o))]
-            (core/submit! eng (tu/order eng '(twice)) {:range 0})
+            (core/submit! eng (tu/order '(twice)) {:range 0})
             (await (tick-out! eng clock 5))
             (is (= 1 @checks) "the second attempt of the call checks no pen")
             (is (= 1 (count (filter #(= :go-to.pen-gate-open (:kind %)) @seen))))))))))
@@ -731,7 +731,7 @@
                               (swap! straights conj (own-way/straight-from! c 12))
                               (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'twice twice))]
-          (core/submit! eng (tu/order eng '(twice)) {:range 0})
+          (core/submit! eng (tu/order '(twice)) {:range 0})
           (await (tick-out! eng clock 5))
           (is (= [170 170] @straights) "an attempt begun 12 off the goal (after a wait) prices its tour as the call did"))))))
 
@@ -747,7 +747,7 @@
                                     (await (cut/start-attempt! c pos))
                                     (ctx/end c :done nil))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'cut-at-gate cut-at-gate))]
-          (core/submit! eng (tu/order eng '(cut-at-gate)) {:range 0})
+          (core/submit! eng (tu/order '(cut-at-gate)) {:range 0})
           (await (tick-out! eng clock 5))
           (is (= 1 (count (filter #(= :go-to.pen-gate-open (:kind %)) @seen)))
               "opened after the first check, left open when the attempt was cut"))))))

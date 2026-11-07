@@ -133,7 +133,7 @@
 (deftest clear-cells-refuses-corners-of-another-shape-at-submit-and-does-not-move
   (doseq [args [{:area {:min "9 71 9" :max [1 1 1]}} {:area {:min [1 2] :max [1 1 1]}} {:area {:min [1 "a" 3] :max [1 1 1]}}]]
     (let [{:keys [eng p]} (setup {:blocks eight})]
-      (is (thrown-with-msg? js/Error #"clear-cells :area must be a map" (core/submit! eng (tu/order eng (list job args)) {})) (pr-str args))
+      (is (thrown-with-msg? js/Error #"clear-cells :area must be a map" (core/submit! eng (tu/order (list job args)) {})) (pr-str args))
       (is (empty? (.-calls (.-world p))) (pr-str args)))))
 
 (deftest clear-cells-keeps-its-count-across-a-cut
@@ -145,7 +145,7 @@
               out (atom nil)
               parent (tu/recording-parent job box out #(dissoc (tu/outcome %) :status))
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (.hold world "dig")
           (let [running (core/tick! eng)]
             (loop []
@@ -204,7 +204,7 @@
 (def pad-plan {:id "pad" :parts [{:id "p" :box [[2 64 1] [2 65 2]] :want "stone"}]})
 
 (defn ^:async listed-after [eng n]
-  (core/submit! eng (tu/order eng (list job box)) {})
+  (core/submit! eng (tu/order (list job box)) {})
   (dotimes [_ n] (await (core/tick! eng)))
   (count (:list (core/state eng))))
 
@@ -310,7 +310,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks eight :inventory full-inventory})
-              id (core/submit! eng (tu/order eng (list job box)) {})]
+              id (core/submit! eng (tu/order (list job box)) {})]
           (dotimes [_ 4] (await (core/tick! eng)))
           (is (= 1 (count (:list (core/state eng)))) "still listed, yielding")
           (is (empty? (calls p "dig"))))))))
@@ -333,7 +333,7 @@
               out (atom :not-done)
               parent (tu/recording-parent job box out #(dissoc (tu/outcome %) :status))
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (core/tick! eng))
           (is (= {:dug 8 :skipped {} :kept 0 :fluids {}} (dissoc @out :text)) "one tick, one call of the child"))))))
 
@@ -350,7 +350,7 @@
                                (ctx/end c :done nil))}
               {:keys [eng]} (setup {:blocks {"1,64,1" "dirt"}})
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (run-until-empty eng 3))
           (is (= [:continue :continue :continue :continue :continue] (:rs @seen*)))
           (is (= {} (:skipped @seen*)) "a briefly unloaded cell is not skipped")
@@ -520,7 +520,7 @@
               eng (-> eng
                       (update-in [:jobs 'jobs.blocks.dig] assoc :round dig)
                       (update-in [:jobs 'jobs.access.cleanup] assoc :round (fn [c] (ctx/end c :done nil))))]
-          (core/submit! eng (tu/order eng (list job {:area {:cells [[1 64 1]]}})) {})
+          (core/submit! eng (tu/order (list job {:area {:cells [[1 64 1]]}})) {})
           (await (run-until-empty eng 20))
           (is (= ["air"] [(block-at p {:x 1 :y 64 :z 1})]))
           (is (some #(re-find #"cleanup-open" (str (:text %))) (kinds seen :cleanup_failed)) "the pillar still in the ledger is told, not ended :done"))))))

@@ -14,7 +14,7 @@
                          (let [e (await (ctx/call c :kid 'jobs.survival.fetch-trip-food args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data :because])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (tu/run-until-empty eng 40))
     @out))
 

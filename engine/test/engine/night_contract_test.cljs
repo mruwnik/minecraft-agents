@@ -31,7 +31,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup hut/night-bed-world)]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng (tu/order eng (list night-job {:ways #{:shelter :flee}})) {})
+          (core/submit! eng (tu/order (list night-job {:ways #{:shelter :flee}})) {})
           (await (tu/run-until-empty eng 8))
           (is (= [] (st/calls p "sleep"))))))))
 
@@ -43,7 +43,7 @@
                          (let [e (await (ctx/call c :kid night-job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (tu/run-until-empty eng 40))
     @out))
 

@@ -15,7 +15,7 @@
   ([job args] (waiting-reason job args {}))
   ([job args world]
   (let [{:keys [eng seen]} (h/setup world)]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     (core/tick! eng)
     (some #(when (= :waiting (:kind %)) (:reason %)) @seen))))
 
@@ -23,7 +23,7 @@
   "Like waiting-reason: the job.waiting events' fields, as a vector."
   [job args]
   (let [{:keys [eng seen]} (h/setup {})]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     (core/tick! eng)
     (filterv #(= :waiting (:kind %)) @seen)))
 
@@ -49,7 +49,7 @@
   "Submit job with args over the fake world spec and plans, tick a few times: the job.waiting events."
   [job args spec plans]
   (let [{:keys [eng seen]} (b/start spec plans [])]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     (dotimes [_ 3] (swap! ht/clock + 700) (core/tick! eng))
     (filterv #(= :waiting (:kind %)) @seen)))
 
@@ -63,7 +63,7 @@
   :reason."
   [job args]
   (let [{:keys [eng seen]} (h/setup {})]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     (await (core/tick! eng))
     (merge {:listed (boolean (seq (:list (core/state eng))))}
            (some #(when (#{:completed :stopped} (:kind %)) {:event (:kind %) :reason (:reason %)}) @seen))))

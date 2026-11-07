@@ -33,7 +33,7 @@
   (let [out (atom nil)
         parent {:round (fn ^:async quoting-round [c] (reset! out (await (ctx/quote c job args))) (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'quoting-parent] parent)]
-    (core/submit! eng (tu/order eng '(quoting-parent)) {})
+    (core/submit! eng (tu/order '(quoting-parent)) {})
     (await (tu/run-until-empty eng 5))
     @out))
 
@@ -194,7 +194,7 @@
                                    (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
                 s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.gather.mine mine 'recording-parent parent)]
                     (f/start (oi/ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) []))]
-            (core/submit! (:eng s) (tu/order (:eng s) '(recording-parent {})) {})
+            (core/submit! (:eng s) (tu/order '(recording-parent {})) {})
             (await (f/run-ticks s 200))
             (is (pos? @runs) "the mine ran")
             (is (= {:kind :nothing-possible :cause cause} (kc @out)) (str cause))
@@ -397,7 +397,7 @@
                                        (need/item-status c "torch" 4 {:how #{:chest :craft :gather}} worth)))
                          (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'status-parent] parent)]
-    (core/submit! eng (tu/order eng '(status-parent)) {})
+    (core/submit! eng (tu/order '(status-parent)) {})
     (await (tu/run-until-empty eng 5))
     @out))
 

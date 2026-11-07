@@ -174,7 +174,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
           (ledger/write! (:store eng) own)
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (seq (calls p "dig")) "it dug its own cobblestone")
@@ -196,7 +196,7 @@
                                           (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1 :checks {:safe? '(always)}
                                                                                        :settings {:jobs.lib.shelter.keep/at-night? false}})))]
           (ledger/write! (:store eng) seal)
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (seq (calls p "dig")) "another wall is cut")
@@ -215,7 +215,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.survival.leave-shelter {})))]
           (ledger/write! (:store eng) seal)
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 400))
           (is (re-find #"seal-kept" (pr-str @out)) (pr-str @out))
           (is (empty? (events-of seen :dig-in.left)) "never says it is out")
@@ -514,7 +514,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge in-room {:blocks room :inventory [{:name "dirt" :count 2}]}) foreign)]
-          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [8 64 0] :range 1 :ignore-zones? true})) {})
+          (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [8 64 0] :range 1 :ignore-zones? true})) {})
           (let [k (atom 0)]
             (.override (.-world p) "dig" (fn [token args impl]
                                            (if (< (swap! k inc) 2) (impl token args) (js/Promise. (fn [_ _])))))
@@ -537,7 +537,7 @@
       (fn ^:async t []
         (let [plain (apply dissoc (merge (box -40 63 -40 40 63 40 "stone") pit) pit-cells)
               {:keys [eng p seen]} (setup (merge in-pit {:blocks plain :inventory [{:name "dirt" :count 2}]}) foreign)]
-          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true :ways #{:walk :stair}})) {})
+          (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true :ways #{:walk :stair}})) {})
           (let [k (atom 0)]
             (.override (.-world p) "dig" (fn [token args impl]
                                            (if (< (swap! k inc) 3) (impl token args) (js/Promise. (fn [_ _])))))
@@ -557,11 +557,11 @@
                  (holes eng))
               "both dug cells outlive the cancelled job, noted as the stair dug them")
           (is (every? :any-of (filter :escalation (ledger eng))))
-          (core/submit! eng (tu/order eng '(jobs.survival.restore-broken {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.restore-broken {})) {})
           (await (tick-out! eng 100))
           (is (every? #(= "air" (block p %)) (holes eng)) "the body is still shut in: its holes stay open")
           (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 0.5])
-          (core/submit! eng (tu/order eng '(jobs.survival.restore-broken {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.restore-broken {})) {})
           (await (tick-out! eng 300))
           (is (= "dirt" (block p [1 63 0])) "out of the pit, restore-broken puts them back")
           (is (= "dirt" (block p [1 62 0])))
@@ -655,7 +655,7 @@
                                                      :inventory [{:name "iron_pickaxe" :count 1}
                                                                  {:name "cobblestone" :count 2}]})
                                      foreign)]
-          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true :ways #{:walk :stair}})) {})
+          (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [10 64 0] :range 1 :ignore-zones? true :ways #{:walk :stair}})) {})
           (await (tick-out! eng 600))
           (is (= "cobblestone" (block p [1 62 0])) "the put-back block is cobblestone")
           (is (= #{[[1 62 0] "cobblestone"] [[1 63 0] "cobblestone"]}
@@ -713,7 +713,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [6 64 0] :range 1})))]
           (ledger/write! (:store eng) own)
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= "air" (block p [-2 64 0])) "the seal behind the body is taken back too"))))))
@@ -779,7 +779,7 @@
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (gt/tick-out! eng 400 step))
           (let [own (map :cell (events-of seen :go-to.dug-own-build))]
             (is (= {:arrived true} @out))
@@ -803,7 +803,7 @@
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 2})))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (gt/tick-out! eng 400 step))
           (let [own (map :cell (events-of seen :go-to.dug-own-build))]
             (is (= {:arrived true} @out))
@@ -828,7 +828,7 @@
               {:keys [eng p seen step]} (gt/setup world (ew/of-data {"room" room} {} []))
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [14 62 12] :range 0})))]
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (gt/tick-out! eng 400 #(do (swap! clock + 500) (step))))
           (let [digs (map #(mapv (js->clj (.-pos (.-args %)) :keywordize-keys true) [:x :y :z]) (calls p "dig"))]
             (is (seq digs) "it cuts its own wall")

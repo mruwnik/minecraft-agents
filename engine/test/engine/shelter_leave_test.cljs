@@ -28,7 +28,7 @@
   "A body dug in at night by dig-in submitted directly (no shelter job), then the time set to day; the setup map."
   [world]
   (let [s (st/setup (merge {:time st/night :inventory st/wall-stack :blocks st/floor} (dissoc world :ways)))]
-    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.survival.shut-in {:ways (:ways world #{:room :walls}) :for :night})) {})
+    (core/submit! (:eng s) (tu/order (list 'jobs.survival.shut-in {:ways (:ways world #{:room :walls}) :for :night})) {})
     (await (st/tick-n (:eng s) 25))
     (is (= [:built] (mapv :state (st/entries (:eng s) :shelter))) "dug in")
     (.setTime (.-world (:p s)) st/noon)
@@ -66,7 +66,7 @@
         (let [{:keys [eng p seen]} (await (dug-in-world {}))
               before (count (st/emitted seen :completed))]
           (.setTime (.-world p) st/night)
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (st/tick-n eng 12))
           (is (= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "still sealed in")
           (is (= before (count (st/emitted seen :completed))) "no \"out of the shelter, nothing left\" while shut in"))))))
@@ -82,7 +82,7 @@
               wall? (fn [pos] (not= (js/Math.floor (.-y pos)) 63))]
           (tu/set-sensed! p (fn [pos] (if (and (wall? pos) (not (looked?))) #js {:unknown true} (.blockAt (tu/oracle p) pos))))
           (is (false? (jobs.lib.shelter/looked-here? p (mem/view (:store eng)))) "no look pass from here yet")
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (st/tick-n eng 12))
           (is (pos? (- (looks) base)) "it looked round at the unseen walls first")
           (is (not= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "and, seeing the walls shut it in, dug out by day"))))))
@@ -111,7 +111,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup (sealed-world {}))
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
-              _ (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [10 64 0]})) {})
+              _ (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [10 64 0]})) {})
               _ (await (st/tick-n eng 30))
               u (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter u)))
@@ -122,7 +122,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:blocks st/floor :unreachable ["10,64,0"]})
-              _ (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [10 64 0]})) {})
+              _ (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [10 64 0]})) {})
               _ (await (st/tick-n eng 30))
               u (first (st/emitted seen :stopped))]
           (is (some? u))
@@ -135,7 +135,7 @@
         (let [{:keys [eng seen]} (st/setup (sealed-world {:inventory h/sword :unreachable ["10,64,0"]
                                                           :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 10 :y 64 :z 0}}]}))
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
-              _ (core/submit! eng (tu/order eng '(jobs.combat.attack {:targets [7]})) {})
+              _ (core/submit! eng (tu/order '(jobs.combat.attack {:targets [7]})) {})
               _ (await (st/tick-n eng 30))
               g (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))
@@ -151,7 +151,7 @@
         (let [{:keys [eng p]} (st/setup {:time st/night :blocks st/floor :inventory [{:name "bread" :count 3}]
                                          :self {:food 20}})]
           (st/refuse-placing! p)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= [] (st/calls p "eat"))))))))
 
@@ -163,7 +163,7 @@
               {:keys [eng seen clock]} (st/setup (sealed-world {:inventory h/sword :unreachable ["10,64,0" "11,64,0" "12,64,0"]
                                                           :entities [(cow 1 10) (cow 2 11) (cow 3 12)]}))
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
-              _ (core/submit! eng (tu/order eng '(jobs.combat.hunt {:item "beef" :count 3 :keep 0})) {})
+              _ (core/submit! eng (tu/order '(jobs.combat.hunt {:item "beef" :count 3 :keep 0})) {})
               _ (await (tu/run-ticks eng clock 300 700))
               g (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))

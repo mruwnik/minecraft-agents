@@ -26,7 +26,7 @@
   (let [out (atom :not-done)
         parent (tu/recording-parent job args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (run-until-empty eng n))
     @out))
 

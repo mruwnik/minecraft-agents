@@ -55,7 +55,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge floor {"0,64,0" "sand"})})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (not= {:x 0 :y 64 :z 0} (core/self-pos p)))
           (is (= ["moveTo"] (call-names p)) "no dig")
@@ -69,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge boxed {"0,64,0" "sand"})})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (= "air" (.-name (.blockAt p (tu/pos 0 64 0)))))
           (is (= [] (:list (core/state eng))) "free in one run"))))))
@@ -79,7 +79,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "bedrock"})})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (= [:blocked] (map :reason (filter #(= :stopped (:kind %)) @seen))) "in one run")
           (is (not-any? #(= :unwedge.blocked (:kind %)) @seen) "the ending carries it")
@@ -92,7 +92,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= [] (vec (.. p -world -calls)))))))))
@@ -113,7 +113,7 @@
               out (atom nil)
               parent (tu/recording-parent unwedge {} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'uw-parent parent))]
-          (core/submit! eng (tu/order eng '(uw-parent)) {})
+          (core/submit! eng (tu/order '(uw-parent)) {})
           (await (core/tick! eng))
           (is (= :nothing-possible (:kind (:ending @out))))
           (is (= :blocked (:reason (:cause (:ending @out)))))
@@ -127,7 +127,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge stone-sides-but-east {"0,64,0" "sand"})})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (let [call (first (array-seq (.. p -world -calls)))
                 pos (.. call -args -pos)]
@@ -139,7 +139,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge stone-sides-but-east {"0,64,0" "sand" "1,64,0" "lava" "1,63,0" "stone"})})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (not (some #{"moveTo"} (call-names p))))
           (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0))))))))))
@@ -154,7 +154,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "sand" "0,65,0" "lava"})})]
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (= "sand" (.-name (.blockAt p (tu/pos 0 64 0)))) "no dig")
           (is (not (some #{"dig"} (call-names p))))
@@ -169,7 +169,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks (merge boxed {"0,64,0" "sand"})})]
           ;; every dig reports success but the block stays: no failure is counted, only passes
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "dug"}))
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= :still-wedged (stopped-reason seen)))
@@ -184,7 +184,7 @@
                      (fn ^:async f [_ _ _]
                        (core/cut! eng (core/holder eng) :test nil)
                        #js {:status "timeout"}))
-          (core/submit! eng (tu/order eng (list unwedge)) {})
+          (core/submit! eng (tu/order (list unwedge)) {})
           (await (core/tick! eng))
           (is (= 1 (count (filter #{"dig"} (call-names p)))) "no try after the cut"))))))
 

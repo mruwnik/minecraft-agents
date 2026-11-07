@@ -369,7 +369,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
-              result (await (child-outcome eng job {:item "bread" :worth 1e6} 400))]
+              result (await (child-outcome eng job {:item "bread" :worth 6000} 400))]
           (is (= :job-time (:reason result)) (pr-str result))
           (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
 
@@ -794,7 +794,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 6} {:name "crafting_table" :count 1}]})
               calls-seen (atom 0)
-              id (core/submit! eng (tu/order eng (list job {:item "bread" :count 2})) {})]
+              id (core/submit! eng (tu/order (list job {:item "bread" :count 2})) {})]
           (.override (.-world p) "craft"
                      (fn [token a impl]
                        (if (= 1 (swap! calls-seen inc))
@@ -846,7 +846,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         ended #(first (filter (comp #{:completed :stopped} :kind) @seen))]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     (loop [i 0]
       (when (and (< i 40) (nil? (ended)))
         (swap! clock + 500)

@@ -29,7 +29,7 @@
     (let [{:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
                                        :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
       (die! eng {:pos pile-pos :inventory dropped} ago-ms)
-      (core/submit! eng (tu/order eng job) {})
+      (core/submit! eng (tu/order job) {})
       (await (run-until-empty eng 120))
       {:eng eng :p p :seen seen}))))
 
@@ -83,7 +83,7 @@
                                            :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}
                                                       {:id 9 :name "skeleton" :kind "hostile" :pos {:x 12.5 :y 64 :z 0.5}}]})]
           (die! eng {:pos pile-pos :inventory pile} 5000)
-          (core/submit! eng (tu/order eng (list (first job) {:value-overrides {"diamond" 12}})) {})
+          (core/submit! eng (tu/order (list (first job) {:value-overrides {"diamond" 12}})) {})
           (await (run-until-empty eng 200))
           (is (not= :unreachable (:reason (recovered eng))) (pr-str (recovered eng)))
           (is (some? (dt/danger-remembered eng)) "the skeleton is weighed and the trip backs off"))))))
@@ -104,7 +104,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks open-slope :self {:pos [0 100 0]}
                                            :entities [{:id 1 :name "item" :kind "item" :pos slope-pile-pos :item {:name "diamond" :count 5}}]})]
           (die! eng {:pos slope-pile-pos :inventory pile} 5000)
-          (core/submit! eng (tu/order eng job) {})
+          (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 120))
           (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
@@ -119,10 +119,10 @@
           (let [store (:store eng)
                 died (mem/latest (mem/view store) :died)]
             (swap! store update :data mem/add-entry :recovered {:t (inc (:t died)) :wt ((:world-time @store)) :data {:decision :abandoned :death-t (:t died) :reason :unreachable}} nil))
-          (core/submit! eng (tu/order eng job) {})
+          (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 20))
           (is (= :abandoned (:decision (recovered eng))) "a reflex run keeps the decision")
-          (core/submit! eng (tu/order eng '(jobs.survival.recover-drops {:retry true})) {})
+          (core/submit! eng (tu/order '(jobs.survival.recover-drops {:retry true})) {})
           (await (run-until-empty eng 120))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
@@ -145,7 +145,7 @@
                                                    (swap! (fake/state p) assoc-in [:self :pos] (get at (dec (count @calls))))
                                                    (finish! c))))))]
       (die! eng {:pos pile-at :inventory pile} 5000)
-      (core/submit! eng (tu/order eng job) {})
+      (core/submit! eng (tu/order job) {})
       (await (run-until-empty eng 40))
       {:eng eng :p p :seen seen :calls calls}))))
 
@@ -187,7 +187,7 @@
         (let [refuse #(ctx/end % :nothing-possible :unreachable {:arrived false :why :goal-not-standable})
               {:keys [eng calls]} (await ((walk-script (vec (repeat 6 [0 64 0])) far-pile refuse)))]
           (dotimes [_ 4]
-            (core/submit! eng (tu/order eng job) {})
+            (core/submit! eng (tu/order job) {})
             (await (run-until-empty eng 10)))
           (is (<= 5 (count @calls)) "every run walked again")
           (is (nil? (recovered eng)) "refusals that searched nothing are no failed walks"))))))
@@ -199,7 +199,7 @@
         (let [{:keys [eng p]} (setup {:blocks deep-ground
                                       :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
           (die! eng {:pos pile-pos :inventory pile} 5000)
-          (core/submit! eng (tu/order eng job) {})
+          (core/submit! eng (tu/order job) {})
           (await (run-until-empty eng 120))
           (is (= {:decision :skip :reason :too-far :cost :infinite :chance 0} (select-keys (recovered eng) [:decision :reason :cost :chance])) (pr-str (recovered eng)))
           (is (empty? (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "no stair is started for a way down no tool can dig"))))))

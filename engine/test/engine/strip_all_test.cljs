@@ -104,7 +104,7 @@
         (let [eng-at (atom nil)
               env (setup :results {'jobs.strip.corridor (fn [_] (core/cancel! @eng-at (first (:list (core/state @eng-at)))) {:status :done :taken {} :new-segments []})})
               _ (reset! eng-at (:eng env))]
-          (core/submit! (:eng env) (tu/order (:eng env) (list all args)) {})
+          (core/submit! (:eng env) (tu/order (list all args)) {})
           (await (tu/run-until-empty (:eng env) 600))
           (is (= ["set-place" "set-spawn"] (take-last 2 (short-names env))) "restored on the cut")
           (is (= [(xyz bed) old-bed] (mapv :bed (called env 'jobs.survival.set-spawn)))))))))

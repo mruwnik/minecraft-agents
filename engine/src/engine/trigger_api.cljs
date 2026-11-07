@@ -433,7 +433,6 @@
       (throw (ex-info (:message problem) problem)))
     (put! eng (assoc e :by :scenario)))
   (doseq [spec queue]
-    (core/require-worth! eng spec)
     (core/submit! eng spec {:by :scenario})))
 
 ;; ------------------------------------------------------------------ boot and every tick

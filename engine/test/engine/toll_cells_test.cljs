@@ -41,7 +41,7 @@
   (let [out (atom nil)
         job {:round (fn ^:async f-round [c] (reset! out (await (f c))) (ctx/end c :done nil))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'f-job job))]
-    (core/submit! eng (tu/order eng '(f-job)) {})
+    (core/submit! eng (tu/order '(f-job)) {})
     (await (tu/tick-until-idle! eng 20))
     @out))
 
@@ -144,7 +144,7 @@
                  (let [decide (.-decide a)
                        logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
                    (impl token (walk/steer-args (.-timeoutS a) logged)))))
-    (core/submit! eng (tu/order eng form) {})
+    (core/submit! eng (tu/order form) {})
     (await (tu/tick-until-idle! eng 60))
     @trail))
 
@@ -205,7 +205,7 @@
                         (loop [i 0] (when (< i 6) (await (need/return! c)) (recur (inc i))))
                         (ctx/end c :done nil))}
           eng (assoc-in (:eng w) [:jobs 'back-job] job)]
-      (core/submit! eng (tu/order eng (list 'back-job args)) {})
+      (core/submit! eng (tu/order (list 'back-job args)) {})
       (await (tu/tick-until-idle! eng 60)))
     @trail))
 
@@ -274,7 +274,7 @@
                        (let [decide (.-decide args)
                              logged (fn [pose] (swap! trail conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))]) (decide pose))]
                          (impl token (walk/steer-args (.-timeoutS args) logged)))))
-          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [40 64 0] :range 1})) {})
+          (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [40 64 0] :range 1})) {})
           (await (tu/tick-until-idle! eng 200))
           (is (seq @trail))
           (is (not (on-strip? @trail -5 5))))))))

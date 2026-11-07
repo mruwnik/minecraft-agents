@@ -34,7 +34,7 @@
          eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker (walker out args)) :triggers triggers/all
                            :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-     (core/submit! eng (tu/order eng '(walker)) {})
+     (core/submit! eng (tu/order '(walker)) {})
      (loop [i 0]
        (when (and (< i 10) (seq (:list (core/state eng))))
          (await (core/tick! eng))
@@ -146,7 +146,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker (repeat-walker args)) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng '(walker)) {})
+    (core/submit! eng (tu/order '(walker)) {})
     (dotimes [_ n] (await (core/tick! eng)))
     {:eng eng :p p}))
 
@@ -219,7 +219,7 @@
               eng (core/create {:primitives p :jobs (assoc registry/jobs 'pen-walker job) :triggers triggers/all
                                 :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng (tu/order eng '(pen-walker)) {})
+          (core/submit! eng (tu/order '(pen-walker)) {})
           (loop [i 0]
             (when (and (< i 10) (seq (:list (core/state eng))))
               (await (core/tick! eng))
@@ -247,7 +247,7 @@
                         (set! drive/follow! (fn [_ plan _]
                                               (swap! (fake/state p) assoc-in [:self :pos] [blocks 64 0.5])
                                               (js/Promise.resolve {:done {:status :searching :replans 1 :fresh true} :plan plan :walked blocks :ms 0 :replans 1 :damage 0})))
-                        (core/submit! eng (tu/order eng '(searcher)) {})
+                        (core/submit! eng (tu/order '(searcher)) {})
                         (loop [i 0]
                           (when (and (< i 10) (seq (:list (core/state eng))))
                             (await (core/tick! eng))

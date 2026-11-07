@@ -110,7 +110,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup (assoc world :unloaded ["7,64,0"]))]
-          (core/submit! eng (tu/order eng '(jobs.movement.cross-water {:pos [7 64 0]})) {})
+          (core/submit! eng (tu/order '(jobs.movement.cross-water {:pos [7 64 0]})) {})
           (await (tu/run-until-empty eng 60))
           (is (empty? (filterv #(= :waiting (:kind %)) @seen)))
           (is (child-ended? seen :launch))
@@ -166,7 +166,7 @@
                            (ctx/update-mem! c assoc-in [:children :kid :crossing] {:land land}))
                          (await ((:round (tu/recording-parent 'jobs.movement.cross-water {} out)) c)))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'saving-parent parent))]
-    (core/submit! eng (tu/order eng '(saving-parent)) {})
+    (core/submit! eng (tu/order '(saving-parent)) {})
     (await (tu/run-until-empty eng 200))
     {:res @out :p p :seen seen}))
 

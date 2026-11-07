@@ -25,7 +25,7 @@
         out (atom :not-done)
         walk (atom :unset)
         eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe (probe out walk pos range opts)))]
-    (core/submit! eng (tu/order eng '(near-probe)) {})
+    (core/submit! eng (tu/order '(near-probe)) {})
     (await (e/tick-out! eng 1000))
     (assoc s :out out :walk walk)))
 
@@ -57,7 +57,7 @@
                walk (atom :unset)
                eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe (probe out walk {:x 2 :y 64 :z 0} 3 opts)))]
            (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
-           (core/submit! eng (tu/order eng '(near-probe)) {})
+           (core/submit! eng (tu/order '(near-probe)) {})
            (await (e/tick-out! eng 1000))
            (is (= answer @out) (pr-str opts))
            (is (= why (result/why @walk)) (pr-str opts @walk))
@@ -77,7 +77,7 @@
                              (ctx/end c :done nil)))}
              eng (assoc eng :jobs (assoc (:jobs eng) 'near-probe job))]
          (mem/write! (:store eng) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- @clock 4000)} core/deaths-policy)
-         (core/submit! eng (tu/order eng '(near-probe)) {})
+         (core/submit! eng (tu/order '(near-probe)) {})
          (await (e/tick-out! eng 1000))
          (is (= [:blocked :continue :blocked false nil] @out))
          (done))))))
@@ -161,7 +161,7 @@
                       (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:leg-s 1 :ways #{:walk :clear-seal}})))
                       (ctx/end c :done nil))}
         eng (update eng :jobs assoc 'leg-probe job 'jobs.movement.go-to (leg-cut-go-to x))]
-    (core/submit! eng (tu/order eng '(leg-probe)) {})
+    (core/submit! eng (tu/order '(leg-probe)) {})
     (await (e/tick-out! eng 1000))
     @firsts))
 
@@ -197,7 +197,7 @@
                            (await (near/go-near! c {:x 10 :y 64 :z 0} 0 {:y-margin 7 :ways #{:walk}}))
                            (ctx/end c :done nil))}
              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to spy 'margin-probe job))]
-         (core/submit! eng (tu/order eng '(margin-probe)) {})
+         (core/submit! eng (tu/order '(margin-probe)) {})
          (await (e/tick-out! eng 1000))
          (is (= [7] (distinct @seen)))
          (done))))))
@@ -211,7 +211,7 @@
              spy (assoc real :round (fn [c] (swap! seen conj (:stay-s (:args c))) ((:round real) c)))
              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to spy
                                          'near-probe (probe (atom nil) (atom nil) {:x 10 :y 64 :z 0} 2 {:stay-s 77})))]
-         (core/submit! eng (tu/order eng '(near-probe)) {})
+         (core/submit! eng (tu/order '(near-probe)) {})
          (await (e/tick-out! eng 1000))
          (is (= #{77} (set @seen)))
          (done))))))

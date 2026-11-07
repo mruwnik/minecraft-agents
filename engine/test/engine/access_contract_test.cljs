@@ -33,7 +33,7 @@
         eng (core/create {:primitives (tu/fake world) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng spec) {})
+    (core/submit! eng (tu/order spec) {})
     (loop [i 0]
       (when (and (< i 40) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 500)
@@ -100,7 +100,7 @@
         eng (core/create {:primitives (tu/fake world) :jobs registry/jobs :dir (tu/tmp-dir) :now #(deref clock)
                           :world (world/of-data {} {} zones)
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng spec) {})
+    (core/submit! eng (tu/order spec) {})
     (await (tu/run-ticks eng clock 3 500))
     (let [of (fn [k] (filterv #(= [:job k] [(:source %) (:kind %)]) @seen))
           out {:reasons (vec (distinct (map #(get-in % [:data :reason]) (of :waiting))))

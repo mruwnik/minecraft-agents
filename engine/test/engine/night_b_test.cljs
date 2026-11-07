@@ -44,7 +44,7 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (st/setup {:time night})]
           (sleep-count! p 1 2)
-          (core/submit! eng (tu/order eng '(jobs.survival.log-out {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.log-out {})) {})
           (swap! clock + 1000)
           (mem/write! (:store eng) :log-out {:ms 30000 :status "ok"} nil)
           (await (tu/run-until-empty eng 3))
@@ -59,7 +59,7 @@
           (sleep-count! p 1 2)
           (mem/write! (:store eng) :log-out {:ms 30000 :status "ok"} nil)
           (swap! clock + 1000)
-          (core/submit! eng (tu/order eng '(jobs.survival.log-out {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.log-out {})) {})
           (await (tu/run-until-empty eng 3))
           (is (= 1 (count (st/calls p "offline")))))))))
 
@@ -69,7 +69,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time 20000})]
           (sleep-count! p 1 2)
-          (core/submit! eng (tu/order eng '(jobs.survival.log-out {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.log-out {})) {})
           (await (tu/run-until-empty eng 3))
           (is (= [175050] (st/ms-of-offline p)) "one stint to morning, no 30 s check-back"))))))
 
@@ -130,7 +130,7 @@
       (st/walls-cheap (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/wall-stack :blocks st/floor})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng (tu/order eng '(jobs.debug.notify {:text "after"})) {})
+          (core/submit! eng (tu/order '(jobs.debug.notify {:text "after"})) {})
           (await (st/tick-n eng 4))
           (is (= {:holder false :notified 1 :places 18}
                  {:holder (some? (core/holder eng)) :notified (st/notified seen) :places (count (st/calls p "place"))})
@@ -163,7 +163,7 @@
              (let [{:keys [eng p seen]} (st/setup {:time night :blocks wide-ground})]
                (st/refuse-cell! p [0 63 0])
                (st/dawn-after! p 3)
-               (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+               (core/submit! eng (tu/order '(jobs.survival.night {})) {})
                (await (core/tick! eng))
                (let [roofs (filterv #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place")))]
                  (is (= {:x 0 :y 63 :z 0} (first roofs)) "the first pit's roof was refused")
@@ -179,7 +179,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks wide-ground})]
           (st/dawn-after! p 3)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (let [log (await (with-child-log #(core/tick! eng)))
                 args (nth (first (filter #(= :shut-in (first %)) log)) 2)]
             (is (number? (:worth args)) "the walks inside (a pit site, a room) are judged against what the next way costs more, not the night's open-gain (0 where the stand cell is as dark by day)")))))))
@@ -192,7 +192,7 @@
                                          :entities [(assoc zombie :pos {:x -7.5 :y 64 :z 0.5})]})]
           (st/refuse-cell! p [0 63 0])
           (st/dawn-after! p 3)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (let [roofs (filterv #(= 63 (:y %)) (mapv st/arg-pos (st/calls p "place")))]
             (is (> (count roofs) 1) "a second pit was roofed")
@@ -219,7 +219,7 @@
                                             :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (with-redefs [risk/status (later-while (atom true))]
-            (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+            (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
             (await (tu/run-until-empty eng 5)))
           (is (= [:risky] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end walk-failed"))))))
@@ -236,7 +236,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks hill-ground :floor [-2 -2 2 2] :inventory st/dirt-stack})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
-          (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
           (await (tu/run-until-empty eng 5))
           (is (empty? (st/calls p "dig")) "no dig through the hill to reach the site: a walk only")
           (is (= [:walk-failed] (distinct (map :reason (filter #(= :stopped (:kind %)) @seen))))))))))
@@ -252,7 +252,7 @@
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (reset! hold true)
           (with-redefs [risk/status (later-while hold)]
-            (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+            (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
             (await (st/tick-n eng 2))
             (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits while go-to says later")
             (reset! hold false))
@@ -284,13 +284,13 @@
                                               :inventory [{:name "dirt" :count 12}] :light {} :light-default [15 15] :sees-all true})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (with-redefs [threats/known-threats (constantly [{:mob "zombie" :pos {:x -11.5 :y 64 :z 0.5} :weight 1e6}])]
-            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.night {})) {})
             (await (tu/run-until-empty eng 20)))
           (is (empty? (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "the pit is shut-in's only way, its toll dearer than the night here, where nothing spawns or walks in")
           (is (empty? (st/emitted seen :shelter.exposed)) "a priced stay is no failure: no warn")
           (is (empty? (st/entries eng :night-exposed)) "nor is the spot marked given up for the night")
           (swap! (fake/state p) assoc :light-default [15 0])
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 30))
           (is (seq (filterv #(< (:x %) -5) (mapv st/arg-pos (st/calls p "place")))) "dark now, and the mob gone: the next firing prices again and digs the pit"))))))
 
@@ -303,7 +303,7 @@
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (reset! hold true)
           (with-redefs [risk/status (later-while hold)]
-            (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+            (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
             (await (st/tick-n eng 2))
             (is (seq (filter #(= :waiting (:kind %)) @seen)) "the walk to the site waits while go-to says later")
             (reset! hold false))
@@ -321,7 +321,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack
                                               :blocks (into {} (for [x (range -6 7) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"]))})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :fluid-adjacent} {:cap 5 :ttl 600000})
-          (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
           (await (tu/run-until-empty eng 5))
           (is (empty? (filter #(= :no-site (:reason %)) @seen)) "a room too small for a site 9 blocks off still has ground 4 blocks from the water")
           (is (seq (st/calls p "place"))))))))
@@ -333,7 +333,7 @@
         (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack
                                          :blocks (into {} (for [x (range -6 7) z (range -6 7) y (range 60 64)]
                                                    [(str x "," y "," z) (if (and (= 63 y) (<= -2 x 2) (<= -1 z 1) (not (and (<= -1 x 1) (zero? z)))) "water" "dirt")]))})]
-          (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
           (await (tu/run-until-empty eng 40))
           (is (seq (st/calls p "place")))
           (is (every? #(let [{:keys [x z]} (st/arg-pos %)] (> (max (js/Math.abs x) (js/Math.abs z)) 2)) (st/calls p "place"))
@@ -350,7 +350,7 @@
                                        :else "stone")]))
               {:keys [eng p seen]} (st/setup {:time night :inventory [{:name "stone_pickaxe" :count 1}] :blocks blocks})]
           (st/teleport! p 2.5 64 0.5)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 40))
           (is (empty? (st/emitted seen :shelter.exposed)) "stone beyond the water takes a pit or a pocket, so the night is not left exposed"))))))
 
@@ -361,7 +361,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks (into {} (for [x (range -1 2) z (range -1 2)] [(str x ",63," z) "dirt"]))
                                               :inventory st/dirt-stack})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
-          (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
           (await (tu/run-until-empty eng 5))
           (is (= [:no-site] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits at the start, it does not run a round to fail")
@@ -397,7 +397,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/ground :inventory [{:name "iron_pickaxe" :count 1}]})
               ]
           (st/refuse-placing! p)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (seq (filterv #(and (= :child_started (:kind %)) (= :log-out (:slot %))) @seen)) "a log-out stint")
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
@@ -426,7 +426,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/floor (tu/box -4 60 -4 4 62 4 "stone")) :inventory st/dirt-stack :floor [-4 -4 4 4]})
               ]
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "Server refused the placement"}))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (re-find #"spawn protection" (:text (first (st/emitted seen :shelter.exposed)))) "the notice too")
           (is (re-find #"spawn protection" (:text (first (st/emitted seen :stopped))))))))))
@@ -436,13 +436,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "dirt" :count 20}] :blocks st/floor})]
-          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:room :walls} :for :night})) {})
           (await (core/tick! eng))
           (is (= 18 (count (st/calls p "place"))) "walled and roofed in one call")
           (is (= [] (:list (core/state eng)))))
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/ground st/floor)})]
           (st/refuse-placing! p)
-          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
           (await (core/tick! eng))
           (is (= 3 (count (st/calls p "dig"))))
           (is (= [:no-way] (mapv :reason (st/emitted seen :stopped))))
@@ -460,7 +460,7 @@
                            (doseq [cell [[0 66 0] [1 64 0] [-1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 65 1] [0 65 -1]]]
                              (swap! (.-state (.-world p)) assoc-in [:blocks cell] "stone"))
                            (contract/ending :condition-failed :declined nil)))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (set! ctx/call call)
           (is (= [] (st/entries eng :night-site)) "no entry outlives the night that wrote it"))))))
@@ -475,7 +475,7 @@
           (is (true? (sh-inside/pocket-open? p)) "a mob on the rim reaches the open fill cell")
           (is (false? (sh-inside/safe-from-night? p)) "so the pit is not safe from the night")
           (is (true? (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))) "and the night trigger fires")
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (empty? (st/emitted seen :completed)) "the night is not done while the fill cell is open"))))))
 
@@ -493,7 +493,7 @@
                                (reset! seen-sites (st/entries eng :shut-in-failed))
                                (.setTime (.-world p) st/noon))
                              (if (= :shut-in k) :continue (await (call c k sym a))))))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (set! ctx/call call)
           (is (= [] @seen-sites) "the yield left no failed site, and the next call resumed the dig-in"))))))
@@ -614,7 +614,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})
               mid (atom nil)]
           (st/refuse-cell! p [0 63 0])
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
           (is (= {:x 5.5 :y 64 :holder false} (-> (:at @mid) (select-keys [:x :y]) (assoc :holder (:holder @mid)))) "shut in the far pair of the 2-deep pocket, safe: not held")
@@ -629,7 +629,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})
               _ (st/refuse-cell! p [0 63 0])
-              _ (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+              _ (core/submit! eng (tu/order '(jobs.survival.night {})) {})
               log (await (with-child-log #(core/tick! eng)))
               args (nth (first (filter #(= :niche (first %)) log)) 2)
               prices (:prices (last (filter #(= :niche (:pick %)) (st/emitted seen :night.answers))))
@@ -643,11 +643,11 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks hillside :floor [-2 -2 8 2] :inventory [{:name "iron_pickaxe" :count 1}]})]
           (st/refuse-cell! p [0 63 0])
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (= {:x 5.5 :y 64} (select-keys (st/pos-of p) [:x :y])) "in the niche")
           (.setTime (.-world p) noon)
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (st/tick-n eng 40))
           (is (< (:x (st/pos-of p)) 4) "out of the hill")
           (is (= ["stone" "stone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "the way in is walled again: no nook open in the hill"))))))
@@ -674,7 +674,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks deep-west-ground :inventory st/dirt-stack
                                               :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
-          (core/submit! eng (tu/order eng '(jobs.survival.dig-pit {:for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.dig-pit {:for :night})) {})
           (await (tu/run-until-empty eng 8))
           (is (= [:pit] (distinct (map :way (filter #(= :completed (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)))

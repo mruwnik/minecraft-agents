@@ -56,7 +56,7 @@
   [x y args & [world]]
   (let [{:keys [eng p seen]} (st/setup (or world stair-home-world))]
     (mem/write! (:store eng) :home {:pos {:x x :y y :z 0}} mem/place-policy)
-    (core/submit! eng (tu/order eng (list 'jobs.survival.go-home args)) {})
+    (core/submit! eng (tu/order (list 'jobs.survival.go-home args)) {})
     (await (tu/run-until-empty eng 30))
     [(js/Math.abs (- x (.-x (.-pos (.self p))))) (some #(when (#{:completed :stopped} (:kind %)) (:reason %)) @seen)
      (some #(when (#{:completed :stopped} (:kind %)) (mapv :job (:next %))) @seen)]))
@@ -92,12 +92,12 @@
               waiting (fn [world know]
                         (let [{:keys [eng]} (st/setup world)]
                           (when know (mem/write! (:store eng) :home {:pos {:x 12 :y 64 :z 0}} mem/place-policy))
-                          (let [id (core/submit! eng (tu/order eng '(jobs.survival.go-home {})) {})]
+                          (let [id (core/submit! eng (tu/order '(jobs.survival.go-home {})) {})]
                             (core/tick! eng)
                             (:reason (:waiting (job-api/summary eng id))))))]
           (is (= :no-home (waiting {:time st/noon} false)))
           (mem/write! (:store eng) :home {:pos {:x 12 :y 64 :z 0}} mem/place-policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.go-home {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.go-home {})) {})
           (await (tu/run-until-empty eng 30))
           (is (< (js/Math.abs (- 12 (.-x (.-pos (.self p))))) 3) "the body stands within 2 of the home"))))))
 
@@ -107,7 +107,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:time st/noon :floor [-30 -30 30 30]})]
           (mem/write! (:store eng) :home {:pos {:x 300 :y 64 :z 0}} mem/place-policy)
-          (do (core/submit! eng (tu/order eng '(jobs.survival.go-home {})) {})
+          (do (core/submit! eng (tu/order '(jobs.survival.go-home {})) {})
             (await (tu/run-until-empty eng 10))
             (is (= [:too-far] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
             (is (= 1 (count (:list (core/state eng)))) "the order waits in the list, once")))))))
@@ -118,7 +118,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (st/setup {:time st/noon :floor [-30 -30 30 30]})]
           (mem/write! (:store eng) :bed {:pos {:x 12 :y 64 :z 0}} mem/place-policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.go-home {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.go-home {})) {})
           (await (tu/run-until-empty eng 30))
           (is (= {:x 12 :y 64 :z 0} (mem/place (mem/view (:store eng)) :home))))))))
 

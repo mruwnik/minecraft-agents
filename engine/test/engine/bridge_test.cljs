@@ -120,7 +120,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (= [5 64 0] (feet p)))
@@ -148,7 +148,7 @@
       (fn ^:async t []
         (let [got (atom [])
               {:keys [eng p] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (await (ticks s eng 4))
           (is (empty? (calls p "place")))
           (is (= {:any-of ["dirt" "cobblestone"] :count 5} (first @got))))))))
@@ -159,7 +159,7 @@
       (fn ^:async t []
         (let [got (atom [])
               {:keys [eng] :as s} (setup {:inventory [{:name "dirt" :count 2}] :jobs {'jobs.items.obtain (obtain-stub got)}})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (await (ticks s eng 12))
           (is (= 3 (:count (first @got)))))))))
 
@@ -169,7 +169,7 @@
       (fn ^:async t []
         (let [got (atom [])
               {:keys [eng p seen] :as s} (setup {:inventory [] :jobs {'jobs.items.obtain (obtain-stub got)}})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5 :ways #{:carried}})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5 :ways #{:carried}})) {})
           (await (ticks s eng 3))
           (is (finished? eng))
           (is (empty? (calls p "place")))
@@ -181,7 +181,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:inventory [{:name "dirt" :count 2}]})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5 :ways #{:carried}})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5 :ways #{:carried}})) {})
           (await (ticks s eng 30))
           (is (finished? eng))
           (is (= [2 64 0] (feet p)))
@@ -197,7 +197,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:zones [{:name "keep-out" :min [4 60 -2] :max [4 70 2]}]})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (await (ticks s eng 5))
           (is (not (finished? eng)) "a listed call waits on its condition")
           (is (empty? (calls p "place")))
@@ -216,7 +216,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:blocks {"1,65,0" "stone"}})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (await (ticks s eng 5))
           (is (finished? eng))
           (is (empty? (calls p "place")))
@@ -246,7 +246,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (let [k (stall-at! p 3 false)]
             (core/tick! eng)
             (await (until-calls k 3)))
@@ -265,7 +265,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (let [k (stall-at! p 3 true)]
             (core/tick! eng)
             (await (until-calls k 3)))
@@ -284,7 +284,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p] :as s} (setup {:blocks {"2,63,1" "stone"}})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (let [k (stall-at! p 3 false)]
             (core/tick! eng)
             (await (until-calls k 3)))
@@ -302,7 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p seen] :as s} (setup {})]
-          (core/submit! eng (tu/order eng (list job {:heading :east :length 5})) {})
+          (core/submit! eng (tu/order (list job {:heading :east :length 5})) {})
           (let [k (stall-at! p 3 false)]
             (core/tick! eng)
             (await (until-calls k 3)))

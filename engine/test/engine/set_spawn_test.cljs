@@ -29,7 +29,7 @@
   (let [s (setup world)]
     (tu/seeing-all (:p s))
     (f (:eng s))
-    (let [id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.survival.set-spawn args)) {})]
+    (let [id (core/submit! (:eng s) (tu/order (list 'jobs.survival.set-spawn args)) {})]
       (await (run-until-empty (:eng s) 6))
       (assoc s :id id))))
 
@@ -39,7 +39,7 @@
   (let [{:keys [eng p]} (setup world)]
     (tu/seeing-all p)
     (when known-bed (know-bed! eng known-bed))
-    (let [id (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {})) {})]
+    (let [id (core/submit! eng (tu/order '(jobs.survival.set-spawn {})) {})]
       (await (run-until-empty eng 6))
       (:reason (:waiting (job-api/summary eng id))))))
 
@@ -152,7 +152,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:time noon})]
           (know-bed! eng bed)
-          (let [id (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {})) {})]
+          (let [id (core/submit! eng (tu/order '(jobs.survival.set-spawn {})) {})]
             (await (run-until-empty eng 6))
             (is (= :no-bed (:reason (:waiting (job-api/summary eng id)))))))))))
 
@@ -176,7 +176,7 @@
     (run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (run-set-spawn bed-world {} #(know-bed! % bed)))]
-          (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.set-spawn {})) {})
           (await (run-until-empty eng 6))
           (is (= 1 (count (calls p "useOn")))))))))
 
@@ -187,7 +187,7 @@
         (let [{:keys [eng p clock]} (await (run-set-spawn bed-world {} #(know-bed! % bed)))]
           (swap! clock + 1000)
           (mem/write! (:store eng) :spawn-reset {} policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.set-spawn {})) {})
           (await (run-until-empty eng 6))
           (is (= 2 (count (calls p "useOn")))))))))
 
@@ -206,7 +206,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup bed-world)]
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
-          (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {:bed {:x 6 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order '(jobs.survival.set-spawn {:bed {:x 6 :y 64 :z 0}})) {})
           (await (run-until-empty eng 6))
           (is (= [:unchanged] (mapv :why (emitted seen :completed))))
           (is (= [] (emitted seen :stopped)))
@@ -233,7 +233,7 @@
           (mem/write! (:store eng) :spawn-set {:pos bed} policy)
           (swap! clock + 1000)
           (mem/write! (:store eng) :spawn-reset {} policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.set-spawn {})) {})
           (await (run-until-empty eng 6))
           (is (= 1 (count (calls p "useOn")))))))))
 
@@ -244,7 +244,7 @@
         (let [{:keys [eng p seen]} (setup bed-world)]
           (know-bed! eng bed)
           (mem/write! (:store eng) :spawn-set {:pos bed} policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.set-spawn {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.set-spawn {})) {})
           (await (run-until-empty eng 6))
           (is (= 0 (count (calls p "useOn"))))
           (is (= [:unchanged] (mapv :why (emitted seen :completed))))

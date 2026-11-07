@@ -105,7 +105,7 @@
 (defn ^:async run-job
   "Submit spec and tick until the list is empty (at most 8 ticks)."
   [eng spec]
-  (core/submit! eng (tu/order eng spec) {})
+  (core/submit! eng (tu/order spec) {})
   (await (run-until-empty eng 8)))
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))

@@ -15,7 +15,7 @@
   "A mine run over log-world with the furnace cooking as the clock runs (10 ticks per 500 ms tick)."
   []
   (let [{:keys [eng clock p] :as s} (mt/start {:world log-world})]
-    (core/submit! eng (tu/order eng (mt/spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 15 :trip true})) {})
+    (core/submit! eng (tu/order (mt/spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 15 :trip true})) {})
     (loop [i 0]
       (when (and (< i 900) (seq (:list (core/state eng))))
         (swap! clock + 500)

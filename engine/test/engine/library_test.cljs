@@ -56,7 +56,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 4)})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:species "oak" :radius 10})) {})
           (await (core/tick! eng))
           (is (= (mapv (fn [y] {:x 3 :y y :z 0}) (range 64 68))
                  (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (calls p "dig")))
@@ -74,7 +74,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks (tree 3 0 "oak" 4)})
               first-index (fn [pred] (first (keep-indexed (fn [i e] (when (pred e) i)) @seen)))]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:species "oak" :radius 10})) {})
           (await (core/tick! eng))
           (let [debt (first-index #(and (= :memory_written (:kind %)) (= :forestry/replant (:memory %))))
                 dig (first-index #(and (= :started (:kind %)) (= "dig" (:name %))
@@ -88,7 +88,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge (tree 8 0 "birch" 3) (tree 2 2 "spruce" 3))})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 10})) {})
           (await (core/tick! eng))
           (is (= [{:x 2 :y 64 :z 2}] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true) (take 1 (calls p "dig"))))
               "nil species picks the nearest tree")
@@ -99,7 +99,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"3,64,0" "oak_log" "3,65,0" "oak_log"}})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 10})) {})
           (await (core/tick! eng))
           (is (nil? (core/tick! eng)) "logs without leaves are not a tree: one look around, then it waits")
           (is (= [] (calls p "dig"))))))))
@@ -114,11 +114,11 @@
       (fn ^:async t []
         (let [pile {"3,64,0" "oak_log" "3,65,0" "oak_log"}
               {:keys [eng p]} (setup {:blocks pile})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 10 :leafless? true})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 10 :leafless? true})) {})
           (await (run-until-empty eng 10))
           (is (seq (calls p "dig")) "the pile is felled with :leafless?"))
         (let [{:keys [eng p]} (setup {:blocks (merge {"3,64,5" "oak_log" "3,65,5" "oak_log"} (tree 8 0 "oak" 3))})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 10 :leafless? true})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 10 :leafless? true})) {})
           (await (run-until-empty eng 10))
           (is (= [8] (distinct (dig-xs p))) "a tree with leaves goes first even when the pile is nearer"))))))
 
@@ -128,7 +128,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 8 0 "oak" 3) (tree 12 0 "oak" 3))
                                            :unreachable ["8,64,0"]})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 20})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 20})) {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [12 12 12] (dig-xs p)) "only the reachable tree is dug")
           (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (debts eng))
@@ -150,7 +150,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge (tree 8 0 "oak" 3) (ring 8 0) (tree 20 0 "oak" 3))})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 30})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 30})) {})
           (await (core/tick! eng))
           (is (= [20 20 20] (dig-xs p)) "the first round walks to the reachable tree and digs its logs")
           (is (every? #(= "arrived" (get-in % [:data :status])) (moved-entries eng)) "no walk toward the walled-off tree"))))))
@@ -160,7 +160,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 8 0 "oak" 3) (ring 8 0) (tree 20 0 "oak" 3) (ring 20 0))})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 30})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 30})) {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "dig")))
@@ -172,7 +172,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 3) :unreachable ["8,64,0"]})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 20})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 20})) {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= [] (calls p "dig")))
@@ -198,7 +198,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks (tree 30 0 "oak" 3)})]
           (await (with-partial-walks nil
                    (fn ^:async b []
-                     (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 40})) {})
+                     (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 40})) {})
                      (await (run-until-empty eng 2))
                      (is (empty? (:unreachable (job-mem eng "j1" []))) "two partials are still progress")
                      (await (run-until-empty eng 10)))))
@@ -212,7 +212,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks (tree 20 0 "oak" 4)})]
           (is (pos? (await (with-partial-walks 2
                              (fn ^:async b []
-                               (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 30})) {})
+                               (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 30})) {})
                                (await (run-until-empty eng 30)))))))
           (is (= 4 (count (calls p "dig"))) "two partials, then the walk arrives: the high logs are dug from the foot of the column")
           (is (not-any? #(= :stopped (:kind %)) @seen)))))))
@@ -232,7 +232,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 8 0 "oak" 3) (tree 12 0 "oak" 3))})]
           (dig-unreachable-at p 8)
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 20})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 20})) {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [8 12 12 12] (dig-xs p)) "one failed dig on the ledge tree, then the next tree is felled")
           (is (= [{:pos {:x 12 :y 64 :z 0} :species "oak"}] (debts eng))
@@ -245,7 +245,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (tree 8 0 "oak" 3)})]
           (dig-unreachable-at p 8)
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 20})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 20})) {})
           (is (pos? (await (run-until-empty eng 10))))
           (is (= [] (:list (core/state eng))))
           (is (= [8] (dig-xs p)) "one dig attempt, no retries")
@@ -260,7 +260,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 6 "oak_log") (item 2 2 "stick") (item 3 4 "oak_sapling") (item 4 40 "oak_log")]})]
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10 :items ["oak_log" "oak_sapling"]})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10 :items ["oak_log" "oak_sapling"]})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "every matching item in one round")
           (is (= [3 1] (mapv #(.-id (.-args %)) (calls p "collect"))))
@@ -272,7 +272,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 2 "stick") (item 2 -1 "dirt")] :unreachable ["2,64,0"]})]
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10})) {})
           (is (<= (await (run-until-empty eng 8)) 4) "an unreachable item does not loop forever")
           (is (= {"dirt" 1} (inv p))))))))
 
@@ -282,7 +282,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 6 "dirt") (item 2 14 "dirt") (item 3 22 "dirt") (item 4 30 "dirt")]})]
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10})) {})
           (await (run-until-empty eng 10))
           (is (= [1] (mapv #(.-id (.-args %)) (calls p "collect")))
               "the next item is in reach of where the body walked to, not of where it started: left alone"))))))
@@ -293,7 +293,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 3 "dirt") (item 2 9 "dirt")]})]
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10})) {})
           (await (run-until-empty eng 10))
           (is (= [1 2] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
 
@@ -380,7 +380,7 @@
         (let [item (fn [id x] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name "dirt" :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 2) (item 2 3)]})]
           (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "gone" :gained #js []}))
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10})) {})
           (is (<= (await (run-until-empty eng 8)) 2) "an item collect calls gone does not loop")
           (is (= [1 2] (sort (mapv #(.-id (.-args %)) (calls p "collect")))) "each item once"))))))
 
@@ -400,7 +400,7 @@
                                        [{} {:at {:x 5 :y 64 :z 5}} {:kind :stopped :reason :need}]
                                        [{:blocks {"5,64,5" "oak_log"} :inventory [{:name "oak_sapling" :count 1}]} {:at {:x 5 :y 64 :z 5}} nil]]]
           (let [{:keys [eng seen]} (setup (update world :blocks #(merge {"5,63,5" "dirt"} %)))]
-            (core/submit! eng (tu/order eng (list 'jobs.forestry.plant-sapling (assoc args :species "oak"))) {})
+            (core/submit! eng (tu/order (list 'jobs.forestry.plant-sapling (assoc args :species "oak"))) {})
             (await (run-until-empty eng 12))
             (is (= (or expected {}) (end-of seen)) (pr-str [world args]))))))))
 
@@ -409,9 +409,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge (tree 3 0 "oak" 2) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:species "oak" :radius 10})) {})
           (await (run-until-empty eng 6))
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.plant-sapling {:species "oak"})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.plant-sapling {:species "oak"})) {})
           (await (run-until-empty eng 4))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
           (is (= [] (debts eng)) "debt cleared"))))))
@@ -423,7 +423,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks {"5,63,5" "dirt" "6,63,5" "dirt"} :inventory [{:name "oak_sapling" :count 2}]})]
           (doseq [x [5 6]]
             (mem/write! (:store eng) :forestry/replant {:pos {:x x :y 64 :z 5} :species "oak"} {:cap 50 :ttl :forever}))
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.plant-sapling {:species "oak"})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.plant-sapling {:species "oak"})) {})
           (await (run-until-empty eng 8))
           (is (= ["oak_sapling" "oak_sapling"] (mapv #(.-name (.blockAt p #js {:x % :y 64 :z 5})) [5 6])))
           (is (= [] (debts eng)) "both debts cleared")
@@ -434,7 +434,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"5,63,5" "dirt"}})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :ways #{:carried}})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :ways #{:carried}})) {})
           (is (nil? (core/tick! eng)) "no sapling in the inventory: not yet")
           (swap! (fake/state p) assoc :inventory [{:name "birch_sapling" :count 1}])
           (await (run-until-empty eng 4))
@@ -451,7 +451,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup chest-world)]
-          (core/submit! eng (tu/order eng (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}})) {})
+          (core/submit! eng (tu/order (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0}})) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "transfer"))) "one stack per round")
           (await (run-until-empty eng 6))
@@ -465,7 +465,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup chest-world)]
-          (core/submit! eng (tu/order eng (list 'jobs.storage.deposit {:items ["bread"] :make-chests? false})) {})
+          (core/submit! eng (tu/order (list 'jobs.storage.deposit {:items ["bread"] :make-chests? false})) {})
           (is (nil? (core/tick! eng)) "no chest known: blocked")
           (know-place! eng :chest {:x 10 :y 64 :z 0})
           (await (run-until-empty eng 6))
@@ -487,7 +487,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 40} {:name "bread" :count 2} {:name "oak_log" :count 30}]
                                       :containers {"10,64,0" []}})]
-          (core/submit! eng (tu/order eng (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :items ["oak_log"] :carry {"oak_log" 16}})) {})
+          (core/submit! eng (tu/order (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :items ["oak_log"] :carry {"oak_log" 16}})) {})
           (await (run-until-empty eng 8))
           (is (= {"oak_log" 16 "bread" 2} (inv p)))
           (is (= [{:name "oak_log" :count 54}]
@@ -533,7 +533,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge (tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.harvest-wood {:species "oak" :radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.harvest-wood {:species "oak" :radius 10})) {})
           (is (= 1 (await (run-until-empty eng 20))) "fells and collects in the one round")
           (is (= [] (:list (core/state eng))))
           (is (= 3 (get (inv p) "oak_log")) "logs collected")
@@ -558,7 +558,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (flight-setup {:floor [-40 -10 10 10]
                                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
-          (core/submit! eng (tu/order eng (list 'test.flight {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.survival.respond.state/still-s 3600}})) {})
+          (core/submit! eng (tu/order (list 'test.flight {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.survival.respond.state/still-s 3600}})) {})
           (await (core/tick! eng))
           (is (not-any? #(= :stopped (:kind %)) @seen) "every flight step arrives: a 6-block walk on flat floor is never cut")
           (let [pos (.-pos (.self p))]
@@ -571,7 +571,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (flight-setup {:floor [-40 -10 10 10]
                                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
-          (core/submit! eng (tu/order eng '(test.flight {:settings {:jobs.lib.danger/hostile-radius 3}})) {})
+          (core/submit! eng (tu/order '(test.flight {:settings {:jobs.lib.danger/hostile-radius 3}})) {})
           (await (core/tick! eng))
           (is (> (.-x (.-pos (.self p))) -1) "a zombie beyond the danger radius starts no flight"))))))
 
@@ -581,7 +581,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (flight-setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
           (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
-          (core/submit! eng (tu/order eng (list 'test.flight {:settings {:jobs.lib.danger/hostile-radius 8}})) {})
+          (core/submit! eng (tu/order (list 'test.flight {:settings {:jobs.lib.danger/hostile-radius 8}})) {})
           (await (core/tick! eng))
           (is (= 4 (count (calls p "attack"))) "unarmed and nothing to seal with: the fist until the zombie dies")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen))))))))
@@ -592,7 +592,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:floor tu/walk-floor :time 14000 :blocks {"6,64,0" "red_bed"}})]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
-          (core/submit! eng (tu/order eng '(jobs.survival.sleep {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.sleep {})) {})
           (await (run-until-empty eng 4))
           (is (= 1 (count (calls p "sleep"))))
           (is (.-isDay (.self p)) "slept through the night"))))))
@@ -603,7 +603,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:time 1000 :blocks {"6,64,0" "red_bed"}})]
           (know-place! eng :bed {:x 6 :y 64 :z 0})
-          (core/submit! eng (tu/order eng '(jobs.survival.sleep {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.sleep {})) {})
           (is (nil? (core/tick! eng))))))))
 
 ;; ----------------------------------------------------------------- triggers
@@ -657,7 +657,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {})]
-          (core/submit! eng (tu/order eng '(jobs.movement.look-around {})) {})
+          (core/submit! eng (tu/order '(jobs.movement.look-around {})) {})
           (await (core/tick! eng))
           (is (= 8 (count (calls p "look"))) "level and down along each of four headings; up only where unseen")
           (is (empty? (calls p "wait")) "it does not pause")
@@ -690,7 +690,7 @@
         (let [{:keys [eng p]} (setup {:blocks (tree 30 0 "oak" 3)})]
           (await (with-partial-walks 1
                    (fn ^:async b []
-                     (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 40})) {})
+                     (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:species "oak" :radius 40})) {})
                      (await (core/tick! eng))
                      (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
                      (is (nil? (:jobs.lib.util/failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
@@ -704,7 +704,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {})]
           (set! (.-entities p) (fn [_] #js [#js {:id 7 :name "item" :kind "item" :item nil :distance 2 :pos #js {:x 2 :y 64 :z 0}}]))
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:items ["oak_log"]})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:items ["oak_log"]})) {})
           (await (core/tick! eng))
           (is (= [] (calls p "collect")) "an unknown stack is not collected when a filter is set")
           (is (= [] (:list (core/state eng))))
@@ -755,7 +755,7 @@
                                             ["Miles" {:ignore-zones? true} [3] []]]]
           (let [{:keys [eng p seen]} (setup {:blocks (merge (tree 3 0 "oak" 3) (tree 8 0 "oak" 3))
                                              :zones [(zone-of owner [2 -1] [4 1])]})]
-            (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree (merge {:radius 10} extra))) {})
+            (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree (merge {:radius 10} extra))) {})
             (await (run-until-empty eng 12))
             (is (= dug (vec (distinct (map #(.-x (.-pos (.-args %))) (calls p "dig"))))) (pr-str [owner extra]))
             (is (= declined (declined-of seen :fell-tree.declined)) (pr-str [owner extra]))))))))
@@ -765,7 +765,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks (tree 3 0 "oak" 3) :zones nil})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 10})) {})
           (await (run-until-empty eng 6))
           (is (empty? (calls p "dig")))
           (is (= [{:reason :no-zones :zones []}] (declined-of seen :fell-tree.declined))))))))
@@ -776,7 +776,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 2) :inventory [{:name "stone_axe" :count 1}]
                                       :zones [(zone-of "Miles" [2 -1] [4 1])]})]
-          (core/submit! eng (tu/order eng (list 'jobs.forestry.fell-tree {:radius 10 :ignore-zones? true})) {})
+          (core/submit! eng (tu/order (list 'jobs.forestry.fell-tree {:radius 10 :ignore-zones? true})) {})
           (await (run-until-empty eng 12))
           (is (= ["stone_axe"] (distinct (map #(.-item (.-args %)) (calls p "equip")))))
           (is (= [[3 64 0] [3 65 0]] (mapv #(:cell (:data %)) (mem/entries (mem/view (:store eng)) :tidy)))))))))
@@ -790,7 +790,7 @@
                                                ["Miles" {:ignore-zones? true} 1 []]]]
           (let [{:keys [eng p seen]} (setup {:blocks {"5,63,5" "dirt"} :inventory [{:name "birch_sapling" :count 1}]
                                              :zones [(zone-of owner [4 4] [6 6])]})]
-            (core/submit! eng (tu/order eng (list 'jobs.forestry.plant-sapling (merge {:at {:x 5 :y 64 :z 5}} extra))) {})
+            (core/submit! eng (tu/order (list 'jobs.forestry.plant-sapling (merge {:at {:x 5 :y 64 :z 5}} extra))) {})
             (await (run-until-empty eng 6))
             (is (= placed (count (calls p "place"))) (pr-str [owner extra]))
             (is (= declined (declined-of seen :plant-sapling.declined)) (pr-str [owner extra]))))))))
@@ -802,7 +802,7 @@
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
               junk (map #(item % 1 "stick") (range 1 41))
               {:keys [eng p]} (setup {:entities (conj (vec junk) (item 100 9 "oak_log"))})]
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10 :items ["oak_log"]})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10 :items ["oak_log"]})) {})
           (await (core/tick! eng))
           (is (= [100] (mapv #(.-id (.-args %)) (calls p "collect")))))))))
 
@@ -812,6 +812,6 @@
       (fn ^:async t []
         (let [item (fn [id x vis] {:id id :name "item" :kind "item" :visible vis :pos {:x x :y 64 :z 0} :item {:name "dirt" :count 1}})
               {:keys [eng p]} (setup {:entities [(item 1 3 false) (item 2 5 true)]})]
-          (core/submit! eng (tu/order eng (list 'jobs.items.collect-drops {:radius 10})) {})
+          (core/submit! eng (tu/order (list 'jobs.items.collect-drops {:radius 10})) {})
           (await (run-until-empty eng 10))
           (is (= [2] (mapv #(.-id (.-args %)) (calls p "collect")))))))))

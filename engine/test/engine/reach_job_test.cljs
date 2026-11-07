@@ -98,7 +98,7 @@
               out (atom :not-done)
               eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.reach {:pos [26 17 16] :range 1}))]
           (dark-but-near p (set thin-mine-dark))
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 2000))
           (is (true? (:arrived @out)) (pr-str @out (feet p) (keep #(when (re-find #"^(go-to|reach)\." (name (:kind %))) [(:kind %) (:at %) (:text %)]) @seen)))
           (is (not-any? #(#{:undercuts-way :unbreakable} (:reason %)) (events-of seen :go-to.escalation-stopped)))
@@ -123,7 +123,7 @@
           (dark-but-near p (set shafts))
           (with-redefs [esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))
                         esc/replans-spent? (constantly true)]
-            (core/submit! eng (tu/order eng '(recording-parent {})) {})
+            (core/submit! eng (tu/order '(recording-parent {})) {})
             (await (tick-out! eng 2000)))
           (is (not= :not-done @out) "the call ended")
           (is (some #(= [:dig-route :replans-spent] ((juxt :step :reason) %)) (events-of seen :go-to.escalation-stopped))
@@ -146,7 +146,7 @@
           ;; the lane and band round the planned stair (seeded-search, :only) come first; the whole search ends at once
           (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)]
                                                         (fn [n] (let [[_ used :as r] (run n)] (when-not (:only (nth args 3)) (swap! nodes + used)) r))))]
-            (core/submit! eng (tu/order eng '(recording-parent {})) {})
+            (core/submit! eng (tu/order '(recording-parent {})) {})
             (await (tick-out! eng 3000)))
           (is (not= :not-done @out) "the call ended")
           (is (empty? (events-of seen :go-to.search-spent)) "the search ended by itself")
@@ -310,7 +310,7 @@
               out (atom :not-done)
               eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [12 67 0] :range 0}))]
           (dark-but-near p (set shafts))
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (tick-out! eng 2000))
           (let [stops (filter #(= :no-floor (:reason %)) (events-of seen :go-to.escalation-stopped))
                 after (fn [stop] (second (drop-while #(not= stop %) (filter #(#{:go-to.escalated :go-to.escalation-stopped} (:kind %)) @seen))))]

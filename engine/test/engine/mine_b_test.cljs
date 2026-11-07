@@ -137,7 +137,7 @@
                            (fn [token args impl] (ew/set-zones! w [(assoc farm-zone :min [5 60 -2] :max [7 70 2])])
                              (impl token args)))
               s (start {:p p :shared w})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 20))
           (is (= 1 (count (moved s))) "one walk, then the zone refuses the dig")
           (is (empty? (calls s "dig")))
@@ -153,7 +153,7 @@
                            (fn [token args impl] (ew/set-area-claims! w [their-claim])
                              (impl token args)))
               s (start {:p p :shared w})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "sand" :count 1 :ways #{:seen}})) {})
           (await (run-ticks s 20))
           (is (empty? (calls s "dig")))
           (is (= [{:reason :claim :claim "c9" :owner "Miles"}]
@@ -278,7 +278,7 @@
       (fn ^:async t []
         (let [s (start {:world (rock-world (assoc corridor "3,65,0" "wall_torch"))})]
           (mem/write! (:store (:eng s)) :tunnel-way {:dim "overworld" :origin [0 64 0] :delta [1 0] :steps 5})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 2})) {})
           (await (run-ticks s 80))
           (is (= [[6 65 0] [6 64 0] [7 65 0] [7 64 0]] (dug-cells s)) "new rock only, no torch")
           (is (= {:level 4} (:cut (done-event s))) "the open corridor walked is not counted as cut")
@@ -290,7 +290,7 @@
       (fn ^:async t []
         (let [s (start {:world (rock-world {"1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,63,0" "air"})})]
           (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[1 62 0]]})
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 1})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 1})) {})
           (await (run-ticks s 80))
           (is (= [[2 63 0] [2 64 0]] (sort-by second (dug-cells s))) "cut at the lower level")
           (is (empty? (filter #(= :no-floor (:reason %)) (tunnel-ends s)))))))))
@@ -521,7 +521,7 @@
               orig (aget p "sensedAt")]
           ;; seen before: a cell two under the tunnel floor is out of sight from the tunnel
           (aset p "sensedAt" (fn [pos] (if (= [-1 62 0] [(.-x pos) (.-y pos) (.-z pos)]) (.blockAt p pos) (orig pos))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :count 30 :tunnel-length 4 :level false})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :count 30 :tunnel-length 4 :level false})) {})
           (await (run-ticks s 250))
           (is (= {:heading "west" :length 4 :stop :tunnel-length} (first (:legs (done-event s)))) (pr-str (:legs (done-event s)))))))))
 
@@ -631,7 +631,7 @@
                                    :bodyHitbox true :exact-eye true :self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge rock {"4,66,0" "lava" "6,64,0" "iron_ore"}) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"}})
               _ (lava-drip! p)
               s (start {:p p})]
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10})) {})
+          (core/submit! (:eng s) (tu/order (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 10})) {})
           (await (run-ticks s 120))
           (is (= 1 (get (inv s) "raw_iron")))
           (is (not= "lava" (block-at s 4 66 0)) "the source over the cut is capped"))))))

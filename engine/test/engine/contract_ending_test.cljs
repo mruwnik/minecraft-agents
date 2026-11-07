@@ -109,7 +109,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)
-              id (core/submit! eng '(parent) {})]
+              id (core/submit! eng (tu/order '(parent)) {})]
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)) "the child's round never ran")
           (is (= {:kind :condition-failed :cause {:reason :no-leaf :text "no-leaf"}} (dissoc (:child-ending @world) :report)))
@@ -126,7 +126,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)]
-          (core/submit! eng '(explains) {})
+          (core/submit! eng (tu/order '(explains)) {})
           (await (core/tick! eng))
           (is (= {:kind :cut-off} (:because (:data (first (job-ev seen :stopped)))))))))))
 
@@ -135,11 +135,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)
-              id (core/submit! eng '(parent {:deadline 9000000}) {})]
+              id (core/submit! eng (tu/order '(parent {:deadline 9000000})) {})]
           (swap! world assoc :leaf-ok true :child-args {:spend {:items {"dirt" 2}}})
           (await (core/tick! eng))
           (is (= {:least 1 :ways #{:craft} :spend {:job-time 45 :items {"dirt" 2}} :use {:tools ["stone_pickaxe"]}
-                  :deadline 9000000}
+                  :deadline 9000000 :worth tu/order-worth}
                  (:leaf-call @world)))
           (is (true? (:leaf-way? @world)))
           (is (= ["stone_pickaxe"] (:leaf-use @world)))
@@ -164,11 +164,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'digger digger} nil [(pick "stone_pickaxe" 12) (pick "iron_pickaxe" 180)])]
-          (core/submit! eng '(digger {:block "stone"}) {})
+          (core/submit! eng (tu/order '(digger {:block "stone"})) {})
           (await (core/tick! eng))
           (is (= ["stone_pickaxe" "iron_pickaxe"] (:dig-use @world)))
           (is (= {:tools ["stone_pickaxe" "iron_pickaxe"]} (:use (:dig-call @world))))
-          (core/submit! eng '(digger {:block "stone" :use {:tools ["iron_pickaxe"]}}) {})
+          (core/submit! eng (tu/order '(digger {:block "stone" :use {:tools ["iron_pickaxe"]}})) {})
           (await (core/tick! eng))
           (is (= ["iron_pickaxe"] (:dig-use @world)) "an explicit :use wins"))))))
 
@@ -187,7 +187,7 @@
           (let [job {:defaults {:use use-defaults}
                      :round (fn [c] (swap! world assoc :call (ctx/frozen-call c)) (ctx/end c :done nil))}
                 {:keys [eng]} (setup {'purposed job} nil inventory)]
-            (core/submit! eng (list 'purposed args) {})
+            (core/submit! eng (tu/order (list 'purposed args)) {})
             (await (core/tick! eng))
             (is (= expected (:use (:call @world))) (pr-str use-defaults))))))))
 
@@ -199,7 +199,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order '(gated)) {})]
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= [id] (:list (core/state eng))) "not started: it waits")
@@ -218,11 +218,11 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)]
           (swap! world assoc :go true :end [:done nil])
-          (core/submit! eng '(gated) {})
+          (core/submit! eng (tu/order '(gated)) {})
           (await (core/tick! eng))
           (is (= {:status :completed :kind :done} (select-keys (:data (first (job-ev seen :completed))) [:status :kind])))
           (swap! world assoc :all-in true)
-          (core/submit! eng '(finished) {})
+          (core/submit! eng (tu/order '(finished)) {})
           (await (core/tick! eng))
           (is (nil? (:ran @world)) "done? said it was done: no round")
           (is (= {:units :items :done 3 :left 0}
@@ -249,14 +249,14 @@
                                          'calls-never {:round (fn ^:async calls-never [c]
                                                                 (swap! world assoc :child-ending (await (ctx/call c :kid never {})))
                                                                 (ctx/end c :nothing-possible :kid))}})]
-          (core/submit! eng '(never) {})
+          (core/submit! eng (tu/order '(never)) {})
           (await (core/tick! eng))
           (is (nil? (:never-ran @world)) "its round never ran")
           (is (empty? (:list (core/state eng))) "removed from the queue, though another condition only skips")
           (is (empty? (job-ev seen :waiting)))
           (is (= {:status :stopped :kind :impossible :cause {:reason :not-smeltable :item "diamond" :text "diamond"} :reason :not-smeltable}
                  (select-keys (:data (first (job-ev seen :stopped))) [:status :kind :cause :reason])))
-          (core/submit! eng '(calls-never) {})
+          (core/submit! eng (tu/order '(calls-never)) {})
           (await (core/tick! eng))
           (is (= {:kind :impossible :cause {:reason :not-smeltable :item "diamond" :text "diamond"}} (dissoc (:child-ending @world) :report))))))))
 
@@ -277,7 +277,7 @@
                                                                 (swap! world assoc :child-ending (await (ctx/call c :kid holds {})))
                                                                 (ctx/end c :done nil))}})]
           (swap! world assoc :holds true)
-          (core/submit! eng '(holds) {})
+          (core/submit! eng (tu/order '(holds)) {})
           (await (core/tick! eng))
           (is (empty? (job-ev seen :waiting)) "never waits on the failing condition")
           (is (nil? (:holds-ran @world)) "no round")
@@ -286,11 +286,11 @@
           (is (= {:units :items :done 0 :left 0}
                  (select-keys (:report (:data (first (job-ev seen :completed)))) [:units :done :left])))
           (is (= {:job-time 20} (:spend (:asked-call @world))) "done? reads the call it would start with")
-          (core/submit! eng '(calls-holds) {})
+          (core/submit! eng (tu/order '(calls-holds)) {})
           (await (core/tick! eng))
           (is (= {:kind :done :cause :already} (select-keys (:child-ending @world) [:kind :cause])) "a child too")
           (swap! world assoc :holds false)
-          (core/submit! eng '(holds) {})
+          (core/submit! eng (tu/order '(holds)) {})
           (await (core/tick! eng))
           (is (= [:not-needed] (mapv #(:reason (:data %)) (job-ev seen :waiting))) "a goal not held waits as before"))))))
 
@@ -306,7 +306,7 @@
         (let [{:keys [eng seen]} (setup {'bad (held-goal (contract/never :bad-args "count 0"))
                                          'other (held-goal (contract/never :not-smeltable "no"))
                                          'bare {:round (fn [c] (ctx/end c :done nil))}})
-              ended (fn ^:async e [spec] (core/submit! eng spec {}) (await (core/tick! eng))
+              ended (fn ^:async e [spec] (core/submit! eng (tu/order spec) {}) (await (core/tick! eng))
                       (select-keys (:data (last (filter #(#{:completed :stopped} (:kind %)) @seen))) [:kind :cause]))]
           (is (= {:kind :impossible :cause {:reason :bad-args :text "count 0"}} (await (ended '(bad)))))
           (is (= {:kind :done :cause :already} (await (ended '(other)))))
@@ -322,7 +322,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'done-throws done-throws})
-              id (core/submit! eng '(done-throws) {})]
+              id (core/submit! eng (tu/order '(done-throws)) {})]
           (await (core/tick! eng))
           (is (= [id] (:list (core/state eng))) "a failing condition still waits")
           (is (= [:not-yet] (mapv #(:reason (:data %)) (job-ev seen :waiting))))
@@ -381,7 +381,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'looks looks})
-              id (core/submit! eng '(looks) {})]
+              id (core/submit! eng (tu/order '(looks)) {})]
           (await (core/tick! eng))
           (let [n (looks-at p)]
             (is (pos? n) "it looked")
@@ -407,7 +407,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'looks-blind looks-blind})]
-          (core/submit! eng '(looks-blind) {})
+          (core/submit! eng (tu/order '(looks-blind)) {})
           (await (core/tick! eng))
           (let [n (looks-at p)]
             (is (pos? n) "it looked once")
@@ -421,7 +421,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup {'looks-blind looks-blind})]
-          (core/submit! eng '(looks-blind) {})
+          (core/submit! eng (tu/order '(looks-blind)) {})
           (await (core/tick! eng))
           (let [n (looks-at p)]
             (swap! clock + ending/look-ttl-ms 1)
@@ -442,7 +442,7 @@
           (let [{:keys [eng p]} (setup {'looks-at-cell looks-at-cell})
                 settle (^:async fn [] (dotimes [_ 3] (await (core/tick! eng))) (looks-at p))]
             (swap! world assoc :look-cell [0 70 0])
-            (core/submit! eng '(looks-at-cell) {})
+            (core/submit! eng (tu/order '(looks-at-cell)) {})
             (let [n (await (settle))]
               (is (pos? n) "it looked once")
               (is (= n (await (settle))) "then waits")
@@ -462,7 +462,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'looks-at-cell looks-at-cell})]
           (swap! world assoc :look-cell [0 70 0])
-          (let [id (core/submit! eng '(looks-at-cell) {})]
+          (let [id (core/submit! eng (tu/order '(looks-at-cell)) {})]
             (await (core/tick! eng))
             (is (seq @(:looks eng)) "marked after the look round")
             (core/cancel! eng id)
@@ -485,7 +485,7 @@
         (let [{:keys [eng seen p]} (setup {'looks-up looks-up})
               sensed-at (.-sensedAt p)]
           (aset p "sensedAt" (fn [pos] (if (= 70 (.-y pos)) #js {:unknown true} (sensed-at pos))))
-          (core/submit! eng '(looks-up) {})
+          (core/submit! eng (tu/order '(looks-up)) {})
           (await (core/tick! eng))
           (is (= 1 (:looks-rounds @world)) "the look at the named cell made the check ok at once")
           (is (= 1 (count (job-ev seen :completed)))))))))
@@ -496,7 +496,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'looks looks})]
           (swap! world assoc :tree-after-look true)
-          (core/submit! eng '(looks) {})
+          (core/submit! eng (tu/order '(looks)) {})
           (await (core/tick! eng))
           (is (pos? (looks-at p)))
           (is (= 1 (:looks-rounds @world)))
@@ -507,7 +507,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order '(gated)) {})]
           (core/cancel! eng id)
           (is (= {:kind :cut-off :cause :agent} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause]))))))))
 
@@ -516,7 +516,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup jobs)
-              id (core/submit! eng '(abandons) {})]
+              id (core/submit! eng (tu/order '(abandons)) {})]
           (swap! world assoc :leaf-ok true)
           (await (core/tick! eng))
           (is (= [[:continue nil] [:cut-off {:kind :cut-off :cause :ended}]]
@@ -640,7 +640,7 @@
                                                             (ctx/update-mem! c update :children dissoc :leaf)
                                                             (await (ctx/call c :leaf leaf {})))
                                                           :continue)}})
-              id (core/submit! eng '(drops) {})]
+              id (core/submit! eng (tu/order '(drops)) {})]
           (swap! world assoc :leaf-ok true)
           (await (core/tick! eng))
           (is (empty? (cut-offs seen)))

@@ -237,7 +237,7 @@
 (defn ^:async one-run!
   "Submit breathe with args and run exactly one tick: one round is the whole attempt."
   [eng args]
-  (core/submit! eng (tu/order eng (list breathe args)) {})
+  (core/submit! eng (tu/order (list breathe args)) {})
   (await (core/tick! eng)))
 
 (deftest drowning-run-swims-up-and-stops-no-land-in-range-without-holding
@@ -434,7 +434,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {})
               round (:round (get registry/jobs breathe))]
-          (core/submit! eng (tu/order eng (list breathe defaults)) {})
+          (core/submit! eng (tu/order (list breathe defaults)) {})
           (await (core/tick! eng))
           (is (= :done (:kind (await (round {:primitives p :args defaults})))))
           (is (zero? (count (.. p -world -calls)))))))))
@@ -678,7 +678,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:pos {:x 0 :y 64.9375 :z 0}}
                                       :blocks {"0,64,0" "farmland" "0,65,0" "wheat" "0,66,0" "wheat"}})]
-          (core/submit! eng (tu/order eng (list breathe defaults)) {})
+          (core/submit! eng (tu/order (list breathe defaults)) {})
           (await (core/tick! eng))
           (is (= [] (call-names p)) "no dig, no move")
           (is (= "wheat" (.-name (.blockAt p (tu/pos 0 65 0)))) "the crop is still there"))))))

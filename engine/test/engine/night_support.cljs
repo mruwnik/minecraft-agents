@@ -96,7 +96,7 @@
         parent (tu/recording-parent 'jobs.survival.log-out args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'out-parent parent))]
     (sleep-count! p 1 2)
-    (core/submit! eng (tu/order eng '(out-parent)) {})
+    (core/submit! eng (tu/order '(out-parent)) {})
     (await (core/tick! eng))
     @out))
 
@@ -125,7 +125,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup (merge {:time night :inventory st/dirt-stack} world))]
           (mem/write! (:store eng) :bed-open {:pos {:x 6 :y 64 :z 0}} sh-beds/bed-open-policy)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 40))
           (f {:eng eng :p p :seen seen}))))))
 
@@ -175,7 +175,7 @@
     (swap! (fake/state raw-p) assoc :yaw 0)
     (st/dawn-after! p st/default-dawn)
     (when home? (know-home! eng pos))
-    (core/submit! eng (tu/order eng (list 'jobs.survival.night args)) {})
+    (core/submit! eng (tu/order (list 'jobs.survival.night args)) {})
     (js/Promise.resolve {:eng eng :p p :seen seen :look-round! #(doseq [yaw [0 90 180 270]]
                                                                 (swap! (fake/state raw-p) assoc :yaw yaw)
                                                                 (perception/pass! per))}))))
@@ -235,7 +235,7 @@
         log (await (with-child-log #(tu/run-until-empty eng 60)
                      (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
                                      {:kind :nothing-possible :data {}}))))]
-    (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+    (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
     (await (tu/run-until-empty eng 60))
     {:p p :log log}))
 
@@ -320,7 +320,7 @@
                    #js {:status "no-support"}
                    (await (impl token a)))))
     (st/dawn-after! p 12)
-    (core/submit! (:eng r) (tu/order (:eng r) (list 'jobs.survival.night args)) {})
+    (core/submit! (:eng r) (tu/order (list 'jobs.survival.night args)) {})
     r)))
 
 ;; ------------------------------------------------------------------ starving while held

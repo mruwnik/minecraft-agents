@@ -122,7 +122,7 @@
     (some->> (:placed world)
              (map (fn [[x y z :as cell]] {:cell cell :item (get (:blocks world) (str x "," y "," z)) :before "air" :job "j0" :purpose :shelter :state :placed}))
              (ledger/write! (:store eng)))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i (:ticks world 1000)) (seq (:list (core/state eng))))
         (await (core/tick! eng))

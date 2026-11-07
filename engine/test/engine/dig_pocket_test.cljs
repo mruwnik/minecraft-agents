@@ -117,7 +117,7 @@
      {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async run-job! [{:keys [eng]} args]
-  (core/submit! eng (tu/order eng (list 'jobs.survival.dig-pocket args)) {})
+  (core/submit! eng (tu/order (list 'jobs.survival.dig-pocket args)) {})
   (loop [i 0]
     (when (and (< i 300) (seq (:list (core/state eng))))
       (await (core/tick! eng))
@@ -219,7 +219,7 @@
           (is (= "stone" (block-at p [4 64 0]))))))))
 
 (defn ^:async run-wall! [s args]
-  (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.survival.wall-in args)) {})
+  (core/submit! (:eng s) (tu/order (list 'jobs.survival.wall-in args)) {})
   (loop [i 0]
     (when (and (< i 30) (seq (:list (core/state (:eng s)))))
       (await (core/tick! (:eng s)))
@@ -288,7 +288,7 @@
         (let [{:keys [eng seen] :as s} (setup [] {:inventory []})
               orig ctx/call
               n (atom 0)]
-          (core/submit! eng (tu/order eng (list 'jobs.survival.dig-pocket {:ways #{:carried :chest :craft :gather}})) {})
+          (core/submit! eng (tu/order (list 'jobs.survival.dig-pocket {:ways #{:carried :chest :craft :gather}})) {})
           (set! ctx/call (fn [c slot job args]
                            (if (= :need slot)
                              (do (swap! n inc) (js/Promise.resolve :continue))

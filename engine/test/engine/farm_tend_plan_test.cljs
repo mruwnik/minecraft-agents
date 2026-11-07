@@ -58,7 +58,7 @@
   ([args spec plans n] (run args spec plans [] n))
   ([args spec plans zones n]
    (let [s (setup spec plans zones)]
-     (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
+     (core/submit! (:eng s) (tu/order (list job args)) {})
      (await (tu/run-ticks (:eng s) (:clock s) n 700))
      s)))
 
@@ -79,7 +79,7 @@
   ([args spec plans] (untouched? args spec plans []))
   ([args spec plans zones]
    (let [{:keys [eng p]} (setup spec plans zones)]
-     (core/submit! eng (tu/order eng (list job args)) {})
+     (core/submit! eng (tu/order (list job args)) {})
      (core/tick! eng)
      (empty? (.-calls (.-world p))))))
 
@@ -122,7 +122,7 @@
   "Submit (repeat (tend args)) over the world, tick n times 700 ms apart; the setup map."
   [args spec plans n]
   (let [s (setup spec plans [])]
-    (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (list job args))) {})
+    (core/submit! (:eng s) (tu/order (list 'repeat (list job args))) {})
     (dotimes [_ n]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
@@ -286,7 +286,7 @@
                                  {:blocks {(k 2 64 2) "oak_log" (k 3 64 2) "chest"}}
                                  all-seed)
                        {"mix" (plan-of)} [])]
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.maintain {:area {:plan "mix"} :irrigate false})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.maintain {:area {:plan "mix"} :irrigate false})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 80 700))
           (is (contains? (dug s) [2 64 2]))
           (is (not (contains? (dug s) [3 64 2])))
@@ -406,7 +406,7 @@
                          (reset! deleted true)
                          (world/set-data! (:w s) {} {}))
                        (await (impl token args))))
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:area {:plan "mix"}})) {})
+          (core/submit! (:eng s) (tu/order (list job {:area {:plan "mix"}})) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (let [before (count (calls s "place"))]
@@ -458,7 +458,7 @@
         out (atom :not-done)
         parent (tu/recording-parent job-ns args out)
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (tu/run-ticks eng (:clock s) n 700))
     [@out s]))
 
@@ -479,7 +479,7 @@
               s (setup (world-of (ground "farmland" [[8 0]]) {:inventory [(item "wheat_seeds" 3)]}) {"mix" plan} [])
               late (foreign-plan [[8 64 0]])]
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {}) (impl token args)))
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.plant {:area {:plan "mix"}})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.plant {:area {:plan "mix"}})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "place")))
@@ -499,7 +499,7 @@
               s (setup (world-of (ground "dirt" [[8 0]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" plan} [])
               zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
-          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.till {:area {:min {:x 8 :y 63 :z 0} :max {:x 8 :y 63 :z 0}} :for-plan "mix"})) {})
+          (core/submit! (:eng s) (tu/order (list 'jobs.farm.till {:area {:min {:x 8 :y 63 :z 0} :max {:x 8 :y 63 :z 0}} :for-plan "mix"})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
@@ -507,7 +507,7 @@
 
 (deftest till-for-a-plan-declines-without-a-zone-list
   (let [{:keys [eng p seen]} (setup (world-of (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" (plan-of)} nil)]
-    (core/submit! eng (tu/order eng (list 'jobs.farm.till {:area {:min {:x 2 :y 63 :z 2} :max {:x 2 :y 63 :z 2}} :for-plan "mix"})) {})
+    (core/submit! eng (tu/order (list 'jobs.farm.till {:area {:min {:x 2 :y 63 :z 2} :max {:x 2 :y 63 :z 2}} :for-plan "mix"})) {})
     (core/tick! eng)
     (is (empty? (.-calls (.-world p))))
     (is (empty? (filter #(= :till.skipped (:kind %)) @seen)) "the round never ran")))
@@ -524,7 +524,7 @@
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {})
                                                        (world/set-zones! (:w s) [ground-zone])
                                                        (impl token args)))
-          (core/submit! (:eng s) (tu/order (:eng s) (list job {:area {:plan "mix"}})) {})
+          (core/submit! (:eng s) (tu/order (list job {:area {:plan "mix"}})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 30 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))

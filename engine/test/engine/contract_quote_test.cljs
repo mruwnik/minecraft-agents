@@ -57,7 +57,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'kid kid 'asker (asking #(ctx/quote % 'kid {:pos [1 2 3] :spend {:job-time 500}}))})]
-          (core/submit! eng (tu/order eng '(asker)) {})
+          (core/submit! eng (tu/order '(asker)) {})
           (await (core/tick! eng))
           (is (= {:uses {:job-time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}} (:got @world)))
           (is (= {:pos [1 2 3] :left {:spend {:job-time 100} :floor {:health 5}} :a true :b false :mem {}} (:seen @world))
@@ -82,7 +82,7 @@
                                                                       o (await (ctx/quote c 'old {}))]
                                                                   [p o])))})]
                      (doseq [s [4 8]] (mem/write! (:store eng) :job-report {:job 'plain :report {:uses {:job-time s}}}))
-                     (core/submit! eng (tu/order eng '(asker)) {})
+                     (core/submit! eng (tu/order '(asker)) {})
                      (await (core/tick! eng))
                      (is (= [{:uses {:job-time [0 6 ##Inf]}} {:uses {:job-time [0 7 ##Inf]}}] (:got @world)))))))))))
 
@@ -106,7 +106,7 @@
                                     'asker (asking (fn ^:async both [c]
                                                      [(await ((turned-during #(ctx/quote % 'plain {})) c))
                                                       (await ((turned-during #(ctx/call % :kid 'plain {})) c))]))})]
-          (core/submit! eng (tu/order eng '(asker)) {})
+          (core/submit! eng (tu/order '(asker)) {})
           (await (core/tick! eng))
           (is (= [true true] (:got @world))))))))
 
@@ -131,7 +131,7 @@
         (let [{:keys [eng]} (setup {'slow slow-quote 'outer outer
                                     'asker (asking #(ctx/quote % 'outer {} (+ @clock 1000)))})
               inf {:uses {:job-time [##Inf ##Inf ##Inf]}}]
-          (core/submit! eng (tu/order eng '(asker)) {})
+          (core/submit! eng (tu/order '(asker)) {})
           (await (core/tick! eng))
           (is (= 1001000 (:handed @world)) "handed down")
           (is (= {:uses {:job-time [1 1 1]}} (:inner @world)) "ran past it, answered")
@@ -160,7 +160,7 @@
                                                      (try (await (ctx/quote c 'cut-in-quote {}))
                                                           (catch :default e (swap! world assoc :second (.-code e))))
                                                      :continue)}})]
-          (core/submit! eng (tu/order eng '(asker)) {})
+          (core/submit! eng (tu/order '(asker)) {})
           (await (core/tick! eng))
           (is (= [true false] (:alive @world)) "the quote's search loops stop once the round that asked is cut")
           (is (= "cut" (:second @world)) "the cut round's next quote throws the cut, as an act would"))))))
@@ -182,7 +182,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'ping ping})]
-          (core/submit! eng (tu/order eng '(ping {:pos 1})) {})
+          (core/submit! eng (tu/order '(ping {:pos 1})) {})
           (await (core/tick! eng))
           (let [{:keys [same other inner]} @world]
             (is (= :duplicate-call (contract/cause-key same)) "the caller's frame")
@@ -205,7 +205,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'idle-field idle-field})]
-          (core/submit! eng (tu/order eng '(idle-field)) {})
+          (core/submit! eng (tu/order '(idle-field)) {})
           (await (core/tick! eng))
           (is (:ran @world))
           (is (nil? (:quotes @world))))))))
@@ -218,7 +218,7 @@
                                      [:all nil {:kind :nothing-possible :cause {:reason :least :least :all :most 2}}]
                                      [2 true nil]]]
           (let [{:keys [eng seen]} (setup {'field field})]
-            (core/submit! eng (tu/order eng (list 'field {:least least})) {})
+            (core/submit! eng (tu/order (list 'field {:least least})) {})
             (await (core/tick! eng))
             (is (= ran? (:ran @world)) (str "least " least))
             (is (= ending (stopped seen)) (str "least " least))))))))
@@ -236,7 +236,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'looking-field looking-field})]
-          (core/submit! eng (tu/order eng '(looking-field {:least :all})) {})
+          (core/submit! eng (tu/order '(looking-field {:least :all})) {})
           (await (core/tick! eng))
           (is (:ran @world) "left 4 after the look, not the 9 asked before it"))))))
 
@@ -269,7 +269,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'chooser chooser 'failer failer})]
-          (core/submit! eng (tu/order eng '(chooser)) {})
+          (core/submit! eng (tu/order '(chooser)) {})
           (await (core/tick! eng))
           (let [[w1 w2 w3 w4] (:ways @world)]
             (is (= {:way :c :dropped {:a :not-allowed :b slow}} w1))
@@ -295,6 +295,6 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'booker booker 'winner winner 'failer failer})]
-          (core/submit! eng (tu/order eng '(booker)) {})
+          (core/submit! eng (tu/order '(booker)) {})
           (await (core/tick! eng))
           (is (= [:c :c] (map :way (:ways @world)))))))))

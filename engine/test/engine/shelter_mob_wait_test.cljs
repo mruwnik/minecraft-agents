@@ -31,7 +31,7 @@
 (defn ^:async run-timed!
   "Submit the job; the clock moves 500 ms a tick."
   [{:keys [eng clock]} job]
-  (core/submit! eng (tu/order eng job) {})
+  (core/submit! eng (tu/order job) {})
   (loop [i 0]
     (when (and (< i 600) (seq (:list (core/state eng))))
       (swap! clock + 500)
@@ -122,7 +122,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (retreat-setup)]
           (refuse-with-mob! p 4)
-          (core/submit! eng (tu/order eng '(test.flight {})) {})
+          (core/submit! eng (tu/order '(test.flight {})) {})
           (loop [i 0] (when (and (< i 8) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 64 0)))) "sealed in despite the sheep")
           (is (not-any? #(= :retreat_blocked (:kind %)) @seen)))))))
@@ -133,7 +133,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (retreat-setup)]
           (refuse-with-mob! p 1000000)
-          (core/submit! eng (tu/order eng '(test.flight {})) {})
+          (core/submit! eng (tu/order '(test.flight {})) {})
           (loop [i 0] (when (and (< i 8) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (not= "cobblestone" (.-name (.blockAt p (tu/pos 1 64 0)))) "never sealed")
           (is (< 4 (placed p) 60) "waited several tries, then gave up the seal"))))))

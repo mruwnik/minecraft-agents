@@ -256,7 +256,7 @@
         eng (core/create {:primitives (capped-primitives raw calls capped (if (contains? long-running job) long-running-cap call-cap)) :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})
         base {:job job :seed seed :args args :ground ground}
-        id (try (core/submit! eng (tu/order eng (list job args)) {}) (catch :default e e))]
+        id (try (core/submit! eng (tu/order (list job args)) {}) (catch :default e e))]
     (if (instance? js/Error id)
       (assoc base :outcome :refused :defects (when (str/blank? (ex-message id)) [[:blank-refusal ""]]))
       (let [thrown (atom nil)

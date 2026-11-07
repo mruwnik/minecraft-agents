@@ -132,7 +132,7 @@
                 now (tu/act-clock clock p 20)
                 eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir) :now now :world (world/of-data {} {} [])
                                   :events (events/make {:sinks [(fn [_])] :now now})})]
-            (core/submit! eng (tu/order eng (list 'jobs.combat.hunt args)) {})
+            (core/submit! eng (tu/order (list 'jobs.combat.hunt args)) {})
             (await (tu/run-ticks eng clock 4 700))
             (core/shutdown! eng)
             (is (= want (some-> (first (h/calls p "equip")) .-args .-item)) (pr-str args))))))))

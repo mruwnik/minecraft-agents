@@ -10,7 +10,7 @@
   (let [[seen sink] (tu/capture-sink)
         eng (core/create {:primitives (tu/seeing-all (tu/fake {})) :jobs registry/jobs :dir (tu/tmp-dir)
                           :events (events/make {:sinks [sink]})})]
-    (core/submit! eng (tu/order eng spec) {})
+    (core/submit! eng (tu/order spec) {})
     (await (core/tick! eng))
     (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
       (core/shutdown! eng)

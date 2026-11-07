@@ -49,7 +49,7 @@
                                [nil []]
                                [[] []]]]
           (let [{:keys [eng p seen]} (setup {:blocks {"0,65,0" "stone" "0,66,0" "stone"}} zones)]
-            (core/submit! eng (tu/order eng '(jobs.survival.breathe {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.breathe {})) {})
             (await (core/tick! eng))
             (is (= [{:x 0 :y 65 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (calls p "dig"))) (pr-str zones))
             (is (= warns (mapv :zones (trespass seen :breathe.trespass-last-resort))) (pr-str zones))))))))
@@ -75,7 +75,7 @@
                             ["fake" []]]]
           (let [{:keys [eng p seen]} (setup-with-plan {:blocks {"0,65,0" "stone" "0,66,0" "stone"}}
                                                        (cond-> roof-plan by (shape/with-author by)))]
-            (core/submit! eng (tu/order eng '(jobs.survival.breathe {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.breathe {})) {})
             (await (core/tick! eng))
             (is (= 2 (count (calls p "dig"))) (pr-str by))
             (is (= warns (mapv :plans (trespass seen :breathe.trespass-last-resort))) (pr-str by))))))))
@@ -91,7 +91,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (assoc burning-with-bucket :blocks (merge st/floor pool)) [feet-zone])]
-          (core/submit! eng (tu/order eng '(jobs.survival.extinguish {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
           (await (run-until-empty eng 4))
           (is (= [] (calls p "place")) "no bucket poured over another's cell")
           (is (= [{:x 4 :y 64 :z 0}] (mapv arg-pos (calls p "moveTo"))))
@@ -105,7 +105,7 @@
                                [[(zone "FAKE" [0 64 0] [0 64 0])] []]
                                [nil []]]]
           (let [{:keys [eng p seen]} (setup (assoc burning-with-bucket :blocks st/floor) zones)]
-            (core/submit! eng (tu/order eng '(jobs.survival.extinguish {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.extinguish {})) {})
             (await (core/tick! eng))
             (is (= [{:x 0 :y 64 :z 0} {:x 0 :y 64 :z 0}] (mapv arg-pos (calls p "place"))) (str (pr-str zones) " poured, then scooped back"))
             (is (= warns (mapv :zones (trespass seen :extinguish.trespass-last-resort))) (pr-str zones))))))))
@@ -121,7 +121,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])]
-          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
           (await (run-until-empty eng 10))
           (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))) "the pit, not the walls")
           (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))))
@@ -132,7 +132,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup pit-world [(zone "Miles" [0 60 0] [0 63 0])])]
-          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:pit} :trespass? false})) {})
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:pit} :trespass? false})) {})
           (await (run-until-empty eng 10))
           (is (= [] (calls p "dig")))
           (is (= [] (trespass seen :shut-in.trespass-last-resort)) "refusing the zone is no trespass"))))))
@@ -145,7 +145,7 @@
                                       [[(whole-zone "Fake")] 18 []]
                                       [nil 18 []]]]
           (let [{:keys [eng p seen]} (setup night-world zones)]
-            (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
+            (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
             (await (run-until-empty eng 10))
             (is (= places (count (calls p "place"))) (pr-str zones))
             (is (= warns (mapv :zones (trespass seen :shut-in.trespass-last-resort))) (pr-str zones)))))))))
@@ -156,7 +156,7 @@
       (st/walls-cheap (fn ^:async t []
         (let [{:keys [eng p seen]} (setup night-world [(whole-zone "Miles")])]
           (st/dawn-after! p 2)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (run-until-empty eng 12))
           (is (= 18 (count (calls p "place"))))
           (is (= 1 (count (trespass seen :shut-in.trespass-last-resort)))))))))
@@ -171,7 +171,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time st/night :floor [-14 -14 14 14] :blocks wide-ground} [(whole-zone "Miles")])]
           (st/dawn-after! p 3)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (run-until-empty eng 40))
           (is (every? #(or (< 3 (js/Math.abs (:x %))) (< 3 (js/Math.abs (:z %)))) (mapv arg-pos (calls p "dig"))) "every cell dug lies outside the zone")
           (is (seq (calls p "dig")) "it dug in")
@@ -196,7 +196,7 @@
             (let [{:keys [eng p seen]} (if plan
                                          (setup-with-plan world (cond-> plan (nil? (:metadata plan)) (shape/with-author "Fake")))
                                          (setup world zones))]
-              (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
+              (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
               (await (run-until-empty eng 10))
               (is (= digs? (boolean (seq (dug p)))) label)
               (is (= (not digs?) (boolean (seq (filterv #(and (= :stopped (:kind %)) (= :no-way (:reason %))) @seen)))) label))))))))
@@ -216,7 +216,7 @@
                                                      [one-carrot foreign {} [] []]
                                                      [one-carrot nil {} [{:x 2 :y 64 :z 0}] []]]]
             (let [{:keys [eng p seen]} (setup (assoc world :self {:food 2}) zones)]
-              (core/submit! eng (tu/order eng (list 'jobs.survival.get-food (assoc args :carry 0))) {})
+              (core/submit! eng (tu/order (list 'jobs.survival.get-food (assoc args :carry 0))) {})
               (await (run-until-empty eng 6))
               (is (= expected (take (count expected) (dug p))) (pr-str [zones args]))
               (is (= (count expected) (count (dug p))) (pr-str [zones args]))
@@ -232,7 +232,7 @@
                                    [{:self {:food 3}} [{:x 2 :y 64 :z 0}]]
                                    [{:self {:food 3} :inventory [{:name "bread" :count 2}]} []]]]
             (let [{:keys [eng p seen]} (setup (merge one-carrot self) foreign)]
-              (core/submit! eng (tu/order eng '(jobs.survival.get-food {:ignore-zones? true})) {})
+              (core/submit! eng (tu/order '(jobs.survival.get-food {:ignore-zones? true})) {})
               (await (run-until-empty eng 6))
               (is (= expected (take (count expected) (dug p))) (pr-str self))
               (is (= (count expected) (count (trespass seen :get-food.trespass-last-resort))) (pr-str self)))))))))
@@ -243,7 +243,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (assoc (update two-carrots :blocks dissoc "3,64,0") :self {:food 3})
                                           [(zone "Miles" [2 64 0] [2 64 0])])]
-          (core/submit! eng (tu/order eng '(jobs.survival.get-food {:explore false})) {})
+          (core/submit! eng (tu/order '(jobs.survival.get-food {:explore false})) {})
           (await (run-until-empty eng 6))
           (is (= [] (dug p)))
           (is (some #(and (= :stopped (:kind %)) (re-find #"left alone food in another's area.*crop at .*vault" (str (:text %)))) @seen)
@@ -259,20 +259,20 @@
               pour (setup (assoc burning-with-bucket :blocks (merge st/floor pool)) [feet-zone])
               dig (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])
               unwedge (setup {:blocks (merge wt/boxed {"0,64,0" "sand"})} [(whole-zone "Miles")])]
-          (core/submit! (:eng breathe) (tu/order (:eng breathe) '(jobs.survival.breathe {:ignore-zones? true})) {})
+          (core/submit! (:eng breathe) (tu/order '(jobs.survival.breathe {:ignore-zones? true})) {})
           (await (core/tick! (:eng breathe)))
           (is (= 2 (count (calls (:p breathe) "dig"))) "breathe digs out")
           (is (= [] (trespass (:seen breathe) :breathe.trespass-last-resort)))
-          (core/submit! (:eng pour) (tu/order (:eng pour) '(jobs.survival.extinguish {:ignore-zones? true})) {})
+          (core/submit! (:eng pour) (tu/order '(jobs.survival.extinguish {:ignore-zones? true})) {})
           (await (run-until-empty (:eng pour) 4))
           (is (= [{:x 0 :y 64 :z 0}] (take 1 (mapv arg-pos (calls (:p pour) "place")))) "pours at once, no walk to the pool")
           (is (= [] (calls (:p pour) "moveTo")))
-          (core/submit! (:eng dig) (tu/order (:eng dig) '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :ignore-zones? true})) {})
+          (core/submit! (:eng dig) (tu/order '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :ignore-zones? true})) {})
           (await (run-until-empty (:eng dig) 10))
           (is (< 1 (count (calls (:p dig) "place"))) "the walls are placed, not the pit")
           (is (= [] (filterv #(< (:y %) 64) (mapv arg-pos (calls (:p dig) "dig")))) "no pit")
           (is (= [] (trespass (:seen dig) :shut-in.trespass-last-resort)))
-          (core/submit! (:eng unwedge) (tu/order (:eng unwedge) '(jobs.survival.unwedge {:ignore-zones? true})) {})
+          (core/submit! (:eng unwedge) (tu/order '(jobs.survival.unwedge {:ignore-zones? true})) {})
           (await (run-until-empty (:eng unwedge) 6))
           (is (= 1 (count (calls (:p unwedge) "dig"))) "unwedge digs the feet block")
           (is (= [] (trespass (:seen unwedge) :unwedge.trespass-last-resort)))))))))

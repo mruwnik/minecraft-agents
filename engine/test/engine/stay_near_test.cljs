@@ -35,7 +35,7 @@
         eng (core/create {:primitives p :jobs (merge registry/jobs stubs {'recording-parent parent})
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     {:eng eng :p p :clock clock :seen seen :out out})))
 
 (defn ^:async run-ticks
@@ -216,7 +216,7 @@
         eng (core/create {:primitives (tu/fake-on-floor {}) :jobs (merge registry/jobs extra-jobs) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng (list job args)) {})
+    (core/submit! eng (tu/order (list job args)) {})
     {:eng eng :clock clock :seen seen}))
 
 (deftest a-cell-needs-a-positive-for-s-when-given-and-one-target

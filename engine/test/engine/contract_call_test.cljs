@@ -43,7 +43,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup jobs)]
-          (core/submit! eng (tu/order eng '(ping {:pos 1 :again [1 2]})) {})
+          (core/submit! eng (tu/order '(ping {:pos 1 :again [1 2]})) {})
           (await (core/tick! eng))
           (let [[[_ _ dup] [_ _ fine] [_ _ pong-e]] @endings]
             (is (= :condition-failed (:kind dup)) "a loop, not a verdict on the args: the parent tries another way")
@@ -66,7 +66,7 @@
                                                 :round (fn ^:async pong [c]
                                                          (need/ending-for (await (ctx/call c :ping 'ping {:pos 1}))
                                                                           :need {:item "ping"}))}})]
-          (core/submit! eng (tu/order eng '(ping {:pos 1})) {})
+          (core/submit! eng (tu/order '(ping {:pos 1})) {})
           (await (core/tick! eng))
           (let [stopped (:data (first (filter #(= [:job :stopped] [(:source %) (:kind %)]) @seen)))]
             (is (= :condition-failed (:kind stopped)))
@@ -83,7 +83,7 @@
                                                     (let [pos (:pos (:args c))
                                                           _ (await (call-noting c :next 'dive {:pos (inc pos)}))]
                                                       (ctx/end c :done nil)))}})]
-          (core/submit! eng (tu/order eng '(dive {:pos 0})) {})
+          (core/submit! eng (tu/order '(dive {:pos 0})) {})
           (await (core/tick! eng))
           (let [deepest (first (filter #(= :condition-failed (:kind (nth % 2))) @endings))]
             (is (= 13 @depth) "the root plus 12 nested calls run; the 13th is refused")
@@ -111,7 +111,7 @@
       (fn ^:async t []
         (reset! knob-seen [])
         (let [{:keys [eng]} (setup knob-jobs)]
-          (core/submit! eng (tu/order eng '(outer {:settings {:jobs.callscope/knob 5}})) {})
+          (core/submit! eng (tu/order '(outer {:settings {:jobs.callscope/knob 5}})) {})
           (await (core/tick! eng))
           (is (= [[:outer-before 5] [:inner 5] [:inner 3] [:outer-after 5]] @knob-seen)
               "the caller's override flows to a child, the child's own wins below it")
@@ -163,9 +163,9 @@
           (is (= 900 (:kid @worths)) "a child's given worth wins, above its caller's")
           (is (= {:a 7 :b 900} (:kid-start @worths)) "a start check sees the would-be call's worth, before the freeze"))
         (let [{:keys [eng]} (setup worth-jobs)]
-          (is (thrown-with-msg? js/Error #"worth is required: give bare a :worth" (core/require-worth! eng '(bare))))
-          (is (thrown-with-msg? js/Error #"worth is required: give kid a :worth" (core/require-worth! eng '(seq (bare {:worth 3}) (kid)))))
-          (is (nil? (core/require-worth! eng '(repeat (bare {:worth 3})))))
+          (is (thrown-with-msg? js/Error #"worth is required: give bare a :worth" (core/submit! eng '(bare) {})))
+          (is (thrown-with-msg? js/Error #"worth is required: give kid a :worth" (core/submit! eng '(seq (bare {:worth 3}) (kid)) {})))
+          (is (some? (core/submit! eng '(repeat (bare {:worth 3})) {})))
           (is (thrown-with-msg? js/Error #"no worth" (ctx/worth {:quote-call {}})) "a call with none given reads no default: it throws")
           (is (some? (contract/call-problem 'bare nil {:worth -1})) "a negative worth is refused")
           (is (some? (contract/call-problem 'bare nil {:worth js/NaN})) "NaN is refused")

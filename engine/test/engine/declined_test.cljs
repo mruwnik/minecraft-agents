@@ -26,7 +26,7 @@
                           :jobs (assoc registry/jobs 'parent parent 'jobs.movement.go-to go-to-def)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [(fn [e] (swap! seen conj (tu/legacy-event e)))] :now #(deref clock)})})]
-    (core/submit! eng (tu/order eng '(parent)) {})
+    (core/submit! eng (tu/order '(parent)) {})
     (loop [n 0]
       (when (and (nil? @out) (< n 6))
         (swap! clock + 500)

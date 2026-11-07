@@ -35,7 +35,7 @@
   (let [{:keys [eng p clock] :as s} (setup world)]
     (when stock
       (mem/write! (:store eng) :fetch/stock {:pos [10 64 0] :items stock} {:cap 64 :ttl (* 6 60 60 1000)}))
-    (core/submit! eng (tu/order eng form) {})
+    (core/submit! eng (tu/order form) {})
     (dotimes [_ n]
       (await (core/tick! eng))
       (.advance (.-world p) 700)
@@ -139,7 +139,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (setup {:inventory [(item "beef" 3) (item "coal" 1)]})]
-          (core/submit! eng (tu/order eng (list 'repeat (list job (assoc args :furnace {:x 30 :y 64 :z 0})))) {})
+          (core/submit! eng (tu/order (list 'repeat (list job (assoc args :furnace {:x 30 :y 64 :z 0})))) {})
           (dotimes [_ 12] (await (core/tick! eng)) (swap! clock + 1000))
           (is (= 1 (count (filter #(get-in % [:ending :data :steps]) (events-of s :child_ended)))) "ticks 1 s apart, inside the 30 s rest")
           (is (seq (filter #(= :resting (:reason %)) (events-of s :waiting)))))))))
@@ -255,8 +255,8 @@
       (fn ^:async t []
         (let [far (list job (assoc args :chest far-chest))
               {:keys [eng] :as s} (setup {:inventory [(item "beef" 3)] :containers {"200,64,0" []}})]
-          (core/submit! eng (tu/order eng far) {})
-          (core/submit! eng (tu/order eng far) {})
+          (core/submit! eng (tu/order far) {})
+          (core/submit! eng (tu/order far) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (seq (events-of s :round_started))))))))
 
@@ -268,8 +268,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng clock] :as s} (setup far-world)]
-          (core/submit! eng (tu/order eng (list 'repeat (list job (assoc args :chest far-chest)))) {})
-          (core/submit! eng (tu/order eng (list 'repeat (list job (assoc args :chest other-far-chest)))) {})
+          (core/submit! eng (tu/order (list 'repeat (list job (assoc args :chest far-chest)))) {})
+          (core/submit! eng (tu/order (list 'repeat (list job (assoc args :chest other-far-chest)))) {})
           (dotimes [_ 6] (await (core/tick! eng)) (swap! clock + 1000))
           (is (seq (events-of s :round_started))))))))
 

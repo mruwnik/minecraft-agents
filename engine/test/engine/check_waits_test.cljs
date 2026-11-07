@@ -22,7 +22,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
-        id (core/submit! eng (tu/order eng spec) {})]
+        id (core/submit! eng (tu/order spec) {})]
     (dotimes [_ (or ticks 1)]
       (swap! clock + 700)
       (await (core/tick! eng)))

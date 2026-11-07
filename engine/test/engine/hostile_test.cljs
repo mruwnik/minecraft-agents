@@ -126,7 +126,7 @@
   ([spec world] (first-round-seeing spec world 0))
   ([spec world ms]
   (let [s (setup-seeing world nil ms)]
-    (core/submit! (:eng s) (tu/order (:eng s) spec) {})
+    (core/submit! (:eng s) (tu/order spec) {})
     (await (core/tick! (:eng s)))
     s)))
 
@@ -134,7 +134,7 @@
   "Submit spec in a world and run one tick; the setup map."
   [spec world]
   (let [s (setup world)]
-    (core/submit! (:eng s) (tu/order (:eng s) spec) {})
+    (core/submit! (:eng s) (tu/order spec) {})
     (await (core/tick! (:eng s)))
     s))
 
@@ -142,7 +142,7 @@
   "As first-round, the clock moving ms with every primitive call, so a call that waits out a gap ends."
   [spec world ms]
   (let [s (setup world ms)]
-    (core/submit! (:eng s) (tu/order (:eng s) spec) {})
+    (core/submit! (:eng s) (tu/order spec) {})
     (await (core/tick! (:eng s)))
     s))
 
@@ -150,7 +150,7 @@
   "As first-round, over setup-flight."
   [spec world]
   (let [s (setup-flight world)]
-    (core/submit! (:eng s) (tu/order (:eng s) spec) {})
+    (core/submit! (:eng s) (tu/order spec) {})
     (await (core/tick! (:eng s)))
     s))
 
@@ -368,7 +368,7 @@
                      (fn [token a impl]
                        (-> (impl token a)
                            (.then (fn [r] (fake/swap-self! p assoc :health (get health-after @n 6)) (swap! n inc) r)))))
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= 4 (count (calls p "attack")))
               "health 16, the zombie at 15: 2.8 expected damage costs less than walking away; at health 1 too: a flight from low health is caught more often than not (cost.caught/prior)")
@@ -394,7 +394,7 @@
           (is (= [{:mob "zombie" :decision :fight :pos {:x 3 :y 64 :z 0}}] (decided seen))
               "a seen mob: its place, one event for the whole encounter"))
         (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [(zombie 101 0.5 -5.5)]} [0 0])]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= [{:mob "zombie" :decision :fight :direction :north :band :near}] (decided seen))
               "a heard-only mob: what the sound tells, never its place"))))))
@@ -521,7 +521,7 @@
       (fn ^:async t []
         (doseq [[light walks?] [[[0 0] false] [[15 0] true]]]
           (let [s (setup-seeing {:inventory sword :entities [(zombie 5 0)]} light 20)]
-            (core/submit! (:eng s) (tu/order (:eng s) '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6})) {})
+            (core/submit! (:eng s) (tu/order '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6})) {})
             (await (core/tick! (:eng s)))
             (is (= walks? (boolean (seq (tu/walked-to (:eng s))))) (str "light " light))))))))
 
@@ -571,7 +571,7 @@
               (perception/pass! (aget p "perception"))
               (swap! (fake/state p) assoc :pitch 0)
               (perception/pass! (aget p "perception"))
-              (core/submit! eng (tu/order eng spec) {})
+              (core/submit! eng (tu/order spec) {})
               (await (core/tick! eng))
               (let [decision (:decision (first (hostile-entries eng)))
                     prices (:prices (first (filter #(= :hostile.decided (:kind %)) @seen)))]
@@ -591,7 +591,7 @@
             (perception/pass! (aget p "perception"))
             (swap! (fake/state p) assoc :pitch 0)
             (mem/write! (:store eng) :hurt hurt)
-            (core/submit! eng (tu/order eng respond) {})
+            (core/submit! eng (tu/order respond) {})
             (await (core/tick! eng))
             (is (= held? (boolean (seq (filter #(= :hostile.sealed-hold (:kind %)) @seen)))) why)
             (is (not-any? #(= :no-response (:reason %)) @seen) "the reflex does not end as if nothing could be done")))))))
@@ -603,7 +603,7 @@
         (let [{:keys [eng p]} (setup-seeing (assoc {:time 14000 :blocks roofed-passage :entities [(zombie 7 0.5 -5.5)]} :self {:health 20} :inventory sword :pitch -80) nil 1000)]
           (perception/pass! (aget p "perception"))
           (swap! (fake/state p) assoc :pitch 0)
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (seq (mem/entries (mem/view (:store eng)) :heard-mute)) "muted")
           (is (seq (calls p "look")) "after it turned to look"))))))
@@ -657,7 +657,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [(zombie 6 0)]})]
-          (core/submit! eng (tu/order eng fight) {})
+          (core/submit! eng (tu/order fight) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "6 blocks is beyond range 4: already done")
           (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
@@ -684,7 +684,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [(zombie 8 0)]})]
-          (core/submit! eng (tu/order eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :settings {:jobs.lib.hostile-fight/leash 5}})) {})
+          (core/submit! eng (tu/order '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :settings {:jobs.lib.hostile-fight/leash 5}})) {})
           (is (nil? (core/tick! eng)) "8 blocks from the start is past the leash of 5: not chased, the job declines")
           (is (zero? (count (calls p "attack")))))
         (let [{:keys [p]} (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 12 :settings {:jobs.lib.hostile-fight/leash 10}}) {:inventory sword :entities [(zombie 8 0)]} 20))]
@@ -702,7 +702,7 @@
                          (reset! hurt true)
                          (swap! (fake/state p) update-in [:self :health] - 1))
                        (impl token a)))
-          (core/submit! eng (tu/order eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 8 :settings {:jobs.lib.hostile-fight/leash 5}})) {})
+          (core/submit! eng (tu/order '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 8 :settings {:jobs.lib.hostile-fight/leash 5}})) {})
           (await (core/tick! eng))
           (swap! (fake/state p) assoc-in [:self :pos] [30.5 64 0])
           (set-entities! p [(zombie 33 0)])
@@ -716,7 +716,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [{:id 7 :name "skeleton" :kind "hostile" :visible false :pos {:x 10 :y 64 :z 0}}]})]
-          (core/submit! eng (tu/order eng '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16})) {})
+          (core/submit! eng (tu/order '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "no line of fire: not a target, nothing in range")
           (is (empty? (concat (calls p "attack") (calls p "equip"))) "no swing, nothing equipped"))))))
@@ -759,7 +759,7 @@
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
                                 :continue)}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] hurting)]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three hurt-yields")
           (is (not-any? #(= :no-response (:reason %)) @seen) "a fight that costs health is a response"))))))
@@ -776,7 +776,7 @@
                                 (when (= 6 @hits) (swap! (fake/state p) assoc :entities []))
                                 :continue)}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] pausing)]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 6 @hits) "the fight went on past three pauses that each landed a hit")
           (is (not-any? #(= :no-response (:reason %)) @seen) "a landed hit is a response"))))))
@@ -794,7 +794,7 @@
                                 (when (= 1 n) (js/setImmediate #(swap! (fake/state p) assoc :entities es)))
                                 (if (= 1 n) :continue (ctx/end c :done nil))))}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] blink)]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (<= 2 @calls) "one empty check after a :continue does not end the round"))))))
 
@@ -812,7 +812,7 @@
               eng (-> eng
                       (assoc-in [:jobs 'runner] runner)
                       (assoc-in [:jobs 'jobs.combat.attack] {:round (fn ^:async look [c] (reset! seen (:start (ctx/mem c))) :continue)}))]
-          (core/submit! eng (tu/order eng '(runner)) {})
+          (core/submit! eng (tu/order '(runner)) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (nil? @seen) "the start from before the flee is dropped"))))))
 
@@ -829,7 +829,7 @@
                                  (reset! out [before (respond-to-hostile/signature c [])]))
                                (ctx/end c :done nil))}
               eng (assoc-in eng [:jobs 'runner] runner)]
-          (core/submit! eng (tu/order eng '(runner)) {})
+          (core/submit! eng (tu/order '(runner)) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (apply not= @out) "a hit the attack child counted shows in the signature"))))))
 
@@ -845,12 +845,12 @@
                                (swap! (fake/state p) assoc :entities [])
                                :continue)}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] hitter)]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 1 @fights))
           (fake/swap-self! p assoc :health 10)
           (fake/add-entity! p (zombie 7 1 0))
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 2 @fights) "the second encounter fights the nearly dead zombie, no flight"))))))
 
@@ -865,12 +865,12 @@
                                  (swap! (fake/state p) assoc :entities [])
                                  (ctx/end c :nothing-possible :blocked {:struck {7 {:name "zombie" :hits 3 :health 2}}}))}
               eng (assoc-in eng [:jobs 'jobs.combat.attack] decliner)]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 1 @fights))
           (fake/swap-self! p assoc :health 10)
           (fake/add-entity! p (zombie 7 1 0))
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 2 @fights) "the second encounter fights the nearly dead zombie, no flight"))))))
 
@@ -896,7 +896,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup-flight {:entities [(zombie 0 5)]})]
           (remember! eng :home {:pos {:x 0 :y 64 :z 20}})
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (= {:x 0 :z -4} (first-move eng)) "a home beyond the hostile is ignored"))))))
 
@@ -905,7 +905,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup-flight {:entities [(zombie 1 0 4) (zombie 2 3 -3) (zombie 3 -3 -3)]})]
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (> (:z (first-move eng)) 1) "mobs on three sides: it leaves through the one open side, not away from the nearest"))))))
 
@@ -915,7 +915,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup-flight {:entities [(zombie 0 5)]})]
           (remember! eng :home {:pos {:x -2100 :y 64 :z -2000}})
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (= {:x 0 :z -4} (first-move eng)) "a home 2000 blocks away does not bend the flight"))))))
 
@@ -925,7 +925,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-flight {:entities [(zombie 5 0)]})]
           (mem/write! (:store eng) :hazard {:kind :lava :pos {:x -6 :y 64 :z 0}} {:cap 50 :ttl :forever})
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (let [m (first-move eng)]
             (is (<= 2.5 (js/Math.hypot (+ (:x m) 6) (:z m))) (str "the step keeps clear of the lava " (pr-str m)))
@@ -943,7 +943,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup-flight {:blocks stone-box :entities [(zombie 6 0)]})]
           (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (filter #(= :retreat_blocked (:kind %)) @seen))) "it cannot reach the body: not a danger, no warn")
           (is (zero? (count (calls p "attack"))))
@@ -961,7 +961,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-flight {:entities [(zombie 2 0)]})]
           (stuck-walks! p)
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (= 4 (count (calls p "attack"))) "unarmed and nothing to seal with: it hits back until the zombie (20, 5 a hit) dies")
           (is (= [] (:list (core/state eng))) "the zombie is gone: the flight is over"))))))
@@ -1069,7 +1069,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup-flight {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= 3 (count (filter #(and (= :goal-not-standable (get-in % [:ending :cause :why])) (nil? (get-in % [:ending :because]))) @seen))) "three go-to walks towards the zombie gave up, never more (the flight's own leg ends :search-spent by the call's seconds)")
           (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "one blocked walk per go-to call: any y re-aim comes before the walk")
@@ -1098,7 +1098,7 @@
           (let [{:keys [eng seen]} (setup-seeing {:self {:health 20 :food 20 :pos {:x 13.5 :y 64 :z 16.5}} :yaw yaw :blocks skeleton-cave
                                                   :entities [(skeleton 1 4.5 14.5) (skeleton 2 4.5 18.5)]}
                                                  [0 14] 1000)]
-            (core/submit! eng (tu/order eng respond) {})
+            (core/submit! eng (tu/order respond) {})
             (dotimes [_ 3] (await (core/tick! eng)))
             (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))
                   {:keys [ends picked]} (first (filter #(= :retreat.search (:kind %)) @seen))
@@ -1120,7 +1120,7 @@
                   [[[(skeleton 1 0.5 4.5)] :fight "a lone skeleton is fought"]
                    [[(skeleton 1 0.5 4.5) (zombie 7 0.5 12.5)] :flee "a zombie heard behind the wall past it joins that fight: too dear at 13 hp"]]]
             (let [{:keys [eng seen]} (setup-seeing {:self {:health 13} :inventory wood-sword :blocks wall :entities entities} [15 15] 1000)]
-              (core/submit! eng (tu/order eng respond) {})
+              (core/submit! eng (tu/order respond) {})
               (await (core/tick! eng))
               (is (= [decision] (mapv :decision (decided seen))) why))))))))
 
@@ -1131,7 +1131,7 @@
         (let [decide (fn ^:async d [hurts]
                        (let [{:keys [eng seen]} (setup-flight {:self {:health 20} :inventory wood-sword :entities [(zombie 1 0.5 2.5)]})]
                          (doseq [h hurts] (mem/write! (:store eng) :hurt h))
-                         (core/submit! eng (tu/order eng respond) {})
+                         (core/submit! eng (tu/order respond) {})
                          (await (core/tick! eng))
                          (first (filter #(= :hostile.decided (:kind %)) @seen))))
               unhurt (await (decide []))
@@ -1172,7 +1172,7 @@
           (is (= [["skeleton" :fight]] (await (decisions [skel]))) "a lone skeleton is fought")
           (is (= [["creeper" :flee]] (await (decisions [skel creeper]))) "with a creeper beside it the body flees and says why")
           (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [skel creeper]} [15 15] 1000)]
-            (core/submit! eng (tu/order eng respond) {})
+            (core/submit! eng (tu/order respond) {})
             (await (core/tick! eng))
             (is (= [["creeper" :flee]] (mapv (juxt :mob :decision) (decided seen))) "seen through perception (both in view, south) too")))))))
 
@@ -1234,7 +1234,7 @@
                                  (swap! (fake/state p) assoc :creeper-came true)
                                  (fake/add-entity! p {:id 20 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}))
                                (.apply swing p (to-array a)))))
-          (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})) {})
+          (core/submit! eng (tu/order '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.cost.threat/difficulty 2}})) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [["zombie" :fight] ["creeper" :flee]] (mapv (juxt :mob :decision) (decided seen)))
               "the zombie is fought alone; the creeper 3 off, seen mid-fight, makes the next call a flight named after it"))))))
@@ -1269,7 +1269,7 @@
                                                               (await (impl token args)))))]
           (stamp! "attack")
           (stamp! "moveTo")
-          (core/submit! eng (tu/order eng fight) {})
+          (core/submit! eng (tu/order fight) {})
           (await (core/tick! eng))
           (is (< (- (get @at "moveTo") (get @at "attack")) (* 1000 answer/fuse-s)) "the step back begins within the fuse")
           (is (empty? (filter #(= :back (get-in % [:data :slot])) @seen)) "no child job for it"))))))
@@ -1303,7 +1303,7 @@
                         (fn ^:async f []
                           (let [s (setup-flight world)]
                             ((fled-before n) s)
-                            (core/submit! (:eng s) (tu/order (:eng s) respond) {})
+                            (core/submit! (:eng s) (tu/order respond) {})
                             (await (core/tick! (:eng s)))
                             s))))
               one {:inventory sword :entities [(assoc (skeleton 1 12 0) :visible true)]}
@@ -1322,7 +1322,7 @@
         (let [walks (fn ^:async f [fled]
                       (let [{:keys [eng]} (setup {:inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]} 20)]
                         (dotimes [_ fled] (mem/write! (:store eng) :hostile {:mob "skeleton" :decision :flee} respond-to-hostile/hostile-policy))
-                        (core/submit! eng (tu/order eng '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6})) {})
+                        (core/submit! eng (tu/order '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6})) {})
                         (await (core/tick! eng))
                         (count (tu/walked-to eng))))
               walks #(settings/with-settings {:jobs.lib.cost.threat/difficulty 3} (fn [] (walks %)))]
@@ -1430,7 +1430,7 @@
       (tu/run-async done
         (fn ^:async t []
           (let [{:keys [eng]} (setup {:inventory sword :blocks torches :entities [sk]})]
-            (core/submit! eng (tu/order eng '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16})) {})
+            (core/submit! eng (tu/order '(jobs.combat.attack {:targets :hostiles :radius 4 :ranged-radius 16})) {})
             (is (some? (core/tick! eng)) "the hostile attack keeps the skeleton as a target: same line of fire as the trigger")))))))
 
 (deftest combat-hostiles-takes-a-ranged-radius
@@ -1468,7 +1468,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-flight {:entities [(zombie 5 0)]
                                       :blocks (wall-cells (for [z (range -2 3)] [-3 z]))})]
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (let [m (first-move eng)]
             (is (>= (js/Math.abs (:z m)) 3) "not straight back into the wall")
@@ -1509,7 +1509,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :blocks wall :entities [(zombie 5 0)]})]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "only a zombie behind the wall: nothing to respond to, done")
           (is (zero? (count (tu/walked-to eng)))))))))
@@ -1532,7 +1532,7 @@
         (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(assoc (zombie 100 3 0) :health 10)]})]
           (.override (.-world p) "attack"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 6) r)))))
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack"))) "health 6 after the first hit, but one more hit kills the zombie at 5: it swings")
           (is (empty? (fake/entities p))))))))
@@ -1544,7 +1544,7 @@
         (let [{:keys [eng p seen]} (setup-flight {:inventory sword :entities [(assoc (zombie 100 3 0) :health 40)]})]
           (.override (.-world p) "attack"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 6) (mem/write! (:store eng) :hurt {:amount 14 :attacker {:id 100 :name "zombie"}}) r)))))
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "35 left is not nearly dead")
           (is (pos? (count (tu/walked-to eng))) "it flees")
@@ -1560,7 +1560,7 @@
               walks-before-eat (atom nil)]
           (.override (.-world p) "eat"
                      (fn [token a impl] (reset! walks-before-eat (count (tu/walked-to eng))) (impl token a)))
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (pos? (count (calls p "eat"))) "a bite once the gap is wide (one a flee step: flee-test retreat-eats-one-bite-per-flee-step)")
           (is (pos? @walks-before-eat) "the skeleton was 5 away at the start: no time to eat before the gap opened"))))))
@@ -1574,7 +1574,7 @@
                      (fn [token a impl]
                        (swap! (fake/state p) update :blocks #(apply dissoc % (map fake/parse-cell (keys box))))
                        (impl token a)))
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (= 4 (count (calls p "attack"))) "the pen opened up at the first swing, but the zombie is still at 2: kept fighting")
           (is (zero? (count (tu/walked-to eng))) "no running back and forth"))))))
@@ -1766,7 +1766,7 @@
                                                    :inventory [{:name "cobblestone" :count 16}]
                                                    :blocks (assoc stair-exit "0,66,0" "stone") :entities [(zombie 0.5 2.5)]})]
           (js/setTimeout #(set-entities! p []) 300)
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "no fist fight")
           (is (= "cobblestone" (.-name (.blockAt p #js {:x 0 :y 64 :z 1})))
@@ -1901,7 +1901,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory sword :entities [(assoc (heard-zombie) :visible false)]})]
-          (core/submit! eng (tu/order eng fight) {})
+          (core/submit! eng (tu/order fight) {})
           (is (nil? (core/tick! eng)) "only a heard mob: the job declines, the retreat takes over")
           (is (zero? (count (calls p "attack"))) "no swing at a mob only heard")
           (is (zero? (count (tu/walked-to eng))) "no walk to its exact place"))))))
@@ -2002,7 +2002,7 @@
         (let [{:keys [eng p]} (setup-seeing {:time 14000 :blocks heard-wall :entities [(zombie 6.5 -3.5)]
                                          :light (into {} (for [x (range -9 10) y [64 65] z (range -9 10)] [[x y z] [0 0]]))} nil 1000)]
           (stuck-walks! p)
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= 1 (count (mutes eng))) "one mute entry, not a mute per round")
           (is (true? (body/heard-muted? (mem/view (:store eng))))))))))
@@ -2040,7 +2040,7 @@
             (is (= [] (heard-only-events seen)) "and no event restates it"))
           (let [{:keys [eng seen] :as s} (setup-flight kit)]
             (mem/write! (:store eng) :hurt {:amount 3})
-            (core/submit! eng (tu/order eng respond) {})
+            (core/submit! eng (tu/order respond) {})
             (await (core/tick! eng))
             (is (walked? s) "just hurt: the unseen mob may be the one hitting, it flees")
             (is (= [] (heard-only-events seen)))))))))
@@ -2051,7 +2051,7 @@
       (fn ^:async t []
         (let [{:keys [eng p raw]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 4 0)]} [0 4] 1000)]
           (swap! (fake/state raw) assoc :light (into {} (for [x (range 3 12) y [64 65] z (range -6 7)] [[x y z] [0 0]])))
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (let [view (mem/view (:store eng))]
             (is (= [7] (keys (body/watched view))) "the mob that never came is watched")
@@ -2069,7 +2069,7 @@
               round (fn ^:async r [entry]
                       (let [{:keys [eng p] :as s} (setup-flight {:entities [(zombie 4.5 0.5)]})]
                         (when entry (mem/write! (:store eng) :hostile entry))
-                        (core/submit! eng (tu/order eng respond) {})
+                        (core/submit! eng (tu/order respond) {})
                         (await (core/tick! eng))
                         {:walked (walked? s) :watched (keys (body/watched (mem/view (:store eng))))}))]
           (is (:walked (await (round nil))) "no flight before: it flees")
@@ -2088,7 +2088,7 @@
                       (let [{:keys [eng p] :as s} (setup-seeing {:time 14000 :entities [(zombie 0.5 6.5)]} [0 0] 1000)]
                         (perception/pass! (aget p "perception"))
                         (mem/write! (:store eng) :hostile entry)
-                        (core/submit! eng (tu/order eng respond) {})
+                        (core/submit! eng (tu/order respond) {})
                         (await (core/tick! eng))
                         (assoc s :walked (walked? s) :watched (body/watched (mem/view (:store eng))))))
               answered-at (fn [{:keys [eng p raw]} pos]
@@ -2121,7 +2121,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-seeing {:entities [(zombie 0.5 4.5)]} nil 1000)]
           (stuck-walks! p)
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
           (is (= [] (mutes eng))))))))
 
@@ -2259,7 +2259,7 @@
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})
               eng (assoc-in eng [:jobs 'jobs.combat.attack]
                             {:round (fn ^:async f [_c] (fake/swap-self! p assoc :health 1) (swap! (fake/state p) assoc :inventory []) :continue)})]
-          (core/submit! eng (tu/order eng respond) {})
+          (core/submit! eng (tu/order respond) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= [:fight :flee] (mapv :decision (decided seen))) "each change of decision is one event")
           (is (re-find #"earlier fight at 20 hp, now 1 hp" (:text (last (filter #(= :hostile.decided (:kind %)) @seen))))))))))

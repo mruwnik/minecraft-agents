@@ -74,7 +74,7 @@
                                 :drops {:carrots "carrot"} :self {:food 0}})]
     (view p)
     (mem/write! (:store eng) :food-source {:pos {:x 11 :y 64 :z 0} :kind :farm} {:cap 5 :ttl :forever})
-    (core/submit! eng (tu/order eng '(jobs.survival.get-food {})) {})
+    (core/submit! eng (tu/order '(jobs.survival.get-food {})) {})
     (await (core/tick! eng))
     (calls p "dig")))
 

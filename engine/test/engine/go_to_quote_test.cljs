@@ -158,7 +158,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
-              cheap (:route (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :worth 100000}))))
+              cheap (:route (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :worth 6000}))))
               dear (:quote (await (preview shut-in {:pos [10 64 1] :range 0 :worth 0.001})))]
           (is (pos? (:dig-seconds cheap)))
           (is (nil? (:dig-seconds (:route dear))) (pr-str (:route dear))))))))

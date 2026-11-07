@@ -35,7 +35,7 @@
   (let [clock (atom 1000000)
         out (atom nil)
         {:keys [eng] :as s} (setup clock {'parent (assoc (parent out clock ahead-ms args) :defaults defs)})]
-    (core/submit! eng (tu/order eng '(parent)) {})
+    (core/submit! eng (tu/order '(parent)) {})
     (loop [i 0]
       (when (and (< i 30) (seq (:list (core/state eng))))
         (await (core/tick! eng))

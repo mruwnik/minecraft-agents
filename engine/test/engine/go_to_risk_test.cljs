@@ -185,7 +185,7 @@
                                          [[-5000 64 0] diamond-kit true]]]
           (let [world (-> night-hut (assoc :inventory inventory) (assoc-in [:self :worldSpawn] spawn))
                 {:keys [eng p seen]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)
-                id (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [800 64 0]})) {})
+                id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [800 64 0]})) {})
                 c (ready-test/ctx-of (assoc world :self {:pos inside :health 20 :food 20 :worldSpawn spawn}))]
             (await (st/tick-n eng 6))
             (is (= held? (= :risky (:reason (core/waiting eng id)))) (pr-str spawn (mapv :name inventory)))
@@ -240,7 +240,7 @@
         (let [{:keys [eng p]} (st/setup (update night-hut :blocks merge hut-bed))
               _ (sky/with-sky p)
               _ (st/know-bed! eng {:x 4 :y 64 :z -1})
-              id (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [800 64 0]})) {})]
+              id (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [800 64 0]})) {})]
           (await (st/tick-n eng 4))
           (is (= [:risky :sleep] ((juxt :reason :wait) (core/waiting eng id))) "go-to holds for the sleep")
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
@@ -392,7 +392,7 @@
           (set! drive/follow! (fn [c plan opts] (swap! walked conj (:steps plan)) (follow! c plan opts)))
           (try
             (let [{:keys [eng p]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)]
-              (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [70 64 0] :unknown false})) {})
+              (core/submit! eng (tu/order '(jobs.movement.go-to {:pos [70 64 0] :unknown false})) {})
               (await (st/tick-n eng 40))
               (is (seq @walked) "go-to walks")
               (is (some #{(first @walked)} @priced) "its first plan is a way priced (a search's partial plan may be priced before it)")

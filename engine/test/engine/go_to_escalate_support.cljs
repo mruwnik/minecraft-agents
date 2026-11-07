@@ -65,7 +65,7 @@
    (let [{:keys [eng clock] :as s} (setup world zones)
          out (atom :not-done)
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out job args)))]
-     (core/submit! eng (tu/order eng '(recording-parent {})) {})
+     (core/submit! eng (tu/order '(recording-parent {})) {})
      (let [n (await (if clocked? (tick-clocked! eng clock 1000) (tick-out! eng 1000)))]
        (assoc s :eng eng :out out :ticks n)))))
 
@@ -161,7 +161,7 @@
                                     (recording-parent out 'jobs.movement.go-to (merge {:pos goal :range range} (:args extra)))))]
     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}
                 {:cap 10 :ttl 86400000})
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (-> (tick-out! eng 300) (.then (fn [_] {:out out :p p :seen seen}))))))
 
 (defn ledger [eng] (mapv :data (mem/entries (mem/view (:store eng)) :tidy)))
@@ -268,6 +268,6 @@
                 (assoc-in [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [3 60 0] :range 0 :unknown false :ignore-zones? (boolean zones)}))
                 (assoc-in [:jobs 'jobs.blocks.dig :round] (fn [c] (swap! digs conj (:args c)) (dig-round c))))]
     (some-> sense (apply [p]))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (tick-out! eng 1000))
     {:out out :p p :seen seen :digs digs})))

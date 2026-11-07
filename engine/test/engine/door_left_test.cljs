@@ -146,11 +146,11 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label stop!] [["cancelled" #(core/cancel! % "j1")]
-                               ["cut by a job done now" #(core/do-now! % (tu/order % '(jobs.debug.notify {:text "x"})))]]]
+                               ["cut by a job done now" #(core/do-now! % (tu/order '(jobs.debug.notify {:text "x"})))]]]
           (let [{:keys [eng p] :as s} (setup (gate-world false 0 0))]
             (core/register-reflex! eng {:trigger :door-left})
             (cut-after-the-open! s (let [once (atom false)] #(when-not @once (reset! once true) (stop! %))))
-            (core/submit! eng (tu/order eng '(walker)) {})
+            (core/submit! eng (tu/order '(walker)) {})
             (await (tick-until s #(open? p gate-cell) 10))
             (is (open? p gate-cell) (str label ": the cut walk left the gate open"))
             (is (= [gate-cell] (mapv :cell (opened eng))) label)
@@ -169,7 +169,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 14 0))]
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 20))
           (is (not (open? p gate-cell)))
           (is (seq (tu/walked-to eng)) "it walked back")
@@ -182,7 +182,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup (gate-world true 8 0 {:blocks (box 7 64 -1 7 66 1 "stone")}))]
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 30))
           (is (seq (tu/walked-to eng)) "it moved although the gate was within reach")
           (is (not (open? p gate-cell)))
@@ -198,7 +198,7 @@
                                             (live pos)
                                             #js {:name "oak_fence_gate" :properties #js {:open "true"} :pos pos :age-ms 5000})))
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 20))
           (is (seq (tu/walked-to eng)) "it walked to the gate the body last saw open")
           (is (= [] (opened eng)) "the entry dropped once it saw the gate shut")
@@ -213,7 +213,7 @@
           (aset p "seenBlockAt" (fn [pos] #js {:unknown true :pos pos}))
           (aset p "sensedAt" (fn [_] #js {:unknown true}))
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 10))
           (is (nil? (first (filter #(= :completed (:kind %)) @seen))) "an unseen gate is not already shut")
           (is (= [{:cell [5 64 0] :reason :unseen}]
@@ -225,7 +225,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))]
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 5))
           (is (open? p gate-cell))
           (is (= :already (:cause (first (filter #(= :completed (:kind %)) @seen)))) "nothing left open: done before any round"))))))
@@ -236,7 +236,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (assoc (gate-world true 14 0) :unreachable ["5,64,0"]))]
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 30))
           (is (empty? (:list (core/state eng))) "the job ended")
           (is (open? p gate-cell))
@@ -250,7 +250,7 @@
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 8 0))
               gave-up #(filter (fn [e] (= :shut.gave-up (:kind e))) @seen)
               run! (fn ^:async f []
-                     (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+                     (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
           (remember-opened! s)
           (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "unchanged"}))
@@ -273,7 +273,7 @@
         (let [cow {:id 7 :name "cow" :kind "passive" :pos {:x 5 :y 64 :z 0}}
               {:keys [eng p] :as s} (setup (gate-world true 8 0 {:entities [cow]}))
               run! (fn ^:async f []
-                     (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+                     (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
           (remember-opened! s)
           (doseq [_ (range 7)] (await (run!)))
@@ -287,7 +287,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup (gate-world true 8 0))
               run! (fn ^:async f []
-                     (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+                     (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
                      (await (tick-until s #(empty? (:list (core/state eng))) 80)))]
           (remember-opened! s)
           (.override (.-world p) "useOn" (fn ^:async f [_token _args _impl] #js {:status "unchanged"}))
@@ -309,7 +309,7 @@
                        (fn ^:async f [token args impl]
                          (swap! seen into (map :shut? (opened eng)))
                          (await (impl token args))))
-            (core/submit! eng (tu/order eng '(walker)) {})
+            (core/submit! eng (tu/order '(walker)) {})
             (await (tick-until s #(empty? (:list (core/state eng))) 10))
             (is (= shut? (first @seen)) (str doors))
             (is (= (not shut?) (some? (:until (first (opened eng))))) "only a :leave-open entry has a time")))))))
@@ -329,7 +329,7 @@
         (let [{:keys [eng p seen] :as s} (setup (two-gates-world 9 2 {}))]
           (remember-opened-at! s gate-cell)
           (remember-opened-at! s gate2-cell)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 1))
           (is (empty? (:list (core/state eng))) "one tick: the job ended")
           (is (not (open? p gate-cell)))
@@ -343,7 +343,7 @@
         (let [{:keys [eng p seen] :as s} (setup (two-gates-world 14 2 {:unreachable ["5,64,0"]}))]
           (remember-opened-at! s gate-cell)
           (remember-opened-at! s gate2-cell)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (empty? (:list (core/state eng))))
           (is (open? p gate-cell))
@@ -365,7 +365,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup (gate-world true 5 0))]
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (open? p gate-cell))
           (is (= [[[5 64 0] :standing-in]] (mapv (juxt :cell :reason) (:left (first (filter #(= :stopped (:kind %)) @seen))))))
@@ -377,7 +377,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen] :as s} (setup (gate-world true 14 0) [{:x 10 :y 64 :z 0} 0] continuing-go-to)]
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (seq (:list (core/state eng))) "the job yields and stays listed; it did not end")
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "no ending, no :left")
@@ -391,7 +391,7 @@
         (let [{:keys [eng p] :as s} (setup (gate-world true 5 0))]
           (core/register-reflex! eng {:trigger :door-left})
           (remember-opened! s)
-          (core/submit! eng (tu/order eng '(jobs.maintenance.shut {})) {})
+          (core/submit! eng (tu/order '(jobs.maintenance.shut {})) {})
           (await (tick-until s #(empty? (:list (core/state eng))) 3))
           (is (open? p gate-cell))
           (swap! (fake/state p) assoc-in [:self :pos] [8.5 64 0.5])
@@ -401,7 +401,7 @@
 (defn done-event [seen] (first (filter #(= :completed (:kind %)) @seen)))
 
 (defn run-shut! [{:keys [eng] :as s} args ticks]
-  (core/submit! eng (tu/order eng (list 'jobs.maintenance.shut args)) {})
+  (core/submit! eng (tu/order (list 'jobs.maintenance.shut args)) {})
   (tick-until s #(empty? (:list (core/state eng))) ticks))
 
 (defn run-unrecorded! [s ticks]

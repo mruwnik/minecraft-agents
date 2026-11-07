@@ -52,7 +52,7 @@
 
 (defn ^:async bring! [world args]
   (let [{:keys [eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} world) 50)]
-    (core/submit! eng (tu/order eng (list 'jobs.animals.bring (merge {:mob "cow" :pos goal} args))) {})
+    (core/submit! eng (tu/order (list 'jobs.animals.bring (merge {:mob "cow" :pos goal} args))) {})
     (await (tu/run-ticks eng clock 14 700))
     s))
 

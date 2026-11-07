@@ -204,7 +204,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 3))
           (is (nil? (mem/place (mem/view (:store eng)) :bed)) "no longer a known place")
           (is (= 1 (count (st/emitted seen :bed_missing))))
@@ -216,7 +216,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/dirt-stack})]
           (st/know-bed! eng {:x 20 :y 64 :z 0})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 40))
           (is (= [{:x 20 :y 64 :z 0}] (mapv st/arg-pos (st/calls p "sleep"))) "the only player: its sleep ends the night")
           (is (empty? (st/calls p "place")) "not dug in"))))))
@@ -232,7 +232,7 @@
              (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
                ((status! 0 5) eng)
                (st/know-bed! eng {:x 20 :y 64 :z 0})
-               (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+               (core/submit! eng (tu/order '(jobs.survival.night {})) {})
                (await (tu/run-until-empty eng 40))
                (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
                (is (= :shelter (:pick (first (st/emitted seen :night.answers)))) "lying there all night is priced above sheltering")
@@ -245,7 +245,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
           ((status! 0 5) eng)
           (st/know-bed! eng {:x 20 :y 64 :z 0})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 40))
           (is (= :bed (:pick (first (st/emitted seen :night.answers)))) "the 20-block walk is priced below sheltering a night where it stands"))))))
 
@@ -255,7 +255,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge st/floor {"100,64,0" "red_bed"})})]
           (st/know-bed! eng {:x 100 :y 64 :z 0})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 4))
           (is (= [100] (mapv :x (map :pos (st/emitted seen :night.bed-too-far))))))))))
 
@@ -268,7 +268,7 @@
           (mem/write! (:store eng) :home {:pos {:x 1 :y 64 :z 0}} mem/place-policy)
           (mem/write! (:store eng) :spawn-bed {:pos {:x 2 :y 64 :z 0}} {:cap 1 :ttl :forever})
           (write! eng :sleep-failed {:pos {:x 2 :y 64 :z 0}})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (st/tick-n eng 4))
           (is (empty? (st/emitted seen :night.bed-too-far))))))))
 
@@ -289,7 +289,7 @@
   (let [reason (fn [world know?]
                  (let [{:keys [eng]} (st/setup world)]
                    (when know? (st/know-bed! eng {:x 6 :y 64 :z 0}))
-                   (let [id (core/submit! eng (tu/order eng '(jobs.survival.sleep {})) {})]
+                   (let [id (core/submit! eng (tu/order '(jobs.survival.sleep {})) {})]
                      (core/tick! eng)
                      (:reason (:waiting (job-api/summary eng id))))))]
     (is (= :no-bed (reason {:time night} false)))
@@ -297,7 +297,7 @@
 
 (deftest night-job-says-why-it-waits-by-day
   (let [{:keys [eng]} (st/setup {:time noon})
-        id (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})]
+        id (core/submit! eng (tu/order '(jobs.survival.night {})) {})]
     (core/tick! eng)
     (is (= :not-night (:reason (:waiting (job-api/summary eng id)))))))
 
@@ -306,7 +306,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks roof})]
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (= [] (tu/walk-calls p))))))))
@@ -318,7 +318,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge st/floor {"6,64,0" "stone"})})]
           (mem/write! (:store eng) :spawn-bed {:pos {:x 6 :y 64 :z 0}} {:cap 1 :ttl :forever})
           (st/dawn-after! p 3)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 20))
           (is (= [{:pos {:x 6 :y 64 :z 0} :why :seen-gone}] (st/entries eng :spawn-lost)))
           (is (= 1 (count (st/emitted seen :spawn_lost)))))))))
@@ -329,7 +329,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:time night :blocks (merge roof {"6,64,0" "stone"})})]
           (mem/write! (:store eng) :spawn-bed {:pos {:x 6 :y 64 :z 0}} {:cap 1 :ttl :forever})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 20))
           (is (= 1 (count (st/emitted seen :spawn_lost)))))))))
 
@@ -337,7 +337,7 @@
   (let [waiting (fn [world seed!]
                   (let [{:keys [eng]} (st/setup world)
                         _ (seed! eng)
-                        id (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})]
+                        id (core/submit! eng (tu/order '(jobs.survival.night {})) {})]
                     (core/tick! eng)
                     (:spawn (:waiting (job-api/summary eng id)))))
         bed {:pos {:x 6 :y 64 :z 0}}]
@@ -355,9 +355,9 @@
                                 1 (reset! mid {:sleeps (mapv st/arg-pos (st/calls p "sleep")) :placed (mapv :cell (ledger/open-entries (mem/view (:store eng))))})
                                 2 (do (fake/swap-self! p assoc :isSleeping false) (.setTime (.-world p) noon))
                                 nil)))
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
-          (core/submit! eng (tu/order eng '(jobs.survival.leave-shelter {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.leave-shelter {})) {})
           (await (tu/run-until-empty eng 10))
           (let [foot (st/arg-pos (first (st/calls p "place")))]
             (is (some? foot) "put down beside the body, no roof needed")
@@ -378,7 +378,7 @@
         (let [{:keys [eng p clock]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :players ["Alex" "Bo" "Cy"] :blocks st/floor})]
           (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
           (sleep-count! p 1 4)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 10))
           (is (= 1 (count (st/calls p "sleep"))) "two others awake: no log-out is open, lying down beats the night exposed")
           (is (empty? (st/calls p "offline")))
@@ -390,7 +390,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :skipNight false})]
           (mem/write! (:store eng) :reserve {:id "plan-bed" :tag :bed :count 1 :strength 1 :by "agent"} {:cap 100 :ttl :forever})
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (empty? (st/calls p "sleep")) "not slept in")
           (is (empty? (st/calls p "place")) "the reserved bed (the only thing carried) is not put down"))))))
@@ -422,7 +422,7 @@
         (let [{:keys [eng p clock]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
           (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
           (sleep-count! p 1 2)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 10))
           (is (= [475050] (st/ms-of-offline p)) "one stint to morning, no check-back")
           (is (= ["logged-out-for-sleeping-player"] (offline-why p)))
@@ -436,7 +436,7 @@
         (let [{:keys [eng p clock]} (st/setup {:time night :self {:food 4} :inventory [{:name "bread" :count 2}] :blocks st/floor})]
           (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
           (sleep-count! p 1 2)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 10))
           (is (= 1 (count (st/calls p "offline"))))
           (is (= ["bread"] (distinct (map #(aget (.-args %) "item") (st/calls p "eat")))) "a bite before the stint"))))))
@@ -448,7 +448,7 @@
         (let [{:keys [eng p]} (st/setup hut/night-bed-world)]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (sleep-count! p 1 2)
-          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 8))
           (is (= 1 (count (st/calls p "sleep"))))
           (is (= [] (st/calls p "offline"))))))))

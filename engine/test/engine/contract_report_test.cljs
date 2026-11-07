@@ -110,7 +110,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup)
-              id (core/submit! eng (tu/order eng '(top)) {})]
+              id (core/submit! eng (tu/order '(top)) {})]
           (await (core/tick! eng))
           (is (= {:uses {:items {"bread" 2}}} (tally eng id [])))
           (is (= {:uses {:items {"bread" 2}}} (tally eng id [:a])))
@@ -138,7 +138,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p dir]} (setup)
-              id (core/submit! eng (tu/order eng '(top)) {})]
+              id (core/submit! eng (tu/order '(top)) {})]
           (.override (.-world p) "eat"
                      (fn [token a impl]
                        (-> (impl token a)
@@ -156,7 +156,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup)
-              id (core/submit! eng (tu/order eng '(eats)) {})]
+              id (core/submit! eng (tu/order '(eats)) {})]
           (.override (.-world p) "eat"
                      (fn [token a impl]
                        (let [full (:inventory @(fake/state p))]
@@ -173,7 +173,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup)
-              id (core/submit! eng (tu/order eng '(eats)) {})
+              id (core/submit! eng (tu/order '(eats)) {})
               fired (atom false)]
           (.override (.-world p) "eat"
                      (fn [token a impl]
@@ -193,7 +193,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup)
-              id (core/submit! eng (tu/order eng '(eats)) {})]
+              id (core/submit! eng (tu/order '(eats)) {})]
           (.override (.-world p) "eat"
                      (fn [token a impl]
                        (.emit (.-world p) #js {:kind "hurt" :food 20 :health 15 :amount 3 :damageType "fall"})
@@ -208,7 +208,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng (tu/order eng '(timed)) {})
+          (core/submit! eng (tu/order '(timed)) {})
           (await (core/tick! eng))
           (let [ended (first (filter #(= :child_ended (:kind %)) @seen))
                 completed (first (filter #(= :completed (:kind %)) @seen))]
@@ -220,7 +220,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng (tu/order eng '(craft)) {})
+          (core/submit! eng (tu/order '(craft)) {})
           (await (core/tick! eng))
           (let [report {:uses {:items {"oak_log" 1} :job-time 0 :wall-time 0} :yields {:items {"oak_planks" 4}}}]
             (is (= report (:report (first (filter #(= :completed (:kind %)) @seen)))))
@@ -243,7 +243,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng (tu/order eng '(strolls)) {})
+          (core/submit! eng (tu/order '(strolls)) {})
           (await (core/tick! eng))
           (let [completed (first (filter #(= :completed (:kind %)) @seen))]
             (is (= {:far 40} (:trip completed)))

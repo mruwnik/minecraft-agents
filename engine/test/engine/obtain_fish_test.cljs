@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (assoc (ft/world [ft/rod] {}) :blocks {}))]
-          (core/submit! eng (tu/order eng '(jobs.items.obtain {:item "cod" :count 1})) {})
+          (core/submit! eng (tu/order '(jobs.items.obtain {:item "cod" :count 1})) {})
           (await (tu/run-until-empty eng 6))
           (is (pos? (sense/looks p))))))))
 
@@ -58,7 +58,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (h/setup (assoc (ft/world [] {}) :entities [{:id 1 :name "rabbit" :kind "passive" :pos {:x 30 :y 64 :z 4} :drops [{:name "rabbit" :count 1}]}]) 50)]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.items.obtain {:any-of ["rabbit" "cod"]})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.items.obtain {:any-of ["rabbit" "cod"]})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 12 700))
           (let [vias (set (map :via (filter #(= :obtain.gathering (:kind %)) @(:seen s))))]
             (is (contains? vias 'jobs.combat.hunt) (pr-str vias))

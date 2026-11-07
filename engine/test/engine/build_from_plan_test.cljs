@@ -733,7 +733,7 @@
   ([spec plans args] (declines spec plans args []))
   ([spec plans args zones]
    (let [{:keys [eng p seen]} (start spec plans zones)]
-     (core/submit! eng (tu/order eng (list job args)) {})
+     (core/submit! eng (tu/order (list job args)) {})
      (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
      [(count (h/calls p "place")) (count (h/events-of seen :build.declined))])))
 
@@ -757,7 +757,7 @@
 
 (deftest the-check-without-items-waits-naming-the-shortage
   (let [{:keys [eng seen]} (start {:inventory []} {"pen" (pen-plan)})]
-    (core/submit! eng (tu/order eng (list job {:plan "pen" :ways #{:carried}})) {})
+    (core/submit! eng (tu/order (list job {:plan "pen" :ways #{:carried}})) {})
     (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
     (is (= [[:no-items "pen" {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}]]
            (distinct (map (juxt :reason :plan :needs) (h/events-of seen :waiting)))))))
@@ -767,14 +767,14 @@
         real plan/judged
         {:keys [eng seen p]} (start {:inventory []} {"pen" (pen-plan)})]
     (with-redefs [plan/judged (fn [& args] (swap! n inc) (apply real args))]
-      (core/submit! eng (tu/order eng (list job {:plan "pen" :ways #{:carried}})) {})
+      (core/submit! eng (tu/order (list job {:plan "pen" :ways #{:carried}})) {})
       (dotimes [_ 8] (swap! h/clock + 700) (core/tick! eng)))
     (is (< 0 @n 8) "eight ticks, fewer than eight judgements")))
 
 (deftest a-broken-plan-declines-without-a-warn
   (let [{:keys [eng p seen w]} (start {:inventory kit} {})]
     (reset! (:state w) (assoc @(:state w) :plans {"pen" {:error "unreadable EDN: eof"}}))
-    (core/submit! eng (tu/order eng (list job {:plan "pen"})) {})
+    (core/submit! eng (tu/order (list job {:plan "pen"})) {})
     (dotimes [_ 3] (swap! h/clock + 700) (core/tick! eng))
     (is (empty? (h/calls p "place")))
     (is (empty? (h/events-of seen :build.declined)))))
@@ -1871,7 +1871,7 @@
                            (reset! cut? true)
                            (core/cut! eng (core/holder eng) :test nil))
                          r)))
-          (core/submit! eng (tu/order eng '(recording-parent {})) {})
+          (core/submit! eng (tu/order '(recording-parent {})) {})
           (await (core/tick! eng))
           (await (h/run-until-empty eng 40))
           (is (= 9 (:placed @out))))))))
@@ -2511,7 +2511,7 @@
                          (ctx/end c :done nil))}
         eng (assoc-in (:eng s) [:jobs 'lit-parent] parent)]
     (mem/write! (:store eng) stock/stock-kind {:pos [40 64 0] :items {"torch" 8}} stock/stock-policy)
-    (core/submit! eng (tu/order eng '(lit-parent)) {})
+    (core/submit! eng (tu/order '(lit-parent)) {})
     (await (tu/run-until-empty eng 5))
     (first @out)))
 

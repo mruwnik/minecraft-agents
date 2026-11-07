@@ -71,7 +71,7 @@
   (let [p (tu/seeing-all (tu/fake-on-floor (merge {:floor h/flight-floor} (when-not (:no-beds world) {:blocks beds}) (dissoc world :no-beds :settings))))
         _ (prepare p)
         s (assoc (start {:p p} args) :extra (:settings world))]
-    (core/submit! (:eng s) (tu/order (:eng s) '(recording-parent {})) {})
+    (core/submit! (:eng s) (tu/order '(recording-parent {})) {})
     (await (run! s n))
     s))
 
@@ -209,7 +209,7 @@
               _ (feeding p 0 :after #(when (= 2 %) (reset! cut true) (core/shutdown! @eng) (throw (core/cut-error))))
               s (start {:p p :dir dir} args)]
           (reset! eng (:eng s))
-          (core/submit! (:eng s) (tu/order (:eng s) '(recording-parent {})) {})
+          (core/submit! (:eng s) (tu/order '(recording-parent {})) {})
           (await (run! s 40 #(deref cut)))
           (is (= :not-done @(:out s)))
           (fake/add-entity! p (villager 9 6 {:baby true}))

@@ -68,7 +68,7 @@
                                   [[] []]
                                   [nil []]]]
           (let [{:keys [eng]} (setup {:blocks enclosed} zones)]
-            (core/submit! eng (tu/order eng '(jobs.survival.breathe {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.breathe {})) {})
             (await (core/tick! eng))
             (is (= recorded (tidy-entries eng)) (pr-str zones))))))))
 
@@ -77,7 +77,7 @@
   [world zones entries]
   (let [{:keys [eng] :as s} (setup world zones)]
     (seed! eng entries)
-    (core/submit! eng (tu/order eng '(jobs.survival.restore-broken {})) {})
+    (core/submit! eng (tu/order '(jobs.survival.restore-broken {})) {})
     s))
 
 (def aside {:self {:pos [2 64 0]}})
@@ -114,7 +114,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (zs/setup (merge aside {:blocks {"0,65,0" "potatoes" "0,64,0" "farmland"} :inventory []}) [(zs/whole-zone "Miles")])]
-          (core/submit! eng (tu/order eng '(jobs.blocks.dig {:pos {:x 0 :y 65 :z 0} :ignore-zones? true})) {})
+          (core/submit! eng (tu/order '(jobs.blocks.dig {:pos {:x 0 :y 65 :z 0} :ignore-zones? true})) {})
           (await (zs/run-until-empty eng 6))
           (is (= [["potato"]] (mapv :any-of (tidy-entries eng))) "the entry names the seed that replants the crop")
           (fake/add-item! p "potato" 2)
@@ -128,10 +128,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (zs/setup (merge aside {:blocks {"0,65,0" "sugar_cane" "0,66,0" "sugar_cane" "0,64,0" "sand"} :inventory []}) [(zs/whole-zone "Miles")])]
-          (core/submit! eng (tu/order eng '(jobs.blocks.dig {:pos {:x 0 :y 66 :z 0} :ignore-zones? true})) {})
+          (core/submit! eng (tu/order '(jobs.blocks.dig {:pos {:x 0 :y 66 :z 0} :ignore-zones? true})) {})
           (await (zs/run-until-empty eng 6))
           (is (= [] (tidy-entries eng)) "a stalk above its base regrows")
-          (core/submit! eng (tu/order eng '(jobs.blocks.dig {:pos {:x 0 :y 65 :z 0} :ignore-zones? true})) {})
+          (core/submit! eng (tu/order '(jobs.blocks.dig {:pos {:x 0 :y 65 :z 0} :ignore-zones? true})) {})
           (await (zs/run-until-empty eng 6))
           (is (= [[0 65 0]] (mapv :cell (tidy-entries eng))) "the base is noted")))))) 
 
@@ -340,7 +340,7 @@
         (let [{:keys [eng p]} (setup (assoc enclosed-body :floor [-25 -25 25 25] :inventory [{:name "stone" :count 2}])
                                              [(zs/whole-zone "Miles")])]
           (core/register-reflex! eng {:trigger :tidy-pending})
-          (core/submit! eng (tu/order eng '(jobs.survival.breathe {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.breathe {})) {})
           (await (ticks! eng 40))
           (is (= [{:x 0 :y 66 :z 0}] (mapv zs/arg-pos (zs/calls p "place"))) "gravity drops the body back to the shaft floor: the roof cell is clear of it and goes back, its head cell does not")
           (is (= 1 (count (tidy-entries eng))) "the cell at its head waits")
@@ -599,7 +599,7 @@
   (let [{:keys [eng p seen]} (setup world [miles-zone])
         placed-while-live (atom 0)]
     (core/register-reflex! eng {:trigger :tidy-pending})
-    (core/submit! eng (tu/order eng (list 'jobs.blocks.clear-cells (assoc dirt-box :ignore-zones? true))) {})
+    (core/submit! eng (tu/order (list 'jobs.blocks.clear-cells (assoc dirt-box :ignore-zones? true))) {})
     (loop [i 0]
       (when (< i 80)
         (let [live? (some #(= 'jobs.blocks.clear-cells (:def (get-in (core/state eng) [:instances %]))) (:list (core/state eng)))]
@@ -761,7 +761,7 @@
                          r)))
           (await (core/tick! eng))
           (is (= 1 (count (zs/calls p "place"))))
-          (core/submit! eng (tu/order eng '(jobs.survival.restore-broken {})) {})
+          (core/submit! eng (tu/order '(jobs.survival.restore-broken {})) {})
           (await (zs/run-until-empty eng 6))
           (is (= 1 (count (zs/calls p "place"))) "the cell holds what the job left: no second place")
           (is (= [] (tidy-entries eng))))))))
@@ -905,7 +905,7 @@
         (doseq [[kind plan-recorded] [[nil [:hut :hut]] [:mineshaft []]]]
           (let [{:keys [eng]} (zs/setup-with-plan {:blocks (merge enclosed {"0,63,0" "stone"})}
                                                   (cond-> (shape/with-author stair-cells-plan "Miles") kind (assoc :kind kind)))]
-            (core/submit! eng (tu/order eng '(jobs.survival.breathe {})) {})
+            (core/submit! eng (tu/order '(jobs.survival.breathe {})) {})
             (await (core/tick! eng))
             (is (= (map #(some-> % name) plan-recorded) (map :plan (tidy-entries eng))) (str kind))))))))
 

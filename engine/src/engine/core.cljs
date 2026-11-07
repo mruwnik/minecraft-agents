@@ -115,7 +115,6 @@
 (def insert-now list-edits/insert-now)
 (def retry! list-edits/retry!)
 (def submit! list-edits/submit!)
-(def require-worth! list-edits/require-worth!)
 (def act! round/act!)
 (def make-ctx round/make-ctx)
 (def hook-ctx round/hook-ctx)
@@ -140,7 +139,6 @@
   [eng {:keys [register queue]}]
   (doseq [spec register] (register-reflex! eng spec))
   (doseq [spec queue]
-    (list-edits/require-worth! eng spec)
     (submit! eng spec {:by :scenario})))
 
 (def error-kinds #{"died" "error" "reconnect-failed" "dependency-patches-missing"})

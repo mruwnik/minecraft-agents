@@ -51,7 +51,7 @@
   (let [out (atom :not-done)
         parent (tu/recording-parent job args out #(dissoc (tu/outcome %) :status))
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (await (run-until-empty eng n))
     @out))
 
@@ -191,7 +191,7 @@
         (let [dig (get registry/jobs 'jobs.blocks.dig)
               waiting (assoc dig :can-start? (constantly (contract/later :inventory-full "no room")))
               {:keys [eng seen]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig waiting))
-              _ (core/submit! eng (tu/order eng (list job {:plan "field"})) {})]
+              _ (core/submit! eng (tu/order (list job {:plan "field"})) {})]
           (await (run-until-empty eng 12))
           (is (seq (:list (core/state eng))) "the job waits on the dig child, it does not give the cells up")
           (is (empty? (of-kind seen :tidy.refused))))))))
@@ -245,7 +245,7 @@
   ([plans args] (declines plans args []))
   ([plans args zones]
    (let [{:keys [eng p seen]} (start tidy-spec plans zones)]
-     (core/submit! eng (tu/order eng (list job args)) {})
+     (core/submit! eng (tu/order (list job args)) {})
      (dotimes [_ 4] (swap! clock + 700) (core/tick! eng))
      [(count (calls p "dig")) (count (of-kind seen :tidy.declined))])))
 
@@ -259,7 +259,7 @@
 (deftest a-broken-plan-digs-nothing
   (let [{:keys [eng p seen w]} (start tidy-spec {})]
     (reset! (:state w) (assoc @(:state w) :plans {"field" {:error "unreadable EDN: eof"}}))
-    (core/submit! eng (tu/order eng (list job {:plan "field"})) {})
+    (core/submit! eng (tu/order (list job {:plan "field"})) {})
     (dotimes [_ 3] (swap! clock + 700) (core/tick! eng))
     (is (zero? (count (calls p "dig"))))
     (is (empty? (of-kind seen :tidy.declined)))))
@@ -269,7 +269,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p w]} (start tidy-spec {"field" field-plan} nil)]
-          (core/submit! eng (tu/order eng (list job {:plan "field"})) {})
+          (core/submit! eng (tu/order (list job {:plan "field"})) {})
           (await (tu/run-ticks eng clock 3 700))
           (is (zero? (count (calls p "dig"))))
           (world/set-zones! w [])
@@ -469,7 +469,7 @@
                        (let [r (await (impl token args))]
                          ((get {2 #(core/cut! (:eng a) (core/holder (:eng a)) :test nil)} (count (calls p "dig")) (constantly nil)))
                          r)))
-          (core/submit! (:eng a) (tu/order (:eng a) (list job {:plan "field"})) {})
+          (core/submit! (:eng a) (tu/order (list job {:plan "field"})) {})
           (swap! clock + 700)
           (await (core/tick! (:eng a)))
           (is (= 2 (count (calls p "dig"))) "cut after the second dig")

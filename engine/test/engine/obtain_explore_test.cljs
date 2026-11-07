@@ -206,10 +206,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world {} []) [f/own-zone])]
-          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.items.get-tool {:kind "hoe"})) {})
+          (core/submit! (:eng s) (tu/order '(jobs.items.get-tool {:kind "hoe"})) {})
           (await (f/run-ticks s 60))
           (is (< 60 (:worth (first (f/events-of s :obtain.exploring))))
-              "get-tool arrives (##Inf): the obtain under it searches within its job time, not at the hoe's own few seconds"))
+              "a hand order of get-tool gives 1200: the obtain under it searches within its job time, not at the hoe's own few seconds"))
         (let [s (f/start (ore-world {} []) [f/own-zone])]
           (await (obtain! s {:item "wooden_sword" :count 1 :explore true} 60))
           (is (< 0 (:worth (first (f/events-of s :obtain.exploring))) (inc (cost/items-find-worth {"wooden_sword" 1})))

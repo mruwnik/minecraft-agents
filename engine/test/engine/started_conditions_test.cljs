@@ -21,7 +21,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir) :now now :world (ew/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now now})})
         ended (fn [] (first (filter #(#{:completed :stopped} (:kind %)) @seen)))]
-    (core/submit! eng (tu/order eng spec) {})
+    (core/submit! eng (tu/order spec) {})
     (dotimes [_ ticks] (await (core/tick! eng)))
     (assert (nil? (ended)) (str "ended early: " (pr-str (:data (ended)))))
     (flip! p)

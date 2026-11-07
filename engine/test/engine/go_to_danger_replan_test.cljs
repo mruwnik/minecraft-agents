@@ -52,7 +52,7 @@
                      (when (and (= 160 (:budget (last args))) (= :searching (:status (wplan/no-walk pl 0 nil))))
                        (swap! unfinished inc))
                      pl))))
-    (core/submit! eng (tu/order eng '(recording-parent {})) {})
+    (core/submit! eng (tu/order '(recording-parent {})) {})
     (let [ticks (await (tu/with-expansion-budget 20 #(gt/tick-out! eng 400)))]
       (set! wsearch/plan-walk-budgeted! plan-walk)
       (set! wsearch/round-budget budget)

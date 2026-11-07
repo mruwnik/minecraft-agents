@@ -71,12 +71,12 @@
         ;; the floor ends at x 40 and the goal's chunk is not loaded: one call walks to the edge, finds no way on and gives up
         (let [{:keys [eng p]} (setup {:floor [-30 -10 40 10]})
               goal (list 'jobs.movement.go-to {:pos {:x 60 :y 64 :z 0}})]
-          (core/submit! eng (tu/order eng goal) {})
+          (core/submit! eng (tu/order goal) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (<= 35 (first (:pos (fake/self p)))) "the body is at the edge")
           (doseq [[k v] (tu/floor 41 -10 60 10)] (fake/set-block! p (fake/parse-cell k) v))
-          (core/submit! eng (tu/order eng goal) {})
+          (core/submit! eng (tu/order goal) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (is (<= 59 (first (:pos (fake/self p)))) "the second call arrived"))))))

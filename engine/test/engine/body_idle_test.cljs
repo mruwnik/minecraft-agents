@@ -58,7 +58,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {})]
-          (core/submit! eng (tu/order eng '(repeat (filler))) {})
+          (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 9000))
           (is (= [] (idles seen)) "under 10 s: nothing yet")
           (await (run-for eng clock 2000))
@@ -73,8 +73,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {})]
-          (core/submit! eng (tu/order eng '(stuck)) {})
-          (core/submit! eng (tu/order eng '(repeat (filler))) {})
+          (core/submit! eng (tu/order '(stuck)) {})
+          (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 12000))
           (let [[e :as all] (idles seen)]
             (is (= 1 (count all)))
@@ -88,8 +88,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {})]
-          (core/submit! eng (tu/order eng '(cook)) {})
-          (core/submit! eng (tu/order eng '(repeat (filler))) {})
+          (core/submit! eng (tu/order '(cook)) {})
+          (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 12000))
           (is (= {:reason :cooking} (select-keys (:holding (first (:jobs (first (idles seen))))) [:reason]))
               (pr-str (:jobs (first (idles seen))))))))))
@@ -99,8 +99,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {})]
-          (core/submit! eng (tu/order eng '(work)) {})
-          (core/submit! eng (tu/order eng '(repeat (filler))) {})
+          (core/submit! eng (tu/order '(work)) {})
+          (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 60000))
           (is (= [] (idles seen))))))))
 
@@ -109,7 +109,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {:body-idle-s 30})]
-          (core/submit! eng (tu/order eng '(repeat (filler))) {})
+          (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 25000))
           (is (= [] (idles seen)) "the caller's 30 s, not the default 10")
           (await (run-for eng clock 6000))
@@ -120,15 +120,15 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {})]
-          (core/submit! eng (tu/order eng '(repeat (filler))) {})
+          (core/submit! eng (tu/order '(repeat (filler))) {})
           (await (run-for eng clock 12000))
           (is (= 1 (count (idles seen))))
-          (core/submit! eng (tu/order eng '(stuck)) {})
+          (core/submit! eng (tu/order '(stuck)) {})
           (await (run-for eng clock 5000))
           (is (= 1 (count (idles seen))) "a queue change restarts the clock")
           (await (run-for eng clock 6000))
           (is (= 2 (count (idles seen))) "a new stretch tells again")
-          (let [id (core/submit! eng (tu/order eng '(work)) {})]
+          (let [id (core/submit! eng (tu/order '(work)) {})]
             (await (run-for eng clock 3000))
             (core/cancel! eng id :agent))
           (await (run-for eng clock 9000))

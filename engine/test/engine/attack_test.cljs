@@ -36,7 +36,7 @@
   "As scenario, over a body that sees through perception."
   [args world n]
   (let [s (h/setup-seeing world nil 20)]
-    (core/submit! (:eng s) (tu/order (:eng s) (spec args)) {})
+    (core/submit! (:eng s) (tu/order (spec args)) {})
     (await (run-ticks s n 700))
     s))
 
@@ -45,7 +45,7 @@
   [args world n]
   (let [s (h/setup world 20)]
     (sky/with-sky (:p s))
-    (core/submit! (:eng s) (tu/order (:eng s) (spec args)) {})
+    (core/submit! (:eng s) (tu/order (spec args)) {})
     (await (run-ticks s n 700))
     s))
 
@@ -199,7 +199,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zed 7 3) (zed 8 30)]})]
-          (core/submit! eng (tu/order eng (spec {:targets [8 "skeleton"] :absent :wait})) {})
+          (core/submit! eng (tu/order (spec {:targets [8 "skeleton"] :absent :wait})) {})
           (is (nil? (core/tick! eng)))
           (is (zero? (count (h/calls p "attack"))))
           (is (zero? (count (h/calls p "equip")))))))))
@@ -213,7 +213,7 @@
           (is (= [7 7 7 7] (attacked s))))
         (doseq [targets [["player"] ["hostile"] [3 "Fake"]]]
           (let [{:keys [eng]} (h/setup {:entities [(ent 3 "Fake" "player" 1) (ent 9 "Alex" "player" 2)]})]
-            (core/submit! eng (tu/order eng (spec {:targets targets :absent :wait})) {})
+            (core/submit! eng (tu/order (spec {:targets targets :absent :wait})) {})
             (is (nil? (core/tick! eng)) (str targets))))))))
 
 (deftest gives-up-on-an-unreachable-target
@@ -349,7 +349,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)]
           (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:targets [7]})) {})
+          (core/submit! (:eng s) (tu/order (spec {:targets [7]})) {})
           (await (core/tick! (:eng s)))
           (is (finished? s) "nothing left to attack: the call looks round and ends")
           (is (= :lost (:reason (done-event s)))))))))
@@ -360,7 +360,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(zed 7 2)]} 20)]
           (.override (.-world p) "attack" (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "hit" :hurt true})))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:targets [7]})) {})
+          (core/submit! (:eng s) (tu/order (spec {:targets [7]})) {})
           (await (core/tick! (:eng s)))
           (is (finished? s))
           (is (= :lost (:reason (done-event s))))
@@ -386,7 +386,7 @@
           (let [{:keys [p clock eng] :as s} (h/setup {:inventory h/sword :entities [(ent 9 "Alex" "player" 2)]} 20)]
             (.override (.-world p) "attack"
                        (fn [_token _args _impl] (js/Promise.resolve #js {:status "killed" :health 0 :hurt true})))
-            (core/submit! eng (tu/order eng (spec {:targets targets})) {})
+            (core/submit! eng (tu/order (spec {:targets targets})) {})
             (await (core/tick! eng))
             (is (= [9] (attacked s)) (str targets " one swing, then left alone"))
             (is (finished? s) (str targets))
@@ -412,7 +412,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [{:id 5 :name "cow" :kind "passive" :pos {:x 0 :y 64 :z -8}}]} 20)
               _ (hunt-test/hear-passives-until! (:p s) #(<= (:z %) -2))
-              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:targets [5]})) {})
+              _ (core/submit! (:eng s) (tu/order (spec {:targets [5]})) {})
               _ (await (run-ticks s 60 700))]
           (is (= [5] (take 1 (attacked s))) "attacked after stepping north to see it")
           (is (not= :absent (:reason (done-event s)))))))))
@@ -423,7 +423,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities []} 20)
               _ (hunt-test/hear-passives-until! (:p s) (constantly false))
-              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:targets [5]})) {})
+              _ (core/submit! (:eng s) (tu/order (spec {:targets [5]})) {})
               _ (await (run-ticks s 60 700))]
           (is (= :absent (:reason (done-event s))))
           (is (zero? (count (h/calls (:p s) "steer")))))))))
@@ -433,7 +433,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock] :as s} (h/setup {:inventory h/sword} 20)]
-          (core/submit! eng (tu/order eng (spec {:targets ["zombie"] :absent :wait})) {})
+          (core/submit! eng (tu/order (spec {:targets ["zombie"] :absent :wait})) {})
           (is (nil? (core/tick! eng)))
           (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :health 20 :pos [2 64 0]})
           (swap! clock + 700)
@@ -448,7 +448,7 @@
           (.override (.-world p) "attack" (fn [t a impl]
                                             (swap! (fake/state p) assoc-in [:entities 1 :pos] [0 64 40])
                                             (impl t a)))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:targets [7 8]})) {})
+          (core/submit! (:eng s) (tu/order (spec {:targets [7 8]})) {})
           (await (core/tick! (:eng s)))
           (is (= :lost (:reason (done-event s))))
           (is (= [7] (:killed (done-event s)))))))))
@@ -463,7 +463,7 @@
                                             (.then (impl t a) (fn [r]
                                                                 (when (= 4 (swap! n inc)) (swap! (fake/state p) assoc-in [:entities 0 :pos] [0 64 40]))
                                                                 r))))
-          (core/submit! (:eng s) (tu/order (:eng s) (spec {:targets [7] :settings {:jobs.combat.attack/no-damage-hits 4}})) {})
+          (core/submit! (:eng s) (tu/order (spec {:targets [7] :settings {:jobs.combat.attack/no-damage-hits 4}})) {})
           (await (core/tick! (:eng s)))
           (is (= :gave-up (:reason (done-event s))))
           (is (= {7 :no-damage} (:given-up (done-event s)))))))))
@@ -478,7 +478,7 @@
                  (let [st (nth statuses (min @i (dec (count statuses))))]
                    (swap! i inc)
                    (js/Promise.resolve #js {:status st :hurt true}))))
-    (core/submit! eng (tu/order eng (spec {:targets [7] :spend {:job-time 1000}})) {})
+    (core/submit! eng (tu/order (spec {:targets [7] :spend {:job-time 1000}})) {})
     (await (run-ticks s n 700))
     s))
 
@@ -508,7 +508,7 @@
                                             (let [n (swap! i inc)]
                                               (swap! (fake/state p) assoc-in [:entities 0 :pos] [(if (even? n) 10 -4) 64 0])
                                               (js/Promise.resolve #js {:status (if (< n 8) "out-of-reach" "killed")}))))
-          (core/submit! eng (tu/order eng (spec {:targets [7] :spend {:job-time 1000}})) {})
+          (core/submit! eng (tu/order (spec {:targets [7] :spend {:job-time 1000}})) {})
           (await (core/tick! eng))
           (is (>= (count (attacked s)) 5) "swung well past three times")
           (is (empty? (:given-up (done-event s)))))))))
@@ -547,7 +547,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})
         s {:eng eng :p p :seen seen :clock clock}]
-    (core/submit! eng (tu/order eng (spec args)) {})
+    (core/submit! eng (tu/order (spec args)) {})
     (await (run-ticks s n 700))
     s))
 
