@@ -168,6 +168,11 @@
          (reduce (fn [m [cell f]] (update m cell (fnil + 0) f)) {})
          (map (fn [[[x y z] factor]] {:x x :y y :z z :factor factor})))))
 
+(defn walk-tolls
+  "The :tolls of go-to call c's walks and dig routes: the call's own and its send-backs' (send-back-tolls)."
+  [c]
+  (into (vec (:tolls (:args c))) (send-back-tolls (ctx/mem c))))
+
 (defn tour
   "The call's tour of frontiers so far, {:explored :walks}: the blocks walked away from the goal and the frontier walks
   taken since the body last came nearer it than ever."

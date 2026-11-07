@@ -651,6 +651,24 @@
     (is (<= (:seconds seeded) (:seconds lane)))
     (is (< reads (+ lane-reads (/ dr/answer-s (cost/search-read-s)))) (str reads " cells read, the seed's lane " lane-reads))))
 
+(def tolled-tunnel
+  "Stone below y 10 with a tunnel x 0..10 at y 10..11, z 0, open."
+  (world (into {} (for [x (range 0 11) y [10 11]] [[x y 0] "air"]))))
+
+(deftest a-route-pays-the-tolls-of-the-cells-it-steps-into-as-a-walk-does
+  ;; go-to :tolls: a step into a tolled cell costs factor times its own seconds more, so the dig round the tunnel answers
+  (let [opts {:step-s 1 :dig-s (constantly 1) :margin 2}
+        tolls (for [x (range 1 10)] {:x x :y 10 :z 0 :factor 60})
+        walked (dr/route tolled-tunnel [0 10 0] [10 10 0] opts)
+        tolled (dr/route tolled-tunnel [0 10 0] [10 10 0] (assoc opts :tolls tolls))]
+    (is (= 10 (:seconds walked)) "the open tunnel walked")
+    (is (not-any? (set (map (juxt :x :y :z) tolls)) (map :to (:steps tolled))) (pr-str (map :to (:steps tolled))))
+    (is (< (:seconds tolled) (* 61 9)) "dug round, not through at 61 times a step")
+    (is (not-any? #{[5 10 0]} (map :to (:steps (dr/route tolled-tunnel [0 10 0] [10 10 0] (assoc opts :tolls [{:x 5 :y 10 :z 0 :factor ##Inf}])))))
+        "no route enters a cell tolled ##Inf")
+    (is (= 10 (:seconds (dr/route tolled-tunnel [0 10 0] [10 10 0] (assoc opts :tolls (map #(assoc % :trample true) tolls)))))
+        "a trample toll counts only for a step that lands: none on the level tunnel")))
+
 (defn holed-climb
   "Stone below y 30 with about one cell in eight air round a climb from [0 10 0], seeded: [block-at goal]."
   [seed]

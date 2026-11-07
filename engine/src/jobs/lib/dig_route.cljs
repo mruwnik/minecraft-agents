@@ -4,6 +4,7 @@
   (:require ["v8" :as v8]
             [engine.args :as a]
             [engine.path.blocks :as blocks]
+            [engine.path.planner.base :as pbase]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -162,11 +163,23 @@
   (let [mf (or (:max-fall opts) (:max-drop (armour/fall-profile {})))]
     (max 1 (min mf (count (take-while #(or (nil? fall-s) (zero? (fall-s %))) (range 1 (inc mf))))))))
 
+(defn toll-fn
+  "(fn [x y z landing?]) the factor of its own seconds a step into feet cell x y z costs more under tolls (go-to :tolls,
+  [{:x :y :z :factor :trample}], as the walk planner prices them: a :trample row only a step that lands, up or down),
+  ##Inf for a cell no route enters; 0 everywhere without tolls."
+  [tolls]
+  (if (empty? tolls)
+    (constantly 0)
+    (let [^js t (wworld/merged-tolls nil tolls) ^js cells (.-cells t) ^js trample (.-trample t)]
+      (fn [x y z landing?]
+        (let [k (pbase/cell-key x y z)]
+          (+ (or (.get cells k) 0) (if landing? (or (.get trample k) 0) 0)))))))
+
 (defn search
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s held-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s held-s only tolls] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -246,6 +259,7 @@
         ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
+        toll-f (toll-fn tolls)
         only-keys (when only (let [s (js/Set.)] (doseq [[x y z] only] (.add s (key x y z))) s))
         ;; the columns of only's cells: a step into any other is refused unread
         only-cols (when only (let [s (js/Set.)] (doseq [[x _ z] only] (.add s (key x fy z))) s))
@@ -474,10 +488,13 @@
                      (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
                            absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
-                           nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)
+                           step (+ (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)
+                           f (if tolls (toll-f nx ny nz (not= ny (nth (cell-of ck) 1))) 0)
+                           nd (when-not (== ##Inf f) (+ (aget from-node 0) step (if (pos? f) (* f step) 0)))
                            sig (sig-of (aget from-node 9) (aget acc 2))
                            run (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 3)) (aget from-node 6) 0)) 0)]
                        (when-let [nk (cond
+                                       (nil? nd) nil
                                        (some? level) (label! wet-at i nd level (aget acc 4) (aget acc 5) sig placed run)
                                        (or path-state? (pos? (.-size contested))) (label! dry-at i nd nil 0 nil sig placed run)
                                        :else (let [^js old (.get best i)] (when (and (not (.has done i)) (or (nil? old) (< nd (aget old 0)))) i)))]
@@ -921,7 +938,8 @@
   :pillar-s a jump-placed block (a step straight up; none without it; or a fn [n x y z] of the seconds of the n-th block of a run of them, from cell x y z, n 1 the least) and :unseen-step-s a step whose feet, head or
   floor is (:unseen? cell), or on a step up the cell over the head it leaves, or every face its placed block rests on, and
   :lava-s (fn [faces]) the seconds a cut with that many lava faces over or beside it costs, sealed as it is cut (the blocks and the risk the flow reaches the body) and
-  :floor-absent-s (fn [floor-cell rise]) the seconds a walk rising rise blocks onto a floor that is (:unseen? cell) adds, the chance it is none; a
+  :floor-absent-s (fn [floor-cell rise]) the seconds a walk rising rise blocks onto a floor that is (:unseen? cell) adds, the chance it is none,
+  :tolls (go-to's) a step's own seconds times its feet cell's factor more (toll-fn); a
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or, without :lava-s, with lava over or beside it (it would flow in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),

@@ -36,6 +36,7 @@
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
+            [jobs.movement.go-to.cut :refer [walk-tolls]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-placed-fn]]
             [jobs.lib.stair-memory :as smem]
             [jobs.movement.go-to.result :as end]
@@ -498,7 +499,7 @@
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
   jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig at the quickest tool carried (search-clear-ms; with fetch? a wooden pickaxe's when quicker, its fetch then paid once, route-tool; an unseen one's at the chance it is solid, escape/dig-share-fn), a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
-  (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, own-builds/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
+  (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, own-builds/own-cut-fn), a step into a cell of route-opts :tolls at its factor (dig-route/toll-fn, in the search and the straight dig), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig? (a dig beside seen water priced as its flood: body-prices); :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
   body longer than the least of route-opts :worth-s and :bound-s with what it carries, or with
@@ -571,6 +572,7 @@
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
         max-fall (get (merge prices route-opts) :max-fall)
+        toll-f (dig-route/toll-fn (:tolls route-opts))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig, and the digs and steps inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of reading its feet and head cells (:read-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
@@ -613,6 +615,9 @@
                                                 (if (or (nil? nm) (dig-route/open? nm)) 0 ((:dig-s prices) nm h))))
                          steps (map cell-s cells)
                          heads (map head-s (cons from cells))
+                         ;; each step's own seconds (its head and feet dug, the step) times its cell's toll, as the search prices it
+                         tolls (map (fn [[x y z :as cell] [dig step] head] (let [f (toll-f x y z (or (climb? cell) (and down? (= x fx) (= z fz))))] (if (pos? f) (* f (+ dig step head)) 0)))
+                                    cells steps (rest heads))
                          ;; each cell's head then its feet dug, then the step into it, as the search adds them
                          moves (distinct (for [[x y z :as c] (cons from cells)
                                                m (concat (map #(vector :dig %) (if (= c from) [[x (inc y) z]] [[x (inc y) z] c]))
@@ -621,8 +626,8 @@
                                            m))
                          dig (vec (keep (fn [[kind cell]] (when (= :dig kind) cell)) moves))]
                      (when (and (not-any? refused (concat cells (map (fn [[x y z]] [x (inc y) z]) cells)))
-                                (every? some? steps) (every? some? heads))
-                       {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps))
+                                (every? some? steps) (every? some? heads) (not-any? #{##Inf} tolls))
+                       {:seconds (+ (reduce + (reduce + 0 heads) (map first steps)) (reduce + 0 (map second steps)) (reduce + 0 tolls)
                                     (if-let [flood (:flood prices)]
                                       (dig-route/flood-s flood (map (fn [[kind cell]] [kind cell (block-at cell)]) moves))
                                       0)
@@ -722,12 +727,12 @@
 
 (defn search-opts
   "route-answer's route-opts for a choice's opts: its :slice, its :spent searches, its :own-s and :own-cut
-  (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
+  (a way that may cut the body's own builds: searched apart), its :tolls, :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage plugs]}]
+  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage plugs tolls]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :read-s (cost/search-read-s) :max-damage max-damage}
     closed? (assoc :max-fall 1)
-    plugs (assoc :plugs plugs) slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
+    plugs (assoc :plugs plugs) (seq tolls) (assoc :tolls tolls) slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
     guess-risk (assoc :guess-risk guess-risk :worth-s worth-s)))
 
@@ -1010,7 +1015,7 @@
   {:closed? (= :closed (some-> (:one-way (:args c)) keyword)) :own? (own-placed-fn c) :skip (skips c) :spent (:spent-routes (ctx/mem c) #{}) :fetch? (pickaxe-fetch c fetch?) :own-s (own-cut-fn c) :plugs (smem/plugs-of c)
    :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice
    :guess-risk (guess-risk c) :worth-s (let [m (ctx/mem c)] (if-let [rs (:route-search m)] (:worth-s rs) (when (:escalation m) (:fallback-s (:replan-budget m))))) :bound-s (call-budget-s c)
-   :max-damage (:max-damage (wworld/walk-settings c))
+   :max-damage (:max-damage (wworld/walk-settings c)) :tolls (walk-tolls c)
    :risk-s (fn [cells goal work-s] (walk-risk/way-risk-s c (zipmap [:x :y :z] goal) cells work-s))})
 
 (defn detour-way

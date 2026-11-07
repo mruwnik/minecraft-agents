@@ -464,6 +464,21 @@
     (is (seq (:steps a)) (pr-str a))
     (is (< (:searched-s a) (* 2 dig-route/answer-s)) (str (:searched-s a) " s of CPU"))))
 
+(deftest a-dig-route-and-its-straight-dig-pay-the-calls-tolls
+  ;; a level tunnel x 0..10 in stone, tolled factor 60 but for its ends: the straight dig walks it, so priced without the
+  ;; tolls it bounds the search below every way round; priced with them the route digs round
+  (let [blocks (apply dissoc (box -1 63 -3 11 67 3 "stone") (for [x (range 0 11) y [64 65]] (str x "," y ",0")))
+        p (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+        tolls (for [x (range 1 10)] {:x x :y 64 :z 0 :factor 60})
+        id "tolled-tunnel"
+        a (try (loop [i 0]
+                 (let [a (choose/route-answer p [0 64 0] [10 64 0] (constantly true) (constantly false) false false
+                                              {:tolls tolls :read-s (cost/search-read-s) :slice (choose/route-slice id)})]
+                   (if (and (= :searching a) (< i 3)) (recur (inc i)) a)))
+               (finally (choose/end-searches! id)))]
+    (is (seq (:steps a)) (pr-str a))
+    (is (not-any? (set (map (juxt :x :y :z) tolls)) (map :to (:steps a))) (pr-str (map :to (:steps a))))))
+
 (deftest a-route-refused-cell-by-cell-with-no-bound-is-searched-at-most-twice
   ;; no :bound-s or :worth-s: only the zone's refusals end the rounds. The first route is refused; the next search asks
   ;; may-dig? of the cells it weighs, so the route it finds is never refused again
@@ -710,10 +725,11 @@
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
-          (let [steps (map :step (events-of seen :go-to.escalated))]
-            ;; one approach walk, then stairs dug up (38.30 s). The unseeded search's 21.30 s route walked the whole tolled loop
-            ;; (the dig route does not price :tolls, card 1356b93a); searched round planned stairs first, the stairs answer
-            (is (= [:approach :stair :stair :stair] (vec steps)) "one approach walk, then a way dug up, not the loop")))))))
+          (let [es (events-of seen :go-to.escalated)]
+            ;; the dig route prices the tunnel's tolls (factor 60): it leaves the tunnel at once and stairs up, not the loop
+            ;; (unpriced, a 21.30 s route walked all 21 tolled cells)
+            (is (= [:dig-route :approach :stair :stair] (mapv :step es)) (pr-str (map #(select-keys % [:step :at :why]) es)))
+            (is (= [2 50 1] (:at (nth es 2))) "the first stair begins off the tunnel, 2 blocks along")))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
   (async done
