@@ -225,17 +225,21 @@
           (is (empty? (st/calls p "place")) "not dug in"))))))
 
 (deftest the-night-shelters-where-it-stands-rather-than-walk-to-an-open-bed-its-sleep-does-not-end-the-night-in
+  ;; at one meet in 200 s: at the measured rate (0.0012) the 20-block walk and a night in the open is the cheapest (bed 58.6 s, shelter 490.5 s)
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
-          ((status! 0 5) eng)
-          (st/know-bed! eng {:x 20 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tu/run-until-empty eng 40))
-          (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
-          (is (= :shelter (:pick (first (st/emitted seen :night.answers)))) "lying there all night is priced above sheltering")
-          (is (<= (Math/abs (:x (st/pos-of p))) 3) "where it stood, not by the bed"))))))
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+           (fn ^:async inner []
+             (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
+               ((status! 0 5) eng)
+               (st/know-bed! eng {:x 20 :y 64 :z 0})
+               (core/submit! eng '(jobs.survival.night) {})
+               (await (tu/run-until-empty eng 40))
+               (is (empty? (st/calls p "sleep")) "an unwalled, unroofed bed is no place to lie")
+               (is (= :shelter (:pick (first (st/emitted seen :night.answers)))) "lying there all night is priced above sheltering")
+               (is (<= (Math/abs (:x (st/pos-of p))) 3) "where it stood, not by the bed")))))))))
 
 (deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
   (async done
