@@ -152,8 +152,10 @@
 
 (deftest recount-prints-the-walk-and-room-spread
   "RECOUNT-WALK / RECOUNT-ROOM: the p90 over runs (ms/cell) of the walk search and the room flood, per scene and pooled over all
-  runs, with the machine's load average: the lines the walk and room ceilings are set from."
-  (let [load1 (aget (.loadavg (js/require "os")) 0)
+  runs, with the machine's load average: the lines the walk and room ceilings are set from. A bench: runs only with RECOUNT=1 in
+  the environment, never in the normal suite."
+  (when (.. js/process -env -RECOUNT)
+   (let [load1 (aget (.loadavg (js/require "os")) 0)
         runs 60
         spread (fn [label scenes]
                  (let [rows (into {} (for [[k run] scenes] [k (vec (for [_ (range runs)] (let [t0 (now) cells (run)] (/ (- (now) t0) cells))))]))
@@ -165,10 +167,12 @@
                                  " p90 " (.toFixed (percentile all 0.9) 4) " max " (.toFixed (apply max all) 4)))
                    (count rows)))]
     (is (= 2 (spread "RECOUNT-WALK" {:slab (walk-scene {}) :pillars (walk-scene (pillared))})))
-    (is (= 3 (spread "RECOUNT-ROOM" {:slab (flood-room-scene {}) :pillars (flood-room-scene (pillared)) :closed (flood-room-scene (walled))})))))
+    (is (= 3 (spread "RECOUNT-ROOM" {:slab (flood-room-scene {}) :pillars (flood-room-scene (pillared)) :closed (flood-room-scene (walled))}))))))
 
 (deftest recount-prints-the-ceiling-spread-over-big-scenes
-  (let [rows (into {} (for [[k mk] (merge big-scenes scenes)] [k (vec (for [_ (range 5)] (to-cells (mk) 4000)))]))
+  "A bench: runs only with RECOUNT=1 in the environment, never in the normal suite."
+  (when (.. js/process -env -RECOUNT)
+   (let [rows (into {} (for [[k mk] (merge big-scenes scenes)] [k (vec (for [_ (range 5)] (to-cells (mk) 4000)))]))
         per (fn [f] (fn [rs] (map #(/ (* 1000 (:s %)) (f %)) rs)))
         cells-of (per :cells) reads-of (per :reads)]
     (doseq [[k rs] rows]
@@ -179,7 +183,7 @@
                     " p90 " (.toFixed (percentile (cells-of all) 0.9) 4) " max " (.toFixed (apply max (cells-of all)) 4)
                     "; ms/read mean " (.toFixed (/ (* 1000 (reduce + (map :s all))) (reduce + (map :reads all))) 5)
                     " p90 " (.toFixed (percentile (reads-of all) 0.9) 5) " max " (.toFixed (apply max (reads-of all)) 5))))
-    (is (= 8 (count rows)))))
+    (is (= 8 (count rows))))))
 
 (defn pool-scene
   "A search through a stone mass x -15..15, y 60..63, z -8..8 (bedrock round it) from an air cell at its west end to a goal in the bedrock,
