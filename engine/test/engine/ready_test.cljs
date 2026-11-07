@@ -794,6 +794,20 @@
     (is (= [:never :exposed 'jobs.movement.walk-look] (own-cell-exposure long-tunnel sides {:root "an earlier call" :spent {[0 64 0] 1e9} :declined [[8 64 0] [8 65 0]]}))
         "a budget spent and sides declined by an earlier call's decision do not bind this call")))
 
+(deftest the-legs-of-one-walk-to-look-together-cost-less-than-the-stay-they-may-spare
+  (let [sides [[8 64 0] [8 65 0]]
+        status (fn [spent]
+                 (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] nil))
+                               reach-room/unseen-sides (constantly sides)
+                               sh-inside/dark-hall (constantly :roofed)
+                               sh-sense/buried? (constantly true)]
+                   (lit 0 0 #(let [c (assoc (for-iron (ctx-of (assoc long-tunnel :time st/noon))) ::price/stay-s 60)]
+                               (ready/hall-status (assoc c :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:root (:root c) :spent {[0 64 0] spent}}} walk-look/walked-policy)}))
+                                                  nil)))))
+        worth (:worth (second (:look-first (nth (status 0) 2))))]
+    (is (number? worth) "the walk-look child is bought with the stay's price as its worth, not the goal's")
+    (is (= [:ok nil] ((juxt first #(:look-first (nth % 2))) (status worth))) "legs that spent the stay's price buy no more: the stay is judged as it is")))
+
 (deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
   (let [c (ctx-of (assoc tunnel :time st/noon))
         status (fn [unseen]
