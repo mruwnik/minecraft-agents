@@ -13,7 +13,6 @@
             [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
-            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.walk.world :as wworld]))
 
@@ -216,30 +215,51 @@
 
 (defn ^:async searched!
   "{:pick x :price seconds :quote q} of the one of xs the body walks to soonest by one search over all their targets
-  (targets/nearest! :all, go-to's world over what the body has seen: dangers and darkness priced), then go-to's quote of
-  that walk alone (Q141: one search ranks them, not a quote each). target (fn [x]) {:pos :range}, walk (fn [x]) the go-to
-  args; ok? (fn [x]), asked of the pick alone, or a quote with no finite price reject! the pick (fn [x]) and the search
-  runs again without it; rejected? (fn [x]) leaves out the ones rejected before. :searching while the search or the quote goes on, or
-  once this call has spent wsearch/round-ms; nil when no target is reached. price (fn [x s]), default s, adds to a walk's
-  seconds s what x costs besides; quote as best!."
-  [c xs {:keys [target walk ok? quote price rejected? reject!] :or {price (fn [_ s] s)}}]
+  (targets/nearest! :all, go-to's world over what the body has seen: dangers and darkness priced, the planner's own price
+  of a route), then go-to's quote of that walk alone (Q141: one search ranks them, not a quote each; the quote's risk
+  past the planner's, walk-risk's, does not rank them). target (fn [x]) {:pos :range}, walk (fn [x]) the go-to args;
+  ok? (fn [x]), asked of the pick alone, or a quote with no finite price reject! the pick (fn [x]) and the search runs
+  again without it; rejected? (fn [x]) leaves out the ones rejected before. state, an atom of {} the caller keeps while
+  what the search rests on holds, keeps a pick whose quote goes on and the answer once there is one. :searching while a
+  search or a quote goes on, or when this call's next step (a search, a test or a quote, at the mean of those so far)
+  would take it past cost/search-budget-s (Q141): the first step of a call always runs, a search stops at what the
+  budget has left; nil when no target is reached. price (fn [x s]), default s, adds to a walk's seconds s what x costs
+  besides; quote as best!."
+  [c xs {:keys [target walk ok? quote price state rejected? reject!] :or {price (fn [_ s] s)}}]
   (let [t0 (clock/now)
-        goal (fn [x] (let [{:keys [pos range]} (target x)] (assoc (update-vals (select-keys pos [:x :y :z]) js/Math.floor) :range (or range 0))))]
-    (loop []
-      (let [left (vec (remove rejected? xs))
-            goals (mapv goal left)
-            unknown (wworld/with-seeds (wworld/unknown-spec c) nil (-> (mapv (juxt :x :y :z) goals) (into (ledger/stair-stands c)) (into (ledger/tunnel-stands c))))
-            a (when (seq left) (await (targets/nearest! c goals 0 {:tag ::searched :all true :unknown unknown})))
-            x (when (= :found (:status a)) (nth left (:index a)))
-            pass-over! #(do (reject! x) (if (< (- (clock/now) t0) wsearch/round-ms) :again :searching))
-            r (cond
-                (= :searching (:status a)) :searching
-                (nil? x) nil
-                (and ok? (not (ok? x))) (pass-over!)
-                :else (let [q (await ((or quote quote!) c (walk x)))
+        goal (fn [x] (let [{:keys [pos range]} (target x)] (assoc (update-vals (select-keys pos [:x :y :z]) js/Math.floor) :range (or range 0))))
+        quote-pick! (fn ^:async quote-pick [x]
+                      (let [q (await ((or quote quote!) c (walk x)))
                             s (when-not (:estimate q) (price x (quoted-s c q)))]
                         (cond
-                          (nil? s) :searching
-                          (js/isFinite s) {:pick x :price s :quote q}
-                          :else (pass-over!))))]
-        (if (= :again r) (recur) r)))))
+                          (nil? s) (do (swap! state assoc :pending x) :searching)
+                          (js/isFinite s) (do (swap! state assoc :answer {:pick x :price s :quote q}) :done)
+                          :else (do (swap! state dissoc :pending) (reject! x) :again))))]
+    ;; a kept pick or answer no longer among xs (the caller tried it since) is forgotten
+    (let [in (set xs)]
+      (swap! state #(cond-> %
+                      (and (:pending %) (not (in (:pending %)))) (dissoc :pending)
+                      (some-> (:answer %) :pick in not) (dissoc :answer))))
+    (loop []
+      (let [t (clock/now)
+            {:keys [pending]} @state
+            r (cond
+                (contains? @state :answer) :done
+                pending (await (quote-pick! pending))
+                :else (let [left (vec (remove rejected? xs))
+                            goals (mapv goal left)
+                            unknown (wworld/with-seeds (wworld/unknown-spec c) nil (-> (mapv (juxt :x :y :z) goals) (into (ledger/stair-stands c)) (into (ledger/tunnel-stands c))))
+                            a (when (seq left) (await (targets/nearest! c goals 0 {:tag ::searched :all true :unknown unknown
+                                                                                    :ms (max 0 (- (* 1000 (cost/search-budget-s)) (- t t0)))})))
+                            x (when (= :found (:status a)) (nth left (:index a)))]
+                        (cond
+                          (= :searching (:status a)) :searching
+                          (nil? x) (do (swap! state assoc :answer nil) :done)
+                          (and ok? (not (ok? x))) (do (reject! x) :again)
+                          :else (await (quote-pick! x)))))]
+        (swap! state #(-> % (update :ms (fnil + 0) (- (clock/now) t)) (update :steps (fnil inc 0))))
+        (case r
+          :again (let [{:keys [ms steps]} @state]
+                   (if (cost/search-pays? (/ (- (clock/now) t0) 1000) (/ ms steps 1000) (cost/search-budget-s)) (recur) :searching))
+          :done (:answer @state)
+          r)))))

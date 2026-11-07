@@ -34,6 +34,7 @@
             [jobs.survival.night :as night]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
+            [jobs.lib.clock :as clock]
             [jobs.lib.walk.search :as wsearch]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home with-walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
@@ -164,27 +165,36 @@
 
 (deftest a-night-flee-quotes-the-one-site-a-search-picks
   ;; KitOak94: at night each walk's quote is about three times its straight bound, so hundreds of ground sites were
-  ;; quoted one by one in one stretch (331 quotes, 29.8 s); one search over them all picks the site, go-to quotes it alone
+  ;; quoted one by one in one stretch (331 quotes, 29.8 s); one search over them all picks the site, go-to quotes it
+  ;; alone, and a call that has spent its search budget quotes the home at the next (each quote 90 ms here)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [ground (into-array (for [x (range -2 -41 -1) z (range -6 7)] #js {:name "dirt" :pos #js {:x x :y 63 :z z}}))
-              price #(+ 6 (* 3 (pick/walk-s {:x 0 :y 64 :z 0} %)))
-              real flee/flee-target
+              real-target flee/flee-target
+              real-quote pick/quote!
+              stopped clock/now
+              ms (atom 0)
               per-call (atom [])
-              calls (atom nil)]
+              quotes (atom 0)]
+          (set! clock/now #(deref ms))
+          (set! pick/quote! (fn ^:async q [c args]
+                              (when (:floor args) (swap! quotes inc) (swap! ms + 90))
+                              (await (real-quote c args))))
           (set! flee/flee-target (fn ^:async f [c survey?]
-                                   (let [n (count (filter :pos @calls))
-                                         r (await (real c survey?))]
-                                     (swap! per-call conj (- (count (filter :pos @calls)) n))
+                                   (let [n @quotes
+                                         r (await (real-target c survey?))]
+                                     (swap! per-call conj (- @quotes n))
                                      r)))
           (try
-            (let [[log _ quoted] (await (flee-with (fn [args] (swap! calls conj args) {:uses {:job-time [0 (price args) 0]}}) ground))]
-              (is (seq (filter #(= :flee (first %)) log)))
-              (is (seq (filter :pos quoted)))
-              (is (seq @per-call))
-              (is (every? #(<= % 1) @per-call) (str "of 507 sites, each pick quotes one: " (pr-str @per-call))))
-            (finally (set! flee/flee-target real))))))))
+            (let [{:keys [eng p]} (await (flee-home-night (update dark-world :blocks merge {"10,66,0" "stone"}) {}))]
+              (aset p "seenBlocks" (fn [_] ground))
+              (let [log (await (with-child-log #(tu/run-until-empty eng 80)))]
+                (is (seq (filter #(= :flee (first %)) log)))
+                (is (seq @per-call))
+                (is (every? #(<= % 1) @per-call) (str "of 507 sites and the home, a call quotes one: " (pr-str @per-call)))
+                (is (<= @quotes (* 2 (count (filter #(= :flee (first %)) log)))) "the home and one site a flee")))
+            (finally (set! flee/flee-target real-target) (set! pick/quote! real-quote) (set! clock/now stopped))))))))
 
 (deftest a-passed-over-flee-site-stays-so-while-memory-holds-not-past-its-time
   (let [now (atom 0)

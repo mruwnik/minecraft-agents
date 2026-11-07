@@ -75,11 +75,12 @@
   the next call), or {:status :none :reason :proved} (answer). One target is not searched ({:status :found :target t
   :index 0}): the walk to it decides. A target may carry its own :range. opts {:tag :budget :dangers :dark}: tag keeps
   searches of different callers of one body apart (default :default), budget the expansions of one call (default
-  wsearch/round-budget), dangers and dark (default true) whether known dangers and darkness are costed, policy and box
+  wsearch/round-budget), ms the most ms of it (default wsearch/round-ms), dangers and dark (default true) whether known
+  dangers and darkness are costed, policy and box
   (new-search); unknown (wworld/unknown-spec) plans over what the body has seen, as go-to's :unknown; all true searches
   every target, not the first max-targets."
   ([c targets range] (nearest! c targets range nil))
-  ([c targets range {:keys [tag budget unknown all] :or {tag :default budget wsearch/round-budget} :as opts}]
+  ([c targets range {:keys [tag budget ms unknown all] :or {tag :default budget wsearch/round-budget ms wsearch/round-ms} :as opts}]
    (let [targets (vec (cond->> targets (not all) (take max-targets)))
          pw (wworld/path-world (:primitives c) unknown)]
      (cond
@@ -102,7 +103,7 @@
              (do (swap! searches dissoc who)
                  (answer targets (.result p)))
 
-             (or (>= used budget) (>= (- (clock/now) t0) wsearch/round-ms))
+             (or (>= used budget) (>= (- (clock/now) t0) (min ms wsearch/round-ms)))
              (do (swap! searches assoc who search)
                  {:status :searching})
 

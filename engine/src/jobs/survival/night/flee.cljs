@@ -8,6 +8,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.clock :as clock]
+            [jobs.lib.cost :as cost]
             [jobs.lib.expiry :as expiry]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
@@ -128,6 +130,21 @@
   (let [p (:primitives c)]
     (swap! (rejections-of p) assoc [kind pos] (expiry/stamp {:memory (sense/known-memory p)} (ctx/now c) wsearch/search-max-age-ms))))
 
+(defonce ^:private searches (js/WeakMap.))
+
+(defn- search-state
+  "The atom of walk-pick/searched!'s progress over the sites of the body p, kept while sites-key holds, for
+  wsearch/search-max-age-ms."
+  [c p]
+  (let [k (sites-key p look/memory-radius)
+        now (ctx/now c)
+        hit (.get searches p)]
+    (if (and k (= k (:k hit)) (expiry/current? now hit))
+      (:state hit)
+      (let [a (atom {})]
+        (when k (.set searches p (expiry/stamp {:k k :state a} now wsearch/search-max-age-ms)))
+        a))))
+
 (defn cave-needed
   "The wall cells dig-in's :enclose still has to fill to wall in the cave cell f (an unseen cell counts open), when they
   are dry, clear of failed sites, no more than the blocks carried, and none a zone or claim refuses; else nil."
@@ -151,9 +168,10 @@
   them all, then priced by go-to's quote of that walk alone (jobs.lib.walk-pick/searched!; a site's own tests, ground-ok?
   and cave-needed, asked of the pick alone, a pick that fails them or that go-to prices no walk to is passed over
   (reject!) and the search goes on without it; quotes shared with the pass, pick/quote-once!), as the candidate with its
-  :distance, :cost (seconds) and go-to's :route; :searching while the search or the quote goes on, or, with survey?,
-  while the body looks round first; nil when there is none (none after sites/max-flees). Candidates: the home at any
-  distance (quoted on its own, the cheaper of it and the searched pick taken), caves and ground seen within look/memory-radius (a bed is the night's
+  :distance, :cost (seconds) and go-to's :route; :searching while the search or a quote goes on or this call's budget
+  (cost/search-budget-s, Q141) is spent, or, with survey?, while the body looks round first; nil when there is none
+  (none after sites/max-flees). Candidates: the home at any distance (quoted on its own once the search has answered,
+  the cheaper of it and the searched pick taken), caves and ground seen within look/memory-radius (a bed is the night's
   bed way, priced there)."
   [c survey?]
   (let [m (ctx/mem c)
@@ -171,11 +189,17 @@
                     true))
             target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
             walk #(assoc (flee-args %) :floor cost-health/spend-down :worth ##Inf)
-            ;; the home at any distance is quoted on its own: past a search's nodes go-to still plans the long walk
-            home (when (seq places) (await (pick/cheapest! c places {:target target :walk walk :quote pick/quote-once!})))
+            t0 (clock/now)
             site (await (pick/searched! c (filter #(site-open? c %) (untried (sites p look/memory-radius)))
-                                        {:target target :walk walk :ok? ok? :quote pick/quote-once!
+                                        {:target target :walk walk :ok? ok? :quote pick/quote-once! :state (search-state c p)
                                          :rejected? #(rejected? c %) :reject! #(reject! c %)}))
+            ;; the home at any distance is quoted on its own (past a search's nodes go-to still plans the long walk), in
+            ;; this call when a quote's round still fits its budget (Q141)
+            home (cond
+                   (or (= :searching site) (empty? places)) nil
+                   (cost/search-pays? (/ (- (clock/now) t0) 1000) (/ wsearch/round-ms 1000) (cost/search-budget-s))
+                   (await (pick/cheapest! c places {:target target :walk walk :quote pick/quote-once!}))
+                   :else :searching)
             best (if (some #{:searching} [home site]) :searching (first (sort-by :price (filter map? [home site]))))]
         (cond
           (map? best) (let [{:keys [kind pos] :as t} (:pick best)]
