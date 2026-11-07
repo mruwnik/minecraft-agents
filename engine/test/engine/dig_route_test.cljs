@@ -667,3 +667,18 @@
   (let [[w goal] (holed-climb 13)
         r (dr/route w [0 10 0] goal {:step-s 0.3 :dig-s (constantly 0.5) :stair-s 3 :margin 2 :max-fall 3 :max-nodes 20000})]
     (is (< (js/Math.abs (- 33.3 (:seconds r))) 1e-9) (pr-str (dissoc r :steps :dig)))))
+
+(deftest a-wet-label-whose-flood-is-within-another-s-drops-it-at-the-same-route-and-price
+  ;; five pools beside a cut through stone: each opening joins the flood's origin (cost/flood-origin-join), so labels of one
+  ;; cell differ in origin; one whose water reaches no cell the other's does not, at no higher price, drops the other
+  (let [pools (set (for [x [-12 -6 0 6 12] z [-4 0 4]] [x 62 z]))
+        beside? (fn [[x y z]] (some pools [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)] [x (inc y) z] [x (dec y) z]]))
+        w (fn [[x y z :as c]] (cond (#{[-15 62 0] [15 62 0]} c) "air" (pools c) "water"
+                                    (and (<= -15 x 15) (<= 60 y 63) (<= -8 z 8)) "stone" :else "bedrock"))
+        flood {:level (fn [c] (when (beside? c) 62)) :open (delay [2 0]) :dig (fn [under _] [1 (inc under)]) :step (fn [under] [0 under])}
+        run (fn [] (let [[a cells] ((dr/search w [-15 62 0] [15 62 0] {:step-s 1 :flood flood :back-h? true}) 100000)] [(:seconds a) (:dig a) cells]))
+        within cost/flood-origin-within?
+        [s dig cells] (run)
+        [s0 dig0 cells0] (try (set! cost/flood-origin-within? =) (run) (finally (set! cost/flood-origin-within? within)))]
+    (is (= [s0 dig0] [s dig]))
+    (is (< cells cells0) (str cells " cells, by equal origins " cells0))))
