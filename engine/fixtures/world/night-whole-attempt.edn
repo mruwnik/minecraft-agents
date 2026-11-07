@@ -27,7 +27,7 @@
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 140}
   ;; Card b7d85dd0. A body roofed in the middle of a lit tunnel 96 long, whose ends it has not seen, must not walk to them to look
-  ;; (look-edge/saving: the looks pay for the least walk that shows both ends, about 60 blocks, at the chance both prove shut),
+  ;; (look-edge/pays?: the looks pay for the least walk that shows both ends, about 60 blocks, at the chance both prove shut),
   ;; as the flood of a cave once carried a body 150 blocks: no edge walk. On the sky grid the fill hangs over void (an underground cell's shell stops at y -2, so the
   ;; fill there reaches natural rock and caves). The lit, roofed body may end roofed or stay the night in the open by price.
   {:name "pit-opening-onto-a-long-tunnel-does-not-edge-walk-down-it"

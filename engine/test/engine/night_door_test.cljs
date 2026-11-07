@@ -116,7 +116,7 @@
                   w2 (await (night/look-priced c true))]
               (is (= [0 0] [w w2]))
               (is (= [[:night.look-priced {:worth 0 :prices {:bed -305 :exposed 0}}]] @emitted) "emitted once, while the worth is unchanged")
-              (is (not (pos? (look-edge/saving {:primitives (tu/fake {})} w [[20 64 0]]))) "a side to look at is not bought when staying costs nothing"))))))))
+              (is (false? (look-edge/pays? {:primitives (tu/fake {})} w [[20 64 0]])) "a side to look at is not bought when staying costs nothing"))))))))
 
 (defn seeing-setup
   "st/setup over a body that has seen only what its sight passes showed (perception over the fake), as live."
@@ -258,3 +258,27 @@
       (st/looked-round! eng p)
       (is (false? (look?)) "looked from here"))
     (is (false? (look?)) "a fully seen room needs no look")))
+
+(defn ^:async looks-bought
+  "The worths night/look! was called with when the night found `cells` unseen at a look-priced worth of 600."
+  [cells]
+  (let [{:keys [eng seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack}))
+        looks (atom [])]
+    (with-redefs [night/look-priced (fn ^:async [& _] 600)
+                  sh/unlooked-for-roof? (constantly false)
+                  sh/unlooked-for-bed? (constantly false)
+                  look-edge/pending (fn ([_] cells) ([_ _] cells))
+                  look-edge/look! (fn ^:async ([_ _ _ worth] (swap! looks conj worth) :continue) ([_ _ _ _ _] :again))]
+      (core/submit! eng '(jobs.survival.night) {})
+      (await (tu/run-until-empty eng 8))
+      {:looks @looks :failed (filter #(= :failed (:kind %)) @seen)})))
+
+(deftest night-walks-to-look-only-when-the-walk-pays
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [near (await (looks-bought [[8 64 0] [3 64 0]]))
+              far (await (looks-bought [[-1000 64 0] [1000 64 0]]))]
+          (is (seq (:looks near)) "two sides a few blocks off: the look is bought")
+          (is (every? #(< 0 % 600) (:looks near)) "its walks are bought from the worth less the looks, not less the tour as well")
+          (is (empty? (:looks far)) "sides 2000 blocks apart: the walk to both costs more than the worth, no look"))))))

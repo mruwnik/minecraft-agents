@@ -1781,7 +1781,7 @@
         pays (fn [n looked t0 now worth]
                (with-redefs [ctx/mem (constantly {:edge-looked (set (cells looked)) :edge-t0 t0})
                              clock/now (constantly now)]
-                 (pos? (look-edge/saving {:primitives (tu/fake {:self {:pos [0.5 0 0.5]}})} worth (cells n)))))]
+                 (pos? (look-edge/worth-after-looks {:primitives (tu/fake {:self {:pos [0.5 0 0.5]}})} worth (cells n)))))]
     (is (pays 5 0 nil 0 600) "a few unseen sides, none looked at yet: priced at look-s")
     (is (pays 5 5 0 10000 600) "five sides left at 2 s each against a 600 s worth x the chance they are all shut")
     (is (not (pays 400 5 0 10000 600)) "four hundred cells at 2 s each are not bought for the chance they all prove shut")
@@ -1789,10 +1789,10 @@
 
 (deftest the-edge-looks-pay-for-the-least-walk-that-shows-every-side
   ;; A body mid-tunnel with the tunnel's two ends unseen 30 blocks either way: proving it shut means walking to both.
-  (let [saving (fn [cells] (with-redefs [ctx/mem (constantly {})]
-                             (look-edge/saving {:primitives (tu/fake {:self {:pos [48.5 64 16.5]}})} 40 cells)))]
-    (is (pos? (saving [[44 64 16] [53 64 16]])) "two sides a few blocks off: the looks pay")
-    (is (neg? (saving [[18 64 16] [78 64 16]])) "two sides 60 blocks apart, at the same chance: the 24 s walk between them is more than the saving")))
+  (let [pays (fn [cells] (with-redefs [ctx/mem (constantly {})]
+                           (look-edge/pays? {:primitives (tu/fake {:self {:pos [48.5 64 16.5]}})} 40 cells)))]
+    (is (true? (pays [[44 64 16] [53 64 16]])) "two sides a few blocks off: the looks pay")
+    (is (false? (pays [[18 64 16] [78 64 16]])) "two sides 60 blocks apart, at the same chance: the walk to both is more than the worth after the looks")))
 
 (deftest the-edge-walk-is-bought-by-its-price-not-counted
   (let [c {:primitives (tunnel-edge-body nil)}
