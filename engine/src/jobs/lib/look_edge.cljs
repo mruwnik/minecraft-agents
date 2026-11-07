@@ -103,7 +103,7 @@
                  (if-let [[cx cy cz :as c] (first todo)]
                    (if (or (seen c) (not (flood c)) (exit? c))
                      (recur seen (rest todo))
-                     (recur (conj seen c) (into (rest todo) (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1] :let [n [(+ cx dx) (+ cy dy) (+ cz dz)]] :when (and (flood n) (not (seen n)))] n))))
+                     (recur (conj seen c) (into (rest todo) (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ cx dx) (+ cy dy) (+ cz dz)]))))
                    seen))
         stands (filterv (fn [[cx cy cz :as c]] (let [at {:x cx :y cy :z cz}] (and (inside c) (shore/standable? p at) (or (seen-roof? c) (unseen-roof? p at))))) flood)]
     (fn [[x y z]]

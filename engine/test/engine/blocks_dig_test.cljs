@@ -1473,4 +1473,4 @@
       (is (reached? {:x 10 :y 64 :z 0}))
       (is (> @asked near))
       (is (not (reached? {:x 20 :y 64 :z 0})) "past peek-steps")
-      (is (not (reached? {:x 5 :y 64 :z 9})) "off the standable ground"))))
+      (is (not (reached? {:x 5 :y 64 :z 9})) "past peek-steps (14 steps away)"))))
