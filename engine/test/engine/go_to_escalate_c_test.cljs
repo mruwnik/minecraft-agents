@@ -963,6 +963,7 @@
     (is (= 6 (count (:dig plain))))
     (is (= (set dig) hidden) "the straight tunnel, under the light, at this risk still the cheapest")
     (is (> seconds (:seconds plain)) "the risk is in the route's seconds")
+    (is (>= seconds (+ (:seconds plain) (* (cost/look-s 1) (+ 1 (* 5 0.25))))) "each guess's misses (risk/(1 - risk) of them) cost at least the look that shows one")
     (is (priced (* 1.01 seconds)) "priced once: no second factor on the route")
     (is (not (priced (* 0.99 seconds))))
     (is (not-any? hidden (:dig (answer {:guess-risk {:placed 0.9 :apart 0.9} :worth-s ##Inf}))) "guesses that nearly always fail are dug round through seen rock")

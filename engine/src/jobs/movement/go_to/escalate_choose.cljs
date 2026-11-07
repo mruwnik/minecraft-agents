@@ -549,6 +549,15 @@
         ;; an unseen cell is dug at the chance it is solid, as a way's price reads it (escape/dig-share-fn), so a bound
         ;; cuts no route that would win on those prices; a guess is dug again till it holds: over the chance it does
         prices (dig-route/by-share base (if (every? zero? (vals guess-risk)) solid-share #(/ (solid-share %) (- 1 (risk %)))))
+        ;; a guess that fails also costs the look that shows it and the walk back up the tunnel to try another way in
+        ;; (the retry's dig is in the division above): risk/(1 - risk) such misses per guess, as the digs again
+        prices (cond-> prices
+                 (not (every? zero? (vals guess-risk)))
+                 (update :dig-s (fn [dig-s]
+                                  (fn [name cell]
+                                    (let [s (dig-s name cell) k (risk cell)]
+                                      (cond-> s (and s (pos? s) (pos? k))
+                                        (+ (* (/ k (- 1 k)) (+ (cost/look-s 1) (* (:step-s prices) (reduce + (map #(js/Math.abs (- %1 %2)) cell from))))))))))))
         ;; a floor not seen is read as rock where the route may walk on it; the chance it is none (cost/floor-absent-chance of
         ;; the step's kind, the prior turn-back prices it by) is the fall at the measured depths past the step's own (cost/unseen-fall-s less its :fall-s) and the pillar
         ;; back up, priced onto each walk step that lands on one, in the search and the straight dig. Only a floor under a cell
