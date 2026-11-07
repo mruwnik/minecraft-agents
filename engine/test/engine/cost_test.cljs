@@ -371,7 +371,7 @@
 (deftest an-unseen-floor-not-there-a-step-down-costs-the-survivable-falls-under-it-and-the-climb-back-out
   (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1 5 1 30 2} :drop {0 1} :drop-4 {1 1} :drop-8 {2 1}}}
     (fn []
-      (let [body {:health 20 :equipment nil :max-drop 8 :carried 64 :share 0}
+      (let [body {:equipment nil :max-drop 8 :carried 64 :share 0}
             out #(+ (cost/hp-cost (cost/fall-damage nil %)) (cost/pillar-s 0 % %))]
         (is (= (+ (* 0.25 (out 1)) (* 0.25 (out 6))) (cost/unseen-fall-s :down 1 body))
             "a 1-block step: each depth under it by its share, the 31-block fall past max-drop never taken")
@@ -385,13 +385,13 @@
           (is (= (+ (* 0.25 (min 5 (out 1))) (* 0.25 (min 5 (out 6))) (* 0.5 5)) (cost/unseen-fall-s :down 1 looked))
               "peeked first: each depth the cheaper of its fall and turning back, the one past max-drop turning back")
           (is (= 5 (cost/unseen-fall-s :drop-8 8 (assoc looked :max-drop 20 :see-depth 9))) "a landing deeper than the peek sees is turned back from")
-          (is (< (cost/unseen-fall-s :drop-4 4 (assoc looked :health 7 :else-s 2)) (cost/unseen-fall-s :drop-4 4 (assoc body :health 7)))
-              "a hurt body's look over a drop costs at most turning back, not the blind fall"))))))
+          (is (< (cost/unseen-fall-s :drop-4 4 (assoc looked :else-s 2)) (cost/unseen-fall-s :drop-4 4 body))
+              "a look over a drop costs at most turning back, not the blind fall"))))))
 
 (deftest a-fall-deeper-than-sixteen-blocks-is-priced-at-its-depth-and-its-death
   (settings/with-settings {:jobs.lib.cost.value/unseen-fall-counts {:down {0 1} :drop {0 1} :drop-4 {0 1} :drop-8 {9 1 30 1}}}
     (fn []
-      (let [body {:health 20 :equipment nil :max-drop 100 :carried 64 :share 0}
+      (let [body {:equipment nil :max-drop 100 :carried 64 :share 0}
             hp #(cost/hp-cost (cost/fall-damage nil %))
             out #(+ (hp %) (cost/pillar-s 0 % %))]
         (is (= (* 0.5 (+ (out 17) (out 38))) (cost/unseen-fall-s :drop-8 8 body)) "the 30-block tail is its own fall, a lethal one")
@@ -408,11 +408,11 @@
   (settings/with-settings {:jobs.lib.cost.value/pillar-knock-counts {:knock 1 :kept 1}}
     (fn []
       (let [hp #(cost/hp-cost (cost/fall-damage nil %))]
-        (is (= 0 (cost/pillar-knock-s 20 nil [])))
-        (is (= (* 0.5 (+ (hp 1) (hp 2) (hp 3))) (cost/pillar-knock-s 20 nil [1 1 1])) "each block's height is a fall, at the chance")
-        (is (< 0 (cost/pillar-knock-s 20 nil (repeat 4 1)) (cost/pillar-knock-s 20 nil (repeat 8 1))) "a taller pillar falls farther")
-        (is (= 0 (cost/pillar-knock-s 20 nil [0 0 0])) "a column held on every side is never knocked off")
-        (is (= (* 0.5 (+ (* 0.25 (hp 1)) (* 0.5 (hp 2)))) (cost/pillar-knock-s 20 nil [0.25 0.5])) "a block's chance is its open share")))))
+        (is (= 0 (cost/pillar-knock-s nil [])))
+        (is (= (* 0.5 (+ (hp 1) (hp 2) (hp 3))) (cost/pillar-knock-s nil [1 1 1])) "each block's height is a fall, at the chance")
+        (is (< 0 (cost/pillar-knock-s nil (repeat 4 1)) (cost/pillar-knock-s nil (repeat 8 1))) "a taller pillar falls farther")
+        (is (= 0 (cost/pillar-knock-s nil [0 0 0])) "a column held on every side is never knocked off")
+        (is (= (* 0.5 (+ (* 0.25 (hp 1)) (* 0.5 (hp 2)))) (cost/pillar-knock-s nil [0.25 0.5])) "a block's chance is its open share")))))
 
 (deftest a-guess-is-rock-never-dug-at-the-measured-rate-of-its-class-moved-by-the-calls-own-looks
   (settings/with-settings {:jobs.lib.cost.value/guess-rock-counts {:layer-62 {:bad 3 :ok 1} :apart {:bad 0 :ok 99}}}

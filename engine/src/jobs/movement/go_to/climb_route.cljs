@@ -14,13 +14,12 @@
   blocks (cost/pillar-knock-block-s) at the cell's open sides, so a run costs by its own height."
   [p]
   (let [self (.self p)
-        health (.-health self)
         equipment (cost/equipment-of (.-equipment self))
         open-sides (escape/open-sides-fn p)
         shares (js/Map.)
         share (fn [x y z] (let [k (str x "," y "," z)]
                             (if (.has shares k) (.get shares k) (let [v (/ (open-sides [x y z]) 4)] (.set shares k v) v))))]
-    (fn [n x y z] (+ (cw/pillar-cost 1) (if (== 1 n) 0 (cost/pillar-knock-block-s health equipment n (share x y z)))))))
+    (fn [n x y z] (+ (cw/pillar-cost 1) (if (== 1 n) 0 (cost/pillar-knock-block-s equipment n (share x y z)))))))
 
 (defn climb-way
   "The way up for a shut-in body at feet to goal above it, its stair, pillar and dig route allowed (not in opts :skip):

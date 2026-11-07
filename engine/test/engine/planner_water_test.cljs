@@ -943,10 +943,9 @@
     (is (found? r))
     (is (>= (cost r :drown) 10))))
 
-(deftest lethal-seconds-covers-the-dearest-drowning-second
-  (is (>= (planner/lethal-seconds 2 2 8 0 nil 0 0 #js [0 1e3 2e3]) (* 1e6 2 1e3)) "2 hp a second at 1000 s an hp")
-  (is (js/isFinite (planner/lethal-seconds 2 2 js/Infinity 0 (js/Map. #js [#js [1 js/Infinity]]) 0 0 nil)))
-  (is (js/isFinite (planner/lethal-seconds 0 0 js/NaN 0 nil 0 0 nil)) "riskWeight 0: a NaN danger cap"))
+(deftest lethal-seconds-stays-finite
+  (is (js/isFinite (planner/lethal-seconds 2 2 js/Infinity 0 (js/Map. #js [#js [1 js/Infinity]]) 0 0)))
+  (is (js/isFinite (planner/lethal-seconds 0 0 js/NaN 0 nil 0 0)) "riskWeight 0: a NaN danger cap"))
 
 (def bush-bank (world [[10 61 -2 20 63 40 "water"] [21 64 -2 21 64 40 "sweet_berry_bush"]]))
 

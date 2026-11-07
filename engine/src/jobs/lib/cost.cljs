@@ -381,30 +381,30 @@
 
 (defn pillar-knock-block-s
   "Seconds of hp the n-th block of a pillar costs in expectation: value/pillar-knock-chance, times the open share (0..1)
-  of the column's sides there, that a blow shoves the body off it, a fall of n blocks (fall-damage at hp-cost from health)."
-  [health equipment n open]
+  of the column's sides there, that a blow shoves the body off it, a fall of n blocks."
+  [equipment n open]
   (* (value/pillar-knock-chance) open (health/hp-cost (fall-damage equipment n))))
 
 (defn pillar-knock-s
   "Seconds of hp a pillar costs in expectation: the sum of pillar-knock-block-s of its blocks, opens their open shares."
-  [health equipment opens]
-  (transduce (map-indexed (fn [i open] (pillar-knock-block-s health equipment (inc i) open))) + 0 opens))
+  [equipment opens]
+  (transduce (map-indexed (fn [i open] (pillar-knock-block-s equipment (inc i) open))) + 0 opens))
 
 (defn pillar-knock-of
-  "pillar-knock-s of opens for body p's health and kit."
+  "pillar-knock-s of opens for body p's kit."
   [p opens]
   (let [self (.self p)]
-    (pillar-knock-s (.-health self) (equipment-of (.-equipment self)) opens)))
+    (pillar-knock-s (equipment-of (.-equipment self)) opens)))
 
 (defn unseen-fall-s
   "Seconds a step drop-by blocks down (kind :down, :drop, :drop-4 or :drop-8: jobs.lib.walk.sight/prior-kind of its rise) onto a floor the body has not seen costs on top of turning
   back when that floor is not there: the walk goes on down onto what lies under it, value/::unseen-fall-counts' share of
   kind at each depth, when the whole drop is one the planner takes (max-drop; a deeper one it does not, and its dead end
-  is priced apart): the fall's hp (fall-damage at hp-cost from health) and a pillar back up to the takeoff (pillar-s,
+  is priced apart): the fall's hp (fall-damage at hp-cost) and a pillar back up to the takeoff (pillar-s,
   every block unseen at the unseen share, the blocks past carried fetched). With :else-s, the body has peeked over the edge
   first (jobs.lib.walk.sight): each depth costs the cheaper of that fall and :else-s (turning back for the next way), a
   depth the peek does not see (deeper than :see-depth) or the planner does not take :else-s."
-  [kind drop-by {:keys [health equipment max-drop carried share else-s see-depth]}]
+  [kind drop-by {:keys [equipment max-drop carried share else-s see-depth]}]
   (let [counts (get (settings/get value/settings ::value/unseen-fall-counts) kind)
         total (reduce + 0 (vals counts))]
     (if (pos? total)

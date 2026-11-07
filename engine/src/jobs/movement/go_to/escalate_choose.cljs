@@ -554,7 +554,7 @@
         ;; back up, priced onto each walk step that lands on one, in the search and the straight dig. Only a floor under a cell
         ;; seen open: under a guessed cell it is the rock mass the dig prices as a guess
         fall (let [self (.self p)]
-               {:health (.-health self) :equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall prices)
+               {:equipment (cost/equipment-of (.-equipment self)) :max-drop (:max-fall prices)
                 :carried (:count (escape/carried-pillar-item p) 0) :share (wworld/unseen-share p)})
         absent-s (memoize (fn [rise]
                             (let [kind (wsight/rise-kind rise)

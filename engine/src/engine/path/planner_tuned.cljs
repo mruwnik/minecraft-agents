@@ -71,7 +71,7 @@
      sets it from the oxygen when the head is under water. Such a plan to a goal whose head cell breathes, with a breathing
      head cell seen within the goal's range (at most TO-AIR-REACH blocks; options.airSeen, fn x y z: the body has seen or felt
      that block, nil: all) (to-air?), is never refused for air and ends with the head in such a cell: each second past the supply drowns DROWN-HP hp (result cost.drown; not
-     damage, so no damageBudget), the first k hp costing options.drownPrices[k] seconds (nil: damageWeight each); drowning
+     damage, so no damageBudget), each hp costing damageWeight seconds; drowning
      with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
    - options.unknown (nil: off, every loaded cell as it is) {id floorId cell seeDepth seeLit seeLitDepth lightDepth peekS aimS lightCost lightOk
@@ -248,18 +248,13 @@
                      (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))] [dx dy dz])))))))
 
 ;; the seconds a lethal plan costs (Search lethal-s): LETHAL-S times the dearest second the caller's prices allow (a walk
-;; at the danger cap through its dearest toll, in the dark, avoided, an hp of risk and of damage and a second of drowning
-;; at the dearest drownPrices hp), so no toll, danger rate or weight makes a plan that does not kill cost more than one
+;; at the danger cap through its dearest toll, in the dark, avoided, and an hp of risk and of damage), so no toll, danger rate or weight makes a plan that does not kill cost more than one
 ;; that does. A price that is not finite (an Infinity toll, NaN) counts 0: lethal-s stays finite (Infinity * 0 is NaN).
-(defn lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor unknown-factor ^js drown-prices]
+(defn lethal-seconds [risk-weight damage-weight danger-cap dark-factor ^js tolls avoid-factor unknown-factor]
   (let [fin (fn [x] (if ^boolean (js/isFinite x) x 0))
-        toll (if (some? tolls) (reduce max 0 (map fin (es6-iterator-seq (.values tolls)))) 0)
-        drown-hp (if (some? drown-prices)
-                   (reduce max (fin (aget drown-prices 0)) (map #(fin (- %2 %1)) drown-prices (rest drown-prices)))
-                   0)]
+        toll (if (some? tolls) (reduce max 0 (map fin (es6-iterator-seq (.values tolls)))) 0)]
     (* base/LETHAL-S (+ 1 (fin avoid-factor))
-       (+ 1 toll (fin dark-factor) (fin unknown-factor) (fin (* risk-weight danger-cap)) (fin risk-weight) (fin damage-weight)
-          (* base/DROWN-HP drown-hp)))))
+       (+ 1 toll (fin dark-factor) (fin unknown-factor) (fin (* risk-weight danger-cap)) (fin risk-weight) (fin damage-weight)))))
 
 (defn- first-id [^js table name] (aget (.get (.-nameIds table) name) 0))
 
@@ -316,7 +311,7 @@
         rw (option options "riskWeight" 2)
         lethal-s (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) (if (some? dark-shares) (apply max (array-seq dark-shares)) 0)
                                  (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
-                                 (unknown-factor unknown costs) (.-drownPrices options))]
+                                 (unknown-factor unknown costs))]
     (->Search
      ;; the world
      snapshot table (.-space options)
@@ -414,8 +409,8 @@
      (.-landing options) (.-landingSeen options)
      ;; dmgs move-dmg enter-dmg cur-dmg damage-refused
      (js/Float64Array. cap) 0 0 0 false
-     ;; drowns cur-drown drown-prices lethal-hp air-known
-     (js/Float64Array. cap) 0 (.-drownPrices options) (option options "health" 20) (.-airSeen options) (unchecked-get costs "drownSlack")
+     ;; drowns cur-drown lethal-hp air-known
+     (js/Float64Array. cap) 0 (option options "health" 20) (.-airSeen options) (unchecked-get costs "drownSlack")
      (not (pos? (or-else (unchecked-get costs "lethalAir") 0))) false
      ;; drown-runs drown-closed move-run move-closed lethal-s
      (js/Float64Array. cap) (js/Float64Array. cap) 0 0 lethal-s
