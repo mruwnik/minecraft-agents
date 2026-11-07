@@ -1077,10 +1077,11 @@
   [f mark?]
   (let [lock (.join path (:dir f) "worlds" "w" "observers" "Probe" "agent.lock")
         waiting (observe/wait! (:req f) {:get! (:get! f) :output (fn [_] (js/Promise.resolve nil))})]
-    (js/setTimeout (fn []
-                     (when mark? (.writeFileSync fs (.join path lock "displaced") ""))
-                     (.kill js/process (.-pid js/process) "SIGTERM"))
-                   300)
+    ((fn poll []
+       (if-not (.existsSync fs lock)
+         (js/setTimeout poll 10)
+         (do (when mark? (.writeFileSync fs (.join path lock "displaced") ""))
+             (.kill js/process (.-pid js/process) "SIGTERM")))))
     (-> waiting (.then (fn [_] nil)) (.catch (fn [error] (.-code error))))))
 
 (deftest sigterm-of-a-marked-wait-is-displaced-and-of-an-unmarked-one-cancelled
