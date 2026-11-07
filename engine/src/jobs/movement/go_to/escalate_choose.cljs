@@ -512,7 +512,7 @@
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
   :guess-risk {class chance}: guess-class), in the search; it is none over :worth-s seconds. Its :share-s is its :seconds
-  without the guesses' digs again, as a way's price reads unseen cells."
+  without the guesses' digs again, as a way's price reads unseen cells. The body's own blocks (own?) are dug free in the search and the worth checks; the reported :seconds and :share-s add their dig."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
   (let [own-s (:own-s route-opts)
         guess-risk (:guess-risk route-opts)
@@ -666,11 +666,14 @@
       ;; the search dug at search-clear-ms: the route pays the fetch when that is the quicker, else digs with what is carried
       (let [tool (route-tool p block-at (:dig a) own? fetch? solid-share)
             a (update a :seconds + (- (:s tool) (:searched tool)))
-            dig-s (fn [pr cell] (or ((:dig-s pr) (block-at cell) cell) 0))]
+            dig-s (fn [pr cell] (or ((:dig-s pr) (block-at cell) cell) 0))
+            ;; the search and the worth checks dig the body's own blocks free (its escape is not held to the worth); the reported price pays them
+            own-s (if own? (transduce (comp (filter #(own? % (block-at %))) (map #(/ (clear-ms (block-at %)) 1000))) + 0 (:dig a)) 0)]
         (cond
           (not (cost/affords? (:s tool) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil
           (cost/affords? (:seconds a) (or worth-s ##Inf))
-          (assoc a :share-s (+ (:seconds a) (transduce (map #(- (* (solid-share %) (dig-s base %)) (dig-s prices %))) + 0 (:dig a))))
+          (assoc a :seconds (+ (:seconds a) own-s)
+                 :share-s (+ (:seconds a) own-s (transduce (map #(- (* (solid-share %) (dig-s base %)) (dig-s prices %))) + 0 (:dig a))))
           dearer? :dearer)))))
 
 (defn route-cells

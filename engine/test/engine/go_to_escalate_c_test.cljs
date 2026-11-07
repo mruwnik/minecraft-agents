@@ -1158,6 +1158,14 @@
     (is (nil? (route (constantly false))) "8 foreign blocks by hand take minutes")
     (is (seq (route (constantly true))) "its own pillar left behind is dug out however long it takes")))
 
+(deftest a-route-through-the-bodys-own-blocks-reports-their-dig-time
+  (let [world (assoc (box 0 60 -1 9 70 1 "cobblestone") "0,64,0" "air" "0,65,0" "air")
+        p (tu/fake {:blocks world :inventory []})
+        seconds (fn [own?] (:seconds (choose/route-answer p [0 64 0] [8 64 0] (constantly true) own? false false {:worth-s 30})))
+        mine (seconds (constantly true))]
+    (is (nil? (seconds (constantly false))) "foreign blocks are held to the worth")
+    (is (> mine (* 7 (/ (tools/clear-ms p "cobblestone") 1000))) "the planks it dug its way out through are in the price, as stairs pay theirs")))
+
 (deftest a-dig-route-is-priced-with-the-pickaxe-the-body-would-fetch
   (let [world (assoc (box 0 60 -1 40 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
         route (fn [inventory fetch?] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false) false fetch? {:worth-s 30}))]
