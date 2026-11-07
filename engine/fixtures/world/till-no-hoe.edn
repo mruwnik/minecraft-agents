@@ -1,6 +1,6 @@
 ;; jobs.farm.till with no hoe: the hoe is fetched (jobs.lib.need); a failed fetch ends the call :stopped :tool (not :completed).
 ;; Should-fail: no hoe and no chest in view: the fetch finds nothing, the job ends :stopped :tool, nothing tilled.
-;; Should-succeed: a seen chest holds a hoe: it is fetched and the 9 grass cells are tilled.
+;; Should-succeed: a chest holds a hoe, in view or behind the body (looked round for): it is fetched and the 9 grass cells are tilled.
 ;; The floor is grass (floor y -1 is the ground layer); the 3x3 square is centred at [16 -1 16].
 {:defaults
  {:tags [:farm :till :fetch :jobs]
@@ -18,6 +18,13 @@
   {:name "hoe-in-a-seen-chest-is-fetched-and-tills"
    :body {:yaw 270}
    :blocks [[:set [18 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]
+   :act [[:job (jobs.farm.till {:worth 1200 :area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:tilled 9}} :within-s 80 :of-job true}]
+   :after [[:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"] [:item "stone_hoe" 1]]}
+  ;; the same chest behind the body (north; it faces south): obtain looks round before it prices the far ways, sees the chest and fetches the hoe
+  {:name "hoe-in-a-chest-behind-is-found-by-a-look-round"
+   :body {:yaw 0}
+   :blocks [[:set [16 0 10] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]
    :act [[:job (jobs.farm.till {:worth 1200 :area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 9}} :within-s 80 :of-job true}]
    :after [[:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"] [:item "stone_hoe" 1]]}

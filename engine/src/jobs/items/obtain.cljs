@@ -46,7 +46,7 @@
 
   A death since the call began starts it again from what is carried: :got counts from the respawn.
 
-  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only for a child given a :worth).
+  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only for a child given a :worth; a :look instead while chests are allowed, none is seen and a look round is within the worth: the price is judged after it).
   Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source (with the craft child's cause as :cause when a gather also ended), :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: fetch-time/one-unit-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
@@ -133,6 +133,15 @@
   (let [a (:args c)]
     (if (:bill a) (cost/items-find-worth (:bill a)) (own-worth c (names-of a) (:count a 1)))))
 
+(defn survey-first?
+  "Before the first round, with chests allowed, none usable seen that might hold one of names and no look around yet:
+  the round looks around first, so a chest behind the body is preferred to a craft or gather."
+  [c names]
+  (and (not (:start (ctx/mem c)))
+       (not (look/surveyed? c))
+       (way? c :chest)
+       (empty? (candidates c names))))
+
 (defn not-worth
   "{:reason :not-worth :price :worth} when the call (no bill) is worth less (ctx/worth) than price-of, the cheapest way
   known; with none (##Inf) only for a child its caller gave a :worth, to weigh that price: else (a root too) the source checks say what is lacking."
@@ -144,11 +153,19 @@
         (when-not (or (cost/affords? s worth) (and (not (and (seq (:slots c)) given)) (not (js/isFinite s))))
           {:reason :not-worth :price s :worth worth})))))
 
+(defn look-first?
+  "Whether the round would look around first (survey-first?) for no more than the call's worth (a look round's looks):
+  a look may show a chest that makes a dear call cheap."
+  [c]
+  (and (survey-first? c (names-of (:args c)))
+       (cost/affords? (cost/look-s (look/round-size)) (ctx/worth c))))
+
 (defn can-start? [c]
   (let [cause (no-source c)
         dear (not-worth c)]
     (contract/all [(checks/cause-status :never (bad-args c)) (checks/cause-status (:kind (cljs.core/meta cause) :later) cause)
-                   (checks/cause-status :later dear (when dear (str "obtain: costs " (js/Math.round (:price dear)) " s, worth " (js/Math.round (:worth dear)) " s")))])))
+                   (checks/cause-status (if (and dear (look-first? c)) :look :later) dear
+                                        (when dear (str "obtain: costs " (js/Math.round (:price dear)) " s, worth " (js/Math.round (:worth dear)) " s")))])))
 
 (defn held-name
   "The name of names carried most of in inventory inv, else the first."
@@ -210,15 +227,6 @@
   (if (:bill (:args c))
     {:uses {:job-time [0 (* (count (bill/todo c)) 2 (gather-need-s)) ##Inf]}}
     (quote-item c)))
-
-(defn survey-first?
-  "Before the first round, with chests allowed, none usable seen that might hold one of names and no look around yet:
-  the round looks around first, so a chest behind the body is preferred to a craft or gather."
-  [c names]
-  (and (not (:start (ctx/mem c)))
-       (not (look/surveyed? c))
-       (way? c :chest)
-       (empty? (candidates c names))))
 
 (defn chests-to-try
   "The candidates whose walk there and back (with its risk) costs no more than the cheapest other way that would start
