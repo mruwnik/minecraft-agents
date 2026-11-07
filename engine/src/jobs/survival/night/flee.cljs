@@ -47,6 +47,17 @@
        (let [blocks (flight/blocks c)]
          (boolean (or (pit/pit-plan c pos blocks) (:unseen (pit/stop-of c blocks pos)))))))
 
+(defn site-open?
+  "The cheap tests of site x, asked of every site before the search (the dear ones, ground-ok? and cave-needed, only of
+  its pick): clear of failed sites, and ground where a pit looks diggable (pit-site/pit-site?), a cave dry at both cells."
+  [c {:keys [kind pos]}]
+  (let [p (:primitives c)]
+    (and (pit-site/clear-of-failed? c pos)
+         (case kind
+           :ground (pit-site/pit-site? p pos)
+           :cave (and (not (dig-cells/wet? p pos)) (not (dig-cells/wet? p (update pos :y inc))))
+           true))))
+
 (defn cave-sites
   "Feet cells over the seen solids [{:name :pos}] under a roof (a seen solid block 2..roof-height above), with two seen
   free cells, as {:kind :cave :pos}; whether they are dry and dig-in's :enclose walls one in (cave-needed) is asked only
@@ -69,15 +80,22 @@
 
 (defonce ^:private site-lists (js/WeakMap.))
 
-(defn sites
-  "cave-sites then ground-sites of the seen solids within radius of the body, kept while what it remembers
-  (sense/known-memory), where it stands and what it carries hold: memory changes far less often than flee-target asks."
+(defn- sites-key
+  "What the seen sites within radius rest on: what the body remembers (sense/known-memory), where it stands and what it
+  carries; nil without a memory."
   [p radius]
   (let [^js st (some-> (aget p "perception") :st)
         memory (sense/known-memory p)
-        ^js pos (.-pos (.self p))
-        k (when memory [(aget p "seenBlocks") (.-dim st) memory [(.-x pos) (.-y pos) (.-z pos)] radius (sh-sense/roof-height)
-                        (into #{} (map :name) (u/inventory p))])
+        ^js pos (.-pos (.self p))]
+    (when memory [(aget p "seenBlocks") (.-dim st) memory [(.-x pos) (.-y pos) (.-z pos)] radius (sh-sense/roof-height)
+                  (into #{} (map :name) (u/inventory p))])))
+
+(defn sites
+  "cave-sites then ground-sites of the seen solids within radius of the body, kept while sites-key holds: memory changes
+  far less often than flee-target asks."
+  [p radius]
+  (let [^js st (some-> (aget p "perception") :st)
+        k (sites-key p radius)
         hit (when k (.get site-lists st))]
     (if (and k (= k (:k hit)))
       (:sites hit)
@@ -85,6 +103,20 @@
             v (into (vec (cave-sites p solids)) (ground-sites p solids))]
         (when k (.set site-lists st {:k k :sites v}))
         v))))
+
+(defonce ^:private rejections (js/WeakMap.))
+
+(defn- rejected
+  "The atom of the candidates flee-target's search picked and passed over (a site's own test failed, or go-to priced no
+  walk), kept per body while sites-key holds, so a search cut short by its time goes on without them."
+  [p]
+  (let [k (sites-key p look/memory-radius)
+        hit (.get rejections p)]
+    (if (and k (= k (:k hit)))
+      (:rejected hit)
+      (let [a (atom #{})]
+        (when k (.set rejections p {:k k :rejected a}))
+        a))))
 
 (defn cave-needed
   "The wall cells dig-in's :enclose still has to fill to wall in the cave cell f (an unseen cell counts open), when they
@@ -105,29 +137,35 @@
     {:pos pos :range 0}))
 
 (defn ^:async flee-target
-  "The place not yet tried tonight, somewhere safer than here (see the doc), whose walk go-to quotes cheapest (jobs.lib.walk-pick/
-  cheapest!: every candidate is ranked by the least its straight walk takes and quoted best-first, as the flight itself
-  will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
-  :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none
-  after sites/max-flees). Candidates: the home at any distance, caves and ground seen within look/memory-radius (a bed is the night's bed way, priced there)."
+  "The place not yet tried tonight, somewhere safer than here (see the doc), the body walks to soonest by one search over
+  them all, then priced by go-to's quote of that walk alone (jobs.lib.walk-pick/searched!; a site's own tests, ground-ok?
+  and cave-needed, asked of the pick alone, a pick that fails them or that go-to prices no walk to is passed over and the
+  search goes on without it; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost
+  (seconds) and go-to's :route; :searching while the search or the quote goes on, or, with survey?, while the body looks
+  round first; nil when there is none (none after sites/max-flees). Candidates: the home at any distance (quoted on its
+  own, the cheaper of it and the searched pick taken), caves and ground seen within look/memory-radius (a bed is the
+  night's bed way, priced there)."
   [c survey?]
   (let [m (ctx/mem c)
         p (:primitives c)
         tried (set (:flee-failed m))]
     (when (< (or (:flees m) 0) (sites/max-flees))
       (let [here (sh-sense/feet p)
-            places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] ##Inf))
-            cands (->> (concat places (sites p look/memory-radius))
-                       (remove #(contains? tried (:pos %))))
+            untried (partial remove #(contains? tried (:pos %)))
+            places (untried (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] ##Inf)))
             needed (atom {})
             ok? (fn [{:keys [kind pos] :as x}]
                   (case kind
                     :ground (ground-ok? c x)
                     :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
                     true))
+            target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
             walk #(assoc (flee-args %) :floor cost-health/spend-down :worth ##Inf)
-            best (await (pick/cheapest! c cands {:target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
-                                                 :walk walk :ok? ok? :quote pick/quote-once! :like :kind}))]
+            ;; the home at any distance is quoted on its own: past a search's nodes go-to still plans the long walk
+            home (when (seq places) (await (pick/cheapest! c places {:target target :walk walk :quote pick/quote-once!})))
+            site (await (pick/searched! c (filter #(site-open? c %) (untried (sites p look/memory-radius)))
+                                        {:target target :walk walk :ok? ok? :quote pick/quote-once! :rejected (rejected p)}))
+            best (if (some #{:searching} [home site]) :searching (first (sort-by :price (filter map? [home site]))))]
         (cond
           (map? best) (let [{:keys [kind pos] :as t} (:pick best)]
                         (cond-> (assoc t :distance (u/dist here pos) :cost (:price best) :route (get-in best [:quote :route]))

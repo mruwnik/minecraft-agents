@@ -13,6 +13,7 @@
             [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.walk.world :as wworld]))
 
@@ -102,14 +103,13 @@
   that walk; ok? (fn [x], default all) is asked of a candidate only when its turn comes, so a costly test is paid for just the
   candidates reached; quote (fn [c args], default quote!) asks go-to, so a caller can reuse one quote. Quoted best-first
   by bound until the best quoted is no dearer than the next bound, each one whose quote-gain over the ratios of the
-  quoted ones it is like (like (fn [x]), default all alike: the same answer) is more than a quote costs (the seconds
+  quoted ones is more than a quote costs (the seconds
   on the clock the quotes so far took each, their ok? tests included, or, when more, their route searches' expansions
   at cost/search-cell-s); the others are passed over.
   rebound (fn [x q left]), asked after each quote until it answers non-nil: a fn is a tighter bound of the candidates left, ranked by it from then on."
-  [c candidates {:keys [bound args price ok? quote rebound like]}]
-  (let [like (or like (constantly nil))
-        t0 (clock/now)
-        ratios (volatile! {})
+  [c candidates {:keys [bound args price ok? quote rebound]}]
+  (let [t0 (clock/now)
+        ratios (volatile! [])
         quoted (volatile! 0)
         searched (volatile! 0)
         ;; a search's CPU by its expansions too: the :test build's clock stands still
@@ -117,14 +117,14 @@
     (loop [[x & more :as left] (by-bound bound candidates) best nil bound bound rebound rebound]
       (cond
         (or (empty? left) (not (js/isFinite (bound x))) (and best (<= (:price best) (bound x)))) best
-        (or (and best (<= (cost/quote-gain (:price best) (bound x) (get @ratios (like x))) (quote-s)))
+        (or (and best (<= (cost/quote-gain (:price best) (bound x) @ratios) (quote-s)))
             (and ok? (not (ok? x)))) (recur more best bound rebound)
         :else (let [b (bound x)
                     q (await ((or quote quote!) c (args x)))
                     s (price x q)
                     _ (vswap! quoted inc)
                     _ (vswap! searched + (or (get-in q [:route :nodes]) 0))
-                    _ (when (and (pos? b) (not (:estimate q))) (vswap! ratios update (like x) conj (/ s b)))
+                    _ (when (and (pos? b) (not (:estimate q))) (vswap! ratios conj (/ s b)))
                     best (if (and (js/isFinite s) (or (nil? best) (< s (:price best)))) {:pick x :price s :quote q} best)
                     r (when rebound (await (rebound x q more)))]
                 (cond
@@ -179,7 +179,7 @@
 (defn ^:async cheapest!
   "{:pick x :price seconds :quote q} of the one of xs whose walk go-to quotes cheapest, within limit-s seconds (those whose
   straight walk alone is over it are left out, the rest quoted best-first, best!). target (fn [x]) {:pos :range} bounds the
-  straight walk, walk (fn [x]) are the go-to args; ok?, quote and like as best!. A quote whose search still goes on prices nothing
+  straight walk, walk (fn [x]) are the go-to args; ok? and quote as best!. A quote whose search still goes on prices nothing
   (its estimate is no price): x is left out this call; with none priced and one searching, :searching (ask again later); a priced pick wins over a search still going on unless one of the candidates it left out could
   still be cheaper (its straight walk under the pick's price): then :searching.
   Nil when no walk is priced. price (fn [x s]), default s, adds to a walk's seconds s what x costs besides.
@@ -187,7 +187,7 @@
   seen) are out of reach too (none-reachable!): then each
   of their quotes would be go-to's guess with no route, ##Inf, or with a way that changes the world (the quote's mean is finite)
   cost-planner/left-s of its straight blocks, so that is their bound; :searching while that search goes on."
-  [c xs {:keys [target walk limit-s ok? quote price like] :or {price (fn [_ s] s) limit-s ##Inf}}]
+  [c xs {:keys [target walk limit-s ok? quote price] :or {price (fn [_ s] s) limit-s ##Inf}}]
   (let [feet (u/self-pos c)
         cell #(update-vals (select-keys % [:x :z]) js/Math.floor)
         bound #(walk-s feet (target %))
@@ -206,10 +206,40 @@
                         (and (number? mean) (js/isFinite mean)) (fn [x] (max (bound x) (guess-s x)))
                         :else (constantly ##Inf)))))
         best (await (best! c (cond->> xs (js/isFinite limit-s) (filter #(<= (bound %) limit-s)))
-                           {:bound bound :args walk :ok? ok? :quote quote :rebound rebound :like like
+                           {:bound bound :args walk :ok? ok? :quote quote :rebound rebound
                             :price (fn [x q] (if (:estimate q)
                                                (do (reset! searching true) ##Inf)
                                                (price x (quoted-s c q))))}))]
     (cond
       (and best (or (nil? @reaching) (<= (:price best) @reaching))) best
       (or @reaching @searching) :searching)))
+
+(defn ^:async searched!
+  "{:pick x :price seconds :quote q} of the one of xs the body walks to soonest by one search over all their targets
+  (targets/nearest! :all, go-to's world over what the body has seen: dangers and darkness priced), then go-to's quote of
+  that walk alone (Q141: one search ranks them, not a quote each). target (fn [x]) {:pos :range}, walk (fn [x]) the go-to
+  args; ok? (fn [x]), asked of the pick alone, and a quote with no finite price put the pick into rejected (an atom of a
+  set the caller keeps across calls) and search again without it. :searching while the search or the quote goes on, or
+  once this call has spent wsearch/round-ms; nil when no target is reached. price (fn [x s]), default s, adds to a walk's
+  seconds s what x costs besides; quote as best!."
+  [c xs {:keys [target walk ok? quote price rejected] :or {price (fn [_ s] s)}}]
+  (let [t0 (clock/now)
+        goal (fn [x] (let [{:keys [pos range]} (target x)] (assoc (update-vals (select-keys pos [:x :y :z]) js/Math.floor) :range (or range 0))))]
+    (loop []
+      (let [left (vec (remove @rejected xs))
+            goals (mapv goal left)
+            unknown (wworld/with-seeds (wworld/unknown-spec c) nil (-> (mapv (juxt :x :y :z) goals) (into (ledger/stair-stands c)) (into (ledger/tunnel-stands c))))
+            a (when (seq left) (await (targets/nearest! c goals 0 {:tag ::searched :all true :unknown unknown})))
+            x (when (= :found (:status a)) (nth left (:index a)))
+            reject! #(do (swap! rejected conj x) (if (< (- (clock/now) t0) wsearch/round-ms) :again :searching))
+            r (cond
+                (= :searching (:status a)) :searching
+                (nil? x) nil
+                (and ok? (not (ok? x))) (reject!)
+                :else (let [q (await ((or quote quote!) c (walk x)))
+                            s (when-not (:estimate q) (price x (quoted-s c q)))]
+                        (cond
+                          (nil? s) :searching
+                          (js/isFinite s) {:pick x :price s :quote q}
+                          :else (reject!))))]
+        (if (= :again r) (recur) r)))))

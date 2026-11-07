@@ -21,7 +21,6 @@
             [engine.scenario :as scenario]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
-            [jobs.lib.clock :as clock]
             [jobs.lib.price :as price]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.sense :as sense]
@@ -30,7 +29,6 @@
             [jobs.lib.util :as u]
             [engine.triggers :as triggers]
             [jobs.lib.spawn-light :as spawn-light]
-            [jobs.lib.targets :as targets]
             [jobs.survival.bed-down :as bed-down]
             [jobs.lib.food-animals :as animals]
             [jobs.survival.night :as night]
@@ -163,37 +161,29 @@
           (is (= [far] (map #(:pos (nth % 2)) (filter #(= :flee (first %)) log))) "the farthest ground site, the only one go-to reaches, is walked to")
           (is (< 16 (count (filter :floor calls))) "quoted past the nearest 16"))))))
 
-(deftest a-night-flee-stops-quoting-once-another-quote-costs-more-than-it-may-save
-  ;; KitOak94: at night each walk's quote is about three times its straight bound, so hundreds of ground sites under
-  ;; the best price were quoted in one stretch (331 quotes, 29.8 s)
+(deftest a-night-flee-quotes-the-one-site-a-search-picks
+  ;; KitOak94: at night each walk's quote is about three times its straight bound, so hundreds of ground sites were
+  ;; quoted one by one in one stretch (331 quotes, 29.8 s); one search over them all picks the site, go-to quotes it alone
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [ground (into-array (for [x (range -2 -41 -1) z (range -6 7)] #js {:name "dirt" :pos #js {:x x :y 63 :z z}}))
               price #(+ 6 (* 3 (pick/walk-s {:x 0 :y 64 :z 0} %)))
-              ;; each pick that quoted: [its quotes, its price]
-              picks (fn ^:async ps [quote-ms]
-                      (let [stopped clock/now
-                            best! pick/best!
-                            ms (atom 0)
-                            quotes (atom 0)
-                            picks (atom [])]
-                        (set! clock/now #(deref ms))
-                        (set! pick/best! (fn ^:async b [c xs opts]
-                                           (let [n @quotes
-                                                 r (await (best! c xs opts))]
-                                             (swap! picks conj [(- @quotes n) (:price r)])
-                                             r)))
-                        (try (await (flee-with (fn [args] (swap! ms + quote-ms) (swap! quotes inc) {:uses {:job-time [0 (price args) 0]}}) ground))
-                             (remove (comp zero? first) @picks)
-                             (finally (set! clock/now stopped) (set! pick/best! best!)))))
-              free (await (picks 0))
-              priced (await (picks 150))]
-          (is (seq priced))
-          (is (= (map second free) (map second priced)) "the same targets at the same prices")
-          (is (every? true? (map (fn [[n] [m]] (< m n)) free priced)) "with quotes free each goes on to the bound")
-          (is (every? (fn [[n s]] (<= n (inc (/ s 0.15)))) priced)
-              "a site after n of the ground quoted is worth quoting at most (price - bound) / (n + 1) s: past price / 0.15 quotes, never"))))))
+              real flee/flee-target
+              per-call (atom [])
+              calls (atom nil)]
+          (set! flee/flee-target (fn ^:async f [c survey?]
+                                   (let [n (count (filter :pos @calls))
+                                         r (await (real c survey?))]
+                                     (swap! per-call conj (- (count (filter :pos @calls)) n))
+                                     r)))
+          (try
+            (let [[log _ quoted] (await (flee-with (fn [args] (swap! calls conj args) {:uses {:job-time [0 (price args) 0]}}) ground))]
+              (is (seq (filter #(= :flee (first %)) log)))
+              (is (seq (filter :pos quoted)))
+              (is (seq @per-call))
+              (is (every? #(<= % 1) @per-call) (str "of 507 sites, each pick quotes one: " (pr-str @per-call))))
+            (finally (set! flee/flee-target real))))))))
 
 (deftest flee-ground-sites-skip-powder-snow-and-keep-other-seen-ground
   (let [p (tu/fake {})

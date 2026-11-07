@@ -476,9 +476,9 @@
 
 (defn quote-gain
   "Seconds quoting a candidate of bound b is expected to save on the best price so far: its price is b times one of
-  the ratios (quoted price over bound) of the quotes of its like so far or, as often as each of them, b itself (a
-  candidate unlike them all). Not an affine fit (a fixed term plus a ratio): the samples are few and one ratio per
-  kind is what Laplace's rule needs."
+  the ratios (quoted price over bound) of the quotes so far or, as often as each of them, b itself (a candidate unlike
+  them all). Not an affine fit (a fixed term plus a ratio): the samples are few and one ratio each is what Laplace's
+  rule needs."
   [best b ratios]
   (/ (reduce (fn [s r] (let [p (* b r)] (if (< p best) (+ s (- best p)) s))) (max 0 (- best b)) ratios) (inc (count ratios))))
 (def reserve-cost value/reserve-cost)
