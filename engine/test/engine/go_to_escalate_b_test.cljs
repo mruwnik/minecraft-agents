@@ -655,20 +655,21 @@
         (is (nil? (:safe? (await (pillar-call-checks {:safe? '(always)})))) "a caller's form reaches the pillar (card 02b795f1)")))))
 
 (deftest go-to-digs-out-of-a-pit-pen-that-is-a-plan-of-the-body-and-puts-the-wall-back
+  ;; clocked: a stair waits a flow delay after each cut before it steps in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [blocks (apply dissoc (merge (box 10 59 10 30 59 22 "bedrock") (box 10 60 10 22 61 22 "stone"))
-                            (for [x (range 14 19) z (range 14 19) y [60 61]] (str x "," y "," z)))
+        (let [inside (for [x (range 14 19) z (range 14 19) y [60 61]] [x y z])
+              blocks (apply dissoc (merge (box 10 59 10 30 59 22 "bedrock") (box 10 60 10 22 61 22 "stone")) (map #(apply str (interpose "," %)) inside))
               plan (shape/with-author {:id "pit" :parts [{:id "inside" :box [[14 60 14] [18 61 18]] :want [:any "air"]}]} "Fake")
               cows [{:id 7 :name "cow" :kind "passive" :pos {:x 15.5 :y 60 :z 15.5}} {:id 8 :name "cow" :kind "passive" :pos {:x 17.5 :y 60 :z 17.5}}]
               {:keys [out p seen]} (await (run-job! {:sight 3 :self {:pos {:x 18.4 :y 60 :z 16.5}} :blocks blocks :entities cows :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                    'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}}))]
+                                                    'jobs.movement.go-to {:pos [26 60 16] :range 1} {:plans {"pit" plan}} true))
+              pen? (own-pen/walls-fn [{:inside (set inside)}])
+              pen-cells (filter pen? (map #(mapv js/parseInt (.split % ",")) (keys blocks)))]
           (is (= {:arrived true} @out))
-          (is (seq (dug-cells-of p)))
-          ;; a dig call on a cell that was air (a guessed cell the look showed open) digs nothing
-          (is (= (set (filter #(contains? blocks (apply str (interpose "," %))) (dug-cells-of p))) (set (concat (mapcat :cells (events-of seen :go-to.restored)) (map :cell (mapcat :cells (events-of seen :go-to.restore-skipped))))))
-              "every cell dug is put back, or left for restore-broken when nothing carried fills it"))))))
+          (is (seq (events-of seen :go-to.restored)))
+          (is (= [] (filterv #(= "air" (block p %)) pen-cells)) "every cell of the pen's wall and floor is whole again"))))))
 
 (deftest go-to-takes-back-the-own-blocks-that-shut-the-body-in-when-the-goal-is-farther-than-the-clear-radius
   ;; a seal beside the feet, the goal 6 blocks past it: the cleanup takes back every own block near the feet, also the one behind
