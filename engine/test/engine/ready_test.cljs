@@ -1301,9 +1301,13 @@
       (is (< (Math/abs (- 0.32 (ready/gap-chance (ctx-of mine-room) {:x 1 :y 65 :z 0}))) 1e-9) "own 0.2 and gap 0.5 x outside 0.3 as independent risks: 1 - 0.8 x 0.85, not the larger of the two"))))
 
 (deftest a-torch-lit-room-with-unseen-walls-is-looked-round-by-the-chance-a-wall-opens-onto-the-dark
-  (with-redefs [look-edge/pending (fn ([_] [[30 64 0]]) ([_ _] [[30 64 0]]))
-                ready/stay-look-price (fn [_ chance] {:gap 0 :delta (if (pos? chance) ##Inf 0)})]
-    (is (= :look (first (ready/sheltered-dark (ctx-of (assoc mine-room :light-default [0 14]))))) "the room's own spawn chance is 0, the dark outside is not")))
+  (let [walls [[30 64 0]]
+        check (fn [stay-s] (with-redefs [look-edge/pending (fn ([_] walls) ([_ _] walls))
+                                         reach-room/unseen-sides (constantly walls)
+                                         sense/unknown? (constantly true)]
+                             (first (ready/sheltered-dark (assoc (ctx-of (assoc mine-room :light-default [0 14])) ::price/stay-s stay-s)))))]
+    (is (= :look (check 5)) "the room's own spawn chance is 0, the dark outside is not: at the real price of a 5 s stay the look pays")
+    (is (= :ok (check 1)) "a 1 s stay spares less than the look costs")))
 
 (deftest mine-and-dig-for-given-only-an-item-wait-in-a-night-hut
   (doseq [safe? [mine/safe? dig-for/safe?]]
