@@ -594,6 +594,18 @@
     (is (= [[0 7 1] [0 4 0] [0 1 -1] [0 0 0]] (dr/walk-then-stair [0 10 0] [0 0 0] 3)) "back and forth over the goal")
     (is (= [[1 10 0] [2 11 0]] (dr/walk-then-stair [0 10 0] [2 11 0] 3)) "up a step a block")))
 
+(deftest a-climb-lane-is-a-stair-that-never-stands-on-its-own-cut-and-a-pillar-of-the-blocks-carried
+  ;; back and forth over the goal a step up stands on the head cell the step before left: no route through such a plan
+  (doseq [[from goal] [[[1 60 0] [1 78 0]] [[0 10 0] [1 13 0]] [[0 10 0] [0 15 0]] [[0 10 0] [0 16 0]] [[0 10 0] [0 17 0]] [[0 64 0] [4 72 0]] [[0 64 0] [8 76 1]] [[3 5 -2] [0 9 0]]]
+          :let [plan (dr/walk-then-stair from goal 1)]]
+    (is (= goal (peek plan)) (pr-str from goal))
+    (is (dr/stair-ok? from plan) (pr-str from goal plan))
+    (is (seq (:steps (dr/route (fn [c] (if (#{from (update from 1 inc)} c) "air" "stone")) from goal {:only (cons from plan) :step-s 0.3 :dig-s (constantly 0.5) :stair-s 3})))
+        (str "a route through the plan's cells " (pr-str from goal))))
+  (let [lane (set (dr/climb-lane [0 61 0] [10 64 0] 2 (constantly true)))]
+    (is (every? lane [[0 62 0] [0 63 0] [1 64 0] [9 64 0]]) "two pillar blocks, then a step up and level")
+    (is (not (lane [0 64 0])) "no pillar past the blocks carried")))
+
 (deftest a-seeded-search-ends-its-proof-once-it-no-longer-pays-at-the-unbounded-price
   ;; a fall of 24 and 30 across through rock never seen, each cell's dig at the measured solid chance by its distance from
   ;; the seen air: with no way in hand the search reads on until its proof ends; the way round the seed's walk and stair

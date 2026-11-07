@@ -507,7 +507,7 @@
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
   priced at the chance it is none (cost/floor-absent-chance of the step's kind) times the fall it adds past the step's own (cost/unseen-fall-s less its :fall-s), in the search and the straight dig. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
-  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; a climb is searched round dig-route/climb-lane first (seeded-search, the pillar part of the route-opts :max-places carried); every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -631,8 +631,10 @@
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
         allowed? (memoize #(escape/diggable? block-at may-dig? %))
+        seed (when (> gy fy) (dig-route/climb-lane from goal (when (:pillar-s route-opts) (:max-places route-opts)) #(when-let [n (seen-floor %)] (not (dig-route/open? n)))))
         opts (fn [refused m spent lazy?] (merge prices
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent}
+                                  (when seed {:seed seed})
                                   ;; a cell seen-floor reads nameless (not seen, under a cell seen open: no floor) is still dug at its guess
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell) (or (not lazy?) (allowed? cell)))
                                                             ((:dig-s prices) (or name (block-at cell)) cell)))}
@@ -642,7 +644,7 @@
         search (fn [refused spent lazy?]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused lazy? worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(dig-route/search seen-floor from goal (assoc (opts refused m spent lazy?) :full? dig-route/heap-full?)) m (route-epoch p)
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused lazy? worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(let [o (opts refused m spent lazy?)] ((if (:seed o) dig-route/seeded-search dig-route/search) seen-floor from goal (assoc o :full? dig-route/heap-full?))) m (route-epoch p)
                                          {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent lazy?) :max-s nil :read-s nil :searched-s 0 :back-h? false)) :max-drop max-fall})
                            (dig-route/route seen-floor from goal (opts refused m spent lazy?)))]
                    a))

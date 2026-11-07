@@ -42,13 +42,14 @@
 
 (deftest a-kept-search-goes-on-as-the-chains-time-left-shrinks
   (let [p (tu/fake {:blocks open-ground :self {:pos {:x 0.5 :y 64 :z 0.5}}})
-        search dig-route/search
+        seeded-search dig-route/seeded-search
         starts (atom 0)
         id (str (random-uuid))
         ask #(choose/route-answer p [0 64 0] [10 70 0] (constantly true) (constantly false) false false
                                   (assoc (choose/search-opts {:slice (choose/route-slice id)}) :bound-s %))]
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
-      #(with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+      ;; a climb's search begins as seeded-search (its stages are searches of one question)
+      #(with-redefs [dig-route/seeded-search (fn [& args] (swap! starts inc) (apply seeded-search args))]
          (ask 100)
          (ask 99.6)
          (is (= 1 @starts) "the second round asks the same search, not a new one")

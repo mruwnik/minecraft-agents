@@ -142,14 +142,15 @@
               out (atom :not-done)
               nodes (atom 0) search dig-route/search
               eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [0 70 0] :range 0}))]
+          ;; the lane and band round the planned stair (seeded-search, :only) come first; the whole search ends at once
           (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)]
-                                                        (fn [n] (let [[_ used :as r] (run n)] (swap! nodes + used) r))))]
+                                                        (fn [n] (let [[_ used :as r] (run n)] (when-not (:only (nth args 3)) (swap! nodes + used)) r))))]
             (core/submit! eng '(recording-parent) {})
             (await (tick-out! eng 3000)))
           (is (not= :not-done @out) "the call ended")
           (is (empty? (events-of seen :go-to.search-spent)) "the search ended by itself")
           (is (some #(and (= [0 50 0] (:at %)) (= :stair (:step %))) (events-of seen :go-to.escalated)) "the stair is taken from the start cell")
-          (is (zero? @nodes) "the climb is not a dig-route search"))))))
+          (is (zero? @nodes) "the climb's whole search expands no cell: the search back from the goal ends it"))))))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
   (is (< (cost/pillar-cost 3) (cost/stair-cost 3)))

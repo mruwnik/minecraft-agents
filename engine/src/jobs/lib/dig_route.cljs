@@ -766,23 +766,96 @@
   [prices yield-s]
   (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (max 0 (- s (if name (yield-s name cell) 0))))))))
 
+(defn stair-ok?
+  "Whether feet cells plan, each a step across from the one before (from first) and level or one up, is a stair cut through rock:
+  no step stands on a cell an earlier one dug (its feet, head, or the cell over the head a step up leaves), nor on one
+  floor? (fn [cell], default every cell) says is none."
+  ([from plan] (stair-ok? from plan (constantly true)))
+  ([from plan floor?]
+    (loop [dug #{from (update from 1 inc)} [[mx my mz :as m] & more] (cons from plan)]
+      (if-let [[nx ny nz :as n] (first more)]
+        (and (== 1 (+ (js/Math.abs (- nx mx)) (js/Math.abs (- nz mz)))) (<= my ny (inc my))
+             (not (dug [nx (dec ny) nz])) (floor? [nx (dec ny) nz])
+             (recur (cond-> (conj dug n [nx (inc ny) nz]) (> ny my) (conj [mx (+ my 2) mz])) more))
+        true))))
+
+(defn- straight-to
+  "Feet cells from [x y z] to [tx ty tz] (ty >= y) moving a block across each step: level while the across left outnumbers
+  the rise left, else one up; x first when x-first?, else z."
+  [[x y z] [tx ty tz] x-first?]
+  (let [sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))]
+    (loop [x x y y z z out []]
+      (if (and (== x tx) (== z tz))
+        out
+        (let [across (+ (js/Math.abs (- tx x)) (js/Math.abs (- tz z)))
+              ny (if (>= (- ty y) across) (inc y) y)
+              [nx nz] (if (or (and x-first? (not= x tx)) (== z tz)) [(+ x (sgn (- tx x))) z] [x (+ z (sgn (- tz z)))])]
+          (recur nx ny nz (conj out [nx ny nz])))))))
+
+(defn spiral-stair
+  "Feet cells of a stair from feet cell from up to goal, which rises more than its across: straight to the goal's column
+  rising as the across allows, then round 2 by 2 (or 2 by 3) columns beside it a block up a step, the first step of the
+  first round level when the rise left is odd, back into the goal; nil when no such stair stands on no cell of its own
+  cut nor on one floor? says is none (stair-ok?: a rise of 1 or 2 straight up has none)."
+  [[fx fy fz :as from] [gx gy gz :as goal] floor?]
+  (let [rise (- gy fy)
+        across (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz)))
+        ;; rounds of [columns level-first?] that rise r back into the goal's column
+        rounds (fn [r] (let [fours (fn [n] (repeat n [4 false]))]
+                         (case (mod r 4)
+                           0 (fours (quot r 4))
+                           3 (cons [4 true] (fours (quot (- r 3) 4)))
+                           2 (when (>= r 6) (cons [6 false] (fours (quot (- r 6) 4))))
+                           1 (when (>= r 5) (cons [6 true] (fours (quot (- r 5) 4)))))))
+        r (first (filter #(or (zero? %) (rounds %)) (range (max 0 (- rise across)) (inc rise))))]
+    (when r
+      (first (for [[a b] [[[1 0] [0 1]] [[1 0] [0 -1]] [[-1 0] [0 1]] [[-1 0] [0 -1]] [[0 1] [1 0]] [[0 1] [-1 0]] [[0 -1] [1 0]] [[0 -1] [-1 0]]]
+                   :let [col (fn [[i j]] [(+ gx (* i (a 0)) (* j (b 0))) (+ gz (* i (a 1)) (* j (b 1)))])
+                         loop-of {4 [[1 0] [1 1] [0 1] [0 0]] 6 [[1 0] [2 0] [2 1] [1 1] [0 1] [0 0]]}
+                         tail (loop [y (- gy r) out [] [[n level?] & more] (rounds r)]
+                                (if (nil? n)
+                                  out
+                                  (let [cells (map-indexed (fn [i c] (let [[x z] (col c)] [x (+ y (if level? i (inc i))) z])) (loop-of n))]
+                                    (recur (nth (last cells) 1) (into out cells) more))))
+                         plan (into (straight-to from [gx (- gy r) gz] true) tail)]
+                   :when (and (= goal (or (peek plan) from)) (stair-ok? from plan floor?))]
+               plan)))))
+
 (defn walk-then-stair
   "Feet cells of a planned way from feet cell from to goal: across toward it (x first, then z) while the across left
   outnumbers the steps the height left needs, each step then down drop blocks (or up one), back and forth across z
-  once over the goal."
-  [[fx fy fz] [gx gy gz] drop]
-  (let [sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))]
-    (loop [x fx y fy z fz zig 1 out []]
-      (if (and (== x gx) (== y gy) (== z gz))
-        out
-        (let [across (+ (js/Math.abs (- gx x)) (js/Math.abs (- gz z)))
-              rise? (>= (if (< gy y) (js/Math.ceil (/ (- y gy) drop)) (- gy y)) (max 1 across))
-              [dx dz zig] (cond (not= x gx) [(sgn (- gx x)) 0 zig]
-                                (not= z gz) [0 (sgn (- gz z)) zig]
-                                :else [0 zig (- zig)])
-              ny (cond (not rise?) y (< gy y) (max gy (- y drop)) :else (inc y))
-              [nx nz] [(+ x dx) (+ z dz)]]
-          (recur nx ny nz zig (conj out [nx ny nz])))))))
+  once over the goal; up more than across, a spiral-stair (on floors floor? passes, default all) when there is one."
+  ([from goal drop] (walk-then-stair from goal drop (constantly true)))
+  ([[fx fy fz :as from] [gx gy gz :as goal] drop floor?]
+    (or (when (> (- gy fy) (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz)))) (spiral-stair from goal floor?))
+        (let [sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))]
+          (loop [x fx y fy z fz zig 1 out []]
+            (if (and (== x gx) (== y gy) (== z gz))
+              out
+              (let [across (+ (js/Math.abs (- gx x)) (js/Math.abs (- gz z)))
+                    rise? (>= (if (< gy y) (js/Math.ceil (/ (- y gy) drop)) (- gy y)) (max 1 across))
+                    [dx dz zig] (cond (not= x gx) [(sgn (- gx x)) 0 zig]
+                                      (not= z gz) [0 (sgn (- gz z)) zig]
+                                      :else [0 zig (- zig)])
+                    ny (cond (not rise?) y (< gy y) (max gy (- y drop)) :else (inc y))
+                    [nx nz] [(+ x dx) (+ z dz)]]
+                (recur nx ny nz zig (conj out [nx ny nz])))))))))
+
+(defn climb-lane
+  "Feet cells of the planned ways up from feet cell from to goal searched first (seeded-search): walk-then-stair (rising
+  late) and, when the rise left is no more than the across, a pillar of up to pillars blocks straight up from it then a
+  stair rising early, each step one up till the goal's height, then level."
+  [[fx fy fz :as from] [gx gy gz :as goal] pillars floor?]
+  (let [k (min (or pillars 0) (- gy fy))
+        top [fx (+ fy k) fz]
+        sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))
+        early (when (<= (- gy (top 1)) (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz))))
+                (loop [[x y z] top out (mapv #(vector fx (+ fy %) fz) (range 1 (inc k)))]
+                  (if (and (== x gx) (== z gz))
+                    out
+                    (let [c (if (not= x gx) [(+ x (sgn (- gx x))) (min gy (inc y)) z] [x (min gy (inc y)) (+ z (sgn (- gz z)))])]
+                      (recur c (conj out c))))))]
+    (vec (distinct (concat (walk-then-stair from goal 1 floor?) early)))))
 
 (defn seeded-search
   "search, but first along the feet cells of :seed alone (the lane), then through them and their neighbours (one across,

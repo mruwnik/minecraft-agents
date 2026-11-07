@@ -451,6 +451,19 @@
   "Solid stone x -1..12, y 60..80, z -2..2 with the body's cell [0 64 0] and the cell over it open."
   (dissoc (box -1 60 -2 12 80 2 "stone") "0,64,0" "0,65,0"))
 
+(deftest a-climb-through-rock-it-barely-sees-has-a-route-in-hand-at-the-search-ceiling
+  ;; Q141: seeing 2 blocks, the unseeded search read 142k cells (2.8 s) over 29 calls before its first route; searched
+  ;; round its planned stairs first it holds one at once and answers once its CPU passes dig-route/answer-s
+  (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}) 2)
+        id "climb-ceiling"
+        a (try (loop [i 0]
+                 (let [a (choose/route-answer p [0 64 0] [8 76 0] (constantly true) (constantly false) false false
+                                              {:read-s (cost/search-read-s) :slice (choose/route-slice id)})]
+                   (if (and (= :searching a) (< i 3)) (recur (inc i)) a)))
+               (finally (choose/end-searches! id)))]
+    (is (seq (:steps a)) (pr-str a))
+    (is (< (:searched-s a) (* 2 dig-route/answer-s)) (str (:searched-s a) " s of CPU"))))
+
 (deftest a-route-refused-cell-by-cell-with-no-bound-is-searched-at-most-twice
   ;; no :bound-s or :worth-s: only the zone's refusals end the rounds. The first route is refused; the next search asks
   ;; may-dig? of the cells it weighs, so the route it finds is never refused again
@@ -698,8 +711,9 @@
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
           (let [steps (map :step (events-of seen :go-to.escalated))]
-            ;; the dig route is searched at the pickaxe's prices, as a stair is: the cheapest way dug up is a route, not a stair
-            (is (= [:approach :dig-route] (vec steps)) "one approach walk, then a way dug up, not the loop")))))))
+            ;; one approach walk, then stairs dug up (38.30 s). The unseeded search's 21.30 s route walked the whole tolled loop
+            ;; (the dig route does not price :tolls, card 1356b93a); searched round planned stairs first, the stairs answer
+            (is (= [:approach :stair :stair :stair] (vec steps)) "one approach walk, then a way dug up, not the loop")))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
   (async done
