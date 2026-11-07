@@ -1464,3 +1464,13 @@
           (is (= [false :not-diggable] [(:dug built) (:reason built)]) (pr-str built))
           (is (= "chest" (block-at p {:x 2 :y 64 :z 0})) "the protected block stays")
           (is (= :dug (:reason natural))))))))
+
+(deftest walk-reacher-floods-only-as-far-as-the-cells-asked-about
+  (let [asked (atom 0)
+        reached? (lava/walk-reacher (fn [{:keys [x]}] (swap! asked inc) (<= 0 x 30)) {:x 0.5 :y 64 :z 0.5})]
+    (is (reached? {:x 1 :y 64 :z 0}))
+    (let [near @asked]
+      (is (reached? {:x 10 :y 64 :z 0}))
+      (is (> @asked near))
+      (is (not (reached? {:x 20 :y 64 :z 0})) "past peek-steps")
+      (is (not (reached? {:x 5 :y 64 :z 9})) "off the standable ground"))))
