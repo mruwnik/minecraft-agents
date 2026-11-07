@@ -1459,6 +1459,20 @@
     (is (= 3 @starts) "the memory changed: searched again")
     (choose/forget-routes! (:id slice))))
 
+(deftest an-ended-route-is-re-priced-as-the-health-rises-not-searched-again
+  (let [p (tu/fake {:blocks (merge open-ground (box 0 64 -2 1 68 2 "bedrock")) :self {:pos {:x 0.5 :y 69 :z 0.5} :health 12}})
+        ask (fn [id] (:seconds (choose/route-answer p [0 69 0] [8 64 0] (constantly true) (constantly false) false false {:slice (choose/route-slice id)})))
+        starts (atom 0)
+        search dig-route/search
+        kept (with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+               (mapv (fn [hp] (swap! (fake/state p) assoc-in [:self :health] hp) (ask "hp-kept")) (range 12 21)))
+        fresh (mapv (fn [hp] (swap! (fake/state p) assoc-in [:self :health] hp) (ask (str "hp-fresh-" hp))) (range 12 21))]
+    (is (= 1 @starts) "the health is no new question: the memory holds")
+    (is (apply > kept) "the fall off the ledge costs less hp's worth as the health rises")
+    (is (every? #(< (js/Math.abs %) 1e-9) (map - kept fresh)) "the kept route's price is a fresh search's at each health")
+    (choose/forget-routes! "hp-kept")
+    (doseq [hp (range 12 21)] (choose/forget-routes! (str "hp-fresh-" hp)))))
+
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))
     [8 60 0] 12 false true

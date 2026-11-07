@@ -506,6 +506,8 @@
   ([p unseen?] (body-prices p unseen? {}))
   ([p unseen? {:keys [sensed own-s max-damage plugs]}]
    (let [self (.self p)
+         ;; the body as the prices are made: a search kept over later ticks prices its whole way at one health
+         health (.-health self)
          equipment (cost/equipment-of (.-equipment self))
          max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {:args (when max-damage {:max-damage max-damage})}))
          dig-cost (memoize cost/dig-cost)
@@ -519,14 +521,14 @@
      {:max-fall max-fall
       :seen-steps (seen-sections/steps-fn p max-fall)
       :seen-cells (seen-sections/steps-fn p 1)
-      :fall-s (fn [blocks] (cost/hp-cost (.-health self) (cost/fall-damage equipment blocks)))
+      :fall-s (fn [blocks] (cost/hp-cost health (cost/fall-damage equipment blocks)))
       :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell))))
       :flood {:level level
               :plugs plugs
-              :open (delay [(cost/flood-dig-s @wet (.-health self) (cost/walk-hp-seconds)) (cost/flood-under-s @wet)])
+              :open (delay [(cost/flood-dig-s @wet health (cost/walk-hp-seconds)) (cost/flood-under-s @wet)])
               :dig (fn [under-s name] (let [d (or (dig-cost name) 0)]
-                                        [(cost/wet-dig-s @wet (.-health self) (cost/walk-hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))
-              :step (fn [under-s] [(cost/wet-step-s @wet (.-health self) (cost/walk-hp-seconds) under-s) (+ under-s (cost/wet-move-s @wet :walk))])}
+                                        [(cost/wet-dig-s @wet health (cost/walk-hp-seconds) under-s d) (+ under-s (* (:dig-pace @wet) d))]))
+              :step (fn [under-s] [(cost/wet-step-s @wet health (cost/walk-hp-seconds) under-s) (+ under-s (cost/wet-move-s @wet :walk))])}
       :step-s (cost/walk-step-s)
       :stair-s (cw/stair-cost 1)
       :unseen? unseen?

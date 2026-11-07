@@ -378,23 +378,42 @@
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
   slice has left under max-s when given (a kept search goes on under the call's bound as it falls); :searching while it
-  has not ended. An ended search keeps its answer only (its cell maps are freed), the route-epoch it was last run at and
-  the max-s it ran under: while that epoch holds, its route answers k under k's bound (the cheapest there is), and its
-  no route answers a max-s no larger."
-  ([slice k start epoch] (sliced-answer slice k start nil epoch))
-  ([{:keys [id left asked]} k start max-s epoch]
+  has not ended. An ended search keeps its answer only (its cell maps are freed), the route-epoch it was last run at, the
+  max-s and the deepest fall (body :max-drop) it ran under, and the seconds of its route the body's health priced (body
+  :route-s of its steps, at the health it began at): while that epoch holds, its route answers k under k's bound, re-priced
+  at the health now (a bound: at a higher health a way of more falls or unseen steps may be cheaper) unless it now takes
+  a fall past :max-drop, and its no route answers a max-s and a :max-drop no larger."
+  ([slice k start epoch] (sliced-answer slice k start nil epoch nil))
+  ([slice k start max-s epoch] (sliced-answer slice k start max-s epoch nil))
+  ([{:keys [id left asked]} k start max-s epoch {:keys [route-s max-drop]}]
    (if-let [a (get @asked k)]
      a
      (let [[k2 kept] (if-let [kept (get-in @kept-routes [id k])] [k kept] (same-question-kept id k))
            kept (when-not (and (:ended? kept)
                                (or (not= epoch (:epoch kept))
-                                   (and (nil? (:dig (:a kept))) (> (or max-s ##Inf) (or (:max-s kept) ##Inf)))))
+                                   (if (:dig (:a kept))
+                                     (and route-s (nil? (route-s (:steps (:a kept)))))
+                                     (or (> (or max-s ##Inf) (or (:max-s kept) ##Inf))
+                                         (> (or max-drop 0) (or (:max-drop kept) ##Inf))))))
                   kept)
            run (or (:run kept) (start))
-           [a used] (if (pos? @left) (run @left max-s) [nil 0])]
+           [a used] (if (pos? @left) (run @left max-s) [nil 0])
+           ;; a fn of the steps while the search goes on (the health it began at), a number once its route is found
+           hp-s (let [h (if kept (:hp-s kept) route-s)]
+                  (cond (not (fn? h)) h
+                        (:steps a) (h (:steps a))
+                        (nil? a) h))]
        (vswap! left - used)
-       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :epoch epoch :max-s (if (:ended? kept) (:max-s kept) (or max-s (:max-s kept))) :ended? (or (some? a) (:ended? kept) false)})))
-       (let [a (if (and (:dig a) max-s (> (:seconds a) max-s)) {:problem :dearer} a)]
+       (swap! kept-routes #(-> % (update id dissoc k2) (assoc-in [id k] {:run (if a (answered-run a) run) :a a :epoch epoch :hp-s hp-s
+                                                                         :max-s (if (:ended? kept) (:max-s kept) (or max-s (:max-s kept)))
+                                                                         :max-drop (if kept (:max-drop kept) max-drop)
+                                                                         :ended? (or (some? a) (:ended? kept) false)})))
+       (let [now (when (and route-s (number? hp-s) (:steps a)) (route-s (:steps a)))
+             a (cond (and now (not= now hp-s)) (update a :seconds + (- now hp-s))
+                     ;; ended this slice on a fall the health now refuses: the next asks again
+                     (and (nil? now) route-s (number? hp-s) (:steps a)) :searching
+                     :else a)
+             a (if (and (:dig a) max-s (> (:seconds a) max-s)) {:problem :dearer} a)]
          (vswap! asked assoc k (or a :searching))
          (or a :searching))))))
 
@@ -508,6 +527,23 @@
         floor-absent-s (fn [[x y z] rise]
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
+        ;; the seconds of a route's steps the body's health prices, as the search adds them: each walk's fall, a walk onto a
+        ;; floor not seen and a step into cells not seen (the unseen share; a placed block's unseen faces left out); nil when
+        ;; a fall is past the deepest it survives now
+        max-fall (get (merge prices route-opts) :max-fall)
+        unseen-cell? (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown)))
+        body-s (fn [steps]
+                 (some-> (reduce (fn [[s [mx my mz]] {[nx ny nz :as n] :to move :move}]
+                                   (let [unseen? (or (some #(unseen-cell? [nx % nz]) [(dec ny) ny (inc ny)])
+                                                     (and (> ny my) (unseen-cell? [mx (+ my 2) mz])))
+                                         s (+ s (if unseen? (:unseen-step-s prices) 0))]
+                                     (cond (not= :walk move) [s n]
+                                           (> (- my ny) max-fall) (reduced nil)
+                                           :else [(+ s (if (> my ny) ((:fall-s prices) (- my ny)) 0)
+                                                     (if (unseen-cell? [nx (dec ny) nz]) (floor-absent-s [nx (dec ny) nz] (- ny my)) 0))
+                                                  n])))
+                                 [0 from] steps)
+                         first))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig, and the digs and steps inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of reading its feet and head cells (:read-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
@@ -583,7 +619,7 @@
         search (fn [refused spent]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s fall spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (route-epoch p))
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s (select-keys fall [:equipment :carried]) spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (route-epoch p) {:route-s body-s :max-drop max-fall})
                            (dig-route/route seen-floor from goal (opts refused m spent)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
