@@ -2,9 +2,9 @@
 ;; bends by the body's kit and by who is near, not by the kind alone. Quotes only (the body walks nowhere): the planned route's :length on open ground.
 ;; Cases pin direction (detour vs pass), not distances: a NoAI zombie 2 off a 40-block straight walk, the straight length being about 40.
 ;; Sword, no armour: a meeting still costs it some 3 hp, so the route keeps out of the close field (length over 42). Sword and diamond armour: a meeting still costs it
-;; 23.2 s (cost/answered-together :price, full health), so its walk may bend round the zombie by at most that much walking: 40 + 23.2 s * 3.2 b/s (fight/walk-speed) = 114, length under 115.
+;; 12.8 s (cost/answered-together :price, full health), so its walk may bend round the zombie by at most that much walking: 40 + 12.8 s * 3.2 b/s (fight/walk-speed) = 81, length under 82.
 ;; A pack of 4 by the west walk and a lone zombie 50 blocks off by the east walk (a sword, no armour): the pack's walk detours, and the lone one keeps its own fight toll, the case 1 detour.
-;; Lone sword-only meeting: 52.1 s (answered-together :price), so under 44.5 + 52.1 * 3.2 = 211 (the pack's own price, 44.5 s, is lower, so a pack-flight detour would not break this bound: it pins only the price).
+;; Lone sword-only meeting, the respawn 25 off: 36.5 s (answered-together :price), so under 44.5 + 36.5 * 3.2 = 161 (the pack's is dearer, 38.4 s).
 {:defaults
  {:tags [:movement :planner :danger]
   :time :any
@@ -27,7 +27,7 @@
          [:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"]
          [:summon "zombie" [22.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 115]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 82]}}}] 30]]
    :after [[:body-near [2.5 0 24.5] 2]]}
   {:name "a-lone-zombie-far-from-a-pack-keeps-its-own-detour"
    :plot {:length 130}
@@ -41,5 +41,5 @@
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"]
          [:until-seen {:entity "zombie" :min 5} 10]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [20 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 50]}}}] 30]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [110 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 211]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [110 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 162]}}}] 30]]
    :after [[:body-near [65.5 0 24.5] 2]]}]}

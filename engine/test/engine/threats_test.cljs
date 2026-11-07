@@ -94,6 +94,17 @@
         "a death beside a near respawn meets the zombie again")
     (is (= (:price (cost/answered-together far [adult] at)) (cheapest-without-meet far [adult] at)) "a far respawn meets it no more")))
 
+;; a death whose respawn lay past the pack's follow range met it no more, though the walk back to the spot does: a pack the
+;; sword fights to a near-sure death then cost less than one zombie
+(deftest a-pack-met-together-costs-no-less-than-one-of-its-zombies-wherever-the-body-respawns
+  (let [at {:x 0 :y 64 :z 0}
+        z (mob-toll/answer-mob {:mob "zombie"})]
+    (doseq [spawn [[0 64 8] [0 64 30] [0 64 60] [0 64 100]]]
+      (let [body (dissoc (threats/death-body (ready-test/ctx-of {:self {:pos [0 64 0] :worldSpawn spawn} :inventory [{:name "diamond_sword" :count 1}]})) :pos)
+            one (:price (cost/answered-together body [z] at))
+            four (:price (cost/answered-together body [z z z z] at))]
+        (is (< one four) (str "respawn at " spawn ": one " one ", four " four))))))
+
 (deftest a-mob-tolls-its-meet-rate-times-its-meeting-s-price
   (let [a (answered armed "zombie")
         {:keys [shape rate]} (jobs.lib.cost.death/notice-prior "zombie")]

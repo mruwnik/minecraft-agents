@@ -1,6 +1,6 @@
 (ns world-test.respawn-meets
   "tools/event-counts.mjs respawn-meets: counts the measured prior behind jobs.lib.cost.answer ::respawn-meets from the trial
-  bodies' logs alone (no fold): of n deaths to a mob whose respawn lies within the mob's give-up range of the death's spot, k
+  bodies' logs alone (no fold): of n deaths to a mob whose respawn lies within threat/despawn-blocks of the death's spot (the mob outlives the walk back), k
   where an event after the respawn names that mob's id again within window-ms. Pure: report."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
@@ -19,7 +19,7 @@
                     (let [d (:data (event r))
                           {:keys [id name]} (some :attacker (:damages d))
                           back (first (filter #(body? ":respawned" %) (subvec rows (inc i))))]
-                      (when (and id back (<= (dist (:pos d) (get-in (event back) [:data :pos])) (threat/give-up-range name)))
+                      (when (and id back (<= (dist (:pos d) (get-in (event back) [:data :pos])) threat/despawn-blocks))
                         (let [named (re-pattern (str "(?::id |\\b" name " )" id "\\b"))]
                           (boolean (some (fn [r] (and (< (:t back) (:t r) (+ (:t back) window-ms 1)) (re-find named (:line r)))) rows)))))))
                 rows)]

@@ -9,4 +9,5 @@
 (deftest a-death-near-its-respawn-counts-the-killer-met-again
   (is (= {:k 1 :n 1} (m/report [(died 0 0 7) (respawned 10 5) (hurt 5000 7)] 600000)) "named again by its id after the respawn")
   (is (= {:k 0 :n 1} (m/report [(died 0 0 7) (respawned 10 5) (hurt 5000 8) (hurt 700000 7)] 600000)) "another mob, or too late")
-  (is (= {:k 0 :n 0} (m/report [(died 0 0 7) (respawned 10 200) (hurt 5000 7)] 600000)) "a respawn past the zombie's follow range is no meet"))
+  (is (= {:k 1 :n 1} (m/report [(died 0 0 7) (respawned 10 60) (hurt 5000 7)] 600000)) "past its follow range the walk back meets it")
+  (is (= {:k 0 :n 0} (m/report [(died 0 0 7) (respawned 10 200) (hurt 5000 7)] 600000)) "a respawn past the despawn range is no meet"))

@@ -47,8 +47,8 @@
                        :doc "Of n seconds a body hid in its own house from a danger, k that it spent on work the house offers (sleep, craft, cook, store). Not yet counted: the uniform prior, half the hide lost (refuge-answer)."}
    ::flee-meets {:default {:k 56 :n 124} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                  :doc "Of n flights of the trial bodies that got away (hostile.fled), k from a mob named again by its id in another run within 600 s (hostile-fight ::return-s), 2026-10-30: decisions logged before then name no id (hostile.decided :mobs), so a meet answered by a fight goes uncounted (at most 9 more, 65/124, by kind within 40 blocks). Recount: node tools/event-counts.mjs flee-meets."}
-   ::respawn-meets {:default {:k 3 :n 17} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
-                    :doc "Of n deaths of the trial bodies to a mob with the respawn within its give-up range (cost.threat/give-up-range) of the death, k where an event after the respawn names the mob's id again within 600 s, 2026-10-30. Recount: node tools/event-counts.mjs respawn-meets."}
+   ::respawn-meets {:default {:k 5 :n 37} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                    :doc "Of n deaths of the trial bodies to a mob with the respawn within cost.threat/despawn-blocks of the death, k where an event after the respawn names the mob's id again within 600 s, 2026-11-07. Recount: node tools/event-counts.mjs respawn-meets."}
    ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
                                   {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}
                                   {:k 960096 :n 1079468} {:k 948840 :n 1077476} {:k 937962 :n 1075465} {:k 927498 :n 1073431}
@@ -198,18 +198,19 @@
 
 (defn meet-death
   "Seconds a death at `at` costs body (death/death-cost) meeting the mobs named in its :meet: when its :respawn lies within
-  the give-up range of one of them, also the meet once more from there by ::respawn-meets, the body healed with nothing
-  (no kit, no xp, nothing carried) and the mobs at the respawn's distance, the cheapest of threat-answers, each death in
-  it costing the same again: D' = min over answers (d + p x price at no death) / (1 - p x death chance)."
+  threat/despawn-blocks (the mobs outlive the walk back to `at`), also the meet once more by ::respawn-meets, the body
+  healed with nothing (no kit, no xp, nothing carried) and the mobs at the respawn's distance or, past it, their
+  give-up range (they take the walk back up there), the cheapest of threat-answers, each death in it costing the same
+  again: D' = min over answers (d + p x price at no death) / (1 - p x death chance)."
   [{:keys [meet respawn] :as body} at]
   (let [d0 (death/death-cost body at)
         far (death/walk-back-blocks body at)]
-    (if-not (and respawn (seq meet) (some #(<= far (threat/give-up-range %)) meet))
+    (if-not (and respawn (seq meet) (<= far threat/despawn-blocks))
       d0
       (let [bare (-> (healed (select-keys body [:respawn])) (assoc :level 0 :carried 0 :food 20))
             d (death/death-cost bare at)
             p (counted-chance (settings/get settings ::respawn-meets))
-            again (->> (vals (threat-answers (assoc bare :distance far) meet nil))
+            again (->> (vals (threat-answers (assoc bare :distance (min far (reduce max (map threat/give-up-range meet)))) meet nil))
                        (keep identity)
                        (map #(/ (+ d (* p (answer-price* bare % at 0))) (- 1 (* p (answer-death-chance bare % at d)))))
                        (reduce min ##Inf))]
