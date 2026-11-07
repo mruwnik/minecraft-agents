@@ -9,7 +9,7 @@
 ;; A bed set by RCON after the start is set where the body looks (:yaw 90, west): one set behind it is not seen.
 {:defaults
  {:tags [:night :survival :sleep]
-  :time :night-exclusive
+  :time :night-exclusive :time-why :sleep
   :register [{:trigger :night}]
   :body {:effects [["resistance" 600 4]] :settle-s 0}}
  :cases

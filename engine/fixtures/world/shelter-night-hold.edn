@@ -10,7 +10,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "night-sleeps-wakes-and-completes"
-   :time :night-exclusive
+   :time :night-exclusive :time-why :sleep
    :tags [:night]
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]

@@ -679,6 +679,16 @@
     (is (= [{:sleeping 1 :needed 2}] (map :data (filter (comp #{:sleep-status} :kind) (f/memory-entries {:time :night :memory [{:kind :sleep-status :data {:sleeping 1 :needed 2}}]})))) "the case's own count is the only one")
     (is (not (status? {:time :day})))))
 
+(deftest a-night-case-that-expects-a-sleep-may-not-be-told-no-sleep-skips-the-night
+  (let [slept {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}
+        seeded? #(some (fn [p] (re-find #"expects a sleep" p))
+                       (f/problems (merge {:name "a" :time :night-exclusive :plot {:height 6 :light :sky} :body {:at [1 0 1]} :act [] :after []} %)))]
+    (is (seeded? {:expect [{:event slept :within-s 60}]}))
+    (is (seeded? {:act [[:await slept 60]] :expect [{:event {:kind :x} :within-s 1}]}))
+    (is (not (seeded? {:time-why :sleep :expect [{:event slept :within-s 60}]})))
+    (is (not (seeded? {:sleep-skip true :expect [{:event slept :within-s 60}]})))
+    (is (not (seeded? {:expect [{:no-event slept :for-s 60} {:event {:kind :x} :within-s 1}]})) "a case that must not sleep")))
+
 (deftest memory-seed-age-s-backdates-an-entry
   (let [data (f/memory-seed [{:kind :spawn-set :data {} :age-s 7200} {:kind :spawn-set :data {}}] 10000000)]
     (is (= [2800000 10000000] (mapv :t (get-in data [:entries :spawn-set]))))))

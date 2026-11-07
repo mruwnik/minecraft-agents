@@ -226,6 +226,28 @@
         p (if (= :far spawnpoint) (some-> at (assoc 1 (- far-spawn-y floor-y))) (or spawnpoint at))]
     (some->> p (mapv #(js/Math.floor %)))))
 
+(defn seeded-night?
+  "A night case whose memory the runner seeds for the other bodies online (memory-entries): not one that keeps memory or names log-out."
+  [c]
+  (boolean (and (#{:night :night-x} (lease/time-phase c))
+                (not (:keep-memory c))
+                (not (str/includes? (pr-str (dissoc c :id :file)) "log-out")))))
+
+(defn no-skip-seeded?
+  "A seeded-night? case that does not sleep (:sleep-skip, :time-why :sleep, or naming sleep-status): memory-entries seeds it a
+  sleep count no sleep can meet."
+  [c]
+  (and (seeded-night? c)
+       (not (or (:sleep-skip c) (= :sleep (:time-why c)) (str/includes? (pr-str (dissoc c :id :file)) "sleep-status")))))
+
+(def slept-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}})
+
+(defn pins-sleep?
+  "Whether the case expects or awaits the body asleep (slept-event)."
+  [c]
+  (boolean (or (some #(= slept-event (:event %)) (:expect c))
+               (some #(and (vector? %) (= :await (first %)) (= slept-event (second %))) (:act c)))))
+
 (defn memory-entries
   "A case's :memory entries, and for a night case (unless it names log-out or keeps memory) two entries for the other
   bodies online, which count as players: a :log-out \"unsupported\" one (they sleep in the same night, and the night job
@@ -236,19 +258,15 @@
   where it wakes, as after a death (body-commands sets the same point in the game); it is older than every seeded
   :died entry, so no seeded death reads as already respawned from."
   [c]
-  (let [text (pr-str (dissoc c :id :file))
-        night? (and (#{:night :night-x} (lease/time-phase c))
-                    (not (:keep-memory c))
-                    (not (str/includes? text "log-out")))
+  (let [night? (seeded-night? c)
         spawn (respawn-cell c)
-        death-age (some->> (:memory c) (filter #(= :died (:kind %))) (map #(or (:age-s %) 0)) seq (apply max) inc)
-        sleeps? (or (:sleep-skip c) (= :sleep (:time-why c)) (str/includes? text "sleep-status"))]
+        death-age (some->> (:memory c) (filter #(= :died (:kind %))) (map #(or (:age-s %) 0)) seq (apply max) inc)]
     (cond-> (vec (:memory c))
       (and spawn (not (or (:keep-memory c) (some #(= :respawned (:kind %)) (:memory c)))))
       (conj (cond-> {:kind :respawned :data {:pos {::rel (vec spawn) ::as :map}}}
               death-age (assoc :age-s death-age)))
       night? (conj {:kind :log-out :data {:status "unsupported"}})
-      (and night? (not sleeps?)) (conj {:kind :sleep-status :data {:sleeping 0 :needed 100}}))))
+      (no-skip-seeded? c) (conj {:kind :sleep-status :data {:sleeping 0 :needed 100}}))))
 
 (def default-memory-policy
   "The engine's default policy for a memory kind (engine.memory/default-policy): 50 entries, one hour."
@@ -531,6 +549,7 @@
       (not (string? (:name c))) (conj ":name must be a string")
       (not (#{:day :night :night-exclusive :any} (:time c))) (conj ":time must be :day, :night, :night-exclusive or :any")
       (not (or (nil? (:time-why c)) (contains? time-reasons (:time-why c)))) (conj (str ":time-why must be one of " (sort time-reasons)))
+      (and (pins-sleep? c) (no-skip-seeded? c)) (conj "the case expects a sleep but is seeded a sleep count no sleep meets, so lying in bed loses the night: give it :time-why :sleep")
       (not (contains? #{nil true} (:alone c))) (conj ":alone must be true (or absent)")
       (and (:alone c) (not (and (string? (:alone-why c)) (not (str/blank? (:alone-why c)))))) (conj ":alone needs an :alone-why string")
       (and (:alone-why c) (not (:alone c))) (conj ":alone-why without :alone")

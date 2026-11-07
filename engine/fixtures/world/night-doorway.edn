@@ -3,7 +3,7 @@
 ;; Needs night: run with --allow-time --time-log <the shared time log>. Hut: stone x 8..16, z 8..16, y 0..3, room 9..15, torches.
 {:defaults
  {:tags [:night :survival :sleep]
-  :time :night-exclusive
+  :time :night-exclusive :time-why :sleep
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
   :body {:effects [["resistance" 600 4]] :settle-s 2}}
  :cases
