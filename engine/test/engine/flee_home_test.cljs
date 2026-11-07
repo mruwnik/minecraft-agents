@@ -572,7 +572,7 @@
           (are [threats fire] (= [(js/Math.ceil (/ budget flood)) (* flood (js/Math.ceil (/ budget flood)))] (judged threats fire))
             [(seen-zombie -13.5 40.5)] nil
             [] nil
-            [#js {:name "skeleton" :visible true :pos #js {:x -13.5 :y 64 :z 20.5}}] {:risk identity :exposed? true}))))))
+            [#js {:name "skeleton" :visible true :pos #js {:x -13.5 :y 64 :z 20.5}}] {:exposed? true}))))))
 
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
   (async done
@@ -598,8 +598,9 @@
           (is (apply > counts) (str "each later step judges more: " counts))
           (is (= (lone (last steps)) (lone (survey far true))) "with the hut's race won, a lone door farther than its walk saves nothing"))))))
 
-(deftest a-crowd-of-doors-under-a-skeletons-fire-is-judged-within-the-time-to-cover
-  ;; nothing races a shooter, but each second the body stands searching is a second in its fire
+(deftest a-crowd-of-doors-under-a-skeletons-fire-is-judged-alike-whatever-its-hit-chance
+  ;; nothing races a shooter, but each second the body stands searching is a second in its fire: the search and the run
+  ;; it spares are both seconds under that fire, so its hit chance, sure or none, weighs them alike
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -608,12 +609,13 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
               skeleton [#js {:name "skeleton" :visible true :pos #js {:x 5.5 :y 64 :z 14.5}}]
-              cover (cost/exposure-s)
-              r (with-redefs [rooms/judge-s (constantly (/ cover 2.5))] (cover/survey c skeleton false))
-              unjudged (count (filter (comp #{:unjudged} :why) (:dropped r)))]
+              judged (fn [chance]
+                       (with-redefs [cost/threat-parts (fn [& _] {:chance chance :death 1})]
+                         (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c skeleton false)))))))
+              counts (mapv judged [0 0.5 1])]
           (is (:exposed? (cover/fire-on c skeleton)) "the body stands in the skeleton's line of fire")
-          (is (< (:spent-s r) cover) (str "the step's CPU within the time to cover: " (:spent-s r)))
-          (is (pos? unjudged) (str "the doors past it wait for a later step: " (:dropped r))))))))
+          (is (pos? (first counts)) (str "door sides judged: " counts))
+          (is (apply = counts) (str "alike at every hit chance: " counts)))))))
 
 (deftest the-homes-judgements-count-in-the-steps-cpu-and-its-doorway-room-is-judged-once
   (async done

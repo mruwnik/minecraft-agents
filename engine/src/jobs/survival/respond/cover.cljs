@@ -48,12 +48,12 @@
 (declare cover-fn)
 
 (defn fire-on
-  "The shooters' fire on the body where it stands, as cost/refuge-search-pays? prices a search by it: {:risk (respond.goal/fire-price's)
-  :exposed? (its feet cell out of cover)}; nil with no shooter in sight (fire-price nil)."
+  "The shooters' fire on the body where it stands, as cost/refuge-search-pays? prices a search by it: {:exposed? (its feet
+  cell out of cover, respond.goal/fire-price's covered?)}; nil with no shooter in sight (fire-price nil)."
   [c threats]
   (let [p (:primitives c)]
-    (when-let [{:keys [risk covered?]} (respond.goal/fire-price c threats (cover-fn p threats (flight/fire-spots c)))]
-      {:risk risk :exposed? (not (covered? (sh-sense/feet p)))})))
+    (when-let [{:keys [covered?]} (respond.goal/fire-price c threats (cover-fn p threats (flight/fire-spots c)))]
+      {:exposed? (not (covered? (sh-sense/feet p)))})))
 
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,

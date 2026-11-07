@@ -233,9 +233,9 @@
   body stands still for, so it must end ::race-margin-s (the margin reach-first? wins a race by) within the chasers'
   lead at the body (here-s) and at the refuge's door (lead-s, lead-s above), and within the run it could save
   (save-s, run-saved-s). With no melee chaser (here-s ##Inf) nothing races: the CPU is time in the shooters' fire
-  (fire {:risk :exposed?}: the risk of seconds in it, respond.goal/fire-price's, and whether the body stands in it),
-  which pays while it risks less than the fire a refuge spares, that of the run it saves capped by a flight's time to
-  cover (exposure-s, what fire-price charges an end left uncovered); out of the fire it spares none. With neither,
+  (fire {:exposed?}: whether the body stands in it), which pays while it is shorter than the time in fire a refuge
+  spares, the run it saves capped by a flight's time to cover (exposure-s, what fire-price charges an end left
+  uncovered): both are seconds under the same fire, so its hit chance weighs them alike; out of the fire it spares none. With neither,
   every search pays but one that saves nothing. None starts at ::search-budget-s (under-ceiling?)."
   [spent-s cost-s here-s lead-s save-s fire]
   (let [margin (settings/get settings ::race-margin-s)]
@@ -243,8 +243,7 @@
          (cond
            (not (infinite? here-s)) (search-pays? spent-s cost-s (min (- here-s margin) (- lead-s margin) save-s))
            (nil? fire) (search-pays? spent-s cost-s ##Inf)
-           :else (let [{:keys [risk exposed?]} fire]
-                   (and exposed? (under-ceiling? spent-s) (< (risk (+ spent-s cost-s)) (risk (min save-s (exposure-s))))))))))
+           :else (and (:exposed? fire) (search-pays? spent-s cost-s (min save-s (exposure-s))))))))
 
 (defn closing-rate
   "Blocks a second a flight by a body with food food opens the gap to a chasing mob-name: ::closing-rates' measured gap
