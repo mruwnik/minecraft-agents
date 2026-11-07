@@ -223,9 +223,9 @@
 
 (defn search-meter
   "A reach/meter of the one search a flight step's or a quote's searches make (cost/search-budget-s, Q141), spent-s spent:
-  a flood's cell at cost/room-read-s, a walk search's at cost/walk-cell-s, a flee search's planner node at cost/search-cell-s."
+  a flood's cell at cost/room-read-s, a walk search's at cost/walk-cell-s, a flee search's planner node at cost/search-cell-ceiling-s (the ceiling is on wall time)."
   [spent-s]
-  (reach/meter (cost/search-budget-s) spent-s (cost/room-read-s) (cost/walk-cell-s) (cost/search-cell-s)))
+  (reach/meter (cost/search-budget-s) spent-s (cost/room-read-s) (cost/walk-cell-s) (cost/search-cell-ceiling-s)))
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
 

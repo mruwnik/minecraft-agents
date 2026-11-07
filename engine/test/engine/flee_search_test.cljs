@@ -118,10 +118,10 @@
               metered (await (run m))
               spent (rooms/search-meter budget)
               none (await (run spent))]
-          (is (> (* (:nodes (meta free)) (cost/search-cell-s)) budget) (str "the whole search is over the budget: " (meta free)))
+          (is (> (* (:nodes (meta free)) (cost/search-cell-ceiling-s)) budget) (str "the whole search is over the budget: " (meta free)))
           (is (search/cut? metered) (pr-str (meta metered)))
           (is (<= (reach/spent-s m) budget) (str (reach/spent-s m)))
-          (is (<= (* (:nodes (meta metered)) (cost/search-cell-s)) budget) (pr-str (meta metered)))
+          (is (<= (* (:nodes (meta metered)) (cost/search-cell-ceiling-s)) budget) (pr-str (meta metered)))
           (is (pos? (:planned (meta metered))) "it plans while the meter lasts")
           (is (= [0 true false] [(:planned (meta none)) (search/cut? none) (search/boxed? none)])
               "a spent meter plans nothing, and that is no proof the body is boxed in"))))))

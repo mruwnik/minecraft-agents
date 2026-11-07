@@ -226,7 +226,7 @@
   expanded, the targets planned and why the ones with no route had none (the planner's reason: count), plan-ms the
   milliseconds in its plans, :cut? when the search's meter (opts :meter, a jobs.lib.reach/meter: the flight step's one
   search, Q141) ran out before every target was planned. Each plan's nodes stop at what the meter has left
-  (cost/search-cell-s a node) and take off it their seconds, the clock's or the nodes' price when more; the search ends
+  (cost/search-cell-ceiling-s a node: the ceiling is on wall time) and take off it their seconds, the clock's or the nodes' price when more; the search ends
   with the best so far once those seconds reach the first chaser's time to contact (a decision made after contact is no
   escape). opts {:y-margin :chasers :covers :covers-key :meter}: blocks past body and end the routes may plan, the chasers (their danger is the race, so death-chance weighs only the other known threats; met at an
   unseen dead end, they corner the body: :trapped, the cheapest cornered answer to them (cost/cornered-answers: the fight,
@@ -279,7 +279,7 @@
                   ms (- (clock/now) t1)
                   spent (or (.-expanded res) 0)
                   ;; the clock's, or the nodes' price when more: a clock that does not move with the CPU (a fake's) still ends the search
-                  s (max (/ ms 1000) (* spent (cost/search-cell-s)))
+                  s (max (/ ms 1000) (* spent (cost/search-cell-ceiling-s)))
                   _ (lreach/spend! meter s false)
                   r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
