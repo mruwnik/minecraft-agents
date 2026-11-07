@@ -40,6 +40,30 @@
         (.set extents s e)
         (when (<= (aget e 1) (aget e 4)) e)))))
 
+(defonce ^{:doc "section -> #js [wrote open mask]: the heights (bit y mod 16) at which it remembers a cell open (a Uint8Array by state id) holds, as of its last write."} open-masks (js/WeakMap.))
+
+(defn open-heights
+  "The heights, ascending, at which the body of primitives p remembers a cell whose state id open (a Uint8Array by state
+  id) holds: a cell at any other height reads closed from memory. nil without a memory."
+  [p ^js open]
+  (when-let [st (st-of p)]
+    (let [ys (js/Set.)]
+      (.forEach (sections st)
+                (fn [^js s]
+                  (let [^js e (.get open-masks s)
+                        mask (if (and e (identical? (aget e 0) (.-wrote s)) (identical? (aget e 1) open))
+                               (aget e 2)
+                               (let [^js ids (.-ids s)
+                                     m (loop [i 0 m 0]
+                                         (if (< i 4096)
+                                           (let [v (aget ids i)]
+                                             (recur (inc i) (if (and (pos? v) (== 1 (aget open (dec v)))) (bit-or m (bit-shift-left 1 (bit-shift-right i 8))) m)))
+                                           m))]
+                                 (.set open-masks s #js [(.-wrote s) open m])
+                                 m))]
+                    (dotimes [b 16] (when-not (zero? (bit-and mask (bit-shift-left 1 b))) (.add ys (+ (* 16 (.-sy s)) b)))))))
+      (.sort (js/Int32Array.from ys)))))
+
 (defn faces-unseen?
   "Whether the body of primitives p remembers no cell within r of a face of the box [x0 y0 z0 x1 y1 z1], inside it or out
   (by each section's box of remembered cells), the bottom face left out at or under floor-y; nil without a memory."

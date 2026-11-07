@@ -472,3 +472,29 @@
         route-s (fn [plugs] (:seconds (dr/route (world {[1 10 0] "stone" [1 11 0] "stone"}) [0 10 0] [3 10 0]
                                                 {:step-s 1 :margin 0 :flood (assoc flood :plugs plugs)})))]
     (is (= 7 (- (route-s #{[1 10 0]}) (route-s #{}))))))
+
+(deftest the-rise-priced-bound-finds-the-way-the-bound-without-it-finds
+  ;; a rise through cells at heights where none reads open is a stair's step (or a pillar block) in the bounds: one over a
+  ;; way's price, or one that fell by more than a move's price from cell to cell, would end on a dearer way
+  (let [seen (into {} (concat (for [x (range -2 9) z [3]] [[x 4 z] "air"])
+                              (for [x [6] y (range -2 4) z (range 0 4)] [[x y z] "air"])
+                              (for [x (range -3 3) y [0 1] z [-4]] [[x y z] "air"])))
+        ys (into-array (sort (into (set (range 10 40)) (keep (fn [[[_ y _] n]] (when (dr/open? n) y)) seen))))
+        rho #(memoize (steps-to-seen seen %))
+        price (fn [from goal opts] (:seconds (first ((dr/search (world seen) from goal opts) 100000))))]
+    (is (= [] (for [[from goal extra] [[[6 -2 1] [0 10 0]]
+                                       [[6 -2 1] [0 10 0] {:pillar-s 4 :place-s 0.4}]
+                                       [[6 -2 1] [0 10 0] {:pillar-s 0.4 :place-s 0.4}]
+                                       [[-3 0 -4] [8 4 3]]
+                                       [[-2 4 3] [4 5 -2] {:pillar-s 4}]
+                                       [[0 -6 0] [3 6 2]]
+                                       [[6 -2 1] [0 10 0] {:range 1 :near [0 10 0]}]
+                                       [[-3 0 -4] [6 3 2] {:range 1 :near [6 3 2]}]
+                                       [[0 10 0] [6 -2 0]]]
+                    prior? [false true]
+                    :let [opts (merge (unseen-opts seen (rho 3) (rho 1) 1000) {:max-fall 3 :margin 3 :stair-s 3 :prior-h? prior?} extra)
+                          bare (price from goal opts)
+                          risen (price from goal (assoc opts :open-ys ys :max-s (+ bare 1e-6)))]
+                    :when (not (and (number? bare) (number? risen) (< (js/Math.abs (- bare risen)) 1e-9)))]
+                [from goal prior? bare risen])))))
+

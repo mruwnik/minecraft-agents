@@ -24,6 +24,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.seen-sections :as seen-sections]
             [jobs.lib.util :as u]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
@@ -1926,3 +1927,40 @@
     (is (false? (beats {:step :stair} 21 20)) "a stair whose own cuts are short but whose walk on is long loses")
     (is (false? (beats {:step :approach} 0 20)) "only a stair or pillar may displace the leg")
     (is (false? (beats nil 0 20)))))
+
+(defn remembering-within
+  "A fake body at feet cell [0 64 0] in blocks carrying inv that remembers, and senses, only the cells within r of it."
+  [blocks inv r]
+  (let [f (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv})
+        raw (fake-raw/create f)
+        per (perception/create raw {:now (constantly 1000000)})
+        ^js st (:st per)
+        n (js/Math.ceil r)]
+    (doseq [x (range (- n) (inc n)) y (range (- 64 n) (+ 65 n)) z (range (- n) (inc n))
+            :when (<= (js/Math.hypot (- (+ x 0.5) 0.5) (- y 64) (- (+ z 0.5) 0.5)) r)]
+      (store/record! st (store/store-of st (.-dim st)) x y z (.stateAt raw x y z) 1000000))
+    (tu/seeing-within (perception/wrap f per) r)))
+
+(defn climb-searched
+  "route-answer's climb from [0 64 0] to [8 72 0] through stone-mass for a body carrying inv that remembers the cells within
+  2 of it, the memory's open heights read (open?) or not: [seconds feet-cells cells-expanded]."
+  [inv open?]
+  (let [p (remembering-within stone-mass inv 2)
+        n (atom 0)
+        search dig-route/search
+        a (settings/with-settings {:jobs.lib.dig-route/max-nodes 100000}
+            #(with-redefs [dig-route/search (fn [& args] (let [run (apply search args)] (fn [& r] (let [out (apply run r)] (swap! n + (second out)) out))))
+                           seen-sections/open-heights (if open? seen-sections/open-heights (constantly nil))]
+               (choose/route-answer p [0 64 0] [8 72 0] (constantly true) (constantly false) false false {})))]
+    [(:seconds a) (map :to (:steps a)) @n]))
+
+(deftest a-climb-through-rock-with-no-open-cell-remembered-at-its-heights-is-searched-narrow-whatever-the-pickaxe
+  ;; each rise there is a stair's step (3 s), not a walk's (0.3 s): priced so in the bounds, a quicker pickaxe no longer
+  ;; buys a wider ball of rock searched (without: bare 743 cells, iron 6060, diamond 7467)
+  (let [bare (nth (climb-searched [] true) 2)]
+    (is (< bare 600) (str bare " cells bare-handed"))
+    (doseq [inv (cons [] (map #(vector {:name % :count 1}) ["wooden_pickaxe" "stone_pickaxe" "iron_pickaxe" "diamond_pickaxe"]))
+            :let [[s steps cells] (climb-searched inv true)
+                  [s0 steps0] (climb-searched inv false)]]
+      (is (= [s0 steps0] [s steps]) (str inv ": the same route at the same price"))
+      (is (<= cells bare) (str inv ": " cells " cells")))))

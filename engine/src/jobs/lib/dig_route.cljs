@@ -3,6 +3,7 @@
   caller says each cell is (block-at cell -> name, or nil when never seen)."
   (:require ["v8" :as v8]
             [engine.args :as a]
+            [engine.path.blocks :as blocks]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
@@ -28,6 +29,13 @@
   "Whether a walker passes the block as it is: air, a plant, a torch, a gate (opened). A fence or wall stops it, though an arrow flies over."
   [n]
   (boolean (and n (or (bs/air n) (and (re-find reach/arrow-passes n) (not (re-find #"_(fence|wall)$" n)))))))
+
+(def open-ids
+  "1 by state id for a block open? passes."
+  (delay (let [^js t (blocks/default-state-table)
+               a (js/Uint8Array. (.-length (.-kind t)))]
+           (.forEach (.-nameIds t) (fn [^js r n] (when (open? n) (.fill a 1 (aget r 0) (inc (aget r 1))))))
+           a)))
 
 (defn cell-cost
   "Digs it takes to open a cell: 0 when open, 1 for a block (an unseen cell is dug to see), nil when it cannot be
@@ -137,7 +145,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood lava-s searched-s read-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s guess floor-absent-s flood lava-s searched-s read-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -201,11 +209,28 @@
         ;; a cell the search (or the back search) would have entered but for the box: its :no-route is then the box's
         boxed (volatile! false)
         back-boxed (volatile! false)
-        to-goal (fn [x y z] (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))))
-        ;; a cell within range of near is at most 2 range across and below it
+        ;; with :open-ys, a step up from feet height h is cut-free only when cells at h+1 and h+2 may read open (its feet and
+        ;; both heads); every other rise is a stair's step or a pillar block, rise-s over a step. The body's own cells are open
+        rise-s (if (and open-ys stair-s)
+                 (max 0 (- (min (max step-s stair-s) (if pillar-s (if (fn? pillar-s) (pillar-s 1 0 0 0) pillar-s) ##Inf)) step-s))
+                 0)
+        ^js free (when (pos? rise-s)
+                   (let [o (doto (js/Set. open-ys) (.add fy) (.add (inc fy)))
+                         a #js []]
+                     (.forEach o (fn [y] (when (.has o (inc y)) (.push a (dec y)))))
+                     (.sort (js/Int32Array.from a))))
+        ;; the rises from feet height lo to hi that must cut (or pillar)
+        cut-rises (if free
+                    (let [below (fn [v] (loop [l 0 h (.-length free)]
+                                          (if (< l h) (let [m (bit-shift-right (+ l h) 1)] (if (< (aget free m) v) (recur (inc m) h) (recur l m))) l)))]
+                      (fn [lo hi] (if (< lo hi) (- hi lo (- (below hi) (below lo))) 0)))
+                    (constantly 0))
+        to-goal (fn [x y z] (+ (* step-s (max (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))) (- gy y))) (* rise-s (cut-rises y gy))))
+        ;; a cell within range of near is at most 2 range across and below it, and no more than range below it
         step-h (if r
                  (fn [x y z] (min (to-goal x y z)
-                                  (* step-s (max 0 (- (max (+ (js/Math.abs (- x ax)) (js/Math.abs (- z az))) (- ay y)) (* 2 r))))))
+                                  (+ (* step-s (max 0 (- (max (+ (js/Math.abs (- x ax)) (js/Math.abs (- z az))) (- ay y)) (* 2 r))))
+                                     (* rise-s (cut-rises y (- ay (js/Math.floor r)))))))
                  to-goal)
         ;; with back-h?, the back search's bound too (back-lb): a dear wall round the goal is priced before the rock round it is searched
         back-lb (volatile! (constantly 0))
@@ -236,8 +261,10 @@
                                   (min (max 0 (dec (* 2 t))) (+ t (* 2 (js/Math.ceil (/ (max 0 (- t dug-mf 1)) dug-mf)))) under)]))
         ;; the first steps open a cell seen-cells less one away, a pillar's first two over the feet
         lead (if pillar-s 2 1)
+        ;; a stair's step or pillar block over a step on top: the unseen's tolls and digs are paid besides it
         prior-h (fn [x y z] (let [n (steps-to x y z)]
                               (+ (* least-step n)
+                                 (* rise-s (cut-rises y (if r (- ay (js/Math.floor r)) gy)))
                                  (* unseen-step-s (min n (+ (max 0 (dec (seen-steps x y z))) end-steps)))
                                  ;; from a seen cell every way meets the seen: the count of a way that never does is no bound there
                                  (* unseen-dig-s (let [sc (seen-cells x y z) b (max (+ (max 0 (- sc lead)) end-digs) last-digs)]
@@ -430,14 +457,17 @@
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too, a stair's step when it cuts; down: the cell entered; a pillar: the cell over the head), up and a
         ;; pillar the unseen toll of the cell entered too, falls and refusals left out, a step across or up only from a cell over a floor. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
-        back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
+        own-cell? (fn [x y z] (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)))
+        back-s (fn [x y z] (if (own-cell? x y z) 0 (open-s x y z)))
+        ;; as the search proper reads a cell to open: dug however little its dig costs
+        back-cut? (fn [x y z] (not (or (own-cell? x y z) (zero? (.-cost ^js (at x y z))))))
         stands? (fn [x y z] (and (some? (back-s x y z)) (some? (back-s x (inc y) z)) (or (inside? x y z) (do (vreset! back-boxed true) false))))
         ;; under prior-h also the unseen cells a way from the start opens, each at least unseen-dig-s: a step into a cell whose
         ;; seen-cells passes the start's by 2 or more opens one (its feet; a pillar its head)
-        to-start (let [walk (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y fy))))
+        to-start (let [walk (fn [x y z] (+ (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y fy))) (* rise-s (cut-rises fy y))))
                        s0 (when prior? (inc (seen-cells fx fy fz)))]
                    (if prior?
-                     (fn [x y z] (max (walk x y z) (+ (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))) (* unseen-dig-s (max 0 (- (seen-cells x y z) s0))))))
+                     (fn [x y z] (max (walk x y z) (+ (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))) (* rise-s (cut-rises fy y)) (* unseen-dig-s (max 0 (- (seen-cells x y z) s0))))))
                      walk))
         back-best (js/Map.) back-done (js/Set.) back-queue #js []
         back-tick (volatile! 0)
@@ -488,8 +518,9 @@
                              (when (< i 8)
                                (let [mx (- x (aget dirs i)) mz (- z (aget dirs (inc i)))]
                                  (when-let [over (when (floored? mx (dec y) mz) (back-s mx (inc y) mz))]
-                                   (let [cuts (+ over feet head)]
-                                     (back-into! g mx (dec y) mz (+ (if (and stair-s (pos? cuts)) (cw/stair-leg-cost (+ step-s cuts) step-s stair-s) (+ step-s cuts)) toll))))
+                                   (let [cuts (+ over feet head)
+                                         stair? (and stair-s (or (pos? cuts) (back-cut? mx (inc y) mz) (back-cut? x y z) (back-cut? x (inc y) z)))]
+                                     (back-into! g mx (dec y) mz (+ (if stair? (cw/stair-leg-cost (+ step-s cuts) step-s stair-s) (+ step-s cuts)) toll))))
                                  (recur (+ i 2)))))
                            ;; down the column a cell at a time, as a fall opens it and the straight dig digs it
                            (back-into! g x (inc y) z feet)
@@ -549,7 +580,8 @@
   neighbour not seen, as water), the water let in (cost/flood-dig-s,
   flood-under-s) and a dig or step on inside it (cost/wet-dig-s, wet-step-s), a stair's step at least its
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps (falls
-  of at most the longest that costs no hp) and :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
+  of at most the longest that costs no hp) and :seen-cells by the sections the body remembers (seen-sections/steps-fn), :open-ys
+  the heights at which it remembers a cell open (seen-sections/open-heights)."
   ([p unseen?] (body-prices p unseen? {}))
   ([p unseen? {:keys [sensed own-s max-damage plugs clear-ms]}]
    (let [self (.self p)
@@ -572,6 +604,7 @@
       ;; the way meets the memory its falls are dug, no longer
       :seen-steps (seen-sections/steps-fn p (max 1 (count (take-while #(zero? (fall-s %)) (range 1 (inc max-fall))))))
       :seen-cells (seen-sections/steps-fn p 1)
+      :open-ys (seen-sections/open-heights p @open-ids)
       :fall-s fall-s
       :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell))))
       :flood {:level level
@@ -617,7 +650,8 @@
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
-  as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
+  as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :open-ys (an array of the heights at which block-at may read a cell open, default every height: a rise
+  through cells at other heights is priced in both bounds as a stair's step or a pillar block), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
   :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
