@@ -821,15 +821,18 @@
 
 (deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
   (let [c (ctx-of (assoc tunnel :time st/noon))
-        status (fn [unseen]
+        status (fn [unseen made-out?]
                  (with-redefs [look-edge/pending (fn ([_] nil) ([_ _] nil))
                                lib-look/room-air-unseen (constantly unseen)
                                lib-look/look-shows? (constantly true)
+                               lib-look/makes-out-fn (constantly (constantly made-out?))
                                sh-inside/dark-hall (constantly :roofed)]
                    (lit 0 0 #(ready/dark-status c {:x 0 :y 64 :z 0}))))]
-    (is (= [:look :exposed [[1 66 0]]] (let [s (status [[1 66 0]])] [(first s) (:reason (nth s 2)) (:look-at (nth s 2))]))
+    (is (= [:look :exposed [[1 66 0]]] (let [s (status [[1 66 0]] true)] [(first s) (:reason (nth s 2)) (:look-at (nth s 2))]))
         "an unseen cell over the room's air is looked at, as unseen-status does, not priced as a walk to look at the goal")
-    (is (= :never (first (status []))) "none unseen: the room is a hall by its edge")))
+    (is (= :never (first (status [] true))) "none unseen: the room is a hall by its edge")
+    (is (= :never (first (status [[1 66 0]] false)))
+        "a cell in sight that a look shows only dark (past look/near-of) is not asked: no look answers it, and each new dig child would ask again")))
 
 (deftest the-walk-to-look-is-one-leg-to-the-far-side-of-the-hall-judged-past-sight-of-it-and-never-beside-the-feet
   (let [p (:primitives (ctx-of (assoc tunnel :time st/noon)))

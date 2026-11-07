@@ -165,13 +165,14 @@
 
 (defn air-look
   "Under a seen roof, a :look at the unseen cells beside the seen air round the body (look/room-air-unseen) a look from here
-  shows and no look round looked at yet and sense/round-plan pays for at the stay's price at chance (stay-look-price),
+  makes out (look/makes-out-fn: a dark cell past look/near-of shows only dark, so no look ever answers it) and no look
+  round looked at yet and sense/round-plan pays for at the stay's price at chance (stay-look-price),
   nil when none is left: once none is unseen, that air's own dark is no evidence for the light outside. Open ground has
   no such room to seal."
   [c text chance]
   (let [p (:primitives c)]
     (when-let [cells (and (sh-sense/roofed? p (sh-sense/room-roof-height))
-                          (seq (filter #(and (not ((sense/round-looked c) %)) (look/look-shows? p %)) (look/room-air-unseen p))))]
+                          (seq (filter (every-pred (complement (sense/round-looked c)) (look/makes-out-fn p)) (look/room-air-unseen p))))]
       (when-let [paid (seq (:pay (sense/round-plan c cells (stay-look-price c chance))))]
         (contract/look :exposed text :look-at (vec paid))))))
 
