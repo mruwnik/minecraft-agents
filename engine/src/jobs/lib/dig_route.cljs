@@ -146,7 +146,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s guess floor-absent-s flood lava-s searched-s read-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -274,14 +274,30 @@
                                   (min (max 0 (dec (* 2 t))) (+ t (* 2 (js/Math.ceil (/ (max 0 (- t dug-mf 1)) dug-mf)))) under)]))
         ;; the first steps open a cell seen-cells less one away, a pillar's first two over the feet
         lead (if pillar-s 2 1)
+        ;; the first steps of a way from a cell seen-cells s off open cells (each its feet, a pillar's its head) at least s - j
+        ;; - lead + 1 off at the j-th, at most y + j + lead - 1 high: with :unseen-digs each such dig at least its tier's
+        ;; seconds (low where that height is low-y or under), a non-decreasing row by distance; (lead-digs k m y) the m first
+        ;; of the k of a cell at height y. A step from the cell opens the first, so the sum falls by no more than its dig
+        lead-digs (when-let [{:keys [low-y low any]} unseen-digs]
+                    (let [prefix (fn [ws] (let [a (js/Float64Array. (inc (count ws)))] (dotimes [i (count ws)] (aset a (inc i) (+ (aget a i) (nth ws i)))) a))
+                          upto (fn [^js a l] (let [n (dec (alength a))] (cond (<= l 0) 0 (<= l n) (aget a l) :else (+ (aget a n) (* (- l n) (- (aget a n) (aget a (dec n))))))))
+                          lows (prefix low) anys (prefix any)
+                          span (fn [a lo hi] (if (< hi lo) 0 (- (upto a hi) (upto a (dec lo)))))]
+                      (fn [k m y] (let [a (max 0 (min m (- low-y y lead -1)))]
+                                    (+ (span lows (inc (- k a)) k) (span anys (inc (- k m)) (- k a)))))))
         ;; a stair's step or pillar block over a step on top: the unseen's tolls and digs are paid besides it
         prior-h (fn [x y z] (let [n (steps-to x y z)]
                               (+ (* least-step n)
                                  (* rise-s (cut-rises y (if r (- ay (js/Math.floor r)) gy)))
                                  (* unseen-step-s (min n (+ (max 0 (dec (seen-steps x y z))) end-steps)))
                                  ;; from a seen cell every way meets the seen: the count of a way that never does is no bound there
-                                 (* unseen-dig-s (let [sc (seen-cells x y z) b (max (+ (max 0 (- sc lead)) end-digs) last-digs)]
-                                                   (if (zero? sc) b (min (digs-to x y z) b)))))))
+                                 (let [sc (seen-cells x y z) k (max 0 (- sc lead))]
+                                   (if lead-digs
+                                     (let [meets (max (+ (lead-digs k k y) (* unseen-dig-s end-digs)) (* unseen-dig-s last-digs))]
+                                       (if (zero? sc)
+                                         meets
+                                         (let [d (digs-to x y z) m (min k d)] (min (+ (lead-digs k m y) (* unseen-dig-s (- d m))) meets))))
+                                     (* unseen-dig-s (let [b (max (+ k end-digs) last-digs)] (if (zero? sc) b (min (digs-to x y z) b)))))))))
         heuristic (let [h (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)]
                     (if prior? (fn [x y z] (max (h x y z) (prior-h x y z))) h))
         end? (fn [ck] (let [[x y z] (cell-of ck)]
@@ -702,7 +718,9 @@
   :read-s seconds of CPU a cell read (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
-  in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
+  in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; :unseen-digs {:low-y :low [s ..] :any [s ..]}
+  the least by its seen-cells distance, 1 the first, the last for any past, where it lies at low-y or under and at any
+  height, each row non-decreasing and low no less than any, for the cells a way opens before it meets the seen; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default access/hidden-guess), :open-ys (an array of the heights at which block-at may read a cell open, default every height: a rise
   through cells at other heights is priced in both bounds as a stair's step or a pillar block, and a cell read open at one is read as never seen, by :guess), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the

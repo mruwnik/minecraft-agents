@@ -532,3 +532,20 @@
         never (dr/route (rock own) [0 10 0] [4 14 0] opts)]
     (is (seq (:dig never)))
     (is (= (select-keys never [:seconds :dig]) (select-keys seen [:seconds :dig])))))
+
+(deftest unseen-digs-priced-by-their-distance-from-the-seen-find-the-plain-search-s-price-through-fewer-cells
+  ;; rock below y 10 never seen, a dig there the dearer the farther from the seen plane (as the measured solid chance is)
+  ;; and under y 4: the least by tier bounds it where the one least of all (the nearest's) leaves a wide ball searched
+  (let [share (fn [[_ y _]] (let [d (- 10 y)] (min 1 (+ 0.2 (* 0.1 (js/Math.ceil (/ d 2))) (if (<= y 4) 0.2 0)))))
+        row (fn [low?] (mapv #(* 0.5 (min 1 (+ 0.2 (* 0.1 (js/Math.ceil (/ % 2))) (if low? 0.2 0)))) (range 1 17)))
+        opts (assoc (unseen-opts {} (constantly ##Inf) (constantly ##Inf) 1000)
+                    :dig-s (fn [_ c] (* 0.5 (share c))) :unseen-dig-s 0.1 :max-fall 3)
+        tiers {:low-y 4 :low (row true) :any (row false)}
+        run (fn [from goal o] (let [[a n] (to-end (dr/search (world {}) from goal o))] [(:seconds a) n]))]
+    (doseq [[from goal] [[[0 10 0] [12 -4 4]] [[0 10 0] [3 -10 0]] [[0 10 0] [16 3 0]]]
+            :let [[plain-s] (run from goal (assoc opts :prior-h? false))
+                  [flat-s flat-n] (run from goal (assoc opts :prior-h? true))
+                  [tier-s tier-n] (run from goal (assoc opts :prior-h? true :unseen-digs tiers))]]
+      (is (< (js/Math.abs (- plain-s tier-s)) 1e-9) (str from "->" goal ": " tier-s " s, plain " plain-s))
+      (is (< (js/Math.abs (- plain-s flat-s)) 1e-9))
+      (is (< tier-n flat-n) (str from "->" goal ": " tier-n " cells, " flat-n " at the least of all")))))

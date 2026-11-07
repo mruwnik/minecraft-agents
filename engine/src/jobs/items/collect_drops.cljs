@@ -19,6 +19,7 @@
             [jobs.lib.stair-memory :as smem]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
+            [jobs.lib.tools :as tools]
             [jobs.lib.loose :as loose]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -375,10 +376,14 @@
       (if (= :continue o) :continue :lit))))
 
 (defn dig-prices
-  "dig-route's prices for a dig to a drop: go-to's (body-prices, the body's plugs priced as floods), less yield, by dig share."
+  "dig-route's prices for a dig to a drop: go-to's (body-prices, the body's plugs priced as floods), less yield, by dig share,
+  an unseen cell's dig at least the rock's at its least share (look/unseen-dig-tiers) in the search's bound."
   [c seen-name yield]
-  (let [p (:primitives c)]
-    (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %)) {:plugs (smem/plugs-of c)}) yield) (escape/dig-share-fn p))))
+  (let [p (:primitives c)
+        rock-s (let [d (/ (tools/clear-ms p blocks/hidden-guess) 1000)] (when (js/isFinite d) (max 0 (- d (yield blocks/hidden-guess nil)))))
+        tiers (some->> rock-s (look/unseen-dig-tiers p))]
+    (cond-> (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %)) {:plugs (smem/plugs-of c)}) yield) (escape/dig-share-fn p))
+      tiers (assoc :unseen-digs tiers :unseen-dig-s (first (:any tiers))))))
 
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was

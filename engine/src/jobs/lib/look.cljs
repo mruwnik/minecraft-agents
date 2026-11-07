@@ -581,6 +581,16 @@
        (let [v (value cell) d (or (some-> v (bit-shift-right 1)) 1)]
          (solid-at y d (frontier-lit? feet-lit v d) beside-solid?))))))
 
+(defn unseen-dig-tiers
+  "dig-route's :unseen-digs for the body of primitives p when an unseen cell's dig costs rock-s at the chance
+  unseen-solid-at-fn gives: by a cell's seen-cells distance (half that, Chebyshev, at least to the nearest frontier), the
+  least such dig in the feet's lowest height band and at any height; nil without a perception's memory."
+  [p rock-s]
+  (when-let [[_ y] (and (frontier-value-fn p) (feet-cell p))]
+    (let [q (near-share p)
+          row (fn [dy-max] (mapv #(* rock-s (base-rates/unseen-solid-least y dy-max (js/Math.ceil (/ % 2)) q)) (range 1 (inc (* 2 base-rates/unseen-d-max)))))]
+      {:low-y (+ y base-rates/unseen-low-dy) :low (row base-rates/unseen-low-dy) :any (row nil)})))
+
 (defn beside-seen-solid?
   "Whether a face neighbour of cell [x y z] is a cell the body has seen solid (unseen-solid-at-fn's beside-solid?): seen,
   (fn [x y z]), the seen block there (u/seen-block)."

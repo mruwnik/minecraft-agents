@@ -189,6 +189,18 @@
            (.set unseen-kept key v)
            v)))))
 
+(def unseen-low-dy "The most blocks over the feet a cell of unseen-solid's lowest height band lies (dy under its first edge)."
+  (dec (first (:dy-edges unseen-data))))
+
+(defn unseen-solid-least
+  "The least unseen-solid of a cell dy-max or fewer blocks over the feet (nil: any height) and d or more from the nearest
+  frontier, lit or dark, its neighbours not asked (y and q as its)."
+  [y dy-max d q]
+  (let [edges (:dy-edges unseen-data)]
+    (reduce min (for [dy (cons unseen-low-dy edges) :when (or (nil? dy-max) (<= dy dy-max))
+                      d (range (max 1 d) (inc unseen-d-max)) lit? [true false]]
+                  (unseen-solid y dy d lit? q)))))
+
 (defn open-run-chance
   "The chance n unseen cells in a row out from a frontier cell are all open, the i-th at 1 - unseen-solid at distance i
   (y dy lit? q as its); under 1e-6 reads 0."
