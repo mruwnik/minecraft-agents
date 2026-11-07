@@ -1087,3 +1087,12 @@
 (deftest times-repeats-its-steps-in-place-after-the-defaults-act
   (let [[c] (f/file-cases "{:defaults {:act [[:rcon \"a\"]]} :cases [{:name \"x\" :act [[:summon \"cow\" [1 0 1]] #times [2 [[:wait-s 1] [:rcon \"b\"]]] [:rcon \"c\"]]}]}" "t")]
     (is (= [[:rcon "a"] [:summon "cow" [1 0 1]] [:wait-s 1] [:rcon "b"] [:wait-s 1] [:rcon "b"] [:rcon "c"]] (:act c)))))
+
+(deftest a-submitted-job-needs-a-worth-in-its-args
+  (let [ps #(f/problems (f/merge-case {} (merge {:name "a" :body {:at [1 0 1]} :expect [{:event {:kind :x} :within-s 1}]} %)))
+        refused #(some (fn [p] (re-find #"needs a :worth in its args.*jobs\.a\.b" p)) (ps %))]
+    (is (refused {:act [[:job '(jobs.a.b {})]]}))
+    (is (refused {:act [[:job '(seq (jobs.a.b {:worth 60}) (repeat (jobs.a.b)))]]}) "a job inside a combinator")
+    (is (refused {:act [[:http :submit '(jobs.a.b {})]]}) "a submit over http")
+    (is (not (refused {:act [[:job '(seq (jobs.a.b {:worth 60}) (repeat 2 (jobs.a.b {:worth 3})))]]})))
+    (is (not (refused {:act [[:http :submit '(jobs.a.b {:worth 60})]]})))))

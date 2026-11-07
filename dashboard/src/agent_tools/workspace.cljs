@@ -131,7 +131,7 @@ Rewritten by the tools on every workspace build: do not edit it.
 
 ## Play: goal jobs first
 
-Submit goal jobs and let them run. Every job of a submit needs `:worth` in its args: the seconds of the body's time the goal is worth to you (a submit without it is refused; a way dearer than it is refused). Each fetches what it needs and ends with a reason. Use a smaller job only to unblock a goal job that stopped, then submit the goal job again. `./bin/observe catalog jobs` lists the goal jobs with a line each and the steps by family; `./bin/observe catalog job <name>` shows a job's args.
+Submit goal jobs and let them run: each fetches what it needs and ends with a reason. Use a smaller job only to unblock a goal job that stopped, then submit the goal job again. `./bin/observe catalog jobs` lists the goal jobs with a line each and the steps by family; `./bin/observe catalog job <name>` shows a job's args.
 
 A fresh start, in this order (skip a step already done). First site the base with `--wait`, then write plan P there with parts \"house\", \"field\" and \"pen\" (`./bin/plans --help`, `./bin/blueprints list`):
 

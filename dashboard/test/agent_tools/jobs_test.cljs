@@ -79,6 +79,13 @@
     (is (thrown? js/Error (jobs/spec-for source)) source))
   (is (string? (:error (request "--world" "w" "Bob" "submit" "{:job \"custom\"}")))))
 
+(deftest a-job-spec-without-a-worth-fails-locally-naming-the-jobs
+  (doseq [[source named] [["(jobs.time.wait-for-light)" "jobs.time.wait-for-light"]
+                          ["(seq (jobs.x {:worth 3}) (jobs.y))" "jobs.y"]
+                          ["(repeat (jobs.y {}))" "jobs.y"]]]
+    (is (thrown-with-msg? js/Error (re-pattern (str "worth is required: give " (str/replace named "." "\\.") " a :worth")) (jobs/spec-for source)) source))
+  (is (= '(seq (jobs.x {:worth 3})) (jobs/spec-for "(seq (jobs.x {:worth 3}))"))))
+
 (deftest a-malformed-job-spec-error-shows-an-example
   (doseq [source ["{:job :foo}" "()" "(jobs.one {:worth 60}) (jobs.two {:worth 60})"]]
     (is (re-find #"e\.g\. \(jobs\.movement\.go-to \{" (.-message (try (jobs/spec-for source) (catch :default e e)))) source)))
