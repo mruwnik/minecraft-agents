@@ -35,10 +35,11 @@
     (is (= {:x -1 :y 64 :z 0} (surface/wall-of p feet #{[1 64 0] [2 64 0]})) "a tunnel east from here would undercut a stair up east")))
 
 (defn buried-body
-  "A body in a 2-high pocket of a stone block 7 wide at feet y, rock to y roof; sky light is seen from sky-y up (nil: no light read)."
+  "A body in a 2-high pocket of a stone block 7 wide at feet y, rock to y roof, carrying inv; sky light is seen from sky-y up (nil: no light read)."
   ([roof sky-y] (buried-body 64 roof sky-y))
-  ([y roof sky-y]
-   (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y y :z 0.5}}
+  ([y roof sky-y] (buried-body y roof sky-y []))
+  ([y roof sky-y inv]
+   (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y y :z 0.5}} :inventory inv
                                                        :blocks (dissoc (box -3 (dec y) -3 3 roof 3 "stone") (str "0," y ",0") (str "0," (inc y) ",0"))})))]
      (when sky-y (aset (.-rawWorld p) "lightAt" (fn [_ y _] (if (>= y sky-y) 240 0))))
      {:primitives p})))
@@ -54,8 +55,14 @@
        (is (< near far) "a taller rise to the seen sky costs more")
        (is (zero? open) "a body on open ground climbs nothing"))))
 
+(deftest a-stair-up-cut-by-hand-costs-what-the-bare-hand-takes-not-a-pickaxe
+  (with-mem {}
+    #(let [hand (surface/climb-s (buried-body 64 71 72 []))
+           pick (surface/climb-s (buried-body 64 71 72 [{:name "stone_pickaxe" :count 1}]))]
+       (is (> hand (* 3 pick)) (str "stone by hand is 7.5 s a cut, 0.6 s with a stone pickaxe: " hand " vs " pick)))))
+
 (deftest a-stair-cut-through-a-build-pays-its-put-back-but-natural-rock-is-free
-  (let [buried (fn [block] {:primitives (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+  (let [buried (fn [block] {:primitives (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1} {:name "stone_axe" :count 1}]
                                                                                    :blocks (dissoc (box -3 63 -3 3 67 3 block) "0,64,0" "0,65,0")})))})]
     (with-mem {} #(is (< (surface/climb-s (buried "stone")) (surface/climb-s (buried "oak_planks")))
                       "planks are put back, natural rock is not"))))

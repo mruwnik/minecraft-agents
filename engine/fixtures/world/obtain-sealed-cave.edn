@@ -2,7 +2,7 @@
 ;; search finds nothing (no sight through rock), so obtain walks to a wall and cuts a stair up (by hand) to the sky, then finds the tree.
 ;; Tree at x 28, z 16: five logs under a leaf crown. Stone x 0..31, z 0..31, y 0..9 (surface y 10); a 7x2x7 hollow round the body at feet y 0.
 ;; Untimed: day, because the tree is seen on the surface and the body waits out a dark one.
-;; The furnace case passes the :worth an agent gives its goal (a furnace of carried cobblestone is worth less than one walk to look for the table's logs).
+;; Each case passes the :worth an agent gives its goal: a root obtain's own worth is the items' usual cost, which a stair out of rock (by hand about 200 s) always tops.
 ;; Should-succeed: oak logs carried. Should-fail: none (the dig must not stop :no-source or :no-way-up).
 {:defaults
  {:tags [:obtain :explore :mining :no-tool]
@@ -14,14 +14,14 @@
   :limit-s 1000}
  :cases
  [{:name "sealed-cave-stairs-up-then-fells-the-tree"
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true :worth 300})]]
    :expect [{:event {:source :job :kind :completed} :within-s 950 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 900 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}
   {:name "sealed-cave-stairs-up-with-a-worn-last-pickaxe"
    :tags [:obtain :explore :mining]
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
-         [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+         [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true :worth 300})]]
    :expect [{:event {:source :job :kind :completed} :within-s 950 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 900 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}
