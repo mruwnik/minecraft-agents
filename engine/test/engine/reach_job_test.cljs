@@ -269,3 +269,25 @@
     :stair false #{:carried :craft}
     :bridge false #{:carried :craft}
     :stair true #{:carried :chest :craft :gather}))
+
+(deftest a-stair-stopped-over-a-shaft-it-guessed-as-rock-is-not-chosen-again
+  ;; the pocket of the test above with shafts of air (x 5, 7, 9, y 64..68 bar 66) the climb's stairs rise over, read as rock
+  ;; till the body is near: each stair that meets one stops :no-floor, and the next way is chosen on what it showed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [shafts (for [x [5 7 9] y [64 65 67 68]] [x y 0])
+              blocks (reduce #(assoc %1 (str (%2 0) "," (%2 1) "," (%2 2)) "air")
+                             (box -4 58 -4 16 72 4 "stone") (concat [[0 64 0] [0 65 0] [12 67 0] [12 68 0]] shafts))
+              {:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
+              out (atom :not-done)
+              eng (assoc-in eng [:jobs 'recording-parent] (recording-parent out 'jobs.movement.go-to {:pos [12 67 0] :range 0}))]
+          (dark-but-near p (set shafts))
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 2000))
+          (let [stops (filter #(= :no-floor (:reason %)) (events-of seen :go-to.escalation-stopped))
+                after (fn [stop] (second (drop-while #(not= stop %) (filter #(#{:go-to.escalated :go-to.escalation-stopped} (:kind %)) @seen))))]
+            (is (true? (:arrived @out)) (pr-str @out))
+            (is (seq stops) "the stairs met the shafts")
+            (is (apply distinct? (map :cell stops)) (pr-str (map (juxt :at :cell) stops)))
+            (is (not-any? #(= [:stair (:at %)] ((juxt :step :at) (after %))) stops) "no stair again from where one stopped")))))))
