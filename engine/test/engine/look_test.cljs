@@ -16,6 +16,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.reach.room :as reach-room]
             [clojure.string :as str]))
 
 (defn seeing
@@ -524,3 +525,20 @@
         [{:keys [hall edge]} night] (stay (lit-yard ground true))]
     (is (= [:sky 1] [hall edge]) "a walker on the seen ground steps onto the rim and drops in")
     (is (= (* (cost/hall-chance :sky) (cost/spawn-chance [0 64 0])) night))))
+
+;; The yard's flood meets guessed ground past the rim at chances under 1. Would fail on the old code by reading: it walked
+;; depth first whatever the chance, so a cell first reached by a guessed floor was walked again each time a likelier way
+;; reached it, and every guessed cell was walked before the flood ended.
+(deftest the-yard-s-flood-walks-each-cell-once-at-its-likeliest-chance-and-ends-at-the-likeliest-edge
+  (let [p (lit-yard {} false)
+        walked (atom {})
+        edge? reach-room/unseen-edge?]
+    (with-redefs [reach-room/unseen-edge? (fn ([p kind-at c] (edge? p kind-at c))
+                                                ([p kind-at c unseen?]
+                                                 (swap! walked update [(aget c 0) (aget c 1) (aget c 2)] (fnil inc 0))
+                                                 (edge? p kind-at c unseen?)))]
+      (let [{:keys [hall edge]} (sh-inside/stay-hall p {:x 0 :y 64 :z 0} (look/sky-subtract-at 18000 0 0))]
+        (is (= :sky hall))
+        (is (< 0 edge 0.5))))
+    (is (seq @walked))
+    (is (= #{1} (set (vals @walked))) "no cell walked twice")))

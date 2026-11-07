@@ -144,14 +144,15 @@
              [nx ny nz]))))
 
 (defn region-flood
-  "spawn-region's flood from [x y z], depth first and farthest from the start first (a far dark cell in the open is met in
-  some 30 cells, not after the whole 24-block disc): ends at an unseen edge (:open?) or at the first dark cell farther
-  than spawn-free-radius (:partial?: its :dark are those met so far), and puts the region for every cell x y z walks to
-  within it. A cell stood on a floor the body has not seen (reach-room/room-kind-at's guess) holds a walker only at the
-  chance that floor is solid (look/unseen-solid-at-fn): a cell's chance is the least of those on its likeliest way from
-  the start (the ground past a wall is one ground, so its guesses go together). An edge or far dark cell met at a chance
-  under 1 does not end the flood; :edge-chance is the likeliest such way out (1 when one is certain, 0 when none: the
-  region is :open? when above 0). :edge, when open: an unseen cell [x y z] beside the likeliest edge."
+  "spawn-region's flood from [x y z], likeliest cell first (reach/heap-push!), then depth first and farthest from the start
+  first (a far dark cell in the open is met in some 30 cells, not after the whole 24-block disc): ends at an unseen edge
+  (:open?) or at the first dark cell farther than spawn-free-radius (:partial?: its :dark are those met so far), and puts
+  the region for every cell x y z walks to within it. A cell stood on a floor the body has not seen (reach-room/room-kind-at's
+  guess) holds a walker only at the chance that floor is solid (look/unseen-solid-at-fn): a cell's chance is the least of
+  those on its likeliest way from the start (the ground past a wall is one ground, so its guesses go together), each cell
+  walked once at it. Once every certain cell is walked, the first edge or far dark cell met is the likeliest way out
+  (:edge-chance; 1 when one is certain, 0 when none: the region is :open? when above 0) and ends the flood. :edge, when
+  open: an unseen cell [x y z] beside the likeliest edge."
   [p [x y z] subtract kind-at put!]
   (let [unseen? (reach-room/memo-kind-at (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z}))))
         solid-at (delay (look/unseen-solid-at-fn p))
@@ -168,39 +169,40 @@
         key (reach/keyer x z)
         best (js/Map.)
         certain #js []
-        stack #js [#js [x y z 1]]
+        ;; entries #js [-chance pushes x y z]: the likeliest first, then the last pushed (depth first)
+        heap #js [#js [-1 0 x y z]]
+        pushes (volatile! 0)
         dark #js []
         way (volatile! 0)
         way-cell (volatile! nil)
-        maybe! (fn [c chance] (when (> chance @way) (vreset! way chance) (vreset! way-cell c)))
         far2 (fn [c] (+ (js/Math.pow (- (aget c 0) x) 2) (js/Math.pow (- (aget c 2) z) 2)))
         _ (.set best (key x y z) 1)
         end (loop []
-              (if (zero? (.-length stack))
+              (if (zero? (.-length heap))
                 :closed
-                (let [c (.pop stack)
-                      cx (aget c 0) cy (aget c 1) cz (aget c 2) chance (aget c 3)]
+                (let [e (reach/heap-pop! heap)
+                      cx (aget e 2) cy (aget e 3) cz (aget e 4) chance (- (aget e 0))
+                      c #js [cx cy cz]]
                   (if (< chance (.get best (key cx cy cz)))
                     (recur)
                     (let [sure? (== 1 chance)
                           edge? (reach-room/unseen-edge? p kind-at c unseen?)
                           dark? (and (not edge?) (dark-at? cx cy cz))
-                          far? (and dark? (far-dark? #js [cx cy cz] x y z))]
+                          far? (and dark? (far-dark? c x y z))]
                       (when sure? (.push certain c))
                       (when (and dark? sure?) (.push dark cx cy cz))
                       (cond
                         (and edge? sure?) (do (vreset! way-cell c) :open)
                         (and far? sure?) :far
-                        :else (do (cond edge? (maybe! c chance)
-                                        far? (maybe! nil chance))
-                                  (let [ns (.sort (reach/backward kind-at cx cy cz) (fn [a b] (- (far2 a) (far2 b))))]
-                                    (.forEach ns (fn [n] (let [nx (aget n 0) ny (aget n 1) nz (aget n 2)
-                                                               k (key nx ny nz)
-                                                               nc (min chance (floor-chance nx ny nz))]
-                                                           (when (and (pos? nc) (> nc (or (.get best k) 0)))
-                                                             (.set best k nc)
-                                                             (.push stack #js [nx ny nz nc]))))))
-                                  (recur))))))))
+                        (or edge? far?) (do (vreset! way chance) (vreset! way-cell (when edge? c)) :closed)
+                        :else (let [ns (.sort (reach/backward kind-at cx cy cz) (fn [a b] (- (far2 a) (far2 b))))]
+                                (.forEach ns (fn [n] (let [nx (aget n 0) ny (aget n 1) nz (aget n 2)
+                                                           k (key nx ny nz)
+                                                           nc (min chance (floor-chance nx ny nz))]
+                                                       (when (and (pos? nc) (> nc (or (.get best k) 0)))
+                                                         (.set best k nc)
+                                                         (reach/heap-push! heap #js [(- nc) (vswap! pushes inc) nx ny nz])))))
+                                (recur))))))))
         chance (if (= :open end) 1 @way)
         region {:open? (pos? chance) :edge-chance chance :dark dark :partial? (= :far end)
                 :edge (some->> @way-cell (unseen-beside unseen?))}]
