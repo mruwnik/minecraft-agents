@@ -192,6 +192,15 @@
   [chance secs]
   (- 1 (Math/pow (- 1 (min 1 chance)) secs)))
 
+(defn failed-walk-s
+  "A walk priced s (cost the walk's price) after fails walks into the same home failed tonight: it wins at cost/retry-chance
+  :walk, else the walk is spent and the cheapest of others follows."
+  [s cost others fails]
+  (if (zero? fails)
+    s
+    (let [q (cost/retry-chance :walk fails)]
+      (+ (* q s) (* (- 1 q) (+ cost (apply min ##Inf others)))))))
+
 (defn ^:async answers
   "{answer seconds}: the ways through the night from here, each priced by cost/night-way-s (the night's work it loses, its tolls
   and hurt, its seconds exposed (exposed-price), what it costs by day) or, a bed, as the night's seconds it loses and the hp it risks
@@ -246,7 +255,8 @@
         sealed (when (and carried? (not sheltered?)) (seal-plan c))
         out-s (when log-out? (get-in (await (ctx/quote c 'jobs.survival.log-out {})) [:uses :job-time 1]))
         here (await (dig-in-quote c))]
-    (cond-> {:exposed (way-s {:open-s (open left)})}
+    (as-> {:exposed (way-s {:open-s (open left)})} prices
+     (cond-> prices
       (js/isFinite (:seconds here)) (assoc :shelter (dig here))
       (or bed asleep? (and carried? (not (and home into-home?)))) (assoc :bed (+ (or walk-s 0)
                                                                                    (if asleep? 0 (- (cost/spawn-worth body at feet)))
@@ -260,7 +270,9 @@
                           (if carried?
                             (+ lost (- (way-s w) (way-s {})) (- (cost/spawn-worth body (:pos home) feet)))
                             (way-s w))))
-      (number? out-s) (assoc :log-out out-s))))
+      (number? out-s) (assoc :log-out out-s))
+     (cond-> prices
+       (:home prices) (update :home failed-walk-s (:cost home) (vals (dissoc prices :home)) (sh-beds/home-walk-fails c (:pos home)))))))
 
 (defn home-bound-s
   "Seconds of walk past which a :home answer (no bed carried) costs more than the least of prices (cost/night-walk-bound-s)."

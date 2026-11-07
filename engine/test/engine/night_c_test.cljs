@@ -441,10 +441,13 @@
         (let [price (fn ^:async p [fails]
                       (let [{:keys [eng seen]} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0}))]
                         (dotimes [_ fails] (mem/write! (:store eng) :home-walk-failed {:pos {:x 10 :y 64 :z 0}} sh-beds/home-walk-failed-policy))
-                        (await (with-child-log #(core/tick! eng) (fn [_ k _ _] (when (= :enter-room k) {:kind :nothing-possible :data {}}))))
-                        (:prices (first (st/emitted seen :night.answers)))))]
-          (is (not (contains? (await (price 1)) :bed)) "one failure: the bed still goes with the walk into the home")
-          (is (contains? (await (price 12)) :bed) "many failures: another walk is not worth it, the bed is priced where it goes down"))))))
+                        (await (core/tick! eng))
+                        (select-keys (first (st/emitted seen :night.answers)) [:pick :prices])))
+              one (await (price 1))
+              many (await (price 12))]
+          (is (not (contains? (:prices one) :bed)) "one failure: the bed still goes with the walk into the home")
+          (is (contains? (:prices many) :bed) "many failures: another walk is not worth it, the bed is priced where it goes down")
+          (is (not= :home (:pick many)) (str "the home's walk is priced at the chance a walk wins after 12 failed: " (:prices many))))))))
 
 (deftest a-carried-bed-whose-sleep-skips-the-night-is-not-put-down-on-dark-ground-a-lit-home-is-a-walk-off
   (async done

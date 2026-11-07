@@ -270,15 +270,19 @@
 
 (declare bed-layout)
 
+(defn home-walk-fails
+  "Tonight's walks into the home at pos that failed (:home-walk-failed)."
+  [c pos]
+  (let [view (ctx/view c)]
+    (count (filter #(= pos (:pos (:data %))) (mem/since view :home-walk-failed (sh-clock/tonight (:primitives c) view))))))
+
 (defn closed-home
   "The :home of a body outside it when it lies in a closed roofed room with room for the carried bed's row
   (bed-layout), else nil: also nil once the walks into it that failed tonight (:home-walk-failed) make another walk not worth its price (cost/try-again? :walk)."
   [c]
   (let [p (:primitives c)
-        view (ctx/view c)
-        home (mem/place view :home)
-        failed (when home
-                 (count (filter #(= home (:pos (:data %))) (mem/since view :home-walk-failed (sh-clock/tonight p view)))))]
+        home (mem/place (ctx/view c) :home)
+        failed (when home (home-walk-fails c home))]
     (when (and home (or (zero? failed) (cost/try-again? c :walk {:fails failed}))
                (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home)
                (bed-layout c true home))
