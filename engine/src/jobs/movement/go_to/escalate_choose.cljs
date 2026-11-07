@@ -404,13 +404,17 @@
                   kept)
            run (or (:run kept) (start))
            [a used] (if (pos? @left) (run @left max-s) [nil 0])
-           ;; a search begun in an earlier call priced its route at that call's body; one that found no way the body
-           ;; survives (its route ##Inf) is not searched again for it
-           repriced? (boolean (and kept reprice (:dig a) (js/isFinite (:seconds a))))
-           [a used2] (if repriced? (let [[r n] (reprice a)] [(if (:dig r) (merge a r) r) n]) [a 0])]
+           ;; a search begun in an earlier call priced its route at that call's body. Its price excludes the CPU the search
+           ;; spent (sunk: a fresh search would spend it again). A route found at ##Inf (a flood the body drowns in) is
+           ;; priced again too, as health rises; it stays when no finite price comes of it
+           repriced? (boolean (and kept reprice (:dig a)))
+           was-finite? (and repriced? (js/isFinite (:seconds a)))
+           [a used2] (if repriced?
+                       (let [[r n] (reprice a)] [(cond (:dig r) (merge a r) was-finite? r :else a) n])
+                       [a 0])]
        (vswap! left - used used2)
        (swap! kept-routes update id dissoc k2)
-       (if (and repriced? (not (and (:dig a) (js/isFinite (:seconds a)))))
+       (if (and was-finite? (not (and (:dig a) (js/isFinite (:seconds a)))))
          (sliced-answer slice k start max-s epoch body)
          (do
            (swap! kept-routes assoc-in [id k] {:run (if a (answered-run a) run) :a a :epoch epoch
@@ -608,7 +612,7 @@
                  (let [m (max-s refused)
                        a (if slice
                            (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s (select-keys fall [:equipment :carried]) spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (route-epoch p)
-                                         {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent) :max-s nil :read-s nil :searched-s 0)) :max-drop max-fall})
+                                         {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent) :max-s nil :read-s nil :searched-s 0 :back-h? false)) :max-drop max-fall})
                            (dig-route/route seen-floor from goal (opts refused m spent)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was

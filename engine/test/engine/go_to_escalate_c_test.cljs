@@ -1527,7 +1527,9 @@
     ;; no route at 1 hp, asked again at each deeper drop till the fall is one
     ledge [0 69 0] [8 64 0] (range 1 21) 3
     ;; the flood's drowning re-priced: searched again once it kills
-    flooded-row [0 64 0] [4 64 0] (range 20 0 -2) 2))
+    flooded-row [0 64 0] [4 64 0] (range 20 0 -2) 2
+    ;; a route found at ##Inf (the flood kills) is re-priced as the health rises, not searched again
+    flooded-row [0 64 0] [4 64 0] (range 2 21 2) 1))
 
 (deftest a-search-gone-on-over-calls-prices-its-route-at-the-health-it-ends-at
   ;; 5 nodes a call: the search begun at 20 hp ends calls later, at a health its way does not survive
