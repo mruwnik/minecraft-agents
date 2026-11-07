@@ -331,7 +331,7 @@
   price. A drop at rest has a solid floor, seen or not. A route priced over worth (seconds, nil: no bound) is none: {:problem :dearer}. With an owner (a job id)
   a search that spends its nodes is kept and gone on at the next call: {:problem :searching} till it ends."
   [prices worth owner block-at solid? from [gx gy gz :as goal]]
-  (let [guess (fn [cell] (when (or (= cell [gx (dec gy) gz]) (solid? cell)) "stone"))]
+  (let [guess (fn [cell] (when (or (= cell [gx (dec gy) gz]) (solid? cell)) blocks/hidden-guess))]
     ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
      (fn [cell] (or (block-at cell) (guess cell)))
      from goal
