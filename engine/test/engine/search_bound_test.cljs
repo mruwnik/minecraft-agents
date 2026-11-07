@@ -1,6 +1,7 @@
 (ns engine.search-bound-test
   "go-to's search bound: a kept dig-route search ends once standing still for it has cost the whole way without it."
   (:require [cljs.test :refer [deftest is]]
+            [engine.ctx :as ctx]
             [engine.ready-test :as ready-test]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
@@ -27,7 +28,7 @@
 (deftest standing-is-priced-by-the-one-risk-formula
   (let [c (ctx-at 2000)]
     (with-redefs [risk/stay-estimate (fn [& _] {:hp 5 :lethal-hp 3 :hostiles 1})]
-      (is (close? (+ 2 (cost/risk-s 14 2 3)) (sb/stood-s c 0))
+      (is (close? (+ 2 (cost/risk-s 14 2 3)) (sb/stood-s c 0 0))
           "two seconds stood and the stay's hurt and death at cost/risk-s"))))
 
 (deftest with-no-way-but-a-dig-route-a-search-is-worth-what-the-goal-is
@@ -49,6 +50,17 @@
     (is (not (esc/replans-spent? (ctx-at 10999) m)))
     (is (esc/replans-spent? (ctx-at 11000) m))
     (is (not (esc/replans-spent? (ctx-at 99999) {})) "none begun")))
+
+(deftest searches-stand-the-body-still-for-their-cpu-when-the-clock-does-not-move
+  (let [c (ctx-at 1000)
+        m {:replan-budget {:since 1000 :cells 100 :fallback-s 10} :route-search {:since 1000 :cells 100 :fallback-s 10}}
+        spent (fn [cells] (with-redefs [cost-planner/search-cell-s (constantly 0.001)
+                                        ctx/mem (constantly {:route-owner "o"})
+                                        choose/searched-cells (atom {"o" cells})
+                                        risk/stay-estimate (fn [& _] {:hp 0 :lethal-hp 0})]
+                            [(boolean (esc/replans-spent? c m)) (boolean (sb/spent? c m))]))]
+    (is (= [false false] (spent 10099)))
+    (is (= [true true] (spent 10100)) "10000 cells at 1 ms each since they began: the 10 s the way without a dig route costs")))
 
 (deftest a-stair-over-an-open-floor-with-no-filler-is-priced-as-a-fetch-and-the-fallback-is-finite
   (let [c (ctx-at 0)

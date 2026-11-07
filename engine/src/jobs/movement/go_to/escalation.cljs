@@ -51,7 +51,7 @@
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch route-tool gap-fill
                                                          goal-way dig-leg dig-toward dig-way drop-fill out-of-sight? refused-drop? damage-refused? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
-                                                         route-owner route-slice route-epoch routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
+                                                         route-owner searched-cells-of route-slice route-epoch routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.lib.stair-memory :as stair-mem]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
@@ -221,7 +221,7 @@
   them is worth (search-bound/fallback-s) and the opts' :worth-s they search under, once."
   [c feet goal opts]
   (when-not (:route-search (ctx/mem c))
-    (ctx/update-mem! c assoc :route-search {:since (ctx/now c) :fallback-s (search-bound/fallback-s c feet goal (may-dig-fn c) opts) :worth-s (:worth-s opts)})))
+    (ctx/update-mem! c assoc :route-search {:since (ctx/now c) :cells (searched-cells-of (route-owner c)) :fallback-s (search-bound/fallback-s c feet goal (may-dig-fn c) opts) :worth-s (:worth-s opts)})))
 
 (defn search-spent!
   "Drop the call's kept searches, which stood the body still as long as the way without them costs (search-bound/spent?): those
@@ -721,11 +721,11 @@
           (if (and guess (= :not-diggable o)) :replan o))))))
 
 (defn replans-spent?
-  "Whether the dig route's replans (memory :replan-budget {:since :fallback-s}, begun at the first) have taken the body as long
-  as the way without a dig route costs (search-bound/fallback-s): the most they can save."
+  "Whether the dig route's replans (memory :replan-budget {:since :cells :fallback-s}, begun at the first) have taken the body as long
+  as the way without a dig route costs (search-bound/fallback-s): the most they can save. Time as search-bound/stood-secs counts it."
   [c m]
-  (when-let [{:keys [since fallback-s]} (:replan-budget m)]
-    (>= (/ (- (ctx/now c) since) 1000) fallback-s)))
+  (when-let [{:keys [since cells fallback-s]} (:replan-budget m)]
+    (>= (search-bound/stood-secs c since cells) fallback-s)))
 
 (defn ^:async replan-route!
   "Plan the :dig-route escalation again from the feet into goal pos with what the body sees now (route-cells): :again,
@@ -742,7 +742,7 @@
         feet (end/feet-cell c)
         _ (when-not (:replan-budget (ctx/mem c))
             (ctx/update-mem! c assoc :replan-budget
-                             {:since (ctx/now c)
+                             {:since (ctx/now c) :cells (searched-cells-of (route-owner c))
                               :fallback-s (search-bound/fallback-s c feet (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                                                                    (may-dig-fn c) (way-opts c feet (fetch-tool? c) nil))}))
         m (ctx/mem c)

@@ -28,15 +28,23 @@
                      (risk/risk-s c (risk/estimate c (cell goal)))))]
       (if (and total (js/isFinite total)) total (choose/call-budget-s c)))))
 
+(defn stood-secs
+  "Seconds go-to call c has stood still since `since` (ctx/now ms), when its sliced searches had expanded `cells`
+  (choose/searched-cells-of): the clock's, or the CPU of the cells expanded since (cost/search-cell-s each) when more,
+  so a clock that does not move with the CPU (a fake's) still ends the searches."
+  [c since cells]
+  (max (/ (- (ctx/now c) since) 1000)
+       (* (cost-planner/search-cell-s) (- (choose/searched-cells-of (:route-owner (ctx/mem c))) (or cells 0)))))
+
 (defn stood-s
-  "Seconds standing still since `since` (ctx/now ms) has cost the body: the time and what staying at its cell risks over
-  it (walk-risk/stay-estimate, risk/risk-s)."
-  [c since]
-  (let [secs (/ (- (ctx/now c) since) 1000)]
+  "Seconds standing still since `since` with `cells` searched (stood-secs) has cost the body: the time and what staying
+  at its cell risks over it (walk-risk/stay-estimate, risk/risk-s)."
+  [c since cells]
+  (let [secs (stood-secs c since cells)]
     (+ secs (risk/risk-s c (risk/stay-estimate c (assoc (risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs secs))))))
 
 (defn spent?
-  "Whether the searches begun as memory m's :route-search {:since :fallback-s} have stood the body longer than their fallback is worth."
+  "Whether the searches begun as memory m's :route-search {:since :cells :fallback-s} have stood the body longer than their fallback is worth."
   [c m]
-  (when-let [{:keys [since fallback-s]} (:route-search m)]
-    (>= (stood-s c since) fallback-s)))
+  (when-let [{:keys [since cells fallback-s]} (:route-search m)]
+    (>= (stood-s c since cells) fallback-s)))

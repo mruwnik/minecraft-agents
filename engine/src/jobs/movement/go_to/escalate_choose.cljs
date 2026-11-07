@@ -348,6 +348,14 @@
 
 (per-body/store! ::kept-routes #(reset! kept-routes {}))
 
+(defonce ^{:doc "Per go-to call (route-owner): the cells its sliced dig-route searches have expanded in all (sliced-answer),
+  the CPU search-bound prices standing still by."}
+  searched-cells (atom {}))
+
+(per-body/store! ::searched-cells #(reset! searched-cells {}))
+
+(defn searched-cells-of [id] (get @searched-cells id 0))
+
 (defn route-owner
   "The key of go-to call c's kept searches (kept-routes), made once a call (memory :route-owner): a job id comes again
   in a later engine."
@@ -413,6 +421,7 @@
                        (let [[r n] (reprice a)] [(cond (:dig r) (merge a r) was-finite? r :else a) n])
                        [a 0])]
        (vswap! left - used used2)
+       (swap! searched-cells update id (fnil + 0) used used2)
        (swap! kept-routes update id dissoc k2)
        (if (and was-finite? (not (and (:dig a) (js/isFinite (:seconds a)))))
          (sliced-answer slice k start max-s epoch body)
@@ -461,9 +470,15 @@
   (into #{} (keep (fn [[k kept]] (when-not (:ended? kept) (vec (take 2 k))))) (get @kept-routes id)))
 
 (defn forget-routes!
-  "Drop the kept searches of go-to call id: it has ended."
+  "Drop the kept searches of go-to call id."
   [id]
   (swap! kept-routes dissoc id))
+
+(defn end-searches!
+  "Go-to call id has ended: drop its kept searches and its count of cells searched."
+  [id]
+  (forget-routes! id)
+  (swap! searched-cells dissoc id))
 
 (defn guess-class
   "The escape/guess-class of unseen cell [x y z]: its seen solid face neighbours' names decide. sensed: cell -> the sensed

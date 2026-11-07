@@ -294,6 +294,6 @@
   (reserve/release! c)
   (wsearch/release! c)
   (goal/clear! c)
-  (choose/forget-routes! (:route-owner (ctx/mem c)))
+  (choose/end-searches! (:route-owner (ctx/mem c)))
   (await (torch/return-torch! c))
   (ctx/end c :done nil {}))
