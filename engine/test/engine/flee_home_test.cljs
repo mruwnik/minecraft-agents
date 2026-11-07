@@ -537,7 +537,7 @@
 (deftest a-chaser-3-blocks-off-leaves-lead-for-a-few-floods-less-the-race-margin
   ;; no distance gate: its lead at the body, less the race margin a race to a refuge is won by, prices the step's floods
   ;; (the search budget lifted: the lead alone is priced here). The body stands among the lone doors: no room is won
-  ;; that the farther sides could not beat
+  ;; that the farther sides could not beat, and each side judged floods open ground to the cap (flood-s)
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -550,7 +550,10 @@
                        (settings/with-settings no-ceiling
                          #(with-redefs [cost-danger/race-margin-s (constantly margin)]
                             (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false))))))))
+              ;; a side is judged while the floods before it and its own price fit the lead
+              paid (fn [margin] (count (take-while #(< (+ (* % (rooms/flood-s)) (rooms/judge-s)) (- (rooms/here-s (:primitives eng) zombie) margin)) (range))))
               [with-margin without] [(judged (margin)) (judged 0)]]
+          (is (= (paid (margin)) with-margin) "as many sides as the lead less the margin pays for")
           (is (pos? with-margin) (str "a zombie 3 blocks off leaves lead for a flood: " with-margin))
           (is (< with-margin without) (str "the race margin's share of the lead buys none: " [with-margin without])))))))
 
