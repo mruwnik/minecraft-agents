@@ -239,12 +239,12 @@
 
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start, :home? and, when its walk search
-  ran, :way-in, way-in's answer): the home's (home {:x :y :z} or nil) and those behind the doors the body has
+  ran whole, uncut, :way-in, way-in's answer): the home's (home {:x :y :z} or nil) and those behind the doors the body has
   seen (starts), nearest cell first (the home on a tie); and {:dropped [{:at [x y z] :own? :why}]}, the cells that are
   none: :run-failed (a run to it failed this flight), :not-closed, :unseen (a cell of the room not seen yet), or
   :unjudged (not judged this step: a door side whose side-s does not pay, cost/refuge-search-pays?, against threats'
   lead at its door, lead-s straight, or fire, and the run it saves over a room with a run on; or a flood cut by the
-  meter). Its floods and walk searches run under one search-meter from spent-s (default 0): each stops where it runs
+  meter, a known closed room's too). Its floods and walk searches run under one search-meter from spent-s (default 0): each stops where it runs
   out, :spent-s what they all ran. The home (judged whatever its price) and sides judged before or kept (side-s none)
   come first, then the rest nearest first; each closed room found gets its walk search (way-s) as verdicts prices it. A
   home with a bare doorway gap counts as a room (doorway-room: its :gap; :fill? when a block is carried to fill it).
@@ -280,12 +280,16 @@
                           r
                           (let [w (way-in p r)]
                             (when (and w (race-won? p r w threats)) (vswap! best min (:steps w)))
-                            ;; a search the meter cut that found no way leaves the room for verdicts to price again
-                            (cond-> r (or w (= n (reach/cuts))) (assoc :way-in w))))))
+                            ;; a door's search the meter cut may hold a shorter way: verdicts prices the room again
+                            (cond-> r (= n (reach/cuts)) (assoc :way-in w))))))
            room-of (fn [{:keys [pos home? gap-room]}]
                      (when-not (some #(contains? (:cells %) (mapv pos [:x :y :z])) @found)
-                       (when-let [r (some-> (or gap-room (reach-room/room p pos)) (assoc :start pos :home? home?))]
-                         (let [r (with-way r)] (vswap! found conj r) r))))
+                       (let [n (reach/cuts)
+                             r (or gap-room (reach-room/room p pos))]
+                         (if (and (nil? r) (not= n (reach/cuts)))
+                           ::cut
+                           (when-let [r (some-> r (assoc :start pos :home? home?))]
+                             (let [r (with-way r)] (vswap! found conj r) r))))))
            judged (->> (starts p home)
                        (map-indexed vector)
                        (sort-by (fn [[i s]] [(if (free? s) 0 1) i]))
@@ -293,8 +297,9 @@
                                (let [why (if (failed (cell-key pos)) :run-failed (judge s))
                                      gap (when (and home? (#{:not-closed :unseen} why)) (doorway-room c pos))
                                      why (cond (= :cut gap) :unjudged gap nil :else why)
-                                     s (cond-> (assoc s :why why) (map? gap) (assoc :gap-room gap))]
-                                 [i (cond-> s (nil? why) (assoc :room (room-of s)))])))
+                                     s (cond-> (assoc s :why why) (map? gap) (assoc :gap-room gap))
+                                     r (when (nil? why) (room-of s))]
+                                 [i (cond (= ::cut r) (assoc s :why :unjudged) r (assoc s :room r) :else s)])))
                        (sort-by first)
                        (mapv second))]
        {:spent-s (reach/spent-s)

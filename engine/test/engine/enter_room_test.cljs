@@ -249,14 +249,15 @@
 
 (defn ^:async pick-over
   "pick-seen over closed rooms behind starts, the body at the origin, route-cost from price (door -> seconds), called again
-  with the state it leaves until it is done: {:pick :quoted [door...] :calls [[door...] per call]}. candidate (default
-  every start a closed room, no flood) stands for candidate?."
+  with the state it leaves until it is done: {:pick :quoted [door...] :calls [[door...] per call]}. candidate (p start
+  unseen?, default every start a closed room, no flood) stands for side-verdict's two answers."
   [starts price & [candidate]]
   (let [quoted (atom [])
         state (atom {})
-        [ss cand self route mid mem] [enter-room/seen-starts enter-room/candidate? jobs.lib.util/self-pos room-lib/route-cost room-lib/mid ctx/mem]]
+        cand (or candidate (fn [_ _ _] true))
+        [ss verdict self route mid mem] [enter-room/seen-starts enter-room/side-verdict jobs.lib.util/self-pos room-lib/route-cost room-lib/mid ctx/mem]]
     (set! enter-room/seen-starts (fn [_] starts))
-    (set! enter-room/candidate? (or candidate (fn [_ _ _] true)))
+    (set! enter-room/side-verdict (fn [p s] (let [closed? (cand p s false)] {:closed? closed? :unseen? (or closed? (cand p s true))})))
     (set! jobs.lib.util/self-pos (fn [_] {:x 0 :y 0 :z 0}))
     (set! room-lib/mid identity)
     (set! ctx/mem (fn [_] @state))
@@ -269,7 +270,7 @@
              (if (or done? (> (count calls) (* 2 (count starts))))
                {:pick pick :quoted @quoted :calls calls}
                (recur calls))))
-         (finally (set! enter-room/seen-starts ss) (set! enter-room/candidate? cand) (set! jobs.lib.util/self-pos self)
+         (finally (set! enter-room/seen-starts ss) (set! enter-room/side-verdict verdict) (set! jobs.lib.util/self-pos self)
                   (set! room-lib/route-cost route) (set! room-lib/mid mid) (set! ctx/mem mem)))))
 
 (defn room-at [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
@@ -311,6 +312,19 @@
           (is (= {:pos (:pos far)} pick))
           (is (= [(:door near) (:door far)] quoted))
           (is (= [[] [(:door near)] [] [(:door far)]] calls) (str "each door's floods in one call, its quote in the next: " calls)))))))
+
+(deftest a-doors-sides-that-pass-one-search-together-are-judged-over-calls
+  ;; nothing kept (no perception): each side's flood takes 60% of the budget, so a door's two never fit one call; the
+  ;; side judged stays judged and the next call takes the other
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (js/Math.ceil (/ (* 0.6 (cost/search-budget-s)) (cost/room-read-s)))
+              flooding (fn [_ _ _] (let [cap (reach/metered-cap cells :read-s)] (reach/charge! cap :read-s (< cap cells)) (= cap cells)))
+              hut (room-at 3)
+              {:keys [pick calls]} (await (pick-over [hut (assoc hut :pos {:x 3 :y 0 :z 2})] {(:door hut) 5} flooding))]
+          (is (= {:pos (:pos hut)} pick) (str "the door is judged and quoted: " calls))
+          (is (= [[] [] [(:door hut)]] calls) (str "a side a call, then the quote: " calls)))))))
 
 (deftest a-doors-unseen-check-floods-nothing-its-judgement-did-not
   ;; candidate?'s unseen check rides on the floods side-s prices (reach-room/look, kept per body), none of its own

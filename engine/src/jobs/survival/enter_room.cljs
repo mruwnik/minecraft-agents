@@ -91,10 +91,18 @@
 
 (defn seen-doors "The doors seen behind which a room may be entered (seen-starts)." [c] (set (map :door (seen-starts c))))
 
+(defn side-verdict
+  "{:closed? :unseen?} of the room behind start {:pos}: a known closed room (refuge-room?), and that or one whose inside
+  is not seen yet (the walk shows it; the open ground outside a door reads unseen too). Both from the floods of
+  reach-room/look, kept per body: what room-lib/side-s prices."
+  [p {:keys [pos]}]
+  (let [look (reach-room/look p pos)
+        closed? (room-lib/refuge-room? p pos look)]
+    {:closed? closed? :unseen? (or closed? (some? @(:unseen look)))}))
+
 (defn candidate?
-  "Whether the room behind start {:pos} may be a closed room to enter: a known closed room (refuge-room?), or with unseen?
-  one whose inside is not seen yet (the walk shows it; the open ground outside a door reads unseen too). Both from the
-  floods of reach-room/look, kept per body: what room-lib/side-s prices."
+  "Whether the room behind start {:pos} may be a closed room to enter (side-verdict's :closed?), or with unseen? one not
+  seen inside yet (its :unseen?); the unseen flood only with unseen?."
   [p {:keys [pos]} unseen?]
   (let [look (reach-room/look p pos)]
     (or (room-lib/refuge-room? p pos look) (and unseen? (some? @(:unseen look))))))
@@ -124,45 +132,50 @@
   (cost/search-pays?) over the cheapest closed room quoted, no route to the door quicker than its straight line at
   cost/least-route-s. A call's floods are one search (room-lib/search-meter) and its quote one of its own, the call's
   last, in a call no flood ran in: the rest waits, :done? false, and :state (kept by the caller, given back as kept)
-  carries the doors judged and priced and the picks on to the next call while the doors seen stay the same."
+  carries the doors judged and priced, each side judged (side-verdict, :side-js) and the picks on to the next call while
+  the doors seen stay the same: the sides of a door a cut left unjudged are judged at the next call. :searched? when a
+  flood or the quote ran."
   [c kept]
   (let [p (:primitives c)
         me (u/self-pos c)
         seen (seen-doors c)
         m (room-lib/search-meter 0)
-        {:keys [priced best picks judged]} (if (= seen (:doors kept)) kept {:priced #{} :best ##Inf :picks {} :judged {}})
+        {:keys [priced best picks judged side-js]} (if (= seen (:doors kept)) kept {:priced #{} :best ##Inf :picks {} :judged {} :side-js {}})
         doors (->> (seen-starts c) (partition-by :door) (remove #(priced (:door (first %)))))
-        answer (fn [done? priced best picks judged]
-                 {:pick (some->> (or (:closed picks) (:unseen picks)) first (hash-map :pos)) :done? done?
-                  :state {:doors seen :priced priced :best best :picks picks :judged judged}})]
-    (loop [[sides & more :as left] doors best best picks picks priced priced judged judged]
+        answer (fn [done? priced best picks judged side-js]
+                 {:pick (some->> (or (:closed picks) (:unseen picks)) first (hash-map :pos)) :done? done? :searched? (pos? (reach/spent-s m))
+                  :state {:doors seen :priced priced :best best :picks picks :judged judged :side-js side-js}})]
+    (loop [[sides & more :as left] doors best best picks picks priced priced judged judged side-js side-js]
       (if-not sides
-        (answer true priced best picks judged)
+        (answer true priced best picks judged side-js)
         (let [d (:door (first sides))
               j (get judged d)
               spent (reach/spent-s m)
               lb (cost/least-route-s (u/flat-dist me (room-lib/mid d)) 0.7)
-              cost (+ (if j 0 (reduce + (map #(room-lib/side-s p (:pos %)) sides))) (room-lib/way-s))]
+              cost (+ (if j 0 (reduce + (map #(room-lib/side-s p (:pos %)) (remove #(contains? side-js (:pos %)) sides)))) (room-lib/way-s))]
           (cond
-            (not (cost/under-ceiling? spent)) (answer false priced best picks judged)
-            (not (cost/search-pays? spent cost (- best lb))) (recur more best picks (conj priced d) judged)
-            (nil? j) (let [j (binding [reach/*search* m]
-                               (let [n (reach/cuts)
-                                     j {:closed (:pos (some #(when (candidate? p % false) %) sides))
-                                        :unseen (:pos (some #(when (candidate? p % true) %) sides))}]
-                                 (when (= n (reach/cuts)) j)))]
-                       (if j
-                         (recur left best picks priced (assoc judged d j))
-                         (answer false priced best picks judged)))
-            (not (or (:closed j) (and (:unseen j) (not (:closed picks))))) (recur more best picks (conj priced d) judged)
-            (pos? spent) (answer false priced best picks judged)
+            (not (cost/under-ceiling? spent)) (answer false priced best picks judged side-js)
+            (not (cost/search-pays? spent cost (- best lb))) (recur more best picks (conj priced d) judged side-js)
+            (nil? j) (let [vs (binding [reach/*search* m]
+                                (reduce (fn [vs {:keys [pos] :as s}]
+                                          (if (contains? vs pos)
+                                            vs
+                                            (let [n (reach/cuts) v (side-verdict p s)]
+                                              (if (= n (reach/cuts)) (assoc vs pos v) (reduced (vary-meta vs assoc :cut? true))))))
+                                        side-js sides))
+                           first-of (fn [k] (:pos (first (filter #(k (get vs (:pos %))) sides))))]
+                       (if (:cut? (meta vs))
+                         (answer false priced best picks judged (vary-meta vs dissoc :cut?))
+                         (recur left best picks priced (assoc judged d {:closed (first-of :closed?) :unseen (first-of :unseen?)}) vs)))
+            (not (or (:closed j) (and (:unseen j) (not (:closed picks))))) (recur more best picks (conj priced d) judged side-js)
+            (pos? spent) (answer false priced best picks judged side-js)
             :else
             (let [start (or (:closed j) (:unseen j))
                   route (await (room-lib/route-cost c {:pos (room-lib/mid d) :range 0.7}))
                   k (if (:closed j) :closed :unseen)
                   picks (if (and route (< route (second (get picks k [nil ##Inf])))) (assoc picks k [start route]) picks)
                   best (if (and (:closed j) route) (min best route) best)]
-              (answer (empty? more) (conj priced d) best picks judged))))))))
+              (assoc (answer (empty? more) (conj priced d) best picks judged side-js) :searched? true))))))))
 
 (defn unclosable?
   "Whether the room seen at pos can be closed by nothing the job does: a seen room with an unroofed cell, no doorway that

@@ -21,6 +21,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.danger :as cost-danger]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond.cover :as cover]
@@ -693,6 +694,42 @@
           (is (<= (:spent-s late) budget) (str (:spent-s late)))
           (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
           (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))
+
+(deftest a-known-closed-home-whose-room-flood-is-cut-is-unjudged-not-dropped-silently
+  ;; card 9ccd6f0c: kept closed in job memory, its room still floods for its cells; a cut leaves it to a later step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 30.5)]
+              first-step (rooms/survey c home {:threats threats})
+              late (rooms/survey c home {:threats threats :spent-s (- (cost/search-budget-s) (* 3 (cost/room-read-s)))})]
+          (is (= [true] (mapv :home? (:rooms first-step))) "the home is a closed room")
+          (is (true? (get-in (ctx/mem c) [:refuge-rooms (rooms/cell-key home)])) "kept closed for the flight")
+          (is (= [] (:rooms late)) "three cells left: its room's flood is cut")
+          (is (some #(= {:at [5 64 0] :own? true :why :unjudged} %) (:dropped late)) (str "and the home says so: " (:dropped late))))))))
+
+(deftest a-way-in-found-while-another-doors-search-was-cut-is-not-kept-as-the-best
+  ;; card 9ccd6f0c: the cut door may hold the shorter way, so verdicts prices the room again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 30.5)]
+              [room walk] [reach-room/room reach-room/walk-steps]
+              searches (atom 0)
+              r (try (set! reach-room/room (fn [p pos] (some-> (room p pos) (update :doors #(into (vec %) %)))))
+                     (set! reach-room/walk-steps (let [f (fn [] (if (= 1 (swap! searches inc)) 7 (do (reach/charge! 1 :cell-s true) nil)))]
+                                                                 (fn ([_ _ _] (f)) ([_ _ _ _] (f)))))
+                     (first (:rooms (rooms/survey c home {:threats threats})))
+                     (finally (set! reach-room/room room) (set! reach-room/walk-steps walk)))]
+          (is (= 2 @searches) "one door's search found a way, the other's was cut")
+          (is (:home? r))
+          (is (not (contains? r :way-in)) "no way-in kept for verdicts to take as the best"))))))
 
 (deftest an-open-home-is-flooded-once-across-flights
   (async done
