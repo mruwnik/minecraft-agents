@@ -100,8 +100,11 @@
    ^:mutable ^js lf-seen ^:mutable ^js lf-queue ^:mutable lf-head ^:mutable lf-budget ^:mutable ^boolean lf-active
    ^:mutable ^boolean lf-open ^:mutable ^boolean lf-seed-open ^:mutable ^boolean lf-end
    ^:mutable ^boolean cut-off ; the flood proved the goal unreachable with a cliff edge in its region or an edge to drop off at its level: cut off, not walled in
-   ;; the walker's limits (options.limits) refused some move: a search without them could have gone further
+   ;; the walker's limits (options.limits) refused some move whose arrival would have changed the search (probeLimit): a
+   ;; search without them could have gone further
    ^:mutable ^boolean limit-refused
+   ;; a gap jump the limits refuse is tried as a probe (probeLimit): 1 while it runs, 2 once it would have changed the search
+   ^:mutable limit-probe
    ;; land a caller's earlier searches toward the same goal searched to the end (options.knownCells, a Set of knownKey,
    ;; nil for none; see frontierNode), and the cells this search adds to it once it ends exhausted (a Set, see frontierOf)
    ^js known-cells ^:mutable ^js known-new

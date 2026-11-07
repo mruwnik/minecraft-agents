@@ -212,6 +212,17 @@
             (if ^boolean (.-damage-refused s) 8 0) (if ^boolean (.-limit-refused s) 16 0) (if ^boolean (.-boxed s) 32 0)
             (if ^boolean (.-dark-refused s) 64 0) (if ^boolean (.-unseen-refused s) 128 0)))
 
+  ;; the refusals met as refusalFlags f says
+  (setRefusalFlags [s f]
+    (set! (.-gap-seen s) (pos? (bit-and f 1)))
+    (set! (.-air-seen s) (pos? (bit-and f 2)))
+    (set! (.-lethal-seen s) (pos? (bit-and f 4)))
+    (set! (.-damage-refused s) (pos? (bit-and f 8)))
+    (set! (.-limit-refused s) (pos? (bit-and f 16)))
+    (set! (.-boxed s) (pos? (bit-and f 32)))
+    (set! (.-dark-refused s) (pos? (bit-and f 64)))
+    (set! (.-unseen-refused s) (pos? (bit-and f 128))))
+
   ;; Ends a sweep (expandNext at sweep-end, or a caller out of its round's budget, so the frontier is not lost to a partial
   ;; walk): the search finishes exhausted with the refusals it had met at edge-node. What only the sweep met (a swim
   ;; refused for air, a move the limits refuse, a drop over the damage budget) names no reason and starts no search
@@ -219,17 +230,9 @@
   (endSweep [s]
     (if (or ^boolean (.-finished s) (neg? (.-edge-node s)))
       false
-      (let [f (.-sweep-flags s)]
-        (set! (.-gap-seen s) (pos? (bit-and f 1)))
-        (set! (.-air-seen s) (pos? (bit-and f 2)))
-        (set! (.-lethal-seen s) (pos? (bit-and f 4)))
-        (set! (.-damage-refused s) (pos? (bit-and f 8)))
-        (set! (.-limit-refused s) (pos? (bit-and f 16)))
-        (set! (.-boxed s) (pos? (bit-and f 32)))
-        (set! (.-dark-refused s) (pos? (bit-and f 64)))
-        (set! (.-unseen-refused s) (pos? (bit-and f 128)))
-        (.finish s "exhausted")
-        true)))
+      (do (.setRefusalFlags s (.-sweep-flags s))
+          (.finish s "exhausted")
+          true)))
 
   ;; Does the search stop at node i and sweep (stop-at-edge; i is not on magma)? When it is a frontier node (frontierNode's
   ;; test: within OPEN-REACH of a chunk's side, within frontier-reach of the goal, at the loaded edge) not in options.knownCells. The goal

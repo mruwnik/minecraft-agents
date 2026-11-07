@@ -374,6 +374,15 @@
     (is (= 0 (class "water" nil [5 64 0])) "unmasked: the walk reads the floor as it is")
     (is (= 0 (class "stone" (constantly true) [5 64 0])) "a seen dry floor ends each axis")))
 
+;; water-fn skips the axis scans when no memory section they cross holds seen water, and keeps that per section
+(deftest a-phantom-floor-is-classed-by-water-in-the-next-section-and-by-what-memory-holds-now
+  (let [p (remember! (seeing {:blocks {"16,63,0" "stone"}}) {"16,63,0" "stone"})
+        class #((look/water-fn p {:phantom? (constantly true) :lags 8}) 15 64 0)]
+    (is (= 0 (class)) "seen stone 1 off, in the next section")
+    (fake/set-block! p [16 63 0] "water")
+    (remember! p {"16,63,0" "water"})
+    (is (= look/lag-class (class)) "the same cell seen as water since")))
+
 (deftest explore-look-lists-a-seen-hostile-and-a-heard-one-only-roughly
   (let [p (seeing {:blocks wall
                    :entities [{:id 7 :name "zombie" :kind "hostile" :pos [0 64 5]}

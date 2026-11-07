@@ -546,8 +546,8 @@
   water, else the block."
   [pw]
   (let [snapshot (.-snapshot pw)
-        ids (set (mapcat #(blocks/state-ids (.-table pw) %) breath/swimmable))]
-    (fn [x y z] (contains? ids (.stateAt snapshot x y z)))))
+        ^js ids (js/Set. (to-array (mapcat #(blocks/state-ids (.-table pw) %) breath/swimmable)))]
+    (fn [x y z] (.has ids (.stateAt snapshot x y z)))))
 
 (defn phantom-read-fn
   "Whether the planner reads x y z of a pathWorld as a cell the body has not seen (the mask's id; nil unmasked)."

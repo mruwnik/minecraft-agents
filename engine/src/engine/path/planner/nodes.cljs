@@ -257,16 +257,18 @@
           rx (+ (- x (.-from-x s)) HALF)
           rz (+ (- z (.-from-z s)) HALF)]
       (cond
-        (or (neg? rx) (>= rx SPAN) (neg? rz) (>= rz SPAN)) (set! (.-boxed s) true)
-        (or (< x (.-bx0 s)) (> x (.-bx1 s)) (< z (.-bz0 s)) (> z (.-bz1 s)) (< y (.-by0 s)) (> y (.-by1 s))) (set! (.-boxed s) true)
+        (or (neg? rx) (>= rx SPAN) (neg? rz) (>= rz SPAN)) (.boxedAt s)
+        (or (< x (.-bx0 s)) (> x (.-bx1 s)) (< z (.-bz0 s)) (> z (.-bz1 s)) (< y (.-by0 s)) (> y (.-by1 s))) (.boxedAt s)
         (and (some? (.-only-cells s)) (not ^boolean (.has ^js (.-only-cells s) (cell-key x y z)))) nil
         ;; a gap jump or a drop never lands on farmland: a landing after a fall of over 0.5 blocks tramples it (a farmland node
         ;; is the farmland's own cell; a jump up one block falls about 0.3 from the top of its arc, so it may land there)
         (and (or (== move MOVE-GAP) (== move MOVE-DROP)) (== (aget (.-tbl-farmland s) (.stateAt ^js (.-snapshot s) x y z)) 1)) nil
         ;; options.unknown: a phantom floor the walk cannot check first or see (also sets move-unk and move-light)
         (and (>= (.-unk-id s) 0) ^boolean (.unseenRefuses s x y z move parent-node dsec)) nil
+        ;; (holdsBack keeps the drop to replay: a probe cannot tell)
+        (and ^boolean (.-returnable s) (pos? (.-limit-probe s))) (set! (.-limit-probe s) 2)
         (and ^boolean (.-returnable s) (not ^boolean (.-replaying s)) ^boolean (.holdsBack s x y z h move parent-node dsec drisk slow-to corner shape)) nil
-        ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (do (set! (.-limit-refused s) true) nil)
+        ^boolean (.refusedKind s (.-limit-kinds s) x y z move) (if (pos? (.-limit-probe s)) (set! (.-limit-probe s) 2) (set! (.-limit-refused s) true))
         (and (pos? (.-move-dmg s)) (> (+ (aget (.-dmgs s) parent-node) (.-move-dmg s)) (.-damage-budget s))) (do (set! (.-damage-refused s) true) nil)
         ;; a move that is not a swim: its air (headAir)
         (and (zero? (.-move-water s)) (not ^boolean (.headAir s parent-node x y z dsec))) nil
@@ -309,26 +311,32 @@
                          (.drownCost s drown counted)))]
               (set! (.-cur-dmg s) dmg)
               (set! (.-cur-drown s) drown)
-              (if (== found -1)
-                (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
-                ;; every record of the node (newest first): one no worse in cost, air, damage and drowning makes this arrival
-                ;; nothing new; else the newest it improves in cost and is no worse than in the rest takes it (relax); else a
-                ;; record of its own. Comparing with the newest only let an arrival in a record an older one beat, round
-                ;; and round (a dive with little air left: 200k records of a few cells)
-                (loop [r found relax-r -1]
-                  (if (== r -1)
-                    (cond
-                      (== relax-r -1) (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
-                      (== (aget (.-heap-pos s) relax-r) -2) nil
-                      :else (.relax s relax-r x z h move parent-node sec risk dark g slow-to corner shape))
-                    (let [d-air (- (.-move-air s) (aget (.-airs s) r))
-                          ;; (a search without a budget keeps one record per node)
-                          d-dmg (if (< (.-damage-budget s) js/Infinity) (- dmg (aget (.-dmgs s) r)) 0)
-                          d-drown (- drown (aget (.-drowns s) r))
-                          g-r (aget (.-gs s) r)]
-                      (when-not (and (>= g g-r) (>= d-air (- AIR-STEP)) (>= d-dmg (- DMG-STEP)) (>= d-drown (- DMG-STEP)))
-                        (recur (dec (aget (.-rivals s) r))
-                               (if (and (== relax-r -1) (< g g-r) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP) (<= d-drown DMG-STEP)) r relax-r)))))))))))))
+              (let [r (if (== found -1) -2 (.arrivalRecord s found g dmg drown))]
+                (cond
+                  ;; a probe changes nothing: it notes whether the arrival would
+                  (pos? (.-limit-probe s)) (when-not (or (== r -1) (and (>= r 0) (== (aget (.-heap-pos s) r) -2))) (set! (.-limit-probe s) 2))
+                  (== r -2) (.insertNode s x y z h move parent-node sec risk dark g slow-to corner shape region key slot)
+                  (== r -1) nil
+                  (== (aget (.-heap-pos s) r) -2) nil
+                  :else (.relax s r x z h move parent-node sec risk dark g slow-to corner shape)))))))))
+
+  ;; what an arrival at g, dmg, drown (and the move's air) is to the node whose newest record is `found`: -1 nothing new
+  ;; (a record no worse in cost, air, damage and drowning), else the newest record it improves in cost and is no worse
+  ;; than in the rest (relax it), else -2 (a record of its own). Every record is compared: comparing with the newest only
+  ;; let an arrival in a record an older one beat, round and round (a dive with little air left: 200k records of a few cells)
+  (arrivalRecord [s found g dmg drown]
+    (loop [r found relax-r -1]
+      (if (== r -1)
+        (if (== relax-r -1) -2 relax-r)
+        (let [d-air (- (.-move-air s) (aget (.-airs s) r))
+              ;; (a search without a budget keeps one record per node)
+              d-dmg (if (< (.-damage-budget s) js/Infinity) (- dmg (aget (.-dmgs s) r)) 0)
+              d-drown (- drown (aget (.-drowns s) r))
+              g-r (aget (.-gs s) r)]
+          (if (and (>= g g-r) (>= d-air (- AIR-STEP)) (>= d-dmg (- DMG-STEP)) (>= d-drown (- DMG-STEP)))
+            -1
+            (recur (dec (aget (.-rivals s) r))
+                   (if (and (== relax-r -1) (< g g-r) (<= d-air AIR-STEP) (<= d-dmg DMG-STEP) (<= d-drown DMG-STEP)) r relax-r)))))))
 
   (stand16 [s node] (+ (* (aget (.-ys s) node) 16) (aget (.-hs s) node)))
 
@@ -344,6 +352,26 @@
                                 (.push ^js (.-held s) #js [x y z h move parent-node dsec drisk slow-to corner shape (.-move-open s) (.-move-air s) (.-move-peak s) (.-move-water s) (.-move-dmg s)]))
                               true)
       :else false))
+
+  ;; a move out of the search box: the search met the box, or a probe would have (probeLimit)
+  (boxedAt [s]
+    (if (pos? (.-limit-probe s)) (set! (.-limit-probe s) 2) (set! (.-boxed s) true)))
+
+  ;; A move the limits refuse, its edge run by (f) in a probe: limit-refused only when its arrival would have changed the
+  ;; search (a node or record it would add or lower), so the search without the limits (wplan/beyond-needed?) runs only then.
+  ;; Every refusal the probe meets is undone. In the goal flood or a door pass the move is refused as it is.
+  (probeLimit [s f]
+    (if-not (and (== (.-edge-mode s) 0) (nil? (.-flood-out s)) (not ^boolean (.-flooding s)))
+      (set! (.-limit-refused s) true)
+      (let [flags (.refusalFlags s)
+            bx (.-dark-best-x s) by (.-dark-best-y s) bz (.-dark-best-z s) bd (.-dark-best-d s)]
+        (set! (.-limit-probe s) 1)
+        (f)
+        (let [changed (== (.-limit-probe s) 2)]
+          (set! (.-limit-probe s) 0)
+          (.setRefusalFlags s flags)
+          (set! (.-dark-best-x s) bx) (set! (.-dark-best-y s) by) (set! (.-dark-best-z s) bz) (set! (.-dark-best-d s) bd)
+          (when changed (set! (.-limit-refused s) true))))))
 
   ;; is entering x,y,z by `move` of one of `kinds` (bits: climbing, water, opening something)?
   (refusedKind [s kinds x y z move]

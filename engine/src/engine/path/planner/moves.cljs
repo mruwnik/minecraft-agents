@@ -263,22 +263,27 @@
                           missed (if deadly 0 (* (.-gap-miss s) share miss))
                           risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (* (.-gap-death s) share) missed))]
                       (when-not (or (< delta -16) (> delta (if up WHOLE 0))
-                                    (and (> n 1) ^boolean (.gapOvershootLethal s dx dz lx ly lz h1))
-                                    (and (some? ^js (.-limit-gap s))
-                                         ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
-                                         (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1)))
-                                         (do (set! (.-limit-refused s) true) true)))
-                        (set! (.-move-dmg s) (+ (.-enter-dmg s) missed))
-                        ;; (the opening pass: the closed gates the jump crosses are opened first, like the one the body stands in)
-                        (let [here (.-door-here s)]
-                          (when ^boolean (.-open-mode s)
-                            (set! (.-door-here s) (.concat ^js here (.gapDoors s x y z dx dz n (- h0 (* y 16))))))
-                          (.edge s lx ly lz h1 MOVE-GAP i
-                                 (+ (* (inc n) (.-c-sprint-s s)) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
-                                 (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
-                          (set! (.-door-here s) here))
-                        (set! (.-move-dmg s) 0))))
+                                    (and (> n 1) ^boolean (.gapOvershootLethal s dx dz lx ly lz h1)))
+                        (if (and (some? ^js (.-limit-gap s))
+                                 ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
+                                 (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1))))
+                          (.probeLimit s #(.gapEdge s i x y z dx dz n h0 lx ly lz h1 delta missed risk))
+                          (.gapEdge s i x y z dx dz n h0 lx ly lz h1 delta missed risk)))))
                   (recur (inc n) hole pit deadly miss up-arc)))))))))
+
+  ;; the edge of a gap jump out of node i at x y z (stand h0) over n cells along dx dz onto lx ly lz (stand h1), delta up,
+  ;; with the damage of a miss and its risk
+  (gapEdge [s i x y z dx dz n h0 lx ly lz h1 delta missed risk]
+    (set! (.-move-dmg s) (+ (.-enter-dmg s) missed))
+    ;; (the opening pass: the closed gates the jump crosses are opened first, like the one the body stands in)
+    (let [here (.-door-here s)]
+      (when ^boolean (.-open-mode s)
+        (set! (.-door-here s) (.concat ^js here (.gapDoors s x y z dx dz n (- h0 (* y 16))))))
+      (.edge s lx ly lz h1 MOVE-GAP i
+             (+ (* (inc n) (.-c-sprint-s s)) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
+             (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
+      (set! (.-door-here s) here))
+    (set! (.-move-dmg s) 0))
 
   ;; the run-up cells a gap jump out of node i has along dx dz, the takeoff cell counted: 2 when the plan walks into it straight on
   (runUp [s i x z dx dz]

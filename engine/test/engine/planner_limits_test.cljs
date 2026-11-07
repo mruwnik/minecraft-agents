@@ -1,7 +1,7 @@
 (ns engine.planner-limits-test
   "engine.path.planner-tuned told the executor's limits (options.limits from engine.path.executor/planner-limits): it plans
   round the steps the executor refuses; without the option it plans the old route."
-  (:require [cljs.test :refer [deftest are]]
+  (:require [cljs.test :refer [deftest are is]]
             [engine.path.executor :as ex]
             [engine.path.planner-tuned :as planner]
             [engine.test-util :as tu]
@@ -164,19 +164,27 @@
 
 (defn limited-flag
   "result.limited of a limited plan from (0 64 1) to goal over blocks: did the walker's limits refuse a move?"
-  [blocks [x y z]]
+  [blocks [x y z] & [options]]
   (let [pw (.pathWorld (tu/fake {:blocks blocks}))]
     (.-limited (planner/plan (.-snapshot pw)
                              #js {:from #js {:x 0 :y 64 :z 1 :px 0.5 :pz 1.5} :goal #js {:kind "near" :x x :y y :z z :range 0}}
-                             #js {:table (.-table pw) :space (.-space pw) :weight 1.2
-                                  :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))}))))
+                             (js/Object.assign #js {:table (.-table pw) :space (.-space pw) :weight 1.2
+                                                    :limits (ex/planner-limits ex/policy (wworld/solid-fn pw))}
+                                               options)))))
 
-;; a search the limits never turned a move away from searched what a search without them would (wplan/plan-within! then
-;; needs no second search to know there is no way beyond the walker's abilities)
+;; a hole at x 5, z 1 in a floor, a low ceiling over x 6..7: the jump back over the hole from under the ceiling (refused,
+;; gap-low-ceiling) lands where the walk has been already, and cheaper
+(def hole-under-ceiling (merge (dissoc (box 0 63 -2 12 63 4 "stone") "5,63,1") {"5,61,1" "stone"} (box 6 66 -2 7 66 4 "stone")))
+
+;; a search the limits never turned a move away from, or only moves whose arrival changes nothing, searched what a search
+;; without them would (wplan/plan-within! then needs no second search to know there is no way beyond the walker's abilities)
 (deftest a-result-says-whether-the-limits-refused-a-move
   (are [blocks goal limited] (= limited (limited-flag blocks goal))
     gap-up-only [10 65 1] true
     ceiling-only [10 64 1] true
     vine-only [10 66 1] true
     (box 0 63 -2 12 63 4 "stone") [10 64 1] false
-    near-floor [10 64 1] false))
+    near-floor [10 64 1] false)
+  ;; (a refusal in the goal flood counts: without it the flood might not prove the goal walled in)
+  (is (= [true false] (map #(limited-flag hole-under-ceiling [10 64 1] #js {:goalFlood %}) [4000 0]))))
+

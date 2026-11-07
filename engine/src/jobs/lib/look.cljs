@@ -920,6 +920,13 @@
   off is lag-class + d - 1."
   6)
 
+(def ^:private axes-dx #js [1 -1 0 0])
+(def ^:private axes-dz #js [0 0 1 -1])
+
+(defonce ^{:private true :doc "Memory section -> #js [its wrote, whether it holds a cell seen as water]: the store bumps
+  wrote on every change of a cell."}
+  water-sections (js/WeakMap.))
+
 (defn water-fn
   "The planner's water class of a feet cell (options.dark.at past dark) for the body of primitives p: 2 for a cell seen
   as water whose column holds, down from it, a water cell at block light 0 over water, or reaches a cell not seen (dark
@@ -946,20 +953,43 @@
                          (.set kinds v k)
                          k))))
             water? (fn [v] (and (pos? v) (keyword-identical? :water (kind v))))
+            section-wet? (fn [k]
+                           (when-let [^js sec (.get sections k)]
+                             (let [^js memo (.get water-sections sec)
+                                   w (.-wrote sec)]
+                               (if (and (some? memo) (identical? w (aget memo 0)))
+                                 (aget memo 1)
+                                 (let [^js ids (.-ids sec)
+                                       wet (loop [i 0] (cond (== i 4096) false (water? (aget ids i)) true :else (recur (inc i))))]
+                                   (.set water-sections sec #js [w wet])
+                                   wet)))))
+            ;; whether a section lag's scans from x y z read (along both axes, at y and the y - 1 under it) holds seen water
+            wet-near? (fn [x y z]
+                        (let [cx (bit-shift-right x 4) cz (bit-shift-right z 4)
+                              x0 (bit-shift-right (- x lags) 4) x1 (bit-shift-right (+ x lags) 4)
+                              z0 (bit-shift-right (- z lags) 4) z1 (bit-shift-right (+ z lags) 4)
+                              level (fn [sy]
+                                      (or (loop [i x0] (cond (> i x1) false (section-wet? (store/section-key i sy cz)) true :else (recur (inc i))))
+                                          (loop [i z0] (cond (> i z1) false (section-wet? (store/section-key cx sy i)) true :else (recur (inc i))))))
+                              sy (bit-shift-right y 4) sy-below (bit-shift-right (dec y) 4)]
+                          (or (level sy) (and (not (== sy sy-below)) (level sy-below)))))
             ;; lag of the nearest seen water along an axis at level y, or at y - 1 under seen air (a phantom floor over a
             ;; pond's air reads the surface below); a seen dry cell, or seen air over no water, ends its axis; nil: none
             lag (fn [x y z]
-                  (reduce (fn [best [dx dz]]
-                            (loop [d 1]
-                              (if (or (> d lags) (and best (>= d best)))
-                                best
-                                (let [cx (+ x (* dx d)) cz (+ z (* dz d))
-                                      v (id-at cx y cz)]
-                                  (cond (zero? v) (recur (inc d))
-                                        (water? v) d
-                                        (and (keyword-identical? :air (kind v)) (water? (id-at cx (dec y) cz))) d
-                                        :else best)))))
-                          nil [[1 0] [-1 0] [0 1] [0 -1]]))
+                  (loop [a 0 best nil]
+                    (if (or (== a 4) (and (zero? a) (not (wet-near? x y z))))
+                      best
+                      (let [dx (aget axes-dx a) dz (aget axes-dz a)]
+                        (recur (inc a)
+                               (loop [d 1]
+                                 (if (or (> d lags) (and best (>= d best)))
+                                   best
+                                   (let [cx (+ x (* dx d)) cz (+ z (* dz d))
+                                         v (id-at cx y cz)]
+                                     (cond (zero? v) (recur (inc d))
+                                           (water? v) d
+                                           (and (keyword-identical? :air (kind v)) (water? (id-at cx (dec y) cz))) d
+                                           :else best)))))))))
             phantom (fn [x y z]
                       (or (when (and phantom? (phantom? x (dec y) z))
                             (some->> (lag x (dec y) z) (+ lag-class -1)))
