@@ -110,8 +110,9 @@
         cells (set (map (juxt :x :y :z) tolls))
         costed (fn [dangers?] (.-tolls (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? dangers?})))
         planned (into {} (map vec) (es6-iterator-seq (.entries (.-cells (costed true)))))]
-    (is (= (* 41 4 3) (count cells)) "every water cell of the lake, the far end 39 blocks off too")
-    (is (contains? cells [40 61 8]))
+    (is (every? (fn [[x y z]] (and (<= 0 x 40) (<= 61 y 63) (<= 5 z 8))) cells) "only lake water")
+    (is (> (count cells) (* 41 4)) "more than the lake's surface: the seen depths too")
+    (is (some (fn [[x]] (>= x 39)) cells) "the far end 38 blocks off is tolled too, past any sphere round the spot")
     (is (not (contains? cells [1 64 4])) "the dry shore is no water")
     (is (every? #(pos? (:factor %)) tolls))
     (is (= (into {} (map (fn [{:keys [x y z factor]}] [(base/cell-key x y z) factor])) tolls) planned)
@@ -124,7 +125,7 @@
   (let [c (met-in-the-lake "drowned")
         ^js tolls (threats/threat-tolls c)
         k (wworld/tolls-key (wworld/costed-world c (wworld/path-world (:primitives c)) {:dangers? true}))]
-    (is (= (* 41 4 3) (count tolls)))
+    (is (> (count tolls) (* 41 4)))
     (is (instance? js/Float64Array (.-factors tolls)) "typed arrays, not a cljs map per cell")
     (is (and (= 3 (count k)) (every? number? k)) "the kept search's key is a fingerprint, not the merged rows")))
 

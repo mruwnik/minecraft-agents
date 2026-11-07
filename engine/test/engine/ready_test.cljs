@@ -106,7 +106,7 @@
   [world]
   (let [c (ctx-of world)
         raw (:primitives c)
-        per (perception/create (fake-raw/create raw) {:now (constantly 1000000)})
+        per (perception/create (fake-raw/create raw) {:now (constantly 1000000) :rand (constantly 0.5)})
         p (perception/wrap raw per)]
     (doseq [yaw [0 90 180 270]] (swap! (fake/state raw) assoc :yaw yaw) (rays/pass! per))
     (game/select! p)
