@@ -1129,6 +1129,18 @@
     (is (= ##Inf (flood-s (cons open (repeat n swum)))) "a way that never surfaces drowns")
     (is (< (flood-s (concat [open] half [[:step [1 66 0]]] half)) ##Inf) "a step with the head over the water breathes")))
 
+(deftest water-let-in-floods-only-as-far-as-it-flows
+  ;; card f9ca065d: every dig at or under the pool's level was wet, however far: a way round far from the water was priced
+  ;; as if under it
+  (let [flood-s (partial dig-route/flood-s (:flood (dig-route/body-prices (tu/fake {:blocks {"1,66,0" "water"}}) (constantly false))))
+        open [:dig [1 65 0] "stone"]
+        dry (flood-s [open])]
+    (is (< dry (flood-s [open [:dig [8 65 0] "stone"]])) "as far as water flows on level ground, the dig is wet")
+    (is (= dry (flood-s [open [:dig [9 65 0] "stone"]])) "a block past that it is dry")
+    (is (< dry (flood-s [open [:dig [15 64 0] "stone"]])) "a block lower it flows as far again")
+    (is (= dry (flood-s [open [:dig [16 64 0] "stone"]])))
+    (is (= dry (flood-s [open [:step [20 64 0]]])) "a step past its reach is walked")))
+
 (deftest a-fast-swimmer-pays-no-negative-price-for-time-under-water
   ;; wet-s lost its floor: swimming faster than the dry walk it replaces priced the flood below nothing
   (let [hp-s (cost/hp-seconds)]

@@ -648,6 +648,23 @@
              "oak_fence" "spruce_fence_gate" "white_glazed_terracotta" "smooth_stone" "polished_andesite" nil]]
     (is (not (rules/natural? n)) (pr-str n))))
 
+(defn ^:async walled-pocket-run!
+  "go-to into the pocket [19 60..61 16] of blocks, from the stone's top at [16 64 16]: {:out :p :seen}. The body sees a
+  cell open to the air or water it stands in, and the faces round one; the pocket's air only once opened."
+  [blocks]
+  (let [pocket #{[19 60 16] [19 61 16]}
+        faces (fn [q] (map #(mapv + q %) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+        {:keys [eng p seen]} (setup {:self {:pos {:x 16.5 :y 64 :z 16.5}} :blocks blocks
+                                     :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 4}]})
+        open? (fn [q] (and (#{"air" "water"} (block p q)) (or (not (pocket q)) (some #(and (not (pocket %)) (= "air" (block p %))) (faces q)))))
+        out (atom :not-done)
+        eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 60 16] :range 0 :unknown false})))]
+    (tu/set-sensed! p (fn [q] (let [cell (mapv js/Math.floor [(.-x q) (.-y q) (.-z q)])]
+                                (if (some open? (cons cell (faces cell))) (.blockAt p q) #js {:unknown true :pos q}))))
+    (core/submit! eng '(recording-parent) {})
+    (await (tick-out! eng 3000))
+    {:out @out :p p :seen seen}))
+
 (deftest a-dig-route-that-meets-buried-bedrock-is-planned-again-till-it-takes-the-glass-it-went-round
   ;; another's glass shaft is the one way into a pocket walled in bedrock whose top is seen and whose sides, buried in
   ;; the stone, are not (guessed rock). A pillar out of the route's own hole leads no nearer a walled-in goal, so it
@@ -655,24 +672,27 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [pocket #{[19 60 16] [19 61 16]}
-              faces (fn [q] (map #(mapv + q %) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
-              blocks (merge (box 2 58 2 30 63 30 "stone") (box 17 59 14 21 63 18 "bedrock")
-                            {"19,60,16" "air" "19,61,16" "air" "19,62,16" "stone" "19,63,16" "glass"})
-              {:keys [eng p seen]} (setup {:self {:pos {:x 16.5 :y 64 :z 16.5}} :blocks blocks
-                                           :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 4}]})
-              ;; the body sees a cell open to the air it stands in, and the faces round one; the pocket's air only once opened
-              open? (fn [q] (and (= "air" (block p q)) (or (not (pocket q)) (some #(and (not (pocket %)) (= "air" (block p %))) (faces q)))))
-              out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 60 16] :range 0 :unknown false})))]
-          (tu/set-sensed! p (fn [q] (let [cell (mapv js/Math.floor [(.-x q) (.-y q) (.-z q)])]
-                                      (if (some open? (cons cell (faces cell))) (.blockAt p q) #js {:unknown true :pos q}))))
-          (core/submit! eng '(recording-parent) {})
-          (await (tick-out! eng 3000))
-          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text :escalation])))
+        (let [{:keys [out p seen]} (await (walled-pocket-run! (merge (box 2 58 2 30 63 30 "stone") (box 17 59 14 21 63 18 "bedrock")
+                                                                      {"19,60,16" "air" "19,61,16" "air" "19,62,16" "stone" "19,63,16" "glass"})))]
+          (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation])))
           (is (= [19 60 16] (feet p)))
           (is (apply distinct? (map :cell (events-of seen :go-to.guess-look))) "a replan searching over rounds counts its guess one look")
           (is (= "air" (block p [19 63 16])) "the glass is dug once the routes round it prove walled"))))))
+
+(deftest a-pocket-whose-only-way-is-under-a-pool-is-dug-to-through-the-pool-not-round-its-buried-walls
+  ;; card f9ca065d: the bedrock box under the pool, its sides buried in the stone, has its one way in under the stone
+  ;; path the body stands on. Every dig under the pool's level priced wet, however far, made the way through the pool dearer
+  ;; than guesses round the box, each a wrong one: 71 looks, 109 cells dug, and no way in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (walled-pocket-run! (merge (box 2 58 2 30 63 30 "stone") (box 14 58 11 24 62 21 "bedrock")
+                                                                      (box 14 63 11 24 63 21 "water") (box 14 63 16 19 63 16 "stone")
+                                                                      {"19,60,16" "air" "19,61,16" "air" "19,62,16" "stone"})))]
+          (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation])))
+          (is (= [19 60 16] (feet p)))
+          (is (every? :ok? (events-of seen :go-to.guess-look)) "no guess round the box's buried walls")
+          (is (every? (fn [[x _ z]] (and (<= 14 x 24) (<= 11 z 21))) (dug-cells p)) "nothing dug outside the pool"))))))
 
 (def unseen-shaft
   "A 6-deep 1x1 shaft (feet y 58) in stone x -6..8, y 57..63; the goal on top 6 east."
