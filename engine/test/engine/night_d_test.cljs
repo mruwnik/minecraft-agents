@@ -196,26 +196,27 @@
                 (is (<= @quotes (* 2 (count (filter #(= :flee (first %)) log)))) "the home and one site a flee")))
             (finally (set! flee/flee-target real-target) (set! pick/quote! real-quote) (set! clock/now stopped))))))))
 
-(deftest a-passed-over-flee-site-stays-so-while-memory-holds-not-past-its-time
+(deftest a-passed-over-flee-site-stays-so-while-memory-near-it-holds-not-past-its-time
   (let [now (atom 0)
-        memory (atom {3 1})
-        known sense/site-memory
-        c {:primitives (tu/fake {}) :view (fn [] {:data mem/empty-data :now @now})}
-        site {:kind :ground :pos {:x 3 :y 64 :z 0}}]
-    (set! sense/site-memory (fn [_ pos] (get @memory (:x pos))))
-    (try
-      (flee/reject! c site)
-      (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [1 64 0])
-      (is (flee/rejected? c site) "the body moved: the site's own test does not rest on where it stands")
-      (is (not (flee/rejected? c (assoc site :kind :cave))))
-      (reset! now wsearch/search-max-age-ms)
-      (is (not (flee/rejected? c site)) "past its time it is tried again")
-      (flee/reject! c site)
-      (swap! memory assoc 99 1)
-      (is (flee/rejected? c site) "the body saw new land far from the site: its rejection holds")
-      (swap! memory update 3 inc)
-      (is (not (flee/rejected? c site)) "what the body remembers near the site changed")
-      (finally (set! sense/site-memory known)))))
+        p (tu/blind (tu/fake {:blocks {"3,63,0" "stone"}}))
+        per (perception/create (fake-raw/create p) {:now (constantly 0) :rand (constantly 0.5)})
+        w (perception/wrap p per)
+        c {:primitives w :view (fn [] {:data mem/empty-data :now @now})}
+        site {:kind :ground :pos {:x 3 :y 64 :z 0}}
+        see! (fn [pos] (swap! (fake/state p) assoc-in [:blocks pos] "stone") (perception/pass! per))]
+    (swap! (fake/state p) assoc-in [:self :pos] [1 64 0])
+    (perception/pass! per)
+    (flee/reject! c site)
+    (perception/pass! per)
+    (is (flee/rejected? c site) "the body moved: the site's own test does not rest on where it stands")
+    (is (not (flee/rejected? c (assoc site :kind :cave))))
+    (see! [500 63 0])
+    (is (flee/rejected? c site) "the body saw new land far from the site: its rejection holds")
+    (see! [2 65 4])
+    (is (not (flee/rejected? c site)) "a block seen near the site changed what it remembers there")
+    (flee/reject! c site)
+    (reset! now wsearch/search-max-age-ms)
+    (is (not (flee/rejected? c site)) "past its time it is tried again")))
 
 (deftest flee-ground-sites-skip-powder-snow-and-keep-other-seen-ground
   (let [p (tu/fake {})
