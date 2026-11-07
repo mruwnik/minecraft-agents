@@ -40,17 +40,42 @@
   [re]
   (swap! allowed conj re))
 
+(def current
+  "The running test var's name, nil between tests."
+  (atom nil))
+
+(def between
+  "The 'threw' warns that landed while no test var ran (a timer or promise of an earlier test), as texts: charging them to the next test would blame the wrong one."
+  (atom []))
+
 (add-watch base/guard-warned ::throws
            (fn [_ _ old new]
              (doseq [[k v] new :when (not= v (get old k))]
-               (swap! throws conj (str (second k) " threw: " (:msg v))))))
+               (swap! (if @current throws between) conj (str (second k) " threw: " (:msg v))))))
+
+(def last-ended (atom nil))
+
+(defn flush-between!
+  "Reports the between-tests throws as their own failed result (named by the test that ended last) and fails the run; returns the message, nil if none."
+  []
+  (when (seq @between)
+    (let [after (or @last-ended "no test")
+          msg (str "a guarded check threw between tests, after " after " (a timer or promise it started?): " (pr-str @between))]
+      (reset! between [])
+      (set! (.-exitCode js/process) 1)
+      (.error js/console msg)
+      (when ev/enabled? (ev/emit! {:event "result" :name (str "between-tests-after " after) :outcome "error" :message msg}))
+      msg)))
 
 (ev/install!)
 
 ;; After install! so it runs before the @@test result line is built and the failure shows in it.
-(ev/hook! :begin-test-var (fn [_] (reset! base/guard-warned {}) (reset! throws []) (reset! allowed [])))
+(ev/hook! :begin-test-var (fn [m] (flush-between!) (reset! current (ev/var-name (:var m))) (reset! base/guard-warned {}) (reset! throws []) (reset! allowed [])))
+(.on js/process "beforeExit" flush-between!)
 (ev/hook! :end-test-var
           (fn [m]
+            (reset! current nil)
+            (reset! last-ended (ev/var-name (:var m)))
             (let [bad (remove (fn [txt] (some #(re-find % txt) @allowed)) @throws)]
               (when (seq bad)
                 (t/do-report {:type :fail :message "a guarded check threw (call-guarded turns it into a warn and a fallback)"

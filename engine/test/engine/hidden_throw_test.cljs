@@ -22,3 +22,12 @@
 (deftest an-expected-guarded-throw-is-not-a-failure
   (timing/allow-throws! #"probe check threw")
   (guarded-throw! "probe check"))
+
+(deftest a-throw-between-tests-is-not-charged-to-a-test
+  (let [was @timing/current]
+    (reset! timing/current nil)
+    (guarded-throw! "late check")
+    (reset! timing/current was)
+    (is (= [] @timing/throws))
+    (is (= ["late check threw: Error: boom"] @timing/between))
+    (reset! timing/between [])))
