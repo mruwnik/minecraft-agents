@@ -1,0 +1,26 @@
+;; Flowing water pulls a walker: a stone room (x 0..9, z 0..12) with a 1-deep field of water (x 1..8, z 3..9, stand y 0, floor y -1) fed by a source column at x 1,
+;; so it flows +x; dry strips (stand y 1, 1 above the water) run along its north (z 1..2) and south (z 10..11) edge, the walls at x 0 and 9 leave no way round (the iron farm's kill room shape).
+;; Should-succeed: cross-current-field-to-a-dry-goal (the only way is across the field: arrives, the pull never pushes the walk off its plan), wade-out-and-walk-the-bank-up-the-stream
+;; (from the downstream end of the field to a dry cell upstream: arrives, never pushed off its plan).
+{:defaults
+ {:tags [:movement :water] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [0 -1 0] [9 4 12] "stone"]
+           [:fill [1 1 1] [8 3 2] "air"]
+           [:fill [1 0 3] [8 3 9] "air"]
+           [:fill [1 1 10] [8 3 11] "air"]
+           [:fill [1 0 3] [1 0 9] "water"]]
+  :limit-s 90}
+ :cases
+ [{:name "cross-current-field-to-a-dry-goal"
+   :body {:at [4.5 1 1.5] :yaw 0 :settle-s 10}
+   :act [[:job (jobs.movement.go-to {:pos #at [4 1 10] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :replan :data {:why :pushed}} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [4.5 1 10.5] 2]]}
+  {:name "wade-out-and-walk-the-bank-up-the-stream"
+   :body {:at [8.5 0 6.5] :yaw 0 :settle-s 10}
+   :act [[:job (jobs.movement.go-to {:pos #at [1 1 2] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :replan :data {:why :pushed}} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [1.5 1 2.5] 2]]}]}
