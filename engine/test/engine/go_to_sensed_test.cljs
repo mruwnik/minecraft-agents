@@ -1213,9 +1213,9 @@
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (run-go-to {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks walkway-room :radius 16 :exact-eye true :bodyHitbox true}
                                                      {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))
-              replans (filter #(= :replan (:kind %)) seen)]
+              stair-replans (filter #(and (= :replan (:kind %)) (some (fn [[_ _ z]] (<= -2 z 2)) (:learned %))) seen)]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p))))
-          (is (< (count replans) (wwatch/max-learned)) "each floor found missing shows the stair's side, not one cell of it"))))))
+          (is (< (count stair-replans) (wwatch/max-learned)) "each floor found missing shows the stair's side, not one cell of it (the room floor below is not the stair)"))))))
 
 ;; the way on from the walkway's far end runs through air no look has reached, guessed a dark cave (Q16): the walk goes to
 ;; the cut before the first guessed step, looks there and is priced again (reprice/safe-prefix), not held :risky at the
