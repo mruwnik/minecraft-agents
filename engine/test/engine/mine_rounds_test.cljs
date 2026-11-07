@@ -145,10 +145,10 @@
       (fn ^:async t []
         (let [s (m/start-lit (m/torch-world coal-stick) [0 0] {:call-ms 1000})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :made 0 :reason "server rejected the craft"})))
-          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :spend {:job-time 120})) {})
+          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :worth 100000 :spend {:job-time 120})) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
-          (is (= :job-time (:reason (m/done-event s))) "the dig's own worth pays every retry, so only the time spend ends it")
+          (is (= :job-time (:reason (m/done-event s))) "a worth that outlasts the spend pays every retry, so only the time spend ends it (a worth of about an ore ends :no-torches, the trip test below)")
           (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
 
 (deftest a-stocking-torch-craft-the-server-keeps-rejecting-is-retried-while-the-goal-pays-then-ends-the-trip-no-torches
