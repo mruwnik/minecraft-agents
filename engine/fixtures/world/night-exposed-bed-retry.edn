@@ -12,11 +12,13 @@
  :cases
  ;; Cards ecf33d85, 4ae26dbd: the ways through the night are priced against each other (bed-down/answers). The sleep count is
  ;; seeded (:sleep-status, 0 of 2: the body's sleep does not end the night) and a log-out is seeded unsupported, so who else is
- ;; online changes nothing; no :respawn is known, so a bed's respawn point is worth its walk back from world spawn.
+ ;; online changes nothing. The harness seeds the respawn at the start block, so the first case puts it far off (:spawnpoint :far):
+;; only then is the bed's respawn worth a real walk back and sealed in beats plain shelter.
  ;; Should-fail of the first two: a bed lain in unsealed (old code put it down in the open and slept).
  [{:name "carried-bed-in-the-dark-open-is-shut-in-then-slept-in"
    :time :night-exclusive
    :time-why :sleep
+   :body {:spawnpoint :far}
    :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}]
    :act [[:rcon "give $BODY red_bed 1"]
          [:rcon "give $BODY dirt 40"]
