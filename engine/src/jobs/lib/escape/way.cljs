@@ -94,7 +94,7 @@
 
 (defn stair-route-s
   "Seconds the stair way e takes from feet, each step as jobs.lib.dig-route (route-answer) prices one: jobs.lib.cost/stair-leg-pricer
-  of its cuts (dig-cost), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
+  of its cuts (the carried tool's dig time, an unseen one at the chance it is solid), a fill for an open floor (a fetch of the blocks, with none carried) and an unseen cut or floor,
   its unseen step in the price (cw/step-price), as the route's search does. A falling block (gravel, sand) is dug like any
   cut (jobs.access.stair digs it again as it falls), and each one stacked over a column's top cut is one dig more: a seen
   one whole, an unseen one over loose ground at the chance it and those under it are loose too (loose-run)."
@@ -103,13 +103,15 @@
         unseen? (escape/unseen-of p)
         leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
         fill-s (cw/fill-cost (carried-build-n p))
+        solid-share (escape/dig-share-fn p)
+        dig-s (fn [n] (/ (tools/clear-ms p n) 1000))
         cut-s (fn [cell] (let [n (block-at cell)]
                            (cond (dig-route/open? n) nil
                                  (and (nil? (dig-route/cell-cost n)) (not (rules/falling? n))) ##Inf
-                                 :else (or (cost/dig-cost (or n "stone")) ##Inf))))
+                                 :else (* (solid-share cell) (dig-s (or n "stone"))))))
         cuts (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) steps)
         tops (vals (reduce (fn [m [x y z]] (update m [x z] #(if (and % (> (% 1) y)) % [x y z]))) {} cuts))
-        stack-s (fn [top] (transduce (map (fn [[_ w n]] (* w (or (cost/dig-cost n) ##Inf)))) + 0 (loose-run p top)))]
+        stack-s (fn [top] (transduce (map (fn [[_ w n]] (* w (dig-s n)))) + 0 (loose-run p top)))]
     (reduce (fn [total cuts]
               (let [floor (escape/add (nth cuts 2) [0 -1 0])
                     leg (leg-s (map cut-s cuts) (when (dig-route/open? (block-at floor)) fill-s) (boolean (some unseen? (cons floor cuts))))]
@@ -147,7 +149,7 @@
                                               (map #(@destroyed (@block-at %) % false)))
                                         + 0 cells))]
       (case step
-        :stair (+ (stair-route-s p feet e) (* (:aside e 0) (or (cost/dig-cost "stone") 1))
+        :stair (+ (stair-route-s p feet e) (* (:aside e 0) (/ (tools/clear-ms p "stone") 1000))
                   (lost-s (escape/stair-cuts feet (escape/heading-dirs (keyword heading)) (:steps e))))
         :pillar (pillar-way-s p feet (:height e) 0)
         :bridge (cw/bridge-cost (:length e) (:short e 0))
@@ -160,10 +162,10 @@
       0))))
 
 (defn new-stair-step-s
-  "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone, and its cells
+  "Seconds one step of a stair not yet laid out (no heading chosen) takes: its three cuts priced as stone with the carried tool, and its cells
   unseen (the worse case)."
   [p]
-  ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (or (cost/dig-cost "stone") 0)) nil true))
+  ((cost/stair-leg-pricer (wworld/unseen-share p)) (repeat 3 (/ (tools/clear-ms p "stone") 1000)) nil true))
 
 (defn rise-left
   "Blocks from end ([x y z]) up to the stand a step below goal's height."

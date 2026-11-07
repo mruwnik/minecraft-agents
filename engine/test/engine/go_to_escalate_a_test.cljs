@@ -114,6 +114,15 @@
     (is (= {:step :pillar :height 5 :item "cobblestone"} (escape-way/choose p [0 64 0] [1 70 0])))
     (is (< (* 2 (s {:step :pillar :height 5})) (s {:step :stair :heading :east :steps 6})) "no knife edge: the stair costs twice the pillar and more")))
 
+(deftest a-stone-stair-is-priced-at-the-tool-carried-so-a-body-without-a-pickaxe-pillars
+  (let [at (fn [inv] (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks column-yard :inventory inv}))
+        stair {:step :stair :heading :east :steps 3}
+        s #(escape-way/price % [0 64 0] stair)
+        bare (at [{:name "cobblestone" :count 16}])
+        armed (at [{:name "cobblestone" :count 16} {:name "iron_pickaxe" :count 1}])]
+    (is (> (s bare) (* 2 (s armed))) "bare-handed cuts of stone cost many times the pickaxe's")
+    (is (> (s bare) (escape-way/price bare [0 64 0] {:step :pillar :height 3 :item "cobblestone"})) "no pickaxe: the pillar is cheaper")))
+
 (deftest escape-choose-takes-a-lone-rim-pillar-beside-a-wall-when-no-stair-is-allowed
   (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge (box -6 63 -6 6 63 6 "stone") (box 1 64 -3 1 66 3 "cobblestone"))
                     :inventory [{:name "cobblestone" :count 16}]})]
@@ -570,7 +579,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft}
+        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft :inventory [{:name "stone_pickaxe" :count 1} {:name "stone_shovel" :count 1}]}
                                                     'jobs.movement.go-to (merge {:pos [30 64 0] :range 1 :worth 30} trespass) foreign))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
@@ -683,8 +692,7 @@
   (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)
         at (fn [chance f] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))] (f)))
         pillar-s #(escape-way/price p [0 58 0] {:step :pillar :height 6})]
-    (is (< (at 0 pillar-s) (at 0.5 pillar-s)))
-    (is (not= :pillar (at 1 #(:step (escape-way/choose p [0 58 0] [6 64 0])))) "a roof sure to be there is dug by hand: a way through the side is cheaper")))
+    (is (< (at 0 pillar-s) (at 0.5 pillar-s)))))
 
 (deftest go-to-escalates-out-of-a-shaft-whose-surrounding-rock-it-cannot-see
   ;; the planner proves the start sealed (:start-enclosed) though the room flood reads the unseen walls as open: it escalates

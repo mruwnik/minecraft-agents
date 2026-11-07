@@ -451,7 +451,7 @@
   (dissoc (box -1 60 -2 12 80 2 "stone") "0,64,0" "0,65,0"))
 
 (deftest a-stair-is-priced-as-the-climb-route-prices-it
-  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= [:walk] (distinct (map :move (:steps route)))))
     (is (= 3 (count (:steps route))))
@@ -463,7 +463,7 @@
   (apply dissoc stone-mass (map #(str (clojure.string/join "," %)) (escape/stair-cuts [0 64 0] [1 0] 3))))
 
 (deftest a-stair-through-open-cells-is-priced-as-the-climb-route-prices-it
-  (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
+  (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= 3 (count (:steps route))))
     (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))
@@ -475,23 +475,24 @@
   (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))] (f)))
 
 (deftest a-new-stair-step-is-priced-as-a-step-cut-through-stone-and-dearer-unseen
-  (let [inv [{:name "iron_pickaxe" :count 1}]
+  (let [inv [{:name "stone_pickaxe" :count 1}]
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         seen (body 50)
         step {:step :stair :heading :east :steps 1}]
-    (is (= (escape-way/price (body 1) [0 64 0] step) (escape-way/new-stair-step-s seen)) "the price of one unseen stone step")
+    (is (= (at-chance 1 #(escape-way/price (body 1) [0 64 0] step)) (escape-way/new-stair-step-s seen)) "the price of one unseen stone step, the cuts sure to be solid")
     (is (< (cw/stair-step-s) (escape-way/new-stair-step-s seen)) "the cuts are paid on top of the stair's step")
     (is (< (escape-way/price seen [0 64 0] step) (escape-way/new-stair-step-s seen)) "seen cells cost less")))
 
 (deftest an-unseen-stair-and-pillar-are-priced-as-the-climb-route-prices-them
-  (let [inv [{:name "iron_pickaxe" :count 1}]
+  (let [inv [{:name "stone_pickaxe" :count 1}]
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         p (body 4.2)
         unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
         stair {:step :stair :heading :east :steps 3}
         route-s #(:seconds (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {}))]
-    (is (= (at-chance 1 route-s) (escape-way/price p [0 64 0] stair)) "unseen rock sure to be solid")
-    (is (< (escape-way/price (body 50) [0 64 0] stair) (escape-way/price p [0 64 0] stair)) "unseen cells cost more")
+    (is (= (at-chance 1 route-s) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "unseen rock sure to be solid")
+    (is (< (escape-way/price (body 50) [0 64 0] stair) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "unseen cells cost more")
+    (is (< (escape-way/price p [0 64 0] stair) (at-chance 1 #(escape-way/price p [0 64 0] stair))) "an unseen cut is dug at the chance it is solid")
     (is (< (route-s) (at-chance 1 route-s)) "the climb route digs an unseen cell at the chance it is solid")
     (are [r n] (let [q (body r)
                      roof-s (* n ((escape/dig-share-fn q) [0 67 0]) (/ (tools/clear-ms q "stone") 1000))]
