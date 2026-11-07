@@ -790,7 +790,9 @@
         status #(with-redefs [look/seen-block (constantly {:unknown true})] (risk/status c far-goal (straight-plan c far-goal)))]
     (is (> (risk/risk-s c (estimate-unseen c far-goal)) 150))
     (is (= [:ok :acceptable] ((juxt first #(:reason (nth % 2))) (status))))
-    (is (= :never (first (planned-status (assoc c :worth (constantly 150)) far-goal))))))
+    (is (= :never (first (planned-status (assoc c :worth (constantly 150)) far-goal))))
+    (is (= :ok (first (with-redefs [look/seen-block (constantly {:unknown true})] (planned-status (assoc c :worth worth-400) far-goal))))
+        "worth 400 buys the walk: its death is a price, not hp over all but 1")))
 
 (deftest a-walk-for-an-unseen-fresh-death-spot-risks-the-death-of-meeting-its-killer
   ;; a fist body with no bed: the death, a long walk back from world spawn, is most of the walk's 231 s; worth 400 buys it, 150 not
@@ -955,10 +957,13 @@
         real u/seen-block
         hidden? (fn [{:keys [x y z]}] (and (<= cx x (inc cx)) (<= 63 y 65) (<= 15 z 17)))
         s (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
-            (planned-status (assoc c :worth (constantly 150)) {:x 27.5 :y 64 :z 18.5}))]
-    ;; the walk costs 212 s, 182 s of it the death of meeting the killer, over the 150 s worth
+            (planned-status (assoc c :worth (constantly 150)) {:x 27.5 :y 64 :z 18.5}))
+        bought (with-redefs [u/seen-block (fn [p pos] (when-not (hidden? pos) (real p pos))) look/seen-block (constantly {:unknown true})]
+                 (planned-status (assoc c :worth worth-400) {:x 27.5 :y 64 :z 18.5}))]
+    ;; the walk costs 212 s, 182 s of it the death of meeting the killer, over the 150 s worth and within 400 s
     (is (= :never (first s)) "its death is priced over the worth, and no wait lowers a death spot's price")
-    (is (= :risky (:reason (nth s 2))))))
+    (is (= :risky (:reason (nth s 2))))
+    (is (= :ok (first bought)) "a worth that buys the death walks it")))
 
 
 (def skeleton-world {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}
