@@ -22,7 +22,6 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.solid :as solid]
             [jobs.lib.spawn-light :as spawn-light]))
@@ -33,13 +32,9 @@
    ::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
    ::max-days-awake {:default 3 :spec (a/num-in 0 nil)
-                     :doc "In-game days without sleep before finding a bed becomes urgent: a bed in the open is slept in."}
-   ::courtesy-radius {:default 32 :spec (a/num-in 0 nil)
-                      :doc "Blocks a body underground may walk to a bed to sleep beside another sleeping player."}})
+                     :doc "In-game days without sleep before finding a bed becomes urgent: a bed in the open is slept in."}})
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
-
-(defn courtesy-radius [] (settings/get settings ::courtesy-radius))
 
 (defn bed-occupied?
   "Whether the bed at pos is occupied as a player sees it: the bed block's occupied state, or another player lying within
@@ -151,14 +146,6 @@
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
   #{:dug-in :room})
 
-(defn courtesy-walk?
-  "Whether a body walks to the bed at pos only to sleep as a courtesy: another player sleeps (others-asleep?), the bed
-  is within courtesy-radius of the feet, and the body is not shut in a dug-in or room shelter (mobs may wait outside it)."
-  [p view pos]
-  (and (<= (u/dist (u/self-pos {:primitives p}) pos) (courtesy-radius))
-       (sh-sleepers/others-asleep? p view)
-       (not (#{:dug-in :room} (sh-inside/walk-leaves-shelter? p (:data (mem/latest view :shelter)) pos 1)))))
-
 (def bed-open-policy
   "Policy of the :bed-open entries the night job writes for a bed it found open and dug in beside instead: half a day."
   {:cap 5 :ttl (quot sh-clock/ms-per-day 2)})
@@ -227,8 +214,7 @@
   "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place (a bed set with
   jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds and the live :spawn-bed,
   nearest first, at any distance (go-to prices the walk, a far one loses on price; worth, when given (a number, or a fn of the bed pos), is the call's: a walk refused on price at no less is skipped, none skips every priced refusal), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
-  would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
-  courtesy-walk?: another player sleeps and the bed is near);
+  would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
   outside goes back to a bed), or while a :sleep-failed entry is unexpired. nil otherwise. Beds the body has seen
   (seen-bed-places) count as well as the remembered one."
@@ -242,7 +228,7 @@
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (not (walk-unsafe? p view pos worth))
-                             (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
+                             (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))))))]
       (distinct (concat (some-> (seen-bed p ok?) vector)
                         (let [known (sh-spawn/known-beds p view)
                               placed (mem/place view :bed)]
