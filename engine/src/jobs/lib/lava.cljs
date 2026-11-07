@@ -167,7 +167,7 @@
           (do (clear!) :arrived)
           (let [{:keys [away-to away-escalate away-tried away-why] :or {away-tried #{}}} (ctx/mem c)
                 _ (when-not away-to
-                    (await (dig-look/look-unknown! c (step-off/floors feet-cell 3))))
+                    (await (sense/look-at-unknown! c (step-off/floors feet-cell 3) dig-look/max-floor-looks)))
                 left (when-not away-to
                        (remove #(contains? away-tried ((juxt :x :y :z) %))
                                (step-off/candidates (:primitives c) feet-cell

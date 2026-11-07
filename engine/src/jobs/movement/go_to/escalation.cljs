@@ -117,7 +117,7 @@
         top (inc (escape/max-depth))
         over (escape/up feet 2)
         [fx fy fz] feet]
-    (await (dig-look/look-unknown! c (step-off/floors {:x fx :y fy :z fz} 2)))
+    (await (sense/look-at-unknown! c (step-off/floors {:x fx :y fy :z fz} 2) dig-look/max-floor-looks))
     (when (dig-look/unknown? p over) (await (dig-look/look-at! c over)))
     (loop [lvl 0]
       (when (< lvl top)

@@ -5,6 +5,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
@@ -135,7 +136,7 @@
   (let [f (found c)
         look (to-look c f)]
     (if (seq look)
-      (do (await (look/look-unknown! c look))
+      (do (await (sense/look-at-unknown! c look look/max-floor-looks))
           (ctx/update-mem! c update :looked (fnil into #{}) look)
           :again)
       (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells (fill-args c (:open f)))))

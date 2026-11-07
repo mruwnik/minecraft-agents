@@ -10,6 +10,7 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.settings :as settings]
+            [engine.sense-test :as st]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.lib.dig-route :as dig-route]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -156,6 +157,19 @@
 (def gulf
   "Stone floors at y 63 either side of a 5-wide void (x 1..5), z -20..20, the body on the west edge."
   (merge (box -20 63 -20 0 63 20 "stone") (box 6 63 -20 20 63 20 "stone")))
+
+(deftest the-look-ahead-leaves-memory-holding-the-floor-in-view-not-just-the-cells-looked-at
+  ;; the span search plans over memory: a look that only turned the head left it holding the cells looked at and their
+  ;; neighbours, so the floor beside the headings stayed unseen to it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (st/seeing {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -8 63 -8 8 63 8 "stone")})
+              remembered? (fn [[x y z]] (not (.-unknown (.seenBlockAt p #js {:x x :y y :z z}))))]
+          (await (reach/look-ahead! (st/stub-ctx p) [0 64 0]))
+          (is (pos? (st/looks p)))
+          (is (some remembered? (for [x (range 2 6) z (range 2 6) [sx sz] [[1 1] [1 -1] [-1 1] [-1 -1]]] [(* sx x) 63 (* sz z)]))
+              "a floor cell off every heading, in view of a look"))))))
 
 (deftest a-free-body-bridges-a-gap-the-planner-cannot-cross
   (async done

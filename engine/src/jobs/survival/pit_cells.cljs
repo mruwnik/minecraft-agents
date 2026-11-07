@@ -189,8 +189,8 @@
          _ (await (sense/decide! c ::roof-support #(dig-cells/dig-plan p feet) {:price (sense/fails-to c)}))
          plan #(pit-plan c feet blocks)]
      (or (plan)
-         (do (await (look/look-unknown! c (for [[dx dz] fill/sides, dy [0 -1 1]]
-                                            [(+ (:x feet) dx) (+ (:y feet) dy) (+ (:z feet) dz)])))
+         (do (await (sense/look-at-unknown! c (for [[dx dz] fill/sides, dy [0 -1 1]]
+                                            [(+ (:x feet) dx) (+ (:y feet) dy) (+ (:z feet) dz)]) look/max-floor-looks))
              (plan))
          (stop-of c blocks feet)))))
 

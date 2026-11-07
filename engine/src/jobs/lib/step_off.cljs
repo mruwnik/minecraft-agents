@@ -7,6 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
@@ -52,7 +53,7 @@
   "Walk off the column of cell (a go-to child :step-off, range 0, no escalation). opts {:avoid :ok? :reach :near} as candidates (:near default: the body) (jobs pass :ok? (zone-ok (access/rules-input c))).
   Glances at floors it has not seen first. Resolves to :arrived, :continue (go-to waits on the world) or {:unreachable why}: no cell to go to (:no-cell) or go-to's."
   [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
-  (await (dig-look/look-unknown! c (floors cell reach)))
+  (await (sense/look-at-unknown! c (floors cell reach) dig-look/max-floor-looks))
   (if-let [to (first (candidates (:primitives c) cell (merge {:near (u/self-pos c)} opts)))]
     (let [e (await (child/call-walk* c :step-off {:pos to :range 0 :ways #{:walk :clear-seal}}))
           res (:data e)]

@@ -14,6 +14,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.stair-memory :as smem]
             [jobs.lib.near :as near]
@@ -288,7 +289,7 @@
           n (max (js/Math.abs dx) (js/Math.abs dz))
           cells (for [i (range 1 n)] [(+ x (js/Math.round (* dx (/ i n)))) (dec y) (+ z (js/Math.round (* dz (/ i n))))])
           unseen (filter #(dig-look/unknown? (:primitives c) %) cells)]
-      (await (dig-look/look-unknown! c unseen))
+      (await (sense/look-at-unknown! c unseen dig-look/max-floor-looks))
       (boolean (seq unseen)))))
 
 (def search-ended-whys

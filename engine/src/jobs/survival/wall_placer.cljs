@@ -10,6 +10,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
@@ -185,7 +186,7 @@
   [c]
   (let [threats (into (shooters c) (melee-spots c))
         p (:primitives c)
-        _ (await (look/look-unknown! c (map lb/cell (fill/open-cells p (sh-sense/feet p) threats))))
+        _ (await (sense/look-at-unknown! c (map lb/cell (fill/open-cells p (sh-sense/feet p) threats)) look/max-floor-looks))
         radius (danger-q/hostile-radius)
         blocks (flight/blocks c)
         open (fill/open-cells p (sh-sense/feet p) threats)

@@ -7,6 +7,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -263,7 +264,7 @@
   entry still waiting."
   [c e waiting]
   (let [{:keys [x y z]} (u/self-pos c)
-        _ (await (dig-look/look-unknown! c (step-off/floors {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} 2)))
+        _ (await (sense/look-at-unknown! c (step-off/floors {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} 2) dig-look/max-floor-looks))
         target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (skip! c e :occupied)

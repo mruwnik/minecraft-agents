@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.escape.span :as span]
@@ -193,7 +194,7 @@
   "Look at each floor cell along the four headings from feet, nearest first, that the body has not sensed, so a bridge
   is judged over cells it has seen."
   [c feet]
-  (await (dig-look/look-unknown! c (for [k (range 1 (inc (span/max-bridge))) d escape/cardinals] (escape/up (escape/ahead feet d k) -1)))))
+  (await (sense/look-at-unknown! c (for [k (range 1 (inc (span/max-bridge))) d escape/cardinals] (escape/up (escape/ahead feet d k) -1)) dig-look/max-floor-looks)))
 
 (defn ^:async pick!
   "After a walk found no way (ending e): remember the cheapest span (span-way) to build and return ::next; else, when the

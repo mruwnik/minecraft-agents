@@ -347,7 +347,7 @@
   (let [[fx fy fz] from
         rng (fn [a b] (range (min a b) (inc (max a b))))
         cells (for [x (rng fx gx) z (rng fz gz) y (range (dec gy) (inc fy))] [x y z])]
-    (await (dig-look/look-unknown! c (sort-by #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal)) cells)))))
+    (await (sense/look-at-unknown! c (sort-by #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal)) cells) dig-look/max-floor-looks))))
 
 (defn replans [] (settings/get settings ::replans))
 
@@ -755,7 +755,7 @@
         (ctx/update-mem! c update :holes-looked (fnil conj []) dug)
         (await (dig-look/look-at! c dug))
         (await (dig-look/look-at! c (update dug 1 dec)))
-        (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4])))
+        (await (sense/look-at-unknown! c (map #(update dug 1 - %) [2 3 4]) dig-look/max-floor-looks))
         (await (dig-look/look-at! c dug))
         (or (seq (candidates c anchor)) (recur (rest holes)))))))
 

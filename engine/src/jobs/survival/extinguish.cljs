@@ -14,6 +14,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -315,7 +316,7 @@
               (await (burning-wait! c (pour-wait-ms)))
               :again)))
 
-      (not= "water" (do (await (dig-look/look-unknown! c [cell])) (u/block-name p at)))
+      (not= "water" (do (await (sense/look-at-unknown! c [cell] 1)) (u/block-name p at)))
       (let [waits (inc (:water-waits (ctx/mem c) 0))]
         (if (> waits (max-water-waits))
           (do (drop-pour! c cell)
@@ -447,8 +448,8 @@
             lava? (boolean (.-inLava me))
             _ (await (look/survey! c :cell))
             ;; lava beside the feet under an overhang shows to no glance of the survey: turn to each side cell not yet sensed
-            _ (await (dig-look/look-unknown! c (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0]]]
-                                                 [(+ (:x pos) dx) (+ (:y pos) dy) (+ (:z pos) dz)])))
+            _ (await (sense/look-at-unknown! c (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 -1 0]]]
+                                                 [(+ (:x pos) dx) (+ (:y pos) dy) (+ (:z pos) dz)]) dig-look/max-floor-looks))
             scanned (feel-feet p pos (scan p (scan-radius) hazards 128))
             water (when-not lava? (first (scan p water-radius water-like 1)))
             pour? (and (not lava?) (has-bucket? p))
