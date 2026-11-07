@@ -193,6 +193,8 @@
     (:hits (:data e) 1)
     (count (filter #(shot/shot? {:data %}) (:damages (:data e))))))
 
+(defn quiet-s "Seconds a hidden body keeps its refuge after the last danger (hide-out ::quiet-s), for the job that may not require hide-out itself." [] (hide-out/quiet-s))
+
 (defn pillar-cover
   "The cover {:open-s :seconds :fails} of a pillar against hostiles (cost/cover-answer): in a melee mob's reach for ::pillar-s,
   then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by

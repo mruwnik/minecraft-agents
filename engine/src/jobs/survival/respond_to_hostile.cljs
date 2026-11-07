@@ -28,7 +28,6 @@
             [jobs.survival.respond.state :as state]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.dig-pit :as dig-pit]
-            [jobs.survival.hide-out :as hide-out]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -329,7 +328,7 @@
         equipment (cost/equipment-of (.-equipment (.self p)))
         mobs (mapv #(hostile/mob-near p %) near)
         priced (fn [{:keys [seconds closed refuge-s] :as h}]
-                 (let [refuge {:chance 0 :refuge-s refuge-s :hide-s (hide-out/quiet-s)}]
+                 (let [refuge {:chance 0 :refuge-s refuge-s :hide-s (options/quiet-s)}]
                    (when-let [answer (cost/look-answer body {:equipment equipment :mobs mobs :seconds seconds
                                                              :outcomes [[closed #(assoc (now-of %) :flee (hostile/flee-answer c near fight felt refuge %))]
                                                                         [(- 1 closed) now-of]]}
