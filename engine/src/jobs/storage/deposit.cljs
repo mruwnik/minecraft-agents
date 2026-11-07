@@ -260,11 +260,14 @@
           (= :unreachable w) (give-up! c :unreachable)
           w w
           :else
-        (let [_ (when (and items (some #(.includes (:name (:stack pick)) %) combat/default-weapons))
-                  (ctx/remember! c :weapon-stowed {:item (:name (:stack pick))} stowed-policy))
+        (let [item (:name (:stack pick))
+              weapon? (and items (some #(.includes item %) combat/default-weapons))
+              _ (when weapon? (ctx/remember! c :weapon-stowed {:item item} stowed-policy))
               r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
-                                                         :item (:name (:stack pick)) :count (:count pick)})))
-                _ (when (.-items r) (stock/note-stock! c chest (.-items r)))]
+                                                      :item item :count (:count pick)})))
+              _ (when (.-items r) (stock/note-stock! c chest (.-items r)))
+              _ (when (and weapon? (pos? (storage/carried (u/inventory (:primitives c)) item)))
+                  (ctx/forget-where! c :weapon-stowed #(= item (:item %))))]
             (if (= "ok" (.-status r))
               (if (and (pos? (or (.-moved r) 0))
                        (< (storage/carried (u/inventory (:primitives c)) (:name (:stack pick))) (storage/carried inventory (:name (:stack pick)))))

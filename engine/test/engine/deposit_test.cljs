@@ -70,6 +70,16 @@
             (await (wt/ending-of eng job {:chest chest :items ["stone_sword"]} 8)))
           (is (true? @seen-at-transfer)))))))
 
+(deftest a-weapon-the-transfer-did-not-move-is-not-left-remembered-as-stowed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (wt/setup {:inventory [{:name "stone_sword" :count 1}] :containers {"10,64,0" []}})]
+          (.override (.-world p) "transfer" (fn ^:async f [_ _ _] #js {:status "ok" :moved 0}))
+          (await (wt/ending-of eng job {:chest chest :items ["stone_sword"]} 12))
+          (is (= {"stone_sword" 1} (wt/inv p)))
+          (is (nil? (mem/latest (mem/view (:store eng)) :weapon-stowed)) "the sword is still carried: the reflex must see it"))))))
+
 (deftest deposit-gives-up-when-the-transfer-says-ok-but-moves-nothing
   (async done
     (tu/run-async done
