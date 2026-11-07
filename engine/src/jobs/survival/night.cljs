@@ -544,13 +544,14 @@
 
 (defn walk-hp-s
   "Seconds the hp a walk to pos along go-to's quoted route r is expected to cost: spawns over its dark seconds (the planner's
-  :dark-seconds over jobs.lib.cost/dark-factor of the kit, by jobs.lib.price/stay-hp) and the fight with the hostiles known near pos
+  :dark-seconds over jobs.lib.cost/dark-factor of the kit, at the spawn-rate of the kit's height, by jobs.lib.price/stay-hp) and the fight with the hostiles known near pos
   (jobs.lib.price/way-fight-hp), each hp at jobs.lib.cost/hp-price."
   [c pos r]
   (let [secs (or (:seconds r) 0)
-        dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor (wworld/kit-of c))))]
+        kit (wworld/kit-of c)
+        dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))]
     (* (cost/hp-price (or (.-health (.self (:primitives c))) 20))
-       (+ (price/stay-hp c (cost/spawn-chance [0 0 0]) dark-s) (price/way-fight-hp c pos)))))
+       (+ (price/stay-hp c (cost/spawn-rate (get-in kit [:at :y])) dark-s) (price/way-fight-hp c pos)))))
 
 (defn bed-walk-price
   "{:walk :walk-hp :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's

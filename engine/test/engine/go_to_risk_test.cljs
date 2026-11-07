@@ -84,7 +84,7 @@
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}))
         {:keys [spawn-hp dark-s]} (risk/estimate c {:x 95 :y 64 :z 0})]
     (is (pos? spawn-hp))
-    (is (<= spawn-hp (* dark-s (cost/spawn-chance [0 0 0]) 20)))))
+    (is (<= spawn-hp (* dark-s (cost/spawn-rate 64) 20)))))
 
 (deftest a-flight-and-a-walk-over-the-same-cells-meet-the-same-spawns
   ;; the flee search prices its routes' spawns by spawn-light/spawns-over, walk-risk a walk's by its dark seconds
@@ -92,9 +92,9 @@
         p (:primitives c)
         goal {:x 40 :y 64 :z 0}
         plan (straight-plan c goal)
-        walk (* (:dark-s (risk/estimate c goal {:plan plan})) (cost/spawn-chance [0 0 0]))]
+        walk (* (:dark-s (risk/estimate c goal {:plan plan})) (cost/spawn-rate 64))]
     (is (pos? walk))
-    (is (= walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)) nil)))))
+    (is (< (js/Math.abs (- walk (spawn-light/spawns-over p (spawn-light/walked (sh-sense/feet p) (:steps plan)) nil))) (* 1e-12 walk)))))
 
 (deftest a-way-made-in-the-dark-prices-the-spawns-over-the-seconds-of-its-making
   (let [cells [[0 64 0] [0 65 0] [0 66 0]]

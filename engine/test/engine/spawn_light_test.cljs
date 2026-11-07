@@ -11,7 +11,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]))
 
-(def open-night-chance (cost/spawn-chance [0 0 0]))
+(def open-night-chance (cost/spawn-chance [0 64 0]))
 
 (def pit
   "A 1x1 pit with a roof: dirt round the feet and head cells, a roof over the head."

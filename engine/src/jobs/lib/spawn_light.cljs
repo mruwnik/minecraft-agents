@@ -102,9 +102,9 @@
 
 (defn dark-share
   "chance-at of cell (under the sky's darkening subtract, default now; solid-at as chance-at's) as a share of that of a
-  cell certainly dark: 1 dark, 0 lit, the chance of dark between."
+  cell certainly dark at its height: 1 dark, 0 lit, the chance of dark between."
   [p cell caves-free? & [subtract solid-at]]
-  (let [dark (cost/spawn-chance [0 0 0])]
+  (let [dark (cost/spawn-rate (:y cell))]
     (if (pos? dark) (/ (chance-at p cell caves-free? subtract false solid-at) dark) 0)))
 
 (defn share-of
@@ -134,11 +134,12 @@
 
 (defn spawns-over
   "The mobs (an expected count) met spawning on the timed cells ([{:x :y :z :t}], :t seconds from the start, the first
-  where the body stands) of a walk: cost/spawn-chance a second over its dark-seconds (read by share, a share-of not
-  caves-free?, nil: its own)."
+  where the body stands) of a walk: its dark-seconds (read by share, a share-of not caves-free?, nil: its own), each
+  cell's at cost/spawn-rate of its height."
   [p cells share]
   (if (next cells)
-    (* (cost/spawn-chance [0 0 0]) (dark-seconds p (vec cells) (mapv :t cells) false nil share))
+    (let [share (or share (share-of p false nil))]
+      (dark-seconds p (vec cells) (mapv :t cells) false nil #(* (share %) (cost/spawn-rate (:y %)))))
     0))
 
 (defn spawns-at

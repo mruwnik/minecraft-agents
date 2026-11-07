@@ -4,7 +4,7 @@
   straight line. It replaces any wait for dawn: a night walk is judged by the light the body perceives along
   the way (Q334), a walk underground by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices
   spawns only where dark floor beyond the spawn-free radius is reachable: spawn-light/hall-chance, Q345).
-  Risk = the hurt of the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking,
+  Risk = the hurt of the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-rate at each cell's height a second,
   jobs.lib.cost/spawns-hurt) plus what the known threats take off the body over
   the way (jobs.lib.cost/route-parts, each over its field, jobs.lib.threats, in meetings): every mob sensed now that catches
   the walk (live-catchers), and every death, near-death or hide spot the walk goes for (remembered-near-way), each
@@ -154,6 +154,10 @@
           cells (cond-> there back? (#(into % (rest (rseq %)))))
           exit (if (sh-inside/walk-leaves-shelter? p shelter goal 1) (exit-dark p there caves-free? sky) {:share 0 :dawn? false})
           exit-s (* (/ (settings/get settings ::exit-blocks) cost/walk-speed) (:share exit))
+          share (spawn-light/share-of p caves-free? sky)
+          times (mapv #(/ % cost/walk-speed) (along cells))
+          rate #(cost/spawn-rate (:y %))
+          stay-share (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free? sky))
           speed cost/walk-speed
           later (fn [i] (if (and (pos? stay-s) (> i stay-at)) stay-s 0))
           catchers (live-catchers known (mapv (fn [i cell d] (assoc cell :t (+ (/ d speed) (later i)))) (range) cells (along cells)))
@@ -164,15 +168,16 @@
        :weights (mapv #(:weights (field/field-of c %)) (concat catchers remembered))
        :memory memory :sky (or sky (:sky now)) :looked looked
        :exit-s exit-s :exit-dawn? (and (pos? exit-s) (:dawn? exit))
-       :exposed-s (+ exit-s
-                     (spawn-light/dark-seconds p cells (mapv #(/ % cost/walk-speed) (along cells)) caves-free? sky)
-                     (* stay-s (spawn-light/dark-share p (nth cells stay-at) caves-free? sky)))
+       :exposed-s (+ exit-s (spawn-light/dark-seconds p cells times caves-free? sky share) stay-share)
+       :spawns (+ (* exit-s (rate feet))
+                  (spawn-light/dark-seconds p cells times caves-free? sky #(* (share %) (rate %)))
+                  (* stay-share (rate (nth cells stay-at))))
        :lava (route-lava-hp p cells)})))
 
 (defn estimate-of
   "estimate of its inputs (estimate-inputs)."
-  [c {:keys [goal feet cells body catchers remembered exposed-s lava]}]
-  (let [spawns (* exposed-s (cost/spawn-chance [0 0 0]))
+  [c {:keys [goal feet cells body catchers remembered exposed-s spawns lava]}]
+  (let [
         parts (fn [ts] (if (seq ts) (cost/route-parts body {:cells cells :threats ts :at feet}) {:chance 0 :death 0 :hurt 0}))
         catchers (threats/with-reach c catchers)
         remembered (threats/with-reach c remembered)

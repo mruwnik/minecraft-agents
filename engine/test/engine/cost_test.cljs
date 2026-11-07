@@ -475,7 +475,7 @@
         sword (cost/dark-factor {:weapon "iron_sword" :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}})
         armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set :respawn spawn-far :at {:x 0 :y 64 :z 0}})]
     (is (zero? floor) "the bare factor is the flat floor")
-    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}} 1 nil) (cost/spawn-chance [0 0 0]) (cost/hp-seconds)))
+    (is (= unarmed (* (cost/spawns-hurt {:weapon nil :equipment nil :respawn spawn-far :at {:x 0 :y 64 :z 0}} 1 nil) (cost/spawn-rate 64) (cost/hp-seconds)))
         "an unarmed body pays the hurt of the spawn mix, the one spawn price walk-risk uses")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
@@ -601,6 +601,15 @@
         one (cost/spawn-chance [0 0 0])]
     (is (= (/ one 2) (cost/spawn-chance #{[0 0 0] [1 0 0]} {:light light})))
     (is (= (/ one 2) (cost/spawn-chance {:min [0 0 0] :max [1 0 0]} {:light light})))))
+
+(deftest a-dark-cell-spawns-at-the-rate-measured-at-its-height
+  (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 9 :n-s 1000 :below {40 {:k 29 :n-s 1000} 0 {:k 99 :n-s 1000}}}}
+    (fn []
+      (is (= [0.1 0.03 0.01 0.01] (mapv #(cost/spawn-chance [0 % 0]) [-5 39 40 64])) "the lowest band above the cell, else the pooled counts")
+      (is (= 0.02 (cost/spawn-chance {:min [0 39 0] :max [0 40 0]})) "a place straddling a band is the mean of its cells")
+      (is (= 0.01 (cost/spawn-rate)) "no height: the pooled counts")))
+  (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+    #(is (= [0.005 0.005] (mapv (fn [y] (cost/spawn-chance [0 y 0])) [-5 64])) "counts with no bands: one rate at every height")))
 
 (def far {:x 100 :y 64 :z 0})
 

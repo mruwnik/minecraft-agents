@@ -61,8 +61,11 @@
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0 :spec (a/num-in 0 nil)
                :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
-   ::spawn-chance-per-s {:default {:k 161 :n-s 133715} :spec (a/map-with {:k (a/num-in 0 nil) :n-s (a/num-in 0.1 nil)})
-                         :doc "Counts {:k :n-s} behind the chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (jobs.lib.cost/spawn-chance reads (k + 1) / n-s, 0.0012): k hostile meets (the first respond decision about a spawnable mob) in n-s seconds the body stood on a cell not lit-light? at the record's time of day (recorded block and sky light, sky less the darkening of the clock the bodies' memory entries stamp, clear sky), trial logs to 2026-11-06; per band under y 40 0.0022, y 40-55 0.0006, surface 0.0011. Recount: tools/event-counts.mjs dark-meets."}
+   ::spawn-chance-per-s {:default {:k 120 :n-s 114942 :below {40 {:k 41 :n-s 18773}}}
+                         :spec (a/pred "a map {:k n :n-s s} counts, :below an optional map of height to such counts"
+                                       (fn [m] (let [ok? #(and (map? %) (number? (:k %)) (<= 0 (:k %)) (number? (:n-s %)) (<= 0.1 (:n-s %)))]
+                                                 (and (ok? m) (every? (fn [[y c]] (and (number? y) (ok? c))) (:below m))))))
+                         :doc "Counts {:k :n-s} behind the chance a mob spawns and reaches the body each second it stands on a cell where one can spawn (spawn-rate reads (k + 1) / n-s): k hostile meets (the first respond decision about a spawnable mob) in n-s seconds the body stood on a cell not lit-light? at the record's time of day (recorded block and sky light, sky less the darkening of the clock the bodies' memory entries stamp, clear sky), trial logs to 2026-11-06. :below {y counts}: a cell under y counts by the lowest such y above it, the rest by the pooled counts: under y 40 41 in 18773 s (0.0022), at y 40 and over 120 in 114942 s (0.00105; y 40-55 alone 5 in 9501, too few for a band). Recount: tools/event-counts.mjs dark-meets."}
    ::loose-over-loose-counts {:default {:h1 {:loose 38.8 :other 5.2} :h2 {:loose 31.1 :other 12.9} :h3 {:loose 29.6 :other 14.4}
                                         :h4 {:loose 10.2 :other 33.8} :h5 {:loose 4 :other 40}}
                               :spec (a/pred "a map of :h1 to :h5 to {:loose n :other n} pseudo-counts >= 0"
@@ -406,21 +409,38 @@
     (number? (first place)) [place]
     :else place))
 
+(defn spawns-fn
+  "(fn [cell]) the chance a mob spawns at cell. :light (cell -> {:block :sky} as the body saw it, the sky light already less
+  the sky's darkening and 0 where it no longer lights; {:dark} the chance an unseen cell is dark, jobs.lib.look's guess; nil
+  or missing: unseen, dark). A cell spawns only at block light 0 and sky light 0."
+  [{:keys [light]}]
+  (fn [cell] (let [{:keys [block sky dark] :or {block 0 sky 0}} (when light (light cell))]
+               (or dark (if (and (zero? block) (zero? sky)) 1 0)))))
+
 (defn spawn-share
-  "The share of place's cells (a cell, a set of cells or a {:min :max} box) a mob spawns at. :light (cell -> {:block :sky} as
-  the body saw it, the sky light already less the sky's darkening and 0 where it no longer lights; {:dark} the chance an
-  unseen cell is dark, jobs.lib.look's guess; nil or missing: unseen, dark). A cell spawns only at block light 0 and sky
-  light 0."
-  [place {:keys [light]}]
-  (let [cells (cells-of place)
-        spawns (fn [cell] (let [{:keys [block sky dark] :or {block 0 sky 0}} (when light (light cell))]
-                            (or dark (if (and (zero? block) (zero? sky)) 1 0))))]
-    (/ (transduce (map spawns) + 0 cells) (max 1 (count cells)))))
+  "The share of place's cells (a cell, a set of cells or a {:min :max} box) a mob spawns at (spawns-fn of opts)."
+  [place opts]
+  (let [cells (cells-of place)]
+    (/ (transduce (map (spawns-fn opts)) + 0 cells) (max 1 (count cells)))))
+
+(defn spawn-rate
+  "The chance per second a mob spawns and reaches a body on a dark cell at height y (nil: the pooled counts): (k + 1) / n-s
+  of ::spawn-chance-per-s, of its :below band when y is under one."
+  ([] (spawn-rate nil))
+  ([y] (spawn-rate (settings/get settings ::spawn-chance-per-s) y))
+  ([{:keys [below] :as counts} y]
+   (let [{:keys [k n-s]} (or (when y (some (fn [[top c]] (when (< y top) c)) (sort-by key below))) counts)]
+     (/ (inc k) n-s))))
 
 (defn spawn-chance
-  "The chance per second a mob spawns at place and reaches a body standing there: (k + 1) / n-s of ::spawn-chance-per-s x spawn-share."
+  "The chance per second a mob spawns at place and reaches a body standing there: over its cells, spawn-rate at each one's
+  height x spawns-fn of opts."
   ([place] (spawn-chance place nil))
-  ([place opts] (let [{:keys [k n-s]} (settings/get settings ::spawn-chance-per-s)] (* (/ (inc k) n-s) (spawn-share place opts)))))
+  ([place opts]
+   (let [cells (cells-of place)
+         spawns (spawns-fn opts)
+         counts (settings/get settings ::spawn-chance-per-s)]
+     (/ (transduce (map #(* (spawn-rate counts (second %)) (spawns %))) + 0 cells) (max 1 (count cells))))))
 
 (def loose-stack-cap "The tallest run of loose cells ::loose-over-loose-counts tells apart." 5)
 

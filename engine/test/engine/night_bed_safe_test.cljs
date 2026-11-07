@@ -235,12 +235,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng raw clock]} (setup on-open-ground)]
-          (swap! clock + (* 4 sh-clock/ms-per-day))
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 12))
-          (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out here costs as much as the walk")
-          (is (seq (st/calls raw "sleep")) "it walks to the bed and sleeps"))))))
+        ;; the pooled rate the scenario is sized at (0.0012 a dark second); the measured surface rate (0.00105) prices it near the edge
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 161 :n-s 133715}}
+          (fn ^:async inner []
+            (let [{:keys [eng raw clock]} (setup on-open-ground)]
+              (swap! clock + (* 4 sh-clock/ms-per-day))
+              (core/submit! eng '(jobs.survival.night) {})
+              (await (st/tick-n eng 12))
+              (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out here costs as much as the walk")
+              (is (seq (st/calls raw "sleep")) "it walks to the bed and sleeps")))))))))
 
 (defn remember-spawn-bed! [eng pos]
   (mem/forget-where! (:store eng) :bed (constantly true))
@@ -611,15 +615,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng clock]} (setup on-open-ground)
-              refusals (atom 0)
-              priced (fn [& _] (swap! refusals inc) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
-          (swap! clock + (* 4 sh-clock/ms-per-day))
-          (with-redefs [child/call-walk* priced]
-            (core/submit! eng '(jobs.survival.night) {})
-            (await (st/tick-n eng 12)))
-          (is (= 1 @refusals) "the refused bed is asked once, not on every pass")
-          (is (number? (:worth (first (st/entries eng :bed-walk-unsafe)))) "the refusal carries the worth it was priced at"))))))
+        ;; the pooled rate the scenario is sized at (0.0012 a dark second); the measured surface rate (0.00105) prices it near the edge
+        (await
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 161 :n-s 133715}}
+          (fn ^:async inner []
+            (let [{:keys [eng clock]} (setup on-open-ground)
+                  refusals (atom 0)
+                  priced (fn [& _] (swap! refusals inc) {:kind :stopped :data {:text "costs more hp" :escalation {:step :none :why :night-risk}}})]
+              (swap! clock + (* 4 sh-clock/ms-per-day))
+              (with-redefs [child/call-walk* priced]
+                (core/submit! eng '(jobs.survival.night) {})
+                (await (st/tick-n eng 12)))
+              (is (= 1 @refusals) "the refused bed is asked once, not on every pass")
+              (is (number? (:worth (first (st/entries eng :bed-walk-unsafe)))) "the refusal carries the worth it was priced at")))))))))
 
 (deftest a-refused-bed-is-judged-at-its-own-bed-worth-not-the-nearest-beds
   (async done
