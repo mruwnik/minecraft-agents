@@ -2,7 +2,11 @@
   (:require [cljs.test :refer [deftest is testing]]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
-            [jobs.lib.dig-route :as dr]))
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.test-util :as tu]
+            [jobs.lib.dig-route :as dr]
+            [jobs.lib.seen-sections :as seen-sections]))
 
 (defn world
   "block-at over a stone mass below y 10 with the given cells overridden."
@@ -289,12 +293,17 @@
     ;; the back search's bound to the start prices the unseen cells a way down to them opens: without, 22831 cells read
     (is (< falls-reads 16000) (str falls-reads " cells read"))))
 
+(defn steps-to-seen
+  "A fn [x y z] of the fewest steps, falls of at most mf, from the cell to one of seen's."
+  [seen mf]
+  (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.ceil (/ (js/Math.abs (- y b)) mf)))))))
+
 (defn same-price?
   "Whether search prices each [from goal opts] of rows the same with the unseen-priced bound, bounded by that price (a
   bound over the way's price anywhere on it ends :dearer), as with the walk bound alone, over the cells of seen (never seen
   below y 10 but for them), seen-steps and seen-cells measured to its cells: [row ok?]."
   [seen rows]
-  (let [rho (fn [mf] (fn [x y z] (reduce min ##Inf (for [[[a b c]] seen] (max (+ (js/Math.abs (- x a)) (js/Math.abs (- z c))) (js/Math.ceil (/ (js/Math.abs (- y b)) mf)))))))
+  (let [rho #(steps-to-seen seen %)
         price (fn [from goal opts prior?] (:seconds (first ((dr/search (world seen) from goal (assoc opts :prior-h? prior?)) 100000))))]
     (for [[from goal extra] rows
           :let [opts (merge (assoc (unseen-opts seen (memoize (rho 3)) (memoize (rho 1)) 1000) :max-fall 3 :margin 3) extra)
@@ -325,7 +334,22 @@
                                                [[-2 4 3] [4 5 -2] {:pillar-s 0.4}]]))))
     (is (= [] (remove second (same-price? seen (for [[from goal] [[[0 10 0] [6 -2 0]] [[0 10 0] [12 -14 5]] [[0 10 0] [-1 -16 0]] [[6 -2 1] [0 10 0]] [[-3 0 -4] [8 4 3]]]]
                                                 [from goal {:fall-s (fn [dy] (if (> dy 1) dy 0))}]))))
-        "falls past 1 priced, so a dug fall is 1 at most")))
+        "falls past 1 priced, so a dug fall is 1 at most")
+    (is (= [] (remove second (same-price? seen (for [[from goal] [[[0 10 0] [6 -2 0]] [[0 10 0] [12 -14 5]] [[-2 4 3] [6 -2 1]] [[6 -2 1] [0 10 0]] [[-3 0 -4] [8 4 3]]]]
+                                                [from goal {:max-fall 6 :fall-s (fn [dy] (if (> dy 1) dy 0)) :seen-steps (memoize (steps-to-seen seen 1))}]))))
+        "seen steps counted with falls of 1, the longest free one, though a fall of 6 down the seen shaft is taken")))
+
+(deftest a-bodys-seen-steps-count-its-falls-through-the-unseen-at-the-longest-that-costs-no-hp
+  ;; a longer fall is taken only down cells seen open, so before the way meets the memory it falls no farther
+  (let [w (tu/fake-on-floor {})
+        per (perception/create (fake-raw/create w) {:radius 10 :ray-deg 2 :now (constantly 1000000) :rand (constantly 0.5)})
+        w (perception/wrap w per)
+        _ (perception/pass! per)
+        {:keys [seen-steps max-fall fall-s]} (dr/body-prices w (constantly false))]
+    (is (< 3 max-fall) "the body may spend hp on a fall")
+    (is (= [true true true false] (mapv (comp zero? fall-s) [1 2 3 4])) "falls to 3 cost no hp")
+    (is (= ((seen-sections/steps-fn w 3) 0 20 0) (seen-steps 0 20 0)))
+    (is (< ((seen-sections/steps-fn w max-fall) 0 20 0) (seen-steps 0 20 0)))))
 
 (deftest the-unseen-priced-bound-prices-seen-steps-at-a-ways-start-end-or-both-as-the-walk-bound-alone
   ;; seen steps (floor, feet and head seen) at the start, the end or both, so the unseen steps before the first seen one and

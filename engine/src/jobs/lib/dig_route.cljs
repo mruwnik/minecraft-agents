@@ -547,8 +547,8 @@
   of seen water that flows into a cell dug (rules/fluid-neighbours, beside or above; for a cell in opts :plugs also a
   neighbour not seen, as water), the water let in (cost/flood-dig-s,
   flood-under-s) and a dig or step on inside it (cost/wet-dig-s, wet-step-s), a stair's step at least its
-  stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps and
-  :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
+  stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps (falls
+  of at most the longest that costs no hp) and :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
   ([p unseen? {:keys [sensed own-s max-damage plugs]}]
    (let [self (.self p)
@@ -556,6 +556,7 @@
          health (.-health self)
          equipment (cost/equipment-of (.-equipment self))
          max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {:args (when max-damage {:max-damage max-damage})}))
+         fall-s (fn [blocks] (cost/hp-cost health (cost/fall-damage equipment blocks)))
          dig-cost (memoize cost/dig-cost)
          sensed (or sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
          destroyed (cost/destroyed-fn sensed)
@@ -565,9 +566,11 @@
                            {:dig-pace (cost/wet-dig-pace (.-equipment self))}))
          level (memoize (fn [[_ y _ :as cell]] (some->> (rules/fluid-neighbours (if (contains? plugs cell) #(or (seen-name %) "water") seen-name) cell) (keep (fn [[n [_ ny _]]] (when (and (not= "lava" n) (>= ny y)) ny))) seq (apply max))))]
      {:max-fall max-fall
-      :seen-steps (seen-sections/steps-fn p max-fall)
+      ;; a fall past the longest that costs no hp is taken only down cells seen open, so from a cell 1 off them: before
+      ;; the way meets the memory its falls are dug, no longer
+      :seen-steps (seen-sections/steps-fn p (max 1 (count (take-while #(zero? (fall-s %)) (range 1 (inc max-fall))))))
       :seen-cells (seen-sections/steps-fn p 1)
-      :fall-s (fn [blocks] (cost/hp-cost health (cost/fall-damage equipment blocks)))
+      :fall-s fall-s
       :dig-s (fn [name cell] (when-let [d (dig-cost name)] (+ d (cut-s name cell))))
       :flood {:level level
               :plugs plugs
@@ -610,7 +613,7 @@
   :margin cells round the two ends, :only feet cells (none else is stepped onto); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
   :read-s seconds of CPU a cell read (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
-  is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
+  is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
