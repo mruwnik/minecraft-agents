@@ -17,6 +17,7 @@
             [jobs.farm.plant :as plant]
             [engine.memory :as mem]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.cost :as cost]
             [jobs.lib.farm :as farm]))
 
 (def clock (atom 1000000))
@@ -136,6 +137,15 @@
     nil ["carrot" 3 "bread" 12] "carrot"
     "carrot" ["carrot" 2] nil
     "carrot" ["carrot" 2 "bread" 12] "carrot"))
+
+(deftest a-box-not-seen-is-worth-the-sowable-share-of-its-cells
+  (let [ctx (fn [extra] {:primitives (tu/fake (field-world (inv "wheat_seeds" 9) extra)) :args {:area field-box}
+                         :view (fn [] {:data mem/empty-data :now 1000}) :engine {:warned (atom {})} :id "j1"})
+        seen (plant/worth-of (ctx {}))
+        unseen (plant/worth-of (ctx {:unloaded (for [x (range 2 5) z (range 2 5)] (cell-key x 63 z))}))]
+    (is (pos? seen))
+    (is (< (js/Math.abs (- unseen (* (cost/field-share :sowable 0 0) seen))) 1e-9)
+        "farmland behind the body is worth sowing before it is seen, at the field prior")))
 
 (deftest count-fail-skips-a-cell-at-the-third-fail
   (let [pos {:x 1 :y 63 :z 1}

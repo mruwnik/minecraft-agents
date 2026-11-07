@@ -254,23 +254,27 @@
 
 (defn worth-of
   "Seconds a root call is worth: each bare cell sown, cost/sown-worth of its crop at the cell's growth rate (cw/growth-rate,
-  as harvest prices the same cells: wet by seen water, light as seen); a plan's cell has its own crop, a box's has the one
-  of the seed it would sow, else the least of any crop's."
+  as harvest prices the same cells: wet by seen water, light as seen), and each cell of the field not seen (ground or the
+  cell above it) at the share cost/field-share :sowable of the seen ones, as tend prices them; a plan's cell has its own
+  crop, a box's has the one of the seed it would sow, else the least of any crop's."
   [c]
   (let [p (:primitives c)
         plan? (boolean (fa/plan c))
         seed->crop (into {} (map (fn [[crop seed]] [seed crop])) crops/seed-of)
-        cells (map (fn [cell] (if plan? cell {:pos (update cell :y inc)})) (unsown c))
-        ws (cw/waters c (map #(update (:pos %) :y dec) cells))
-        worth (fn [crop pos] (cost/sown-worth crop (cw/growth-rate p ws pos)))
-        box-crop (some-> (pick-seed (:seed (:args c)) c) seed->crop)]
-    (reduce + 0 (map (fn [{:keys [pos seed]}]
-                       (if plan?
-                         (worth (seed->crop seed) pos)
-                         (if box-crop
-                           (worth box-crop pos)
-                           (apply min (map #(worth % pos) (keys crops/field-seed-of))))))
-                     cells))))
+        box-crop (some-> (pick-seed (:seed (:args c)) c) seed->crop)
+        stands (if plan?
+                 (map (fn [[pos crop]] {:pos pos :crop crop}) (:cells (planned c)))
+                 (when-let [{:keys [min max]} (fa/arg-box c)]
+                   (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))]
+                     {:pos {:x x :y (inc (:y min)) :z z}})))
+        bare (map (fn [cell] (if plan? {:pos (:pos cell) :crop (seed->crop (:seed cell))} {:pos (update cell :y inc)})) (unsown c))
+        unseen (remove #(and (u/seen-name p (:pos %)) (u/seen-name p (update (:pos %) :y dec))) stands)
+        ws (cw/waters c (map #(update (:pos %) :y dec) (concat bare unseen)))
+        worth (fn [{:keys [pos crop]}]
+                (let [w #(cost/sown-worth % (cw/growth-rate p ws pos))]
+                  (cond crop (w crop) box-crop (w box-crop) :else (apply min (map w (keys crops/field-seed-of))))))
+        share (cost/field-share :sowable (count bare) (- (count stands) (count unseen)))]
+    (+ (reduce + 0 (map worth bare)) (* share (reduce + 0 (map worth unseen))))))
 
 (defn quote-of [c]
   (let [n (count (unsown c))

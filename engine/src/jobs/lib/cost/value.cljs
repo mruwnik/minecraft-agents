@@ -594,11 +594,12 @@
 (def expected-drops "Meat items a kill is counted to give when the game data lists none." 2)
 
 (defn animal-worth
-  "Seconds an animal of kind `mob` is worth: the kill-drops of its raw meat at their measured gathers (the animal's own name for a kind with none)."
+  "Seconds an animal of kind `mob` is worth: the food-points of its raw meat's kill-drops at food-point-worth, as crop-worth
+  prices a crop; a kind with no meat its own name's item-value at the measured gathers."
   [mob]
-  (let [meat (get (set/map-invert game/meat-animal) mob mob)]
-    (:value (item-value [{:name meat :count (or (tbl/kill-drops mob meat) expected-drops)}]
-                        :overrides (measured-worths @game/version)))))
+  (if-let [meat (get (set/map-invert game/meat-animal) mob)]
+    (* (food-point-worth) (food-points meat) (or (tbl/kill-drops mob meat) expected-drops))
+    (:value (item-value [{:name mob :count expected-drops}] :overrides (measured-worths @game/version)))))
 
 (defn animal-find-worth
   "Seconds a search for an animal of kind `mob` is worth: animal-worth less one trip (the walk to it is priced apart)."

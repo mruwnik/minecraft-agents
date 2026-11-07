@@ -770,22 +770,17 @@
     (is (< (js/Math.abs (- 1 (/ (chance [(on "zombie")]) (settings/with-settings counted-often #(chance [(on "zombie")]))))) 0.05)
         "a zombie, its class counted 8 times, prices within 5% of a class counted a hundred times as often at the same mean")))
 
-(deftest a-find-is-worth-its-count-and-an-animal-its-meat
-  (let [body {:level 0 :carried 0}]
+(deftest a-find-is-worth-its-count-and-an-animal-the-food-of-its-meat
+  (let [body {:level 0 :carried 0}
+        meat #(* (cost/food-point-worth) (value/food-points %2) (cost/kill-drops %1 %2))]
     (is (= (* 3 (cost/worth-to body ["oak_log"] nil)) (cost/find-worth body ["oak_log"] nil 3)) "its walks price their own trip")
     (is (< (cost/find-worth body ["oak_log"] nil 1) (cost/find-worth body ["oak_log"] nil 3)))
     (is (< (cost/animal-worth "horse") (cost/animal-worth "cow")) "a cow is worth its beef, a kind with no meat the unknown item")
-    (is (= (cost/animal-worth "cow") (cost/animal-worth "sheep")) "mutton as dear as beef")
-    (is (= (- (cost/animal-worth "cow") (cost/trip)) (cost/animal-find-worth "cow")) "a search for one is worth the animal less a trip")
-    (is (= (:value (cost/item-value [{:name "chicken" :count (cost/kill-drops "chicken" "chicken")}])) (cost/animal-worth "chicken"))
-        "a kill counts the drops the game data lists, not a flat count")))
-
-(deftest an-animal-is-worth-the-measured-replacement-cost-of-its-meat
-  (let [measured {:jobs.lib.cost.value/gather-counts {"beef" {:s 500 :got 1}}}
-        worth #(settings/with-settings measured (fn [] (% [{:name "beef" :count (cost/kill-drops "cow" "beef")}])))]
-    (is (= (:value (worth cost/goal-value)) (settings/with-settings measured #(cost/animal-worth "cow")))
-        "a cow is worth its beef (kill-drops) at their measured gathers")
-    (is (not= (:value (worth cost/item-value)) (settings/with-settings measured #(cost/animal-worth "cow"))))))
+    (is (= (meat "cow" "beef") (cost/animal-worth "cow")) "the food points its kill-drops give, at food-point-worth")
+    (is (= (meat "chicken" "chicken") (cost/animal-worth "chicken")))
+    (is (= (settings/with-settings {:jobs.lib.cost.value/gather-counts {"beef" {:s 500 :got 1}}} #(cost/animal-worth "cow")) (cost/animal-worth "cow"))
+        "a pen's animal is food as a field's crop is, not its meat's replacement cost")
+    (is (= (- (cost/animal-worth "cow") (cost/trip)) (cost/animal-find-worth "cow")) "a search for one is worth the animal less a trip")))
 
 (deftest a-stick-is-worth-its-share-of-the-planks-it-is-made-of
   (let [worth #(:value (cost/item-value [{:name % :count 1}]))]
