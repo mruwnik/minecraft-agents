@@ -860,6 +860,21 @@
     (is (< (:x nearer) (:x farthest)))
     (is (nil? (far (constantly false))))))
 
+(deftest the-stand-cells-of-a-room-are-read-once-while-its-memory-holds
+  ;; each dig child of a dig route asks its night check, whose walk-look reads the stand cells of the room round the body
+  (let [p (:primitives (remembering-ctx tunnel))
+        floods (atom [])
+        flood reach-room/room-flood
+        note! (fn [x y z] (swap! floods conj [x y z (reach-room/steady-key (aget p "perception"))]))
+        near (with-redefs [reach-room/room-flood (fn ([p k x y z] (note! x y z) (flood p k x y z))
+                                                   ([p k x y z budget] (note! x y z) (flood p k x y z budget))
+                                                   ([p k x y z budget entered?] (note! x y z) (flood p k x y z budget entered?)))]
+               (vec (repeatedly 3 #(look-edge/walkable-near p [6 64 0]))))]
+    (is (some? (first near)))
+    (is (apply = near))
+    (is (seq @floods))
+    (is (= (distinct @floods) @floods) "the room round the feet flooded once per memory epoch")))
+
 (deftest the-walk-to-look-goes-first-to-the-unseen-cell-the-spawn-flood-ends-at
   (let [p (:primitives (ctx-of (assoc tunnel :time st/noon)))
         far (fn [edge]

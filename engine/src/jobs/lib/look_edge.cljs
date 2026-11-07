@@ -92,12 +92,11 @@
               (sort-by (fn [[x y z]] (u/dist feet {:x x :y y :z z})))
               vec))))))
 
-(defn walkable-near-fn
-  "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once."
+(defn walkable-near-fn*
+  "walkable-near-fn, read anew."
   [p region]
-  (let [flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x region) (:y region) (:z region)))))
+  (let [flood (set (map vec (:cells (reach-room/kept-flood p (:x region) (:y region) (:z region) false))))
         seen-roof? (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz}))
-        roofed (set (filter (fn [[cx cy cz :as c]] (or (seen-roof? c) (unseen-roof? p {:x cx :y cy :z cz}))) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
                                     (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (if (flood n) (not (seen-roof? n)) (let [at {:x (n 0) :y (n 1) :z (n 2)}] (and (not (sh-sense/solid-at? p at)) (not (shore/seen-air? p (update at :y dec)))))))) [[1 0] [-1 0] [0 1] [0 -1]])))
         inside (loop [seen #{} todo (list [(:x region) (:y region) (:z region)])]
@@ -106,10 +105,17 @@
                      (recur seen (rest todo))
                      (recur (conj seen c) (into (rest todo) (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ cx dx) (+ cy dy) (+ cz dz)]))))
                    seen))
-        stands (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) (filter inside roofed))]
+        stands (filterv (fn [[cx cy cz :as c]] (let [at {:x cx :y cy :z cz}] (and (inside c) (shore/standable? p at) (or (seen-roof? c) (unseen-roof? p at))))) flood)]
     (fn [[x y z]]
-      (let [best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) stands))]
+      (let [d (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z))))
+            best (reduce (fn [b c] (if (< (d c) (d b)) c b)) (first stands) (rest stands))]
         (when best {:x (best 0) :y (best 1) :z (best 2)})))))
+
+(defn walkable-near-fn
+  "walkable-near as a fn of the cell [x y z], over the closed region round `region` ({:x :y :z}) read once, kept while the
+  world and memory stay the same (reach-room/kept)."
+  [p {:keys [x y z] :as region}]
+  (reach-room/kept p (str "walkable-near|" x "|" y "|" z) (fn [_] (walkable-near-fn* p region))))
 
 (defn walkable-near
   "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
@@ -147,9 +153,9 @@
          shown (fn [to] (count (filter #(shows? to %) sides)))]
      (some->> (seq sides)
               (keep (fn [side] (when-let [to (@near-fn side)] (when-not (no-new-view? side to) {:side side :to to}))))
-              (sort-by (juxt #(if (= edge (:side %)) 0 1) #(- (shown (:to %))) #(- (u/dist from (:to %)))))
-              (filter #(affordable? (:to %)))
-              first))))
+              (map (fn [w] [[(if (= edge (:side w)) 0 1) (- (shown (:to w))) (- (u/dist from (:to w)))] w]))
+              (sort-by first)
+              (some (fn [[_ w]] (when (affordable? (:to w)) w)))))))
 
 (defn affords-walk?
   "Whether a walk of s seconds is bought from `worth` after the seconds the job's edge walks before it spent (:edge-spent)."
