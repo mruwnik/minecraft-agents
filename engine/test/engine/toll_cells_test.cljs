@@ -249,7 +249,7 @@
           (is (every? #(< 1 (:factor %)) dry) "a price, not a wall")
           (is (nil? swimmer) "a body already in water may swim out"))))))
 
-(deftest the-roof-reach-and-the-toll-follow-the-bodys-breath-not-its-health
+(deftest the-roof-reach-follows-the-bodys-breath-and-a-hurt-drowning-is-cheaper-by-the-refill
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -259,6 +259,7 @@
               winded (await (probe {:self {:oxygen 4}}))]
           (is (< 1 (:factor whole)) "swimming roofed water costs more than its seconds")
           (is (< (:factor hurt) (:factor whole)) "a drowning costs the one death, cheaper by what the respawn refills when the body is hurt (Q145)")
+          (is (= (:reach hurt) (:reach whole)) "health does not change how far the body can swim under a roof")
           (is (< (:reach winded) (:reach whole)) "a body low on breath surfaces from fewer blocks")
           (is (<= 1 (:reach winded)) (pr-str winded)))))))
 
