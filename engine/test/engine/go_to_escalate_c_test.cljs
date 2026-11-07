@@ -1780,6 +1780,15 @@
     (.setOwner (:primitives eng) "tx")
     (is (nil? (choose/dig-price c [38 64 0] 0.1)) "dearer than walking on: priced and dropped, not :budget")))
 
+(deftest a-dig-quote-cheaper-than-walking-on-is-found-under-the-bound
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        _ (.setOwner (:primitives eng) "tx")
+        dug (choose/dig-price c [4 64 0] nil)]
+    (is (number? dug) "the dig is found with no bound")
+    (is (= dug (choose/dig-price c [4 64 0] (* 1.5 dug))) "a walk-on dearer than the dig leaves the dig found")
+    (is (nil? (choose/dig-price c [4 64 0] (* 0.75 dug))) "a walk-on cheaper than the dig ends the search")))
+
 (deftest a-dig-quote-of-no-running-call-that-ended-keeps-no-search
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]

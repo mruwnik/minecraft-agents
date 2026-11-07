@@ -122,26 +122,29 @@
                :risk (risk/estimate c pos {:plan (select-keys plan [:status :steps])
                                    :back? (:back (:args c)) :stay-s (:stay-s (:args c))}))))))
 
+(defn rest-blocks
+  "Blocks still to go from the end of route r's partial to its goal (straight), else its :near."
+  [{:keys [partial goal near]}]
+  (let [[ex _ ez] (last (:waypoints partial))]
+    (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))))
+
 (defn walk-on-s
   "Seconds of walking route r's partial on to its goal, the rest over unseen land priced as quote-of-route does; nil with no partial."
-  [{:keys [partial goal]}]
-  (when-let [[ex _ ez] (last (:waypoints partial))]
-    (+ (or (:seconds partial) 0)
-       (cost-planner/left-s (if goal (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) 0) false))))
+  [{:keys [partial] :as r}]
+  (when (seq (:waypoints partial))
+    (+ (or (:seconds partial) 0) (cost-planner/left-s (rest-blocks r) false))))
 
 (defn quote-of-route
   "The quote of route r: time from the planner's seconds (most quote-most-factor times them); a partial route or none
   adds quote-unseen-factor walk blocks (cost.planner/walk-floor) for each block still to go, from the route's end to the goal, and has no most; a route dug (:dig-seconds, whole, walk on included) is priced as such; a search still going on (:searching) is priced so too, from its :near blocks, with an unfinished dig search's :rest-dig-s, marked :estimate true; one that spent its node budget (:budget: not known yet, not no route) is priced so but is no estimate to wait on (callers go on with the price); none at all, or a refusal, is ##Inf unless escalating? (a way
   that changes the world may still get there). Health: the planned damage. :moves-to the goal. :risk the route's walk risk.
   `back?` (go-to :back): the time is the walk there and back, as the risk prices it."
-  [{:keys [found seconds partial near reason damage goal dig-seconds rest-dig-s] :as r} escalating? back?]
+  [{:keys [found seconds partial reason damage goal dig-seconds rest-dig-s] :as r} escalating? back?]
   (let [searching? (= :searching reason)
         budget? (= :budget reason)
         legs (if back? 2 1)
         s (* legs (or seconds (:seconds partial) 0))
-        [ex _ ez] (last (:waypoints partial))
-        rest-blocks (if (and goal ex) (js/Math.round (js/Math.hypot (- (first goal) ex) (- (nth goal 2) ez))) (or near 0))
-        to-go-s (+ (cost-planner/left-s rest-blocks back?) (* legs (or rest-dig-s 0)))
+        to-go-s (+ (cost-planner/left-s (rest-blocks r) back?) (* legs (or rest-dig-s 0)))
         time (cond
                found [s s (* s (quote-most-factor))]
                dig-seconds (let [d (* legs dig-seconds)] [d d ##Inf])
