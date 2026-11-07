@@ -117,7 +117,7 @@
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :nitwit}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
   {:name "level-2-librarian-is-locked-without-a-dig"
-   :act [[:summon "villager" [16.5 1 17.5] "{NoAI:1b,Xp:10,UUID:[I;20260,7,5,16],VillagerData:{profession:\"minecraft:librarian\",level:2,type:\"minecraft:plains\"}}"]
+   :act [[:summon "villager" [16.5 0 17.5] "{NoAI:1b,UUID:[I;20260,7,5,16],VillagerData:{profession:\"minecraft:librarian\",level:2,type:\"minecraft:plains\"},Xp:10,Offers:{Recipes:[{buy:{id:\"minecraft:paper\",count:24},sell:{id:\"minecraft:emerald\",count:1},maxUses:16,xp:2},{buy:{id:\"minecraft:emerald\",count:9},sell:{id:\"minecraft:bookshelf\",count:1},maxUses:12,xp:1}]}}"]
          [:job (jobs.village.roll {:villager "00004f24-0000-0007-0000-000500000010" :pos #at [16 0 16] :profession "librarian" :want "enchanted_book"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :locked}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "lectern"]]}
