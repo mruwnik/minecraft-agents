@@ -255,6 +255,13 @@
     (is (pos? (get (cover-at {:x 4 :y 64 :z 0}) {:x 4 :y 64 :z 0})) "the cover lies past the unseen cell")
     (is (zero? (get (cover-at {:x 1 :y 64 :z 0}) {:x 1 :y 64 :z 0})) "the cover lies in what the body has seen")))
 
+(deftest a-cover-walked-into-cells-the-body-has-not-seen-is-a-step-into-the-unseen
+  (let [from {:x 0.5 :y 64 :z 0.5}
+        ends (search/scored [] from [east home])
+        cover-at #(first (filter :cover? (search/covers [] from (fn [c] (= c %)) ends)))]
+    (is (search/into-unseen? (cover-at {:x 4 :y 64 :z 0})) "the cover lies past the unseen cell: look first")
+    (is (not (search/into-unseen? (cover-at {:x 2 :y 64 :z 0}))) "the cover lies in what the body has seen")))
+
 (deftest a-cover-is-timed-as-one-walk-without-the-stops-between-flight-steps
   ;; a flight walks to a cover end whole (step-of), so the stops timed-cells puts on the way's route are not made there
   (let [from {:x 0.5 :y 64 :z 0.5}

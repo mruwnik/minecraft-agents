@@ -1076,6 +1076,25 @@
 
 (def wood-sword [{:name "wooden_sword" :count 1}])
 
+(def skeleton-cave
+  "Rock with a lit cave (x 3..20, z 12..20) and a tunnel east from its middle (z 16) to x 28, turning north there."
+  (merge (tu/box 0 63 0 31 75 31 "stone") (tu/box 3 64 12 20 66 20 "air") (tu/box 21 64 16 28 65 16 "air") (tu/box 28 64 10 28 65 16 "air")))
+
+(deftest a-flight-from-skeletons-looks-before-it-takes-a-cover-past-cells-it-has-not-seen
+  ;; facing the skeletons, the body had not seen the cave wall beside them: a cover end in that unseen rock, a walk from
+  ;; their bows, was walked to whole with no look and won over the tunnel the body had seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup-seeing {:self {:health 20 :food 20 :pos {:x 13.5 :y 64 :z 16.5}} :yaw 90 :blocks skeleton-cave
+                                                :entities [(skeleton 1 4.5 14.5) (skeleton 2 4.5 18.5)]}
+                                               [0 14] 1000)]
+          (core/submit! eng respond {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))]
+            (is (and (< 20 x) (= 16 z)) (str "the first step is the tunnel's cover: " x " " z))))))))
+
+
 ;; Wicken j3766: at 13 hp with a wooden sword the fight walked to a seen skeleton, beside a zombie heard further on
 (deftest a-fight-counts-the-mobs-heard-by-the-way-to-it
   (async done

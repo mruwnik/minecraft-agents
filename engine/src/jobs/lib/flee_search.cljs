@@ -574,10 +574,12 @@
     (when (seq pool) (apply max-key :net (reverse pool)))))
 
 (defn into-unseen?
-  "Whether the step of end entry e (choose) is cut short by a cell the body has not seen: its route's seen part ends
-  less than ::step-s in (a cover end is walked to whole)."
+  "Whether the step of end entry e (choose) walks into a cell the body has not seen: its route's seen part ends less than
+  ::step-s in, or, for a cover end (walked to whole), before the cover."
   [{:keys [unseen cover? cells seen-n]}]
-  (boolean (and unseen (not cover?) (< (:t (nth cells (dec seen-n))) (settings/get settings ::step-s)))))
+  (boolean (and unseen (if cover?
+                         (< seen-n (count cells))
+                         (< (:t (nth cells (dec seen-n))) (settings/get settings ::step-s))))))
 
 (defn pick
   "The cell the flee step choose takes walks to, nil when cornered."

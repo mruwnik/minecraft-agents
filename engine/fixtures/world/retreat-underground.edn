@@ -41,7 +41,7 @@
          [:summon "zombie" [13.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [22 8 16] 3]}} :for-s 30}]}
-  ;; a0a0bb2a: a lit cave with two skeletons west and a tunnel mouth 8 blocks east that turns north at its end: the flight breaks their line of sight round the corner instead of staying in the cave in bow range. Resistance 5 keeps the body alive to be judged by where it goes; no sword, so a fight is priced dearer than the flight (with a stone sword it fights, 199 against 306).
+  ;; a0a0bb2a, 586f8620: a lit cave with two skeletons west and a tunnel mouth 8 blocks east that turns north at its end: the flight breaks their line of sight in the tunnel (its far part or round the corner, whichever is out of their fire) instead of staying in the cave in bow range, or walking for a cover in the unseen wall beside them before it looks. Resistance 5 keeps the body alive to be judged by where it goes; no sword, so a fight is priced dearer than the flight (with a stone sword it fights, 199 against 306).
   {:name "skeleton-cave-flight-breaks-line-of-sight-round-the-tunnel-corner"
    :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 12] [20 2 20] "air"]
             [:fill [21 0 16] [28 1 16] "air"] [:fill [28 0 10] [28 1 16] "air"]
@@ -51,8 +51,10 @@
    :act [[:summon "skeleton" [4.5 0 14.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [4.5 0 18.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
-            {:no-event {:source :body :kind :died} :for-s 40}]
-   :after [[:body-near [28.5 0 12.5] 4]]}
+            {:no-event {:source :body :kind :died} :for-s 40}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [6 0 22] 3]}} :for-s 40}
+            {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [6 0 10] 3]}} :for-s 40}]
+   :after [[:body-near [27.5 0 14.5] 4.5]]}
   ;; a0a0bb2a, 76b95cac: 3 hp, a zombie beside the body in a closed room. Every answer leaves it in reach over a second
   ;; (it hits every 20 ticks; a flight first stands its measured start, a fight or a wall takes longer), so a second blow
   ;; may land whatever the body does: the case asks only that it answers and lives.
