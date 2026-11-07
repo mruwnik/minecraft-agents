@@ -403,3 +403,11 @@
           (set! search-bound/stood-s stood)
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:reason :escalation :text])))
           (is (> -6 (first (gt/at p))) (pr-str (gt/at p))))))))
+
+(deftest a-goal-in-kelp-at-the-surface-is-swum-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (merge (pond 24) (box 10 63 0 10 63 0 "kelp"))}
+                                             {:pos [10 63 0] :range 0 :ways #{:walk :clear-seal}}))]
+          (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))

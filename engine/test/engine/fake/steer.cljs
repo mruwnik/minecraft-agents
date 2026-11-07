@@ -39,8 +39,9 @@
 (def fall-limit 256)
 (def bury 3)
 (def deg (/ 180 js/Math.PI))
+(def swum #{"water" "bubble_column" "kelp" "kelp_plant" "seagrass" "tall_seagrass"})
 (def passable
-  #{"air" "water" "bubble_column" "ladder" "vine" "short_grass" "tall_grass" "rail" "powered_rail" "detector_rail" "activator_rail"})
+  #{"air" "water" "bubble_column" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "ladder" "vine" "short_grass" "tall_grass" "rail" "powered_rail" "detector_rail" "activator_rail"})
 ;; small blocks (and crops) with no collision box: the planner and the game walk through them
 (def no-collision #"^(lever|torch|wall_torch|redstone_torch|redstone_wall_torch|wheat|carrots|potatoes|beetroots|sugar_cane)$|_(button|pressure_plate|sign|wall_sign|hanging_sign)$")
 (def climbable-names #{"ladder" "vine"})
@@ -65,9 +66,9 @@
   [(floor x) (floor (if (on-short-floor? w x y z) (dec y) y)) (floor z)])
 
 (defn wet?
-  "Is the cell water or a bubble column (swum like water)?"
+  "Is the cell water, a bubble column, kelp or seagrass (swum like water)?"
   [w x y z]
-  (contains? #{"water" "bubble_column"} (name-at w x y z)))
+  (contains? swum (name-at w x y z)))
 
 (defn dragging?
   "Is the cell a bubble column that pulls down (drag true)? An upward one lifts."
