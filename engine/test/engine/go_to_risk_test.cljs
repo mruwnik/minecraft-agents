@@ -247,6 +247,16 @@
           (await (st/tick-n eng 10))
           (is (= [{:x 4 :y 64 :z -1}] (mapv st/arg-pos (st/calls p "sleep"))) "the night job lies down in the hut's bed"))))))
 
+(deftest a-bare-bodys-death-walks-back-from-the-world-spawn-so-a-far-spawn-prices-the-walk-now-higher
+  (let [now-of (fn [spawn]
+                 (let [c (ready-test/ctx-of (-> night-hut (update :blocks merge hut-bed) (assoc :self {:pos inside :health 20 :food 20 :worldSpawn spawn})))
+                       [_ _ {:keys [wait now-s]}] (planned-status c {:x 195 :y 64 :z 0})]
+                   [wait now-s]))
+        [near-wait near-s] (now-of [5000 64 0])
+        [far-wait far-s] (now-of [-28000 64 0])]
+    (is (= [:sleep :sleep] [near-wait far-wait]))
+    (is (< near-s far-s))))
+
 (def day-world (assoc night-hut :time st/noon))
 (def dark-spot-world "day-world with the death spot of the tests, [80 64 5], dark (a cave): its killer may be there by day too." (assoc day-world :light {[80 64 5] [0 0]}))
 

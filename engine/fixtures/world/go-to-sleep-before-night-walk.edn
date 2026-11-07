@@ -1,6 +1,7 @@
 ;; go-to out of a hut at night prices sleeping the night away as one of its waits (card 4619bd6f): a bed in the hut, the
 ;; body alone, the walk then by day. A bare body far from world spawn (no bed set: its death walks back from world spawn,
 ;; card c4610613; the surface grid lies 20000 out) pays a dark open walk to the plot's far corner dearly.
+;; The other bodies online are awake players, so the case seeds a night count that skips on the body's own sleep.
 ;; Should-succeed: with a bed in the hut, go-to holds :risky :wait :sleep and the body stays in the hut.
 ;; Should-fail (no sleep way): with no bed, no :wait :sleep; walking now and dawn are priced alone.
 ;; Hut: stone walls x 2..8, z 2..8, roof at y 3, the room x 3..7, z 3..7 lit by torches, a shut oak door at [5 0 8].
@@ -17,6 +18,7 @@
   :limit-s 60}
  :cases
  [{:name "a-bed-in-the-hut-holds-the-walk-for-the-sleep"
+   :memory [{:kind :sleep-status :data {:sleeping 0 :needed 1}}]
    :blocks [[:set [3 0 4] "red_bed[facing=east,part=foot]"] [:set [4 0 4] "red_bed[facing=east,part=head]"]]
    :act [[:job (jobs.memory.set-place {:name :bed :pos #at [4 0 4]})]
          [:job (jobs.movement.go-to {:pos #at [29 0 29]})]]
