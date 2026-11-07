@@ -111,18 +111,19 @@
                (done))))))
 
 (deftest a-rejecting-or-throwing-pass-is-reported-and-time-set-still-runs
-  (doseq [boom [(fn [_] (js/Promise.reject (js/Error. "pool spawn failed")))
-                (fn [_] (throw (js/Error. "pool spawn failed")))]]
-    (async done
-      (let [{:keys [calls deps]} (fake {})
-            evs (atom [])]
-        (.then (s/run-sweep (s/passes opts) (assoc deps :run-pass! boom :emit! #(swap! evs conj %)))
-               (fn [r]
-                 (is (= [:time-set] @calls))
-                 (is (= 1 (:exit r)))
-                 (is (re-find #"pool spawn failed" (:error (first (:passes r)))))
-                 (is (re-find #"pool spawn failed" (:message (second @evs))))
-                 (done)))))))
+  (async done
+    (letfn [(check [boom]
+              (let [{:keys [calls deps]} (fake {})
+                    evs (atom [])]
+                (.then (s/run-sweep (s/passes opts) (assoc deps :run-pass! boom :emit! #(swap! evs conj %)))
+                       (fn [r]
+                         (is (= [:time-set] @calls))
+                         (is (= 1 (:exit r)))
+                         (is (re-find #"pool spawn failed" (:error (first (:passes r)))))
+                         (is (re-find #"pool spawn failed" (:message (second @evs))))))))]
+      (-> (check (fn [_] (js/Promise.reject (js/Error. "pool spawn failed"))))
+          (.then #(check (fn [_] (throw (js/Error. "pool spawn failed")))))
+          (.then done)))))
 
 (deftest a-failed-pass-names-its-failing-fixtures
   (async done

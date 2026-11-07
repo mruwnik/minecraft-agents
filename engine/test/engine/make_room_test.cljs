@@ -404,10 +404,10 @@
 
 (deftest a-chest-walk-is-taken-only-when-it-costs-no-more-than-the-stacks-the-toss-would-throw
   (let [worth (mr/toss-cost [{:worth (ord/item-worth {:name "gravel" :count 64}) :count 64}] 1)]
-    (doseq [[factor chest?] [[0.99 true] [1.01 false]]]
-      (async done
-        (tu/run-async done
-          (fn ^:async t []
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (doseq [[factor chest?] [[0.99 true] [1.01 false]]]
             (let [quote! pick/quote!
                   mean (* factor worth)
                   {:keys [eng p]} (setup {:inventory (same "gravel" 35 64) :containers {"10,64,0" []}})]
@@ -633,12 +633,14 @@
             (is (= [{:x x :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look"))))))))))
 
 (deftest a-body-walled-in-on-all-four-sides-tosses-nothing-since-the-items-would-come-straight-back
-  (doseq [chest? [false true]]
-    (async done
-      (tu/run-async done
-        (fn ^:async t []
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [chest? [false true]]
           (let [{:keys [eng p]} (setup {:inventory (many "junk" 35) :containers {"40,64,0" []}
-                                        :blocks {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"}})]
+                                        :blocks (if chest? ; a chest walk needs a way out: one free cell ahead, then stone, is still no toss
+                                                  {"2,65,0" "stone" "-2,65,0" "stone" "0,65,2" "stone" "0,65,-2" "stone"}
+                                                  {"1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"})})]
             (when chest? (know-chest! eng {:x 40 :y 64 :z 0}))
             (await (run-reflex eng {:free 2} {}))
             (is (zero? (count (calls p "toss"))))

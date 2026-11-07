@@ -191,10 +191,10 @@
 
 (deftest a-hostile-seen-during-the-walk-holds-the-put-back-and-costs-no-try
   ;; place of a cell in reach asks no readiness check, so the run's own look after the walk is all that holds it
-  (doseq [mob [zombie (assoc zombie :id 8 :name "skeleton" :pos {:x 8 :y 64 :z 0})]]
-    (async done
-      (tu/run-async done
-        (fn ^:async t []
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [mob [zombie (assoc zombie :id 8 :name "skeleton" :pos {:x 8 :y 64 :z 0})]]
           (let [{:keys [eng p]} (restore! (merge aside {:inventory [{:name "stone" :count 2}] :blocks floor}) [(zs/whole-zone "Miles")] [dug])
                 walk restore-broken/walk-to!]
             (set! restore-broken/walk-to! (fn ^:async w [c cell] (let [r (await (walk c cell))] (fake/add-entity! p mob) r)))
