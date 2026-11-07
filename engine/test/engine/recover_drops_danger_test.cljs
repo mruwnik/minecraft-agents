@@ -142,7 +142,7 @@
                               ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"]))
               pack (for [i (range 24)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 18.5 (mod i 6)) :y 64 :z (+ 3.5 (quot i 6))}})
               {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) pack))})]
-          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 5000 dt/far-respawn)
           (core/submit! eng job {})
           (await (run-until-empty eng 20))
           (is (nil? (recovered eng)) "a death on the way loses the kit too")
