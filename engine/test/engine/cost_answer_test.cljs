@@ -373,6 +373,13 @@
     (is (= :roof (decide [ender])))
     (is (= :walls (decide [ender (mob "zombie" 1)])) "a zombie beside the body hits it under the roof for the whole hold")))
 
+(deftest a-hold-pays-the-walk-to-its-spot-and-the-answer-after-the-cap
+  (let [ender (mob "enderman" 6)
+        fight (cost/fight-answer (fight nil ender))
+        price #(cost/answer-price (body 20) (cost/hold-answer (merge {:mobs [ender] :seconds 60} %)) here)]
+    (is (< 60 (price {:walk-s 8})) "the seconds of the walk, and the enderman's blows on the way")
+    (is (< 60 (price {:then [fight]})) "the enderman may still be angry when the hold ends: the fight follows by the stay chance")))
+
 (deftest a-threats-cover-is-priced-as-respond-prices-it
   (let [cover {:open-s 2 :seconds 50}
         zombie (mob "zombie" 0 35)]

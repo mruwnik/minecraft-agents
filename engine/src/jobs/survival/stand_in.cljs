@@ -52,12 +52,14 @@
 (def can-start?
   (checks/args-fit "needs a :where of :water, :roof or :dry" (fn [c] (contains? #{:water :roof :dry} (:where (:args c))))))
 
-(defn reach-of [c]
+(defn reach-of
+  ([c] (reach-of c (:where (:args c))))
+  ([c where]
   (or (:reach (:args c))
-      (case (:where (:args c))
+      (case where
         :water (settings/get settings ::water-reach)
         :roof (settings/get settings ::roof-reach)
-        nil)))
+        nil))))
 
 (defn feet-cell [c]
   (let [{:keys [x y z]} (u/self-pos c)]
@@ -105,16 +107,18 @@
   [p from need]
   (:stand (shore/swim-to-land p from need)))
 
-(defn place-of
+(defn place
   "The cell to stand at for where, or nil: the nearest of its kind within reach."
-  [c block-at]
+  [c where block-at]
   (let [p (:primitives c)
-        reach (reach-of c)]
-    (case (:where (:args c))
+        reach (reach-of c where)]
+    (case where
       :water (water-cell block-at (u/self-pos c) reach)
       :roof (roof-cell block-at (u/self-pos c) reach
                      (mapv #(danger-q/mob-pos p %) (filter combat/enderman? (danger-q/known-hostiles p reach {}))))
       :dry (dry-cell p (u/self-pos c) (reduce max 0 (map #(cost/hit-range (fight/mob-near p %)) (options/near c)))))))
+
+(defn place-of [c block-at] (place c (:where (:args c)) block-at))
 
 (defn here?
   "Whether the body stands in a place of its kind."

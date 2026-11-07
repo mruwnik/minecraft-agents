@@ -636,12 +636,6 @@
     (cond-> (-> (blows-over stats others seconds) (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max % (map blast-hp blasts))) (assoc :seconds 0))
       (seq blasts) (assoc :blasts blasts))))
 
-(defn hold-answer
-  "The answer of holding for seconds in a spot no enderman reaches (water, under a 2-high roof) among mobs [flee-mob's]
-  wearing equipment: stand-answer of the rest, which reach it there, and the seconds the body's."
-  [{:keys [mobs seconds] :as hold}]
-  (assoc (stand-answer (assoc hold :mobs (remove #(= "enderman" (:name %)) mobs))) :seconds seconds))
-
 (defn stand-loss
   "Seconds doing nothing about mobs [flee-mob's, :weight as blows-over's] for seconds costs body (answer-price's) wearing
   equipment at `at`: the price of their stand-answer, the hp they take and the death they risk. 0 when none can hit. The
@@ -745,6 +739,19 @@
     (cond-> (assoc a :seconds seconds :stays (* (- 1 fails) (stays-chance mobs)) :then (vec then))
       (pos? fails) (assoc :seconds open-s :outcomes [[fails {:damage 0 :hit 0 :seconds 0 :then (vec failed) :at-once true}]
                                                      [(- 1 fails) {:damage 0 :hit 0 :seconds (- seconds open-s)}]]))))
+
+(defn hold-answer
+  "The answer of walking walk-s seconds (default 0) to a spot no enderman reaches (water, under a 2-high roof) and holding there for
+  seconds among mobs [flee-mob's] wearing equipment: an angry enderman's blows over the walk (it teleports to the body on the way),
+  the blows of the rest over walk and hold (stand-answer), the walk and hold the body's seconds; then, by the chance
+  the mobs are still about (stays-chance, an enderman may still be angry), the answers of then."
+  [{:keys [mobs seconds walk-s then equipment] :as hold}]
+  (let [walk-s (or walk-s 0)
+        {enders true others false} (group-by #(= "enderman" (:name %)) mobs)
+        a (add-blows (stand-answer (assoc hold :mobs others :seconds (+ walk-s seconds)))
+                     (blows-over (armour/armour-stats equipment) (map #(assoc % :distance 0 :start 0) enders) walk-s))]
+    (cond-> (assoc a :seconds (+ walk-s seconds))
+      (seq then) (assoc :then (vec then) :stays (stays-chance mobs)))))
 
 (defn home-work-share
   "The share of a hide in the body's own house that work fills: counted-chance of ::home-work-counts."

@@ -28,6 +28,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.respond.state :as flight]
+            [jobs.survival.stand-in :as stand-in]
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.pillar :as pillar]
@@ -199,6 +200,14 @@
                              (or (open cell) (open (update cell :y inc)))))
                    (hitters c hostiles)))))
 
+(defn hold-walks
+  "{:water s :roof s}: the seconds of walking to the nearest such place the body knows (cost/walk-step-s a block); a kind with none seen is left out."
+  [c]
+  (let [block-at (respond.goal/block-at-fn (:primitives c))
+        from (u/self-pos c)]
+    (into {} (for [o [:water :roof] :let [cell (stand-in/place c o block-at)] :when cell]
+               [o (* (cost/walk-step-s) (u/dist from {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))}))]))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order (its covers and back-off by price, by-price) that it can
   take and has not failed since the last start over (blocked!). home?: the body is in its home room."
@@ -221,7 +230,7 @@
                    (await (back-off-search! c chasers)))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
         enderman? (angry-enderman? c hostiles)
-        weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim? enderman?))
+        weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim? enderman? (when enderman? (hold-walks c))))
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
         prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
