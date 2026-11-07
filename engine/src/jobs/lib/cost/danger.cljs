@@ -202,6 +202,42 @@
          floor (settings/get settings ::chase-speed)]
      (every? true? (map #(wins-race? body-s (/ %1 (max floor (chase-speed %2)))) mob-dists mob-names)))))
 
+(defn lead-s
+  "Seconds a chaser arrive-s from a place leaves a body blocks from it running at its own pace (body-speed food)."
+  [arrive-s blocks food]
+  (- arrive-s (/ blocks (body-speed food))))
+
+(defn run-saved-s
+  "Seconds of run a refuge blocks from the body could save over one whose way in is best-steps long, at its own pace
+  (body-speed food): ##Inf with none. Steps of a walk against a straight line: no walk is shorter, so it never
+  understates the saving."
+  [blocks best-steps food]
+  (if (infinite? best-steps) ##Inf (/ (- best-steps blocks) (body-speed food))))
+
+(defn search-pays?
+  "Whether a search of cost-s seconds of CPU, spent-s spent before it, ends within budget-s: what the body has to stand
+  still for, or what the search may save."
+  [spent-s cost-s budget-s]
+  (< (+ spent-s cost-s) budget-s))
+
+(defn refuge-search-pays?
+  "Whether a search for a refuge of cost-s seconds of CPU pays, spent-s already spent this step. The CPU is lead the
+  body stands still for, so it must end ::race-margin-s (the margin reach-first? wins a race by) within the chasers'
+  lead at the body (here-s) and at the refuge's door (lead-s, lead-s above), and within the run it could save
+  (save-s, run-saved-s). With no melee chaser (here-s ##Inf) nothing races: the CPU is time in the shooters' fire
+  (fire {:risk :exposed?}: the risk of seconds in it, respond.goal/fire-price's, and whether the body stands in it),
+  which pays while it risks less than the fire a refuge spares, that of the run it saves capped by a flight's time to
+  cover (exposure-s, what fire-price charges an end left uncovered); out of the fire it spares none. With neither,
+  every search pays but one that saves nothing."
+  [spent-s cost-s here-s lead-s save-s fire]
+  (let [margin (settings/get settings ::race-margin-s)]
+    (and (pos? save-s)
+         (cond
+           (not (infinite? here-s)) (search-pays? spent-s cost-s (min (- here-s margin) (- lead-s margin) save-s))
+           (nil? fire) true
+           :else (let [{:keys [risk exposed?]} fire]
+                   (and exposed? (< (risk (+ spent-s cost-s)) (risk (min save-s (exposure-s))))))))))
+
 (defn closing-rate
   "Blocks a second a flight by a body with food food opens the gap to a chasing mob-name: ::closing-rates' measured gap
   growth of its kind and sprint state (sprints?), shrunk toward the prior flee-pace less chase-speed weighted as

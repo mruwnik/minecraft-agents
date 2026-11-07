@@ -113,7 +113,7 @@
   through glass or a wall included, so a door two blocks off behind glass can beat one far round): a known closed room
   (candidate?), else one whose inside is unseen; nil when none has a route. Doors nearest first: a door's floods of its
   sides (room-lib/judge-s each) and its quote (room-lib/way-s) are paid only while they could save more than they cost
-  (room-lib/cpu-pays?) over the cheapest closed room quoted, no route to the door quicker than its straight line at
+  (cost/search-pays?) over the cheapest closed room quoted, no route to the door quicker than its straight line at
   cost/least-block-s a block (horizontal)."
   [c]
   (let [p (:primitives c)
@@ -125,7 +125,7 @@
         (let [d (:door (first sides))
               lb (* cost/least-block-s (max 0 (- (u/flat-dist me (room-lib/mid d)) 0.7)))
               cost (+ (* (count sides) (room-lib/judge-s)) (room-lib/way-s))]
-          (if-not (room-lib/cpu-pays? spent cost (- best lb))
+          (if-not (cost/search-pays? spent cost (- best lb))
             (recur more spent best picks)
             (let [closed (some #(when (candidate? p % false) %) sides)
                   start (or closed (when-not (:closed picks) (some #(when (candidate? p % true) %) sides)))

@@ -20,6 +20,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond.cover :as cover]
@@ -491,7 +492,8 @@
   (let [f (.-sensedAt p)]
     (aset p "sensedAt" (fn [pos] (swap! reads inc) (.call f p pos)))))
 
-(deftest a-close-melee-chaser-gets-a-first-step-that-floods-no-room
+(deftest a-chaser-at-the-body-gets-a-first-step-that-floods-no-room
+  ;; its lead at the body is under the race margin: any flood would cost the race
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -500,7 +502,7 @@
               step retreat/flight-step!
               restores [(counting! counts :closed-room #(identity rooms/refuge-room?) #(set! rooms/refuge-room? %))
                         (counting! counts :room #(identity reach-room/room) #(set! reach-room/room %))]
-              world (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [(zombie 5.5 9.5 0.4)] lone-doors)
+              world (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [(zombie 5.5 8 0.4)] lone-doors)
                            :home false)
               {:keys [eng]} (setup world)
               _ (set! retreat/flight-step! (fn [c] (let [before @counts] (.then (step c) (fn [r] (swap! per-step conj (merge-with - @counts before)) r)))))]
@@ -526,6 +528,29 @@
 
 (defn seen-zombie [x z] #js {:name "zombie" :visible true :pos #js {:x x :y 64 :z z}})
 
+(defn margin [] (settings/get cost-danger/settings ::cost-danger/race-margin-s))
+
+(deftest a-steps-fresh-floods-are-as-many-as-the-chasers-lead-pays-for
+  ;; the lead, not a count, bounds a step's floods: a far chaser leaves time for every door side, one at the body for none.
+  ;; The body stands among the lone doors, nearer them than the hut: no room won early saves the farther sides.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x -13.5 :y 64 :z 10.5} (merge hs/door-states lone-door-states) [] lone-doors)
+                                          :home false))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              p (:primitives eng)
+              unjudged-at (fn [threats] (mapv :at (filter (comp #{:unjudged} :why) (:dropped (cover/survey c threats false)))))
+              far [(seen-zombie -13.5 40.5)]
+              pressed [(seen-zombie -13.5 9)]
+              sides (* 2 7)]
+          (is (> (- (rooms/here-s p far) (margin)) (* sides (rooms/judge-s))) "the far chaser's lead pays for every side")
+          (is (= [[5 64 3]] (unjudged-at far))
+              "so every door side is judged in the one step but the hut's outside, which saves no run over the hut its inside won")
+          (is (< (- (rooms/here-s p pressed) (margin)) (rooms/judge-s)) "one at the body leaves no lead for a flood")
+          (is (= sides (count (unjudged-at pressed))) "so none is"))))))
+
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
   (async done
     (tu/run-async done
@@ -537,8 +562,8 @@
               far [(seen-zombie 40.5 6.5)]
               ;; at the hut's door: no race to the hut is won
               pressed [(seen-zombie 5.5 3.5)]
-              lead (rooms/here-s (:primitives eng) pressed)
-              ;; two fresh judgements fit the pressed body's lead
+              lead (- (rooms/here-s (:primitives eng) pressed) (margin))
+              ;; two fresh judgements fit the pressed body's lead, less the race margin
               survey (fn [threats keep?] (with-redefs [rooms/judge-s (constantly (/ lead 2.5))] (rooms/survey c nil {:threats threats :keep? keep?})))
               unjudged #(count (filter (comp #{:unjudged} :why) (:dropped %)))
               lone #(count (filter (fn [{[x] :at why :why}] (and (neg? x) (= :unjudged why))) (:dropped %)))

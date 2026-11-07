@@ -48,7 +48,7 @@
 (declare cover-fn)
 
 (defn fire-on
-  "The shooters' fire on the body where it stands, as room-lib/pays? prices a search by it: {:risk (respond.goal/fire-price's)
+  "The shooters' fire on the body where it stands, as cost/refuge-search-pays? prices a search by it: {:risk (respond.goal/fire-price's)
   :exposed? (its feet cell out of cover)}; nil with no shooter in sight (fire-price nil)."
   [c threats]
   (let [p (:primitives c)]
@@ -57,15 +57,11 @@
 
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,
-  pricing its door sides judged afresh; none with a melee threat within cover-gap); nil with a creeper of threats within
-  blast reach (blast). keep? as room-lib/survey's: the flee price (caught-chance!) keeps nothing, so it surveys what the
-  flight's step then does."
+  pricing its door sides judged afresh); nil with a creeper of threats within blast reach (blast). keep? as
+  room-lib/survey's: the flee price (caught-chance!) keeps nothing, so it surveys what the flight's step then does."
   [c threats keep?]
-  (let [p (:primitives c)]
-    (when (empty? (blast p threats))
-      (room-lib/survey c (home-pos c)
-                       {:threats threats :keep? keep? :fire (fire-on c threats)
-                        :fresh? (not-any? #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)}))))
+  (when (empty? (blast (:primitives c) threats))
+    (room-lib/survey c (home-pos c) {:threats threats :keep? keep? :fire (fire-on c threats)})))
 
 (def glance-turns
   "Degrees from the way away a flight turns to look before it chooses: the view cone (about 100 degrees wide) then
