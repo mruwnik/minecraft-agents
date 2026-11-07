@@ -14,6 +14,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.survival.restore-broken :as restore-broken]
             [engine.memory :as mem]
+            [engine.ready-test :as ready-test]
             [engine.settings :as settings]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -177,7 +178,7 @@
 (deftest restore-waits-while-hurt-or-with-a-hostile-near
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (doseq [[world reason] [[{:inventory [{:name "stone" :count 2}] :self {:health 0.5}} :low-health]
                                 [{:inventory [{:name "stone" :count 2}] :entities [zombie] :blocks floor} :hostile-near]]]
           (let [{:keys [eng p]} (restore! world [(zs/whole-zone "Miles")] [dug])
@@ -186,7 +187,7 @@
             (is (= reason (:reason (core/waiting eng id))) (pr-str reason))
             (is (= [] (zs/calls p "place")) (pr-str reason))
             (is (= [] (zs/calls p "dig")) (pr-str reason))
-            (is (= 1 (count (tidy-entries eng))) (pr-str reason))))))))
+            (is (= 1 (count (tidy-entries eng))) (pr-str reason))))))))))
 
 (deftest a-put-back-that-waits-for-the-world-yields-the-run-and-costs-no-try
   (async done

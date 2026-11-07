@@ -512,7 +512,7 @@
 
 (def turn-back-cost value/turn-back-cost)
 (def cover-tour-s value/cover-tour-s)
-(def food-worth value/food-worth)
+(def food-worth food/food-worth)
 (def animal-worth value/animal-worth)
 (def animal-find-worth value/animal-find-worth)
 (def crop-worth value/crop-worth)

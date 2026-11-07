@@ -21,5 +21,5 @@
   [body item heals?]
   (let [h (or (:health body) 20)
         eaten (fed body item)]
-    (+ (health/gain-worth h (js/Math.floor (- (:health eaten) h)) heals?)
-       (health/gain-worth (:health eaten) (- (:absorption eaten) (or (:absorption body) 0)) false))))
+    (+ (health/gain-worth h (js/Math.floor (- (:health eaten) h)) heals? nil)
+       (health/gain-worth (:health eaten) (- (:absorption eaten) (or (:absorption body) 0)) false nil))))

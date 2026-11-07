@@ -11,6 +11,7 @@
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
+            [jobs.lib.hostile-loss :as hostile-loss]
             [jobs.lib.meal :as meal]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.threats :as threats]
@@ -43,7 +44,7 @@
   "The hp of expected hurt (in the outcomes the body lives through) it may take on a risk now: as many as `worth` (seconds the goal is worth, by default the
   call's, ctx/worth) buys at the price of an hp (cost/hp-seconds, as a walk's planner prices it), all but 1 at most (##Inf, arrive: all but 1); a goal
   worth little is refused a dear trip, one worth 0 buys none. A death is no hp of health: its price in seconds is weighed against the worth (walk-risk/bought?). Whether to take the risk now or wait first is
-  a choice of ways (walk-risk/status). With nil (body fitness: fit; the death is inside its hp, cost.risk/work-hp, as no worth weighs it): cost.risk/share-hp, all but 1 hp while waiting never
+  a choice of ways (walk-risk/status). With nil: cost.risk/share-hp, all but 1 hp while waiting never
   lowers the price (`waits?` false; by default while the body can not heal by waiting, cannot-heal?)."
   ([c] (allowed c (ctx/worth c)))
   ([c worth] (allowed c worth (not (cannot-heal? c))))
@@ -52,21 +53,22 @@
      (allowed-hp (.-health self) (.-food self) worth waits?))))
 
 (defn fit
-  "The wait reason {:reason :low-health :health :work-hp :allowed :text} while the work of a job of category (cost.risk/work-hp at
-  the body's health and death price) is more than allowed without a worth (the share of health) and healing would bring it within, else nil;
-  none while waiting cannot heal the body (cannot-heal?): the job's own cannot-heal check (ready/hurt-cannot-heal?) stops it instead.
-  A call's :worth is its own pricing (a search's legs, a walk), not the body's fitness. `seconds`: the job's own quoted stay,
-  else the category's."
+  "The wait reason {:reason :low-health :health :hurry-s :wait-s :text} while the body should heal before the work of a job of
+  category (hostile-loss/too-hurt?: going now costs more over going healed, hurry-s, than the heal wait, wait-s); none while
+  waiting cannot heal the body (cannot-heal?): the job's own cannot-heal check (ready/hurt-cannot-heal?) stops it instead.
+  `seconds`: the job's own quoted stay, else the category's."
   ([c category] (fit c category nil))
   ([c category seconds]
-  (let [self (.self (:primitives c))
-        allowed (allowed c nil)
-        death (cost/death-s (:primitives c) (ctx/view c))
-        work (risk/work-hp category (.-health self) death seconds)]
-    (when (and (not (cannot-heal? c)) (> work allowed) (<= (risk/work-hp category 20 death seconds) (allowed-hp 20 (.-food self) nil true)))
-      {:reason :low-health :health (.-health self) :work-hp (round1 work) :allowed (round1 allowed)
-       :text (str "health " (.toFixed (.-health self) 1) " of 20 may risk " (round1 allowed) " hp, under the " (round1 work)
-                  " this job's work may cost: eat or rest to heal first (natural healing needs food 18+)")}))))
+   (when-not (cannot-heal? c)
+     (let [p (:primitives c)
+           view (ctx/view c)
+           health (.-health (.self p))
+           hurry (risk/hurry-s health category (cost/death-fn p view) {:seconds seconds :present (hostile-loss/present-fn p view)})
+           wait (risk/heal-wait-s health)]
+       (when (> hurry wait)
+         {:reason :low-health :health health :hurry-s (round1 hurry) :wait-s (round1 wait)
+          :text (str "health " (.toFixed health 1) " of 20: going now costs " (round1 hurry) " s more than going healed, over the "
+                     (round1 wait) " s healing takes: eat or rest to heal first (natural healing needs food 18+)")})))))
 
 (defn spawn-parts
   "{:kill :each} of one mob spawned beside body at `at` (cost/spawn-kill, cost/spawn-hurt), read once per body and place

@@ -589,29 +589,34 @@
     (assoc c :view (fn [] {:now now :data {:entries {:hurt (mapv (fn [[health pos food]] {:t (- now 60000) :data {:health health :food food :pos pos :attacker {:name "skeleton"}}}) hits)}}}))))
 
 (deftest a-hit-down-to-near-death-prices-its-spot-like-a-death-one-spot-for-a-fight
-  (let [c (ready-test/ctx-of day-world)
-        spot {:x 80 :y 64 :z 5}
-        hp-of #(:death-hp (estimate-unseen (with-hits c %) far-goal))]
-    (is (zero? (hp-of [[3.5 spot]])) "a hit that leaves 3.5 hp is no near-death")
-    (is (pos? (hp-of [[2 spot]])))
-    (is (pos? (hp-of [[3.5 spot 5]])) "hungry, the same 3.5 hp is too hurt for risky work: a near-death")
-    (is (= 1 (count (death-spot/recent (with-hits c (for [h (range 5 0 -1)] [h (update spot :x + h)]))))) "a fight's hits are one spot")
-    (is (= 2 (count (death-spot/recent (with-hits c [[2 spot] [2 (update spot :x + 30)]])))))))
+  ;; a dear death: a hit to 2 hp is a near-death (a body with nothing to lose near its bed has none, Q145)
+  (ready-test/dear-death
+   (fn []
+     (let [c (ready-test/ctx-of day-world)
+           spot {:x 80 :y 64 :z 5}
+           hp-of #(:death-hp (estimate-unseen (with-hits c %) far-goal))]
+       (is (zero? (hp-of [[10 spot]])) "a hit that leaves 10 hp is no near-death")
+       (is (pos? (hp-of [[2 spot]])) "2 hp: healing first pays (a dear death), a near-death")
+       (is (= 1 (count (death-spot/recent (with-hits c (for [h (range 5 0 -1)] [h (update spot :x + h)]))))) "a fight's hits are one spot")
+       (is (= 2 (count (death-spot/recent (with-hits c [[2 spot] [2 (update spot :x + 30)]])))))))))
 
 (deftest a-near-death-fades-over-the-hurt-memory-ttl-and-counts-once-with-a-death
-  (let [c (ready-test/ctx-of day-world)
-        now 36000000
-        spot {:x 80 :y 64 :z 5}
-        view (fn [hurt-ttl deaths]
-               (assoc c :view (fn [] {:now now
-                                      :data {:policies {:hurt {:cap 50 :ttl hurt-ttl} :deaths core/deaths-policy}
-                                             :entries {:hurt [{:t (- now 1800000) :data {:health 2 :pos spot :attacker {:name "skeleton"}}}]
-                                                       :deaths deaths}}})))
-        weights #(mapv :weight (death-spot/recent %))]
-    (is (< 0.49 (first (weights (view 3600000 []))) 0.51) "half the 1 h hurt ttl gone")
-    (is (< 0.74 (first (weights (view 7200000 []))) 0.76) "the ttl is read from the stored policy")
-    (is (= ["zombie"] (mapv :cause (death-spot/recent (view 3600000 [{:t (- now 600000) :data {:pos (update spot :x + 3) :cause "zombie" :death-t (- now 600000)}}]))))
-        "a hit beside a death is the death's spot")))
+  ;; a dear death: a hit to 2 hp is a near-death (a body with nothing to lose near its bed has none, Q145)
+  (ready-test/dear-death
+   (fn []
+     (let [c (ready-test/ctx-of day-world)
+           now 36000000
+           spot {:x 80 :y 64 :z 5}
+           view (fn [hurt-ttl deaths]
+                  (assoc c :view (fn [] {:now now
+                                         :data {:policies {:hurt {:cap 50 :ttl hurt-ttl} :deaths core/deaths-policy}
+                                                :entries {:hurt [{:t (- now 1800000) :data {:health 2 :pos spot :attacker {:name "skeleton"}}}]
+                                                          :deaths deaths}}})))
+           weights #(mapv :weight (death-spot/recent %))]
+       (is (< 0.49 (first (weights (view 3600000 []))) 0.51) "half the 1 h hurt ttl gone")
+       (is (< 0.74 (first (weights (view 7200000 []))) 0.76) "the ttl is read from the stored policy")
+       (is (= ["zombie"] (mapv :cause (death-spot/recent (view 3600000 [{:t (- now 600000) :data {:pos (update spot :x + 3) :cause "zombie" :death-t (- now 600000)}}]))))
+           "a hit beside a death is the death's spot")))))
 
 (deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
   (let [c (ready-test/ctx-of day-world)
@@ -814,10 +819,10 @@
 
 (defn dark-share
   "present-share of each death or near-death spot by a mob in dark-spot-world (simulation distance 10), at difficulty (1 easy, 2 normal), its records `entries`;
-  over its weight with :unfaded."
+  over its weight with :unfaded. Its body's death is dear (ready-test/dear-death's 15000 s): a hit to 2 hp is a near-death."
   [difficulty entries & [unfaded]]
   (with-redefs [threat/simulation-distance (constantly 10)]
-    (settings/with-settings {::threat/difficulty difficulty}
+    (settings/with-settings {::threat/difficulty difficulty :jobs.lib.cost.death/extra-s 15000}
       #(let [c (assoc (ready-test/ctx-of dark-spot-world) :view (fn [] {:now 36000000 :data {:policies {:deaths core/deaths-policy} :entries entries}}))]
          (mapv (fn [d] (/ (death-spot/present-share c (assoc d :mob (:cause d))) (if unfaded (:weight d) 1))) (filter :mob? (death-spot/recent c)))))))
 

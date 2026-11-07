@@ -421,9 +421,9 @@
 
 (deftest the-food-search-of-a-starving-hold-carries-the-hunger-worth
   (let [{:keys [p]} (held-starving [])
-        c {:primitives p :args {}}
+        c {:primitives p :args {} :view (fn [] {:now 0 :data {}})}
         args (hold/food-args c)]
-    (is (= (animals/search-benefit {:primitives p :args {:carry 0}}) (:worth args))
+    (is (= (animals/search-benefit (assoc c :args {:carry 0})) (:worth args))
         "get-food walks are judged against what food is worth the hungry body, not the night's open-gain")
     (is (pos? (:worth args)))))
 

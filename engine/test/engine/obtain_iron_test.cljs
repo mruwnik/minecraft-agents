@@ -13,6 +13,7 @@
             [engine.game :as game]
             [engine.perception :as perception]
             [engine.shelter-support :as st]
+            [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
@@ -215,13 +216,14 @@
           (is (pos? @rounds) "the mine child ran"))))))
 
 (deftest a-badly-hurt-body-does-not-walk-off-to-look-for-an-unseen-need
+  ;; a dear death: healing first pays (a body with nothing to lose near its bed works on, Q145)
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (let [s (f/start (assoc-in (ore-world {} []) [:self :health] 0.5) [f/own-zone])]
           (await (obtain! s {:item "oak_log" :count 2 :ways #{:gather} :explore true} 8))
           (is (empty? (tu/walk-calls (:p s))) "no search walk at 0.5 hp")
-          (is (= [:low-health] (distinct (map :reason (f/events-of s :waiting))))))))))
+          (is (= [:low-health] (distinct (map :reason (f/events-of s :waiting))))))))))))
 
 (def st-pit
   "A one-cell pit round the body at the origin: stone on its four sides at feet and head height and over it."

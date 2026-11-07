@@ -11,6 +11,7 @@
             [engine.fell-tree-test :as ft]
             [engine.forest-maintain-test :as fm]
             [engine.library-test :as lt]
+            [engine.ready-test :as ready-test]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.access.approach :as approach]
@@ -149,14 +150,14 @@
 (deftest a-pillar-held-for-health-only-food-gives-leaves-the-tree-instead-of-waiting
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        ;; 1 hp with no food may risk no more than its 0.25 hp share, under a pillar's work: the build is held for health
+      (fn [] (ready-test/dear-death (fn ^:async t []
+        ;; 1 hp, a dear death and no food: a pillar's work costs more now than healed, over the heal wait: held for health
         (let [{:keys [end eng seen]} (await (fell-ending (assoc ft/tall :self {:pos {:x 0.5 :y 64 :z 0.5} :health 1 :food 4})
                                                          'jobs.forestry.fell-tree {:radius 10} 200))
               build (some #(when (and (= :child_ended (:kind %)) (= :build (:slot %))) (:ending %)) @seen)]
           (is (= {:kind :condition-failed :cause :low-health} (kc build)))
           (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
-          (is (= [] (ledger/open-entries (mem/view (:store eng))))))))))
+          (is (= [] (ledger/open-entries (mem/view (:store eng))))))))))))
 
 (deftest a-pillar-with-no-log-in-reach-is-taken-back-and-the-tree-left
   (async done

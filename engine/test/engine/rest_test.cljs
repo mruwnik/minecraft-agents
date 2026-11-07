@@ -7,22 +7,35 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.ready-test :as ready-test]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
+(defn dear-run-async
+  "tu/run-async of f with a dear death (ready-test/dear-death): the body these rests are for."
+  [done f]
+  (tu/run-async done #(ready-test/dear-death f)))
+
 (defn holds? [self] (boolean ((:when (get triggers/all :low-health)) (tu/fake {:self self}) {} {})))
 
+;; Q145: no load, no xp, its bed beside it: a death refills more than it costs, so healing first never pays
+(deftest low-health-lets-a-body-with-nothing-to-lose-near-its-bed-work-on
+  (is (not (holds? {:health 3 :food 18 :worldSpawn [0 64 8]})))
+  (is (ready-test/dear-death #(holds? {:health 3 :food 18 :worldSpawn [0 64 8]})) "the same body with a dear death rests"))
+
 (deftest low-health-holds-for-a-hurt-body-its-own-reflexes-do-not-heal
-  (are [self expected] (= expected (holds? self))
-    {:health 3 :food 18} true
-    {:health 3 :food 3} true
-    {:health 6 :food 20} false
-    {:health 0 :food 20} false
-    {:health 4 :food 20 :effects [{:name "poison" :amplifier 0 :duration 400}]} false
-    {:health 4 :food 20 :onFire true} false
-    {:health 4 :food 20 :isSleeping true} false))
+  (ready-test/dear-death
+   (fn []
+     (are [self expected] (= expected (holds? self))
+       {:health 3 :food 18} true
+       {:health 3 :food 3} true
+       {:health 6 :food 20} false
+       {:health 0 :food 20} false
+       {:health 4 :food 20 :effects [{:name "poison" :amplifier 0 :duration 400}]} false
+       {:health 4 :food 20 :onFire true} false
+       {:health 4 :food 20 :isSleeping true} false))))
 
 (def pocket "A body shut in rock at [0 64 0]: shut-in is done at once." (ct/rock [-3 3] [62 67] #{[0 64 0] [0 65 0]}))
 
@@ -47,16 +60,16 @@
 
 (deftest a-hurt-body-rests-until-an-hp-is-not-worth-its-wait-before-its-listed-job-runs
   (async done
-    (tu/run-async done
+    (dear-run-async done
       (fn ^:async t []
         (let [{:keys [worked-at p]} (await (run! {:food 12} [{:name "bread" :count 4}] 1))]
-          (is (= 15 worked-at) "the listed job started once the next hp cost more than it is worth (heal-price under 10 s of food and 4 s of waiting)")
+          (is (= 5 worked-at) "the listed job started once going on cost no more over going healed than the rest left (Q140; at this dear death, 5 hp)")
           (is (<= 2 (count (ct/calls p "eat"))) "food under 18 is eaten up before the rest; a bite keeps it at 20")
           (is (empty? (ct/calls p "place")) "already shut in: nothing placed"))))))
 
 (deftest a-rest-that-heals-nothing-gives-up
   (async done
-    (tu/run-async done
+    (dear-run-async done
       (fn ^:async t []
         (let [{:keys [worked-at p eng]} (await (run! {:food 20} [] 0))]
           (is (= 3 worked-at) "the rest ended :not-healing and the listed job ran")
@@ -67,7 +80,7 @@
 
 (deftest a-rest-that-found-no-food-is-lifted-when-food-comes-to-hand
   (async done
-    (tu/run-async done
+    (dear-run-async done
       (fn ^:async t []
         (let [{:keys [p eng]} (await (run! {:food 12} [] 0))
               holds-now? #(boolean ((:when (get triggers/all :low-health)) p (mem/view (:store eng)) {}))]
@@ -76,13 +89,15 @@
           (is (holds-now?) "bread carried lifts the wait"))))))
 
 (deftest hungry-leaves-a-hurt-body-to-low-health
-  (are [self expected] (= expected (boolean ((:when (get triggers/all :hungry)) (tu/fake {:self self :inventory [{:name "bread" :count 2}]}) {} {})))
-    {:health 3 :food 10} false
-    {:health 10 :food 10} true))
+  (ready-test/dear-death
+   (fn []
+     (are [self expected] (= expected (boolean ((:when (get triggers/all :hungry)) (tu/fake {:self self :inventory [{:name "bread" :count 2}]}) {} {})))
+       {:health 3 :food 10} false
+       {:health 10 :food 10} true))))
 
 (deftest a-rest-that-could-not-shut-in-goes-for-food-at-once
   (async done
-    (tu/run-async done
+    (dear-run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
               p (tu/seeing-all (tu/fake-on-floor {:self {:health 3 :food 12} :floor-block "bedrock"
@@ -96,7 +111,7 @@
 
 (deftest a-hurt-body-in-a-cave-with-no-food-waits-out-the-night-shut-in-and-says-why
   (async done
-    (tu/run-async done
+    (dear-run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
               [seen sink] (tu/legacy-capture-sink)
@@ -110,7 +125,7 @@
 
 (deftest a-hurt-body-in-a-closed-room-it-has-not-looked-at-looks-round-and-waits-out-the-night-without-shutting-in
   (async done
-    (tu/run-async done
+    (dear-run-async done
       (fn ^:async t []
         (let [clock (atom 1000000)
               p (tu/seeing-after-look (tu/fake {:self {:health 3 :food 12} :blocks room :time 18000}))

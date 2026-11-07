@@ -1,8 +1,7 @@
 (ns jobs.lib.cost.risk
-  "How many hp of expected damage a risk may take at a health and food, the one rule (jobs.lib.price/allowed adds a goal's
-  worth and the cannot-heal lift): ::risk-share of the health, cut by ::hungry-share at ::hungry-food or under. A job's
-  work: the seconds it stays (work-s of its category, :click, :work or :long) and the hp they cost at a health (work-hp:
-  ::work-hurt's hits and the death a hit of at least that health risks). too-hurt?: a job's work takes more than that and would not at full health. Pure."
+  "A job's work: the seconds it stays (work-s of its category, :click, :work or :long) and what they cost at a health
+  (work-price-s: ::work-hurt's hits and the death a hit of at least that health risks). too-hurt? (Q140): going now costs
+  more over going healed than the heal wait. share-hp: what a call with no worth may risk (price/allowed). Pure."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
@@ -11,7 +10,7 @@
 
 (a/defargs settings
   {::risk-share {:default 0.5 :spec (a/num-in 0 nil)
-                 :doc "Share of the health the body has that the expected damage may take where no call worth prices it (a nil worth: price/fit's body fitness, share-hp), and the health a risky walk's heal wait heals to. A call with a worth, ##Inf included, is priced by cost alone (walk-risk/status, ready/priced)."}
+                 :doc "Share of the health the body has that the expected damage may take where no call worth prices it (a nil worth: share-hp), and the health a risky walk's heal wait heals to. A call with a worth, ##Inf included, is priced by cost alone (walk-risk/status, ready/priced)."}
    ::hungry-food {:default 6 :spec (a/int-in 0 20)
                   :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
    ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
@@ -74,27 +73,50 @@
   [category]
   (* (hit-rate category) (hit-mean) (work-s category)))
 
-(defn work-hp
-  "hp a job's work of category costs a body at health: its hurt (hit-rate x hit-mean over work-s) and its death
-  (work-death-chance) in hp at `death` seconds (cost/lethal-hp; cost/death-s), as price/stay-hp. `seconds`: the job's own
-  quoted stay, else the category's."
-  ([category health death] (work-hp category health death nil))
-  ([category health death seconds]
-   (let [s (or seconds (stay-of category health))]
-     (+ (* (hit-rate category) (hit-mean) s)
-        (answer/lethal-hp {:chance (work-death-chance category health s) :death death})))))
-
 (defn share-hp
-  "hp of expected damage a body at health and food may risk while waiting would heal it: ::risk-share of the health, cut
-  while hungry (food unknown: not hungry)."
+  "hp of expected damage a body at health and food may risk on a call with no worth (price/allowed): ::risk-share of the
+  health, cut while hungry (food unknown: not hungry)."
   [health food]
   (* (settings/get settings ::risk-share) health
      (if (some-> food (<= (settings/get settings ::hungry-food))) (settings/get settings ::hungry-share) 1)))
 
+(defn work-price-s
+  "Seconds a job's work of category staying s seconds costs a body at health: its hurt (hit-rate x hit-mean) and its death
+  chance (work-death-chance) at `death` seconds, priced as a walk's risk (cost.health/risk-s)."
+  [category health death s]
+  (health/risk-s health (* (hit-rate category) (hit-mean) s) (answer/lethal-hp {:chance (work-death-chance category health s) :death death})))
+
+(defn heal-wait-s
+  "Seconds healing to full by waiting costs a body at health: its idle time (heal-s). The food its hp eat is not counted: a
+  body that goes now eats the same food healing them at work."
+  [health]
+  (heal-s health))
+
+(defn death-at
+  "Seconds a death costs a body at health h: (death h) for a fn (a respawn refills less the more healed, cost.death/refill-s), else death."
+  [death h]
+  (if (fn? death) (death h) death))
+
+(defn hurry-s
+  "Seconds going now to a job's work of category costs a body at health over going healed (at 20): work-price-s at both, over
+  `seconds` (default stay-of at health), its death at each (death-at), plus (present h), what the dangers about the body
+  cost it at health h (nil: none)."
+  [health category death {:keys [seconds present]}]
+  (let [s (or seconds (stay-of category health))
+        at #(+ (work-price-s category % (death-at death %) s) (if present (present %) 0))]
+    (- (at health) (at 20))))
+
 (defn too-hurt?
-  "Whether a job's work of category (work-hp; :long, a mine's or a build's, for the body's fitness as such) is more than a
-  body at health and food may risk (share-hp), and healed it may; `death` seconds a death costs (cost/death-s); `seconds`
-  the job's own quoted stay, else the category's."
-  ([health food category death] (too-hurt? health food category death nil))
-  ([health food category death seconds]
-   (and (> (work-hp category health death seconds) (share-hp health food)) (<= (work-hp category 20 death seconds) (share-hp 20 food)))))
+  "Whether a body at health should heal before a job's work of category (:long, a mine's or a build's; :heal, the riskiest
+  work over the heal wait, for a caller with no job): going now costs more over going healed (hurry-s, opts :seconds
+  :present) than the heal wait does (heal-wait-s). `death` seconds a death costs (cost/death-s), or a fn of the health (death-at)."
+  ([health category death] (too-hurt? health category death nil))
+  ([health category death opts]
+   (> (hurry-s health category death opts) (heal-wait-s health))))
+
+(defn averted-fn
+  "fn of a health h: the seconds of death the hp from h to h + 1 averts on the riskiest work over the heal wait from health
+  (work-death-chance of :heal), at `death` seconds (death-at)."
+  [health death]
+  (let [s (stay-of :heal health)]
+    (fn [h] (* (death-at death h) (- (work-death-chance :heal h s) (work-death-chance :heal (inc h) s))))))

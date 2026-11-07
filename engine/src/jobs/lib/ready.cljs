@@ -15,7 +15,6 @@
             [jobs.lib.cond :as lcond]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.risk :as risk]
             [jobs.lib.danger :as danger]
             [jobs.lib.home-food :as home-food]
             [jobs.lib.hostile-loss :as hostile-loss]
@@ -748,11 +747,10 @@
 (def cannot-heal? price/cannot-heal?)
 
 (defn hurt-cannot-heal?
-  "Too hurt for a job's work of category (cost.risk/too-hurt?, at `seconds` when given) with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
+  "Too hurt for a job's work of category (hostile-loss/too-hurt?, at `seconds` when given) with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
   ([c category] (hurt-cannot-heal? c category nil))
   ([c category seconds]
-   (let [self (.self (:primitives c))]
-     (and (risk/too-hurt? (.-health self) (.-food self) category (cost/death-s (:primitives c) (ctx/view c)) seconds) (cannot-heal? c)))))
+   (and (cannot-heal? c) (hostile-loss/too-hurt? (:primitives c) (ctx/view c) category seconds))))
 
 (defn fed-fit-for
   "fit-for category, and later :low-health while hurt-cannot-heal? for that category: a hurt body that only food heals gets food before the work."
@@ -798,11 +796,10 @@
       s)))
 
 (defn starving?
-  "Whether the body must get food whatever the dark: food 0, or too hurt for the riskiest work even fed (cost.risk/too-hurt?
-  of the heal wait (:heal) without the hungry cut, which the walks' own price applies) with only food able to heal it (cannot-heal?)."
+  "Whether the body must get food whatever the dark: food 0, or it should heal before the riskiest work (hostile-loss/too-hurt?
+  of the heal wait (:heal)) with only food able to heal it (cannot-heal?)."
   [c]
-  (let [self (.self (:primitives c))]
-    (boolean (or (zero? (.-food self)) (and (risk/too-hurt? (.-health self) nil :heal (cost/death-s (:primitives c) (ctx/view c))) (cannot-heal? c))))))
+  (boolean (or (zero? (.-food (.self (:primitives c)))) (and (cannot-heal? c) (hostile-loss/too-hurt? (:primitives c) (ctx/view c) :heal nil)))))
 
 (defn or-starving
   "The status of `safe` for c, or while starving? the status of threatened when `safe` is not ok (a starving body walks by night)."

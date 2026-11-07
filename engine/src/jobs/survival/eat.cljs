@@ -43,8 +43,9 @@
 (defn worth-of
   "Seconds a root eat is worth: what reaching food is worth the body now (cost/food-worth)."
   [c]
-  (let [self (.self (:primitives c))]
-    (cost/food-worth (.-food self) (.-health self))))
+  (let [p (:primitives c)
+        self (.self p)]
+    (cost/food-worth (.-food self) (.-health self) (cost/death-fn p (ctx/view c)))))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

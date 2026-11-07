@@ -1,12 +1,14 @@
 (ns jobs.lib.hostile-loss
   "What doing nothing about the dangers near costs the body (cost/stand-loss over a respond call): the hostile-near
-  trigger holds only while it is positive, and respond-to-hostile is worth it."
+  trigger holds only while it is positive, and respond-to-hostile is worth it; too-hurt? counts it in the low-health
+  comparison."
   (:require [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
@@ -93,6 +95,23 @@
   "Seconds doing nothing about hostiles hs costs the body over a respond call (loss-over the spread of call-s)."
   [p view hs]
   (loss-over p view hs (call-s)))
+
+(defn present-fn
+  "fn of a health h: what the hostiles the body knows of near (danger/known-hostiles within the hostile radius, shooters
+  within their fire range) cost a body of p at h over a respond call (loss, with its health h); nil when none is known."
+  [p view]
+  (let [mobs (mobs-of p view (danger-q/known-hostiles p (danger-q/hostile-radius) {:ranged-radius :fire-range}))]
+    (when (seq mobs)
+      (let [body (body-at p view)
+            equipment (cost/equipment-of (.-equipment (.self p)))
+            at (u/pos-of (.-pos (.self p)))]
+        (fn [h] (cost/stand-loss (assoc body :health h) equipment mobs at (call-s)))))))
+
+(defn too-hurt?
+  "cost.risk/too-hurt? of the body of p now for a job's work of category (`seconds` its own quoted stay, nil: the category's),
+  the hostiles it knows of near counted (present-fn): the one low-health comparison (Q140)."
+  [p view category seconds]
+  (risk/too-hurt? (.-health (.self p)) category (cost/death-fn p view) {:seconds seconds :present (present-fn p view)}))
 
 (defn hostile-near?
   "Whether the hostile-near trigger holds (args :radius, :ranged-radius, :visible-only): the loss of doing nothing about

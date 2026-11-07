@@ -72,7 +72,7 @@
         n (min drops (/ short pts))
         stock (* (cost/meat-factor (animals-seen c (cost/meat-animal item)) (meat-opts))
                  (:value (cost/item-value [{:name item :count n}])))]
-    (max (cost/food-worth (.-food (.self p)) (.-health (.self p))) stock)))
+    (max (cost/food-worth (.-food (.self p)) (.-health (.self p)) (cost/death-fn p (ctx/view c))) stock)))
 
 (defn noted-benefit
   "Seconds the meat of the noted animal n is worth the body (meat-benefit)."
@@ -85,7 +85,7 @@
   [c]
   (let [p (:primitives c)
         short (max 0 (- (carry c) (foods/stock-points (u/inventory p))))]
-    (max (cost/food-worth (.-food (.self p)) (.-health (.self p))) (cost/food-search-worth short))))
+    (max (cost/food-worth (.-food (.self p)) (.-health (.self p)) (cost/death-fn p (ctx/view c))) (cost/food-search-worth short))))
 
 (defn noted-here?
   "Whether the note n is not proven gone: its cell in view within the scan its kind's reach covers (reach: kind -> blocks)."

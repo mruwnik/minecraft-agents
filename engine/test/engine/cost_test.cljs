@@ -461,10 +461,11 @@
 
 (deftest food-is-worth-the-hp-it-lets-a-hurt-body-heal
   (let [top-up foods/top-up-food]
-    (is (< 0 (cost/food-worth (dec top-up) 2.4)) "hurt at food 17 (KitOak05): only food lets it heal, so reaching food is worth a walk")
-    (is (< (cost/food-worth (dec top-up) 10) (cost/food-worth (dec top-up) 2.4)) "the more hurt, the more")
-    (is (zero? (cost/food-worth top-up 2.4)) "at the top-up line it heals by waiting: food adds nothing")
-    (is (zero? (cost/food-worth (dec top-up) 20)) "unhurt: nothing to heal")))
+    (is (< 0 (cost/food-worth (dec top-up) 2.4 1000)) "hurt at food 17 (KitOak05): only food lets it heal, so reaching food is worth the death it averts")
+    (is (< (cost/food-worth (dec top-up) 10 1000) (cost/food-worth (dec top-up) 2.4 1000)) "the more hurt, the more")
+    (is (zero? (cost/food-worth (dec top-up) 2.4)) "no death priced: an hp healed by food or by waiting costs the same food")
+    (is (zero? (cost/food-worth top-up 2.4 1000)) "at the top-up line it heals by waiting: food adds nothing")
+    (is (zero? (cost/food-worth (dec top-up) 20 1000)) "unhurt: nothing to heal")))
 
 (deftest dig-cost-is-the-item-base-s-dig-term
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))
@@ -1115,7 +1116,14 @@
 
 (deftest a-jobless-caller-stays-the-seconds-healing-by-waiting-takes
   (is (= [75 108] [(risk/work-s :work) (risk/work-s :long)]) "the category stays are the measured mean runs")
-  (is (= 0 (risk/work-hp :heal 20 100)) "a full body waits for nothing")
   (is (= 64 (risk/stay-of :heal 4)) "16 hp at 4 s an hp")
-  (is (= (risk/hit-rate :heal) (max (risk/hit-rate :work) (risk/hit-rate :long))) "the riskiest measured rate")
-  (is (< (risk/work-hp :heal 10 100) (risk/work-hp :heal 4 100)) "the hurter the body, the longer the wait"))
+  (is (= (risk/hit-rate :heal) (max (risk/hit-rate :work) (risk/hit-rate :long))) "the riskiest measured rate"))
+
+(deftest a-hurt-body-heals-first-only-while-going-now-costs-more-over-going-healed-than-the-wait
+  (is (= 40 (risk/heal-wait-s 10)) "the wait: 4 s an hp; its food is eaten going now as well")
+  (is (zero? (risk/hurry-s 20 :heal 1000 nil)) "a full body: going now is going healed")
+  (is (< (risk/hurry-s 10 :heal 1000 nil) (risk/hurry-s 4 :heal 1000 nil)) "the hurter the body, the dearer going now")
+  (is (not (risk/too-hurt? 2.4 :heal 1000)) "a 1000 s death at the work's 1.4% chance is 14 s, under the 70 s wait: it goes")
+  (is (risk/too-hurt? 2.4 :heal 100000) "a dear death: it heals first")
+  (is (risk/too-hurt? 2.4 :heal 1000 {:present #(if (< % 3) 400 100)}) "a danger about that costs the hurt body 300 s more: it heals first")
+  (is (not (risk/too-hurt? 14 :heal 1000 {:present (constantly 400)})) "a danger that costs as much healed: no reason to wait"))

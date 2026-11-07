@@ -416,7 +416,7 @@
                            (set! (.-ms builds) (+ (.-ms builds) (- (js/performance.now) t0)))
                            table)))]
     (fn [version overrides basis]
-      (built version overrides basis (health/hp-seconds) (health/max-scale) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
+      (built version overrides basis (health/hp-seconds) (health/heal-s-per-hp) (craft-step) (smelt-step)))))
 
 (defn groups-of
   "The override groups item name belongs to."

@@ -8,6 +8,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.precious :as precious]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.value :as value]
@@ -65,6 +66,18 @@
   work of mean seconds kills it at health (cost.risk/work-death-chance)."
   [health mean]
   (* (value/food-point-worth) (risk/work-death-chance :long health (or mean 0))))
+
+(defn food-worth
+  "Seconds reaching food is worth to a body with `food` points and `health`: rising as the bar falls
+  (value/::food-worth-per-point under value/::food-worth-from); under foods/top-up-food, where only food lets it heal, also
+  the hp it lacks, each at what it is worth over healing it by waiting (cost.health/gain-worth without and with waiting,
+  the death each averts at `death` seconds: cost.risk/averted-fn; nil: none)."
+  ([food health] (food-worth food health nil))
+  ([food health death]
+   (let [missing (if (< food foods/top-up-food) (js/Math.floor (- 20 health)) 0)
+         averted (when death (risk/averted-fn health death))]
+     (+ (* (settings/get value/settings ::value/food-worth-per-point) (max 0 (- (settings/get value/settings ::value/food-worth-from) food)))
+        (- (health/gain-worth health missing false averted) (health/gain-worth health missing true averted))))))
 
 (defn point-price
   "Seconds a point of home food source {:points :fetch-s :point-s} costs, taken whole: the order the trip's lots and

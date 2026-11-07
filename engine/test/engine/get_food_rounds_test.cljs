@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             ["fs" :as fs]
             ["path" :as path]
+            [engine.ready-test :as ready-test]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.core :as core]
@@ -971,12 +972,13 @@
           (is (= ["bread"] (call-args p "transfer" "item"))))))))
 
 (deftest a-refused-search-names-the-dark-cell-or-the-hostile-known
+  ;; a dear death: the hurt body that only food heals searches whatever the dark (ready/starving?)
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:self {:food 10 :health 2} :time 15000} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (re-find #"will not search unknown ground \(dark above ground at \[.*\], light " (stop-text seen))))))))
+          (is (re-find #"will not search unknown ground \(dark above ground at \[.*\], light " (stop-text seen))))))))))
 
 (deftest a-refused-search-names-the-hostile-kind-and-place
   (async done
@@ -1355,7 +1357,7 @@
           (is (= :no-carry (:reason (first (ended seen))))))))))
 
 (deftest a-search-for-food-is-worth-what-reaching-food-is-to-the-body
-  (let [benefit (fn [food carry] (let [{:keys [p]} (setup {:self {:food food}})] (animals/search-benefit {:primitives p :args {:carry carry}})))]
+  (let [benefit (fn [food carry] (let [{:keys [p]} (setup {:self {:food food}})] (animals/search-benefit {:primitives p :view (fn [] {:now 0 :data {}}) :args {:carry carry}})))]
     (is (zero? (benefit 20 0)) "fed and asked to carry nothing: no walk is worth it")
     (is (pos? (benefit 20 60)) "fed but short of the 3-day reserve")
     (is (< (benefit 8 0) (benefit 2 0)) "the hungrier, the more a walk to food is worth")
@@ -1363,11 +1365,11 @@
 
 (deftest the-meat-of-a-kill-is-worth-more-hunted-than-from-a-working-pen
   (let [benefit (fn [world] (let [{:keys [p]} (setup (merge {:self {:food 20}} world))]
-                              (animals/meat-benefit {:primitives p :args {:carry 60}} "beef")))
+                              (animals/meat-benefit {:primitives p :view (fn [] {:now 0 :data {}}) :args {:carry 60}} "beef")))
         zones [{:name "home" :owner "Fake" :min [-20 60 -20] :max [20 70 20]}]
         wild (benefit {})
         penned (let [{:keys [p]} (setup {:self {:food 20} :entities (take 2 herd)} :zones zones)]
-                 (animals/meat-benefit {:primitives p :args {:carry 60}} "beef"))]
+                 (animals/meat-benefit {:primitives p :view (fn [] {:now 0 :data {}}) :args {:carry 60}} "beef"))]
     (is (pos? penned))
     (is (> wild penned) "with no pen the replacement of the meat is dear, with a breeding pen it is the meat's own worth")))
 

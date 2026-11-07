@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.ready-test :as ready-test]
             [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
@@ -80,12 +81,14 @@
     (is (holds? {:food 10 :health 12}))))
 
 (deftest hungry-holds-at-urgent-near-empty-or-hurt-with-food-at-hand
-  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))]
-    (is (true? (level {:self {:food 5}})) "hungry: its :comfort level")
-    (is (= :urgent (level {:self {:food 2}})) "food 2")
-    (is (= :urgent (level {:self {:food 6} :inventory [{:name "bread" :count 1}]})) "hungry with food carried: one bite, no waiting for a section")
-    (is (= :urgent (level {:self {:food 15 :health 7} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")
-    (is (not (level {:self {:food 15 :health 3} :inventory [{:name "bread" :count 1}]})) "below the risky health: the low-health rest's")))
+  (ready-test/dear-death
+   (fn []
+     (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))]
+       (is (true? (level {:self {:food 5}})) "hungry: its :comfort level")
+       (is (= :urgent (level {:self {:food 2}})) "food 2")
+       (is (= :urgent (level {:self {:food 6} :inventory [{:name "bread" :count 1}]})) "hungry with food carried: one bite, no waiting for a section")
+       (is (= :urgent (level {:self {:food 15 :health 7} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")
+       (is (not (level {:self {:food 15 :health 3} :inventory [{:name "bread" :count 1}]})) "below the risky health: the low-health rest's")))))
 
 (deftest hungry-in-the-dark-only-holds-with-food-to-eat
   (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))
@@ -95,19 +98,23 @@
     (is (level {:time night :self {:food 4} :inventory [{:name "bread" :count 1}]}) "carried food is eaten at night")))
 
 (deftest hungry-leaves-a-body-under-the-risky-health-to-the-low-health-rest
-  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))]
-    (are [world] (not (level world))
-      {:time 23800 :self {:food 10 :health 2}}
-      {:time 6000 :self {:food 10 :health 2}}
-      {:time 15000 :self {:food 10 :health 20}})
-    (is (level {:time 23800 :self {:food 4 :health 20}}) "a healthy body goes at first light")))
+  (ready-test/dear-death
+   (fn []
+     (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))]
+       (are [world] (not (level world))
+         {:time 23800 :self {:food 10 :health 2}}
+         {:time 6000 :self {:food 10 :health 2}}
+         {:time 15000 :self {:food 10 :health 20}})
+       (is (level {:time 23800 :self {:food 4 :health 20}}) "a healthy body goes at first light")))))
 
 (deftest a-hungry-body-is-the-hungry-triggers-unless-too-hurt-then-the-low-health-triggers
-  (let [fires? (fn [trigger world] (boolean ((:when (get triggers/all trigger)) (tu/with-light-data (tu/fake world)) {} {})))
-        too-hurt {:time 6000 :self {:food 4 :health 2}}
-        fit {:time 6000 :self {:food 4 :health 20}}]
-    (is (= [true false] [(fires? :low-health too-hurt) (fires? :hungry too-hurt)]) "too hurt: low-health, not hungry")
-    (is (= [false true] [(fires? :low-health fit) (fires? :hungry fit)]) "hungry and fit: hungry, not low-health")))
+  (ready-test/dear-death
+   (fn []
+     (let [fires? (fn [trigger world] (boolean ((:when (get triggers/all trigger)) (tu/with-light-data (tu/fake world)) {} {})))
+           too-hurt {:time 6000 :self {:food 4 :health 2}}
+           fit {:time 6000 :self {:food 4 :health 20}}]
+       (is (= [true false] [(fires? :low-health too-hurt) (fires? :hungry too-hurt)]) "too hurt: low-health, not hungry")
+       (is (= [false true] [(fires? :low-health fit) (fires? :hungry fit)]) "hungry and fit: hungry, not low-health")))))
 
 ;; ------------------------------------------- the hungry reflex with nothing to eat
 

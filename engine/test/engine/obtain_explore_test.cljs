@@ -6,6 +6,7 @@
             [engine.obtain-iron-test :refer [ore-world obtain!]]
             [engine.fake :as fake]
             [engine.settings :as settings]
+            [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
             [engine.memory :as mem]
             [engine.ctx :as ctx]
@@ -189,13 +190,14 @@
     (is (= 70 (climb {:gather {:climb 70}} {:way :look})) "a climb under way goes on whatever the price says now")))
 
 (deftest a-search-held-on-the-body-says-it-is-looking-once-not-every-round
+  ;; a dear death: healing first pays (a body with nothing to lose near its bed works on, Q145)
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (let [s (f/start (update (ore-world {} []) :self assoc :health 1 :food 0) [f/own-zone])]
           (await (obtain! s {:item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
           (is (seq (f/events-of s :waiting)) "the hurt, foodless body's search waits")
-          (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))
+          (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))))
 
 ;; Old code priced every obtain's search at the item's own find-worth (a hoe or a sword: a few seconds, or 0), so a
 ;; means job's obtain never searched and a root sword's walked off at 0 s.

@@ -1,6 +1,6 @@
 (ns world-test.spot-returns
   "tools/event-counts.mjs spot-returns: counts the measured prior jobs.lib.cost.threat ::spot-occupied from the trial bodies' event logs.
-  A spot is a death by a mob, or a hurt by one that left the body too hurt for risky work (jobs.lib.death-spot's near-death). Its return is the first time the body is within
+  A spot is a death by a mob (a log line has no respawn or load, so no near-death: jobs.lib.death-spot's needs the death's price). Its return is the first time the body is within
   return-blocks of it again after away-s or more with every known position 32 to 128 blocks off (vanilla: the killer has
   despawned, and mobs spawn there again); a later spot elsewhere, a position over 128 blocks off or memory-ms end the spot.
   k: returns where, within met-ms, a hostile was decided about within return-blocks of the spot, or hurt or killed the
@@ -10,8 +10,6 @@
             ["path" :as path]
             ["zlib" :as zlib]
             [clojure.string :as str]
-            [jobs.lib.cost.death :as death]
-            [jobs.lib.cost.risk :as risk]
             [world-test.fresh-drop :as fresh-drop]))
 
 (def hostiles #{"zombie" "husk" "drowned" "zombie_villager" "skeleton" "stray" "bogged" "spider" "cave_spider" "creeper" "witch"
@@ -19,7 +17,6 @@
 (def return-blocks 16)
 (def away-s 300)
 (def met-ms 60000)
-(def death-s "The price of a death in a log line: the log has no respawn, so death-cost's unknown-spawn walk." (death/death-cost {} nil))
 (def memory-ms "jobs.lib.cost.death ::memory-ms's default: how long a spot counts." 7200000)
 
 (defn- num-of [re line] (some-> (re-find re line) second js/parseFloat))
@@ -40,9 +37,7 @@
     (when t
       (cond
         (and body? (str/includes? line ":kind :died")) (assoc r :k (if cause :spot :pos))
-        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (cond (and cause (risk/too-hurt? (or (num-of #":health (-?[\d.]+)" line) 99) (num-of #":food (-?[\d.]+)" line) :long death-s)) :spot
-                                                                         cause :met
-                                                                         :else :pos))
+        (and body? (str/includes? line ":kind :hurt")) (assoc r :k (if cause :met :pos))
         (str/includes? line ":kind :hostile.decided") (assoc r :k :met)
         (or (str/includes? line ":kind :planned") (str/includes? line ":kind :respawned")) (assoc r :k :pos)))))
 

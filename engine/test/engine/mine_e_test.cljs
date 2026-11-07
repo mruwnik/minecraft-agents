@@ -19,6 +19,7 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.expr :as expr]
+            [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
@@ -134,9 +135,10 @@
 
 ;; ------------------------------------------------------------------ low health
 (deftest a-badly-hurt-body-waits-to-heal-before-it-mines
+  ;; a dear death: healing first pays (a body with nothing to lose near its bed works on, Q145)
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (let [s (await (scenario {:block "sand" :count 6} {:blocks (merge floor sand-patch) :self {:health 0.5}} 10))
               world (.-world (:p s))
               waits (events-of s :waiting)]
@@ -146,7 +148,7 @@
           (is (re-find #"heal" (str (:text (first waits)))))
           (swap! (.. world -state) assoc-in [:self :health] 20)
           (await (run-ticks s 60))
-          (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))
+          (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))))
 
 (deftest a-caller-with-fit-always-digs-on-at-low-health
   (async done
@@ -168,13 +170,14 @@
           (is (finished? s)))))))
 
 (deftest a-hurt-body-with-nothing-to-eat-digs-nothing-and-says-cannot-heal
+  ;; a dear death: healing first pays (a body with nothing to lose near its bed works on, Q145)
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (fn [] (ready-test/dear-death (fn ^:async t []
         (let [hurt {:blocks (merge floor sand-patch) :self {:health 1.5 :food 12}}
               s (await (scenario {:block "sand" :count 6} hurt 40))]
           (is (zero? (dig-count s)))
-          (is (= :cannot-heal (:reason (done-event s)))))))))
+          (is (= :cannot-heal (:reason (done-event s)))))))))))
 
 (deftest a-hurt-body-carrying-bread-digs-on
   (async done
