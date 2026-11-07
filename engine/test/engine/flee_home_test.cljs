@@ -887,3 +887,22 @@
         (let [{:keys [eng]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []) :home {:x 105 :y 64 :z 0}))
               c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})]
           (is (= {:x 105 :y 64 :z 0} (cover/home-pos c))))))))
+
+(deftest a-look-through-the-homes-door-is-not-gated-by-the-flood-survey-did-not-gate
+  ;; survey judges the home whatever its search costs; a home door side it left :unjudged is looked into on the same rule
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hidden (atom #{[5 64 0] [5 64 1]})
+              {:keys [eng p]} (setup (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)]))
+              _ (seeing-all-but p (fn [cell] (contains? @hidden cell)))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 13.5)]
+              s (rooms/survey c home {:threats threats})
+              cut (update s :dropped (fn [ds] (mapv #(if (:own? %) % (assoc % :why :unjudged)) ds)))
+              pays cost/refuge-search-pays?
+              looks (do (set! cost/refuge-search-pays? (constantly false))
+                        (try (cover/building-looks c cut threats) (finally (set! cost/refuge-search-pays? pays))))]
+          (is (some :own? (:dropped s)) "the hidden home is dropped unseen")
+          (is (seq looks) "its door sides are looked into though no flood pays"))))))

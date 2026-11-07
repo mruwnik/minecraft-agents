@@ -171,7 +171,7 @@
   (cost/closed-chance of its boundary's seen and unseen cells, reach-room/boundary) and then the run from the door into it
   at a flight's pace; its seconds room-lib/glance-s. Part of the step's one search, before the flee search: a door's
   flood only while it pays as survey's door sides do (cost/refuge-search-pays? of room-lib/flood-s against threats' lead
-  at the body and that door, the run it saves over survey's ways in won, and fire). respond prices each against the answers
+  at the body and that door, the run it saves over survey's ways in won, and fire), the home's always, as survey judges it. respond prices each against the answers
   without it."
   [c s threats]
   (let [p (:primitives c)
@@ -187,7 +187,7 @@
                                                   (cost/run-saved-s blocks best food) fire)))
         r (binding [reach/*search* m]
             (vec (for [g (room-lib/door-glances c s)
-                       :when (pays? (room-lib/mid (:d g)))
+                       :when (or (:home? g) (pays? (room-lib/mid (:d g))))
                        :let [{:keys [seen unseen]} (reach-room/boundary p (:pos g))]]
                    {:at g :seconds (room-lib/glance-s c g) :closed (cost/closed-chance seen (count unseen))
                     :refuge-s (/ (u/dist (room-lib/mid (:d g)) (room-lib/mid (:pos g))) pace)})))]

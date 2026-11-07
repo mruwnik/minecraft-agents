@@ -345,7 +345,7 @@
 (defn door-glances
   "The door sides survey dropped :unseen (a cell beside a seen door or gate), and the :unseen home's door sides (a side or
   the cell beyond its door one of the home room's unseen sides) a step's search left :unjudged, not looked into this
-  flight (memory :door-glanced): each {:k :pos :d :looks} (door-cell d, looks its unseen sides). Its floods run under
+  flight (memory :door-glanced): each {:k :pos :d :looks :home?} (door-cell d, looks its unseen sides, :home? the home's own). Its floods run under
   reach/*search*."
   [c survey]
   (let [p (:primitives c)
@@ -354,12 +354,12 @@
                      (set (reach-room/unseen-sides p (let [[x y z] (:at h)] {:x x :y y :z z}))))
         home-door? (fn [{:keys [x y z]} d]
                      (some #(contains? home-sides %) [[x y z] [(- (* 2 (:x d)) x) y (- (* 2 (:z d)) z)]]))]
-    (for [{[x y z] :at why :why} (:dropped survey)
+    (for [{[x y z] :at why :why own? :own?} (:dropped survey)
           :let [k (cell-key {:x x :y y :z z})
                 pos {:x x :y y :z z}
                 d (door-cell p pos)]
           :when (and d (not (glanced k)) (or (= :unseen why) (and (= :unjudged why) (home-door? pos d))))]
-      {:k k :pos pos :d d :looks (count (reach-room/unseen-sides p pos))})))
+      {:k k :pos pos :d d :looks (count (reach-room/unseen-sides p pos)) :home? (boolean (or own? (= :unjudged why)))})))
 
 (defn glance-at
   "The door side of door-glances the flight looks in at: the first within door-glance-radius whose
