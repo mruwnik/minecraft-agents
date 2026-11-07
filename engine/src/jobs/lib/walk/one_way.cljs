@@ -63,14 +63,15 @@
   "Seconds the cheapest way back up from landing `at` to the rim it dropped from takes, as go-to's escalations price them: a
   pillar of the drop's height when the body carries the climb blocks (the column it fell through is open), or a stair of
   that height cut along the cheapest heading, each cut at what the carried kit (or the bare hand) takes on its block, an open floor at a laid block, a cell not seen or not loaded
-  read as rock (the worse case). ##Inf when neither can be made."
+  read as rock dug at the chance it is solid (escape/dig-share-fn). ##Inf when neither can be made."
   [p rim at]
   (let [rim (mapv rim [:x :y :z])
         at (mapv at [:x :y :z])
         h (- (second rim) (second at))
         block-at (escape/block-at-of p)
+        share (escape/dig-share-fn p)
         cut-s (fn [cell] (let [n (or (block-at cell) access/hidden-guess)]
-                           (when-not (bs/passable? n) (/ (tools/clear-ms p n) 1000))))
+                           (when-not (bs/passable? n) (* (share cell) (/ (tools/clear-ms p n) 1000)))))
         unseen? (escape/unseen-of p)
         leg-s (cost/stair-leg-pricer (wworld/unseen-share p))
         fill-s (cw/fill-cost (:count (escape/carried-pillar-item p) 0))

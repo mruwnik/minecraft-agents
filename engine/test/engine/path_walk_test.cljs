@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [jobs.lib.escape :as escape]
+            [jobs.lib.look :as look]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
             [engine.path.fixture :as fx]
@@ -604,6 +605,12 @@
     (is (< picked deep) "a pickaxe cuts the stair quicker")
     (is (< pillared picked) "20 carried blocks pillar out quicker than any stair")
     (is (> (* 0.1 deep) 30) "the deep shaft costs more than the old flat trap price (0.1 x 300 s)")))
+
+(deftest a-stair-out-of-a-landing-cuts-unseen-rock-at-the-chance-it-is-solid
+  (let [p (tu/seeing-within (tu/fake {:blocks (shaft 3) :self {:pos {:x 1.5 :y 71 :z 0.5}}}) 1)
+        climb (fn [chance] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))]
+                             (one-way/climb-out-s p {:x 1 :y 65 :z 0} {:x 0 :y 62 :z 0})))]
+    (is (< (climb 0.5) (climb 1)) "unseen cuts cost their dig at the chance the rock is there")))
 
 (deftest the-pillar-out-of-a-landing-adds-the-unseen-step-price-for-each-block-over-unseen-cells
   (let [p (tu/fake {:blocks (shaft 4) :inventory [{:name "dirt" :count 4}] :self {:pos {:x 1.5 :y 71 :z 0.5}}})
