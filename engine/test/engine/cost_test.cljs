@@ -520,9 +520,9 @@
 (deftest a-dark-stay-is-lit-when-its-torches-cost-less-than-its-hurt
   (let [way {:blocks 20 :carried 4}]
     (is (< (abs (- (cost/torch-way-s 20 0) (cost/torch-way-s 20 4) (cost/trip))) 1e-6) "one trip for all the torches when none is carried")
-    (is (= :lit (:way (cost/dark-or-lit 5 20 way))) "five hp of hurt cost more than three torches")
-    (is (= :dark (:way (cost/dark-or-lit 0 20 way))) "a dark that hurts nothing costs less than any torch")
-    (is (= :dark (:way (cost/dark-or-lit 5 20 nil))) "a job that hangs no torches stays dark")))
+    (is (= :lit (:way (cost/dark-or-lit (* 5 (cost/walk-hp-seconds)) way))) "five hp of hurt cost more than three torches")
+    (is (= :dark (:way (cost/dark-or-lit 0 way))) "a dark that hurts nothing costs less than any torch")
+    (is (= :dark (:way (cost/dark-or-lit 50 nil))) "a job that hangs no torches stays dark")))
 
 (deftest an-unseen-way-is-priced-by-how-often-the-seen-ways-near-it-go-on
   (let [kit {:weapon nil :equipment nil}

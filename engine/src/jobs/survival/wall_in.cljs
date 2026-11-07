@@ -9,7 +9,6 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.danger :as cost-danger]
-            [jobs.lib.cost.health :as health]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -28,7 +27,7 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is waited out
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their hp-cost over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
+  (##Inf with no block carried; with fewer blocks than open cells, which would stop half built, a melee hostile known gets in by an open cell, a mob unseen spawns: their risk-s over the stay (::job-time-s) added, half-built-s). With :for :night the quote counts night seconds only (placing), and :morning-s names the door dug out and the blocks left (plug-way/morning-s); it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
 (a/defargs args
@@ -127,22 +126,21 @@
 (defn half-built-s
   "Seconds a wall left half built (fewer carried blocks than open cells, so a gap stays open for the whole stay,
   ::job-time-s) costs: the nearest melee hostile known that arrives (arrive-s) within the stay gets in by a cell left open,
-  at the hp-cost of its blow (answer/blow, at the body's health and armour), and a mob unseen spawns at the chance a second
-  at the feet by their light (spawn-light/chance-at; price/stay-hp); 0 with the blocks for every cell."
+  its blow (answer/blow, at the body's armour) hurting, and a mob unseen spawns at the chance a second
+  at the feet by their light (spawn-light/chance-at); both priced by price/stay-risk-s; 0 with the blocks for every cell."
   ([c open] (half-built-s c open (arrivals c)))
   ([c open arrivals]
   (let [have (reduce + (map :count (lb/carried c (flight/blocks c))))
         p (:primitives c)
         self (.self p)
-        health (let [h (.-health self)] (if (number? h) h 20))
         stats (cost/armour-stats (cost/equipment-of (.-equipment self)))
         stay (settings/get settings ::job-time-s)
         nearest (some->> (seq (filter #(< (first %) stay) arrivals)) (apply min-key first) second)
         known (if nearest (answer/blow stats {:name (.-name nearest)}) 0)
-        unseen (price/stay-hp c (spawn-light/chance-at p (sh-sense/feet p) false) stay)]
+        chance (spawn-light/chance-at p (sh-sense/feet p) false)]
     (if (>= have open)
       0
-      (health/hp-cost health (+ known unseen))))))
+      (price/stay-risk-s c chance stay known)))))
 
 (defn fails
   "The chance the walls cannot be closed for a mob in a cell: cost/counted-chance of ::mob-fails of the class the body

@@ -10,11 +10,15 @@
             [engine.registry :as registry]
             [engine.flight-job :as fj]
             [engine.shelter-support :as st]
+            [engine.settings :as settings]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.base-rates :as base-rates]
+            [jobs.lib.price :as price]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as sight]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -326,6 +330,14 @@
     (is (= (half 3 [(zombie 9 4)]) (half 3 [(zombie 9 4) (zombie 10 5)])) "one gets in, not all")
     (is (= none (half 3 [(assoc (zombie 9 4) :name "skeleton")])) "a shooter does not walk in")
     (is (zero? (half 10 [(zombie 9 4)])) "blocks for every cell: nothing is left open")))
+
+(deftest a-half-built-wall-prices-the-unseen-hurt-and-death-by-cost-risk-s-not-scaled-by-health-again
+  (let [ctx (plan-ctx (sky/with-sky (tu/seeing-all (tu/fake {:time st/night :self {:health 5} :inventory [{:name "dirt" :count 3}] :entities []}))))
+        chance (spawn-light/chance-at (:primitives ctx) (sh-sense/feet (:primitives ctx)) false)
+        {:keys [hurt dies death]} (price/stay-parts ctx chance (settings/get wall-in/settings ::wall-in/job-time-s))]
+    (is (pos? (* dies death)))
+    (is (< (abs (- (cost/risk-s 5 hurt (cost/lethal-hp {:chance dies :death death})) (wall-in/half-built-s ctx 10))) 1e-6)
+        "the death at hp-seconds a hp, only the hurt at the hp-price of the health")))
 
 (deftest a-half-built-wall-prices-the-unseen-by-the-light-at-the-feet-not-as-dark
   (let [ctx (plan-ctx (sky/with-sky (tu/seeing-all (tu/fake {:time st/night :inventory [{:name "dirt" :count 3}] :entities []}))))

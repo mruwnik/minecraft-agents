@@ -85,6 +85,14 @@
   (let [{:keys [hurt dies death]} (stay-parts c chance seconds)]
     (+ hurt (cost/lethal-hp {:chance dies :death death}))))
 
+(defn stay-risk-s
+  "Seconds staying `seconds` where mobs spawn at `chance` per second costs (cost/risk-s): the stay-parts hurt, with `extra-hurt` hp
+  besides, at the hp-cost of the health, and its death at hp-seconds."
+  ([c chance seconds] (stay-risk-s c chance seconds 0))
+  ([c chance seconds extra-hurt]
+   (let [{:keys [hurt dies death]} (stay-parts c chance seconds)]
+     (cost/risk-s (.-health (.self (:primitives c))) (+ hurt extra-hurt) (cost/lethal-hp {:chance dies :death death})))))
+
 (defn with-stay
   "The checker `safe` run with (stay-of c) seconds as the ctx's stay (kept when keep? and one is set); its :jobs.lib.ready/exposure half too."
   [safe stay-of keep?]

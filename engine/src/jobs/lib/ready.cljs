@@ -143,8 +143,7 @@
 (defn stay-price
   "Seconds the stay of price/stay-s at spawn chance `chance` costs acted on now: price/stay-parts at cost/risk-s."
   [c chance]
-  (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))]
-    (cost/risk-s (.-health (.self (:primitives c))) hurt (cost/lethal-hp {:chance dies :death death}))))
+  (price/stay-risk-s c chance (price/stay-s c)))
 
 (defn stay-look-price
   "The {:gap :delta} of a look at the unseen cells a stay exposed at chance rests on, paid at P(closed): unlooked, an unseen
@@ -605,8 +604,7 @@
         chance-of (fn [[_ _ data]] (:chance data))
         way (fn [c chance]
               (when torch-way
-                (cost/dark-or-lit (if (number? chance) (price/stay-hp c chance (price/stay-s c)) ##Inf)
-                                  (.-health (.self (:primitives c))) (torch-way c))))
+                (cost/dark-or-lit (if (number? chance) (price/stay-risk-s c chance (price/stay-s c)) ##Inf) (torch-way c))))
         own-stay (fn [c chance] (when (near? c) (let [w (way c chance)] (cond (nil? w) 0 (= :lit (:way w)) (:lit-s w)))))
         own-s (fn [c s] (when (and (dark-wait? s) (not (and (nil? torch-way) (priced-never? s))))
                           (own-stay c (chance-of s))))

@@ -611,11 +611,9 @@
   (+ s (torch-way-s n ##Inf item)))
 
 (defn dark-or-lit
-  "{:way :lit or :dark, :dark-s :lit-s}: the cheaper of staying in the dark at a risk of `hurt` hp (each at hp-price of
-  health) and lighting the job's way instead (torch-way-s of `torch-way` {:blocks :carried :item}; nil: the job hangs none)."
-  [hurt health torch-way]
-  (let [dark (* hurt (hp-price health))
-        lit (if torch-way (torch-way-s (:blocks torch-way) (:carried torch-way) (:item torch-way)) ##Inf)]
+  "{:way :lit or :dark, :dark-s :lit-s}: the cheaper of staying in the dark at `dark-s` seconds (price/stay-risk-s) and lighting the job's way instead (torch-way-s of `torch-way` {:blocks :carried :item}; nil: the job hangs none)."
+  [dark torch-way]
+  (let [lit (if torch-way (torch-way-s (:blocks torch-way) (:carried torch-way) (:item torch-way)) ##Inf)]
     {:way (if (< lit dark) :lit :dark) :dark-s dark :lit-s lit}))
 
 (defn dark-way-s
