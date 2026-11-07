@@ -161,6 +161,23 @@
           (is (not (hs/door-open? raw)) "the door shut behind it")
           (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge built outside"))))))
 
+(deftest the-hostile-reflex-prices-the-unseen-shut-home-after-the-look-a-flight-takes-first
+  ;; respond priced the flight before the glance into the home: no refuge, so the pillar (809) beat the flight (1302)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut {:x 5.5 :y 64 :z 5.5} hs/door-states [(zombie 5.5 12.5 nil)])
+                        (assoc :inventory [{:name "cobblestone" :count 16}])
+                        (assoc-in [:self :health] 4))
+              {:keys [eng raw seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)]
+          (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+          (await (tu/run-until-empty eng 3))
+          (is (nil? (:cover (first (filter #(= :hostile.decided (:kind %)) @seen)))) "the home is the refuge, no cover built here")
+          (is (in-room? (body raw)) (str "inside the hut: " (body raw)))
+          (is (not (hs/door-open? raw)) "the door shut behind it")
+          (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge built outside"))))))
+
 (deftest the-door-a-glance-opens-is-recorded-with-an-expiry
   ;; the glance clicked the door by hand and wrote no :opened entry: a cut flight left it open and unrecorded
   (async done

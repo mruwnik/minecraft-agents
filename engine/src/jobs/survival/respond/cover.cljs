@@ -195,13 +195,17 @@
         chance)))))
 
 (defn ^:async caught-chance!
-  "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!) and one
+  "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!), its
+  look into a building dropped :unseen (room-lib/glance-in!, as flight-step!; never with a creeper chasing) and one
   look at the cells its flight would look at first (:look): a way that may be there is priced after the glance the flight
   takes anyway, not before it. One pass: the price asked again after the look is
   the answer, whatever it still wants to look at (cells past the glance memory would cycle for ever)."
   ([c] (await (caught-chance! c nil)))
   ([c specs]
    (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
+   (let [threats (:on (flight/look c (flight/resume-flight (ctx/mem c) (ctx/now c))))]
+     (when-let [s (and (seq threats) (not-any? combat/creeper? threats) (survey c threats false))]
+       (await (room-lib/glance-in! c s threats))))
    (let [r (await (caught-chance-once! c specs))]
      (if-let [cells (:look r)]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
