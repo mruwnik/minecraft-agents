@@ -6,6 +6,7 @@
             [engine.fake :as fake]
             [engine.library-test :as lt]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.forestry.harvest-wood :as hw]
             [jobs.forestry.plant-sapling :as ps]
@@ -37,11 +38,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[inventory logs] [[[] 3] [[{:name "bread" :count 3}] 0]]]
-          (let [{:keys [eng p]} (lt/setup {:self {:health 0.5 :food 5} :blocks (lt/tree 3 0 "oak" 3) :inventory inventory})]
-            (core/submit! eng harvest {})
-            (await (tu/run-until-empty eng 30))
-            (is (= logs (get (lt/inv p) "oak_log" 0)) (pr-str inventory))))))))
+        (await
+         (settings/with-settings {:jobs.lib.cost.death/extra-s 15000}
+           (fn ^:async dear []
+             (doseq [[inventory logs] [[[] 3] [[{:name "bread" :count 3}] 0]]]
+               (let [{:keys [eng p]} (lt/setup {:self {:health 0.5 :food 5} :blocks (lt/tree 3 0 "oak" 3) :inventory inventory})]
+                 (core/submit! eng harvest {})
+                 (await (tu/run-until-empty eng 30))
+                 (is (= logs (get (lt/inv p) "oak_log" 0)) (pr-str inventory)))))))))))
 
 (deftest no-tree-in-range-looks-once-and-waits-unstarted
   (async done

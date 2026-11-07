@@ -258,7 +258,7 @@
               hurt (await (probe {:self {:health 4}}))
               winded (await (probe {:self {:oxygen 4}}))]
           (is (< 1 (:factor whole)) "swimming roofed water costs more than its seconds")
-          (is (< (js/Math.abs (- (:factor hurt) (:factor whole))) 0.1) "a drowning costs the one death at any health")
+          (is (< (:factor hurt) (:factor whole)) "a drowning costs the one death, cheaper by what the respawn refills when the body is hurt (Q145)")
           (is (< (:reach winded) (:reach whole)) "a body low on breath surfaces from fewer blocks")
           (is (<= 1 (:reach winded)) (pr-str winded)))))))
 

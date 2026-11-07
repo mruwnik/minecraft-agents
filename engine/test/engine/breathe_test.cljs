@@ -1249,8 +1249,8 @@
     (is (zero? (price 20 [])) "no hostile known: the opening costs nothing")
     (is (pos? (price 20 zombie)) "a zombie over the cap hurts the body once it is open")
     (is (> (price 6 zombie) (price 20 zombie)) "a weaker armed body pays more: the death it risks")
-    (is (>= (price 6 zombie :inventory []) (price 20 zombie :inventory []))
-        "a bare body dies near surely at either health: the hurt counts only where it lives, so more health never costs more")))
+    (is (< (price 6 zombie :inventory []) (price 20 zombie :inventory []))
+        "a bare body dies near surely at either health: the hurt counts only where it lives, and the death of a hurt body is cheaper by what the respawn refills (Q145)")))
 
 (deftest an-own-build-cap-is-too-dear-when-opening-it-costs-more-than-the-drowning-it-averts
   (is (nil? (judge-of {})) "no other way, no hostile: dug")
