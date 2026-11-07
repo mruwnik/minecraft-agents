@@ -136,7 +136,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood lava-s searched-s read-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood lava-s searched-s read-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -182,6 +182,7 @@
         ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
         way-keys (let [s (js/Set.)] (doseq [[x y z] ways] (.add s (key x y z))) s)
+        only-keys (when only (let [s (js/Set.)] (doseq [[x y z] only] (.add s (key x y z))) s))
         ;; without a body's own, the drops a body with no hp to spend takes
         max-fall (or (:max-fall opts) (:max-drop (armour/fall-profile {})))
         fall-prices (let [a #js []] (dotimes [dy (inc max-fall)] (.push a (if (and fall-s (pos? dy)) (fall-s dy) 0))) a)
@@ -353,7 +354,8 @@
                         try! (fn [nx ny nz move s0 head? top bot unseen-face?]
                                (let [acc #js [s0 0 0 #js [] (aget node 8) (aget node 9)]
                                      face-s (if (and unseen? (or unseen-face? (and head? (unseen-cell? mx (+ my 2) mz)))) unseen-step-s 0)]
-                                 (when (and (or (not head?) (open-cell! acc mx (+ my 2) mz))
+                                 (when (and (or (nil? only-keys) (.has only-keys (key nx ny nz)))
+                                            (or (not head?) (open-cell! acc mx (+ my 2) mz))
                                             (loop [y top] (or (< y bot) (and (open-cell! acc nx y nz) (recur (dec y)))))
                                             (or (inside? nx ny nz) (do (vreset! boxed true) false)))
                                    ;; a step up that cuts or lays its floor is a stair's step: no less than :stair-s
@@ -581,7 +583,7 @@
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or, without :lava-s, with lava over or beside it (it would flow in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
-  :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
+  :margin cells round the two ends, :only feet cells (none else is stepped onto); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
   :read-s seconds of CPU a cell read (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
@@ -592,6 +594,12 @@
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
+
+(defn route-within
+  "search's [answer expanded] stepping only onto the feet cells of route r's steps: r priced at opts' prices (the body's
+  health now), or a way through its cells no dearer. Run to its end: it expands no more than r's cells."
+  [block-at from goal r opts]
+  (take 2 ((search block-at from goal (assoc opts :only (map :to (:steps r)))) ##Inf)))
 
 (defonce ^{:doc "{caller [key search-fn]} of the searches route-resumed left unfinished, one a caller, the oldest dropped past kept-max."} kept (js/Map.))
 

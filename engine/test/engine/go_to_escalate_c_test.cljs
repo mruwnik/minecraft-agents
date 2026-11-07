@@ -1460,19 +1460,63 @@
     (is (= 3 @starts) "the memory changed: searched again")
     (choose/forget-routes! (:id slice))))
 
-(deftest an-ended-route-is-re-priced-as-the-health-rises-not-searched-again
-  (let [p (tu/fake {:blocks (merge open-ground (box 0 64 -2 1 68 2 "bedrock")) :self {:pos {:x 0.5 :y 69 :z 0.5} :health 12}})
-        ask (fn [id] (:seconds (choose/route-answer p [0 69 0] [8 64 0] (constantly true) (constantly false) false false {:slice (choose/route-slice id)})))
+(defn counted-search
+  "dig-route/search counting each search begun in starts: route-within's re-price of a kept route over its own cells is none."
+  [starts]
+  (let [search dig-route/search]
+    (fn [& args] (when-not (:only (nth args 3)) (swap! starts inc)) (apply search args))))
+
+(defn health-run
+  "route-answer's seconds (to 1e-6; else its answer, :searching say) from feet cell from to goal at each health of hps: {:kept under one go-to call, :fresh
+  under a call of its own at each, :starts the searches the kept call began}."
+  [p from goal hps]
+  (let [ask (fn [id] (let [a (choose/route-answer p from goal (constantly true) (constantly false) false false {:slice (choose/route-slice id)})]
+                      (if (:seconds a) (js/Math.round (* 1e6 (:seconds a))) a)))
+        at (fn [id hp] (swap! (fake/state p) assoc-in [:self :health] hp) (ask id))
         starts (atom 0)
-        search dig-route/search
-        kept (with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
-               (mapv (fn [hp] (swap! (fake/state p) assoc-in [:self :health] hp) (ask "hp-kept")) (range 12 21)))
-        fresh (mapv (fn [hp] (swap! (fake/state p) assoc-in [:self :health] hp) (ask (str "hp-fresh-" hp))) (range 12 21))]
-    (is (= 1 @starts) "the health is no new question: the memory holds")
-    (is (apply > kept) "the fall off the ledge costs less hp's worth as the health rises")
-    (is (every? #(< (js/Math.abs %) 1e-9) (map - kept fresh)) "the kept route's price is a fresh search's at each health")
+        kept (with-redefs [dig-route/search (counted-search starts)]
+               (mapv #(at "hp-kept" %) hps))
+        fresh (mapv #(at (str "hp-fresh-" %) %) hps)]
     (choose/forget-routes! "hp-kept")
-    (doseq [hp (range 12 21)] (choose/forget-routes! (str "hp-fresh-" hp)))))
+    (doseq [hp hps] (choose/forget-routes! (str "hp-fresh-" hp)))
+    {:kept kept :fresh fresh :starts @starts}))
+
+(def ledge
+  "A body at x 0 on a bedrock ledge 6 over the open ground: its way to the floor is the fall off it."
+  {:blocks (merge open-ground (box 0 64 -2 1 68 2 "bedrock")) :self {:pos {:x 0.5 :y 69 :z 0.5}}})
+
+(def flooded-row
+  "A one-wide row of rock under a pool, the rock over it too high to dig round: the row dug under water is the only way,
+  one the body drowns on at 10 hp."
+  {:blocks (merge (box 0 63 0 4 90 0 "stone") (box 1 66 0 3 66 0 "water") (box 0 64 0 0 65 0 "air") (box 4 64 0 4 65 0 "air"))
+   :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
+
+(deftest an-ended-route-is-re-priced-as-the-health-rises-not-searched-again
+  (let [{:keys [kept fresh starts]} (health-run (tu/fake ledge) [0 69 0] [8 64 0] (range 12 21))]
+    (is (= 1 starts) "the health is no new question: the memory holds")
+    (is (apply > kept) "the fall off the ledge costs less hp's worth as the health rises")
+    (is (= fresh kept) "the kept route's price is a fresh search's at each health")))
+
+(deftest a-kept-route-follows-the-health-down-and-a-no-route-a-deeper-drop-up
+  (are [scene from goal hps starts] (let [{:keys [kept fresh] :as run} (health-run (tu/fake scene) from goal hps)]
+                                      (and (= fresh kept) (= starts (:starts run))))
+    ;; searched again once the fall passes the deepest drop survived
+    ledge [0 69 0] [8 64 0] (range 20 0 -1) 2
+    ;; no route at 1 hp, asked again at each deeper drop till the fall is one
+    ledge [0 69 0] [8 64 0] (range 1 21) 3
+    ;; the flood's drowning re-priced: searched again once it kills
+    flooded-row [0 64 0] [4 64 0] (range 20 0 -2) 2))
+
+(deftest a-search-gone-on-over-calls-prices-its-route-at-the-health-it-ends-at
+  ;; 5 nodes a call: the search begun at 20 hp ends calls later, at a health its way does not survive
+  (are [scene from goal nodes calls hp] (let [{:keys [kept fresh]} (settings/with-settings {:jobs.lib.dig-route/max-nodes nodes}
+                                                         #(health-run (tu/fake scene) from goal (concat (repeat calls 20) (repeat 12 hp))))]
+                              (and (= [:searching] (distinct (take calls kept)))
+                                   (= [(last fresh)] (distinct (remove #{:searching} kept)))))
+    ;; the fall off the ledge passes the deepest drop
+    ledge [0 69 0] [8 64 0] 5 3 2
+    ;; the flood drowns it
+    flooded-row [0 64 0] [4 64 0] 2 2 8))
 
 (deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
   (are [end best dive? ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best dive?))
@@ -1590,7 +1634,6 @@
         feet [0 64 0]
         goal [10 64 0]
         starts (atom 0)
-        search dig-route/search
         choice (fn []
                  (let [slice (choose/route-slice (choose/route-owner c))
                        o (choose/way-opts c feet false slice)
@@ -1601,7 +1644,7 @@
                    [(:worth-s o) (:step e)]))]
     (.setOwner (:primitives eng) "tx")
     (ctx/update-mem! c assoc :escalation {:step :pillar} :replan-budget {:since 0 :fallback-s 30})
-    (with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+    (with-redefs [dig-route/search (counted-search starts)]
       (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
         (fn []
           (let [first-round (choice)
@@ -1618,7 +1661,6 @@
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
         p (:primitives c)
         starts (atom 0)
-        search dig-route/search
         choice (fn []
                  (let [slice (choose/route-slice (choose/route-owner c))
                        o (choose/way-opts c [0 64 0] false slice)
@@ -1627,7 +1669,7 @@
                    (:step e)))
         ended (fn [] (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c) (choose/route-epoch p))))))]
     (.setOwner p "tx")
-    (with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+    (with-redefs [dig-route/search (counted-search starts)]
       (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
         (fn []
           (is (= :searching (choice)))
