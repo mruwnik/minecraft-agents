@@ -11,7 +11,7 @@
    ;; danger); the job is submitted once the body has seen it, so it decides on its real place
    :register []
    :body {:inventory [["stone_sword" 1]]}
-   :act [[:summon "skeleton" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [18.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "skeleton"} 10]
          [:job (jobs.survival.respond-to-hostile)]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :fight}} :within-s 15}
@@ -43,6 +43,6 @@
    :limit-s 60}
   {:name "bare-hand-skeleton-at-range"
    :body {:effects [["resistance" 600 4]]}
-   :act [[:summon "skeleton" [26.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [26.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}]
    :limit-s 45}]}

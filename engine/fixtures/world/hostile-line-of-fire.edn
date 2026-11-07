@@ -9,39 +9,39 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "skeleton-open-fires"
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
   {:name "skeleton-slit-fires"
    :blocks [[:fill [19 0 12] [19 6 20] "stone"] [:fill [19 1 12] [19 1 20] "air"]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
    :after [[:block [19 0 16] "stone"] [:block [19 1 16] "air"]]}
   {:name "skeleton-poppies-fires"
    :blocks [[:fill [19 -1 12] [19 -1 20] "grass_block"] [:fill [19 0 12] [19 0 20] "poppy"]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
    :after [[:block [19 0 16] "poppy"]]}
   {:name "skeleton-torches-fires"
    :blocks [[:fill [19 0 12] [19 0 20] "torch"]]
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]
    :after [[:block [19 0 16] "torch"]]}
   {:name "skeleton-glass-quiet"
    :blocks [[:fill [19 0 12] [19 6 20] "glass"]]
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "skeleton-leaves-quiet"
    :blocks [[:fill [19 0 12] [19 6 20] "oak_leaves[persistent=true]"]]
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "skeleton-stone-quiet"
    :blocks [[:fill [19 0 12] [19 6 20] "stone"]]
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[20 0 14] [24 2 18]] 1]]}
   {:name "zombie-sealed-glass-quiet"
@@ -53,7 +53,7 @@
   {:name "skeleton-ai-sealed-glass-quiet"
    :blocks [[:fill [20 -1 14] [24 3 18] "glass" :hollow]]
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:summon "skeleton" [22.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "skeleton" [22.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[21 0 15] [23 1 17]] 1]]}
   {:name "zombie-way-round-glass-fires"
@@ -86,21 +86,21 @@
    :plot {:height 8}
    :blocks [[:fill [4 -1 4] [28 6 28] "stone" :hollow]]
    :body {:at [12.5 0 16.5]}
-   :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
   {:name "heard-skeleton-in-a-dark-tunnel-quiet"
    :plot {:height 8}
    :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"]]
    :body {:at [12.5 0 16.5]}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 10}]
    :after [[:entities "type=skeleton,tag=wt" [[18 0 15] [21 2 17]] 1]]}
   {:name "seen-skeleton-in-a-lit-tunnel-fires"
    :plot {:height 8}
    :blocks [[:fill [4 -1 4] [28 6 28] "stone"] [:fill [8 0 16] [26 1 16] "air"] [:set [10 0 16] "torch"] [:set [14 0 16] "torch"] [:set [18 0 16] "torch"] [:set [21 0 16] "torch"] [:set [24 0 16] "torch"]]
    :body {:at [12.5 0 16.5] :yaw -90}
-   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 9}]}
   ;; Owner Q240: in closed quarters a heard melee mob counts only once a look sees it. The body in a dark 1x2 tunnel, the
   ;; zombie 7 east behind a stone plug: its rough spot (4 east, in the tunnel) has a way, but nothing is seen.

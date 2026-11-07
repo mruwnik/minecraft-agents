@@ -12,7 +12,7 @@
   :limit-s 90}
  :cases
  [{:name "hurt-body-in-a-skeletons-line-of-fire-walls-in"
-   :act [[:summon "skeleton" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [16.5 0 22.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 10 minecraft:generic"]
          [:job (jobs.survival.shut-in {:ways #{:walls :pocket}})]]
    :expect [{:event {:source :job :kind :completed :data {:way :walls}} :within-s 60 :of-job true}]}

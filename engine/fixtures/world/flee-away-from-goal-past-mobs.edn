@@ -15,7 +15,7 @@
  [{:name "unarmed-go-to-past-a-skeleton-and-a-zombie-flees-back-not-on"
    ;; a walled hall (z 14..19, x 8..60): in the open plot go-to routes round the mobs 12 blocks off and the reflex never fires; here the only way on is past them
    :blocks [[:fill [8 0 13] [60 3 13] "stone"] [:fill [8 0 20] [60 3 20] "stone"]]
-   :act [[:summon "skeleton" [26.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [26.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "zombie" [22.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 60}
@@ -34,7 +34,7 @@
   {:name "armed-body-approaches-a-lone-skeleton"
    ;; unarmoured with a sword the fight is the cheaper answer (live: fight 152, flee 351): the decision is :fight
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
-   :act [[:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 40}
             {:no-event {:source :body :kind :died} :for-s 30}]
@@ -43,7 +43,7 @@
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"] [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
          [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"] [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
-         [:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [20.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 60}]
@@ -51,7 +51,7 @@
   {:name "armed-body-beside-a-lone-skeleton-fights-it"
    ;; a sword in reach of a lone archer: closing is cheaper than a walk under its arrows (live: fight 155, flee 280)
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
-   :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 40}
             {:no-event {:source :body :kind :died} :for-s 30}]
@@ -60,17 +60,17 @@
    ;; on hard, three walks under its arrows cost more than closing on it
    :body {:yaw 270 :inventory [["iron_sword" 1]]}
    :memory [{:kind :hostile :data {:mob "skeleton" :decision :flee}} {:kind :hostile :data {:mob "skeleton" :decision :flee}}]
-   :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :fight}} :within-s 30}
             {:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 40}]
    :limit-s 40}
   {:name "armed-body-flees-six-skeletons-it-met-for-the-first-time"
    :body {:yaw 270 :inventory [["wooden_sword" 1]]}
-   :act [[:summon "skeleton" [19.5 0 10.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [19.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [19.5 0 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [19.5 0 18.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [19.5 0 20.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [19.5 0 10.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [19.5 0 12.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [19.5 0 14.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [19.5 0 18.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [19.5 0 20.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}]
    :limit-s 40}]}

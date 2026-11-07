@@ -21,7 +21,7 @@
    :after [[:block [10 0 6] "cobblestone"] [:entities "type=zombie,tag=wt" [[7 0 3] [9 2 5]] 1]]
    :limit-s 80}
   {:name "skeleton-with-line-of-fire-holds-tidy-off"
-   :act [[:summon "skeleton" [10.5 0 3.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [10.5 0 3.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:no-event {:source :reflex :kind :ended :context {:reflex-id :tidy-pending} :data {:kind #{:done :nothing-possible}}} :for-s 30}]
    :after [[:block [10 0 6] "air"] [:entities "type=skeleton,tag=wt" [[9 0 2] [12 2 5]] 1]]
    :limit-s 40}]}

@@ -26,7 +26,7 @@
    :register [{:trigger :hostile-near}]
    :blocks [[:fill [14 9 15] [17 11 17] "stone"] [:fill [15 9 16] [16 10 16] "air"]]
    :body {:at [16.2 9 16.5] :yaw -90 :settle-s 2 :effects [["regeneration" 120 1]]}
-   :act [[:summon "skeleton" [16.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "skeleton" [16.5 0 16.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 70}
             {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 75}]
    :after [[:body-far [16.5 0 16.5] 5]]}]}

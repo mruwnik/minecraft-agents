@@ -17,7 +17,7 @@
   :limit-s 60}
  :cases
  [{:name "cover-past-the-seen-part-pays-its-dead-end"
-   :act [[:summon "skeleton" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [6.5 3 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.respond-to-hostile {})]]
    :expect [{:event {:source :job :kind :retreat.search :data {:ends [:has {:cover? true :dead-end [:> 0]}]}} :within-s 25 :of-job true}
             {:no-event {:source :body :kind :died} :for-s 1}]}]}

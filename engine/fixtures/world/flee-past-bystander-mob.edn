@@ -12,7 +12,7 @@
  :cases
  [{:name "flee-from-a-skeleton-does-not-run-into-a-zombie-behind"
    :act [[:summon "zombie" [48.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}
             {:no-event {:source :body :kind :died} :for-s 25}]
    :after [[:body-far [48.5 0 16.5] 9]]
