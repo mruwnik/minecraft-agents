@@ -141,8 +141,9 @@
 (defn log-encounter!
   "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health;
   the event has the answers' prices, seconds, the cover way a flight begins with, the :near mobs' names (what a flight's
-  catch is counted by) and their :mobs (name and id); :way the flee search's judged catch chance with :food and the mob's :distance (the fit of a flight's catch beyond its prior) (what a meet after a flight is counted by); way-log/log-priced! the way counts
-  scan the flight was priced with, when it was). The entry's :run is the run's first decision time (hostile-fight/returns)."
+  catch is counted by) and their :mobs (name and id; what a meet after a flight is counted by); :way the flee search's
+  judged catch chance with :food and the mob's :distance (the fit of a flight's catch beyond its prior); way-log/log-priced!
+  the way counts scan the flight was priced with, when it was). The entry's :run is the run's first decision time (hostile-fight/returns)."
   [c near threat decision prices cover scan refuge-s way]
   (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
@@ -151,13 +152,12 @@
                        :health (js/Math.round (.-health (.self (:primitives c)))) :run run)]
       (ctx/remember! c :hostile entry hostile-policy)
       (ctx/emit! c :hostile.decided :info (cond-> (assoc (dissoc entry :from :run :id) :text (encounter-text entry prev) :near (mapv #(.-name %) near)
-                                                                       :mobs (mapv #(str (.-name %) " " (.-id %)) near))
+                                                                       :mobs (mapv #(str (.-name %) " " (.-id %)) near) :food (.-food (.self (:primitives c))))
                                             (some? (.-held threat)) (assoc :held (.-held threat))
                                             prices (assoc :prices (update-vals prices js/Math.round))
                                             cover (assoc :cover cover)
                                             refuge-s (assoc :refuge-s refuge-s)
                                             way (assoc :way way)
-                                            true (assoc :food (.-food (.self (:primitives c))))
                                             (danger-q/seen-only? threat) (assoc :distance (danger-q/mob-distance (:primitives c) threat))))
       (way-log/log-priced! c scan)
       (ctx/update-mem! c assoc :logged decision :run-at run))))

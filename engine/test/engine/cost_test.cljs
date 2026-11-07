@@ -583,7 +583,7 @@
         (is (< 0.05 (dies 20) 0.2) "and 1 of 15 at 20 hp: a caught flight takes some blows, not the whole flight's")))))
 
 (deftest a-flight-from-a-shooter-is-caught-at-the-bow-mobs-own-prior
-  ;; the trial flights from bow mobs: 2 deaths in 45, most of the arrows on the walk out of range
+  ;; the trial flights from bow mobs: 2 deaths in 39, most of the arrows on the walk out of range
   (let [bow (caught/prior "stray" 20) zombie (caught/prior "zombie" 20)]
     (is (= bow (caught/prior "skeleton" 20)) "one group")
     (is (< (:chance bow) (:chance zombie)) "caught less often than by a zombie")
