@@ -18,7 +18,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
-            [jobs.lib.step-off :as step-off]))
+            [jobs.lib.step-off :as step-off]
+            [jobs.lib.walk-pick :as pick]))
 
 (def doc
   "Dig out a box from the top down (site levelling, demolition). Beds, containers and fluids are kept (:keep adds
@@ -239,26 +240,62 @@
         fx (js/Math.floor x) fy (js/Math.floor y) fz (js/Math.floor z)]
     #{{:x fx :y (dec fy) :z fz} {:x fx :y fy :z fz} {:x fx :y (inc fy) :z fz}}))
 
-(defn exposed
-  "The [pos name] of loaded that touch seen air outside the cells still to dig that a body could stand in or just above
-  (solid floor within 2 below it): a stair dug into rock opens from its foot, not from its far wall; all of them when none does."
+(defn open-neighbours
+  "The function (fn [pos]) of the seen air cells beside pos outside the loaded cells still to dig that a body could stand in or just above
+  (solid floor within 2 below it)."
   [c loaded]
   (let [p (:primitives c)
         todo (into #{} (map first) loaded)
         air? (fn [pos] (some-> (u/seen-name p pos) bs/air))
         solid? (fn [pos] (let [n (u/seen-name p pos)] (and n (not (bs/air n)))))
         below (fn [{:keys [x y z]} d] {:x x :y (- y d) :z z})
-        standable? (fn [pos] (and (air? pos) (not (todo pos)) (or (solid? (below pos 1)) (and (air? (below pos 1)) (solid? (below pos 2))))))
-        open? (fn [{:keys [x y z]}]
-                (some (fn [[dx dy dz]] (standable? {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
-                      [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
-        out (filter #(open? (first %)) loaded)]
+        standable? (fn [pos] (and (air? pos) (not (todo pos)) (or (solid? (below pos 1)) (and (air? (below pos 1)) (solid? (below pos 2))))))]
+    (fn [{:keys [x y z]}]
+      (filter standable? (map (fn [[dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+                              [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))))
+
+(defn exposed
+  "The [pos name] of loaded that touch seen air outside the cells still to dig that a body could stand in or just above
+  (open-neighbours): a stair dug into rock opens from its foot, not from its far wall; all of them when none does."
+  [c loaded]
+  (let [open (open-neighbours c loaded)
+        out (filter #(seq (open (first %))) loaded)]
     (if (seq out) out loaded)))
 
-(defn top-cell
-  "The pending [pos name] at the highest y among the loaded cells not under the
-  body's feet that touch open air, nearest the body; with none loaded, the nearest unloaded one.
-  Under-foot cells are picked only when nothing else is pending (nil then)."
+(def walk-range "Blocks within which the dig child's walk stops short of the cell (jobs.lib.blocks/walk-request's default)." 3)
+
+(defn supported-stands
+  "The cells a body stands in to dig pos from its open neighbours (open-neighbours): the neighbour with solid ground under it,
+  else the cell below it (the neighbour is its headroom)."
+  [c open pos]
+  (let [p (:primitives c)
+        solid? (fn [{:keys [x y z]}] (let [n (u/seen-name p {:x x :y (dec y) :z z})] (and n (not (bs/air n)))))]
+    (map (fn [{:keys [x y z] :as n}] (if (solid? n) n {:x x :y (dec y) :z z})) (open pos))))
+
+(defn ^:async reachable-layer
+  "The highest layer (cells of one y) of loaded the body digs now (a cell it sees within reach) or can walk to a stand beside
+  (walk-pick/none-reachable!, go-to's own reach, not proved out of reach); :searching while that search goes on; nil when no layer."
+  [c loaded]
+  (let [open (open-neighbours c loaded)
+        layers (->> loaded (group-by #(:y (first %))) (sort-by key >) (map val))]
+    (loop [ls layers]
+      (if-let [layer (first ls)]
+        (let [now (filter #(blocks/in-reach? c (first %) true) layer)
+              goals (distinct (map #(assoc % :range 0) (mapcat #(supported-stands c open (first %)) layer)))
+              r (cond (seq now) false
+                      (empty? goals) true
+                      :else (await (pick/none-reachable! c goals)))]
+          (cond
+            (seq now) now
+            (= :searching r) :searching
+            (true? r) (recur (rest ls))
+            :else layer))
+        nil))))
+
+(defn ^:async top-cell
+  "The pending [pos name] at the highest y among the loaded cells not under the body's feet that touch open air the body
+  can walk to (reachable-layer), nearest the body; with none loaded, the nearest unloaded one. Under-foot cells are picked
+  only when nothing else is pending (nil then). :searching while the reach search goes on."
   [c todo]
   (let [me (u/self-pos c)
         feet (under-foot c)
@@ -267,8 +304,10 @@
     (cond
       (empty? others) nil
       (empty? loaded) (apply min-key #(u/dist me (first %)) others)
-      :else (let [top (apply max (map #(:y (first %)) loaded))]
-              (apply min-key #(u/dist me (first %)) (filter #(= top (:y (first %))) loaded))))))
+      :else (let [layer (await (reachable-layer c loaded))]
+              (if (= :searching layer)
+                :searching
+                (apply min-key #(u/dist me (first %)) (or layer (filter #(= (apply max (map (comp :y first) loaded)) (:y (first %))) loaded))))))))
 
 (def unseen-reach
   "Blocks from the eye within which an unseen cell is dug at once: a cell inside rock is never in view, and the dig child digs through to it."
@@ -379,14 +418,17 @@
                 :again)))
       (if (empty? ready)
         (finish! c)
-        (if-let [[pos n] (top-cell c ready)]
+        (let [top (await (top-cell c ready))]
+         (if (= :searching top)
+          :continue
+          (if-let [[pos n] top]
           (if (and (nil? n) (not (digs-unseen? c pos)))
-            (let [w (await (common/walk! c pos 3 {:ways #{:walk}}))]
+            (let [w (await (common/walk! c pos walk-range {:ways #{:walk}}))]
               (when (= :blocked w) (bump! c pos :unreachable))
               (if (= :continue w) :continue :again))
             (do (ctx/update-mem! c assoc :target pos)
                 (await (dig! c pos))))
-          (await (step-off! c ready))))))))
+          (await (step-off! c ready))))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until the box is cleared or declined; :continue only while a walk or the body waits."
