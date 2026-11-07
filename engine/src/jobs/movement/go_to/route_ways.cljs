@@ -13,6 +13,16 @@
     (seq dig) [:dig]
     :else [:walk]))
 
+(defn dig-cells
+  "[{:cell :block :guess :floor-guess}] of a dig route's cells digs (in walking order): :guess on a cell not seen (read as
+  rock), :floor-guess the cell under it when that is not seen and not dug (the route stands on it, read as rock)."
+  [block-at unseen? digs]
+  (let [dug (set digs)]
+    (mapv (fn [[x y z :as c]] (let [floor [x (dec y) z]]
+                                (cond-> {:cell c :block (block-at c) :guess (unseen? c)}
+                                  (and (not (dug floor)) (unseen? floor)) (assoc :floor-guess floor))))
+          digs)))
+
 (defn segments
   "The ways, in order, of a route's steps (jobs.lib.dig-route :steps) from feet cell from, each with :from, the feet it
   starts at: {:step :pillar :height :roof} (:roof its cells dug overhead), {:step :stair :heading :steps :guessed} (:guessed
@@ -31,7 +41,7 @@
                   :pillar [{:step :pillar :height (count run) :roof (count digs) :from start}]
                   :stair [(let [guessed (filterv unseen? (map #(escape/add (:to %) [0 -1 0]) run-steps))]
                             (cond-> {:step :stair :heading (second kind) :steps (count run) :from start} (seq guessed) (assoc :guessed guessed)))]
-                  :dig [{:step :dig-route :cells (mapv (fn [c] {:cell c :block (block-at c) :guess (unseen? c)}) digs) :from start}
+                  :dig [{:step :dig-route :cells (dig-cells block-at unseen? digs) :from start}
                         {:step :approach :pos end :from start}]
                   :walk [{:step :approach :pos end :from start}])))]
     (as-> (reduce (fn [ways w]
@@ -50,6 +60,8 @@
       (assoc nxt :then (vec (rest (:then e)))))))
 
 (defn floor-gone
-  "A floor stair way e guessed (:guessed) that is now seen to be no floor (a shaft's air, water), else nil."
+  "A floor way e guessed (a stair's :guessed, a dig route's cells' :floor-guess) that is now seen to be no floor (a shaft's
+  air, water), else nil."
   [block-at unseen? e]
-  (first (filter #(and (not (unseen? %)) (some? (block-at %)) (not (escape/solid? (block-at %)))) (:guessed e))))
+  (first (filter #(and (not (unseen? %)) (some? (block-at %)) (not (escape/solid? (block-at %))))
+                 (concat (:guessed e) (keep :floor-guess (:cells e))))))

@@ -36,3 +36,10 @@
     (is (= [2 0 0] (gone "air" #{})) "seen open since: the stair would stop at once")
     (is (nil? (gone "stone" #{})) "seen solid: the guess held")
     (is (nil? (gone "air" #{[2 0 0]})) "still unseen")))
+
+(deftest a-dig-route-over-a-floor-it-guessed-is-dropped-once-that-floor-is-seen-to-be-none
+  (let [dig (last (ways/segments (constantly "stone") #{[3 4 -2]} [0 0 0] route))
+        gone #(ways/floor-gone (constantly %1) %2 dig)]
+    (is (= [nil [3 4 -2]] (map :floor-guess (:cells dig))) "the stand's floor was not seen; the head cell stands on the feet cell it digs")
+    (is (= [3 4 -2] (gone "air" #{})) "seen open since: the route stands on nothing there")
+    (is (nil? (gone "stone" #{})) "seen solid: the guess held")))

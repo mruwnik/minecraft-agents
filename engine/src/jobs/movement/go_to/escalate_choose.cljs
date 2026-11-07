@@ -42,6 +42,7 @@
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-placed-fn]]
             [jobs.lib.stair-memory :as smem]
             [jobs.movement.go-to.result :as end]
+            [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.tuning :refer [budget-near max-blocked]]
             [jobs.movement.go-to.way-steps :as ways]))
 
@@ -691,8 +692,9 @@
           dearer? :dearer)))))
 
 (defn route-cells
-  "[{:cell :block :guess :class}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
-  rock), :class its guess-class; [] when nothing is left to dig; :searching or nil as route-answer; :dearer, or dig-route's
+  "[{:cell :block :guess :class :floor-guess}]: the cells to dig of route-answer's way, in walking order, :guess on a cell not seen (read as
+  rock), :class its guess-class, :floor-guess the cell under it when the route stands on that cell unseen (read as rock) and does
+  not dig it; [] when nothing is left to dig; :searching or nil as route-answer; :dearer, or dig-route's
   {:problem :no-route :boxed true :searched-s} (no route in the :margin box), under route-opts :dearer?."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
@@ -703,10 +705,8 @@
      (cond
        (or (#{:searching :dearer} a) (:boxed a)) a
        a (let [sensed #(u/sensed p (zipmap [:x :y :z] %))]
-           (mapv (fn [cell] (let [guess (dig-look/unknown? p cell)]
-                              (cond-> {:cell cell :block (block-at cell) :guess guess}
-                                guess (assoc :class (guess-class sensed cell)))))
-                 (:dig a)))))))
+           (mapv #(cond-> % (:guess %) (assoc :class (guess-class sensed (:cell %))))
+                 (route-ways/dig-cells block-at #(dig-look/unknown? p %) (:dig a))))))))
 
 (defn way-guesses
   "[{:cell :class}]: the cells stair e from feet cuts that the body has not sensed (read as rock), each with its

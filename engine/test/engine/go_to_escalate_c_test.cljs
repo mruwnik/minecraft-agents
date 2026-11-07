@@ -1080,6 +1080,25 @@
     (is (= [[1 64 0] [2 64 0]] (run! {:step :stair :then [{:step :dig-route :cells (cells 1 2)}]})) "a later way's route is held")
     (is (= [[1 64 0] [2 64 0] [3 64 0]] (run! {:step :dig-route :cells (cells 3)})) "a later route adds to the earlier route's unentered cells")))
 
+(deftest a-dig-route-whose-guessed-floor-is-seen-to-be-air-digs-no-more-and-is-planned-again
+  ;; a dig of the stand's head and feet over the floor it guessed rock, which a look into a hole dug before showed is air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (gt/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                       :blocks (assoc (box -1 62 -1 4 65 1 "stone") "0,64,0" "air" "0,65,0" "air" "1,63,0" "air")})
+              p (:primitives eng)
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+          (.setOwner p "tx")
+          (ctx/update-mem! c assoc
+                           :replan-budget {:since (ctx/now c) :cells 0 :fallback-s 1000}
+                           :escalation {:step :dig-route :from [0 64 0] :then [{:step :approach :pos [3 64 0] :from [0 64 0]}]
+                                        :cells [{:cell [1 65 0] :block "stone" :guess false}
+                                                {:cell [1 64 0] :block "stone" :guess false :floor-guess [1 63 0]}]})
+          (is (= :again (await (esc/dig-route-round! c [3 64 0]))))
+          (is (= ["stone" "stone"] [(tu/true-block-name p 1 65 0) (tu/true-block-name p 1 64 0)]) "nothing more of the route is dug")
+          (is (nil? (:escalation (ctx/mem c))) "the climb is searched again from what the body sees now"))))))
+
 (deftest a-climb-s-next-stair-over-a-guessed-floor-seen-to-be-air-is-not-started-and-the-ways-are-chosen-again
   (let [{:keys [eng seen]} (gt/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (assoc (box -1 62 -1 4 63 1 "stone") "2,63,0" "air")})
         c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})

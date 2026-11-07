@@ -829,27 +829,29 @@
 
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,
-  so a resumed round goes on where it stopped; a guessed cell seen otherwise plans the route again (replan-route!).
-  A cell that may not or could not be dug ends it (escalation-failed!)."
+  so a resumed round goes on where it stopped; a guessed cell seen otherwise, or a guessed floor seen to be none
+  (route-ways/floor-gone), plans the route again (replan-route!). A cell that may not or could not be dug ends it (escalation-failed!)."
   [c pos]
   (let [{:keys [cells] :as e} (:escalation (ctx/mem c))]
     (loop [todo cells]
-      (if-let [{:keys [cell] :as planned} (first todo)]
-        (let [o (await (route-cell! c planned todo))]
-          (when (= :dug o)
-            (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :guess false)))))
-          (cond
-            (= :continue o) :continue
-            ;; a replan still searching meets the same cell next round: one look
-            (= :replan o) (do (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :looked true))))
-                              (await (replan-route! c pos cell)))
-            (#{:dug :missing :open} o) (recur (rest todo))
-            :else (await (escalation-failed! c pos (cond-> {:step :dig-route :reason o :cell cell}
-                                                     (= :not-diggable o) (assoc :block ((escape/block-at-of (:primitives c)) cell)))))))
-        (do (when-let [stand (and (own-cut? c) (past-hole-stand (end/feet-cell c) cells))]
-              (when (standable-seen? c stand)
-                (ctx/update-mem! c assoc-in [:escalation :then] [{:step :approach :pos stand :past-hole true}])))
-            (escalated! c pos e true))))))
+      (if-let [gone (route-ways/floor-gone (escape/block-at-of (:primitives c)) (escape/unseen-of (:primitives c)) e)]
+        (await (replan-route! c pos gone))
+        (if-let [{:keys [cell] :as planned} (first todo)]
+          (let [o (await (route-cell! c planned todo))]
+            (when (= :dug o)
+              (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :guess false)))))
+            (cond
+              (= :continue o) :continue
+              ;; a replan still searching meets the same cell next round: one look
+              (= :replan o) (do (ctx/update-mem! c update-in [:escalation :cells] (partial mapv #(cond-> % (= cell (:cell %)) (assoc :looked true))))
+                                (await (replan-route! c pos cell)))
+              (#{:dug :missing :open} o) (recur (rest todo))
+              :else (await (escalation-failed! c pos (cond-> {:step :dig-route :reason o :cell cell}
+                                                       (= :not-diggable o) (assoc :block ((escape/block-at-of (:primitives c)) cell)))))))
+          (do (when-let [stand (and (own-cut? c) (past-hole-stand (end/feet-cell c) cells))]
+                (when (standable-seen? c stand)
+                  (ctx/update-mem! c assoc-in [:escalation :then] [{:step :approach :pos stand :past-hole true}])))
+              (escalated! c pos e true)))))))
 
 (defn ^:async escalation-round!
   "One round of the escalation: leaving the shelter, digging a route, or the child's call (escalation-child-round!)."
