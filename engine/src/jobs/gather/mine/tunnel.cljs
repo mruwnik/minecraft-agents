@@ -85,7 +85,7 @@
 (defn tunnel-reason [stop] (case stop :tunnel-length :tunnel-length :no-tool :no-tool :tunnel-stopped))
 
 (defn tunnel-end!
-  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending, one round on (a target
+  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending, on the first round no seen target is left (a target
   its looks brought into view is dug first), carries :stop :length :at :next-cell :walk :fluid :behind.
   walk: for :walk-failed, what stopped the walk (step-to!)."
   [c stop at & [next walk]]

@@ -1913,6 +1913,29 @@
             (dotimes [_ 3] (await (look-edge/look! c [[20 64 0]]))))
           (is (= [:look] @log) "one look, no walk"))))))
 
+(deftest an-edge-cell-whose-centre-is-past-near-of-the-eye-is-walked-towards-though-its-feet-distance-is-within
+  ;; 4 cells along the tunnel: feet to cell is 4, eye to its centre 4.15 (perception's measure), so the first look may not show it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem* (atom {})
+              body (tunnel-seen-body)
+              feet (sh-sense/feet body)
+              cell [(+ (:x feet) 4) (:y feet) (:z feet)]
+              c {:primitives body :id "edge-stub" :root "edge-stub" :slots []
+                 :view (fn [] {:now 1000000 :data {:entries {(mem/job-kind "edge-stub") [{:t 1000000 :data @mem*}]}
+                                                    :policies {(mem/job-kind "edge-stub") mem/job-policy}}})
+                 :update-mem (fn [f more] (apply swap! mem* f more))}
+              log (atom [])
+              orig-call ctx/call]
+          (with-redefs [walk-risk/look-way (constantly {:hp 0 :secs 1})
+                        ctx/worth (constantly 100)
+                        look/near-of (constantly 4)
+                        dig-look/look-at! (fn [c' cell] (swap! log conj :look) (js/Promise.resolve true))
+                        ctx/call (fn [c' slot job args] (if (identical? c c') (do (swap! log conj :walk) (js/Promise.resolve :done)) (orig-call c' slot job args)))]
+            (dotimes [_ 3] (await (look-edge/look! c [cell]))))
+          (is (some #{:walk} @log) "no look from here shows it: a walk closer"))))))
+
 (deftest an-edge-cell-within-sight-range-round-a-corner-is-walked-towards
   (async done
     (tu/run-async done

@@ -119,6 +119,11 @@
   [p cell]
   ((walkable-near-fn p (sh-sense/feet p)) cell))
 
+(defn eye-dist-from
+  "Perception's measure: a body standing in cell `at` ({:x :y :z}), its eye to the centre of `cell`."
+  [{:keys [x y z]} cell]
+  (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} cell))
+
 (defn far-side
   "{:side [x y z] :to {:x :y :z}}: the unseen side, not in `looked`, of the closed region round `region` whose walkable-near
   cell `to` shows the most unseen sides within look/near-of (the
@@ -136,7 +141,7 @@
    (let [near-fn (delay (walkable-near-fn p region))
          near (or (look/near-of p) 4)
          edge (:edge (sh-inside/spawn-region p region (sh-sense/sky-subtract-now p)))
-         shows? (fn [{:keys [x y z]} [sx sy sz]] (<= (u/dist {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)} {:x (+ sx 0.5) :y (+ sy 0.5) :z (+ sz 0.5)}) near))
+         shows? (fn [at side] (<= (eye-dist-from at side) near))
          sides (remove #(or (looked %) (some (fn [at] (shows? at %)) stands)) (distinct (concat (some-> edge vector) (filter (open-beside-fn p) (reach-room/unseen-sides p region)))))
          no-new-view? (fn [side to] (some #(and (u/within? % to 1) (or (shows? % side) (not (shows? to side)))) (cons from stands)))
          shown (fn [to] (count (filter #(shows? to %) sides)))]
@@ -200,7 +205,7 @@
                    target (zipmap [:x :y :z] (map + cell [0.5 0.5 0.5]))
                    feet (sh-sense/feet p)
                    eye-at (fn [{:keys [x y z]}] {:x (+ 0.5 x) :y (+ y game/eye-height) :z (+ 0.5 z)})
-                   in-range? (fn [at] (some-> (look/near-of p) (>= (u/dist at {:x (first cell) :y (second cell) :z (nth cell 2)}))))
+                   in-range? (fn [at] (some-> (look/near-of p) (>= (eye-dist-from at cell))))
                    near (or to ((walkable-near-fn p feet) reach-to))
                    shown-from? (fn [at] (and (in-range? at) (look/line-clear? p (eye-at at) target)))
                    no-new-view? (or (shown-from? feet) (and near (u/within? feet near 1)) (and (in-range? feet) near (not (shown-from? near))))
