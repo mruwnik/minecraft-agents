@@ -282,11 +282,11 @@
     (:dig (:args c)) (conj :stair)))
 
 (defn walk-cell
-  "The cell go-to walks to for a drop: its own cell, or the solid cell it rests on when no one can stand in its own (a wall niche above the feet: the body stands beside the block under it, within pickup reach of the item, which range 1 of the niche's own cell never allows)."
+  "The cell go-to walks to for a drop: its own cell, or the solid cell it rests on when no one can stand in its own (a wall niche no side cell of it is standable beside: the body stands beside the block under it, within pickup reach of the item, which range 1 of the niche's own cell never allows)."
   [c item]
   (let [[x y z :as cell] (item-cell item)
         p (:primitives c)]
-    (if (and (< (feet-y c) y) (not (high? c item)) (not (reach/seen-standable? p {:x x :y y :z z})) (sh-sense/solid-at? p {:x x :y (dec y) :z z}))
+    (if (and (not (high? c item)) (not (some #(reach/seen-standable? p {:x (+ x (first %)) :y y :z (+ z (second %))}) [[0 0] [1 0] [-1 0] [0 1] [0 -1]])) (sh-sense/solid-at? p {:x x :y (dec y) :z z}))
       [x (dec y) z]
       cell)))
 

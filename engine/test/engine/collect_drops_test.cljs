@@ -922,3 +922,10 @@
           (let [result (await (tu/child-outcome eng job {:radius 10 :near {:x 3 :y 70 :z 0} :dig true} 120))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "diamond")))))))))
+
+(deftest walk-cell-follows-the-niche-shape-not-the-feet-height
+  (doseq [[niche-y body-y] [[64 63] [64 64] [64 66] [65 64] [65 66]]]
+    (let [wall (into {} (for [y (range 64 67) z [-1 0 1]] [(str "3," y "," z) "stone"]))
+          {:keys [p]} (bd/setup {:self {:pos {:x 0 :y body-y :z 0}} :blocks (assoc wall (str "3," niche-y ",0") "air")})
+          item #js {:pos #js {:x 3.5 :y (+ niche-y 0.3) :z 0.5}}]
+      (is (= [3 64 0] (job-ns/walk-cell {:primitives p} item)) (str niche-y " " body-y)))))
