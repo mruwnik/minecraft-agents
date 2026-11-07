@@ -61,7 +61,9 @@
   (println (str "RECOUNT " label ": " cells " cells in " (.toFixed s 3) " s = " (.toFixed (/ (* 1000 s) cells) 4) " ms/cell")))
 
 (deftest recount-prints-the-search-and-flood-prices
-  (let [rows (doall (for [[k mk] scenes] [k (to-end (mk) 20)]))
+  "A bench: runs only with RECOUNT=1 in the environment, never in the normal suite."
+  (when (.. js/process -env -RECOUNT)
+   (let [rows (doall (for [[k mk] scenes] [k (to-end (mk) 20)]))
         pooled (reduce (fn [a [_ r]] (-> a (update :cells + (:cells r)) (update :reads + (:reads r)) (update :s + (:s r)))) {:cells 0 :reads 0 :s 0} rows)
         flood (flood-scene 30)]
     (doseq [[k r] rows] (line k r) (line (str k " reads") (assoc r :cells (:reads r))))
@@ -69,7 +71,7 @@
     (line :pooled-reads (assoc pooled :cells (:reads pooled)))
     (line :flood flood)
     (println (str "RECOUNT search-cell-s " (/ (:s pooled) (:cells pooled)) " search-read-s " (/ (:s pooled) (:reads pooled)) " flood-cell-s " (/ (:s flood) (:cells flood))))
-    (is (every? (comp :ended? second) rows))))
+    (is (every? (comp :ended? second) rows)))))
 
 (defn median [xs] (nth (sort xs) (quot (count xs) 2)))
 
@@ -109,7 +111,9 @@
                  :when (or (= y 66) (#{-11 11} x) (#{-11 11} z))] [[x y z] "stone"])))
 
 (deftest recount-prints-the-walk-and-room-flood-prices
-  (let [scenes {:walk-slab (walk-scene {}) :walk-pillars (walk-scene (pillared))
+  "A bench: runs only with RECOUNT=1 in the environment, never in the normal suite."
+  (when (.. js/process -env -RECOUNT)
+   (let [scenes {:walk-slab (walk-scene {}) :walk-pillars (walk-scene (pillared))
                 :room-slab (flood-room-scene {}) :room-pillars (flood-room-scene (pillared)) :room-closed (flood-room-scene (walled))}
         rows (into {} (for [[k run] scenes] [k (timed-reps 7 run)]))
         pooled (fn [ks] (reduce (fn [a k] (-> a (update :cells + (:cells (rows k))) (update :s + (:s (rows k))))) {:cells 0 :s 0} ks))]
@@ -117,7 +121,7 @@
       (println (str "RECOUNT " k ": median " (.toFixed per-cell 4) " ms/cell, low " (.toFixed low 4) ", high " (.toFixed high 4))))
     (line :pooled-walk (pooled [:walk-slab :walk-pillars]))
     (line :pooled-room (pooled [:room-slab :room-pillars :room-closed]))
-    (is (= 5 (count rows)))))
+    (is (= 5 (count rows))))))
 
 (defn bedrock-shell
   "Bedrock one cell thick round c (c itself air): a goal no cost reaches, so a search expands the region round it."
@@ -199,11 +203,13 @@
     (to-end run 60)))
 
 (deftest recount-prints-the-pool-origin-join-cost
-  (let [join cost/flood-origin-join
+  "A bench: runs only with RECOUNT=1 in the environment, never in the normal suite."
+  (when (.. js/process -env -RECOUNT)
+   (let [join cost/flood-origin-join
         scenes {:none [] :one [0] :two [0 6] :several [-12 -6 0 6 12]}
         run (fn [] (into {} (for [[k xs] scenes] [k (pool-scene xs)])))
         after (run)
         before (try (set! cost/flood-origin-join (fn [a _] a)) (run) (finally (set! cost/flood-origin-join join)))]
     (doseq [k (keys scenes)]
       (println (str "RECOUNT-JOIN " k ": before " (:cells (before k)) " cells " (.toFixed (* 1000 (:s (before k))) 0) " ms; after " (:cells (after k)) " cells " (.toFixed (* 1000 (:s (after k))) 0) " ms")))
-    (is (= 4 (count after)))))
+    (is (= 4 (count after))))))
