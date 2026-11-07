@@ -775,3 +775,42 @@
     (is (some? (detour/refusal (mapv #(update % :x * 0.7) line-20) 6 (constantly true) 0.5 dug ##Inf))
         "a loop shorter than the dug way's walk, its unseen toll added, is dearer than digging")
     (is (nil? (detour/refusal (mapv #(update % :x * 0.7) line-20) 6 (constantly false) 0.5 dug ##Inf)) "the same loop seen is cheaper than digging")))
+
+;; A chamber (x 0..2, feet 60, z 0) in a stone mass and a pocket (x 11..12, feet 64) the body has seen, the rock between
+;; never seen: a goal no higher than it is across is dug toward leg by leg; with a seen hall (z 2) rising from the
+;; chamber's side to the pocket's, the climb through it is cheaper than the leg and wins.
+(def up-pocket (apply dissoc (box -4 50 -4 20 74 4 "stone") (for [[x y] [[0 60] [1 60] [2 60] [11 64] [12 64]] dy [0 1]] (str x "," (+ y dy) ",0"))))
+
+(def up-hall (apply dissoc up-pocket (for [x (range 2 13) dy [0 1]] (str x "," (+ (min 64 (+ 60 (quot (- x 2) 2))) dy) ",2"))))
+
+(defn ^:async climb-up! [blocks seen]
+  (await (climb! {:blocks blocks :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 15] :seen (into [[-1 59 -1 3 62 1] [10 63 -1 13 66 1]] seen)
+                  :inventory [{:name "stone_pickaxe" :count 1}]}
+                 {:pos [11 64 0]})))
+
+(deftest a-buried-body-takes-its-climb-or-its-dig-leg-by-their-whole-ways
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out track] :as s} (await (climb-up! up-hall [[2 59 2 12 66 2]]))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (some #(= :climb-on (:why %)) (gt/events-of s :go-to.escalated)) "the climb's ways run back to back")
+          (is (some #(< 1.5 (% 2)) track) "through the hall"))
+        (let [{:keys [out track] :as s} (await (climb-up! up-pocket []))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= #{:dig-route} (set (map :step (gt/events-of s :go-to.escalated)))) "legs")
+          (is (not-any? #(= :climb-on (:why %)) (gt/events-of s :go-to.escalated)) "no climb")
+          (is (every? #(< -1 (% 2) 1) track)))))))
+
+(deftest a-climb-is-taken-over-a-way-when-it-costs-no-more
+  (let [total {:leg 10 :climb 8 :dear 12 :tie 10}
+        way (fn [step k] {:step step :k k})
+        pick #(:k (esc/or-climb %1 %2 (comp total :k)))]
+    (are [w k want] (= want (pick w k))
+      (way :dig-route :leg) (way :stair :climb) :climb
+      (way :dig-route :leg) (way :stair :dear) :leg
+      (way :pillar :leg) (way :dig-route :tie) :tie
+      (way :dig-route :leg) nil :leg
+      (way :none nil) (way :stair :dear) :dear
+      (way :approach :leg) (way :stair :climb) :leg)
+    (is (= :searching (:step (esc/or-climb {:step :dig-route} {:step :searching} (constantly 1)))) "a climb still searched is waited for")))

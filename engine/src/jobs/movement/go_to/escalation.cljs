@@ -256,7 +256,8 @@
 (defn way-total
   "Seconds way e from feet takes the body to goal, one sum for a stair, a pillar and a dig leg: the way's own price
   (escape-way/way-s for a stair or pillar, with its climb left; price for a leg) and the walk on from its end to goal
-  along the straight line, a seen solid cell of that line and of the one over it dug (cost/dig-cost) as the walk goes; no dangers."
+  along the straight line, a seen solid cell of that line and of the one over it dug (cost/dig-cost) as the walk goes; no dangers.
+  A climb (climb-route/climb-way) is its whole route's :route-s."
   [p feet goal e may-dig?]
   (let [walk-s (escape-way/rest-s-fn p goal)
         block-at (escape/block-at-of p)
@@ -264,14 +265,26 @@
         rest-s (fn [cell] (+ (walk-s cell)
                              (transduce (comp (mapcat #(vector % (escape/up % 1))) (remove unseen?) (map block-at) (remove dig-route/open?) (map #(or (cost/dig-cost %) 0))) + 0
                                         (take escape-way/read-line-cells (escape/line-cells cell goal)))))]
-    (if (= :dig-route (:step e))
-      (+ (escape-way/price p feet e) (rest-s (:cell (peek (:cells e)))))
-      (escape-way/way-s p feet goal e (assoc (escape/carried-pillar-item p) :rest-s rest-s :may-dig? may-dig?)))))
+    (cond
+      (:route-s e) (:route-s e)
+      (= :dig-route (:step e)) (+ (escape-way/price p feet e) (rest-s (:cell (peek (:cells e)))))
+      :else (escape-way/way-s p feet goal e (assoc (escape/carried-pillar-item p) :rest-s rest-s :may-dig? may-dig?)))))
 
 (defn beats-leg?
   "Whether way e (a stair or pillar) takes the body to the goal in no more seconds than dig leg l: total maps a way to its way-total."
   [e l total]
   (boolean (and e (#{:stair :pillar} (:step e)) (<= (total e) (total l)))))
+
+(defn or-climb
+  "Way w, or the climb k when it reaches the goal for no more seconds (total, way-total): k when w is none, w when k is
+  nil or w cannot be priced (a walk, a search going on)."
+  [w k total]
+  (cond (nil? k) w
+        (= :none (:step w)) k
+        (not (#{:dig-route :stair :pillar} (:step w))) w
+        (= :searching (:step k)) k
+        (<= (total k) (total w)) k
+        :else w))
 
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
@@ -324,24 +337,33 @@
                                     (or none? (= :searching (:step d))) d
                                     (< (price d) (price e)) d
                                     :else e)))))
+        ;; a shut-in body's dig leg and its climb are weighed by their whole ways, the climb searched no further than the leg costs
+        priced (fn [f] (fn [may-dig? o]
+                         (let [w (f may-dig? o)
+                               total #(way-total (:primitives c) feet goal % may-dig?)]
+                           (if (or (not @shut?) (= :searching (:step w)))
+                             w
+                             (or-climb w (climb-route/climb-way (:primitives c) feet goal may-dig?
+                                                                (cond-> o (#{:dig-route :stair :pillar} (:step w)) (update :bound-s #(min (or % ##Inf) (total w)))))
+                                       total)))))
         choose-by (cond into? #(goal-way c feet goal %1 %2)
                      ;; a goal too far for one dig route, no stair or pillar out (a plateau top): a dig off the land's edge
-                     dig-in? #(let [d (dig-toward c feet goal %1 %2)]
+                     dig-in? (priced #(let [d (dig-toward c feet goal %1 %2)]
                                 (if (and d (not= :none (:step d)))
                                   d
                                   (let [e (escape-way/choose (:primitives c) feet goal %1 %2)
                                         w (or (when (#{:none :approach} (:step e)) (frontier-way (:primitives c) feet goal %1 %2)) e)]
                                     ;; the leg's own reason (:past-worth, :dig-budget) outlives a none from the other ways
-                                    (if (and d (= :none (:step w))) d w))))
+                                    (if (and d (= :none (:step w))) d w)))))
                      ;; its route searches are shared through the slice's answers: choose runs again per zone rule below
-                     rock-dig? #(let [l (dig-leg c feet goal %1 %2)
+                     rock-dig? (priced #(let [l (dig-leg c feet goal %1 %2)
                                       e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))]
                                   (cond
                                     (beats-leg? e l (fn [w] (way-total (:primitives c) feet goal w %1))) e
                                     (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
                                       (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (= :none (:step e))) l e))
-                                    :else (or l (escape-way/choose (:primitives c) feet goal %1 %2))))
+                                    :else (or l (escape-way/choose (:primitives c) feet goal %1 %2)))))
                      (and (not= :never (some-> (:doors (:args c)) keyword)) (escape/blocked-door-beside? (:primitives c) feet))
                      #(let [d (dig-toward c feet goal %1 %2)]
                         (if (and d (not= :none (:step d))) d (let [e (escape-way/choose (:primitives c) feet goal %1 %2)] (if (and d (= :none (:step e))) d e))))
