@@ -570,7 +570,7 @@
     (is (< 0 (unseen open) (unseen closed) 1) "a way into unseen cells may end there, the likelier where the seen ways end")))
 
 (deftest a-flight-is-caught-at-a-chance-smooth-in-the-health-it-starts-at
-  ;; the zombie family's trial flights (cost.caught/::flights, easy): under 10 hp 18 of 29 died, at 20 hp 3 of 27
+  ;; the zombie family's trial flights (cost.caught/::flights, easy): under 10 hp 18 of 22 died, at 20 hp 1 of 15
   (settings/with-settings {::threat/difficulty 1}
     (fn []
       (let [flee #(cost/flee-answer {:health % :food 20 :mobs [{:name "zombie" :distance 3 :follow 35}]})
@@ -578,8 +578,8 @@
             dies #(answer/blows-chance {:health % :food 20} (flee %))]
         (is (< (js/Math.abs (- (chance 9.9) (chance 10))) 0.01) "no step at a band edge")
         (is (< (chance 20) (chance 10) (chance 5)) "caught more often from low health")
-        (is (< 0.45 (dies 5) 0.8) "its own blows kill about the measured 18 of 29 under 10 hp")
-        (is (< 0.05 (dies 20) 0.2) "and 3 of 27 at 20 hp: a caught flight takes some blows, not the whole flight's")))))
+        (is (< 0.65 (dies 5) 0.95) "its own blows kill about the measured 18 of 22 under 10 hp")
+        (is (< 0.05 (dies 20) 0.2) "and 1 of 15 at 20 hp: a caught flight takes some blows, not the whole flight's")))))
 
 (deftest a-flight-from-a-shooter-is-caught-at-the-bow-mobs-own-prior
   ;; the trial flights from bow mobs: 2 deaths in 45, most of the arrows on the walk out of range

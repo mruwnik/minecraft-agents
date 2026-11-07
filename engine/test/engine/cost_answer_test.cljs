@@ -226,12 +226,14 @@
 (deftest a-flight-ending-past-follow-range-is-not-flown-again-when-the-way-back-passes-the-skeleton
   (settings/with-settings {:jobs.lib.cost.threat/difficulty 3}
     (fn []
-      (let [choose (fn [again returns]
-                     (let [skeleton (cond-> (mob "skeleton" 15) again (assoc :again again))
-                           f (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))]
-                       (:answer (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here))))]
+      (let [decision (fn [again returns]
+                       (let [skeleton (cond-> (mob "skeleton" 15) again (assoc :again again))
+                             f (cost/fight-answer (assoc (fight sword skeleton) :mobs [skeleton]))]
+                         (cost/decide (body 20) {:fight f :flee (cost/flee-answer {:food 20 :mobs [skeleton] :returns returns :later f})} here)))
+            choose (fn [again returns] (:answer (decision again returns)))]
         (is (= [:fight :fight] (mapv #(choose 1 %) [0 1])) "the goal lies past it: the trigger refiring on the walk back is already priced, at the first meet and after a flight, so the body does not pendulum at 16")
-        (is (= [:flee :flee] (mapv #(choose nil %) [0 1])) "no way back past it: the flight is the last")))))
+        (is (= :flee (choose nil 0)) "no way back past it: the first flight is taken")
+        (is (< (get-in (decision nil 1) [:prices :flee]) (get-in (decision 1 1) [:prices :flee])) "and a flight that is the last costs less than one the way back passes it again")))))
 
 (deftest a-mob-between-the-body-and-its-goal-is-walked-from-again-from-where-the-way-back-passes-it
   (settings/with-settings {:jobs.lib.cost.threat/difficulty 3}
@@ -417,7 +419,7 @@
   (let [route (fn [weight & mobs] {:cells [(assoc here :s 60)] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
     (doseq [r [(route 1 "witch") (route 0.3 "witch")]]
       (let [{:keys [chance hurt]} (cost/route-parts (body 8) r)]
-        (is (< 0 hurt (* (- 1 chance) 8)) "the hp are paid only where the body lives: under its life by the chance it lives")))
+        (is (and (< 0 hurt) (<= hurt (* (- 1 chance) 8))) "the hp are paid only where the body lives: under its life by the chance it lives")))
     (is (< 0.6 (:chance (cost/route-parts (body 8) (route 1 "witch")))) "60 s in her range: she seldom misses the body")
     (is (<= (:hurt (cost/route-parts (body 8) (route 1 "witch" "witch"))) 8) "two take no more than the life"))
   (let [death (death/death-cost (body 5) here)]

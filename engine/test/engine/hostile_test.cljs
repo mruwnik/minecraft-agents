@@ -1486,12 +1486,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(assoc (zombie 100 3 0) :health 20)]})]
+        (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(assoc (zombie 100 3 0) :health 40)]})]
           (.override (.-world p) "attack"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 6) (mem/write! (:store eng) :hurt {:amount 14 :attacker {:id 100 :name "zombie"}}) r)))))
           (core/submit! eng respond {})
           (await (core/tick! eng))
-          (is (= 1 (count (calls p "attack"))) "15 left is not nearly dead")
+          (is (= 1 (count (calls p "attack"))) "35 left is not nearly dead")
           (is (pos? (count (tu/walked-to eng))) "it flees"))))))
 
 (deftest retreat-eats-only-once-the-gap-is-wide
