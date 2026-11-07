@@ -221,8 +221,8 @@
         [exact exact-cells] (to-end (dr/search w [0 10 0] [0 5 6] opts))
         _ (.clear dr/kept)
         [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
-    ;; the back search and each expansion's neighbours are read too: the CPU goes by the cells read
-    (is (= (:searched-s priced) (* (cost/search-read-s) reads)) "its CPU priced by the cells it read")
+    ;; the back search and each expansion's neighbours are read too: here the CPU goes by the cells read
+    (is (= (:searched-s priced) (max (* (cost/search-read-s) reads) (* (cost/search-cell-s) priced-cells))) "its CPU priced by the cells it read or expanded")
     (is (< priced-cells reads) "more than it expanded")
     (is (<= (:seconds priced) (+ (:seconds exact) (:searched-s priced)))
         (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))
@@ -544,7 +544,11 @@
                   (first ((dr/search (world seen) [0 -6 0] [6 2 2] (merge opts bound)) 100000)))]
     (is (= [] (own-cut-floors way)) "the way through those cells stands on no floor it dug")
     (is (= [] (remove #(< (js/Math.abs (- (:seconds %) (:seconds way))) 1e-9) answers)) (str "each bound finds its price, " (:seconds way) " s"))
-    (is (= [[] [] []] (map own-cut-floors answers)))))
+    (is (= [[] [] []] (map own-cut-floors answers)))
+    ;; each restart expands again cells the search read before: priced by the reads alone it cost 0.19 s for 0.47 s expanded
+    (let [[a cells reads] (to-end (dr/search (world seen) [0 -6 0] [6 2 2] (assoc opts :read-s (cost/search-read-s))))]
+      (is (> (* (cost/search-cell-s) cells) (* (cost/search-read-s) reads)) (str cells " cells expanded, " reads " read"))
+      (is (= (:searched-s a) (* (cost/search-cell-s) cells)) "its CPU priced by the cells it expanded"))))
 
 (deftest a-cell-read-open-at-a-height-the-rise-bound-read-closed-is-read-as-never-seen
   ;; open-ys is the memory as the search began: a cell seen open since, at a height it held none at, would make a rise

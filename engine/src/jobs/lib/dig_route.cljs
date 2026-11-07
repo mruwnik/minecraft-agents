@@ -543,9 +543,11 @@
         ;; with read-s, the search's CPU is a cost of the route it finds: it goes on only while what is left to find may
         ;; still save more than the search has spent (a ski rental's rule: at worst twice the best), against the route in
         ;; hand (its cheapest end reached) or max-s; :searched-s, what earlier searches of the same question spent, counts too.
-        ;; Counted by the cells read, not expanded: the back search, the dig prices and the neighbours read are most of the
-        ;; work and come per cell read, while a cell expanded reads 3 to 9 of them as the scene goes
-        spent-s (fn [] (+ searched-s (if read-s (* read-s (.-size read)) 0)))
+        ;; The CPU grows with both the cells read and the cells expanded (restarts and labels expand cells read before),
+        ;; and each measured price is the whole CPU over one count at the recount's mix: the larger of the two bounds a
+        ;; cost linear in both from above, exact at that mix
+        cell-s (when read-s (cost/search-cell-s))
+        spent-s (fn [] (+ searched-s (if read-s (max (* read-s (.-size read)) (* cell-s @expanded)) 0)))
         max-s (volatile! (or max-s ##Inf))
         priced (fn [r] (cond-> r read-s (assoc :searched-s (spent-s))))
         bound-s (fn [] (min @max-s (aget incumbent 0)))
@@ -812,7 +814,7 @@
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends, :only feet cells (none else is stepped onto), :seed the feet cells of a planned way searched round first (seeded-search); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
-  :read-s seconds of CPU a cell read (priced-search; past answer-s it answers with the cheapest route in hand, or ends :dearer
+  :read-s seconds of CPU a cell read (priced-search; a cell expanded at cost/search-cell-s when that is more; past answer-s it answers with the cheapest route in hand, or ends :dearer
   under :held-s, the price of a route the caller holds), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
@@ -846,7 +848,7 @@
     (> (.-used_heap_size h) (* (.-heap_size_limit h) (settings/get settings ::heap-full)))))
 
 (defn priced-search
-  "search with its CPU priced (cost/search-read-s), the back search's bound in its heuristic (:back-h?), the unseen steps a
+  "search with its CPU priced (cost/search-read-s, cost/search-cell-s), the back search's bound in its heuristic (:back-h?), the unseen steps a
   way must take priced in it (:prior-h?, with :seen-steps and :seen-cells), grown only while the heap has room (heap-full?). A fn of n as search's."
   [block-at from goal opts]
   ((if (:seed opts) seeded-search search) block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?)))
