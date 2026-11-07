@@ -55,8 +55,9 @@
     (is (false? (ok? {:reason :abilities :kind :break} :never)))
     (is (false? (ok? {:reason :stuck} :never)))))
 
-(deftest a-one-way-end-at-a-refused-drop-is-dug-down-but-a-closed-door-one-is-not
+(deftest a-one-way-end-at-a-refused-drop-or-a-damage-budget-end-is-dug-down-but-a-closed-door-one-is-not
   (is (true? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :drop :at [0 70 0]}}))))
+  (is (true? (boolean (choose/refused-drop? {:status :no-path :reason :damage-budget :hp-cost 10 :hp-budget 7}))))
   (is (false? (boolean (choose/refused-drop? {:reason :one-way :one-way {:kind :door}}))))
   (is (false? (boolean (choose/refused-drop? {:reason :exhausted :one-way {:kind :drop}})))))
 

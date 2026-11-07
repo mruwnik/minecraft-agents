@@ -10,7 +10,7 @@
     the call's :floor :health, default 12, less 1, at most its :spend :health; a caller's floor counts only above 12
     unless this call gives one, walk-limits). When that budget is why no way was found, go-to does not heal or eat: it gives up :why :needs-health (limit-reached
     :health; :heal says how the body could gain hp) and the caller or the hurt and hungry reflexes heal; at full health, where
-    healing cannot help, :why :damage-budget (nothing-possible). Only a given :floor :health of 1
+    healing cannot help, a free body digs toward the goal first (escalate-choose/refused-drop?), then :why :damage-budget (nothing-possible). Only a given :floor :health of 1
     or less goes over it, down to 1 hp (info go-to.over-budget). See jobs.movement.go-to.health."
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
