@@ -604,7 +604,10 @@
         (str "a route through the plan's cells " (pr-str from goal))))
   (let [lane (set (dr/climb-lane [0 61 0] [10 64 0] 2 (constantly true)))]
     (is (every? lane [[0 62 0] [0 63 0] [1 64 0] [9 64 0]]) "two pillar blocks, then a step up and level")
-    (is (not (lane [0 64 0])) "no pillar past the blocks carried")))
+    (is (not (lane [0 64 0])) "no pillar past the blocks carried"))
+  (let [lane (set (dr/climb-lane [0 64 0] [3 74 0] 4 (constantly true)))]
+    (is (every? lane (concat [[0 65 0] [0 66 0] [0 67 0] [0 68 0]] (dr/walk-then-stair [0 68 0] [3 74 0] 1)))
+        "up more than across from the pillar's top: the pillar, then a spiral stair from it")))
 
 (deftest a-seeded-search-ends-its-proof-once-it-no-longer-pays-at-the-unbounded-price
   ;; a fall of 24 and 30 across through rock never seen, each cell's dig at the measured solid chance by its distance from

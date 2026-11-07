@@ -684,6 +684,21 @@
       (job-ns/drop-route {:max-fall 3} nil nil (constantly nil) (constantly true) [0 64 0] [4 55 0]))
     (is (= [[1 64 0] [2 61 0] [3 58 0] [4 55 0]] (:seed @asked)))))
 
+(deftest a-drop-high-over-the-body-is-searched-round-a-spiral-stair-up-first
+  ;; up more than across, walk-then-stair is a spiral stair (dig-route/spiral-stair): a route in hand at once, priced as
+  ;; the unseeded search's
+  (let [open #{[0 64 0] [0 65 0] [1 70 0] [1 71 0]}
+        seen (fn [c] (if (open c) "air" "stone"))
+        prices {:step-s 0.3 :dig-s (constantly 0.5) :stair-s 3}
+        asked (atom nil)
+        searched dig-route/priced-search
+        r (with-redefs [dig-route/priced-search (fn [b f g opts] (reset! asked opts) (searched b f g opts))]
+            (.clear dig-route/kept)
+            (loop [] (let [r (job-ns/drop-route prices nil "spiral" seen (constantly true) [0 64 0] [1 70 0])] (if (= :searching (:problem r)) (recur) r))))]
+    (is (dig-route/stair-ok? [0 64 0] (:seed @asked)) (pr-str (:seed @asked)))
+    (is (= [1 70 0] (peek (:seed @asked))))
+    (is (< (js/Math.abs (- (:seconds r) (:seconds (dig-route/route seen [0 64 0] [1 70 0] (merge prices {:max-nodes 100000}))))) 1e-9) (pr-str (dissoc r :steps)))))
+
 (defn tier-over-price
   "The cells round frontier-test's cave and under its floor whose tier in prices' :unseen-digs (by seen-cells, low or any
   by height) is over the dig price drop-route asks of them: [cell tier price] each."

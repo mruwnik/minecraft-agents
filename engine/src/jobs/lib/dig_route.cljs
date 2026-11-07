@@ -860,18 +860,21 @@
 
 (defn climb-lane
   "Feet cells of the planned ways up from feet cell from to goal searched first (seeded-search): walk-then-stair (rising
-  late) and, when the rise left is no more than the across, a pillar of up to pillars blocks straight up from it then a
-  stair rising early, each step one up till the goal's height, then level."
+  late) and a pillar of up to pillars blocks straight up from it, then, when the rise left is no more than the across, a
+  stair rising early, each step one up till the goal's height, then level, else walk-then-stair from its top."
   [[fx fy fz :as from] [gx gy gz :as goal] pillars floor?]
   (let [k (min (or pillars 0) (- gy fy))
         top [fx (+ fy k) fz]
         sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))
-        early (when (<= (- gy (top 1)) (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz))))
-                (loop [[x y z] top out (mapv #(vector fx (+ fy %) fz) (range 1 (inc k)))]
+        column (mapv #(vector fx (+ fy %) fz) (range 1 (inc k)))
+        early (cond
+                (<= (- gy (top 1)) (+ (js/Math.abs (- gx fx)) (js/Math.abs (- gz fz))))
+                (loop [[x y z] top out column]
                   (if (and (== x gx) (== z gz))
                     out
                     (let [c (if (not= x gx) [(+ x (sgn (- gx x))) (min gy (inc y)) z] [x (min gy (inc y)) (+ z (sgn (- gz z)))])]
-                      (recur c (conj out c))))))]
+                      (recur c (conj out c)))))
+                (pos? k) (into column (walk-then-stair top goal 1 floor?)))]
     (vec (distinct (concat (walk-then-stair from goal 1 floor?) early)))))
 
 (defn seeded-search
