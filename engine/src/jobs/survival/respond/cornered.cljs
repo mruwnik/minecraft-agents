@@ -161,16 +161,19 @@
                 (sh-sense/shut-in-room? (:primitives c)))))
 
 (defn bare-boxed-in?
-  "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius in that room (not outside its door) and has no
-  weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room."
+  "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius in that room (not outside its door; not
+  in the doorway, a step from the other side) and has no weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room."
   [c hostiles]
   (let [p (:primitives c)
         close (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
                             (<= (danger-q/mob-distance p %) (close-radius)))
                       hostiles)
-        ;; one flood (sh-sense/shut-in-hut?'s room) that stops at its own search budget (Q141), a cut one no room; not the
-        ;; step's: a doorway's flood of the open side alone spends it all, before the step's survey and flee search
-        room (fn [] (binding [reach/*search* (room-lib/search-meter 0)] (reach-room/room p (sh-sense/feet p))))
+        feet (sh-sense/feet p)
+        ;; one flood (sh-sense/shut-in-hut?'s room), a part of the step's one search (Q141): a cut one is no room
+        room (fn [] (let [m (room-lib/step-meter c)
+                          r (binding [reach/*search* m] (reach-room/room p feet))]
+                      (room-lib/spent-meter! c m)
+                      r))
         in-room? (fn [{:keys [cells]}]
                    (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
                                    (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
@@ -178,7 +181,8 @@
     (boolean (and (seq close)
                   (nil? (combat/best-weapon p (combat/weapons c)))
                   (empty? (lb/carried c (flight/blocks c)))
-                  (sh-sense/room-roofed? p (sh-sense/feet p))
+                  (not (some-> (u/seen-block p feet) .-name reach/openable?))
+                  (sh-sense/room-roofed? p feet)
                   (let [r (room)] (and r (sh-sense/wide-room? r) (in-room? r)))))))
 
 (defn mob-in-corner-cell?

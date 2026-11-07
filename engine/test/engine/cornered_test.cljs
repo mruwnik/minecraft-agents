@@ -27,6 +27,8 @@
             [jobs.survival.respond.cornered :as pick]
             [jobs.lib.shot :as shot]
             [jobs.lib.cost.caught :as caught]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.survival.respond.cover :as cover]
@@ -2235,9 +2237,18 @@
     (into {} (for [x (range -1 6) y (range 62 68) z (range -2 3) :when (not (open [x y z]))] [(key-of x y z) "stone"]))))
 
 (deftest a-bare-body-in-a-closed-hut-is-boxed-in-by-a-melee-mob-in-the-room-hit-or-not
-  (let [boxed? (fn [world mob] (pick/bare-boxed-in? {:primitives (tu/fake-on-floor world) :quote-call {} :view (fn [] {:now 0 :data {:entries {} :policies {}}})} [mob]))
-        closed {:blocks hut}]
-    (is (true? (boxed? closed (mob-at "zombie" 4))) "never hurt: no hit is needed")
+  (let [step (fn [mem*] {:primitives nil :quote-call {} :id "j1" :root "j1" :slots []
+                          :view (fn [] {:now 0 :data {:entries {(mem/job-kind "j1") [{:t 0 :data @mem*}]}
+                                                      :policies {(mem/job-kind "j1") mem/job-policy}}})
+                          :update-mem (fn [f args] (apply swap! mem* f args))})
+        boxed-in (fn [world mob mem*] (pick/bare-boxed-in? (assoc (step mem*) :primitives (tu/fake-on-floor world)) [mob]))
+        boxed? (fn [world mob] (boxed-in world mob (atom {})))
+        closed {:blocks hut}
+        fresh (atom {})]
+    (is (true? (boxed-in closed (mob-at "zombie" 4) fresh)) "never hurt: no hit is needed")
+    (is (pos? (room-lib/step-spent-s (step fresh))) "its flood is a part of the step's one search (Q141)")
+    (is (false? (boxed-in closed (mob-at "zombie" 4) (atom {:search-s (cost/search-budget-s)})))
+        "the step's search spent: the flood is cut, no room")
     (is (false? (boxed? closed (mob-at "zombie" 12))) "beyond close-radius")
     (is (false? (boxed? closed (mob-at "skeleton" 4))))
     (is (false? (boxed? closed (mob-at "creeper" 4))))
