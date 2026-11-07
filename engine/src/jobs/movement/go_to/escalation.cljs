@@ -416,7 +416,8 @@
             @own @own
             (choosable? (constantly true)) {:step :none :why :zone}
             :else (or @priced-own e))
-        e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
+        e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)
+        hold (delay (start-hold c pos feet e))]
     (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (route-owner c)))
     (ctx/hold-still! c (when (= :searching (:step e)) :searching))
     (cond
@@ -434,7 +435,7 @@
           (ctx/update-mem! c #(-> % (dissoc :escalation) (assoc :escalate-now true :escalate-failed failed)))
           :again)
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
-      (start-hold c pos feet e) (reprice/end c (start-hold c pos feet e))
+      @hold (reprice/end c @hold)
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})

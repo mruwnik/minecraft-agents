@@ -16,7 +16,9 @@
             [engine.triggers :as triggers]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
-            [jobs.lib.shelter.inside :as sh-inside]))
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.movement.go-to.escalation :as escalation]
+            [jobs.movement.go-to.reprice :as reprice]))
 
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})
@@ -233,11 +235,19 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge (far-hut {"5,64,2" "cobblestone" "5,65,2" "cobblestone"})
                                             {:inventory [{:name "iron_pickaxe" :count 1}]}))
-              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})]
-          (await (ticks eng 30))
+              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
+              holds (atom []) ends (atom 0)
+              orig-hold escalation/start-hold orig-end reprice/end]
+          ;; the hold is priced once a choice: each start-hold's :later ends the round (a reprice walk is ~40 ms)
+          (set! escalation/start-hold (fn [& args] (let [s (apply orig-hold args)] (swap! holds conj s) s)))
+          (set! reprice/end (fn [c s] (when (some #(identical? s %) @holds) (swap! ends inc)) (orig-end c s)))
+          (try (await (ticks eng 30))
+               (finally (set! escalation/start-hold orig-hold) (set! reprice/end orig-end)))
           (is (= inside (st/pos-of p)) "the body stays in its room")
           (is (empty? (st/calls p "dig")) "no wall is cut before the walk is priced")
-          (is (= :risky (:reason (waiting-of eng id)))))))))
+          (is (= :risky (:reason (waiting-of eng id))))
+          (is (pos? @ends))
+          (is (= (count @holds) @ends) "each choice prices its hold once"))))))
 
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
 
