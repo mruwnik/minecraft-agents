@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [engine.night-support :refer [night noon sleep-count!]]
             [engine.shelter-support :as st]
@@ -267,3 +268,20 @@
               all-lit (await (shelter (into {} (for [x (range -1 6) z (range -2 3)] [[x 64 z] [15 15]]))))]
           (is (number? dark))
           (is (= dark one-lit all-lit) "a lit patch in a dark open field keeps no walker off: the price is the dark floor round it, whichever cell the body gets up at"))))))
+
+(def sealed-room
+  "A lit stone room shut on every side (inside x -1..11, y 64..65, z -1..1, floor 63, roof 66) round the body's start, a bed 10 blocks off that is already its respawn point."
+  (assoc (apply dissoc (tu/box -2 63 -2 12 66 2 "stone") (keys (tu/box -1 64 -1 11 65 1 "stone"))) "10,64,0" "red_bed"))
+
+(deftest alone-in-a-sealed-room-with-no-daylight-work-staying-up-beats-the-walk-to-a-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :blocks sealed-room :light {} :light-default [0 15]})]
+          (st/know-bed! eng {:x 10 :y 64 :z 0})
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 10 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+          (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
+            (is (< (:exposed prices) (:bed prices)) "the work goes on here through the night, so the skip saves nothing the walk to the bed costs")
+            (is (not= :bed pick))))))))
