@@ -15,7 +15,7 @@
   :limit-s 120}
  :cases
  [{:name "door-dug-open-pit-shelter-is-climbed-out-of-by-day"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :dig-in.left} :within-s 90}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 110 :of-job true}
             {:count-event {:source :job :kind :dig-in.left} :for-s 30 :at-most 1}
@@ -23,7 +23,7 @@
    :after [[:body-near [24.5 0 16.5] 3]]}
   {:name "walk-back-down-through-the-left-shelter-is-no-new-dawn"
    :blocks [[:fill [16 -2 17] [16 -1 21] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 -2 21] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 -2 21] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dawn}} :within-s 30}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 110 :of-job true}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :dawn}} :for-s 40 :at-most 2}]
@@ -35,7 +35,7 @@
              :data {:entries [{:cell #at [16 0 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}
                               {:cell #at [16 1 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
    :blocks [[:fill [14 0 14] [18 1 18] "dirt"]]
-   :act [[:job (jobs.survival.leave-shelter {})]]
+   :act [[:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :within-s 90 :of-job true}]
    :after [[:block [16 0 16] "air"]]}
   {:name "dawn-hold-names-the-husk-over-the-shaft"
@@ -43,7 +43,7 @@
    :settings {:jobs.lib.dawn/unarmed-grace-ticks 24000}
    :register []
    :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
-         [:job (jobs.survival.leave-shelter {})]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :holding :data {:reason [:contains "first light: husk seen"]}} :within-s 60}
             {:no-event {:source :job :kind :dig-in.left} :for-s 20}]
    :after [[:body-near [16.5 -2 16.5] 2]]}
@@ -53,7 +53,7 @@
    :zones [{:name "farm" :min [8 -6 8] :max [24 4 24] :owner "Other" :allow #{}}]
    :memory [{:kind :shelter :data {:pos #xyz [16 -2 16] :state :built :start #xyz [16 0 16]} :policy {:cap 10 :ttl 1200000}}]
    :blocks [[:fill [17 -2 16] [17 -1 16] "dirt"]]
-   :act [[:job (jobs.survival.leave-shelter {})]]
+   :act [[:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :dig-in.left} :within-s 90}
             {:no-event {:source :job :kind :dig-in.trapped} :for-s 30}]
    :after [[:body-near [16.5 0 16.5] 3]]}]}

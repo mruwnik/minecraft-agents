@@ -10,6 +10,6 @@
   :limit-s 150}
  :cases
  [{:name "a-tunnel-lit-ahead-with-no-torch-carried-goes-on-digging"
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 20 :radius 24 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 20 :radius 24 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 140 :of-job true}]
    :after [[:item "raw_iron" [:>= 1]]]}]}

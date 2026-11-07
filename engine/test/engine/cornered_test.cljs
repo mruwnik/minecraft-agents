@@ -59,7 +59,7 @@
 
 (defn ^:async first-round [spec world]
   (let [s (setup world)]
-    (core/submit! (:eng s) spec {})
+    (core/submit! (:eng s) (tu/order (:eng s) spec) {})
     (await (core/tick! (:eng s)))
     s))
 
@@ -95,7 +95,7 @@
    (let [{:keys [eng p seen clock] :as s} (setup world)
          noted (atom nil)]
      (prep p)
-     (core/submit! eng spec {})
+     (core/submit! eng (tu/order eng spec) {})
      (let [round (core/tick! eng)]
        (let [release (await (until-hiding round seen p))]
          (swap! clock + jump-ms)
@@ -230,7 +230,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})
               _ (add-watch (fake/state p) :mob-out
                            (fn [_ _ _ w] (when (and (seq (:entities w)) (get-in w [:blocks [1 64 0]])) (swap! (fake/state p) assoc :entities []))))
-              round (do (core/submit! eng '(test.real-flight {:settings {:jobs.survival.wall-placer/max-places 1}}) {})
+              round (do (core/submit! eng (tu/order eng '(test.real-flight {:settings {:jobs.survival.wall-placer/max-places 1}})) {})
                         (core/tick! eng))]
           (await round)
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the seal is finished though the skeleton is out of sense")
@@ -353,7 +353,7 @@
   [spec world steps]
   (let [{:keys [eng p seen clock] :as s} (setup world)
         listed (atom [])]
-    (core/submit! eng spec {})
+    (core/submit! eng (tu/order eng spec) {})
     (let [round (core/tick! eng)
           release (atom (await (until-hiding round seen p)))
           arrive (atom nil)
@@ -542,7 +542,7 @@
                                              :inventory (cond-> [{:name "cobblestone" :count 20}] sword? (conj {:name "iron_sword" :count 1}))
                                              :entities [(assoc (skeleton 4 64 0) :visible visible?)]})]
             (dotimes [_ hides] (mem/write! (:store eng) :hid {:pos {:x 0 :y 64 :z 0} :mobs ["skeleton"]} hide-spot/policy))
-            (core/submit! eng retreat {})
+            (core/submit! eng (tu/order eng retreat) {})
             (await (core/tick! eng))
             (is (= sealed? (boolean (seq (placed-cells p)))) (pr-str [hides sword? health visible?]))))))))
 
@@ -710,7 +710,7 @@
           (tu/set-sensed! p (fn [q] (if (and (hidden [(.-x q) (.-y q) (.-z q)]) (empty? (calls p "look")))
                                       #js {:unknown true}
                                       (sensed q))))
-          (core/submit! eng '(test.flight {:cover-way :pillar}) {})
+          (core/submit! eng (tu/order eng '(test.flight {:cover-way :pillar})) {})
           (await (far-from-frontiers #(core/tick! eng)))
           (is (= 3 (count (calls p "jumpPlace"))) "unseen cells beside the column read as rock by the prior; once looked at they are open air, so the pillar stands"))))))
 
@@ -745,7 +745,7 @@
               {:keys [eng p seen]} s]
           (.override (.-world p) "jumpPlace"
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "jumpPlace"))) "at respond's real worth the pillar ends after the first refusal: a second try next to the zombie costs more than it wins")
           (is (empty? (pillar-entries eng)) "no block went in")
@@ -760,7 +760,7 @@
                       (let [{:keys [eng p]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0.5 64 1.6)]})]
                         (.override (.-world p) "jumpPlace"
                                    (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
-                        (core/submit! eng job {})
+                        (core/submit! eng (tu/order eng job) {})
                         (await (core/tick! eng))
                         (count (calls p "jumpPlace"))))
               real (await (jumps '(test.real-flight)))
@@ -914,7 +914,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}] :entities [(zombie 1.0 64 0)]})]
           (.override (.-world p) "dig"
                      (fn [_ _ _] (swap! (fake/state p) assoc :entities []) (js/Promise.resolve #js {:status "cannot"})))
-          (core/submit! eng '(test.flight {:cover-way :pit}) {})
+          (core/submit! eng (tu/order eng '(test.flight {:cover-way :pit})) {})
           (await (core/tick! eng))
           (is (some #(= :hostile.stopped (:kind %)) @seen) "the zombie the pit was for was a chaser that then left sight, not a flight that never had one: the flight is not cleared at once"))))))
 
@@ -942,7 +942,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "iron_sword" :count 1}] :blocks room :entities [(creeper 3 64 0)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "one hit to knock it back")
           (is (= -1 (:x (first-move eng))) "then the step back into the last cell of the room"))))))
@@ -983,7 +983,7 @@
               n (atom 0)]
           (.override (.-world p) "blockAt"
                      (fn [token a impl] (when (= 300 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "no melee with a creeper out of reach")
           (is (every? #(< (:x %) 3) (tu/walked-to eng)) "no step towards the creeper"))))))
@@ -1002,7 +1002,7 @@
           (stuck-walks! p)
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "no melee with a creeper")
           (is (pos? (count (calls p "place"))) "blocks between it and the creeper"))))))
@@ -1017,7 +1017,7 @@
               n (atom 0)]
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (when (= 2 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "4 health against a zombie 3 off: the walls' first side, two placements at the measured 0.72 s, failing for a mob by (3 + 1) / (7 + 2), cost less than a fight a blow may end")
           (is (seq (placed-cells p))))))))
@@ -1218,7 +1218,7 @@
   [spec world]
   (let [{:keys [eng p] :as s} (setup world)
         acted (acts-on p ["place" "moveTo" "steer"])]
-    (core/submit! eng spec {})
+    (core/submit! eng (tu/order eng spec) {})
     (let [round (core/tick! eng)]
       (await (until-acts acted round))
       (let [places (count (calls p "place"))]
@@ -1263,7 +1263,7 @@
                                       :blocks wall
                                       :entities [(assoc (skeleton 6.5 64 0.5) :visible true)]})
               eng (assoc-in eng [:jobs 'jobs.movement.go-to] (standing-go-to n))]
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (let [acted (acts-on p ["place"])
                 round (core/tick! eng)]
             (await (until-acts acted round))
@@ -1283,7 +1283,7 @@
           (with-redefs [cover/glance-away! (fn [_ _]
                                                      (fake/add-entity! p (assoc (creeper 0.5 64 3.5) :visible true))
                                                      (js/Promise.resolve nil))]
-            (core/submit! eng retreat {})
+            (core/submit! eng (tu/order eng retreat) {})
             (let [acted (acts-on p ["place" "moveTo" "steer"])
                   round (core/tick! eng)]
               (await (until-acts acted round))
@@ -1303,7 +1303,7 @@
                                       :inventory [{:name "cobblestone" :count 20}]
                                       :entities [(assoc (zombie 5.5 64 0.5) :visible true)]})]
           (with-redefs [flight/look! (fn [c] (cond-> (vec (look c)) (even? (swap! n inc)) (conj #js {:id (str "ghost" @n)})))]
-            (core/submit! eng retreat {})
+            (core/submit! eng (tu/order eng retreat) {})
             (let [acted (acts-on p ["moveTo" "steer"])
                   round (core/tick! eng)]
               (await (until-acts acted round))
@@ -1329,7 +1329,7 @@
                                     (ctx/end c :limit-reached {:reason :leg :line :job-time} {:arrived false})
                                     (ctx/end c :done nil {:arrived true})))}
               eng (assoc-in eng [:jobs 'jobs.movement.go-to] slow-once)]
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (let [acted (js/Promise.race #js [(acts-on p ["place"]) third])
                 round (core/tick! eng)]
             (await (until-acts acted round))
@@ -1371,7 +1371,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 2.5 64 0.5)]})]
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= [{:x 0.5 :y 64 :z 0.5}] (tu/walked-to eng)) "no flee step: only the seal's step to its cell's middle")
           (is (zero? (count (calls p "attack"))))
@@ -1385,7 +1385,7 @@
                                       :entities [(enderman 2.5 64 0.5)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :pos [3.5 64 1.5]) (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
           (is (zero? (count (calls p "place")))))))))
@@ -1399,7 +1399,7 @@
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :pos [3.5 64 1.5])
                                                                         (swap! (fake/state p) assoc :entities [(enderman -14.5 64 0.5)]) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "steer"))) "the one step into the water, no flee step out of it once the enderman looks calm")
           (is (zero? (count (calls p "place")))))))))
@@ -1426,7 +1426,7 @@
               {:keys [eng]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 0 64 0) "water"}
                                     :entities [(enderman 2.5 64 0.5)]}
                                    (assoc fj/jobs 'test.hold-prices (hold-pricer out [[0 0] [(quot hide 2) (/ hide 2)] [hide hide] [1000 (* 1000 hide)]])))]
-          (core/submit! eng '(test.hold-prices) {})
+          (core/submit! eng (tu/order eng '(test.hold-prices)) {})
           (await (core/tick! eng))
           (let [[fresh half one long] @out]
             (is (= (:water fresh) (:water half)) (str "within one hide nothing changed, nor does the hold's price: " (pr-str (map :water @out))))
@@ -1442,7 +1442,7 @@
                                       :entities [(enderman -1.5 64 0.5)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
@@ -1462,7 +1462,7 @@
                                                               :blocks {(key-of x 66 0) "stone" (key-of x 63 0) "stone"}
                                                               :entities [(enderman -1.5 64 0.5)]})]
                              (leaves-on-steer! p)
-                             (core/submit! eng retreat {})
+                             (core/submit! eng (tu/order eng retreat) {})
                              (await (core/tick! eng))
                              (-> (filter #(= :retreat.cornered (:kind %)) @seen) first :prices :roof)))
               near (await (roof-price 3))
@@ -1478,7 +1478,7 @@
                                                           :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
                                                           :entities [(enderman -1.5 64 0.5)]})]
                          (leaves-on-steer! p)
-                         (core/submit! eng retreat {})
+                         (core/submit! eng (tu/order eng retreat) {})
                          ;; a long hide: the hold, taken again, repeats dearer than what may follow it
                          (await (settings/with-settings {:jobs.survival.hide-out/hide-s 600}
                                   (fn ^:async tick [] (await (core/tick! eng)))))
@@ -1498,7 +1498,7 @@
                                            :entities [(enderman -1.5 64 0.5) (zombie 0.5 64 -1.5)]})]
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (let [{:keys [prices order]} (first (filter #(= :retreat.cornered (:kind %)) @seen))]
             (is (< (:plug prices) (:roof prices)) "the zombie would hit it under the roof for the whole hold")
@@ -1517,7 +1517,7 @@
           (aset p "sensedAt" (fn [pos] (if (and (== 66 (.-y pos)) (not (looked-east?))) #js {:unknown true} (sensed pos))))
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (looked-east?) "an unseen cell reads as rock, so the body looks round before it gives up on the roof")
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof")
@@ -1533,7 +1533,7 @@
           (aset p "sensedAt" (fn [pos] (if (and (>= (.-y pos) 66) (not (looked?))) #js {:unknown true} (sensed pos))))
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (looked?) "the cell over the head itself is looked at (a look at a cell far above glances only that one), not read as rock")
           (is (pos? (count (calls p "place"))) "open sky is no roof: it walls itself in")
@@ -1555,7 +1555,7 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 6 64 0.5)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (neg? (:x (first-move eng))) "away from it")
           (is (zero? (count (calls p "place")))))))))
@@ -1572,7 +1572,7 @@
                       (when (>= @calls 60) (swap! (fake/state p) assoc :entities [])))]
           (.override (.-world p) "steer" (fn [_ _ _] (hurt!) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (.override (.-world p) "wait" (fn [token a impl] (hurt!) (impl token a)))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (<= 60 @calls) "kept trying until the zombie was gone")
           (is (not-any? #(re-find #"cannot-escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
@@ -1627,7 +1627,7 @@
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
           (.override (.-world p) "steer" (fn [token a impl] (-> (impl token a) (.then follow-and-hit!))))
           (.override (.-world p) "attack" leave!)
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (seq (calls p "attack")) "it swings at the zombie that keeps hitting it")
           (is (<= (count (filter #(= :retreat.target (:kind %)) @seen)) 2)
@@ -1647,7 +1647,7 @@
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
           (mem/write! (:store eng) :hurt {:amount 0.5 :attacker {:name "zombie"}} {:cap 50 :ttl 60000})
           (.override (.-world p) "attack" leave!)
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (seq (calls p "attack")) "one hit in a box with no way out: it swings")
           (is (not-any? #(and (= :child_started (:kind %)) (= :back-off (:slot %))) @seen) "and never steps back"))))))
@@ -1665,7 +1665,7 @@
     (.override (.-world p) "steer" (fn [_ _ _] (on-walk s) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
     (.override (.-world p) "place" leave!)
     (.override (.-world p) "attack" leave!)
-    (core/submit! eng retreat {})
+    (core/submit! eng (tu/order eng retreat) {})
     (await (core/tick! eng))
     s)))
 
@@ -1701,7 +1701,7 @@
                        (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (.override (.-world p) "place"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (some #(= :retreat.cornered (:kind %)) @seen) "one healed hit corners the body: its cornered options are weighed")
           (is (= 1 (count (filter #(= :retreat.target (:kind %)) @seen))) "no second flee step (a back-off is a cornered option, no retreat.target)")
@@ -1724,7 +1724,7 @@
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
           (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
           (.override (.-world p) "attack" leave!)
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "place"))) "no wall while the zombie stands in a corner cell")
           (is (pos? (count (calls p "jumpPlace"))) "the pillar needs no corner cell")
@@ -1750,7 +1750,7 @@
         (let [{:keys [eng p] :as s} (setup {:self {:health 8} :inventory [{:name "iron_sword" :count 1}]
                                             :entities [(zombie 5 64 0)]})]
           (.override (.-world p) "steer" (fn [_ _ _] (shot! s) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= [] (filterv #(> (:x %) 3) (tu/walked-to eng))) "no walk through the fire to the zombie five blocks off")
           (is (zero? (count (calls p "attack")))))))))
@@ -1837,7 +1837,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true} :blocks pool
                                            :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}]})]
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (empty? (calls p "attack")) "no fist fight")
           (is (= :dry (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "the walk is the swim-out step")
@@ -1850,7 +1850,7 @@
         (let [{:keys [eng seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true} :blocks pool
                                          :inventory [{:name "iron_sword" :count 1}]
                                          :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20 :visible false}]})]
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (= :dry (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "a fight on a drowned it cannot target is no win: the swim to dry land"))))))
 
@@ -1861,7 +1861,7 @@
         (let [{:keys [eng seen p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true} :blocks pool
                                            :inventory [{:name "iron_sword" :count 1}]
                                            :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20 :visible true}]})]
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (not-any? #(and (= :retreat.step-speed (:kind %)) (= :dry (:slot %))) @seen) "a drowned in reach and in sight is fought, not fled"))))))
 
@@ -1872,7 +1872,7 @@
         (let [{:keys [eng seen]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5} :inWater true}
                                          :blocks (into {} (for [x (range -4 9) z (range -4 5)] [(key-of x 64 z) "water"]))
                                          :entities [{:id 5 :name "drowned" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}]})]
-          (core/submit! eng retreat {})
+          (core/submit! eng (tu/order eng retreat) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (not-any? #(and (= :retreat.step-speed (:kind %)) (= :dry (:slot %))) @seen) "a wade stands on its floor: no swim to dry land"))))))
 
@@ -1890,7 +1890,7 @@
                                            :entities [(assoc (zombie 3 64 0) :visible true)]})
               hurt! #(lose-health! eng p {:attacker {:name "zombie"}})]
           (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
-          (core/submit! eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000}}) {})
+          (core/submit! eng (tu/order eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000}})) {})
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
@@ -1908,7 +1908,7 @@
                          (swap! (fake/state p) update-in [:self :health] - 2)
                          (mem/write! (:store eng) :hurt {:amount 2 :health 18 :hits 1 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
                        (impl token args)))
-          (core/submit! eng '(test.flight {}) {})
+          (core/submit! eng (tu/order eng '(test.flight {})) {})
           (await (core/tick! eng))
           (is (= [[1 64 0]] (take 1 (placed-cells p))))
           (is (= 1 (count (take-while #(not= "attack" (.-name %)) (filter #(#{"place" "attack"} (.-name %)) (.-calls (.-world p))))))
@@ -1952,7 +1952,7 @@
                  (when (and @arrived (some #(= :retreat.hide-breached (:kind %)) @seen))
                    (swap! (fake/state p) assoc :entities []))
                  (impl token a)))
-    (core/submit! eng hiding-retreat {})
+    (core/submit! eng (tu/order eng hiding-retreat) {})
     (await (core/tick! eng))
     {:seen seen :health (:health (:self @(fake/state p)))}))
 
@@ -1979,7 +1979,7 @@
                          (when (= 1 (swap! holds inc)) (fake/add-entity! p (assoc (creeper 3 64 0) :visible true)))
                          (when (> @holds 5) (swap! (fake/state p) assoc :entities [])))
                        (impl token a)))
-          (core/submit! eng hiding-retreat {})
+          (core/submit! eng (tu/order eng hiding-retreat) {})
           (await (core/tick! eng))
           (is (< 5 @holds) "it held on while the creeper stood by")
           (is (empty? (filter #(= :retreat.hide-breached (:kind %)) @seen)) "the refuge was not left for it"))))))
@@ -1995,7 +1995,7 @@
                        (when (and (hiding? seen) (= 1 (swap! holds inc)))
                          (fake/add-entity! p (assoc (creeper 3 64 0) :visible true)))
                        (impl token a)))
-          (core/submit! eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000 :jobs.survival.hide-out/opened-s 10}}) {})
+          (core/submit! eng (tu/order eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000 :jobs.survival.hide-out/opened-s 10}})) {})
           (await (core/tick! eng))
           (is (seq (filter #(= :retreat.hide-breached (:kind %)) @seen)) "the blast opens the wall onto the zombie: leaving is cheaper"))))))
 
@@ -2010,7 +2010,7 @@
                    (when (= 1 (swap! holds inc)) (fake/add-entity! p (assoc (creeper 0 64 5) :visible true)))
                    (when (> @holds 5) (swap! (fake/state p) assoc :entities [])))
                  (impl token a)))
-    (core/submit! eng (list 'test.flight {:settings (merge {:jobs.survival.hide-out/hide-s 100000} settings)}) {})
+    (core/submit! eng (tu/order eng (list 'test.flight {:settings (merge {:jobs.survival.hide-out/hide-s 100000} settings)})) {})
     (await (core/tick! eng))
     {:holds @holds :left? (boolean (seq (filter #(= :retreat.hide-breached (:kind %)) @seen)))}))
 
@@ -2035,7 +2035,7 @@
                          (swap! looks-before #(or % (count (calls p "look"))))
                          (when (> (swap! holds inc) 6) (swap! (fake/state p) assoc :entities [])))
                        (impl token a)))
-          (core/submit! eng hiding-retreat {})
+          (core/submit! eng (tu/order eng hiding-retreat) {})
           (await (core/tick! eng))
           (is (>= (->> (drop @looks-before (calls p "look"))
                        (map (fn [c] (let [pos (.-pos (.-args c))] [(.-x pos) (.-z pos)])))
@@ -2064,7 +2064,7 @@
                          (lose-health! eng p {:attacker {:name "zombie"}}))
                        (when (>= (count (calls p "jumpPlace")) 5) (swap! (fake/state p) assoc :entities []))
                        (impl token a)))
-          (core/submit! eng hiding-retreat {})
+          (core/submit! eng (tu/order eng hiding-retreat) {})
           (await (core/tick! eng))
           (is (= 5 (count (calls p "jumpPlace"))) "three blocks, then two more once the first three were hit")
           (is (zero? (count (calls p "attack"))) "no fist fight")
@@ -2086,7 +2086,7 @@
                          (lose-health! eng p {:attacker {:name "skeleton"}}))
                        (when (and @hurt (> (count (calls p "wait")) 6)) (swap! (fake/state p) assoc :entities []))
                        (impl token a)))
-          (core/submit! eng hiding-retreat {})
+          (core/submit! eng (tu/order eng hiding-retreat) {})
           (await (core/tick! eng))
           (is (= 3 (count (calls p "jumpPlace"))) "no higher: a taller pillar only lifts it into the shooter's line"))))))
 
@@ -2104,7 +2104,7 @@
                            (lose-health! eng p damage))
                          (when (and @hurt (> (count (calls p "wait")) 3)) (swap! (fake/state p) assoc :entities []))
                          (impl token a)))
-            (core/submit! eng hiding-retreat {})
+            (core/submit! eng (tu/order eng hiding-retreat) {})
             (await (core/tick! eng))
             (is (empty? (filter #(= :retreat.hide-hurt (:kind %)) @seen)) (pr-str damage))
             (is (= 3 (count (calls p "jumpPlace"))) "no raise: the loss was no blow")))))))
@@ -2125,7 +2125,7 @@
                            (lose-health! eng p {:attacker {:name "zombie"}}))
                          (when (>= n 7) (swap! (fake/state p) assoc :entities [])))
                        (impl token a)))
-          (core/submit! eng hiding-retreat {})
+          (core/submit! eng (tu/order eng hiding-retreat) {})
           (await (core/tick! eng))
           (is (= 7 (count (calls p "jumpPlace"))) "three blocks, then two more after each of two hits")
           (is (= 2 (count (filter #(= :retreat.hide-hurt (:kind %)) @seen)))))))))
@@ -2365,7 +2365,7 @@
             (when hurt? (mem/write! (:store eng) :hurt {:amount 2 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
             (.override (.-world p) "steer"
                        (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-            (core/submit! eng retreat {})
+            (core/submit! eng (tu/order eng retreat) {})
             (await (settings/with-settings {:jobs.survival.respond.options/hurt-window-s 600}
                      (fn ^:async tick [] (await (core/tick! eng)))))
             (is (= leg-s (first @legs)) (str "hurt? " hurt?))))))))
@@ -2385,7 +2385,7 @@
           (tu/set-sensed! p (fn [pos] (if (< (.-y pos) 63) #js {:unknown true :pos pos} (sensed pos))))
           (mem/write! (:store eng) :hurt {:amount 6 :health 14 :damageType "minecraft:arrow" :attacker {:id 50 :name "arrow"} :dir {:x 1 :z 0}}
                       {:cap 50 :ttl 60000})
-          (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {})) {})
           (await (core/tick! eng))
           (let [step (first (filter #(= :retreat.target (:kind %)) @seen))]
             (is (= [] (:from step)))

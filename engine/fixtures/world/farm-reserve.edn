@@ -13,52 +13,52 @@
  [{:name "plant-sows-the-unreserved-seed-and-keeps-the-reserved-one"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["wheat_seeds" 8] ["beetroot_seeds" 4]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.plant {:area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
+         [:job (jobs.farm.plant {:worth 1200 :area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:planted 4 :status :completed}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "beetroots"] [:block [13 0 16] "beetroots"] [:item "wheat_seeds" 8] [:item "beetroot_seeds" 0]]}
   {:name "plant-sows-nothing-when-all-its-seed-is-reserved"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["wheat_seeds" 8]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.plant {:area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
+         [:job (jobs.farm.plant {:worth 1200 :area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :food-reserve}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:planted [:>= 1]}} :for-s 15}]
    :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 8]]}
   {:name "compost-feeds-the-leaves-and-leaves-the-reserved-seed"
    :blocks [[:set [11 0 16] "composter"]]
    :body {:inventory [["wheat_seeds" 10] ["oak_leaves" 4]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.compost {:at #xyz [11 0 16] :items ["wheat_seeds" "oak_leaves"] :times 1})]]
+         [:job (jobs.farm.compost {:worth 1200 :at #xyz [11 0 16] :items ["wheat_seeds" "oak_leaves"] :times 1})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.compost"}} :within-s 70 :of-job true}]
    :after [[:item "wheat_seeds" 10] [:item "oak_leaves" [:<= 3]]]}
   {:name "fertilize-leaves-the-reserved-bone-meal"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:fill [10 0 16] [13 0 16] "wheat[age=1]"]]
    :body {:inventory [["bone_meal" 5]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-meal" :item "bone_meal" :count 3 :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-meal" :item "bone_meal" :count 3 :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.fertilize {:area {:pos #xyz [11 0 16] :radius 6} :ways #{:carried}})]]
+         [:job (jobs.farm.fertilize {:worth 1200 :area {:pos #xyz [11 0 16] :radius 6} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.fertilize"}} :within-s 40 :of-job true}]
    :after [[:item "bone_meal" 3]]}
   {:name "get-seeds-fertilize-way-spends-only-the-unreserved-bone-meal"
    :plot {:floor "grass_block"}
    :body {:at [16.5 0 16.5] :inventory [["bone_meal" 8]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-meal" :item "bone_meal" :count 7 :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-meal" :item "bone_meal" :count 7 :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 8 :ways #{:fertilize}})]]
+         [:job (jobs.gather.get-seeds {:worth 1200 :item "wheat_seeds" :count 1 :radius 8 :ways #{:fertilize}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:name "jobs.gather.get-seeds"}} :within-s 120 :of-job true}]
    :after [[:item "bone_meal" 7]]
    :limit-s 150}
   {:name "get-seeds-keeps-all-bone-meal-when-it-is-all-reserved"
    :plot {:floor "grass_block"}
    :body {:at [16.5 0 16.5] :inventory [["bone_meal" 8]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-meal" :item "bone_meal" :count :all :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-meal" :item "bone_meal" :count :all :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 8})]]
+         [:job (jobs.gather.get-seeds {:worth 1200 :item "wheat_seeds" :count 1 :radius 8})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :none}} :within-s 60 :of-job true}]
    :after [[:item "bone_meal" 8]]
    :limit-s 70}
@@ -66,17 +66,17 @@
    :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"] [:set [10 0 16] "wheat[age=3]"]
             [:set [9 0 16] "chest"] [:set [11 0 16] "composter"]]
    :body {:inventory [["wheat" 5] ["wheat_seeds" 70]]}
-   :act [[:job (jobs.memory.reserve {:id "wt-wheat" :item "wheat" :count 3 :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-wheat" :item "wheat" :count 3 :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.memory.reserve {:id "wt-seed" :item "wheat_seeds" :count 66 :why "world test"})]
+         [:job (jobs.memory.reserve {:worth 1200 :id "wt-seed" :item "wheat_seeds" :count 66 :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.maintain {:area {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
+         [:job (jobs.farm.maintain {:worth 1200 :area {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.maintain"}} :within-s 70 :of-job true}]
    :after [[:item "wheat" 3] [:item "wheat_seeds" 66]]}
   {:name "maintain-keeps-two-wheat-as-bait-for-a-lure"
    :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"] [:set [10 0 16] "wheat[age=3]"]
             [:set [9 0 16] "chest"]]
    :body {:inventory [["wheat" 5]]}
-   :act [[:job (jobs.farm.maintain {:area {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16]})]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.maintain"}} :within-s 70 :of-job true}]
    :after [[:item "wheat" 2]]}]}

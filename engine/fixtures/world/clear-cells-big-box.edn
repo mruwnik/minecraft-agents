@@ -13,7 +13,7 @@
   :limit-s 200}
  :cases
  [{:name "big-own-box-keeps-jobs-list-answering"
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [10 0 10] :max #at [15 1 15]}})]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [10 0 10] :max #at [15 1 15]}})]
          [:wait-s 3]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
          [:wait-s 3]
@@ -27,7 +27,7 @@
    :body {:at [8.5 0 15.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 900 4] ["haste" 900 2]]}
    :act [[:summon "cow" [24.5 0 13.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [26.5 0 13.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.blocks.clear-cells {:area {:min #at [10 0 10] :max #at [19 1 19]}})]
+         [:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [10 0 10] :max #at [19 1 19]}})]
          [:wait-s 3]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
          [:wait-s 3]
@@ -44,7 +44,7 @@
    :body {:at [8.5 0 15.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 900 4] ["haste" 900 2]]}
    :act [[:summon "cow" [22.5 0 13.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [24.5 0 13.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.blocks.clear-cells {:area {:min #at [10 0 10] :max #at [19 1 19]}})]]
+         [:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [10 0 10] :max #at [19 1 19]}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug 200}} :within-s 420 :of-job true}]
    :after [[:block [10 0 10] "air"] [:block [19 1 19] "air"] [:block [20 0 13] "oak_fence"] [:body-far [23.5 0 13.5] 3]
            [:entities "type=cow,tag=wt" [[21 0 11] [25 2 15]] 2]]

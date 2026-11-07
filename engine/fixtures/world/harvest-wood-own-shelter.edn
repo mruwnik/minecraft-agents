@@ -16,7 +16,7 @@
   :limit-s 230}
  :cases
  [{:name "shut-in-own-shelter-holds-the-trees-and-fells-one-at-dawn"
-   :act [[:job (jobs.forestry.harvest-wood {:count 1 :radius 24})]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :count 1 :radius 24})]
          [:wait-s 30]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :for-s 30}
@@ -27,7 +27,7 @@
    :after [[:block [36 0 16] "air"]]}
   {:name "own-shelter-by-day-is-left-through-the-wall-at-the-floor"
    :time :any :time-why nil
-   :act [[:job (jobs.forestry.harvest-wood {:count 1 :radius 24})]]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :count 1 :radius 24})]]
    :expect [{:event {:source :job :kind :completed} :within-s 190 :of-job true}]
    :limit-s 200
    :after [[:block [36 0 16] "air"] [:block [19 2 16] "air"] [:block [20 3 16] "air"]]}]}

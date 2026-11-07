@@ -19,14 +19,14 @@
   :limit-s 320}
  :cases
  [{:name "only-way-dives-so-a-stair-up-is-cut"
-   :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [6 30 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :exhausted}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :go-to.restored} :for-s 300 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [6.5 30 16.5] 3]
            [:memory {:entries {:stair-way [{:data {:floors [:any]}}]}}]]}
   {:name "walk-only-ways-give-up-without-digging"
-   :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [6 30 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
@@ -34,8 +34,8 @@
    :limit-s 100}
   {:name "go-home-without-a-pickaxe-digs-the-stair-by-hand-and-never-walks-down"
    :body {:inventory []}
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [6 30 16]}) [:now]]
-         [:job (jobs.survival.go-home {})]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [6 30 16]}) [:now]]
+         [:job (jobs.survival.go-home {:worth 1200})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :exhausted}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.by-hand} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 12 16.5] 6]]

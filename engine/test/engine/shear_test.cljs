@@ -23,7 +23,7 @@
   "Submit (jobs.animals.shear args) in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world)]
-    (core/submit! (:eng s) (list 'jobs.animals.shear args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.shear args)) {})
     (await (run-ticks s n 700))
     s))
 
@@ -140,7 +140,7 @@
                        (let [r (impl token args)]
                          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "u2" (:uuid e))) %))
                          r)))
-          (core/submit! eng '(jobs.animals.shear {}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.shear {})) {})
           (await (run-ticks s 8 700))
           (is (finished? s))
           (is (= :shorn (:reason (done-event s))))
@@ -156,7 +156,7 @@
                        (let [r (impl token args)]
                          (swap! (fake/state p) assoc :inventory [])
                          r)))
-          (core/submit! eng '(jobs.animals.shear {}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.shear {})) {})
           (await (run-ticks s 8 700))
           (is (finished? s))
           (is (= :shears-broke (:reason (done-event s))))
@@ -171,7 +171,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (h/setup {:inventory shears :entities [(sheep 1 2)]})]
           (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
-          (core/submit! eng '(jobs.animals.shear {}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.shear {})) {})
           (await (run-ticks s 10 700))
           (is (finished? s) "the pickup is over, no loop")
           (is (= 0 (:collected (done-event s)))))))))
@@ -186,7 +186,7 @@
                  ["Miles" {:ignore-zones? true} [1 2] []]
                  [nil {} [] [:no-zones]]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory shears :entities [(sheep 1 2) (sheep 2 3)]} 0 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.shear (merge {:collect false} extra)) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.shear (merge {:collect false} extra))) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :shear.declined))) (pr-str owner extra))))))))
@@ -201,7 +201,7 @@
                      :entities [(sheep 1 14) (sheep 2 2)]}
               run (fn ^:async r [extra]
                     (let [{:keys [eng] :as s} (h/setup world)]
-                      (core/submit! eng (list 'jobs.animals.shear (merge {:collect false} extra)) {})
+                      (core/submit! eng (tu/order eng (list 'jobs.animals.shear (merge {:collect false} extra))) {})
                       (await (tu/run-ticks eng (:clock s) 20 700))
                       (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))))]
           (is (= [2] (await (run {}))) "the sheep inside the foreign pen is left, the free one shorn"))))))
@@ -212,7 +212,7 @@
       (fn ^:async t []
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory shears :entities [(sheep 1 2)]} 0 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.shear {:collect false}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.shear {:collect false})) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= reason (:reason (done-event s))) (pr-str owner))))))))
 
@@ -226,7 +226,7 @@
   [args world n]
   (let [s (h/setup-seeing world nil)]
     (perception/pass! (aget (:p s) "perception"))
-    (core/submit! (:eng s) (list 'jobs.animals.shear args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.shear args)) {})
     (await (run-ticks s n 700))
     s))
 
@@ -280,7 +280,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory shears :entities [(sheep 1 2)]})]
           (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (list 'jobs.animals.shear {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.shear {})) {})
           (await (run-ticks s 8 700))
           (is (= :shorn (:reason (done-event s))))
           (is (= [true] (world-sheared s))))))))
@@ -311,7 +311,7 @@
                             (pos? (+ (* fx (- (.-x (.-pos %)) (.-x me))) (* fz (- (.-z (.-pos %)) (.-z me))))))))))
     (with-redefs [pen-read/read! (fn ([_ _] (reset! facing [1 0]) (js/Promise.resolve {:closed? false :reason :unloaded}))
                                 ([_ _ _] (reset! facing [1 0]) (js/Promise.resolve {:closed? false :reason :unloaded})))]
-      (core/submit! (:eng s) (list 'jobs.animals.shear {:collect false :radius 40}) {})
+      (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.shear {:collect false :radius 40})) {})
       (await (tu/run-ticks (:eng s) (:clock s) 30 700)))
     s)))
 

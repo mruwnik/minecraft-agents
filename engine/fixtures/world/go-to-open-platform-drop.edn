@@ -15,7 +15,7 @@
  :cases
  [{:name "over-budget-drop-off-an-open-platform-tries-the-unseen-sides-and-never-ends-needs-health"
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :replan} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :needs-health}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}
@@ -23,7 +23,7 @@
    :after [[:body-far [17.5 0 9.5] 4]]}
   {:name "capped-drop-off-an-open-platform-tries-the-unseen-sides"
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [17 0 9] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
    :expect [{:event {:source :job :kind :replan} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
@@ -32,7 +32,7 @@
    :body {:at [22.5 0 9.5] :yaw 90 :pitch 20 :settle-s 3 :inventory [["iron_pickaxe" 1]]}
    :limit-s 220
    :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [17 0 9] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:why :damage-budget}} :within-s 140 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 200 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 200 :until {:source :job :kind #{:completed :stopped}}}]

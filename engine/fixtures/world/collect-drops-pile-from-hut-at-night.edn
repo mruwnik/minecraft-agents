@@ -10,7 +10,7 @@
            [:set [8 1 17] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [8 2 17] "oak_door[facing=east,half=upper,hinge=left,open=false]"]]
   :body {:at [40.5 0 16.5] :spawnpoint [5 1 17] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24]]}
-  :act [[:kill-body] [:wait-s 3] [:job (jobs.items.collect-drops {:near #at [40 0 16] :radius 6 :search 4 :dig true})]]
+  :act [[:kill-body] [:wait-s 3] [:job (jobs.items.collect-drops {:worth 1200 :near #at [40 0 16] :radius 6 :search 4 :dig true})]]
   :limit-s 200}
  :cases
  [{:name "pile-is-collected-from-a-hut-with-a-door-at-night"

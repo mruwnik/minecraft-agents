@@ -36,7 +36,7 @@
          [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
          [:wait-s 3]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
             {:event {:source :job :kind :completed} :within-s 750 :of-job true}]
    :after [[:block [17 1 16] "glass"] [:block [17 2 16] "glass"] [:not-block [15 1 16] "stone"]]}
@@ -61,7 +61,7 @@
          [:rcon "damage $BODY 18.5 minecraft:generic"]
          [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
          [:wait-s 3]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30}
             {:event {:source :job :kind :completed} :within-s 850 :of-job true}]
@@ -75,6 +75,6 @@
    :body {:inventory [["iron_sword" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:not-block [17 1 16] "glass"] [:not-block [17 2 16] "glass"]]}]}

@@ -54,7 +54,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'driving-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(driving-parent) {})
+    (core/submit! eng (tu/order eng '(driving-parent)) {})
     (loop [i 0]
       (when (and (< i 200) (seq (:list (core/state eng))))
         (swap! clock + 500)
@@ -549,7 +549,7 @@
   "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts (:worth the call's, else the root default): its plan."
   [blocks pos goal budget opts]
   (let [p (tu/fake (merge {:blocks blocks :self {:pos pos}} (:world opts)))
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly (or (:worth opts) (ctx/default-worth)))}]
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly (or (:worth opts) 1200))}]
     (reset! wsearch/searches {})
     (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! c (.pathWorld p) goal 0 (walk/default-weight) (assoc (dissoc opts :worth :world) :budget budget))))
          (finally (reset! wsearch/searches {})))))

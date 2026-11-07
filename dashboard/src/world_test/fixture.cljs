@@ -6,6 +6,7 @@
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [clojure.walk :as walk]
+            [agent-tools.jobs :as jobs]
             [world-test.expect :as x]
             [world-test.lease :as lease]))
 
@@ -534,6 +535,13 @@
                (#{:rain :thunder} (:weather c))
                (some #(and (vector? %) (= :time-set (first %))) (:act c)))))
 
+(defn unpriced-jobs
+  "The jobs of c's [:job spec] and [:http :submit spec] steps whose args give no :worth (agent-tools.jobs/unpriced)."
+  [c]
+  (distinct (mapcat (fn [step] (when (and (vector? step) (or (= :job (first step)) (= [:http :submit] (take 2 step))))
+                                 (jobs/unpriced (if (= :job (first step)) (second step) (nth step 2)))))
+                    (:act c))))
+
 (defn problems
   "Why a merged case cannot run, as a vector of strings (empty when it can)."
   [c]
@@ -565,6 +573,7 @@
       (not (every? #(and (string? (:name %)) (not (str/blank? (:name %))) (coords? (:pos %))) (:places c))) (conj ":places entries need a :name and :pos [x y z]")
       (not (vector? (get-in c [:body :at]))) (conj ":body :at must be [x y z]")
       (some step-problem? (:act c)) (conj (str ":act steps must be one of " (sort step-kinds)))
+      (seq (unpriced-jobs c)) (conj (str "a submitted job needs a :worth in its args, as every submit does: " (str/join ", " (unpriced-jobs c))))
       (seq (bare-plot-positions c)) (conj (str "a job position " (first (bare-plot-positions c)) " with a plot-relative height needs #at"))
       (seq (out-of-plot-positions c)) (conj (str "position " (first (out-of-plot-positions c)) " is outside the plot: give :plot :length / :width or move it inside"))
       (seq (solid-placements c)) (conj (str "the " (name (ffirst (solid-placements c))) " position " (second (first (solid-placements c))) " is inside a solid :blocks cell"))

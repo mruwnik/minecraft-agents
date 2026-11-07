@@ -38,7 +38,7 @@
         {:keys [eng p] :as s} (g/setup (assoc world :clock clock))
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (g/recording-parent out args)))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 60) (seq (:list (core/state eng))))
         (swap! clock + 1000)

@@ -424,7 +424,7 @@
               ;; top scan (2*depth) + 1 + the sky scan (2*depth + 8)
               row-reads (* (inc (* 2 (:range a))) (:w a) (+ (* 4 12) 9))
               bound (+ (pt/read-budget) row-reads)]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (run-until-empty eng 40))
           (is (empty? (:list (core/state eng))) "the scan ends within a few ticks")
           (is (> @reads bound) (str "the scan read past one slice: " @reads))
@@ -443,7 +443,7 @@
               out (atom :not-done)
               parent (tu/recording-parent job a out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (run-until-empty eng 40))
           (is (empty? (:list (core/state eng))) "the job ends")
           (is (<= @reads 66000) (str "reads over the slice cap: " @reads))
@@ -460,7 +460,7 @@
               out (atom :not-done)
               parent (tu/recording-parent job a out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (core/tick! eng))
           (swap! (fake/state p) assoc-in [:self :pos] [7 64 5])
           (await (run-until-empty eng 40))

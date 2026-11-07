@@ -10,18 +10,18 @@
   :limit-s 90}
  :cases
  [{:name "repeat-job-survives-a-death"
-   :act [[:http :submit (repeat (jobs.time.noop {:seconds 0.5 :why :idle})) [] {:ok true}]
+   :act [[:http :submit (repeat (jobs.time.noop {:worth 1200 :seconds 0.5 :why :idle})) [] {:ok true}]
          [:kill-body] [:await {:source :body :kind :respawned} 30]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
    :expect [{:event {:source :body :kind :respawned} :within-s 40}
             {:no-event {:source :job :kind :cancelled} :for-s 10 :of-job true}]}
   {:name "dropped-job-is-cancelled-by-a-death"
-   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [:drop-on-death] {:ok true}]
+   :act [[:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [28 0 28] :range 1}) [:drop-on-death] {:ok true}]
          [:kill-body]]
    :expect [{:event {:source :job :kind :cancelled} :within-s 40 :of-job true}]}
   ;; a plain job stays listed through the death (the died event names it), is run again after the respawn, and arrives
   {:name "go-to-survives-the-death-and-arrives"
-   :act [[:http :submit (jobs.movement.go-to {:pos #at [28 0 28] :range 1}) [] {:ok true}]
+   :act [[:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [28 0 28] :range 1}) [] {:ok true}]
          [:wait-s 2] [:kill-body]]
    :expect [{:event {:source :body :kind :died :data {:survived [:any]}} :within-s 30}
             {:event {:source :body :kind :respawned} :within-s 40}
@@ -31,8 +31,8 @@
    :limit-s 120}
   ;; the job ahead dies with the body; the respawn is no move the queued call waits out (:moved-since-submit)
   {:name "queued-pillar-starts-from-the-respawn-point"
-   :act [[:http :submit (jobs.time.noop {:seconds 60}) [:drop-on-death] {:ok true}]
-         [:http :submit (jobs.access.pillar {:height 1 :submitted-at #xyz [10 0 10]}) [] {:ok true}]
+   :act [[:http :submit (jobs.time.noop {:worth 1200 :seconds 60}) [:drop-on-death] {:ok true}]
+         [:http :submit (jobs.access.pillar {:worth 1200 :height 1 :submitted-at #xyz [10 0 10]}) [] {:ok true}]
          [:wait-s 2] [:kill-body] [:await {:source :body :kind :respawned} 30]
          [:rcon "give $BODY dirt 4"]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}

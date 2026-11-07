@@ -22,6 +22,6 @@
  [{:name "plan-bed-hold-ends-with-from-plan-so-bed-down-places-the-bed"
    :memory [{:kind :home :data {:pos #xyz [15 0 15]} :policy {:cap 1 :ttl :forever}}]
    :act [[:rcon "clear $BODY red_bed"] [:rcon "give $BODY red_bed 1"]
-         [:job (any (jobs.build.from-plan {:plan "$plan:bedroom"}) (jobs.survival.bed-down {}))]
+         [:job (any (jobs.build.from-plan {:worth 1200 :plan "$plan:bedroom"}) (jobs.survival.bed-down {:worth 1200}))]
          [:await {:source :job :kind :night.bed-placed} 120]]
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120}]}]}

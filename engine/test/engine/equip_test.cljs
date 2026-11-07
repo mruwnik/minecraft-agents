@@ -28,7 +28,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     {:eng eng :p p :clock clock :seen seen :out out}))
 
 (defn ^:async equip [world args]
@@ -105,7 +105,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
-          (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list job {:item "wooden_pickaxe"})) {})
           (await (ft/run-ticks s 40))
           (is (= "wooden_pickaxe" (held (:p s))))
           (is (= ["holding wooden_pickaxe"] (mapv :text (ft/events-of s :completed))))
@@ -116,7 +116,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (ft/start (ft/world {}) [])]
-          (core/submit! (:eng s) (list job {:item "wooden_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list job {:item "wooden_pickaxe"})) {})
           (await (ft/run-ticks s 40))
           (is (nil? (held (:p s))))
           (is (empty? (ft/events-of s :completed)))
@@ -127,7 +127,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (ft/start (ft/world ft/pickaxe-stock) [])]
-          (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :ways #{:carried}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list job {:item "wooden_pickaxe" :ways #{:carried}})) {})
           (await (ft/run-ticks s 10))
           (is (nil? (held (:p s))))
           (is (empty? (filter #(= :need (:slot %)) (ft/events-of s :child_started))))

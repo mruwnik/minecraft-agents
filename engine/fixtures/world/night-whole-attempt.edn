@@ -9,7 +9,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [{:name "dug-in-ends-the-night-in-one-round"
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:wait-s 10]] ; deliberate hold: the sealed body must sit through it with no hold/idle/re-dig before dawn
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
@@ -19,7 +19,7 @@
    :limit-s 140}
   {:name "wet-site-is-left-for-another-pit-site"
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :child_ended :data {:ending {:cause :no-way :data {:text [:contains "; not "]}}}} :within-s 30}
             {:event {:source :job :kind :shut-in.relocated} :within-s 60}
             {:event {:source :job :kind :shut-in.sealed} :within-s 120}
@@ -36,7 +36,7 @@
    :blocks [[:fill [0 -6 14] [95 -1 18] "stone"] [:fill [0 -5 16] [95 -4 16] "air"]
             [:set [8 -5 16] "torch"] [:set [24 -5 16] "torch"] [:set [40 -5 16] "torch"] [:set [56 -5 16] "torch"] [:set [72 -5 16] "torch"] [:set [88 -5 16] "torch"]]
    :body {:at [48.5 -5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night" :reason #{nil :exposed}}} 150]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :edge-walk}} :of-job true :for-s 150}
             {:event {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night" :reason #{nil :exposed}}} :within-s 150 :of-job true}]
@@ -47,7 +47,7 @@
    :time-why :dawn-decision
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
    :act [[:time-set 21000]
-         [:job (jobs.survival.night {:ways #{:bed :shelter}})]
+         [:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 60]
          [:await {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} 130]]
    ;; the log-out lasts until the morning: from 21000 that is 2000 ticks (100 s)
@@ -60,14 +60,14 @@
   {:name "failed-site-forgotten-when-the-night-ends-roofed"
    :time :night-exclusive
    :blocks [[:fill [0 -6 0] [31 -1 31] "dirt"] [:set [17 -1 16] "water"]]
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :shut-in.sealed} 150]
          [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 120]
          [:rcon "execute positioned $X $Y $Z run setblock ~17 ~-1 ~16 minecraft:dirt"]
          ;; integer execute coordinates are block centres, so ~16 ~ ~16 is the start cell's centre (~16.5 lands on [17 0 17])
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:time-set 14000]
-         [:job (jobs.survival.night)]
+         [:job (jobs.survival.night {:worth 1200})]
          ;; the expectations below are met by night 1's events, so wait here until night 2 has dug the start cell
          [:until-rcon "execute positioned $X $Y $Z unless block ~16 ~-1 ~16 minecraft:dirt" "passed" 120]]
    :expect [{:event {:source :job :kind :shut-in.relocated} :within-s 150}
@@ -80,7 +80,7 @@
    :body {:inventory [["iron_sword" 1]]} ; a fist loses to the helmeted zombie (flee), and the flight pillars up with the last dirt
    :register [{:trigger :hostile-near}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.night)]]
+         [:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 90}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120}
@@ -94,7 +94,7 @@
    :blocks [[:fill [0 -6 0] [63 -1 63] "dirt"]]
    :register [{:trigger :hostile-near}]
    :act [[:summon "zombie" [38.5 0 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.night)]
+         [:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 200]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 30}
             {:event {:source :job :kind :hostile.decided :data {:cover #{:pit :pocket :walls}}} :within-s 30}
@@ -107,7 +107,7 @@
   {:name "stone-pad-no-pickaxe-starts-no-pit"
    :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 90]
          [:await {:source :job :kind :stopped :data {:reason :exposed}} 120]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
@@ -118,7 +118,7 @@
   {:name "stone-pad-with-pickaxe-digs-in"
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 100}

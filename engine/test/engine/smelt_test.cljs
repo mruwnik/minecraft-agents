@@ -226,8 +226,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
-              _ (core/submit! eng '(jobs.debug.notify {:text "free"}) {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
+              _ (core/submit! eng (tu/order eng '(jobs.debug.notify {:text "free"})) {})
               _ (await (ticks eng 1))]
           (is (= {"raw_iron" 2 "coal" 2} (inv-of p)) "3 iron and a coal went into the furnace")
           (is (= {:name "raw_iron" :count 3} (:input (furnace-of p))))
@@ -258,7 +258,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup {:blocks {pos-key "furnace"}
                                                  :inventory [{:name "raw_iron" :count 64} {:name "coal" :count 8}]})
-              _ (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 64}) {})
+              _ (core/submit! eng (tu/order eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 64})) {})
               _ (await (ticks eng 1))
               _ (advance! p 1)
               _ (await (ticks eng 2))
@@ -288,7 +288,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (advance! p 200)
               _ (swap! clock + 40000)
@@ -307,7 +307,7 @@
   "A world with one furnace block, the job over item and count, the cook done and the clock past it: [p seen eng]."
   [block inventory item count]
   (let [{:keys [eng p seen clock]} (setup {:blocks {pos-key block} :inventory inventory})]
-    (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count count}) {})
+    (core/submit! eng (tu/order eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count count})) {})
     (await (ticks eng 1))
     (advance! p 2000)
     (swap! clock + 100000)
@@ -331,7 +331,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup (assoc base-world :furnaces {pos-key {:input {:name "beef" :count 2} :fuel {:name "coal" :count 1}}}))
               _ (advance! p 1)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 2))]
           (is (empty? (of-kind seen :stopped)) "the cook in the furnace is waited out")
           (is (= 1 (count (:list (core/state eng)))))
@@ -351,7 +351,7 @@
         (let [{:keys [eng p seen]} (setup (assoc base-world :furnaces {pos-key {:input {:name "beef" :count 1} :output {:name "cooked_beef" :count 1}
                                                                                 :fuel {:name "coal" :count 1}}}))
               _ (advance! p 1)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 2))]
           (is (empty? (of-kind seen :stopped)) "output beside another cooking input is not furnace-busy")
           (is (nil? (:output (furnace-of p))) "the leftover is taken out")
@@ -375,7 +375,7 @@
                 (fn ^:async one [[label world item reason]]
                   (let [{:keys [eng p seen]} (setup world)
                         before (inv-of p)]
-                    (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count 3}) {})
+                    (core/submit! eng (tu/order eng (list 'jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item item :count 3})) {})
                     (await (ticks eng 6))
                     (is (= (keyword reason) (:reason (first (of-kind seen :stopped)))) label)
                     (is (= 1 (count (of-kind seen :stopped))) label)
@@ -388,7 +388,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"20,64,0" "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
-          (core/submit! eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0}}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0}})) {})
           (swap! (fake/state p) assoc :inventory [{:name "coal" :count 2}])
           (await (ticks eng 6))
           (is (empty? (tu/walk-calls p)) "no walk toward a furnace with nothing to cook")
@@ -400,9 +400,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup base-world)]
-          (core/submit! eng '(jobs.memory.reserve {:item "coal"}) {})
+          (core/submit! eng (tu/order eng '(jobs.memory.reserve {:item "coal"})) {})
           (await (ticks eng 2))
-          (core/submit! eng iron-job {})
+          (core/submit! eng (tu/order eng iron-job) {})
           (await (ticks eng 6))
           (is (= :no-fuel (:reason (first (of-kind seen :stopped)))))
           (is (not (some #{"load"} (ops p))))
@@ -413,7 +413,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"20,64,0" "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
-          (core/submit! eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3})) {})
           (await (ticks eng 2))
           (is (seq (tu/walk-calls p)))
           (is (= {"raw_iron" 0 "coal" 1} (select-keys (merge {"raw_iron" 0} (inv-of p)) ["raw_iron" "coal"])))
@@ -434,7 +434,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng make p clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (core/shutdown! eng)
               again (make)]
@@ -449,7 +449,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup base-world)
-              id (core/submit! eng iron-job {})
+              id (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (mem/update-job! (:store eng) id [] #(dissoc % :owed :ready-at :unlit-from))
               _ (swap! clock + 1000)
@@ -467,7 +467,7 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup base-world)
               notes #(mapv :data (mem/entries (mem/view (:store eng)) :smelt/cooking))
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (is (= [{:pos {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}] (notes)) "noted at the load")
               _ (advance! p 600)
@@ -480,12 +480,12 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup (assoc base-world :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 1}]))
-              first-id (core/submit! eng iron-job {})
+              first-id (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (core/cancel! eng first-id)
               _ (await (ticks eng 3))
               _ (is (= {} (select-keys (inv-of p) ["raw_iron" "coal"])) "everything is in the furnace")
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 2))
               _ (is (empty? (of-kind seen :obtain.gathering)) "no fuel or input is fetched")
               _ (advance! p 2000)
@@ -499,7 +499,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup base-world)
-              id (core/submit! eng iron-job {})
+              id (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (core/cancel! eng id)
               _ (await (ticks eng 3))]
@@ -510,7 +510,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (fake/remove-block! p (fake/parse-cell pos-key))
               _ (swap! clock + 40000)
@@ -534,7 +534,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock seen]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (advance! p 200)
               _ (put-out! p)
@@ -557,7 +557,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock seen]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 1}]})
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (advance! p 200)
               _ (put-out! p)
@@ -575,7 +575,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock seen]} (setup {:blocks {pos-key "furnace"} :inventory [{:name "clay" :count 3} {:name "coal" :count 2}]})
-              _ (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "clay" :count 3}) {})
+              _ (core/submit! eng (tu/order eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "clay" :count 3})) {})
               _ (await (ticks eng 1))
               _ (swap! clock + 7000)
               _ (await (ticks eng 2))]
@@ -588,7 +588,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup (assoc base-world :furnaces {pos-key {:output {:name "iron_ingot" :count 2}}}))
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))]
           (is (= {"raw_iron" 2 "coal" 2 "iron_ingot" 2} (inv-of p)) "the two ingots lying there came first")
           (is (= ["read" "take" "load"] (ops p)))
@@ -603,7 +603,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (swap! (fake/state p) assoc-in [:furnaces (fake/parse-cell pos-key) :input] nil)
               _ (swap! clock + 40000)
@@ -617,7 +617,7 @@
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup {:blocks {pos-key "blast_furnace"}
                                             :inventory [{:name "raw_iron" :count 4} {:name "oak_planks" :count 4}]})
-              _ (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 4 :fuel "oak_planks"}) {})
+              _ (core/submit! eng (tu/order eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item "raw_iron" :count 4 :fuel "oak_planks"})) {})
               _ (await (ticks eng 1))]
           (is (= {:name "oak_planks" :count 3} (select-keys (:fuel (furnace-of p)) [:name :count])) "4 iron need 3 planks")
           (advance! p 2000)
@@ -632,7 +632,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (fake/set-block! p (fake/parse-cell pos-key) "chest")
               _ (swap! clock + 40000)
@@ -646,7 +646,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup base-world)
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 1))
               _ (fake/set-block! p (fake/parse-cell pos-key) "chest")
               _ (swap! clock + 40000)
@@ -694,7 +694,7 @@
                                    (js/Promise.resolve (contract/ending :condition-failed :goal-dangerous {:why :goal-dangerous :arrived false}))))
           (set! child/pause! (fn [c seconds why] (swap! pauses inc) (pause c seconds why)))
           (try
-            (core/submit! eng (list 'jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.items.smelt {:furnace {:x 20 :y 64 :z 0} :item "raw_iron" :count 3})) {})
             (await (ticks eng 8))
             (is (< 1 @walks) "asked again each round")
             (is (<= (dec @walks) @pauses) "each refused round holds still, so the time spend is charged")
@@ -710,7 +710,7 @@
               {:keys [eng p seen]} (setup (assoc base-world
                                                  :furnaces {pos-key {:output {:name "iron_ingot" :count 2}}}
                                                  :inventory (into filler [{:name "raw_iron" :count 5} {:name "coal" :count 3}])))
-              _ (core/submit! eng iron-job {})
+              _ (core/submit! eng (tu/order eng iron-job) {})
               _ (await (ticks eng 2))]
           (is (= :inventory-full (:reason (first (of-kind seen :stopped)))))
           (is (not (some #{"load"} (ops p))) "nothing was loaded")
@@ -752,7 +752,7 @@
                        (if (and (= "load" (.-op a)) (pos? @busy))
                          (do (swap! busy dec) (clj->js {:status "busy" :slot "input" :holds {:name "raw_copper" :count 2}}))
                          (impl token a))))
-          (core/submit! eng iron-job {})
+          (core/submit! eng (tu/order eng iron-job) {})
           (await (ticks eng 3))
           (is (empty? (of-kind seen :stopped)) "one busy answer is not the end")
           (is (some #{"load"} (ops p)) "the load went in on the next round"))))))
@@ -764,7 +764,7 @@
         out (atom :not-done)
         parent (tu/recording-parent 'jobs.items.smelt args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 24) (seq (:list (core/state eng))))
         (await (core/tick! eng))
@@ -815,7 +815,7 @@
         (let [{:keys [eng seen] :as s} (seeing-setup {:blocks {"20,64,0" "furnace"} :unreachable ["20,64,0"]
                                                        :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
           (dotimes [_ 2]
-            (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+            (core/submit! eng (tu/order eng '(jobs.items.smelt {:item "raw_iron" :count 3})) {})
             (await (seeing-ticks s 6)))
           (is (= 1 (count (of-kind seen :smelt.furnace))) "the second call does not walk to it again"))))))
 
@@ -825,7 +825,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (seeing-setup {:blocks {"1,64,2" "smoker" "-1,64,4" "furnace" "0,64,7" "furnace"}
                                                          :inventory iron-and-coal})]
-          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:item "raw_iron" :count 3})) {})
           (await (seeing-ticks s 3))
           (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [-1 64 4])))
               "the nearer furnace; the nearer smoker cannot cook iron")
@@ -840,7 +840,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (seeing-setup {:blocks {"-1,64,4" "furnace" "0,64,9" "furnace"} :inventory iron-and-coal
                                                    :zones [{:name "kitchen" :min [-3 60 2] :max [1 70 6] :owner "Miles"}]})]
-          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:item "raw_iron" :count 3})) {})
           (await (seeing-ticks s 3))
           (is (nil? (:input (get (:furnaces @(fake/state p)) [-1 64 4]))) "the nearer one lies in another's zone")
           (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [0 64 9])))))))))
@@ -851,7 +851,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (seeing-setup {:blocks {"1,64,2" "smoker" "-1,64,4" "furnace"}
                                                          :inventory iron-and-coal})]
-          (core/submit! eng '(jobs.items.smelt {:count 3}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:count 3})) {})
           (await (seeing-ticks s 3))
           (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
               "the nearer smoker cannot cook the carried iron"))))))
@@ -903,7 +903,7 @@
                          (let [e (await (ctx/call c :kid 'jobs.items.smelt args))]
                            (if (= :continue e) e (do (reset! out e) (ctx/end c :done nil)))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (ticks eng 3))
     [@out p]))
 
@@ -929,7 +929,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (seeing-setup {:inventory iron-and-coal})
               before (inv-of p)]
-          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:item "raw_iron" :count 3})) {})
           (await (seeing-ticks s 3))
           (is (= [:no-furnace-seen] (mapv :reason (of-kind seen :stopped))))
           (is (empty? (:list (core/state eng))))
@@ -940,7 +940,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (seeing-setup {:blocks {"0,64,-3" "furnace"} :inventory iron-and-coal})]
-          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:item "raw_iron" :count 3})) {})
           (await (seeing-ticks s 4))
           (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [0 64 -3])))
               "the furnace behind the body was found by turning around")
@@ -951,7 +951,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (seeing-setup {:inventory iron-and-coal})]
-          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3 :ways #{:carried}}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:item "raw_iron" :count 3 :ways #{:carried}})) {})
           (await (seeing-ticks s 4))
           (is (= 10 (count (calls p "look"))) "four headings, level and down, up unless that ray is seen, once")
           (is (= [:no-furnace-seen] (mapv :reason (of-kind seen :stopped)))))))))
@@ -978,7 +978,7 @@
         parent (tu/recording-parent 'jobs.items.smelt args out)
         eng (assoc eng :jobs (merge (:jobs eng) jobs {'recording-parent parent}))]
     (when before (before eng))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 80) (seq (:list (core/state eng))))
         (await (core/tick! eng))
@@ -1207,7 +1207,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup two-foods)]
-          (core/submit! eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item ["beef" "porkchop"]}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.smelt {:furnace {:x 1 :y 64 :z 0} :item ["beef" "porkchop"]})) {})
           (await (ticks eng 1))
           (is (= ["read" "load"] (ops p)) "the first item is loaded")
           (await (ticks eng 3))
@@ -1275,7 +1275,7 @@
               out (atom nil)
               parent (tu/recording-parent 'jobs.items.smelt contract-args out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks eng 1))
           (advance! p 200)
           (put-out! p)
@@ -1292,7 +1292,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p clock]} (setup base-world)]
-          (core/submit! eng iron-job {})
+          (core/submit! eng (tu/order eng iron-job) {})
           (await (ticks eng 1))
           (dotimes [_ 3]
             (swap! clock + 1000)

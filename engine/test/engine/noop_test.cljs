@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen waits]} (setup nil)]
-          (core/submit! eng '(pauser) {})
+          (core/submit! eng (tu/order eng '(pauser)) {})
           (await (core/tick! eng))
           (is (= [10000 10000 5000] @waits) "in waits of at most prim/wait-max-ms")
           (is (= [:testing] (distinct (map #(:reason %) (of-kind seen :holding)))) "holding with its reason")
@@ -54,7 +54,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen waits]} (setup 2)
-              id (core/submit! eng '(pauser) {})]
+              id (core/submit! eng (tu/order eng '(pauser)) {})]
           (await (core/tick! eng))
           (is (= [id] (:list (core/state eng))) "cut, still listed")
           (await (tu/run-until-empty eng 5))
@@ -66,7 +66,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen waits]} (setup nil)]
-          (core/submit! eng '(pauser {:seconds 600}) {})
+          (core/submit! eng (tu/order eng '(pauser {:seconds 600})) {})
           (await (core/tick! eng))
           (is (= 60 (count @waits)) "still one wait act per prim/wait-max-ms")
           (is (< (count @seen) 30) (str "events: " (frequencies (map (juxt :source :kind) @seen)))))))))
@@ -76,7 +76,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen waits]} (setup nil true)]
-          (core/submit! eng '(pauser) {})
+          (core/submit! eng (tu/order eng '(pauser)) {})
           (await (core/tick! eng))
           (is (= [10000 10000 5000] @waits))
           (is (= :done (:pause (first (of-kind seen :completed))))))))))

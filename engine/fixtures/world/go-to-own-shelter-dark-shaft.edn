@@ -18,7 +18,7 @@
   :limit-s 150}
  :cases
  [{:name "sealed-in-own-shelter-leaves-it-and-walks-the-surface"
-   :act [[:job (jobs.movement.go-to {:pos #at [44 9 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [44 9 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :unseen-floor-dark}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}

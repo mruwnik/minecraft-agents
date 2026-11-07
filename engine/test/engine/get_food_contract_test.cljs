@@ -24,7 +24,7 @@
                          (let [e (await (ctx/call c :kid food (merge {:carry 0} args)))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-until-empty eng 40))
     @out))
 

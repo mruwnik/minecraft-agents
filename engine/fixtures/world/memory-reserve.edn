@@ -8,12 +8,12 @@
   :limit-s 40}
  :cases
  [{:name "reserve-then-unreserve-an-item"
-   :act [[:job (jobs.memory.reserve {:id "wt-keep" :item "diamond" :count 3 :why "world test"})]
+   :act [[:job (jobs.memory.reserve {:worth 1200 :id "wt-keep" :item "diamond" :count 3 :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.memory.unreserve {:id "wt-keep"})]]
+         [:job (jobs.memory.unreserve {:worth 1200 :id "wt-keep"})]]
    :expect [{:event {:source :job :kind :reserve.set :data {:id "wt-keep" :item "diamond" :count 3 :strength 1}} :within-s 20}
             {:event {:source :job :kind :reserve.cleared :data {:removed 1}} :within-s 30}]}
   {:name "reserve-with-no-target-is-refused-without-a-round"
-   :act [[:job (jobs.memory.reserve {})]]
+   :act [[:job (jobs.memory.reserve {:worth 1200})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :bad-args}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 5 :of-job true}]}]}

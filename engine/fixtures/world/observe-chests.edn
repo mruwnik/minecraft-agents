@@ -12,7 +12,7 @@
  [{:name "deposit-books-the-chest-stock-for-observe"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :body {:inventory [["bread" 6]]}
-   :act [[:job (jobs.storage.deposit {:chest #xyz [20 0 16] :items ["bread"]})]
+   :act [[:job (jobs.storage.deposit {:worth 1200 :chest #xyz [20 0 16] :items ["bread"]})]
          [:await {:source :job :kind :completed} 40]
          [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 16] :items {"bread" 6}}]}]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
@@ -20,15 +20,15 @@
   {:name "explicit-chest-arg-beats-the-recorded-place"
    :blocks [[:set [20 0 16] "chest[facing=west]"] [:set [20 0 20] "chest[facing=west]"]]
    :body {:inventory [["bread" 6]]}
-   :act [[:job (jobs.memory.set-place {:name :chest :pos #at [20 0 16]})]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :chest :pos #at [20 0 16]})]
          [:await {:source :job :kind :completed} 20]
-         [:http :submit (jobs.storage.deposit {:chest #xyz [20 0 20] :items ["bread"]}) [] {:ok true}]
+         [:http :submit (jobs.storage.deposit {:worth 1200 :chest #xyz [20 0 20] :items ["bread"]}) [] {:ok true}]
          [:until [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 20] :items {"bread" 6}}]}] 40]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 40}]
    :after [[:item "bread" 0]]}
   {:name "inspect-container-books-the-chest-stock-for-observe"
    :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]]
-   :act [[:job (jobs.primitive.inspect-container {:pos #xyz [20 0 16]})]
+   :act [[:job (jobs.primitive.inspect-container {:worth 1200 :pos #xyz [20 0 16]})]
          [:await {:source :job :kind :completed} 40]
          [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 16] :items {"bread" 5}}]}]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]

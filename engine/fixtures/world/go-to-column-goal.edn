@@ -11,11 +11,11 @@
   :limit-s 150}
  :cases
  [{:name "column-goal-arrives-on-the-ground"
-   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [60.5 0 16.5] 2]]}
   {:name "y-off-by-three-arrives"
-   :act [[:job (jobs.movement.go-to {:pos #at [40 3 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [40 3 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [40.5 0 16.5] 2]]}
   {:name "far-plateau-column-more-than-8-up-arrives"
@@ -24,7 +24,7 @@
             [:fill [43 0 0] [43 3 31] "stone"] [:fill [44 0 0] [44 4 31] "stone"] [:fill [45 0 0] [45 5 31] "stone"]
             [:fill [46 0 0] [46 6 31] "stone"] [:fill [47 0 0] [47 7 31] "stone"] [:fill [48 0 0] [48 8 31] "stone"]
             [:fill [49 0 0] [49 9 31] "stone"] [:fill [50 0 0] [50 10 31] "stone"] [:fill [51 0 0] [51 11 31] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :goal-not-standable}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [60.5 12 16.5] 2]]}
@@ -35,7 +35,7 @@
             [:fill [37 0 0] [37 4 31] "stone"] [:fill [38 0 0] [38 3 31] "stone"] [:fill [39 0 0] [39 2 31] "stone"]
             [:fill [40 0 0] [40 1 31] "stone"] [:fill [41 0 0] [41 0 31] "stone"]]
    :body {:at [2.5 12 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :goal-not-standable}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [60.5 0 16.5] 2]]}
@@ -46,7 +46,7 @@
             [:fill [43 0 0] [43 3 31] "stone"] [:fill [44 0 0] [44 4 31] "stone"] [:fill [45 0 0] [45 5 31] "stone"]
             [:fill [46 0 0] [46 6 31] "stone"] [:fill [47 0 0] [47 7 31] "stone"] [:fill [48 0 0] [48 8 31] "stone"]
             [:fill [49 0 0] [49 9 31] "stone"] [:fill [50 0 0] [50 10 31] "stone"] [:fill [51 0 0] [51 11 31] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 16] :range 0 :unknown true})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :unseen-floors}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [60.5 12 16.5] 2]]}
@@ -57,7 +57,7 @@
             [:fill [37 0 0] [37 4 31] "stone"] [:fill [38 0 0] [38 3 31] "stone"] [:fill [39 0 0] [39 2 31] "stone"]
             [:fill [40 0 0] [40 1 31] "stone"] [:fill [41 0 0] [41 0 31] "stone"]]
    :body {:at [2.5 12 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 16] :range 0 :unknown true})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :unseen-floors}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [60.5 0 16.5] 2]]}
@@ -67,25 +67,25 @@
             [:fill [43 0 0] [43 3 31] "stone"] [:fill [44 0 0] [44 4 31] "stone"] [:fill [45 0 0] [45 5 31] "stone"]
             [:fill [46 0 0] [46 6 31] "stone"] [:fill [47 0 0] [47 7 31] "stone"] [:fill [48 0 0] [48 8 31] "stone"]
             [:fill [49 0 0] [49 9 31] "stone"] [:fill [50 0 0] [50 10 31] "stone"] [:fill [51 0 0] [51 11 31] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [60 8 16] :range 0 :unknown true})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 8 16] :range 0 :unknown true})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :unseen-floor-dark}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [60.5 12 16.5] 2]]}
   ;; 6b85f599: in the dark the walk's sight gate presses against the mound's wall; it must let go after a few still ticks, replan and arrive
   {:name "unknown-goal-inside-a-mound-in-daylight-arrives-on-top"
    :blocks [[:fill [28 0 14] [32 0 18] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 0 :unknown true})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 16] :range 0 :unknown true})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :unseen-floor-dark}} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [30.5 1 16.5] 1.5]]}
   {:name "unknown-block-goal-with-range-1-stands-beside-it"
    :blocks [[:set [30 0 16] "crafting_table"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1 :unknown true})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 16] :range 1 :unknown true})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 2.5] [:body-far [30.5 1 16.5] 1.2]]}
   {:name "column-behind-a-bottomless-gap-gives-up-bounded"
    :blocks [[:fill [40 -8 0] [50 -1 31] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [70 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [70 16] :range 0})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}]
    :after [[:body-far [70.5 0 16.5] 10]]}
   {:name "hill-with-a-cave-below-arrives-on-the-surface"
@@ -93,6 +93,6 @@
    ;; not at the cave floor nearest the feet; the body walks the ramp and arrives on the surface (feet y 6)
    :blocks [[:fill [14 0 8] [14 0 24] "stone"] [:fill [15 0 8] [15 1 24] "stone"] [:fill [16 0 8] [16 2 24] "stone"] [:fill [17 0 8] [17 3 24] "stone"] [:fill [18 0 8] [18 4 24] "stone"] [:fill [19 0 8] [19 5 24] "stone"]
             [:fill [20 0 8] [40 5 24] "stone"] [:fill [22 0 14] [36 2 18] "air"] [:fill [20 0 16] [21 1 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [30 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [30.5 6 16.5] 2.5]]}]}

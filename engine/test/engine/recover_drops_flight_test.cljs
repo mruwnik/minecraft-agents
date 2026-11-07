@@ -28,7 +28,7 @@
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng seen]} (setup (merge iron-kit {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) guard)}))]
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 30))
           (is (= [] (danger-declines seen)))
           (is (= :collected (:decision (recovered eng)))))))))
@@ -41,7 +41,7 @@
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (mem/write! (:store eng) :recover-trip {:death-t (death-t eng) :decided {:value 1400 :cost 50} :baseline {} :phase :go}
                       {:cap 1 :ttl 1000000})
-          (core/submit! eng dear-zombie {})
+          (core/submit! eng (tu/order eng dear-zombie) {})
           (await (run-until-empty eng 20))
           (is (= [] (danger-declines seen)))
           (is (re-find #"zombie" (:text (dt/danger-remembered eng)))))))))
@@ -52,7 +52,7 @@
   (fn ^:async t []
     (let [{:keys [eng]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) dt/zombie-by-the-way)})]
       (die! eng {:pos dt/death-pos :inventory dt/diamonds} ago-ms)
-      (core/submit! eng dear-zombie {})
+      (core/submit! eng (tu/order eng dear-zombie) {})
       (await (run-until-empty eng 5))
       {:eng eng :danger (:data (mem/latest (mem/view (:store eng)) :recover-danger))})))
 
@@ -94,7 +94,7 @@
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (core/submit! eng dear-zombie {})
+          (core/submit! eng (tu/order eng dear-zombie) {})
           (await (run-until-empty eng 5))
           (is (re-find #"zombie" (:text (dt/danger-remembered eng))) "the skip for danger is remembered, naming the mob")
           (is (= [] (tu/walk-calls p)) "the body did not walk toward the pile"))))))
@@ -106,7 +106,7 @@
         (let [zombie {:id 8 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
               {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds} 2500)
-          (core/submit! eng dear-zombie {})
+          (core/submit! eng (tu/order eng dear-zombie) {})
           (let [timer (js/setInterval #(swap! clock + 500) 5)]
             (await (run-until-empty eng 12))
             (js/clearInterval timer))
@@ -121,7 +121,7 @@
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj (vec (pile-drops dt/diamonds)) zombie)})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds} 5000 dt/far-respawn)
           (on-first-leg! p clock #(place-entity! p 8 [19.5 64 2.5]))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides dt/far-held-values}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides dt/far-held-values})) {})
           (await (run-until-empty eng 30))
           (is (some? (dt/danger-remembered eng)) "the trip turned dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))
@@ -136,7 +136,7 @@
           (on-first-leg! p clock (fn []
                              (swap! (fake/state p) assoc-in [:self :health] 2)
                              (mem/write! (:store eng) :hurt {:amount 18 :health 2 :attacker {:id 8 :name "zombie"}} {:cap 50 :ttl 60000})))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides (:value-overrides (second dear-zombie))}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :value-overrides (:value-overrides (second dear-zombie))})) {})
           (await (run-until-empty eng 30))
           (is (some? (dt/danger-remembered eng)) "hit and low, the trip backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))

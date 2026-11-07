@@ -32,7 +32,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     {:eng eng :p p :clock clock :seen seen :out out}))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))

@@ -13,10 +13,10 @@
   :limit-s 400}
  :cases
  [{:name "hungry-body-at-the-foot-of-its-own-stair-climbs-it-and-cuts-no-new-one"
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :completed} 120]
          [:summon "cow" [12.5 10 20.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 360}]
    :after [[:block [17 4 16] "stone"] [:block [16 4 17] "stone"] [:block [16 4 15] "stone"] [:block [17 5 16] "stone"]]}]}

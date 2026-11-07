@@ -8,5 +8,5 @@
  :cases
  [{:name "cobblestone-from-a-pond"
    :blocks [[:fill [14 -5 14] [18 -1 18] "water"] [:fill [21 -1 14] [23 0 18] "stone"]]
-   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "cobblestone" :count 3})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}]}

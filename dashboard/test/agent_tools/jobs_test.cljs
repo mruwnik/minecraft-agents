@@ -21,31 +21,31 @@
 (defn request [& args] (jobs/request-for (vec args)))
 
 (deftest native-expressions-preserve-lists-symbols-and-keyword-arguments
-  (let [r (request "--world" "w" "Bob" "submit" "(jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}})" "--request-id" "move-home")]
+  (let [r (request "--world" "w" "Bob" "submit" "(jobs.movement.go-to {:pos {:x -1 :y 64 :z 2} :worth 60})" "--request-id" "move-home")]
     (is (= "move-home" (get-in r [:request :request-id])))
     (is (re-find #"\(jobs.movement.go-to \{:pos \{:x -1" (data/write-edn (:request r)))))
-  (is (= :interrupt (get-in (request "--world" "w" "Bob" "submit" "(repeat (jobs.movement.look-around))" "--now") [:request :op]))))
+  (is (= :interrupt (get-in (request "--world" "w" "Bob" "submit" "(repeat (jobs.movement.look-around {:worth 60}))" "--now") [:request :op]))))
 
 (deftest submit-appends-by-default-and-now-cuts-in-front-of-the-current-job
-  (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)")
-        now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--now")]
+  (let [plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})")
+        now (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--now")]
     (is (= :submit (get-in plain [:request :op])))
     (is (= {:op :submit} (select-keys (:request plain) [:op :next? :exclusive?])) "a plain submit appends")
     (is (= :interrupt (get-in now [:request :op])))
-    (is (= '(jobs.time.wait-for-light) (get-in now [:request :spec]))))
-  (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-light)"]]
-                          [#"--now and --next" ["submit" "(jobs.time.wait-for-light)" "--now" "--next"]]
+    (is (= '(jobs.time.wait-for-light {:worth 60}) (get-in now [:request :spec]))))
+  (doseq [[pattern args] [[#"unknown operation" ["interrupt" "(jobs.time.wait-for-light {:worth 60})"]]
+                          [#"--now and --next" ["submit" "(jobs.time.wait-for-light {:worth 60})" "--now" "--next"]]
                           [#"--now requires submit" ["list" "--now"]]
                           [#"--now requires submit" ["cancel" "j1" "--now"]]]]
     (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
 
 (deftest wait-and-its-timeout-belong-to-submit
-  (is (= {:timeout "5m"} (select-keys (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "5m")) [:timeout])))
-  (is (some? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--now" "--wait"))))
-  (is (nil? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)"))))
+  (is (= {:timeout "5m"} (select-keys (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--wait" "--timeout" "5m")) [:timeout])))
+  (is (some? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--now" "--wait"))))
+  (is (nil? (:wait (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})"))))
   (doseq [[pattern args] [[#"--wait requires submit" ["cancel" "j1" "--wait"]]
-                          [#"--timeout requires --wait" ["submit" "(jobs.time.wait-for-light)" "--timeout" "5s"]]
-                          [#"--timeout must be" ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "forever"]]]]
+                          [#"--timeout requires --wait" ["submit" "(jobs.time.wait-for-light {:worth 60})" "--timeout" "5s"]]
+                          [#"--timeout must be" ["submit" "(jobs.time.wait-for-light {:worth 60})" "--wait" "--timeout" "forever"]]]]
     (is (re-find pattern (str (:error (apply request "Bob" "--world" "w" args)))) (pr-str args))))
 
 (deftest list-show-cancel-and-retry-use-fixed-endpoints-and-validate-arguments
@@ -75,12 +75,12 @@
   (is (= "/s/worlds/w/agents/Bob/engine/events.sock" (:socketPath (request "Bob" "--world" "w" "--state" "/s")))))
 
 (deftest malformed-multiple-or-oversized-native-job-forms-fail-locally
-  (doseq [source ["{:job :foo}" "(jobs.one) (jobs.two)" "()" (apply str (repeat 13000 "x"))]]
+  (doseq [source ["{:job :foo}" "(jobs.one {:worth 60}) (jobs.two {:worth 60})" "()" (apply str (repeat 13000 "x"))]]
     (is (thrown? js/Error (jobs/spec-for source)) source))
   (is (string? (:error (request "--world" "w" "Bob" "submit" "{:job \"custom\"}")))))
 
 (deftest a-malformed-job-spec-error-shows-an-example
-  (doseq [source ["{:job :foo}" "()" "(jobs.one) (jobs.two)"]]
+  (doseq [source ["{:job :foo}" "()" "(jobs.one {:worth 60}) (jobs.two {:worth 60})"]]
     (is (re-find #"e\.g\. \(jobs\.movement\.go-to \{" (.-message (try (jobs/spec-for source) (catch :default e e)))) source)))
 
 (deftest job-mutations-have-a-total-deadline-even-when-no-response-arrives
@@ -91,10 +91,10 @@
         (.then done))))
 
 (deftest a-submitted-job-survives-death-unless-dropped
-  (let [goal (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-light))")
-        standing (request "Bob" "--world" "w" "submit" "(repeat (jobs.farm.tend {}))")
-        dropped (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--drop-on-death")
-        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--exclusive")]
+  (let [goal (request "Bob" "--world" "w" "submit" "(seq (jobs.time.wait-for-light {:worth 60}))")
+        standing (request "Bob" "--world" "w" "submit" "(repeat (jobs.farm.tend {:worth 60}))")
+        dropped (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--drop-on-death")
+        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--exclusive")]
     (is (true? (get-in goal [:request :survive-death?])))
     (is (true? (get-in standing [:request :survive-death?])))
     (is (not (contains? (:request dropped) :survive-death?)))
@@ -103,9 +103,9 @@
 
 (deftest cancel-all-has-no-job-argument-and-front-and-exclusive-are-submission-options
   (let [cancel (request "Bob" "--world" "w" "cancel-all" "--request-id" "all")
-        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--exclusive")
-        front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)" "--next")
-        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light)")]
+        exclusive (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--exclusive")
+        front (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})" "--next")
+        plain (request "Bob" "--world" "w" "submit" "(jobs.time.wait-for-light {:worth 60})")]
     (is (= :cancel-all (get-in cancel [:request :op])))
     (is (= "all" (get-in cancel [:request :request-id])))
     (is (not (contains? (:request cancel) :id)))
@@ -116,7 +116,7 @@
     (is (re-find #":next\? true" (data/write-edn (:request front))))
     (is (not (contains? (:request plain) :next?))))
   (doseq [args [["cancel-all" "j1"] ["cancel-all" "--exclusive"] ["list" "--exclusive"] ["show" "j1" "--exclusive"] ["retry" "j1" "--exclusive"]
-                ["submit" "(jobs.x {})" "--exclusive" "--next"] ["submit" "(jobs.x {})" "--exclusive" "--now"] ["submit" "(jobs.x {})" "--exclusive" "--drop-on-death"]]]
+                ["submit" "(jobs.x {:worth 60})" "--exclusive" "--next"] ["submit" "(jobs.x {:worth 60})" "--exclusive" "--now"] ["submit" "(jobs.x {:worth 60})" "--exclusive" "--drop-on-death"]]]
     (is (string? (:error (apply request "Bob" "--world" "w" args))) (pr-str args)))
   (doseq [args [["list" "--next"] ["show" "j1" "--next"]
                 ["cancel-all" "--next"] ["cancel" "j1" "--next"] ["retry" "j1" "--next"]]]
@@ -139,7 +139,7 @@
 (deftest submit-options-and-cancel-all-go-through-the-generation-aware-api
   (let [state (state-dir)]
     (async done
-      (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-light) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2}}))"
+      (-> (run-main! state ["submit" "(seq (jobs.time.wait-for-light {:worth 60}) (jobs.movement.go-to {:pos {:x -1 :y 64 :z 2} :worth 60}))"
                             "--next" "--request-id" "held"] engine)
           (.then (fn [first-run]
                    (is (= 0 (:code first-run)))
@@ -152,7 +152,7 @@
                      (is (true? (:next? sent)))
                      (is (= "generation" (:generation-id sent)))
                      (is (= 'seq (first (:spec sent))))
-                     (is (= {:pos {:x -1 :y 64 :z 2}} (second (nth (:spec sent) 2)))))
+                     (is (= {:pos {:x -1 :y 64 :z 2} :worth 60} (second (nth (:spec sent) 2)))))
                    (run-main! state ["cancel-all" "--request-id" "clear"] engine)))
           (.then (fn [second-run]
                    (let [sent (data/read-edn (:body (first (filterv #(= "POST" (:method %)) (:seen second-run)))))
@@ -190,10 +190,10 @@
   (let [state (state-dir)]
     (async done
       (-> (run-main! state ["show" "j3"]
-                     (fn [_] {:text "{:id \"j3\" :name \"go\" :status :queued :round 2 :spec (jobs.x) :noise 1 :waiting {:reason :no-tree :radius 2} :attention {:total 0}}"}))
+                     (fn [_] {:text "{:id \"j3\" :name \"go\" :status :queued :round 2 :spec (jobs.x {:worth 60}) :noise 1 :waiting {:reason :no-tree :radius 2} :attention {:total 0}}"}))
           (.then (fn [{:keys [code out]}]
                    (is (= 0 code))
-                   (is (= {:id "j3" :name "go" :status :queued :round 2 :spec '(jobs.x) :waiting {:reason :no-tree :radius 2}} (data/read-edn out)))))
+                   (is (= {:id "j3" :name "go" :status :queued :round 2 :spec '(jobs.x {:worth 60}) :waiting {:reason :no-tree :radius 2}} (data/read-edn out)))))
           (.then (fn [_] (run-main! state ["show" "j4"]
                                     (fn [_] {:text "{:id \"j4\" :name \"get-kit\" :status :stopped :finished? true :ended-at 5 :result {:reason :no-source :why \"no source\"}}"}))))
           (.then (fn [{:keys [out]}]
@@ -281,7 +281,7 @@
                                         (event-of 6 :job :completed {:job-id "j7" :chain ["j7"]})])
                    60)
     (async done
-      (-> (run-main! state ["submit" "(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})" "--wait" "--timeout" "3s"]
+      (-> (run-main! state ["submit" "(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2} :worth 60})" "--wait" "--timeout" "3s"]
                      (waiting-engine events))
           (.then (fn [{:keys [code out]}]
                    (let [result (data/read-edn out)
@@ -311,7 +311,7 @@
                 (let [state (state-dir)
                       events (atom [(event-of 1 :system :started {})])]
                   (js/setTimeout #(swap! events conj event) 60)
-                  (-> (run-main! state ["submit" "(jobs.farm.plant)" "--wait" "--timeout" "3s"] (waiting-engine events))
+                  (-> (run-main! state ["submit" "(jobs.farm.plant {:worth 60})" "--wait" "--timeout" "3s"] (waiting-engine events))
                       (.then (fn [{:keys [out]}]
                                (.rmSync fs state #js {:recursive true :force true})
                                out)))))))
@@ -324,7 +324,7 @@
   (let [state (state-dir)
         events (atom [(event-of 1 :system :started {})])]
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "100ms"] (waiting-engine events))
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light {:worth 60})" "--wait" "--timeout" "100ms"] (waiting-engine events))
           (.then (fn [{:keys [code out]}]
                    (let [result (data/read-edn out)]
                      (is (= 1 code) "a script can tell the job did not end")
@@ -351,7 +351,7 @@
 (deftest a-refused-submit-does-not-wait
   (let [state (state-dir)]
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait"]
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light {:worth 60})" "--wait"]
                      (fn [{:keys [method path]}]
                        {:status (if (= "POST" method) 400 200)
                         :text (if (= "/snapshot" path) "{:generation-id \"g\"}" "{:ok false :reason :bad-spec}")}))
@@ -371,18 +371,18 @@
   (let [state (state-dir)
         night {:id "j9" :name "jobs.survival.night" :status :running :reflex :night}]
     (async done
-      (-> (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine night))
+      (-> (run-main! state ["submit" "(jobs.x {:worth 60})" "--now"] (reflex-engine night))
           (.then (fn [{:keys [out]}]
                    (let [hint (str (:hint (data/read-edn out)))]
                      (is (re-find #"queued behind reflex :night" hint) out)
                      (is (re-find #"j9" hint) out)
                      (is (re-find #"dawn" hint) out))))
-          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine {:id "j9" :name "jobs.survival.hungry" :status :running :reflex :hungry}))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.x {:worth 60})" "--now"] (reflex-engine {:id "j9" :name "jobs.survival.hungry" :status :running :reflex :hungry}))))
           (.then (fn [{:keys [out]}]
                    (let [hint (str (:hint (data/read-edn out)))]
                      (is (re-find #"queued behind reflex :hungry" hint) out)
                      (is (not (re-find #"dawn" hint)) out))))
-          (.then (fn [_] (run-main! state ["submit" "(jobs.x {})" "--now"] (reflex-engine {:id "j3" :name "jobs.x" :status :running}))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.x {:worth 60})" "--now"] (reflex-engine {:id "j3" :name "jobs.x" :status :running}))))
           (.then (fn [{:keys [out]}] (is (not (re-find #"reflex" (str (:hint (data/read-edn out))))) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
@@ -440,7 +440,7 @@
                  (and (= "GET" method) (str/starts-with? path "/jobs?")) (str "{:total " (count items) " :items " (pr-str items) "}")
                  :else "{:ok true :job {:id \"j9\" :status :queued}}")}))
 
-(def mine-spec "(jobs.gather.mine {:target \"iron_ore\"})")
+(def mine-spec "(jobs.gather.mine {:target \"iron_ore\" :worth 60})")
 
 (defn posted? [{:keys [seen]}] (boolean (some #(= "POST" (:method %)) seen)))
 
@@ -469,7 +469,7 @@
   (let [state (state-dir)]
     (async done
       (-> (js/Promise.resolve nil)
-          (.then (fn [_] (run-main! state ["submit" "(jobs.blocks.dig {:pos [1 64 2]})"] (listing-engine [{:id "j5" :name "jobs.blocks.dig" :status :queued}]))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.blocks.dig {:pos [1 64 2] :worth 60})"] (listing-engine [{:id "j5" :name "jobs.blocks.dig" :status :queued}]))))
           (.then (fn [result] (is (posted? result) "a second one-cell dig is not held back")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
@@ -477,7 +477,7 @@
   (let [state (state-dir)]
     (async done
       (-> (js/Promise.resolve nil)
-          (.then (fn [_] (run-main! state ["submit" "(jobs.memory.forget-place {:name \"bed\"})"] (listing-engine [{:id "j5" :name "jobs.memory.forget-place" :status :queued}]))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.memory.forget-place {:name \"bed\" :worth 60})"] (listing-engine [{:id "j5" :name "jobs.memory.forget-place" :status :queued}]))))
           (.then (fn [result] (is (posted? result) "forgetting another place is not held back")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
@@ -485,7 +485,7 @@
   (let [state (state-dir)]
     (async done
       (-> (js/Promise.resolve nil)
-          (.then (fn [_] (run-main! state ["submit" "(jobs.access.stair {:dir :down})"] (listing-engine [{:id "j5" :name "jobs.strip.corridor" :label "corridor 12" :status :running}]))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.access.stair {:dir :down :worth 60})"] (listing-engine [{:id "j5" :name "jobs.strip.corridor" :label "corridor 12" :status :running}]))))
           (.then (fn [{:keys [out] :as result}]
                    (let [answer (data/read-edn out)]
                      (is (false? (posted? result)))
@@ -493,7 +493,7 @@
                      (is (= [{:id "j5" :name "jobs.strip.corridor" :label "corridor 12" :status :running}] (:clashes answer)) out)
                      (is (re-find #"jobs.strip.corridor \(corridor 12\)" (str (:hint answer))) out)
                      (is (re-find #"jobs.access.stair" (str (:hint answer))) out))))
-          (.then (fn [_] (run-main! state ["submit" "(jobs.gather.chop {})"] (listing-engine [{:id "j5" :name "jobs.access.tunnel" :status :running}]))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.gather.chop {:worth 60})"] (listing-engine [{:id "j5" :name "jobs.access.tunnel" :status :running}]))))
           (.then (fn [result] (is (posted? result) "a non-digging job does not clash with a dig")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
@@ -518,7 +518,7 @@
 
 (deftest a-submit-that-times-out-is-sent-again-with-the-same-request-id
   (let [state (state-dir)
-        spec "(jobs.time.wait-for-light)"]
+        spec "(jobs.time.wait-for-light {:worth 60})"]
     (async done
       (-> (run-main! state ["submit" spec] (flaky-post-engine 2))
           (.then (fn [{:keys [code seen]}]
@@ -555,13 +555,13 @@
       (-> (js/Promise.resolve nil)
           (.then (fn [_] (run-main! state ["submit" mine-spec "--alongside"] (listing-engine [twin]))))
           (.then (fn [result] (is (posted? result) "--alongside overrides")))
-          (.then (fn [_] (run-main! state ["submit" "(jobs.gather.chop {})"] (listing-engine [twin]))))
+          (.then (fn [_] (run-main! state ["submit" "(jobs.gather.chop {:worth 60})"] (listing-engine [twin]))))
           (.then (fn [result] (is (posted? result) "another job name")))
           (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [(assoc twin :survive-death? true :name "(repeat jobs.gather.mine)")]))))
           (.then (fn [result] (is (posted? result) "a standing repeat of the name is not a twin")))
           (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [(assoc twin :status :failed)]))))
           (.then (fn [result] (is (posted? result) "a failed job is not live")))
-          (.then (fn [_] (run-main! state ["submit" "(repeat (jobs.gather.mine {}))"] (listing-engine [twin]))))
+          (.then (fn [_] (run-main! state ["submit" "(repeat (jobs.gather.mine {:worth 60}))"] (listing-engine [twin]))))
           (.then (fn [result] (is (posted? result) "a standing submit is never held")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
@@ -574,29 +574,29 @@
 
 (deftest stamp-from-adds-the-submit-position-only-to-jobs-that-take-it-and-did-not-say-otherwise
   (let [pos {:x 1.5 :y 64 :z -3 :yaw 2}]
-    (doseq [[spec takes? want] [['(jobs.access.stair {:dir :up}) true '(jobs.access.stair {:dir :up :submitted-at {:x 1.5 :y 64 :z -3}})]
-                                ['(jobs.access.stair) true '(jobs.access.stair {:submitted-at {:x 1.5 :y 64 :z -3}})]
-                                ['(jobs.access.stair {:dir :up}) false '(jobs.access.stair {:dir :up})]
-                                ['(jobs.access.stair {:here true}) true '(jobs.access.stair {:here true})]
-                                ['(jobs.access.stair {:submitted-at {:x 0 :y 0 :z 0}}) true '(jobs.access.stair {:submitted-at {:x 0 :y 0 :z 0}})]
-                                ['(repeat (jobs.farm.tend)) true '(repeat (jobs.farm.tend))]]]
+    (doseq [[spec takes? want] [['(jobs.access.stair {:dir :up :worth 60}) true '(jobs.access.stair {:dir :up :submitted-at {:x 1.5 :y 64 :z -3} :worth 60})]
+                                ['(jobs.access.stair {:worth 60}) true '(jobs.access.stair {:submitted-at {:x 1.5 :y 64 :z -3} :worth 60})]
+                                ['(jobs.access.stair {:dir :up :worth 60}) false '(jobs.access.stair {:dir :up :worth 60})]
+                                ['(jobs.access.stair {:here true :worth 60}) true '(jobs.access.stair {:here true :worth 60})]
+                                ['(jobs.access.stair {:submitted-at {:x 0 :y 0 :z 0} :worth 60}) true '(jobs.access.stair {:submitted-at {:x 0 :y 0 :z 0} :worth 60})]
+                                ['(repeat (jobs.farm.tend {:worth 60})) true '(repeat (jobs.farm.tend {:worth 60}))]]]
       (is (= want (jobs/stamp-from spec pos takes?)) (pr-str spec takes?)))))
 
 (deftest the-jobs-that-take-from-are-named-not-read-from-the-truncated-catalog
-  (doseq [spec ['(jobs.access.stair {:dir :down}) '(jobs.access.bridge) '(jobs.access.pillar) '(jobs.gather.mine {:block "coal_ore"})]]
+  (doseq [spec ['(jobs.access.stair {:dir :down :worth 60}) '(jobs.access.bridge {:worth 60}) '(jobs.access.pillar {:worth 60}) '(jobs.gather.mine {:block "coal_ore" :worth 60})]]
     (is (true? (jobs/takes-from? spec)) (pr-str spec)))
-  (doseq [spec ['(jobs.movement.go-to {:pos [1 2 3]}) '(repeat (jobs.access.stair)) '(jobs.access.tunnel {})]]
+  (doseq [spec ['(jobs.movement.go-to {:pos [1 2 3] :worth 60}) '(repeat (jobs.access.stair {:worth 60})) '(jobs.access.tunnel {:worth 60})]]
     (is (false? (jobs/takes-from? spec)) (pr-str spec))))
 
 (deftest a-stair-submit-posts-from-the-snapshot-position
   (let [state (state-dir)]
     (async done
-      (-> (run-main! state ["submit" "(jobs.access.stair {:dir :down})"]
+      (-> (run-main! state ["submit" "(jobs.access.stair {:dir :down :worth 60})"]
                      (fn [{:keys [path]}] {:text (if (= "/snapshot" path)
                                                    "{:generation-id \"g\" :position {:x -528.3 :y 64 :z 350.5}}"
                                                    "{:ok true :job {:id \"j5\" :status :queued}}")}))
           (.then (fn [{:keys [seen]}]
-                   (is (= '(jobs.access.stair {:dir :down :submitted-at {:x -528.3 :y 64 :z 350.5}})
+                   (is (= '(jobs.access.stair {:dir :down :submitted-at {:x -528.3 :y 64 :z 350.5} :worth 60})
                           (:spec (data/read-edn (:body (last (filterv #(= "POST" (:method %)) seen)))))) (pr-str seen))))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
@@ -615,7 +615,7 @@
   (let [state (state-dir)
         events (atom [(event-of 1 :system :started {})])]
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "100ms"] (vitals-engine events true))
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light {:worth 60})" "--wait" "--timeout" "100ms"] (vitals-engine events true))
           (.then (fn [{:keys [out]}]
                    (let [v (:vitals (data/read-edn out))]
                      (is (= "lost 6 health during the wait (20 -> 14)" (:hurt v)) out)
@@ -628,7 +628,7 @@
         events (atom [(event-of 1 :system :started {})])]
     (js/setTimeout #(swap! events conj (event-of 2 :body :hurt {} {:data {:health 14 :causes ["zombie"]}})) 150)
     (async done
-      (-> (run-main! state ["submit" "(jobs.time.wait-for-light)" "--wait" "--timeout" "5s"] (vitals-engine events false))
+      (-> (run-main! state ["submit" "(jobs.time.wait-for-light {:worth 60})" "--wait" "--timeout" "5s"] (vitals-engine events false))
           (.then (fn [{:keys [out]}]
                    (is (= :danger (get-in (data/read-edn out) [:wait :wake])) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))

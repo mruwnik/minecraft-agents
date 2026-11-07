@@ -15,7 +15,7 @@
   {:name "charcoal-from-the-only-logs-carried-burns-some-of-them"
    :blocks [[:set [12 0 10] "furnace"]]
    :body {:inventory [["spruce_log" 3]]}
-   :act [[:job (jobs.items.obtain {:item "charcoal" :count 1 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "charcoal" :count 1 :explore true})]]
    :expect [{:event {:source :job :kind :smelt.loaded :data {:fuel "spruce_log"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 30}]
    :limit-s 90}]}

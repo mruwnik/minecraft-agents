@@ -18,7 +18,7 @@
             [:set [20 0 12] "red_bed[facing=east,part=foot]"] [:set [21 0 12] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :sleep-status :data {:sleeping 0 :needed 1}}]
    :act [[:rcon "give $BODY white_bed 1"]
-         [:job (jobs.survival.bed-down {:answer :bed :roofed-only true})]]
+         [:job (jobs.survival.bed-down {:worth 1200 :answer :bed :roofed-only true})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
             {:no-event {:source :job :kind :tidy.dug} :for-s 60}]
    :limit-s 120}]}

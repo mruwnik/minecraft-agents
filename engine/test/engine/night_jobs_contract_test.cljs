@@ -33,7 +33,7 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (st/dawn-after! p st/default-dawn)
     (prep eng)
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-until-empty eng 40))
     @out))
 
@@ -169,7 +169,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:blocks {"1,64,0" "red_bed"} :time st/night})]
-          (core/submit! eng '(jobs.survival.sleep {:bed {:x 1 :y 64 :z 0} :open-bed false}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.sleep {:bed {:x 1 :y 64 :z 0} :open-bed false})) {})
           (await (tu/run-until-empty eng 5))
           (is (= [:bed-open] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end"))))))
@@ -191,7 +191,7 @@
     (is (fn? (:can-start? job)))
     (is (nil? (:check job)))
     (is (some? (:done? job)))
-    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (spawn-world {}) :view (constantly {:data {} :now 0}) :args {} :quote-call {:spend {:job-time 60}}}))))))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (spawn-world {}) :view (constantly {:data {} :now 0}) :args {} :quote-call {:spend {:job-time 60} :worth tu/order-worth}}))))))
 
 (deftest bed-down-start-facts-are-conditions
   (async done

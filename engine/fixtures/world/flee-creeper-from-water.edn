@@ -36,7 +36,7 @@
   {:name "body-walking-away-sees-a-creeper-behind-it"
    :settings {:jobs.movement.go-to.tuning/look-round false}
    :body {:at [60.5 2 16.5] :yaw 90}
-   :act [[:job (jobs.movement.go-to {:pos #at [10 3 16] :range 1})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [10 3 16] :range 1})]
          [:wait-s 0.5]
          [:summon "creeper" [64.5 3 16.5]]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 7}

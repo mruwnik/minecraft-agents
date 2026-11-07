@@ -13,11 +13,11 @@
   :limit-s 90}
  :cases
  [{:name "10-drop-onto-a-bed-is-taken-at-floor-15"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 15}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 15}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2.5]]}
   {:name "10-drop-onto-a-bed-is-refused-at-floor-18"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [8.5 10 16.5] 9]]}]}

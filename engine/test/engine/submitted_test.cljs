@@ -20,7 +20,7 @@
                 p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 8}]})
                 eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                   :now #(deref clock) :world (world/of-data {} {} [])})
-                id (core/submit! eng spec {})]
+                id (core/submit! eng (tu/order eng spec) {})]
             (await (tu/run-ticks eng clock 3 500))
             (is (= :moved-since-submit (:reason (:waiting (job-api/summary eng id)))) (pr-str spec))))))))
 
@@ -32,8 +32,8 @@
               p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [{:name "iron_pickaxe" :count 1}]})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock) :world (world/of-data {} {} [])})
-              _ (core/submit! eng '(jobs.debug.notify {:text "first"}) {})
-              id (core/submit! eng '(jobs.gather.mine {:block "coal_ore" :submitted-at {:x 80 :y 65 :z 0}}) {})]
+              _ (core/submit! eng (tu/order eng '(jobs.debug.notify {:text "first"})) {})
+              id (core/submit! eng (tu/order eng '(jobs.gather.mine {:block "coal_ore" :submitted-at {:x 80 :y 65 :z 0}})) {})]
           (await (tu/run-ticks eng clock 6 500))
           (is (not= :moved-since-submit (:reason (:waiting (job-api/summary eng id))))))))))
 
@@ -45,7 +45,7 @@
               p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [{:name "iron_pickaxe" :count 1}]})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock) :world (world/of-data {} {} [])})
-              id (core/submit! eng '(jobs.gather.mine {:block "coal_ore" :submitted-at {:x 0 :y 65 :z 0}}) {:survive-death? true})]
+              id (core/submit! eng (tu/order eng '(jobs.gather.mine {:block "coal_ore" :submitted-at {:x 0 :y 65 :z 0}})) {:survive-death? true})]
           (.die (.-world p))
           (swap! (fake/state p) assoc-in [:self :pos] [80 65 0])
           (swap! clock + 1000)

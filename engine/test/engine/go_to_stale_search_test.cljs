@@ -44,7 +44,7 @@
               (reset! loaded true)
               (swap! (fake/state p) update :blocks merge (fake/cells sealed-cell identity)))
             (apply plan-walk args)))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (let [ticks (await (tu/with-expansion-budget 16 #(gt/tick-out! eng 400)))]
       (set! wsearch/plan-walk-budgeted! plan-walk)
       (set! wsearch/round-budget budget)
@@ -166,7 +166,7 @@
                   out (atom :not-done)
                   eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos goal :range 0})))]
               (reset! p-atom p)
-              (core/submit! eng '(recording-parent) {})
+              (core/submit! eng (tu/order eng '(recording-parent {})) {})
               (await (tu/with-expansion-budget 16 #(gt/tick-out! eng 1))))
             (set! wsearch/plan-walk-budgeted! plan-walk)
             (set! wsearch/round-budget budget)
@@ -191,7 +191,7 @@
         (let [{:keys [eng]} (gt/setup {:blocks shaft-blocks :self {:pos {:x 4.5 :y 64 :z 8.5} :inWater true :oxygen 10}})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos [18 70 8] :range 1 :ways #{:walk :clear-seal}})))]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (gt/tick-out! eng 30))
           (reset! wsearch/searches {})
           (is (true? (:arrived @out)) (str "result " @out)))))))

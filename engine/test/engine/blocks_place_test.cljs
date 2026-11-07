@@ -29,7 +29,7 @@
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-until-empty eng n))
     @out))
 
@@ -186,7 +186,7 @@
               e (await (ending-of env {:pos at :item "cobblestone"} 3))]
           (is (= {:kind :nothing-possible :cause {:reason :failed :primitive "failed"}} e)))
         (let [env (bd/setup {:self body :blocks {"2,64,0" "cobblestone"} :inventory cobble})]
-          (core/submit! (:eng env) (list job {:pos at :item "cobblestone"}) {})
+          (core/submit! (:eng env) (tu/order (:eng env) (list job {:pos at :item "cobblestone"})) {})
           (await (tu/run-until-empty (:eng env) 5))
           (is (some #(= :completed (:kind %)) @(:seen env))))))))
 
@@ -551,7 +551,7 @@
                                  (let [e (await (ctx/call c :kid use-on {:on at}))]
                                    (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause])) (ctx/end c :done nil)))))}
                 eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
-            (core/submit! eng '(recording-parent) {})
+            (core/submit! eng (tu/order eng '(recording-parent {})) {})
             (await (tu/run-until-empty eng 5))
             (is (= {:kind kind :cause cause} (update @out :cause identity)) status)))))))
 
@@ -589,7 +589,7 @@
                                  (swap! out conj (await (ctx/quote c j args))))
                                (ctx/end c :done nil))}
               eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tu/run-until-empty eng 5))
           (let [[near far use] @out]
             (is (= {"cobblestone" [1 1 1]} (get-in near [:uses :items])))

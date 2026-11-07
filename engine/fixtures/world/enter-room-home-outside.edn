@@ -19,6 +19,6 @@
  :cases
  [{:name "home-bed-outside-the-house-body-enters-the-house"
    :memory [{:kind :home :data {:pos #xyz [10 0 20]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.shut-in"}} :within-s 70 :of-job true}]
    :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5] [:not-block [15 0 19] "cobblestone"]]}]}

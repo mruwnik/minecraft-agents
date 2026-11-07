@@ -9,7 +9,7 @@
  :cases
  [{:name "straight-cow-gathered"
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+         [:job (jobs.animals.lead-to {:worth 1200 :mob "cow" :pos #xyz [26 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :unleashed :gathered true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 9] [31 2 23]] 1]
            [:item "lead" 2]]}
@@ -17,7 +17,7 @@
    :blocks [[:fill [14 0 0] [14 3 31] "stone"]
             [:fill [14 0 14] [14 3 18] "air"]]
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+         [:job (jobs.animals.lead-to {:worth 1200 :mob "cow" :pos #xyz [26 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :unleashed :gathered true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[17 0 9] [31 2 27]] 1]
            [:item "lead" 2]]}
@@ -26,19 +26,19 @@
    :blocks [[:fill [14 0 0] [14 0 31] "oak_fence"]
             [:set [14 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+         [:job (jobs.animals.lead-to {:worth 1200 :mob "cow" :pos #xyz [26 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :unleashed :gathered true}} :within-s 150 :of-job true}]
    :after [[:block [14 0 16] "oak_fence_gate[open=false]"]
            [:item "lead" 2]]}
   {:name "pull-behind-wall-given-up"
    :blocks [[:fill [28 0 0] [29 6 31] "stone"]]
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16] :gather-radius 1})]]
+         [:job (jobs.animals.lead-to {:worth 1200 :mob "cow" :pos #xyz [26 0 16] :gather-radius 1})]]
    :expect [{:event {:source :job :kind :lead-to.gather-short} :within-s 150 :of-job true}
             {:event {:source :job :kind :completed :data {:reason :unleashed :gathered false}} :within-s 150 :of-job true}]
    :after [[:item "lead" 2]]}
   {:name "glass-wall-cow-stuck-ends-stalled"
    :blocks [[:fill [14 0 10] [14 3 22] "glass"]]
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [26 0 16]})]]
+         [:job (jobs.animals.lead-to {:worth 1200 :mob "cow" :pos #xyz [26 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :animal-stalled :still-led false}} :within-s 150 :of-job true}]}]}

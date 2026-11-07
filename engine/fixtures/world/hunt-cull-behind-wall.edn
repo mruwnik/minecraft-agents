@@ -12,19 +12,19 @@
  [{:name "cull-cow-behind-stone-is-left-alone"
    :blocks [[:fill [12 0 0] [12 4 29] "stone"]]
    :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.animals.cull {:mob "cow" :keep 0 :count 1 :radius 24})]]
+         [:job (jobs.animals.cull {:worth 1200 :mob "cow" :keep 0 :count 1 :radius 24})]]
    :expect [{:no-event {:source :job :kind :animal.killed} :for-s 40}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 1]]
    :limit-s 50}
   {:name "hunt-cow-behind-glass-is-hunted"
    :blocks [[:fill [12 0 0] [12 4 29] "glass"]]
    :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
+         [:job (jobs.combat.hunt {:worth 1200 :item "beef" :keep 0 :radius 24})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 55 :of-job true}]
    :after [[:item "beef" [:>= 1]]]}
   {:name "cull-cow-behind-glass-is-culled"
    :blocks [[:fill [12 0 0] [12 4 29] "glass"]]
    :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.animals.cull {:mob "cow" :keep 0 :count 1 :radius 24})]]
+         [:job (jobs.animals.cull {:worth 1200 :mob "cow" :keep 0 :count 1 :radius 24})]]
    :expect [{:event {:source :job :kind :animal.killed :data {:rule :cull}} :within-s 55}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}

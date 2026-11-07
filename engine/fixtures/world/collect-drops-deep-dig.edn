@@ -17,14 +17,14 @@
  [{:name "drop-22-down-is-dug-to-with-dig"
    :act [[:summon "item" [17.5 8.2 16.5] "{Item:{id:\"minecraft:diamond\",count:8}}"]
          [:until-seen {:block "stone" :min 30} 15]
-         [:job (jobs.items.collect-drops {:radius 30 :holes [#at [16 29 16]] :dig true})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 30 :holes [#at [16 29 16]] :dig true})]]
    :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "diamond" 8]]}
   {:name "drop-22-down-without-dig-is-left"
    :act [[:summon "item" [17.5 8.2 16.5] "{Item:{id:\"minecraft:diamond\",count:8}}"]
          [:until-seen {:block "stone" :min 30} 15]
-         [:job (jobs.items.collect-drops {:radius 30 :holes [#at [16 29 16]]})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 30 :holes [#at [16 29 16]]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason #{:too-deep :unreachable}}} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]

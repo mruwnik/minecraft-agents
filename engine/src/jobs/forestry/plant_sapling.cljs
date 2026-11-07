@@ -255,3 +255,8 @@
 (defn ^:async round
   [c]
   (await (pace/steps! c #(step c))))
+
+(defn worth-of
+  "What a replant is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  [c]
+  (second (get-in (quote-of c) [:uses :job-time])))

@@ -14,13 +14,13 @@
   :limit-s 200}
  :cases
  [{:name "a-recorded-stair-is-not-undercut-by-a-level-run-back-over-it"
-   :act [[:job (jobs.access.record-stair {})]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :west :ways #{:seen :strip-tunnel} :tunnel-length 5 :mend false}) [:alongside]]]
+   :act [[:job (jobs.access.record-stair {:worth 1200})]
+         [:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :direction :west :ways #{:seen :strip-tunnel} :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :completed :data {:steps [:>= 2]}} :within-s 30 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop [:any]}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:stop #{:breach-sealed :breach-open}}} :for-s 120 :until {:source :job :kind #{:completed :stopped} :data {:name "jobs.gather.mine"}}}]
    :after [[:block [19 3 16] "air"] [:not-block [18 2 16] "stone"] [:not-block [18 2 16] "cobblestone"]]}
   {:name "flat-ground-is-no-stair"
    :body {:at [26.5 10 10.5]}
-   :act [[:job (jobs.access.record-stair {})]]
+   :act [[:job (jobs.access.record-stair {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-stair}} :within-s 30 :of-job true}]}]}

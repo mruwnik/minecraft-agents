@@ -12,7 +12,7 @@
    :cases [{:name \"open\" :act [[:summon \"skeleton\" [22.5 0 16.5] \"{NoAI:1b}\"]]
             :expect [{:event {:kind :fired :data {:pos [:near #at [16.5 0 16.5] 2]}} :within-s 9}]}
            {:name \"glass\" :blocks [[:fill [19 0 12] [19 6 20] \"glass\"]] :body {:inventory [[\"bread\" 3]]}
-            :act [[:job (jobs.blocks.dig {:pos #at [1 0 2] :box {:min #xyz [0 0 0]}})]]}
+            :act [[:job (jobs.blocks.dig {:pos #at [1 0 2] :box {:min #xyz [0 0 0]} :worth 60})]]}
            {:name 7}]}")
 
 (deftest plots-tile-the-grid-row-by-row
@@ -264,9 +264,9 @@
 (deftest a-job-in-the-file-defaults-and-in-a-case-is-refused
   (let [text (fn [d c] (str "{:defaults {:act " d "} :cases [{:name \"a\" :act " c " :expect [{:event {:kind :x} :within-s 1}]}]}"))
         ps #(:problems (first (f/file-cases (text %1 %2) "d")))]
-    (is (some #(re-find #":defaults" %) (ps "[[:job (jobs.a.b {})]]" "[[:job (jobs.c.d {})]]")))
-    (is (nil? (ps "[[:job (jobs.a.b {})]]" "[[:rcon \"x\"]]")) "a default job alone runs for every case")
-    (is (nil? (ps "[[:rcon \"x\"]]" "[[:job (jobs.c.d {})]]")) "default setup steps may precede a case's job")))
+    (is (some #(re-find #":defaults" %) (ps "[[:job (jobs.a.b {:worth 60})]]" "[[:job (jobs.c.d {:worth 60})]]")))
+    (is (nil? (ps "[[:job (jobs.a.b {:worth 60})]]" "[[:rcon \"x\"]]")) "a default job alone runs for every case")
+    (is (nil? (ps "[[:rcon \"x\"]]" "[[:job (jobs.c.d {:worth 60})]]")) "default setup steps may precede a case's job")))
 
 (deftest a-position-inside-a-solid-blocks-cell-is-refused
   (let [ps (fn [blocks body-at act]
@@ -281,9 +281,9 @@
     (is (not (solid? (ps carved [5.5 0 16.5] "[]"))) "an air fill after the stone clears it")
     (is (solid? (ps carved [5.5 0 16.5] "[[:summon \"skeleton\" [19.5 0 18.5]]]")) "a summon in rock")
     (is (not (solid? (ps carved [5.5 0 16.5] "[[:summon \"skeleton\" [19.5 0 16.5]]]"))))
-    (is (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18]})]]")) "a go-to goal in rock")
-    (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 16]})]]"))))
-    (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18] :range 3})]]"))) "a block worked from within range")
+    (is (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18] :worth 60})]]")) "a go-to goal in rock")
+    (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 16] :worth 60})]]"))))
+    (is (not (solid? (ps carved [5.5 0 16.5] "[[:job (jobs.movement.go-to {:pos #at [28 0 18] :range 3 :worth 60})]]"))) "a block worked from within range")
     (is (not (solid? (ps [[:fill [0 0 0] [30 4 30] "stone" :hollow]] [5.5 1 5.5] "[]"))) "a hollow fill is air inside")))
 
 (deftest a-single-case-file-is-one-case
@@ -346,8 +346,8 @@
 (deftest tags-resolve-against-the-plot-origin
   (let [[_ glass] (f/file-cases text "hostile")
         [[_ spec]] (:act (f/resolve-tags glass [100 150 200]))]
-    (is (= '(jobs.blocks.dig {:pos [101 150 202] :box {:min {:x 100 :y 150 :z 200}}}) spec))
-    (is (= "(jobs.blocks.dig {:pos [101 150 202], :box {:min {:x 100, :y 150, :z 200}}})" (pr-str spec)))))
+    (is (= '(jobs.blocks.dig {:pos [101 150 202] :box {:min {:x 100 :y 150 :z 200}} :worth 60}) spec))
+    (is (= "(jobs.blocks.dig {:pos [101 150 202], :box {:min {:x 100, :y 150, :z 200}}, :worth 60})" (pr-str spec)))))
 
 (deftest a-two-element-tag-is-a-column-goal
   (let [r (f/resolve-tags (f/read-edn "[#at [3 7] #xyz [3 7] #at [1 2 3]]") [100 150 200])]
@@ -528,8 +528,8 @@
     (is (not (f/plan-on-plot? (plan {:id "h" :blueprint "starter-hut" :at [20330 -41 20010]}) plot [32 32])))))
 
 (deftest plan-refs-resolve-to-the-runner-prefix
-  (is (= '(jobs.forestry.prepare {:plan "test-probex-wood"})
-         (f/resolve-plan-refs '(jobs.forestry.prepare {:plan "$plan:wood"}) "test-probex-")))
+  (is (= '(jobs.forestry.prepare {:plan "test-probex-wood" :worth 60})
+         (f/resolve-plan-refs '(jobs.forestry.prepare {:plan "$plan:wood" :worth 60}) "test-probex-")))
   (is (= {:plan "other"} (f/resolve-plan-refs {:plan "other"} "test-probex-"))))
 
 (deftest expect-plan-refs-resolve-in-expect-and-no-event
@@ -550,10 +550,10 @@
       "$tag (the lowercase shared tag) and $body inside a string"))
 
 (deftest entity-id-refs-name-a-type-and-resolve-to-numbers
-  (let [form '(jobs.combat.attack {:targets ["$entity-id:cow" "zombie" "$entity-id:pig"]})]
+  (let [form '(jobs.combat.attack {:targets ["$entity-id:cow" "zombie" "$entity-id:pig"] :worth 60})]
     (is (= #{"cow" "pig"} (f/entity-id-types form)))
     (is (= #{} (f/entity-id-types {:targets "zombie"})))
-    (is (= '(jobs.combat.attack {:targets [12 "zombie" 40]})
+    (is (= '(jobs.combat.attack {:targets [12 "zombie" 40] :worth 60})
            (f/resolve-entity-refs form {"cow" 12 "pig" 40})))))
 
 (deftest after-block-checks-floor-fractional-coordinates
@@ -651,7 +651,7 @@
     (is (log-out? {:time :day :act [[:time-set 13000]]}))
     (is (not (log-out? {:time :day})))
     (is (not (log-out? {:time :night :keep-memory true})))
-    (is (not (log-out? {:time :night :act [[:job '(jobs.survival.log-out)]]})))
+    (is (not (log-out? {:time :night :act [[:job '(jobs.survival.log-out {:worth 60})]]})))
     (is (= [:bed :log-out :sleep-status] (mapv :kind (f/memory-entries {:time :night :memory [{:kind :bed :data {}}]}))))))
 
 (deftest command-errors-name-the-refused-commands
@@ -878,8 +878,8 @@
     (is (= ["engine/tools/plans.mjs" "add" "p-wt-bob" "--edn" "{:id \"p-wt-bob\", :by \"Bob\"}"]
            (f/step-argv "Bob" "test" [:cli "plans" ["add" "p-$tag" "--edn" {:id "p-$tag" :by "$body"}]] nil nil))
         "placeholders inside a map argument's strings are filled too")
-    (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "submit" "(jobs.x {:a 1})" "--next"]
-           (argv [:http :submit '(jobs.x {:a 1}) [:next]])))))
+    (is (= ["engine/tools/jobs.mjs" "B" "--world" "test" "submit" "(jobs.x {:a 1, :worth 60})" "--next"]
+           (argv [:http :submit '(jobs.x {:a 1 :worth 60}) [:next]])))))
 
 (deftest cli-steps-take-string-map-and-position-arguments
   (let [step-problem? f/step-problem?]

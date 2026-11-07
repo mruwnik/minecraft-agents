@@ -18,26 +18,26 @@
   :limit-s 160}
  :cases
  [{:name "tall-tree-felled-on-its-own-logs-with-no-blocks-carried"
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind #{:stopped :fell-tree.declined}} :for-s 150 :until {:source :job :kind :completed}}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 150 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 9 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 9]] [:body-far [16.5 9 16.5] 5]]}
   {:name "branch-logs-are-felled-with-the-trunk-and-carried"
    :blocks [[:fill [17 4 16] [18 4 16] "oak_log"]]
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"] [:not-block [17 4 16] "oak_log"] [:not-block [18 4 16] "oak_log"] [:item "oak_log" [:>= 12]]]}
   {:name "log-wall-touching-the-tree-in-another-zone-is-left-standing"
    :blocks [[:fill [17 1 16] [18 3 16] "oak_log"]]
    :zones [{:name "yard" :min [17 0 15] :max [19 4 17] :owner "Other" :allow #{}}]
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 9 16] "oak_log"] [:block [17 1 16] "oak_log"] [:block [18 3 16] "oak_log"]]}
   {:name "harvest-wood-with-the-replant-trigger-plants-the-sapling-on-the-ground"
    :register [{:trigger :replant-owed}]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
-   :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind #{:stopped}} :for-s 150 :until {:source :job :kind :completed}}
            {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
@@ -48,7 +48,7 @@
             [:fill [16 0 16] [17 3 17] "dark_oak_log"]
             [:fill [15 4 15] [18 5 18] "dark_oak_leaves[persistent=true]"]]
    :body {:inventory [["iron_axe" 1] ["dark_oak_sapling" 4]]}
-   :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
  {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
    :after [[:block [16 0 16] "dark_oak_sapling"] [:block [17 0 16] "dark_oak_sapling"]
@@ -58,7 +58,7 @@
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "wheat" :cells [#at [16 1 16]] :want {:crop "wheat"}}]}]
-   :act [[:job (jobs.forestry.harvest-wood {:radius 16 :ignore-zones? true})]]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :radius 16 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 0 16] "oak_sapling"] [:item "oak_sapling" 1]]}
@@ -66,7 +66,7 @@
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]
             [:fill [14 8 14] [18 10 18] "air"] [:fill [16 8 16] [16 9 16] "oak_log"]]
    :body {:inventory []}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
             {:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 80 :of-job true}
             {:event {:source :job :kind :completed} :within-s 150 :of-job true}]
@@ -74,7 +74,7 @@
   {:name "fetch-false-chops-by-hand-and-fetches-no-axe"
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]]
    :body {:inventory []}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16] :ways #{:carried :pillar}})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16] :ways #{:carried :pillar}})]]
    :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40}]
    :after [[:item "iron_axe" 0]]
@@ -85,7 +85,7 @@
             [:fill [24 0 12] [24 4 12] "oak_log"] [:fill [23 4 11] [25 5 13] "oak_leaves[persistent=true]"] [:set [24 4 12] "oak_log"]]
    :plans [{:id "hut" :metadata {:by "$body"}
             :parts [{:id "corner" :cells [#at [8 0 12] #at [8 1 12] #at [8 2 12] #at [8 3 12]] :want [:any "birch_log"]}]}]
-   :act [[:job (jobs.forestry.fell-tree {:radius 20})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :radius 20})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :fell-tree.declined} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [8 0 12] "birch_log"] [:not-block [24 0 12] "oak_log"] [:item "oak_log" [:>= 4]]]}
@@ -93,13 +93,13 @@
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
-   :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 12})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :part-cut? true :radius 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
   {:name "part-cut-leaves-a-log-wall-with-no-leaves"
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [14 1 16] [18 5 16] "oak_log"]]
-   :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 12})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :part-cut? true :radius 12})]]
    :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 60 :of-job true}]
    :after [[:block [14 1 16] "oak_log"] [:block [18 5 16] "oak_log"] [:item "oak_log" 0]]
    :limit-s 80}]}

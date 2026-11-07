@@ -10,7 +10,7 @@
  :cases
  [{:name "logs-make-pick-and-table"
    :body {:inventory [["oak_log" 12]]}
-   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0]
            [:entities "type=item" [[0 -1 0] [32 5 32]] 0]]}
@@ -18,31 +18,31 @@
    :blocks [[:set [19 0 16] "crafting_table"]]
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"]
-         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+         [:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0] [:item "oak_planks" 0] [:item "stick" 0]]}
   {:name "seen-table-logs-no-second-table"
    :blocks [[:set [19 0 16] "crafting_table"]]
    :body {:inventory [["oak_log" 2]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"]
-         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
+         [:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1] [:item "crafting_table" 0]]}
   {:name "dig-fetch-from-logs"
    :blocks [[:set [18 0 19] "stone"]]
    :body {:inventory [["oak_log" 12]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 19]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 19]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
   {:name "only-dirt-waits-no-source"
    :body {:inventory [["dirt" 20]]}
-   :act [[:job (jobs.items.get-tool {:kind "pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0] [:item "dirt" 20]]}
   {:name "two-logs-no-source"
    :body {:inventory [["oak_log" 2]]}
-   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped :data {:reason :no-source :why [:contains "no seen chest"]}}}]
    :after [[:item "wooden_pickaxe" 0]]}
@@ -53,7 +53,7 @@
    :plot {:height 12 :floor "dirt" :length 128 :width 64}
    :blocks [[:fill [0 -2 0] [127 -2 63] "bedrock"]]
    :body {:at [64.5 0 32.5] :inventory [["oak_log" 12] ["stick" 4]]}
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :explore false})]]
    :limit-s 150
    :expect [{:event {:source :job :level :warn :kind :stopped :data {:reason :no-source}} :within-s 140 :of-job true}]
    :after [[:item "stone_pickaxe" 0]]},
@@ -62,7 +62,7 @@
    :blocks [[:fill [20 0 15] [24 3 17] "deepslate"]]
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+         [:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe"})]]
    :limit-s 150
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]}
@@ -71,7 +71,7 @@
    :blocks [[:fill [20 0 15] [22 3 17] "stone"] [:fill [24 0 15] [26 3 17] "deepslate"]]
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"]
-         [:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+         [:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe"})]]
    :limit-s 150
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:item "stone_pickaxe" 1] [:item "cobbled_deepslate" 0]]}
@@ -80,7 +80,7 @@
    ;; a 128 long plot: the middle is 64 from the terrain stone at the plot end, beyond the 48-block seen radius
    :plot {:floor "grass_block" :length 128 :width 64}
    :body {:at [64.5 0 32.5] :inventory [["wooden_pickaxe" 1] ["stick" 4] ["oak_planks" 8]]}
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}]}

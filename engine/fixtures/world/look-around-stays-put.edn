@@ -13,7 +13,7 @@
  :cases
  [{:name "idle-then-look-around-same-cell"
    :act [[:wait-s 8]
-         [:job (jobs.movement.look-around {})]
+         [:job (jobs.movement.look-around {:worth 1200})]
          [:await {:source :job :kind :completed} 30]
          [:wait-s 3]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
@@ -21,7 +21,7 @@
   {:name "edge-of-cell-same-cell"
    :body {:at [16.12 0 16.5] :yaw 180}
    :act [[:wait-s 8]
-         [:job (jobs.movement.look-around {})]
+         [:job (jobs.movement.look-around {:worth 1200})]
          [:await {:source :job :kind :completed} 30]
          [:wait-s 3]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]

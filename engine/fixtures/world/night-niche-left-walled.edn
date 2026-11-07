@@ -13,6 +13,6 @@
   :limit-s 90}
  :cases
  [{:name "niche-left-by-day-is-walled-again"
-   :act [[:job (jobs.survival.leave-shelter)]]
+   :act [[:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}]
    :after [[:body-near [14.5 -2 16.5] 3] [:block [16 -2 16] "cobblestone"] [:block [16 -1 16] "cobblestone"]]}]}

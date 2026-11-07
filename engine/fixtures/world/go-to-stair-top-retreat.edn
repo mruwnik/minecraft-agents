@@ -12,13 +12,13 @@
   :limit-s 300}
  :cases
  [{:name "top-of-its-own-stair-under-a-hill-cuts-out-instead-of-walking-down"
-   :act [[:job (jobs.movement.go-to {:pos #at [3 22 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [3 22 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.retrying} :for-s 90 :until {:source :job :kind :go-to.escalated}}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [3.5 22 16.5] 3]]}
   {:name "walk-only-stays-in-its-stair"
-   :act [[:job (jobs.movement.go-to {:pos #at [3 22 16] :range 1 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [3 22 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 120 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:body-far [3.5 22 16.5] 8]]

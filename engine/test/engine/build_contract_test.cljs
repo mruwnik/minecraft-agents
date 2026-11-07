@@ -160,7 +160,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (bfp/start {:inventory bfp/kit} {"pen" (bfp/pen-plan)})
-              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str {:plan "pen"}))))]
+              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str (merge {:worth tu/order-worth} {:plan "pen"})))))]
           (is (nil? (contract/quote-problem q)) (pr-str q))
           (is (= [0 9 9] (:done q))))))))
 
@@ -170,7 +170,7 @@
       (fn ^:async t []
         (let [s (bfp/start {:inventory bfp/kit} {"pen" (bfp/pen-plan)})
               _ (await (bfp/child-outcome (:eng s) from-plan {:plan "pen"} 200))
-              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str {:plan "pen"}))))]
+              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str (merge {:worth tu/order-worth} {:plan "pen"})))))]
           (is (= [0 0 1] (:done q))))))))
 
 (deftest from-plan-start-facts
@@ -191,7 +191,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (bfp/start {:inventory bfp/kit} {"pen" (bfp/pen-plan)})
-              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str {:plan "pen"}))))
+              q (:quote (await (event-api/quote-view (:eng s) (str from-plan) (pr-str (merge {:worth tu/order-worth} {:plan "pen"})))))
               items (get-in q [:uses :items])]
           (is (= {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1} (update-vals items second))))))))
 
@@ -200,5 +200,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (cbt/setup {:blocks cbt/eight :inventory [{:name "iron_shovel" :count 1} {:name "stone_pickaxe" :count 1}]})
-              q (:quote (await (event-api/quote-view eng "jobs.blocks.clear-cells" (pr-str cbt/box))))]
+              q (:quote (await (event-api/quote-view eng "jobs.blocks.clear-cells" (pr-str (merge {:worth tu/order-worth} cbt/box)))))]
           (is (= {"iron_shovel" [4 4 4] "stone_pickaxe" [4 4 4]} (get-in q [:uses :wear]))))))))

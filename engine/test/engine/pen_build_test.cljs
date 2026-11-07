@@ -292,7 +292,7 @@
   "Submit the job as a top-level job in the world, tick a few times: [places, pen-build.declined reasons, other events, list]."
   [world-spec plans args & [zones]]
   (let [{:keys [eng p seen]} (b/start world-spec plans (if (= :none zones) nil (or zones [])))]
-    (core/submit! eng (list job args) {})
+    (core/submit! eng (tu/order eng (list job args)) {})
     (await (tu/run-ticks eng h/clock 4 700))
     {:places (count (h/calls p "place"))
      :declined (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined))
@@ -339,7 +339,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen w]} (b/start (spec kit) {} [])]
           (reset! (:state w) (assoc @(:state w) :plans {"pen" {:error "unreadable EDN: eof"}}))
-          (core/submit! eng (list job {:plan "pen"}) {})
+          (core/submit! eng (tu/order eng (list job {:plan "pen"})) {})
           (await (tu/run-ticks eng h/clock 3 700))
           (is (empty? (kinds-of seen :pen-build.declined))))))))
 
@@ -387,7 +387,7 @@
       (fn ^:async t []
         (let [plan {:id "pen" :parts [{:id "gate" :cells [[3 64 2]] :want [:any "oak_fence_gate" "birch_fence_gate"]}]}
               {:keys [eng p seen]} (b/start {:inventory [{:name "birch_fence" :count 5}] :blocks ground :unloaded ["3,64,2"]} {"pen" plan} [])]
-          (core/submit! eng (list job {:plan "pen" :ways #{:carried :patch}}) {})
+          (core/submit! eng (tu/order eng (list job {:plan "pen" :ways #{:carried :patch}})) {})
           (await (tu/run-ticks eng h/clock 4 700))
           (is (seq (tu/walk-calls p)))
           (is (empty? (filter #(= :no-items (:reason %)) (kinds-of seen :waiting)))))))))
@@ -413,7 +413,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (b/start (spec kit) {"pen" (ring-plan)} [])
               release (.hold (.-world p) "place")]
-          (core/submit! eng (list job {:plan "pen"}) {})
+          (core/submit! eng (tu/order eng (list job {:plan "pen"})) {})
           (let [round (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
             (core/cut! eng (core/holder eng) :test nil)

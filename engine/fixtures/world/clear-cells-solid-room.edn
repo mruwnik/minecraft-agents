@@ -9,6 +9,6 @@
   :limit-s 600}
  :cases
  [{:name "room-in-solid-stone-is-dug-once-and-not-refilled"
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [7 2 5] :max #at [13 4 11]}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [7 2 5] :max #at [13 4 11]}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug 147}} :within-s 500 :of-job true}]
    :after [[:block [7 2 5] "air"] [:block [13 4 11] "air"] [:block [10 3 8] "air"] [:block [7 4 11] "air"] [:block [10 0 3] "air"] [:block [10 0 4] "air"] [:block [10 0 5] "air"] [:block [10 0 6] "air"] [:block [10 0 7] "air"]]}]}

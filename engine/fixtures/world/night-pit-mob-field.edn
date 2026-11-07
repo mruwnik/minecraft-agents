@@ -19,7 +19,7 @@
  [{:name "pit-across-a-death-field-is-not-dug"
    :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [8 0 12] :cause "zombie"}}
             {:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [11 0 9] :cause "zombie"}}]
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}]
@@ -27,7 +27,7 @@
   {:name "pit-across-a-clear-field-is-dug-from-a-dark-start"
    :blocks [[:set [24 0 10] "air"] [:set [28 0 10] "air"] [:set [24 0 14] "air"] [:set [28 0 14] "air"]
             [:fill [21 0 7] [31 2 7] "air"] [:fill [21 0 17] [31 2 17] "air"] [:fill [21 0 7] [21 2 17] "air"] [:fill [31 0 7] [31 2 17] "air"]]
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 120}
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:body-far [26.5 0 12.5] 10]]}]}

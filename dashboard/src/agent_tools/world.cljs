@@ -10,11 +10,12 @@
             ["node:path" :as path]))
 
 (def usage
-  (str "usage: world.mjs <agent> submit <action> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME] [--exclusive]\n"
+  (str "usage: world.mjs <agent> submit <action> [args] --worth <seconds> --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME] [--exclusive]\n"
+       "  --worth  required: what the action is worth to you in seconds of the body's time (the job's :worth); a costlier way is refused\n"
        "  submit move-to <x> <y> <z> | <x> <z> (a column: its surface) [--range <n>] [--doors shut|leave-open|never] [--no-escalate]   (jobs.movement.reach)\n"
        "  submit dig <x> <y> <z> [--ignore-zones] | submit place <x> <y> <z> <item> [--ignore-zones]   (jobs.blocks.dig / place)\n"
        "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west] [--ignore-zones]   (jobs.items.use)\n"
-       "  For gates, doors, trapdoors and levers prefer jobs.mjs submit '(jobs.access.toggle {:pos [x y z] :state :open|:closed|:on|:off|:press})': it reads the state first and says why it could not change it.\n"
+       "  For gates, doors, trapdoors and levers prefer jobs.mjs submit '(jobs.access.toggle {:pos [x y z] :state :open|:closed|:on|:off|:press :worth 60})': it reads the state first and says why it could not change it.\n"
        "  submit interact <entity-id> [--item <item>]   (jobs.items.use)\n"
        "  submit equip [<item>] [--hand main|off]   (jobs.items.equip: put a carried item where it belongs (armour in its slot, a shield in the off-hand, else the main hand; --hand for a non-armour item); no item: the best carried armour piece for each empty or weaker slot)\n"
        "  submit mount <entity-id|name> | submit dismount   (jobs.movement.mount: walk to a boat, raft, minecart or rideable mob (by id, or the nearest of a name) and get on; jobs.movement.leave-vehicle: get off)\n"
@@ -26,7 +27,7 @@
   {:who {:type "string" :default "claude"} :state {:type "string"} :worlds {:type "string"} :world {:type "string"}
    :range {:type "string"} :doors {:type "string"} :no-escalate {:type "boolean"} :ignore-zones {:type "boolean"}
    :item {:type "string"} :hand {:type "string"} :face {:type "string"} :request-id {:type "string"}
-   :wait {:type "boolean"} :timeout {:type "string"} :exclusive {:type "boolean"}})
+   :wait {:type "boolean"} :timeout {:type "string"} :exclusive {:type "boolean"} :worth {:type "string"}})
 
 ;; parseArgs would read "-10" as a short option, so hide negative numbers from it
 (defn hide [token] (if (re-matches #"-\d+(\.\d+)?" token) (str (char 0) token) token))
@@ -85,7 +86,11 @@
   (let [unsupported (first (filter (fn [k] (and (some? (k values)) (not (contains? (get allowed action #{}) k)))) action-options))
         _ (when unsupported (fail (str "--" (name unsupported) " is not valid for " action)))
         _ (when (and (some? (:doors values)) (not (doors (:doors values)))) (fail "--doors must be shut, leave-open or never"))
-        spec (spec-for action args values)
+        [job job-args] (spec-for action args values)
+        _ (when (nil? (:worth values)) (fail "worth is required: --worth <seconds>, what the action is worth to you in seconds of the body's time"))
+        worth (num (unhide (:worth values)) "--worth")
+        _ (when (neg? worth) (fail "--worth must be 0 or more"))
+        spec (list job (assoc job-args :worth worth))
         request-id (or (:request-id values) (.randomUUID crypto))]
     (when-not (re-matches #"[A-Za-z0-9._-]{1,80}" request-id)
       (fail "--request-id must be 1..80 letters, digits, dot, _ or -"))
@@ -114,7 +119,7 @@
       (not (re-matches bodies/name-re world)) {:error "the world must be a name of letters, digits, _ and -"}
       (not (<= 1 (count who) 80)) {:error "--who must be 1..80 characters"}
       (and (some? (:request-id values)) (not= command "submit")) {:error "--request-id is only valid for submit"}
-      (and (not= command "submit") (some #(some? (% values)) action-options)) {:error "action options are only valid with submit"}
+      (and (not= command "submit") (some #(some? (% values)) (conj action-options :worth))) {:error "action options and --worth are only valid with submit"}
       (and (:wait values) (not= command "submit")) {:error "--wait requires submit"}
       (and (:timeout values) (not (:wait values))) {:error "--timeout requires --wait"}
       :else (let [request (command-request command action (vec args) who values)

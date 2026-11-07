@@ -14,6 +14,6 @@
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: 90\\b" 10]
          [:rcon "execute positioned $X $Y $Z run setblock ~20 ~ ~16 wheat[age=7]"] [:wait-s 1]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270} 10] [:wait-s 4]
-         [:job (jobs.farm.harvest {:area {:pos #xyz [20 0 16] :radius 3} :replant false})]]
+         [:job (jobs.farm.harvest {:worth 1200 :area {:pos #xyz [20 0 16] :radius 3} :replant false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 1}} :within-s 70 :of-job true}]
    :after [[:block [20 0 16] "air"]]}]}

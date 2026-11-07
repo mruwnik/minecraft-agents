@@ -101,7 +101,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}]})]
-          (core/submit! eng (list job {:items ["dirt"] :make-chests? false}) {})
+          (core/submit! eng (tu/order eng (list job {:items ["dirt"] :make-chests? false})) {})
           (core/tick! eng)
           (is (some #(and (= :waiting (:kind %)) (= :no-chest (:reason %))) @seen)))))))
 

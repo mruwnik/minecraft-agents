@@ -11,6 +11,6 @@
  :cases
  [{:name "hostile-in-the-doorway-ends-hostile-in-cell"
    :act [[:summon "zombie" [8.5 0 8.5] "{NoAI:1b,Invulnerable:1b,PersistenceRequired:1b}"]
-         [:job (jobs.blocks.fill-cells {:cells [#at [8 0 8]] :use {:blocks ["cobblestone"]} :ignore-zones? true :checks {:safe? (always)}})]]
+         [:job (jobs.blocks.fill-cells {:worth 1200 :cells [#at [8 0 8]] :use {:blocks ["cobblestone"]} :ignore-zones? true :checks {:safe? (always)}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-in-cell}} :within-s 40 :of-job true}]
    :after [[:not-block [8 0 8] "cobblestone"]]}]}

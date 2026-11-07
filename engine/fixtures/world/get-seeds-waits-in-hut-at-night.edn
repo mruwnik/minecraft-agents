@@ -12,7 +12,7 @@
   :limit-s 60}
  :cases
  [{:name "cane-outside-a-closed-hut-waits-for-light"
-   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "sugar_cane"} 20] [:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 32})]]
+   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "sugar_cane"} 20] [:job (jobs.gather.get-seeds {:worth 1200 :item "sugar_cane" :count 1 :radius 32})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:block [10 0 15] "sugar_cane"] [:item "sugar_cane" 0]]}]}

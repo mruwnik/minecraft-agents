@@ -15,28 +15,28 @@
  :cases
  [{:name "decaying-leaves-never-stood-on"
    :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=false,distance=7]"]]
-   :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 4] :species "jungle"})]]
+   :act [[:job (jobs.forestry.plant-sapling {:worth 1200 :at #at [16 0 4] :species "jungle"})]]
    :expect [{:event {:source :job :kind :obtain.gathering} :within-s 40 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 120}]}
   {:name "decaying-leaves-lone-vine-never-dropped-off"
    ;; a vine spread onto the column's north face (as random ticks do): a drop from it has no stand to stop on and check an unseen floor
    :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=false,distance=7]"] [:fill [9 8 15] [9 8 15] "vine[south=true]"]]
-   :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 4] :species "jungle"})]]
+   :act [[:job (jobs.forestry.plant-sapling {:worth 1200 :at #at [16 0 4] :species "jungle"})]]
    :expect [{:event {:source :job :kind :obtain.gathering} :within-s 40 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 120}]}
   {:name "attached-leaves-walked-on"
    :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=true]"]]
-   :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 4] :species "jungle"})] [:until-pos {:x-min 11 :y-min 11} 90]]
+   :act [[:job (jobs.forestry.plant-sapling {:worth 1200 :at #at [16 0 4] :species "jungle"})] [:until-pos {:x-min 11 :y-min 11} 90]]
    :expect [{:event {:source :job :kind :obtain.gathering} :within-s 40 :of-job true}]}
   {:name "go-to-onto-decaying-leaves-gives-up"
    ;; watched on after the go-to ends: a body left on the leaves falls when they go
    :idle-grace-s 110
    :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=false,distance=7]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 11 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 11 16] :range 0})]]
    :expect [{:event {:source :job :kind #{:stopped :failed}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:has "fall"]}} :for-s 120}]}
   {:name "go-to-onto-attached-leaves-arrives"
    :blocks [[:fill [10 9 10] [22 10 22] "jungle_leaves[persistent=true]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 11 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 11 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]}]}

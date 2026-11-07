@@ -7,6 +7,7 @@
             [jobs.lib.cost :as cost]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.schedule :as schedule]
             [engine.expr :as expr]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -476,7 +477,7 @@
         (let [cells (pillar-cells [0 64 0] 6)
               {:keys [eng p out digs seen] :as s} (setup {:self {:x 0.5 :y 70 :z 0.5} :blocks (pillar-blocks cells)
                                                           :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= (mapv (fn [c] [c (update c 1 inc)]) (reverse cells)) @digs) "top-down, each from on top of it")
           (is (every? nil? (map #(block p %) cells)))
@@ -493,7 +494,7 @@
         (let [cells [[0 64 0] [0 65 0] [10 64 0]]
               {:keys [eng p seen] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                  :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= 3 (count (filter #(= "dig" (.-name %)) (.-calls (.-world p))))))
           (is (= 3 (count (ce/ends seen :dug)))))))))
@@ -505,7 +506,7 @@
         (let [{:keys [eng p out] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "wall_torch"})
                                                 :drops {"wall_torch" "torch"}
                                                 :entries [(entry [0 64 0] :item "wall_torch")]})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (nil? (block p [0 64 0])))
           (is (= [{:cell [0 64 0] :item "wall_torch"}] (:removed @out)))
@@ -520,7 +521,7 @@
               {:keys [eng out p] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                               :drops {"dirt" []}
                                               :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= 0 (:collected @out)))
           (is (= :done (:status @out)))
@@ -534,7 +535,7 @@
         (let [cells [[0 64 0] [0 65 0] [10 64 0]]
               {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                      :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= [[0 65 0] [0 64 0] [10 64 0]] (mapv first @digs)))
           (is (= [3 64 0] (second (first @digs))) "the first two from where it stood")
@@ -561,7 +562,7 @@
               (setup {:self {:x 3.5 :y 64 :z 0.5}
                       :blocks (merge (floor -2 5) {"0,64,0" "stone" "1,64,0" "dirt"})
                       :entries [(entry [0 64 0]) (entry [0 65 0]) (entry [1 64 0])]})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= [[1 64 0]] (mapv first @digs)))
           (is (= "stone" (block p [0 64 0])))
@@ -577,7 +578,7 @@
         (let [pit-world (apply dissoc (tu/box -2 60 -3 12 64 3 "dirt") ["3,63,1" "3,64,1" "2,64,1"])
               {:keys [eng p digs] :as s} (setup {:self {:x 3.5 :y 63 :z 1.5} :blocks pit-world :entries [(entry [5 62 0])]})]
           (tu/seeing-all p)
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (every? #{[5 62 0]} (map first @digs)) (pr-str @digs))
           (is (= "dirt" (block p [4 63 1]) (block p [4 63 0]) (block p [4 64 1])) "the blocks in the line are not its own")
@@ -591,7 +592,7 @@
               (setup {:self {:x 3.5 :y 64 :z 0.5}
                       :blocks (merge (floor -2 5) {"1,64,0" "grass_block"})
                       :entries [(entry [1 64 0])]})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= [[1 64 0]] (mapv first @digs)))
           (is (nil? (block p [1 64 0])))
@@ -605,7 +606,7 @@
               {:keys [eng make p out] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                      :entries (mapv entry cells)})]
           (.hold (.-world p) "dig")
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (core/tick! eng)
           (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
           (is (= :removing (:state (ledger/entry-at (the-ledger eng) [0 65 0]))) "the intent was saved before the call")
@@ -624,7 +625,7 @@
               {:keys [eng make p out digs] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                           :entries (mapv entry cells)})]
           (.override (.-world p) "dig" (fn [token args impl] (impl token args) (js/Promise. (fn [_ _]))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (core/tick! eng)
           (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
           (core/shutdown! eng)
@@ -645,7 +646,7 @@
               {:keys [eng p out digs seen] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                           :entries (mapv entry cells)
                                                           :zones [{:name "keep" :min [0 65 0] :max [0 65 0]}]})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= [[0 64 0]] (mapv first @digs)))
           (is (= "dirt" (block p [0 65 0])))
@@ -662,7 +663,7 @@
               {:keys [eng p out] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                 :entries [(entry [0 64 0] :job "j1/pillar") (entry [1 64 0] :job "j77")]
                                                 :args {:of "j1"}})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (nil? (block p [0 64 0])))
           (is (= "dirt" (block p [1 64 0])))
@@ -677,7 +678,7 @@
               {:keys [eng p out digs] :as s} (setup {:self {:x 0.5 :y 68 :z 0.5}
                                                      :blocks (dissoc (pillar-blocks cells) "0,63,0")
                                                      :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= [[[0 67 0] [0 68 0]] [[0 66 0] [0 67 0]]] @digs))
           (is (= "dirt" (block p [0 65 0])))
@@ -702,7 +703,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (floor -2 2) :entries []})]
-          (core/submit! eng (list job) {})
+          (core/submit! eng (tu/order eng (list job)) {})
           (await (ticks s eng 20))
           (is (empty? (:list (core/state eng))) "ended at once: the goal already holds")
           (is (= 0 (.-length (.-calls (.-world p))))))))))
@@ -729,10 +730,10 @@
         (let [{:keys [eng p] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (pillar-blocks [[0 64 0]])
                                             :entries [(entry [0 64 0])]
                                             :zones [{:name "keep" :min [0 64 0] :max [0 64 0]}]})]
-          (core/submit! eng (list job) {})
+          (core/submit! eng (tu/order eng (list job)) {})
           (await (ticks s eng 10))
           (is (empty? (:list (core/state eng))))
-          (core/submit! eng (list job) {})
+          (core/submit! eng (tu/order eng (list job)) {})
           (let [n (.-length (.-calls (.-world p)))]
             (await (ticks s eng 10))
             (is (empty? (:list (core/state eng))) "the second ends done: nothing is offered")
@@ -744,7 +745,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks (pillar-blocks [[0 64 0]])
                                                  :entries [(entry [0 64 0])] :zones nil})]
-          (core/submit! eng (list job) {})
+          (core/submit! eng (tu/order eng (list job)) {})
           (await (ticks s eng 10))
           (is (= "dirt" (block p [0 64 0])))
           (is (empty? (of-kind seen :cleanup.declined))))))))
@@ -762,7 +763,7 @@
       (fn ^:async t []
         (let [{:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "cobblestone"})
                                                     :entries [(entry [0 64 0] :item "cobblestone")]})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= [] @digs))
           (is (= "cobblestone" (block p [0 64 0])))
@@ -781,7 +782,7 @@
                      (fn ^:async f [token args impl]
                        (swap! (fake/state p) assoc :inventory [])
                        (await (impl token args))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= 1 (count (of-kind seen :tool.broke))))
           (is (= 1 (count (of-kind seen :tool.none)))))))))
@@ -798,7 +799,7 @@
                        (let [r (await (impl token args))]
                          (swap! (fake/state p) assoc :inventory [])
                          r)))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 30))
           (is (= 1 (count (of-kind seen :tool.broke))))
           (is (= 1 (count (of-kind seen :tool.none)))))))))
@@ -810,7 +811,7 @@
         (let [{:keys [eng p out]} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"1,64,0" "water"})
                                           :entries [(entry [1 64 0] :item "water" :purpose :pour)]})]
           (swap! (fake/state p) update :inventory conj {:name "bucket" :count 1})
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks {:clock (atom 1000000)} eng 5))
           (is (= [] (:list (core/state eng))))
           (is (= [{:cell [1 64 0] :item "water"}] (:removed @out)))
@@ -830,7 +831,7 @@
                        (let [r (await (impl tok a))]
                          (fake/set-block! p [1 64 0] "water")
                          r)))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks {:clock (atom 1000000)} eng 5))
           (is (= [{:cell [1 64 0] :item "water"}] (:removed @out)) "the full bucket proves the source scooped")
           (is (= [] (the-ledger eng))))))))
@@ -842,7 +843,7 @@
         (let [cells (pillar-cells [0 64 0] 6)
               {:keys [eng p out] :as s} (setup {:self {:x 0.5 :y 70 :z 0.5} :blocks (pillar-blocks cells)
                                                 :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "one tick ends the run")
           (is (every? nil? (map #(block p %) cells)))
@@ -861,7 +862,7 @@
     (.override (.-world p) "dig"
                (fn ^:async f [token args impl]
                  (await ((ffirst (swap-vals! digs rest)) token args impl))))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (ticks s eng 30))
     {:eng eng :p p :out out}))
 
@@ -945,7 +946,7 @@
   (let [calls (atom [])
         {:keys [eng out] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks blocks :entries (mapv entry cells)
                                         :jobs {'jobs.movement.go-to (stub-go-to calls result)}})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (ticks s eng 40))
     {:calls @calls :open (mapv :reason (:open @out))})))
 
@@ -957,7 +958,7 @@
           (is (seq calls))
           (is (every? #(= {:pos {:x 9 :y 64 :z 0} :range 3 :ways #{:walk}} (select-keys % [:pos :range :ways])) calls)))))))
 
-(deftest a-walk-is-worth-the-calls-goal-and-a-root-cleanup-the-blocks-it-takes-back
+(deftest a-walk-is-worth-the-calls-goal-and-a-fired-cleanup-the-blocks-it-takes-back
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -965,12 +966,15 @@
                     (let [calls (atom [])
                           {:keys [eng] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (pillar-blocks [[9 64 0]]) :entries [(entry [9 64 0])]
                                                       :args args :jobs {'jobs.movement.go-to (stub-go-to calls {:status :done :arrived true})}})]
-                      (core/submit! eng job {})
+                      (core/submit! eng (tu/order eng job) {})
                       (await (ticks s eng 40))
                       (:worth (first @calls))))]
-          (is (= 50 (await (run {:worth 50} '(recording-parent)))) "a child's walk is worth its caller's goal")
-          (is (= (:value (cost/goal-value [{:name "dirt" :count 1}])) (await (run {} '(jobs.access.cleanup {}))))
-              "a root cleanup is worth getting the block back"))))))
+          (is (= 50 (await (run {:worth 50} '(recording-parent {})))) "a child's walk is worth its caller's goal")
+          (let [{:keys [eng]} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (pillar-blocks [[9 64 0]]) :entries [(entry [9 64 0])]})]
+            (is (= (:value (cost/goal-value [{:name "dirt" :count 1}]))
+                   (get-in (schedule/priced eng {:id "trigger:scaffold-left" :reflex :scaffold-left} (expr/parse (:jobs eng) '(jobs.access.cleanup {})))
+                           [:args :worth]))
+                "the trigger fires a cleanup at what getting the block back is worth")))))))
 
 (deftest a-permanent-go-to-failure-holds-the-cell-unreachable-after-one-walk
   (async done
@@ -1019,7 +1023,7 @@
                                 [(cell-key [x y z]) (v [x y z])]))
               {:keys [eng p out seen] :as s} (setup {:self {:x 2.5 :y 64 :z 0.5} :blocks blocks
                                                      :entries (row-entries [1 2 3])})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 80))
           (is (every? nil? (map #(block p [% 63 0]) [1 2 3])))
           (is (= [] (the-ledger eng)))
@@ -1049,7 +1053,7 @@
         (let [{:keys [eng p out] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"0,64,0" "dirt"})
                                                 :entries [(entry [0 64 0])]})
               _ (tu/seeing-after-look p)]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (some #(= "look" (.-name %)) (.-calls (.-world p))))
           (is (= [{:cell [0 64 0] :item "dirt"}] (:removed @out))))))))
@@ -1062,7 +1066,7 @@
               {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                      :entries [(entry [2 64 0] :purpose :retreat-plug) (entry [2 65 0] :purpose :retreat-plug)]})]
           (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -4 :y 64 :z 0} :health 20})
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= [] @digs) "Juniper j658: the plug dug next to the skeleton let it in")
           (is (= #{:hostile-near} (set (map :reason (:open @out))))))))))
@@ -1079,7 +1083,7 @@
               {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (merge (pillar-blocks cells) pocket cave)
                                                      :entries (mapv #(entry % :purpose :retreat-plug) cells)})]
           (fake/add-entity! p {:id 9 :name "skeleton" :kind "hostile" :pos {:x -3.5 :y 64 :z 0.5} :health 20})
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= (set cells) (set (map first @digs))))
           (is (empty? (:open @out))))))))
@@ -1092,7 +1096,7 @@
               {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                      :entries (mapv entry cells)})]
           (fake/add-entity! p {:id 9 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0} :health 20})
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= [] @digs))
           (is (= 3 (js/Math.floor (.-x (.-pos (.self p))))) "the body stayed where it was")
@@ -1105,7 +1109,7 @@
         (let [cells [[10 64 0]]
               {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (assoc (pillar-blocks cells) "12,64,0" "lava")
                                                      :entries (mapv entry cells)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (ticks s eng 60))
           (is (= [] @digs))
           (is (= 3 (js/Math.floor (.-x (.-pos (.self p))))) "the body stayed where it was")

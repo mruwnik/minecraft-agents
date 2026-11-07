@@ -148,7 +148,7 @@
                              debts (:replant (core/job-memory eng "j1"))]
                          (swap! seen conj (boolean (some #(= pos (:pos %)) debts)))
                          (await (impl token args)))))
-          (core/submit! eng (list job {}) {})
+          (core/submit! eng (tu/order eng (list job {})) {})
           (await (run-until-empty eng 200))
           (is (= 9 (count @seen)))
           (is (every? true? @seen)))))))
@@ -167,7 +167,7 @@
                                           (if (<= (swap! calls inc) 4) :continue (await ((:round dig) c)))))
               {:keys [eng]} (start {:world wheat-world :jobs (assoc registry/jobs 'jobs.blocks.dig waiting)})]
           (reset! eng-a eng)
-          (core/submit! eng (list job {}) {})
+          (core/submit! eng (tu/order eng (list job {})) {})
           (await (run-until-empty eng 300))
           (is (> @calls 4) "the child waited four rounds")
           (is (every? true? @debts-distinct) "a waiting round does not write the debt again"))))))
@@ -184,7 +184,7 @@
                        (let [r (await (impl token args))]
                          ((get {2 #(core/cut! (:eng a) (core/holder (:eng a)) :test nil)} (count (calls p "dig")) (constantly nil)))
                          r)))
-          (core/submit! (:eng a) (list job {}) {})
+          (core/submit! (:eng a) (tu/order (:eng a) (list job {})) {})
           (await (core/tick! (:eng a)))
           (is (= 2 (count (calls p "dig"))) "cut after the second dig")
           (is (pos? (count (:replant (core/job-memory (:eng a) "j1")))))
@@ -305,7 +305,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:world {:blocks (field "wheat" 3 [2 3] [2]) :ages (ages 3 [2 3] [2])}})]
-          (core/submit! eng (list job {}) {})
+          (core/submit! eng (tu/order eng (list job {})) {})
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "ends :done :already")
           (is (zero? (count (.-calls (.-world p))))))))))
@@ -336,7 +336,7 @@
         (let [p (tu/fake-on-floor {:blocks {}})
               _ (look-then-see p)
               {:keys [eng seen]} (start {:p p})]
-          (core/submit! eng '(jobs.farm.harvest {}) {})
+          (core/submit! eng (tu/order eng '(jobs.farm.harvest {})) {})
           (await (run-until-empty eng 50))
           (is (seq (calls p "look")))
           (let [stopped (events-of seen :stopped)]
@@ -444,7 +444,7 @@
                      (fn ^:async f [token args impl]
                        (swap! owed conj (:collect (core/job-memory eng "j1")))
                        (await (impl token args))))
-          (core/submit! eng (list job {}) {})
+          (core/submit! eng (tu/order eng (list job {})) {})
           (await (run-until-empty eng 200))
           (is (= 9 (count @owed)))
           (is (every? true? @owed)))))))
@@ -541,7 +541,7 @@
       (fn ^:async t []
         (doseq [[owner extra cut] [["Fake" {} 1] ["FAKE" {} 1] ["Miles" {} 0] ["Miles" {:ignore-zones? true} 1]]]
           (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} [(zone-over-crop owner)])})]
-            (core/submit! eng (list job (merge {:area {:pos origin :radius 6}} extra)) {})
+            (core/submit! eng (tu/order eng (list job (merge {:area {:pos origin :radius 6}} extra))) {})
             (await (run-until-empty eng 60))
             (is (= cut (count (calls p "dig"))) (pr-str [owner extra]))
             (is (empty? (events-of seen :harvest.declined)) "a condition does not warn")))))))
@@ -552,7 +552,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world (assoc zoned-world :blocks (field "wheat" 7 [2 3] [2]) :ages (ages 7 [2 3] [2]))
                                            :shared (ew/of-data {} {} [(zone-over-crop "Miles")])})]
-          (core/submit! eng (list job {:area {:pos origin :radius 6}}) {})
+          (core/submit! eng (tu/order eng (list job {:area {:pos origin :radius 6}})) {})
           (await (run-until-empty eng 60))
           (is (= 1 (count (calls p "dig"))) "the free crop is cut")
           (is (= 1 (count (events-of seen :harvest.declined))) "the refused one is named once"))))))
@@ -562,7 +562,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} nil)})]
-          (core/submit! eng (list job {:area {:pos origin :radius 6}}) {})
+          (core/submit! eng (tu/order eng (list job {:area {:pos origin :radius 6}})) {})
           (await (run-until-empty eng 60))
           (is (zero? (count (calls p "dig"))))
           (is (empty? (events-of seen :harvest.declined))))))))

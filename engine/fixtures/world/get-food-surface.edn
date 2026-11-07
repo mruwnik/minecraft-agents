@@ -13,5 +13,5 @@
  :cases
  [{:name "hungry-body-sealed-in-a-cave-climbs-out-and-hunts-the-cow-above"
    :act [[:summon "cow" [20.5 6 15.5] "{NoAI:1b}"]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 180}]}]}

@@ -5,6 +5,7 @@
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
+            [engine.memory :as mem]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
@@ -488,3 +489,12 @@
     (cond-> {:uses {:job-time [least mean (max mean (time-s))]} :done [0 1 1]}
       (pos? n) (-> (assoc-in [:uses :wear] (choose/dig-wear c (repeat n (str (:species t) "_log"))))
                    (assoc :yields {:items {(str (:species t) "_log") [0 n n]}})))))
+
+(defn worth-of
+  "What finishing a part-cut tree is worth when its trigger asks: what felling one costs, the quote the engine gives a job
+  with no quote-of (contract/default-quote of this body's fell-tree reports) (owner question: a better price)."
+  [c]
+  (second (get-in (contract/default-quote (keep #(when (= 'jobs.forestry.fell-tree (get-in % [:data :job])) (get-in % [:data :report]))
+                                                (mem/entries (ctx/view c) :job-report))
+                                          (settings/get contract/settings ::contract/default-time-s))
+                  [:uses :job-time])))

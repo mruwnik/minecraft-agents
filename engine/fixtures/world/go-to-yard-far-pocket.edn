@@ -16,6 +16,6 @@
   :limit-s 200}
  :cases
  [{:name "shut-in-body-digs-out-and-into-a-far-pocket"
-   :act [[:job (jobs.movement.go-to {:pos #at [47 3 29] :range 0 :unknown false})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [47 3 29] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [47.5 3 29.5] 1.5]]}]}

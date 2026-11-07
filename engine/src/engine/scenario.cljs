@@ -24,7 +24,7 @@
 (defn problems
   "Human-readable problems with scenario s against the job registry and the
   triggers (with :condition for :when entries); empty when fine. The register
-  goes through the same validation as POST /triggers."
+  goes through the same validation as POST /triggers, the queue as a submit (a :worth for each job)."
   [jobs triggers {:keys [register queue]}]
   (vec (concat (trigger-api/register-problems jobs triggers register)
-               (keep #(expr/problem jobs %) queue))))
+               (keep #(or (expr/problem jobs %) (expr/worth-problem (expr/parse jobs %))) queue))))

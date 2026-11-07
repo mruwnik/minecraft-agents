@@ -243,7 +243,7 @@
                           :triggers triggers/all :dir (or dir (tu/tmp-dir)) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
-    (let [id (when-not (:p opts) (if (:root opts) (core/submit! eng (list job args) {}) (core/submit! eng '(recording-parent) {})))]
+    (let [id (when-not (:p opts) (if (:root opts) (core/submit! eng (tu/order eng (list job args)) {}) (core/submit! eng (tu/order eng '(recording-parent {})) {})))]
       {:eng eng :p p :clock clock :seen seen :out out :id id})))
 
 (defn ^:async tick-out! [{:keys [eng clock] :as s}]
@@ -655,7 +655,7 @@
         p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [] :blocks ground})
         s (setup {} (cond-> (merge {:target [6 57 0]} extra) (false? fetch) (assoc :ways #{:carried})) prep :p p
                  :jobs {'jobs.items.get-tool (get-tool-stub calls p give)})
-        s (assoc s :id (core/submit! (:eng s) '(recording-parent) {}))]
+        s (assoc s :id (core/submit! (:eng s) (tu/order (:eng s) '(recording-parent {})) {}))]
     (await (tick-out! s))
     (assoc s :calls @calls)))
 

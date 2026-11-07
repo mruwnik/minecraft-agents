@@ -15,11 +15,11 @@
    :act [[:summon "cow" [15.5 0 15.5]]
          [:summon "cow" [17.5 0 17.5]]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2}] 10]
-         [:job (jobs.blocks.clear-cells {:area {:min #at [19 0 16] :max #at [22 1 16]}})]]
+         [:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [19 0 16] :max #at [22 1 16]}})]]
    :expect [{:event {:source :job :kind :clear-cells.refused :data {:reason :own-pen}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [19 0 16] "stone"] [:block [19 1 16] "stone"] [:block [20 0 16] "air"] [:block [20 1 16] "air"] [:entities "type=cow,tag=wt" [[14 0 14] [18 2 18]] 2]]}
   {:name "wall-beside-an-empty-pit-is-dug"
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [19 0 16] :max #at [22 1 16]}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [19 0 16] :max #at [22 1 16]}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [19 0 16] "air"] [:block [19 1 16] "air"] [:block [22 0 16] "air"]]}]}

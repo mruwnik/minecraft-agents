@@ -6,6 +6,8 @@
             ["path" :as path]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.core.round :as round]
+            [engine.expr :as expr]
             [engine.core.ending :as ending]
             [engine.ctx :as ctx]
             [engine.fake :as fake-world]
@@ -21,6 +23,22 @@
             [jobs.lib.walk.plan :as wplan]))
 
 (def require-here node/require-here)
+
+(def order-worth "The :worth a test's hand order of a job with no worth-of gives, as an agent's submit gives one." 1200)
+
+(defn order
+  "Job spec form as an agent orders it by hand, each goal priced as its job prices it: a job without a :worth gets its
+  worth-of over eng (one that reads the caller's worth reads order-worth), else (none, or nil) order-worth."
+  [eng form]
+  (let [[head & parts] form]
+    (case head
+      (seq any until) (apply list head (map #(order eng %) parts))
+      repeat (apply list head (concat (butlast parts) [(order eng (last parts))]))
+      (if (number? (:worth (first parts)))
+        form
+        (let [f (:worth-of (get (:jobs eng) head))]
+          (list head (assoc (first parts) :worth (or (when f (f (assoc (round/check-ctx eng {:id "order"} (:args (expr/parse (:jobs eng) form))) :worth (constantly order-worth))))
+                                                     order-worth))))))))
 
 (defn kind-reason "A status [kind text data] as [kind reason]." [[kind _ data]] [kind (:reason data)])
 
@@ -444,10 +462,11 @@
                  (do (reset! out (f r)) (ctx/end c :done nil)))))}))
 
 (defn ^:async child-outcome
-  "Run job with args as the child of a recording parent until the list is empty, at most n ticks; the child's outcome."
+  "Run job with args as the child of a recording parent ordered at order-worth until the list is empty, at most n ticks;
+  the child's outcome."
   [eng job args n]
   (let [out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent job args out)))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (list 'recording-parent {:worth order-worth}) {})
     (await (run-until-empty eng n))
     @out))

@@ -14,18 +14,18 @@
  :cases
  [{:name "slit-in-the-wall-is-filled"
    :body {:yaw 270}
-   :act [[:job (jobs.survival.block-arrow-gap {})]]
+   :act [[:job (jobs.survival.block-arrow-gap {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :until {:source :job :kind :completed}}]
    :after [[:block [19 1 16] "cobblestone"]]}
   {:name "no-blocks-waits-places-nothing"
    :body {:inventory []}
-   :act [[:job (jobs.survival.block-arrow-gap {:ways #{:carried}})]]
+   :act [[:job (jobs.survival.block-arrow-gap {:worth 1200 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-blocks}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 15 :until {:source :job :kind :waiting :data {:reason :no-blocks}} :of-job true}]
    :after [[:block [19 1 16] "air"]]}
   {:name "wall-without-a-slit-declines"
    :blocks [[:set [19 1 16] "stone"]]
-   :act [[:job (jobs.survival.block-arrow-gap {})]]
+   :act [[:job (jobs.survival.block-arrow-gap {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:cause :already}} :within-s 30 :of-job true}]
    :after [[:block [19 1 16] "stone"] [:not-block [18 0 16] "cobblestone"]]}]}

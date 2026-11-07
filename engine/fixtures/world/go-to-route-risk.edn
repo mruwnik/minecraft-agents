@@ -16,7 +16,7 @@
    :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [15 0 15] "torch"]
             [:set [18 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [18 1 16] "oak_door[facing=east,half=upper,open=false]"]
             [:fill [30 0 14] [44 3 18] "stone"] [:fill [30 0 16] [43 1 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [40 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
    :after [[:body-near [40.5 0 16.5] 2.5]]}
@@ -29,8 +29,8 @@
          [:summon "zombie" [36.5 0 17.5] "{NoAI:1b}"]
          [:summon "zombie" [42.5 0 15.5] "{NoAI:1b}"]
          [:wait-s 4]
-         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.movement.go-to {:pos #at [50 0 16] :range 1})]]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [50 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 20 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 2.5]]}
@@ -42,8 +42,8 @@
          [:summon "zombie" [36.5 0 17.5] "{NoAI:1b}"]
          [:summon "zombie" [42.5 0 15.5] "{NoAI:1b}"]
          [:wait-s 4]
-         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.movement.go-to {:pos #at [50 0 16] :range 1})]]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [50 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 20 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 2.5]]}]}

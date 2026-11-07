@@ -15,8 +15,8 @@
             [:fill [20 0 8] [20 3 8] "oak_log"] [:fill [18 3 6] [22 4 10] "oak_leaves[persistent=true]"] [:set [20 3 8] "oak_log"]
             [:set [10 -5 8] "torch"] [:set [19 -5 8] "torch"] [:set [22 -5 8] "torch"] [:set [18 0 8] "torch"] [:set [22 0 8] "torch"]]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [1 0 8]})]
-         [:job (jobs.forestry.harvest-wood {:radius 32 :count 2})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [1 0 8]})]
+         [:job (jobs.forestry.harvest-wood {:worth 1200 :radius 32 :count 2})]]
    :expect [{:no-event {:source :job :kind :stopped} :for-s 100 :until {:source :job :kind :completed :data {:name "jobs.forestry.harvest-wood"}}}
             {:event {:source :job :kind :completed :data {:name "jobs.forestry.harvest-wood"}} :within-s 110}]
    :after [[:item "oak_log" [:>= 2]] [:body-far [20.5 -4 8.5] 3]]}]}

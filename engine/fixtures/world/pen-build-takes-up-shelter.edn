@@ -17,9 +17,9 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night :ignore-zones? true})]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:walls} :for :night :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
          [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~12 ~ ~12"]
-         [:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch} :ignore-zones? true})]]
+         [:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.build.pen"}} :within-s 120 :of-job true}]
    :after [[:not-block [15 0 12] "cobblestone"] [:not-block [15 1 12] "cobblestone"] [:not-block [17 0 12] "cobblestone"]]}]}

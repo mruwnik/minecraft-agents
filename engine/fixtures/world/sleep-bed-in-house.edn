@@ -23,17 +23,17 @@
  [{:name "sleeping-in-the-house-bed-replaces-the-open-air-bed"
    :memory [{:kind :bed :data {:pos #xyz [10 0 20]} :policy {:cap 1 :ttl :forever}}
             {:kind :home :data {:pos #xyz [10 0 20]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.sleep {:bed #at [16 0 14]})]
+   :act [[:job (jobs.survival.sleep {:worth 1200 :bed #at [16 0 14]})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
    :after [[:memory {:entries {:bed [{:data {:pos #xyz [16 0 14]}}] :home [{:data {:pos #xyz [16 0 14]}}]}}]]}
   {:name "carried-bed-is-put-down-inside-the-home-house"
    :blocks [[:set [16 0 14] "air"] [:set [16 0 15] "air"] [:set [10 0 20] "air"] [:set [10 0 21] "air"]]
    :memory [{:kind :home :data {:pos #xyz [15 0 15]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.movement.go-to {:pos #at [15 0 15]})] [:await {:source :job :kind :completed :after-previous true} 40]
-         [:job (jobs.movement.go-to {:pos #at [12 0 21]})] [:await {:source :job :kind :completed :after-previous true} 40]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [15 0 15]})] [:await {:source :job :kind :completed :after-previous true} 40]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [12 0 21]})] [:await {:source :job :kind :completed :after-previous true} 40]
          [:rcon "clear $BODY red_bed"] [:rcon "give $BODY red_bed 1"]
-         [:job (jobs.survival.bed-down {})]
+         [:job (jobs.survival.bed-down {:worth 1200})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 100]]
    :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [15 0 15] 3.5]}} :within-s 100}]
    :after [[:body-near [15.5 0 15.5] 3.5]]}]}

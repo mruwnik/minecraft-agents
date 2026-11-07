@@ -86,18 +86,18 @@
   (and (air? p [x y z]) (air? p [x (inc y) z]) (not (air? p [x (dec y) z]))))
 
 (defn ^:async dig-in! [{:keys [eng ways] :as s}]
-  (core/submit! eng (list 'jobs.survival.shut-in {:ways (or ways #{:room :walls :pit}) :for :night}) {})
+  (core/submit! eng (tu/order eng (list 'jobs.survival.shut-in {:ways (or ways #{:room :walls :pit}) :for :night})) {})
   (await (run-until-empty s 20)))
 
 (defn ^:async leave-at-dawn!
   ([s] (leave-at-dawn! s {}))
   ([{:keys [eng p] :as s} leave-args]
    (.setTime (.-world p) dawn)
-   (core/submit! eng (list 'leaver {:leave-args leave-args}) {})
+   (core/submit! eng (tu/order eng (list 'leaver {:leave-args leave-args})) {})
    (await (run-until-empty s 200))))
 
 (defn ^:async go-to! [{:keys [eng] :as s} goal]
-  (core/submit! eng (list 'jobs.movement.go-to {:pos goal}) {})
+  (core/submit! eng (tu/order eng (list 'jobs.movement.go-to {:pos goal})) {})
   (await (run-until-empty s 300)))
 
 (defn slope
@@ -197,7 +197,7 @@
           (await (dig-in! s))
           (fake/add-entity! p zombie)
           (let [digs (count (calls p "dig"))]
-            (core/submit! eng '(leaver) {})
+            (core/submit! eng (tu/order eng '(leaver)) {})
             (await (run-until-empty s 20))
             (is (= [:stopped :unsafe :night] ((juxt :status :reason :why) @out)))
             (is (= digs (count (calls p "dig"))) "nothing dug")
@@ -422,7 +422,7 @@
         (let [{:keys [eng p runs] :as s} (setup {:blocks walled-logs})]
           (remember-walls! eng)
           (.setTime (.-world p) dawn)
-          (core/submit! eng '(again) {})
+          (core/submit! eng (tu/order eng '(again)) {})
           (await (run-until-empty s 300))
           (is (= 2 @runs))
           (is (= "air" (block-at p [3 64 0])) "the second shelter's block comes back in the same job"))))))
@@ -433,7 +433,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "oak_log" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty s 40))
           (let [entry (last (entries eng :shelter))
                 placed (frequencies (map #(.-item (.-args %)) (calls p "place")))]
@@ -450,7 +450,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty s 40))
           (let [entry (last (entries eng :shelter))]
             (is (seq (:take-back entry)) "cobblestone walls are listed for take-back")
@@ -465,7 +465,7 @@
       (fn ^:async t []
         (let [{:keys [eng] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                           :blocks (assoc (ground) "0,66,0" "stone")})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty s 40))
           (is (nil? (:take-back (last (entries eng :shelter))))))))))
 
@@ -478,7 +478,7 @@
               {:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")
                                             :zones [] :plans {"pen" pen}})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty s 40))
           (let [take-back (:take-back (last (entries eng :shelter)))
                 near-gate? (fn [{:keys [x y z]}] (<= (js/Math.hypot (- x 2) (- y 64) (- z 0)) 2))]
@@ -494,7 +494,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone") :zones []})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty s 40))
           (let [view (mem/view (:store eng))
                 l (ledger/open-entries view)
@@ -513,7 +513,7 @@
         (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
                                             :blocks (assoc (ground) "0,66,0" "stone")})]
           (mem/write! (:store eng) :spawn-bed {:pos {:x 2 :y 64 :z 0}} {:cap 1 :ttl :forever})
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:walls} :for :night})) {})
           (await (run-until-empty s 40))
           (let [take-back (:take-back (last (entries eng :shelter)))]
             (is (seq take-back) "dirt walls within reach of the bed are listed")

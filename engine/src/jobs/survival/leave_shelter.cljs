@@ -159,6 +159,11 @@
                  (sh-beds/bed-to-collect p (ctx/view c))
                  (boolean (seals c))))))
 
+(defn worth-of
+  "The loss leaving averts: the day left, which the body would spend shut in (sh-clock/dusk-tick less the time of day)."
+  [c]
+  (sh-clock/ticks->s (mod (- sh-clock/dusk-tick (.-timeOfDay (.self (:primitives c)))) 24000)))
+
 (defn done?
   "Nothing left to leave or take up (result: none)."
   [c]

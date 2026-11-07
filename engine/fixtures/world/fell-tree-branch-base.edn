@@ -15,6 +15,6 @@
   :limit-s 100}
  :cases
  [{:name "a-branch-base-walks-to-the-trunk-ground-not-into-the-crown"
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [17 8 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [17 8 16]})]]
    :expect [{:event {:source :job :kind :tidy.dug :data {:cell [16 0 16]}} :within-s 80}
             {:no-event {:source :job :kind :planned :data {:why "goal-not-standable"}} :for-s 80 :until {:source :job :kind :tidy.dug}}]}]}

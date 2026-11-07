@@ -18,7 +18,7 @@
    :act [[:summon "zombie" [22.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 100
              :until {:source :job :kind :completed :data {:arrived true}}}]
@@ -29,7 +29,7 @@
    :act [[:summon "zombie" [36.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 100
              :until {:source :job :kind :completed :data {:arrived true}}}]
@@ -40,13 +40,13 @@
    :act [[:summon "zombie" [22.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}
   {:name "threat-memory-detour"
    :memory [{:kind :threat :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"
                                   :pos #xyz [22.5 0 24.5] :ended :far}}]
-   :act [[:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}
   {:name "gone-creeper-at-goal-does-not-block"
@@ -68,7 +68,7 @@
    :act [[:summon "zombie" [21.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.movement.go-to {:pos #at [20 0 24] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end} :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 24] :range 0 :settings {:jobs.movement.go-to.tuning/goal-danger :end} :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :goal-in-danger} :for-s 5}]
    :after [[:body-near [20.5 0 24.5] 2]]}
@@ -77,7 +77,7 @@
              :data {:mob "zombie" :id 99 :uuid "00000000-0000-0000-0000-000000000099" :key "00000000-0000-0000-0000-000000000099"
                     :pos #xyz [22.5 0 24.5] :ended :far}}]
    :act [[:wait-s 6]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}
   {:name "one-wide-gap-still-arrives"
@@ -85,7 +85,7 @@
    :act [[:summon "zombie" [20.5 0 24.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}
   {:name "unseen-zombie-behind-stone-straight"
@@ -93,7 +93,7 @@
    :act [[:summon "zombie" [22.5 0 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:block "stone"} 10]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}
   {:name "fenced-zombie-straight"
@@ -101,6 +101,6 @@
    :act [[:summon "zombie" [22.5 0 29.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.movement.go-to {:pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [70 0 24] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
    :after [[:body-near [70.5 0 24.5] 3]]}]}

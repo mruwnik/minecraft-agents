@@ -39,7 +39,7 @@
      {:eng eng :p p :seen seen})))
 
 (defn ^:async run-job! [{:keys [eng]} args]
-  (core/submit! eng (list 'jobs.survival.block-arrow-gap args) {})
+  (core/submit! eng (tu/order eng (list 'jobs.survival.block-arrow-gap args)) {})
   (loop [i 0]
     (when (and (< i 300) (seq (:list (core/state eng))))
       (await (core/tick! eng))
@@ -149,7 +149,7 @@
           (is (= 8 (cobble p)) "nothing placed"))))))
 
 (defn ^:async one-tick! [{:keys [eng] :as s} args]
-  (core/submit! eng (list 'jobs.survival.block-arrow-gap args) {})
+  (core/submit! eng (tu/order eng (list 'jobs.survival.block-arrow-gap args)) {})
   (await (core/tick! eng))
   s)
 

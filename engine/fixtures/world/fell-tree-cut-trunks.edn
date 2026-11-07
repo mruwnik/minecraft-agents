@@ -10,10 +10,10 @@
   :limit-s 200}
  :cases
  [{:name "fell-tree-at-a-trunk-hanging-over-air-brings-its-logs-down"
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 3 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 3 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
    :after [[:not-block [16 6 16] "oak_log"] [:not-block [16 3 16] "oak_log"] [:item "oak_log" 4]]}
   {:name "fell-tree-by-radius-finds-a-hanging-trunk-and-keeps-its-logs"
-   :act [[:job (jobs.forestry.fell-tree {:radius 14})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :radius 14})]]
    :expect [{:event {:source :job :kind :completed} :within-s 190 :of-job true}]
    :after [[:item "oak_log" 4]]}]}

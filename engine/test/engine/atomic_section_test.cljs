@@ -73,7 +73,7 @@
   "Register reflex id, submit job spec, hold the first two walks and start its round; [release-1 release-2 round]."
   [{:keys [eng p]} id spec]
   (core/register-reflex! eng {:trigger id})
-  (core/submit! eng spec {})
+  (core/submit! eng (tu/order eng spec) {})
   (let [r1 (.hold (.-world p) "moveTo")
         r2 (.hold (.-world p) "moveTo")
         round (core/tick! eng)]
@@ -165,7 +165,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup)]
           (core/register-reflex! eng {:trigger :promo :level :danger})
-          (core/submit! eng '(section-then-walk {:level :urgent}) {})
+          (core/submit! eng (tu/order eng '(section-then-walk {:level :urgent})) {})
           (.hold (.-world p) "moveTo")
           (.hold (.-world p) "moveTo")
           (let [round (core/tick! eng)]
@@ -192,7 +192,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen] :as s} (setup)
               [_ _ round] (await (start! s :untagged '(section-then-walk {:level :urgent})))]
-          (core/do-now! eng '(eat))
+          (core/do-now! eng (tu/order eng '(eat)))
           (await round)
           (is (= [:cut] (kinds seen))))))))
 

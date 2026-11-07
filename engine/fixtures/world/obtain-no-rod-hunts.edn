@@ -12,6 +12,6 @@
  :cases
  [{:name "water-without-a-rod-hunts-the-far-cow"
    :act [[:summon "cow" [50.5 0 12.5] "{NoAI:1b}"]
-         [:job (jobs.items.obtain {:any-of ["beef" "cod"] :count 1})]]
+         [:job (jobs.items.obtain {:worth 1200 :any-of ["beef" "cod"] :count 1})]]
    :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["cow"]}} :within-s 30}
             {:no-event {:source :job :kind :obtain.gathering :data {:via jobs.food.fish}} :for-s 30}]}]}

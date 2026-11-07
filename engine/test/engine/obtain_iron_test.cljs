@@ -36,14 +36,14 @@
       (assoc :drops {"iron_ore" "raw_iron" "deepslate_iron_ore" "raw_iron" "stone" "cobblestone"})))
 
 (defn ^:async obtain! [s args n]
-  (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
+  (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain args)) {})
   (await (f/run-ticks s n)))
 
 (defn ^:async obtain-until!
   "Submit obtain with args; tick in fives up to n ticks, ending 10 ticks after (stop? s) first holds: the assertion's
   point, not the job's end."
   [s args n stop?]
-  (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
+  (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain args)) {})
   (loop [left n after nil]
     (when (and (pos? left) (or (nil? after) (pos? after)))
       (await (f/run-ticks s 5))
@@ -129,7 +129,7 @@
                            (swap! breaks inc)
                            (swap! (fake/state p) update :inventory #(vec (remove (comp #{"stone_pickaxe"} :name) %))))
                          r)))
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "raw_iron" :count 4 :explore true}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "raw_iron" :count 4 :explore true})) {})
           (loop [i 0]
             (await (f/run-ticks s 1))
             (.advance (.-world p) 40)
@@ -304,7 +304,7 @@
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
           ;; a root obtain: the pickaxe's goal worth, which a night walk to the tree costs more than
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"})) {})
           (await (f/run-ticks s 30))
           (is (= [:exposed] (distinct (map :reason (f/events-of s :waiting)))) "harvest-wood judges the tree it walks to, not the room")
           (is (= 1 (count (f/events-of s :waiting))) "one wait, not one per round")
@@ -316,7 +316,7 @@
       (fn ^:async t []
         (let [[s rounds] (stub-mine (f/start (assoc (ore-world (merge f/tree-blocks {"1,64,4" "stone" "2,64,4" "stone" "3,64,4" "stone" "1,64,2" "crafting_table"}) []) :time st/night) [f/own-zone]))]
           (look-round! s)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"})) {})
           (await (f/run-ticks s 60))
           (is (empty? (f/events-of s :waiting)) "a cheap death does not wait the night out")
           (is (zero? (get (f/inv s) "stone_pickaxe" 0)))
@@ -370,7 +370,7 @@
                                      {:name "crafting_table" :count 1}])
                          [])
               _ (swap! (fake/state (:p s)) assoc-in [:recipes "iron_pickaxe"] {:count 1 :needs {"iron_ingot" 3 "stick" 2} :table true})]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :spend {:job-time 60} :explore false}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "iron_pickaxe" :spend {:job-time 60} :explore false})) {})
           (loop [i 0]
             (await (f/run-ticks s 20))
             (.advance (.-world (:p s)) 2000)

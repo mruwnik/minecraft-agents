@@ -12,7 +12,7 @@
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["white_bed" 1] ["dirt" 5]]}
-   :act [[:job (jobs.storage.deposit {})]]
+   :act [[:job (jobs.storage.deposit {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 60 :of-job true}]
    :after [[:item "white_bed" 1] [:item "dirt" 0]]}
   {:name "deposit-stores-the-carried-bed-once-a-home-bed-exists"
@@ -20,6 +20,6 @@
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}
             {:kind :bed :data {:pos #xyz [10 0 10]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["white_bed" 1] ["dirt" 5]]}
-   :act [[:job (jobs.storage.deposit {})]]
+   :act [[:job (jobs.storage.deposit {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 60 :of-job true}]
    :after [[:item "white_bed" 0] [:item "dirt" 0]]}]}

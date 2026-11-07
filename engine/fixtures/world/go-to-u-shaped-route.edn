@@ -12,6 +12,6 @@
   :limit-s 400}
  :cases
  [{:name "u-shaped-route-arrives"
-   :act [[:job (jobs.movement.go-to {:pos #at [310 0 28] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [310 0 28] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [310.5 0 28.5] 3]]}]}

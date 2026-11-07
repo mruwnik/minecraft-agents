@@ -16,9 +16,9 @@
   :limit-s 40}
  :cases
  [{:name "no-death-takes-the-direct-corridor"
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}
   {:name "recent-unseen-zombie-death-takes-the-detour"
    :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 26.5] :cause "zombie"}}]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 40]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:> 40]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}]}

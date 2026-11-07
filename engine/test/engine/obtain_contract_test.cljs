@@ -33,7 +33,7 @@
   (let [out (atom nil)
         parent {:round (fn ^:async quoting-round [c] (reset! out (await (ctx/quote c job args))) (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'quoting-parent] parent)]
-    (core/submit! eng '(quoting-parent) {})
+    (core/submit! eng (tu/order eng '(quoting-parent)) {})
     (await (tu/run-until-empty eng 5))
     @out))
 
@@ -194,7 +194,7 @@
                                    (if (= :continue e) :continue (do (reset! out e) (ctx/end c :done nil)))))}
                 s (with-redefs [registry/jobs (assoc registry/jobs 'jobs.gather.mine mine 'recording-parent parent)]
                     (f/start (oi/ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) []))]
-            (core/submit! (:eng s) '(recording-parent) {})
+            (core/submit! (:eng s) (tu/order (:eng s) '(recording-parent {})) {})
             (await (f/run-ticks s 200))
             (is (pos? @runs) "the mine ran")
             (is (= {:kind :nothing-possible :cause cause} (kc @out)) (str cause))
@@ -397,7 +397,7 @@
                                        (need/item-status c "torch" 4 {:how #{:chest :craft :gather}} worth)))
                          (ctx/end c :done nil))}
         eng (assoc-in eng [:jobs 'status-parent] parent)]
-    (core/submit! eng '(status-parent) {})
+    (core/submit! eng (tu/order eng '(status-parent)) {})
     (await (tu/run-until-empty eng 5))
     @out))
 
@@ -414,7 +414,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [none (await (torch-status (f/start (f/bare []) []) 1000))]
-          (is (= [:later :not-worth ##Inf] [(first none) (:reason (nth none 2)) (:price (nth none 2))]) "no way, however much it is worth"))
+          (is (= :ok (first none)) "no way known, however much it is worth: it starts, its round looks around, the source checks then say what is lacking"))
         (is (= :ok (first (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) 100))))
             "a craft from carried coal costs its steps")
         (is (= [:later :not-worth] (let [[kind _ data] (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) -5))] [kind (:reason data)]))

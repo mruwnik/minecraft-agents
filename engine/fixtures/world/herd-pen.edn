@@ -13,7 +13,7 @@
  [;; should-fail: a 3x3 box can never give the 5 cells in a line the walk-in needs (impossible from the args, no walk)
   {:name "three-by-three-box-impossible"
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [21 0 16]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [21 0 16]} :target 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :too-shallow}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped}}]}
   ;; should-fail: a fence across the pen 2 cells in from the gate, seen at the start: a start condition, so it waits, no walk
@@ -23,12 +23,12 @@
             [:fill [21 0 14] [21 0 18] "oak_fence"]
             [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-shallow}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30}]}
   {:name "shut-gate-one-cow-brought"
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]]}
@@ -40,7 +40,7 @@
             [:set [18 1 16] "oak_fence_gate[facing=east,open=false]"]]
    :body {:at [12.5 1 16.5] :yaw 270 :inventory [["lead" 4]]}
    :act [[:summon "cow" [10.5 1 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 1 16] "oak_fence_gate[open=false]"]]}
@@ -55,7 +55,7 @@
             [:fill [13 0 17] [17 0 17] "oak_fence"]
             [:set [13 0 16] "oak_fence"]]
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 280 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [24 0 16] "oak_fence_gate[open=false]"] [:block [18 0 16] "oak_fence_gate[open=false]"]]}
@@ -63,7 +63,7 @@
   {:name "pen-behind-the-body-is-looked-at-then-cow-brought"
    :body {:at [12.5 0 16.5] :yaw 90 :inventory [["lead" 4]]}
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind #{:waiting :stopped} :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
@@ -75,7 +75,7 @@
             :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want [:any "oak_fence"]}
                     {:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
    :act [[:summon "cow" [10.5 0 18.5]]
-         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 240 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]

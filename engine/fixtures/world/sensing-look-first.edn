@@ -9,31 +9,31 @@
  :cases
  [{:name "look-useful-lists-table-then-furnace"
    :blocks [[:set [11 0 16] "crafting_table"] [:set [13 0 20] "furnace"]]
-   :act [[:job (jobs.explore.look {:useful? true :radius 32 :max-blocks 16})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :useful? true :radius 32 :max-blocks 16})]]
    :expect [{:event {:source :job :kind :completed :data {:blocks [{:name "crafting_table"} {:name "furnace"}]}} :within-s 30 :of-job true}]}
   {:name "look-useful-with-block-names-refused"
-   :act [[:job (jobs.explore.look {:useful? true :block-names ["iron_ore"] :radius 16})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :useful? true :block-names ["iron_ore"] :radius 16})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]}
   {:name "search-reaches-a-far-target"
    :blocks [[:set [56 0 16] "emerald_block"]]
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :spend {:job-time 150} :within 60 :settings {:jobs.lib.cost.find/leg-spacing 8}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 160 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 170}
   {:name "search-with-nothing-ends-distance-not-legs"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :spend {:job-time 100} :within 14 :settings {:jobs.lib.cost.find/leg-spacing 6}})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 110 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 120}
   {:name "get-tool-announces-its-walk-to-look-for-logs"
-   :act [[:job (jobs.items.get-tool {:kind "pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :obtain.exploring :attention :notice :data {:for [:any] :max-distance [:any]}} :within-s 40 :of-job true}]
    :limit-s 60}
   {:name "get-tool-without-explore-gives-no-notice"
-   :act [[:job (jobs.items.get-tool {:kind "pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :kind "pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 40}]
    :limit-s 60}]}

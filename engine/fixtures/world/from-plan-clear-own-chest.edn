@@ -14,10 +14,10 @@
  :cases
  [{:name "own-chest-in-a-clear-cell-is-dug"
    :memory [{:kind :build-placed-kept :data {:cell #at [11 0 12] :block "chest"} :policy {:cap 200 :ttl 604800000}}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:cleared"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:cleared"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:not-block [11 0 12] "chest"] [:block [13 0 12] "oak_fence"]]}
   {:name "unknown-chest-in-a-clear-cell-stays"
-   :act [[:job (jobs.build.from-plan {:plan "$plan:cleared"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:cleared"})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}]
    :after [[:block [11 0 12] "chest"] [:block [13 0 12] "oak_fence"]]}]}

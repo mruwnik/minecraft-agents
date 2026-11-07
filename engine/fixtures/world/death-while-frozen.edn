@@ -12,7 +12,7 @@
          [:freeze-body 35]
          [:await {:source :body :kind :respawned} 60]
          [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
-         [:job (jobs.survival.recover-drops)]]
+         [:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:event {:source :body :kind :died :data {:atJoin true}} :within-s 100}
             {:count-event {:source :body :kind :died} :for-s 100 :at-least 1 :at-most 1}
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 140 :of-job true}]
@@ -22,6 +22,6 @@
    :act [[:summon "zombie" [11.5 0 10.5] "{PersistenceRequired:1b}"]
          [:freeze-body 35]
          [:await {:source :body :kind :respawned} 60]
-         [:job (jobs.survival.recover-drops)]]
+         [:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:event {:source :body :kind :died :data {:atJoin true}} :within-s 100}
             {:count-event {:source :body :kind :died} :for-s 100 :at-least 1 :at-most 1}]}]}

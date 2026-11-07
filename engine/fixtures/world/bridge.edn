@@ -11,9 +11,9 @@
   :limit-s 120}
  :cases
  [{:name "bridges-five-then-cleanup-removes-it"
-   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]
+   :act [[:job (jobs.access.bridge {:worth 1200 :heading :east :length 5 :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
-         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:built 5}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:removed [[:any] [:any] [:any] [:any] [:any]]}} :within-s 100}]
    :after [[:not-block [9 -1 16] "dirt"] [:not-block [11 -1 16] "dirt"] [:not-block [13 -1 16] "dirt"]
@@ -21,20 +21,20 @@
   {:name "foreign-footprint-on-the-row-waits-places-nothing"
    :plans [{:id "foreign" :metadata {:by "SomeoneElse"}
             :parts [{:id "row" :box [#at [9 -1 16] #at [13 -1 16]] :want "stone"}]}]
-   :act [[:job (jobs.access.bridge {:heading :east :length 5})]]
+   :act [[:job (jobs.access.bridge {:worth 1200 :heading :east :length 5})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :footprint}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:not-block [9 -1 16] "dirt"]]
    :limit-s 50}
   {:name "no-blocks-without-fetch-gives-up-too-few"
    :body {:inventory []}
-   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ways #{:carried} :ignore-zones? true})]]
+   :act [[:job (jobs.access.bridge {:worth 1200 :heading :east :length 5 :ways #{:carried} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :too-few-blocks :short 5 :built 0}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]
    :limit-s 40}
   {:name "low-ceiling-ahead-is-blocked"
    :blocks [[:set [9 1 16] "stone"]]
-   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
+   :act [[:job (jobs.access.bridge {:worth 1200 :heading :east :length 5 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :blocked :built 0}} :within-s 40 :of-job true}]
    :after [[:not-block [9 -1 16] "dirt"]]
    :limit-s 50}]}

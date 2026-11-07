@@ -17,7 +17,7 @@
    :blocks [[:fill [26 4 16] [28 5 16] "air"] [:set [27 4 16] "torch"]]
    :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
    :register []
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :log-out} :for-s 25}]
@@ -78,7 +78,7 @@
    ;; the pit (3 s of digging) quotes under 14+ walls, so the placing is priced down to make the walls the cheaper way
    ;; dirt, not cobblestone: the pit digs stone and roofs with its drops, which the clear must not take
    :body {:inventory [["dirt" 20] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :settings {:jobs.survival.wall-placer/max-places 2 :jobs.survival.plug-way/night-place-s 0.1}})]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night :settings {:jobs.survival.wall-placer/max-places 2 :jobs.survival.plug-way/night-place-s 0.1}})]
          [:await {:source :action :kind :done :data {:name "place"}} 30]
          [:rcon "clear $BODY dirt"]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}

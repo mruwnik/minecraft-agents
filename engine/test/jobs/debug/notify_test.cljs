@@ -36,7 +36,7 @@
         (let [{:keys [eng seen]} (setup {:self {:health 7 :food 12 :oxygen 9 :onFire true
                                                 :pos {:x 1.4 :y 64 :z -2.6}}
                                          :time 6000})]
-          (core/submit! eng '(jobs.debug.notify {:text "burning fired"}) {})
+          (core/submit! eng (tu/order eng '(jobs.debug.notify {:text "burning fired"})) {})
           (await (core/tick! eng))
           (let [[e :as evs] (notify-events seen)
                 text (:message e)]
@@ -60,7 +60,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:entities [{:name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
                                                     {:name "cow" :kind "passive" :pos {:x 2 :y 64 :z 0}}]})]
-          (core/submit! eng '(jobs.debug.notify) {})
+          (core/submit! eng (tu/order eng '(jobs.debug.notify {})) {})
           (await (core/tick! eng))
           (is (re-find #"hostiles 1" (:message (first (notify-events seen))))))))))
 
@@ -80,7 +80,7 @@
   [args prep]
   (let [{:keys [eng p seen]} (setup {:entities [{:kind "player" :username "Steve" :name "Steve" :pos {:x 2 :y 64 :z 0}}]})]
     (prep p)
-    (core/submit! eng (list 'jobs.debug.notify args) {})
+    (core/submit! eng (tu/order eng (list 'jobs.debug.notify args)) {})
     (await (core/tick! eng))
     [p seen eng]))
 

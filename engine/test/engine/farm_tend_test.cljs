@@ -66,7 +66,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args spec n]
   (let [s (setup spec)]
-    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:area box} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend (merge {:area box} args))) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
@@ -91,7 +91,7 @@
   "True when the job is submitted, the first tick does nothing and the body is never asked to do anything."
   [args spec]
   (let [{:keys [eng p]} (setup spec)]
-    (core/submit! eng (list 'jobs.farm.tend args) {})
+    (core/submit! eng (tu/order eng (list 'jobs.farm.tend args)) {})
     (and (nil? (core/tick! eng))
          (empty? (.-calls (.-world p))))))
 
@@ -301,7 +301,7 @@
       (fn ^:async t []
         (let [s (setup (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 3)]}))]
           (.override (.-world (:p s)) "useOn" (fn [_ _ _] (js/Promise.resolve #js {:status "unchanged"})))
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area box})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (true? (finished? s)))
           (is (<= (count (calls s "useOn")) 2) "one till child per cell, which tries twice")
@@ -399,7 +399,7 @@
   "Whether tend starts a round on the first tick, in a world whose zone list is zones."
   [args spec zones]
   (let [s (setup spec zones)]
-    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:area box} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend (merge {:area box} args))) {})
     (await (core/tick! (:eng s)))
     (boolean (seq (events-of s :round_started)))))
 
@@ -424,7 +424,7 @@
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) wheat-drops))
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area box})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 80 700))
           (is (seq (calls s "look")))
           (is (= #{[2 2] [3 2]} (dug s)))
@@ -436,7 +436,7 @@
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area box})) {})
           (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (is (seq (calls s "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
@@ -450,7 +450,7 @@
                              {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})
               s (setup terrain)
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area box :till true})) {})
           (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
@@ -462,7 +462,7 @@
       (fn ^:async t []
         (let [s (setup (world (ground "dirt" all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]}) [foreign-zone])
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area box :till true})) {})
           (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
@@ -479,7 +479,7 @@
   "Nine ripe wheat seen dx blocks off; safe? always, so the price alone decides."
   [dx]
   (let [s (setup (assoc (far-ripe dx) :time 1000))]
-    (core/submit! (:eng s) (list 'jobs.farm.tend {:area (far-box dx) :checks {:safe? '(always)}}) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area (far-box dx) :checks {:safe? '(always)}})) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
@@ -498,7 +498,7 @@
               real (get-in (:eng s) [:jobs 'jobs.movement.go-to])
               spy (assoc real :round (fn [c] (swap! seen conj (:stay-s (:args c))) ((:round real) c)))
               eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))]
-          (core/submit! eng (list 'jobs.farm.tend {:area (far-box 150) :checks {:safe? '(always)}}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.farm.tend {:area (far-box 150) :checks {:safe? '(always)}})) {})
           (await (tu/run-ticks eng (:clock s) 3 700))
           (is (some pos? (keep identity @seen))))))))
 
@@ -522,7 +522,7 @@
   [repeat?]
   (let [s (setup high-ripe)
         job (list 'jobs.farm.tend {:area high-box})]
-    (core/submit! (:eng s) (if repeat? (list 'repeat job) job) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (if repeat? (list 'repeat job) job)) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
@@ -540,7 +540,7 @@
       (fn ^:async t []
         (let [s (setup (assoc (world (farm "wheat" 7 unseen-cells unseen-cells) wheat-drops) :floor [-5 -5 60 15]))]
           (tu/seeing-within (:p s) 24)
-          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 30 :y 63 :z 2} :max {:x 34 :y 64 :z 6}}})) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 30 :y 63 :z 2} :max {:x 34 :y 64 :z 6}}}))) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (tu/walk-calls (:p s))) "the body goes to the field")
           (is (= (set (map (fn [[x z]] [x z]) unseen-cells)) (dug s)) "and cuts the wheat there"))))))
@@ -563,7 +563,7 @@
   [secs]
   (let [s (setup (assoc (world (farm "wheat" 7 unseen-cells unseen-cells) wheat-drops) :floor [-5 -5 60 15]))]
     (remembering-within (:p s) 24 secs 4)
-    (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 30 :y 63 :z 2} :max {:x 34 :y 64 :z 6}} :irrigate false})) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 30 :y 63 :z 2} :max {:x 34 :y 64 :z 6}} :irrigate false}))) {})
     (await (tu/run-ticks (:eng s) (:clock s) 60 700))
     s))
 
@@ -591,7 +591,7 @@
       (fn ^:async t []
         (let [s (setup (assoc (world (farm "wheat" 7 hidden-cells hidden-cells) wheat-drops) :floor [-5 -5 60 15]))]
           (tu/seeing-within (:p s) 10)
-          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false})) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false}))) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (seq (tu/walk-calls (:p s))) "13 blocks off and unseen: the body goes to the field")
           (is (= (set hidden-cells) (dug s)) "and cuts the wheat there"))))))
@@ -602,7 +602,7 @@
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 7 [[300 2]] [[300 2]]) wheat-drops))]
           (tu/seeing-within (:p s) 24)
-          (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 300 :y 63 :z 2} :max {:x 300 :y 64 :z 2}} :irrigate false})) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 300 :y 63 :z 2} :max {:x 300 :y 64 :z 2}} :irrigate false}))) {})
           (await (tu/run-ticks (:eng s) (:clock s) 5 700))
           (is (empty? (tu/walk-calls (:p s))) "one crop 300 blocks off is not worth the walk")
           (is (some #(= :not-worth (:reason %)) (events-of s :waiting))))))))
@@ -617,7 +617,7 @@
           (tu/seeing-within (:p s) 10)
           (set! pick/quoted-s (fn [_c _q] (swap! asked inc) 1000))
           (try
-            (core/submit! (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false})) {})
+            (core/submit! (:eng s) (tu/order (:eng s) (list 'repeat (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false}))) {})
             (await (tu/run-ticks (:eng s) (:clock s) 400 700))
             (finally (set! pick/quoted-s quoted)))
           (is (= 1 @asked) "the walk is quoted once in 280 s, not again after each rest")
@@ -634,7 +634,7 @@
           (tu/seeing-within (:p s) 10)
           (set! pick/quoted-s (fn [_c _q] (swap! asked inc) 1))
           (try
-            (core/submit! (:eng s) (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false}) {})
+            (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area {:min {:x 12 :y 63 :z 2} :max {:x 14 :y 64 :z 4}} :irrigate false})) {})
             (await (tu/run-ticks (:eng s) (:clock s) 60 700))
             (finally (set! pick/quoted-s quoted)))
           (is (seq (tu/walk-calls (:p s))) "the walk is made")
@@ -730,7 +730,7 @@
                          (let [e (await (ctx/call c :kid 'jobs.farm.tend args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng s) [:jobs 'recording-parent] parent)]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-ticks eng (:clock s) n 700))
     @out))
 
@@ -789,7 +789,7 @@
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.tend {:area box})) {})
           (await (tu/with-looks-showing #(tu/run-ticks (:eng s) (:clock s) 6 700)))
           (is (= #{(tend/recheck-ms)} (set (map #(:recheck-after-ms %) (events-of s :waiting))))))))))
 

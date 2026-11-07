@@ -794,7 +794,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 6} {:name "crafting_table" :count 1}]})
               calls-seen (atom 0)
-              id (core/submit! eng (list job {:item "bread" :count 2}) {})]
+              id (core/submit! eng (tu/order eng (list job {:item "bread" :count 2})) {})]
           (.override (.-world p) "craft"
                      (fn [token a impl]
                        (if (= 1 (swap! calls-seen inc))
@@ -846,7 +846,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
         ended #(first (filter (comp #{:completed :stopped} :kind) @seen))]
-    (core/submit! eng (list job args) {})
+    (core/submit! eng (tu/order eng (list job args)) {})
     (loop [i 0]
       (when (and (< i 40) (nil? (ended)))
         (swap! clock + 500)
@@ -933,5 +933,5 @@
   (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}}) :args {:item "wooden_pickaxe" :count 1})
         own (craft/goal-worth (assoc c :worth (constantly 0)))]
     (is (pos? own) "the item's own worth bounds a call worth less")
-    (is (= (ctx/default-worth) (craft/goal-worth c)) "a craft ordered at the root with no worth: the default, more than the item's own")
+    (is (= tu/order-worth (craft/goal-worth c)) "a craft ordered by hand: the order's worth, more than the item's own")
     (is (= (+ own 100) (craft/goal-worth (assoc c :worth (constantly (+ own 100))))))))

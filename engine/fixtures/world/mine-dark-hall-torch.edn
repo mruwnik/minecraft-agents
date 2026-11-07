@@ -11,7 +11,7 @@
   :limit-s 240}
  :cases
  [{:name "dark-hall-to-lit-ore-over-the-spawn-radius-hangs-a-torch-and-digs"
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 0 :radius 40 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 0 :radius 40 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 230 :of-job true}
             {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 230 :at-least 1}]
    :after [[:item "raw_iron" [:>= 1]]]}]}

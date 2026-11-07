@@ -9,7 +9,7 @@
   :limit-s 120}
  :cases
  [{:name "two-logs-walled-in-by-leaves"
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 2 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}]}

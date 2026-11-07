@@ -18,7 +18,7 @@
    :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]]
    :body {:inventory [["oak_planks" 6]]}
    :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [11 0 16] :cause "enderman"}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]},
@@ -26,7 +26,7 @@
    :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]]
    :body {:inventory [["oak_planks" 6]]}
    :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [27 0 16] :cause "enderman"}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
@@ -42,7 +42,7 @@
             [:fill [26 -1 15] [28 1 17] "stone"] [:set [27 0 16] "air"]]
    :body {:inventory [["oak_planks" 6]]}
    :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [27 0 16] :cause "enderman"}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "craft-towards-a-fresh-unseen-death-spot-is-declined-when-the-goal-is-worth-less"
@@ -70,7 +70,7 @@
             {:kind :died :age-s 10 :data {:pos #xyz [27 0 16] :dimension "overworld" :inventory [{:name "cobblestone" :count 20 :slot 36}] :experience {:level 0 :points 0}}}
             {:kind :recovered :age-s 4 :data {:decision :skip}}
             {:kind :respawned :age-s 5 :data {:pos #xyz [227 0 16]}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
@@ -83,7 +83,7 @@
             {:kind :died :age-s 600 :data {:pos #xyz [27 0 16] :dimension "overworld" :inventory [{:name "cobblestone" :count 20 :slot 36}] :experience {:level 0 :points 0}}}
             {:kind :recovered :age-s 4 :data {:decision :skip}}
             {:kind :respawned :age-s 5 :data {:pos #xyz [227 0 16]}}]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}]}

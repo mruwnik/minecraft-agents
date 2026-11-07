@@ -9,30 +9,30 @@
  :cases
  [{:name "repeat-two-pauses-completes"
    :time :any
-   :act [[:job (repeat 2 (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :act [[:job (repeat 2 (jobs.time.noop {:worth 1200 :seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 40 :of-job true}]}
   {:name "until-light-beside-a-torch-ends"
    :time :any
    :blocks [[:set [17 0 16] "torch"]]
-   :act [[:job (until (jobs.time.wait-for-light) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :act [[:job (until (jobs.time.wait-for-light {:worth 1200}) (jobs.time.noop {:worth 1200 :seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]}
   {:name "until-light-in-a-dark-cell-keeps-looping"
    :time :any
    :plot {:height 8 :light :dark}
-   :act [[:job (until (jobs.time.wait-for-light) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :act [[:job (until (jobs.time.wait-for-light {:worth 1200}) (jobs.time.noop {:worth 1200 :seconds 0.5 :why :idle}))]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 3]]}
   ;; card 33c9ae94: a child that ends refused/failed (go-to to a goal sealed in bedrock, no retry) stops seq with its cause and makes repeat and until
   ;; rest 30 s (waiting :resting) before they call it again; none reads it as done and goes on.
   {:name "seq-stops-at-a-failed-child"
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (seq (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :act [[:job (seq (jobs.movement.go-to {:worth 1200 :pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}) (jobs.time.noop {:worth 1200 :seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :c1}} :for-s 80 :until {:source :job :kind :stopped}}]
    :limit-s 100}
   {:name "repeat-stops-at-a-failed-child"
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (repeat (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
+   :act [[:job (repeat (jobs.movement.go-to {:worth 1200 :pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}
@@ -40,7 +40,7 @@
    :time :any
    :plot {:height 8 :light :dark}
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (until (jobs.time.wait-for-light) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
+   :act [[:job (until (jobs.time.wait-for-light {:worth 1200}) (jobs.movement.go-to {:worth 1200 :pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}]}

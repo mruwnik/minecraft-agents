@@ -14,6 +14,6 @@
    :act [[:summon "chicken" [14.5 -1 15.5] "{NoAI:1b}"]
          [:summon "chicken" [14.5 -1 17.5] "{NoAI:1b}"]
          [:until-seen {:entity "chicken" :min 1} 15]
-         [:job (jobs.items.use {:on "$entity-id:chicken" :item "wheat_seeds"})]]
+         [:job (jobs.items.use {:worth 1200 :on "$entity-id:chicken" :item "wheat_seeds"})]]
    :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
    :after [[:entities "type=chicken,tag=wt" [[12 -2 13] [18 1 19]] 2]]}]}

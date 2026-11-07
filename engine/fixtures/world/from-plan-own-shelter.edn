@@ -16,7 +16,7 @@
   :limit-s 230}
  :cases
  [{:name "sealed-in-own-shelter-waits-then-builds-at-dawn"
-   :act [[:job (jobs.build.from-plan {:plan "$plan:pair"})]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:pair"})]
          [:wait-s 30]
          [:time-set 1000]]
    :expect [{:no-event {:source :job :kind :stopped} :for-s 30}

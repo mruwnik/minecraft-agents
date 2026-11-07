@@ -11,42 +11,42 @@
  :cases
  [{:name "water-beside-descent-cell-refuses"
    :blocks [[:set [17 -2 16] "stone"] [:set [17 -1 16] "water"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "waterlogged-slab-beside-descent-cell-refuses"
    :blocks [[:set [17 -1 16] "oak_slab[waterlogged=true]"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "seagrass-beside-descent-cell-refuses"
    :blocks [[:set [17 -1 16] "seagrass"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "water-in-feet-cell-refuses"
    :blocks [[:set [16 0 16] "water"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :no-way}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "water-above-roof-cell-refuses"
    :blocks [[:set [17 0 16] "stone"] [:set [16 1 16] "water"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "not digging"]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "not digging"]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "poppy-beside-start-digs-3-deep-and-seals"
    :blocks [[:set [17 0 16] "poppy"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:body-near [16.5 -3 16.5] 2]]
@@ -56,7 +56,7 @@
    ;; lava under the dirt, unseen from the surface: the dig of the cell above it lays it open (8 blocks: fewer than the 10 walls need)
    :blocks [[:set [17 -2 16] "lava"]]
    :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :shelter_seal_failed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:not-block [17 -2 16] "lava"]]
@@ -65,12 +65,12 @@
    ;; lava under the dirt, unseen from the surface: the dig of the cell above it lays it open (8 blocks: fewer than the 10 walls need)
    :blocks [[:set [17 -2 16] "lava"]]
    :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :on-lava :stop})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night :on-lava :stop})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "lava"]} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :no-way}}}]
    :limit-s 70}
   {:name "flat-dirt-no-plant-seals"
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 80}]}

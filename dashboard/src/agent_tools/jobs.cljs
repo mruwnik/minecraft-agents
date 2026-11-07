@@ -20,8 +20,8 @@
   (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--drop-on-death] [--next | --now | --exclusive] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :submitted-at (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there; a job queued behind another of this body counts from where the body stands when that one ends. Give :here true in the args (any job takes it) to run wherever the body is.\n"
        "submit appends the job to the end of the list (jobs take turns).\n"
-       "Any spec takes the call keys :worth and :spend in its args: :worth is what the goal is worth to you in seconds of the body's time (a number); a job you submit without it prices itself (a job with no price of its own is worth 1200 s, a game day) and may refuse a far or costly goal, so give a high :worth to go anyway: submit '(jobs.items.obtain {:item \"oak_log\" :worth 2000})'. :spend caps what the job may use, e.g. {:job-time 600 :tries 3}.\n"
-       "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})' or '(jobs.items.get-tool {:item \"stone_pickaxe\"})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
+       "Every job of a spec needs :worth in its args: what the goal is worth to you in seconds of the body's time (a number; a submit without it is refused); the job refuses a far or costly goal it does not pay for, so give a high :worth to go anyway: submit '(jobs.items.obtain {:item \"oak_log\" :worth 2000})'. :spend caps what the job may use, e.g. {:job-time 600 :tries 3}.\n"
+       "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2} :worth 300})' or '(jobs.items.get-tool {:item \"stone_pickaxe\" :worth 600})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
        "  --drop-on-death  the body's death cancels the job; without it the job stays listed through a death and runs again from the respawn once the respawn reflexes (recover-drops, night) are done\n"
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
        "  --now    cut the current job and run this one at once (a normal job); the cut job keeps its memory and\n"
@@ -37,12 +37,21 @@
 
 (def usage (usage-for "jobs.mjs"))
 
-(def spec-example "a spec is one list: a job name then an args map, e.g. (jobs.movement.go-to {:pos {:x 1 :y 64 :z 2}})")
+(def spec-example "a spec is one list: a job name then an args map, e.g. (jobs.movement.go-to {:pos {:x 1 :y 64 :z 2} :worth 300})")
 
 (defn read-spec [text]
   (try (map-tool/read-edn text)
        (catch :default error
          (throw (js/Error. (str (.-message error) "; " spec-example))))))
+
+(defn unpriced
+  "The job names of spec form whose args give no :worth (a combinator's jobs too)."
+  [form]
+  (let [[head & parts] (when (seq? form) form)]
+    (case head
+      (seq any until) (mapcat unpriced parts)
+      repeat (unpriced (last parts))
+      (when (and head (not (number? (:worth (first parts))))) [head]))))
 
 (defn spec-for [text]
   (when (or (not (string? text)) (> (.byteLength js/Buffer text) 12000))
@@ -50,6 +59,8 @@
   (let [form (read-spec text)]
     (when-not (and (seq? form) (symbol? (first form)))
       (throw (js/Error. (str "spec must be one native EDN job expression list; " spec-example))))
+    (when-let [js (seq (distinct (unpriced form)))]
+      (throw (js/Error. (str "worth is required: give " (str/join ", " js) " a :worth in its args, the seconds of the body's time the goal is worth to you; " spec-example))))
     form))
 
 (def single-cell-jobs

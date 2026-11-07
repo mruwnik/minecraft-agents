@@ -90,7 +90,7 @@
     (if (= :continue a) :continue (done c))))
 
 (defn ^:async submit-round [c]
-  (ctx/submit! c '(count) {})
+  (ctx/submit! c '(count {:worth 60}) {})
   (done c))
 
 (def flag (atom false))

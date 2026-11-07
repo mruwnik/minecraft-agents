@@ -42,4 +42,4 @@
             {:trigger :pen-gate :persistence :cooldown :cooldown-s 5}
             {:trigger :mounted :persistence :cooldown :cooldown-s 30}
             {:trigger :dark-work :persistence :cooldown :cooldown-s 10}]
- :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
+ :queue [(repeat (jobs.time.noop {:worth 1200 :seconds 2 :why :idle}))]}

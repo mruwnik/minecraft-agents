@@ -70,13 +70,14 @@
                 r)))))
 
 (defn ^:async run-job!
-  "Run job with args under a recording parent until the list is empty (at most 5 ticks).
-  {:eng :p :seen :calls :out}."
+  "Run job with args, at its worth-of as the hostile trigger fires it, under a recording parent until the list is empty
+  (at most 5 ticks). {:eng :p :seen :calls :out}."
   [s job args]
-  (let [calls (atom [])
+  (let [args (second (tu/order (:eng s) (list job args)))
+        calls (atom [])
         out (atom nil)
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent (recording-parent calls out job args)))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 5) (seq (:list (core/state eng))))
         (await (core/tick! eng))
@@ -1440,7 +1441,7 @@
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
               s (assoc-in s [:eng :jobs 'walker] walker)
-              _ (core/submit! (:eng s) '(walker) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) '(walker)) {})
               _ (await (core/tick! (:eng s)))
               {:keys [seen]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
           (is (= [-10 64 10] (first-target seen))))))))

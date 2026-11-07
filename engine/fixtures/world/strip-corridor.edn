@@ -16,19 +16,19 @@
   :limit-s 150}
  :cases
  [{:name "cobweb-and-rails-taken-torches-hung-then-taken-back"
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:cobweb [:>= 1] :rail [:>= 10]}}} :within-s 140 :of-job true}]
    :after [[:not-block [10 1 16] "cobweb"] [:not-block [14 0 16] "rail"] [:not-block [25 0 16] "rail"] [:item "cobweb" [:>= 1]] [:item "torch" 8]]}
   {:name "a-support-is-wood-and-goes-to-an-axe"
    :blocks [[:set [14 0 15] "oak_fence"] [:set [14 1 15] "oak_fence"] [:set [14 0 17] "oak_fence"] [:set [14 1 17] "oak_fence"]
             [:fill [14 2 15] [14 2 17] "oak_planks"]]
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:wood]})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:wood]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:wood [:>= 7]}}} :within-s 140 :of-job true}]
    :after [[:not-block [14 0 15] "oak_fence"] [:not-block [14 1 17] "oak_fence"] [:not-block [14 2 16] "oak_planks"] [:block [14 0 16] "rail"] [:block [10 1 16] "cobweb"]]}
   {:name "chest-minecart-in-the-segment-is-looted"
    :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
+         [:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 3] [:item "chest_minecart" [:>= 1]]]}
   ;; a bag with no free slot and no room in any stack: the cart cannot be emptied, which is a bag-full stop (a trip to the base
@@ -36,7 +36,7 @@
   {:name "full-bag-at-a-chest-minecart-stops-bag-full"
    :body {:inventory [["cobblestone" 2176] ["torch" 8] ["bread" 8]]}
    :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"] [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail] :settings {:jobs.lib.trip/want-free 0}})]]
+         [:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail] :settings {:jobs.lib.trip/want-free 0}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :bag-full}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :cart-failed}} :for-s 100 :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[2 -1 10] [30 4 22]] 1]]}
@@ -45,54 +45,54 @@
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["bread" 8]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
          [:until-seen {:block "chest"} 10]
-         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
+         [:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 100}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
    :after [[:item "stone_pickaxe" [:>= 1]] [:not-block [14 0 16] "rail"]]}
  {:name "no-shears-stops-no-tool-leaving-the-cobweb"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["bread" 8]]}
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb]})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [10 1 16] "cobweb"]]}
   {:name "dark-without-torches-stops-no-torches"
    :body {:inventory [["stone_pickaxe" 1] ["shears" 1] ["bread" 8]]}
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb :rail]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-torches}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [14 0 16] "rail"]]}
   {:name "spawner-default-is-lit-and-left"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:kept [:has {:why :spawner :lit true}]}} :within-s 140 :of-job true}]
    :after [[:block [16 1 18] "spawner"] [:item "torch" [:<= 7]]]}
   {:name "spawner-default-without-torches-stops-no-torches"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :body {:inventory [["stone_pickaxe" 1] ["bread" 8]]}
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-torches}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [16 1 18] "spawner"]]}
   {:name "spawner-break-lights-it-then-digs-it"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :break})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :break})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:spawner 1}}} :within-s 140 :of-job true}]
    :after [[:not-block [16 1 18] "spawner"]]}
   {:name "spawner-seal-stops-spawner-and-leaves-it"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :seal})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :seal})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :spawner}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]
    :after [[:block [16 1 18] "spawner"]]}
   ;; a seen zombie (NoAI, helmeted) in the corridor can reach the body: the job waits :hostile-near, and takes the rails once it is gone
   {:name "hostile-in-the-corridor-waits-then-strips-once-it-is-gone"
-   :act [[:summon "zombie" [12.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:wait-s 2] [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]
+   :act [[:summon "zombie" [12.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:wait-s 2] [:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 40]
          [:rcon "kill @e[type=zombie,$BOX]"]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:rail [:>= 10]}}} :within-s 140 :of-job true}]
    :after [[:not-block [25 0 16] "rail"]]}
   {:name "spawner-skip-leaves-it-unlit"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
-   :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :skip})]]
+   :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :skip})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:kept [:has {:why :spawner}]}} :within-s 140 :of-job true}]
    :after [[:block [16 1 18] "spawner"] [:item "torch" 8]]}]}

@@ -18,7 +18,7 @@
    :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:ignore-zones? true})]]
+         [:job (jobs.survival.get-food {:worth 1200 :ignore-zones? true})]]
    :body {:at [18.5 0 19.5]}
    :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
@@ -28,7 +28,7 @@
    :body {:at [18.5 0 19.5]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :get-food.trespass-last-resort} :for-s 10}]
    :after [[:block [22 0 22] "potatoes[age=7]"]]}
@@ -36,7 +36,7 @@
    :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :get-food.trespass-last-resort} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [22 0 22] "potatoes[age=7]"]]}
@@ -45,7 +45,7 @@
    :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:ignore-zones? true})]]
+         [:job (jobs.survival.get-food {:worth 1200 :ignore-zones? true})]]
    :register [{:trigger :tidy-pending}]
    :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}
             {:event {:source :reflex :kind :ended :context {:reflex-id :tidy-pending}} :within-s 160}

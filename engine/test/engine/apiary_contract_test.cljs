@@ -30,7 +30,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir) :now now
                           :world (world/of-data {} {} (:zones w []))
                           :events (events/make {:sinks [sink] :now now})})]
-    (core/submit! eng spec {})
+    (core/submit! eng (tu/order eng spec) {})
     (loop [i 0]
       (when (and (< i 80) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 700)

@@ -12,7 +12,7 @@
  :cases
  [{:name "parched-gets-the-doorway-closed"
    :act [[:summon "parched" [27.5 0 16.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:until-seen {:entity "parched"} 10]
-         [:job (jobs.survival.respond-to-hostile {})]]
+         [:job (jobs.survival.respond-to-hostile {:worth 1200})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :gap :ending {:kind :done}}} :within-s 40 :of-job true}]
    :after [[:body-near [17.5 0 16.5] 1.5] [:item "cobblestone" [:< 10]]]
    :limit-s 50}]}

@@ -10,19 +10,19 @@
   :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "stair-down-then-go-to-back-up"
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :completed} 120]
-         [:job (jobs.movement.go-to {:pos #at [10 10 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [10 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 6}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 220 :of-job true}]
    :limit-s 230
    :after [[:body-near [10.5 10 16.5] 2.5]]}
   {:name "second-stair-under-first-stops-undercuts-way"
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]
          [:await {:source :job :kind :completed} 120]
-         [:job (jobs.access.stair {:dir :down :heading :west :steps 3})]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :west :steps 3})]
          [:await {:source :job :kind :stopped} 60]
-         [:job (jobs.movement.go-to {:pos #at [10 10 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [10 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :undercuts-way :cell #at [15 4 16]}} :within-s 200 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 320 :of-job true}]
    :limit-s 330

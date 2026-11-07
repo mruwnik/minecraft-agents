@@ -28,7 +28,7 @@
 
 (defn ^:async scenario [args world n]
   (let [s (h/setup world 50)]
-    (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 

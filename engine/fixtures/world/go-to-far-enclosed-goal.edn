@@ -14,13 +14,13 @@
   :limit-s 90}
  :cases
  [{:name "shut-in-body-far-from-a-sealed-pocket-escalates-connected"
-   :act [[:job (jobs.movement.go-to {:pos #at [80 1 56] :range 0 :unknown false})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [80 1 56] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :disconnected} :for-s 60 :until {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}}}]}
   ;; Card b110b7c2: a dig route search past its node budget goes on in the next rounds instead of refusing, and the
   ;; approaches do not wander: the body gets off the plateau, over the plain and digs into the pocket.
   {:name "shut-in-body-far-from-a-sealed-pocket-reaches-it"
-   :act [[:job (jobs.movement.go-to {:pos #at [80 1 56] :range 0 :unknown false})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [80 1 56] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 240 :of-job true}
             {:no-event {:source :body :kind :disconnected} :for-s 240 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [80.5 1 56.5] 1.5]]

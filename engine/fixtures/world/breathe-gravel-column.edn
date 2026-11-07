@@ -31,7 +31,7 @@
   {:name "gravel-column-on-a-stair-step-is-left-by-stepping-down"
    :blocks [[:fill [17 -1 16] [17 1 16] "air"] [:set [17 -2 16] "stone"]]
    :body {:at [17.5 -1 16.5] :yaw 90 :settle-s 2 :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 16] :range 0})]
          [:until-pos {:y-min 0} 20]
          [:wait-s 2]
          [:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~16 ~16 ~4 ~16 gravel"]

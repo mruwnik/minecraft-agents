@@ -11,7 +11,7 @@
  [{:name "goal-over-a-void-is-given-up"
    :time :any
    :blocks [[:fill [13 -6 0] [89 -1 31] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :unknown true :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [60 0 16] :range 1 :unknown true :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 100 :of-job true}]
    :after [[:body-far [60.5 0 16.5] 20]]}
   {:name "mine-ore-cluster-over-a-void-is-given-up-at-once"
@@ -20,7 +20,7 @@
    ;; The body may still pillar up to a block from the void floor and finish; either end is fine within the limit.
    :body {:at [2.5 0 16.5] :settle-s 2 :inventory [["stone_pickaxe" 1]]}
    :blocks [[:fill [13 -6 0] [89 -1 31] "air"] [:fill [40 0 15] [42 2 17] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :radius 40 :ways #{:seen}})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :radius 40 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind :mine.unreachable} :within-s 40 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 40 :of-job true}]
    :limit-s 60}]}

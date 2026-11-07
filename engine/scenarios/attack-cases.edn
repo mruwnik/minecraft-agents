@@ -1,7 +1,7 @@
 ;; ProbeAttack live case: type zombie: four zombies, two skeletons left alone
 {:register []
- :queue [(jobs.combat.attack {:targets "zombie"})
-         (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
+ :queue [(jobs.combat.attack {:worth 1200 :targets "zombie"})
+         (repeat (jobs.time.noop {:worth 1200 :seconds 2 :why :idle}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeAttack-1
 ;; ;; ProbeAttack live case: one zombie by id

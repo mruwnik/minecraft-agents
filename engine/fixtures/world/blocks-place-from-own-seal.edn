@@ -14,11 +14,11 @@
    :memory [{:kind :scaffold :policy {:cap 1 :ttl :forever}
              :data {:entries [{:cell #at [16 2 16] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}
                               {:cell #at [16 3 16] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}]}}]
-   :act [[:job (jobs.blocks.place {:pos #at [24 0 16] :item "cobblestone"})]]
+   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [24 0 16] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
    :after [[:block [24 0 16] "cobblestone"]]}
   {:name "bedrock-pit-unreachable"
    :blocks [[:fill [14 -1 14] [18 3 18] "bedrock"] [:fill [16 0 16] [16 1 16] "air"]]
-   :act [[:job (jobs.blocks.place {:pos #at [24 0 16] :item "cobblestone"})]]
+   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [24 0 16] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 140 :of-job true}]
    :after [[:not-block [24 0 16] "cobblestone"]]}]}

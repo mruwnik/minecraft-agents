@@ -6,6 +6,6 @@
  [{:name "meal-15-blocks-off-is-collected"
    :blocks [[:set [25 0 16] "composter"]]
    :act [[:summon "item" [24.5 0 16.5] "{Item:{id:\"minecraft:bone_meal\",count:1}}"]
-         [:job (jobs.farm.compost {:at #xyz [25 0 16] :items ["oak_leaves"]})]]
+         [:job (jobs.farm.compost {:worth 1200 :at #xyz [25 0 16] :items ["oak_leaves"]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.compost"}} :within-s 70 :of-job true}]
    :after [[:item "bone_meal" 1]]}]}

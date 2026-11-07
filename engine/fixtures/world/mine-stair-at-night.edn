@@ -8,7 +8,7 @@
   :body {:at [7.5 26 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}}
  :cases
  [{:name "mine-cobblestone-down-a-stair-does-not-wait-for-light"
-   :act [[:job (jobs.gather.mine {:item "cobblestone" :count 3 :here true :torches false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :item "cobblestone" :count 3 :here true :torches false})]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 20}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 3]}} :within-s 120 :of-job true}]
    :after [[:item "cobblestone" [:>= 3]]]

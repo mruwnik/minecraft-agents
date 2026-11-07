@@ -11,6 +11,6 @@
    :time :any
    :act [[:summon "item" [15.5 0 12.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"]
          [:wait-s 2]
-         [:job (jobs.items.collect-drops {:radius 10})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 10})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
    :after [[:item "iron_ingot" 3]]}]}

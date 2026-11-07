@@ -34,7 +34,7 @@
           {:keys [eng seen p]} (setup world)]
       (when known? (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items items)} stock/stock-policy))
       (die-noted! eng {:pos dt/death-pos :inventory pile :cause cause} 5000)
-      (core/submit! eng job {})
+      (core/submit! eng (tu/order eng job) {})
       (await (run-until-empty eng 60))
       {:eng eng :seen seen :p p}))))
 
@@ -114,7 +114,7 @@
           real (aget need/blocks! arity4)]
       (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items kit-in-chest)} stock/stock-policy)
       (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 5000)
-      (core/submit! eng job {})
+      (core/submit! eng (tu/order eng job) {})
       (aset need/blocks! arity4 (or fetch-stub real))
       (try (await (run-until-empty eng 60))
            (finally (aset need/blocks! arity4 real)))
@@ -174,7 +174,7 @@
               {:keys [eng seen p]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
           (mem/write! (:store eng) stock/stock-kind {:pos [-1000 64 3] :items {"iron_sword" 1}} stock/stock-policy)
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 5000)
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 60))
           (is (empty? (filter #(= :obtain.chest (:kind %)) @seen)))
           (is (nil? (get (inv p) "iron_sword"))))))))

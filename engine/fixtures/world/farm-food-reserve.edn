@@ -17,7 +17,7 @@
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
    :body {:inventory [["carrot" 5]]}
-   :act [[:job (jobs.farm.harvest {:area {:plan "$plan:field"}})]]
+   :act [[:job (jobs.farm.harvest {:worth 1200 :area {:plan "$plan:field"}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2 :replanted 2}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]
            [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}
@@ -25,20 +25,20 @@
    :blocks [[:set [14 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"] [:set [9 0 16] "chest"]]
    :memory [{:kind :fetch/stock :data {:pos #at [14 0 16] :items {"bread" 40}} :policy {:cap 64 :ttl :forever}}]
    :body {:at [12.5 0 16.5] :inventory [["bread" 5]]}
-   :act [[:job (jobs.survival.get-food {:carry 60 :explore false})]
-         [:job (jobs.storage.deposit {:chest #xyz [9 0 16] :items ["bread"]})]]
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 60 :explore false})]
+         [:job (jobs.storage.deposit {:worth 1200 :chest #xyz [9 0 16] :items ["bread"]})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 60}
             {:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 90}]
    :after [[:item "bread" 0] [:block [14 0 16] "chest{Items:[{id:\"minecraft:bread\",count:24}]}"] [:block [9 0 16] "chest{Items:[{id:\"minecraft:bread\",count:21}]}"]]}
   {:name "deposit-at-home-keeps-only-the-food-for-its-own-trip"
    :blocks [[:set [9 0 16] "chest"]]
    :body {:at [12.5 0 16.5] :inventory [["bread" 20] ["dirt" 16]]}
-   :act [[:job (jobs.storage.deposit {:chest #xyz [9 0 16]})]]
+   :act [[:job (jobs.storage.deposit {:worth 1200 :chest #xyz [9 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 60}]
    :after [[:item "bread" [:<= 3]] [:item "dirt" 0]]}
   {:name "make-room-keeps-the-food-reserve"
    :body {:at [12.5 0 16.5] :inventory [["bread" 20] ["cobblestone" 64] ["dirt" 64] ["gravel" 64]]}
-   :act [[:job (jobs.storage.make-room {:free 34})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 34})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed :data {:item "bread"}} :for-s 70
              :until {:source :job :kind #{:completed :stopped}}}]

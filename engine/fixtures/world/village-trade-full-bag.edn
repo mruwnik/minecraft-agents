@@ -10,6 +10,6 @@
  [{:name "full-bag-keeps-the-trade-payment"
    :act [[:summon "item" [12.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]
          [:summon "villager" [14.5 0 16.5] "{NoAI:1b,VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:paper\",count:24},sell:{id:\"minecraft:bread\",count:1},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:buy "bread" :spend {:items {"paper" 24}}})]]
+         [:job (jobs.village.trade {:worth 1200 :buy "bread" :spend {:items {"paper" 24}}})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 1}} :within-s 100 :of-job true}]
    :after [[:item "bread" 1] [:item "paper" 0]]}]}

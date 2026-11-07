@@ -78,7 +78,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'leftover job) :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(leftover) {})
+    (core/submit! eng (tu/order eng '(leftover)) {})
     (loop [i 0]
       (when (and (< i 5) (seq (:list (core/state eng))))
         (await (core/tick! eng))
@@ -120,7 +120,7 @@
   and whether the door is open after."
   [pos]
   (let [{:keys [eng p seen]} (ut/setup (hut/hut-world {:x 5 :y 64 :z 0} {}))]
-    (core/submit! eng (list 'jobs.movement.go-to {:pos pos :range 1}) {})
+    (core/submit! eng (tu/order eng (list 'jobs.movement.go-to {:pos pos :range 1})) {})
     (await (st/tick-n eng 8))
     {:sections (sections-opened seen) :door-open (hut/door-open? p)}))
 

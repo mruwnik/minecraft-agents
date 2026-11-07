@@ -9,23 +9,23 @@
  :cases
  [{:name "a-short-dark-tunnel-is-crossed-with-no-spawn-price"
    :blocks [[:fill [0 0 0] [120 6 31] "stone"] [:fill [1 0 15] [3 1 17] "air"] [:fill [4 0 16] [20 1 16] "air"] [:set [2 1 15] "torch"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 16] :range 0})]
          [:until-pos {:x-min 18} 60]
-         [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [3 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 4} 60]
-         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 0}) [:alongside]]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 16] :range 0}) [:alongside]]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 40 :at-least 3}
             {:no-event {:source :job :data {:reason :risky}} :for-s 1}]}
   {:name "a-long-dark-tunnel-waits-risky-for-its-spawns"
    :body {:inventory [["bread" 3]]}
    :settings {:jobs.lib.cost.risk/risk-share 0.01}
    :blocks [[:fill [0 0 0] [120 6 31] "stone"] [:fill [1 0 15] [3 1 17] "air"] [:fill [4 0 16] [110 1 16] "air"] [:set [2 1 15] "torch"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 0})]
          [:until-pos {:x-min 98} 60]
-         [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [3 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 4} 60]
          [:rcon "effect clear $BODY"] [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 16 minecraft:generic"] [:rcon "effect give $BODY minecraft:resistance 600 4 true"]
-         [:job (jobs.movement.go-to {:pos #at [100 0 16] :range 0}) [:alongside]]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 0}) [:alongside]]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 120}]
    :after [[:body-near [3 0 16.5] 5]]}]}

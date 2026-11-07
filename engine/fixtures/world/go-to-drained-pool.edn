@@ -15,7 +15,7 @@
  :cases
  [{:name "just-seen-water-is-dropped-into"
    :blocks [[:fill [5 2 7] [5 24 7] "stone"] [:fill [5 2 8] [5 23 8] "stone"] [:fill [5 2 9] [5 22 9] "stone"] [:fill [5 2 10] [5 21 10] "stone"] [:fill [5 2 11] [5 20 11] "stone"] [:fill [5 2 12] [5 19 12] "stone"] [:fill [5 2 13] [5 18 13] "stone"] [:fill [5 2 14] [5 17 14] "stone"] [:fill [5 2 15] [5 16 15] "stone"] [:fill [5 2 16] [5 15 16] "stone"] [:fill [5 2 17] [5 14 17] "stone"] [:fill [5 2 18] [5 13 18] "stone"] [:fill [5 2 19] [5 12 19] "stone"] [:fill [5 2 20] [5 11 20] "stone"] [:fill [5 2 21] [5 10 21] "stone"] [:fill [5 2 22] [5 9 22] "stone"] [:fill [5 2 23] [5 8 23] "stone"] [:fill [5 2 24] [5 7 24] "stone"] [:fill [5 2 25] [5 6 25] "stone"] [:fill [5 2 26] [5 5 26] "stone"] [:fill [5 2 27] [5 4 27] "stone"] [:fill [5 2 28] [5 3 28] "stone"] [:fill [5 2 29] [5 2 29] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [12 0 6] :range 1 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [12 0 6] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [12.5 0 6.5] 3]]}
@@ -26,7 +26,7 @@
          [:rcon "execute positioned $X $Y $Z run fill ~9 ~ ~3 ~15 ~1 ~9 air"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"]
          [:until-facing {:yaw 270 :pitch 40} 10]
-         [:job (jobs.movement.go-to {:pos #at [12 0 6] :range 1 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [12 0 6] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [12.5 0 6.5] 3]]}
@@ -36,7 +36,7 @@
          [:rcon "execute positioned $X $Y $Z run fill ~9 ~ ~3 ~15 ~1 ~9 air"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"]
          [:until-facing {:yaw 270 :pitch 40} 10]
-         [:job (jobs.movement.go-to {:pos #at [12 0 6] :range 1 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [12 0 6] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :body :kind :died} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [12.5 0 6.5] 4]]}]}

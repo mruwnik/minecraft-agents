@@ -29,6 +29,6 @@
    :body {:yaw 90}
    :act [[:summon "drowned" [5.5 2 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "item" [6.5 2.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.items.collect-drops {:radius 14})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 14})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :water-danger}} :within-s 40 :of-job true}]
    :after [[:item "cobblestone" 0]]}]}

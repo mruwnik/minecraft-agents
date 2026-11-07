@@ -11,7 +11,7 @@
   :body {:at [10.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1] ["oak_sapling" 1]] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "logs-collected-after-the-reflex-cut"
-   :act [[:job (jobs.forestry.harvest-wood {:radius 32})]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :radius 32})]
          [:wait-s 5]
          [:summon "zombie" [4.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}

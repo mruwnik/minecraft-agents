@@ -17,7 +17,7 @@
  [{:name "dark-room-by-day-unseen-cell-waits-exposed"
    :blocks [[:fill [6 0 12] [22 1 20] "air"]]
    :body {:at [8.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.debug.ready-probe {:at #at [20 0 16] :stay-s 120})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [20 0 16] :stay-s 120})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]}
   {:name "lit-hall-at-night-unseen-cell-round-a-corner-starts"
@@ -26,13 +26,13 @@
             [:set [8 3 16] "glowstone"] [:set [14 3 16] "glowstone"] [:set [19 3 13] "glowstone"] [:set [19 3 19] "glowstone"]
             [:set [24 1 16] "glowstone"] [:set [24 1 13] "glowstone"]]
    :body {:at [6.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.debug.ready-probe {:at #at [23 0 15] :stay-s 120})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [23 0 15] :stay-s 120})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 1 :of-job true}]}
   {:name "rock-cell-at-night-guessed-rock-starts"
    :time :night :time-why :night-light
    :blocks [[:fill [8 0 16] [8 1 16] "air"]]
    :body {:at [8.5 0 16.5] :yaw -90 :settle-s 2 :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.debug.ready-probe {:at #at [22 0 16] :stay-s 120})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [22 0 16] :stay-s 120})]]
    :expect [{:event {:source :job :kind :job.ready-probe :data {:status [:has {:reason :unexposed}]}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 1 :of-job true}]}]}

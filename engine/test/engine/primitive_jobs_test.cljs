@@ -115,7 +115,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'down (drops-to 64)})]
           (high-up p)
-          (core/submit! eng '(down) {})
+          (core/submit! eng (tu/order eng '(down)) {})
           (await (core/tick! eng))
           (is (zero? (calls p "moveTo")) "the act did not run")
           (is (= {:kind :limit-reached :cause {:line :health :floor 15 :act :moveTo}} (stopped seen))))))))
@@ -126,7 +126,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'down (drops-to 66)})]
           (high-up p)
-          (core/submit! eng '(down) {})
+          (core/submit! eng (tu/order eng '(down)) {})
           (await (core/tick! eng))
           (is (= 1 (calls p "moveTo")))
           (is (empty? (job-ev seen :stopped))))))))
@@ -137,7 +137,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'down (drops-to 64)})]
           (high-up p)
-          (core/submit! eng '(down) {})
+          (core/submit! eng (tu/order eng '(down)) {})
           (await (core/tick! eng))
           (is (= [{:cause {:line :health :floor 15 :act :moveTo} :most 3 :left 2}]
                  (mapv #(select-keys (:data %) [:cause :most :left]) (job-ev seen :limit_reached)))))))))
@@ -158,7 +158,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {'looks looks-once})]
-          (core/submit! eng '(looks) {})
+          (core/submit! eng (tu/order eng '(looks)) {})
           (await (core/tick! eng))
           (is (= 1 (calls p "look"))))))))
 
@@ -169,7 +169,7 @@
         (let [{:keys [eng seen p]} (setup {'wall (places-in-a-section 2)})]
           (fake/swap-self! p assoc :pos [0 64 0])
           (swap! (fake/state p) assoc :inventory [{:name "cobblestone" :count 5 :slot 36}])
-          (core/submit! eng '(wall) {})
+          (core/submit! eng (tu/order eng '(wall)) {})
           (await (core/tick! eng))
           (is (= 1 (calls p "place")) "the second place would use a second cobblestone")
           (is (= {:kind :limit-reached :cause {:line :items :item "cobblestone" :spend 1 :act :place}}
@@ -182,7 +182,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup registry/jobs)]
-          (core/submit! eng '(jobs.primitive.look {:pos [1 64 1]}) {})
+          (core/submit! eng (tu/order eng '(jobs.primitive.look {:pos [1 64 1]})) {})
           (await (core/tick! eng))
           (is (= 1 (calls p "look")))
           (is (= 1 (count (completed seen)))))))))
@@ -192,7 +192,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup registry/jobs)]
-          (core/submit! eng '(jobs.primitive.dig {:pos [0 60 0]}) {})
+          (core/submit! eng (tu/order eng '(jobs.primitive.dig {:pos [0 60 0]})) {})
           (await (core/tick! eng))
           (is (= 1 (calls p "dig")))
           (is (= {:kind :condition-failed :cause :missing} (stopped seen))))))))
@@ -210,7 +210,7 @@
         (doseq [form ['(jobs.primitive.wait {:ms 10}) '(jobs.primitive.offline {:ms 10 :why "test"})]]
           (let [{:keys [eng seen p]} (setup registry/jobs)
                 k (name (first form))]
-            (core/submit! eng form {})
+            (core/submit! eng (tu/order eng form) {})
             (await (core/tick! eng))
             (is (= 1 (calls p (subs k (inc (.lastIndexOf k "."))))) k)
             (is (= 1 (count (completed seen))) k)))))))
@@ -226,7 +226,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (assoc registry/jobs 'quoter quoter))]
-          (core/submit! eng '(quoter) {})
+          (core/submit! eng (tu/order eng '(quoter)) {})
           (await (core/tick! eng))
           (is (= (quote-of :eat p {:item "bread"}) (:quote @world)))
           (is (zero? (calls p "eat")) "a quote does not act"))))))
@@ -256,7 +256,7 @@
 (defn ^:async run-one [jobs form check]
   (let [{:keys [eng seen p]} (setup jobs)]
     (fake/swap-self! p assoc :pos [0 64 0])
-    (core/submit! eng form {})
+    (core/submit! eng (tu/order eng form) {})
     (await (core/tick! eng))
     (check seen p)))
 
@@ -289,7 +289,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen p]} (setup {'digs digs})]
           (fake/swap-self! p assoc :pos [0 64 0] :held "iron_pickaxe")
-          (core/submit! eng '(digs) {})
+          (core/submit! eng (tu/order eng '(digs)) {})
           (await (core/tick! eng))
           (is (zero? (calls p "dig")))
           (is (= {:kind :limit-reached :cause {:line :wear :tool "iron_pickaxe" :spend 0 :act :dig}}
@@ -361,6 +361,6 @@
         (let [{:keys [eng p]} (setup registry/jobs)]
           (fake/swap-self! p assoc :pos [10 64 1])
           (swap! (fake/state p) assoc-in [:containers [10 64 0]] [{:name "bread" :count 3}])
-          (core/submit! eng '(jobs.primitive.inspect-container {:pos [10 64 0]}) {})
+          (core/submit! eng (tu/order eng '(jobs.primitive.inspect-container {:pos [10 64 0]})) {})
           (await (core/tick! eng))
           (is (= {[10 64 0] {"bread" 3}} (stock/stock-of (mem/view (:store eng))))))))))

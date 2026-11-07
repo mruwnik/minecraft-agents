@@ -18,15 +18,15 @@
    :body {:inventory [["dirt" 12] ["stone_pickaxe" 1] ["bread" 3]]}
    :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
          [:rcon "effect give $BODY minecraft:hunger 20 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-5]$" 20]
-         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :shelter.ate} :within-s 40}]
    :after [[:body-near [16.5 -2 16.5] 1.5]]}
   {:name "starving-in-a-pit-does-not-dig-out-to-hunt"
    :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
          [:rcon "effect give $BODY minecraft:hunger 30 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 0$" 30]
-         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 35}
             {:count-event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :for-s 35 :at-most 0}]
    :after [[:body-near [16.5 -2 16.5] 1.5]]

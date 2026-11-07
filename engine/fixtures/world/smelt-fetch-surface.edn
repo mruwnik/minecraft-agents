@@ -13,6 +13,6 @@
   :limit-s 400}
  :cases
  [{:name "underground-no-logs-no-furnace-climbs-for-a-log-and-makes-both"
-   :act [[:job (jobs.items.obtain {:item "iron_ingot" :count 2 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "iron_ingot" :count 2 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
    :after [[:item "iron_ingot" 2]]}]}

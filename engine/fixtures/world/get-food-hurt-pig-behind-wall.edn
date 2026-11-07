@@ -18,7 +18,7 @@
    :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 20 :until {:source :job :kind :food.killed}}]}
   {:name "hurt-starving-body-hunts-a-near-pig-in-the-dark"
@@ -26,7 +26,7 @@
    :act [[:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}
             {:no-event {:source :job :kind :waiting :data {:reason #{:low-health :exposed :dark}}} :for-s 20 :until {:source :job :kind :food.killed}}]}
   {:name "hurt-body-the-reflex-calls-without-a-reserve-hunts-the-pig-behind-a-wall"
@@ -34,12 +34,12 @@
    :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]
-         [:job (jobs.survival.get-food {:food 6 :carry 0})]]
+         [:job (jobs.survival.get-food {:worth 1200 :food 6 :carry 0})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "unhurt-body-the-reflex-calls-without-a-reserve-leaves-the-pig"
    :blocks [[:fill [10 0 10] [10 2 22] "stone"]]
    :act [[:time-set 6000] [:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-         [:job (jobs.survival.get-food {:food 6 :carry 0})]]
+         [:job (jobs.survival.get-food {:worth 1200 :food 6 :carry 0})]]
    :expect [{:no-event {:source :job :kind :food.killed} :for-s 30 :until {:source :job :kind :done}}]
    :after [[:entities "type=pig,tag=wt" [[0 0 0] [39 5 31]] 1]]}]}

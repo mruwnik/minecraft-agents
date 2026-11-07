@@ -73,7 +73,7 @@
   [args spec & [n before]]
   (let [s (setup spec (some-> (:max-distance args) (+ 8)))]
     (when before (before s))
-    (core/submit! (:eng s) (list 'jobs.explore.search (child/search-args args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.explore.search (child/search-args args))) {})
     (await (run-until-done s (or n 400)))))
 
 (defn event-of [{:keys [seen]} kind] (first (filter #(= kind (:kind %)) @seen)))
@@ -283,7 +283,7 @@
               block (await (notes-of "diamond_block"))
               p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
               leg (fn [age-s] (:leg (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                                      #(search/choose-leg {:args {:pattern :spiral} :primitives p :view (constantly {:now 1000000})} {:origin [0 64 0]} ["cow"]
+                                      #(search/choose-leg {:args {:pattern :spiral} :primitives p :view (constantly {:now 1000000}) :worth (constantly tu/order-worth)} {:origin [0 64 0]} ["cow"]
                                                           [{:kind :searched :what ["cow"] :pos [0 64 0] :r 200 :t (- 1000000 (* 1000 age-s))}]))))]
           (is (= 86400000 (- (:until animal) (:t animal))) "its looks still tell the chance of a find for a day")
           (is (= 86400000 (- (:until block) (:t block))))
@@ -295,7 +295,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:blocks diamond})]
-          (core/submit! (:eng s) (list 'jobs.explore.search {:target "diamond_block"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.explore.search {:target "diamond_block"})) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (finished? s) "legs walked and the ore found in one round")
@@ -431,7 +431,7 @@
                                (let [r (await (ctx/call c :kid 'jobs.explore.search {:target "diamond_block"}))]
                                  (if (= :continue r) r (do (reset! ending (tu/outcome r)) (ctx/end c :done nil)))))}
               s (with-redefs [registry/jobs (assoc registry/jobs 'worth-parent parent)] (setup {}))
-              _ (core/submit! (:eng s) '(worth-parent) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) '(worth-parent)) {})
               _ (await (run-until-done s 400))
               outcome (juxt :why #(get-in % [:coverage :legs]) :text)
               arg (outcome (not-found-of (await (search! {:target "diamond_block" :worth 12} {}))))]
@@ -649,7 +649,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:unloaded ring-1-cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :within 20}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :within 20})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
@@ -664,7 +664,7 @@
       (fn ^:async t []
         (let [cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [300 0] 16 23))
               s (setup {:unloaded cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :within 20}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :within 20})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (seq (walks s)) "a walk started")
           (is (every? #(> (:x %) 200) (walks s)) "toward the centre"))))))
@@ -675,7 +675,7 @@
       (fn ^:async t []
         (let [cells (into ["0,63,0"] (map (fn [[x z]] (str x ",63," z))) (search/spiral-points [0 0] 16 100))
               s (setup {:unloaded cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :within 100}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :within 100})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for its own chunks")
           (is (= [] (walks s))))))))
@@ -1073,7 +1073,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {} 0)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :within 40 :settings {:jobs.lib.cost.find/leg-spacing 4}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.explore.search {:target "diamond_block" :within 40 :settings {:jobs.lib.cost.find/leg-spacing 4}})) {})
           (await (run-until-done s 400))
           (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")

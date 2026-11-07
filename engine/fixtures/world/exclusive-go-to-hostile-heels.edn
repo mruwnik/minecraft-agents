@@ -10,6 +10,6 @@
  :cases
  [{:name "exclusive-go-to-stops-with-a-zombie-at-the-heels"
    :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b}"]
-         [:http :submit (jobs.movement.go-to {:pos #at [10.5 0 16.5]}) [:exclusive] {:ok true}]]
+         [:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [10.5 0 16.5]}) [:exclusive] {:ok true}]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-near}} :within-s 20}]
    :after [[:body-near [24.5 0 16.5] 3]]}]}

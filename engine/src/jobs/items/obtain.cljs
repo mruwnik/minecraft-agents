@@ -46,7 +46,7 @@
 
   A death since the call began starts it again from what is carried: :got counts from the respawn.
 
-  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only at a given :worth).
+  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is left to the source checks).
   Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source (with the craft child's cause as :cause when a gather also ended), :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: fetch-time/one-unit-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
@@ -135,13 +135,13 @@
 
 (defn not-worth
   "{:reason :not-worth :price :worth} when the call (no bill) is worth less (ctx/worth) than price-of, the cheapest way
-  known; with none (##Inf) only at a given :worth: else the source checks say what is lacking."
+  known; with none (##Inf) the source checks say what is lacking."
   [c]
-  (let [{:keys [bill] given :worth} (:args c)
+  (let [{:keys [bill]} (:args c)
         worth (ctx/worth c)]
     (when-not (or bill (args-error (:args c)))
       (let [s (price-of c)]
-        (when-not (or (cost/affords? s worth) (and (not given) (not (js/isFinite s))))
+        (when-not (or (cost/affords? s worth) (not (js/isFinite s)))
           {:reason :not-worth :price s :worth worth})))))
 
 (defn can-start? [c]

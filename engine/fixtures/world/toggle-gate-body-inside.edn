@@ -9,6 +9,6 @@
   :limit-s 60}
  :cases
  [{:name "body-inside-open-gate-steps-out-and-shuts-it"
-   :act [[:job (jobs.access.toggle {:pos #at [16 0 12] :state :closed})]]
+   :act [[:job (jobs.access.toggle {:worth 1200 :pos #at [16 0 12] :state :closed})]]
    :expect [{:event {:source :job :kind :completed :data {:wanted :closed}} :within-s 40 :of-job true}]
    :after [[:block [16 0 12] "oak_fence_gate[open=false]"]]}]}

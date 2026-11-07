@@ -13,7 +13,7 @@
  :cases
  [{:name "moved-far-digs-in-where-it-stands"
    :memory [{:kind :shut-in-failed :data {:pos #xyz [4 0 16] :way :pit :reason :no-floor} :policy {:cap 5 :ttl 600000}}]
-   :act [[:job (jobs.survival.dig-pit {:for :night})]
+   :act [[:job (jobs.survival.dig-pit {:worth 1200 :for :night})]
          [:await {:source :job :kind :planned} 20]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~55 ~ ~16"]
          [:restart-body]
@@ -23,7 +23,7 @@
    :limit-s 110}
   {:name "moved-near-digs-in-where-it-stands"
    :memory [{:kind :shut-in-failed :data {:pos #xyz [4 0 16] :way :pit :reason :no-floor} :policy {:cap 5 :ttl 600000}}]
-   :act [[:job (jobs.survival.dig-pit {:for :night})]
+   :act [[:job (jobs.survival.dig-pit {:worth 1200 :for :night})]
          [:await {:source :job :kind :planned} 20]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~21 ~ ~0"]
          [:restart-body]

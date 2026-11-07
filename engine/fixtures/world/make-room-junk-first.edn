@@ -9,7 +9,7 @@
  :cases
  [{:name "no-chest-junk-goes-ores-stay"
    :body {:inventory [["cobblestone" 64] ["granite" 64] ["tuff" 20] ["coal" 30] ["raw_copper" 12] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
-   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 4})]]
    :expect [{:event {:source :job :kind :make-room.tossed :data {:item "granite"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:tossed [{:item "tuff" :count 20} {:item "granite" :count 64}]}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :for-s 90 :until {:source :job :kind :completed :data {:tossed [{:item "tuff" :count 20} {:item "granite" :count 64}]}}}
@@ -18,7 +18,7 @@
    :limit-s 100}
   {:name "no-chest-more-junk-then-tuff-ores-stay"
    :body {:inventory [["dirt" 64] ["gravel" 64] ["sand" 64] ["tuff" 20] ["coal" 30] ["raw_copper" 12] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1]]}
-   :act [[:job (jobs.storage.make-room {:free 5})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 5})]]
    :expect [{:event {:source :job :kind :completed :data {:tossed [:any :any :any]}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed :data {:item "coal"}} :for-s 120 :until {:source :job :kind :completed :data {:tossed [:any :any :any]}}}
             {:no-event {:source :job :kind :make-room.tossed :data {:item "raw_copper"}} :for-s 120 :until {:source :job :kind :completed :data {:tossed [:any :any :any]}}}]
@@ -30,7 +30,7 @@
    :register [{:trigger :loose-items}]
    :settings {:jobs.lib.loose/always ["granite" "tuff"]}
    :body {:inventory [["cobblestone" 64] ["granite" 64] ["tuff" 20] ["coal" 30] ["raw_copper" 12] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
-   :act [[:job (jobs.storage.make-room {:free 4})]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 4})]
          [:await {:source :job :kind :completed} 90]
          [:wait-s 40]]
    :expect [{:event {:source :job :kind :completed :data {:tossed [{:item "tuff" :count 20} {:item "granite" :count 64}]}} :within-s 90 :of-job true}
@@ -41,7 +41,7 @@
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["cobbled_deepslate" 64] ["granite" 64] ["tuff" 20] ["coal" 30] ["raw_copper" 12] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
-   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 10 :until {:source :job :kind :completed}}]
    :limit-s 100}
@@ -50,12 +50,12 @@
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["wheat_seeds" 256] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1] ["wooden_hoe" 1] ["stone_hoe" 1] ["iron_hoe" 1] ["golden_hoe" 1] ["diamond_hoe" 1] ["netherite_hoe" 1] ["wooden_sword" 1] ["stone_sword" 1] ["iron_sword" 1] ["golden_sword" 1]]}
-   :act [[:job (jobs.storage.make-room {:free 3})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 3})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 10 :until {:source :job :kind :completed}}]
    :limit-s 100}
   {:name "bag-of-junk-only-done-is-emitted"
    :body {:inventory [["dirt" 640] ["gravel" 640] ["sand" 640] ["andesite" 384]]}
-   :act [[:job (jobs.storage.make-room {:free 12})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :limit-s 160}]}

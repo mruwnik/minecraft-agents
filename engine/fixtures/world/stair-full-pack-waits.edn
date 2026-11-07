@@ -9,7 +9,7 @@
  :cases
  [{:name "full-pack-of-diamonds-waits-no-free-slot"
    :body {:inventory [["stone_pickaxe" 1] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64]]}
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 6})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 6})]]
    :expect [{:no-event {:source :job :kind :stopped} :for-s 100 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 100}]
    :after [[:item "diamond" 2240]]

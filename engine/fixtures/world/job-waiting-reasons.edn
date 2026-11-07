@@ -10,73 +10,73 @@
   :limit-s 40}
  :cases
  [  {:name "clear-cells-bad-args-is-impossible"
-   :act [[:job (jobs.blocks.clear-cells {})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
   {:name "mine-no-target-is-impossible"
-   :act [[:job (jobs.gather.mine {:torches false })]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false })]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-target}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
   {:name "leave-vehicle-not-mounted-is-done-already"
-   :act [[:job (jobs.movement.leave-vehicle {})]]
+   :act [[:job (jobs.movement.leave-vehicle {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "breathe-not-underwater-is-done-already"
-   :act [[:job (jobs.survival.breathe {})]]
+   :act [[:job (jobs.survival.breathe {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "extinguish-not-burning-is-done-already"
-   :act [[:job (jobs.survival.extinguish {})]]
+   :act [[:job (jobs.survival.extinguish {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "get-food-not-hungry-is-done-already"
-   :act [[:job (jobs.survival.get-food {:carry 0})]]
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 0})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "night-waits-not-night"
    :time :day :time-why :dawn-decision
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-night}} :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :not-night}} :of-job true}]}
   {:name "recover-drops-waits-no-drops"
-   :act [[:job (jobs.survival.recover-drops {})]]
+   :act [[:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-drops}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-ready}} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-drops}} :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-drops}} :of-job true}]}
   {:name "respond-to-hostile-no-hostile-is-done-already"
-   :act [[:job (jobs.survival.respond-to-hostile {})]]
+   :act [[:job (jobs.survival.respond-to-hostile {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "restore-broken-nothing-to-restore-is-done-already"
-   :act [[:job (jobs.survival.restore-broken {})]]
+   :act [[:job (jobs.survival.restore-broken {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "unwedge-not-wedged-is-done-already"
-   :act [[:job (jobs.survival.unwedge {})]]
+   :act [[:job (jobs.survival.unwedge {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "breathe-runs-when-the-body-is-in-water"
    :act [[:rcon "execute positioned $X $Y $Z run fill ~13 ~-1 ~13 ~19 ~6 ~19 water"]
-         [:job (jobs.survival.breathe {})]]
+         [:job (jobs.survival.breathe {:worth 1200})]]
    :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
   {:name "extinguish-runs-when-the-body-burns"
    :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~-1 ~16 netherrack"]
          [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 fire"]
-         [:job (jobs.survival.extinguish {})]]
+         [:job (jobs.survival.extinguish {:worth 1200})]]
    :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
   {:name "respond-to-hostile-runs-when-a-zombie-is-near"
    :mobs :keep
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"] [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.survival.respond-to-hostile)]]
+         [:job (jobs.survival.respond-to-hostile {:worth 1200})]]
    :expect [{:event {:source :job :kind :round_started} :within-s 40 :of-job true}]}
   ;; card 1a708c35: the state goals that already hold end done, not condition-failed or waiting (eat, block-arrow-gap, night)
   {:name "eat-fed-with-food-carried-is-done-already-and-eats-nothing"
    :body {:inventory [["bread" 3]]}
-   :act [[:job (jobs.survival.eat {})]]
+   :act [[:job (jobs.survival.eat {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:stopped :waiting}} :for-s 5 :until {:source :job :kind :completed} :of-job true}]
    :after [[:item "bread" 3]]}
   {:name "block-arrow-gap-no-ranged-danger-is-done-already"
-   :act [[:job (jobs.survival.block-arrow-gap {})]]
+   :act [[:job (jobs.survival.block-arrow-gap {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "night-in-a-closed-roofed-room-is-done-at-once"
    :time :night
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5]}
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 25 :of-job true}
             {:no-event {:source :job :kind #{:stopped :waiting}} :for-s 5 :until {:source :job :kind :completed} :of-job true}]}]}

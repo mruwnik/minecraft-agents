@@ -72,7 +72,7 @@
       (fn ^:async t []
         (reset! gate (contract/later :no-furnace "no furnace"))
         (let [{:keys [eng seen]} (setup)
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order eng '(gated)) {})]
           (await (ticks eng 5))
           (is (= 1 (count (waits seen))) "once, not every round")
           (is (= {:job id :reason :no-furnace} (select-keys (first (waits seen)) [:job :reason])))
@@ -86,7 +86,7 @@
       (fn ^:async t []
         (reset! gate (contract/later :cooking "cooking" :ready-at 5))
         (let [{:keys [eng seen]} (setup)
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order eng '(gated)) {})]
           (await (ticks eng 3))
           (reset! gate (contract/later :cooking "cooking" :ready-at 9))
           (await (ticks eng 3))
@@ -103,7 +103,7 @@
         (doseq [spec ['(seq (gated)) '(any (gated)) '(repeat (gated)) '(until (never) (gated))
                       '(seq (repeat (gated))) '(until (never) (any (seq (gated))))]]
           (let [{:keys [eng seen]} (setup)]
-            (core/submit! eng spec {})
+            (core/submit! eng (tu/order eng spec) {})
             (await (ticks eng 3))
             (is (= [[:no-tree 3]] (mapv (juxt :reason :near) (waits seen))) (str spec))))))))
 
@@ -115,7 +115,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (core/submit! eng '(torch-lit) {})
+          (core/submit! eng (tu/order eng '(torch-lit)) {})
           (await (ticks eng 2))
           (is (= [[:few-torches "waiting: inventory torch 0 < 4"]] (mapv (juxt :reason :text) (waits seen)))))))))
 
@@ -132,7 +132,7 @@
                                 :triggers {:night {:name :night :job '(night-hold) :persistence :stop :when (constantly true)}}
                                 :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order eng '(gated)) {})]
           (reset! gate true)
           (core/register-reflex! eng {:trigger :night})
           (let [night (core/tick! eng)]
@@ -150,7 +150,7 @@
         (doseq [spec ['(counted-dark) '(child-dark)]]
           (reset! asked 0)
           (let [{:keys [eng clock]} (setup)
-                id (core/submit! eng spec {})]
+                id (core/submit! eng (tu/order eng spec) {})]
             (dotimes [_ 40] (swap! clock + 250) (await (core/tick! eng)))
             (is (= 1 @asked) (str spec ": 10 s of ticks inside a 60 s recheck, one check or round"))
             (is (= :dark (get-in (job-api/summary eng id) [:waiting :reason])) (str spec " says why"))
@@ -169,7 +169,7 @@
                                       ["the time is set to night" #(assoc % :time 18000) #{2}]]]
           (reset! asked 0)
           (let [{:keys [eng clock p]} (setup {:time 1000 :light {}})]
-            (core/submit! eng '(seq (torch-wait)) {})
+            (core/submit! eng (tu/order eng '(seq (torch-wait))) {})
             (dotimes [_ 10] (swap! clock + 250) (await (core/tick! eng)))
             (is (= 1 @asked) (str what ": rests on its 10 min recheck"))
             (swap! (fake/state p) change)

@@ -95,3 +95,8 @@
 (def can-start? can-run?)
 (defn done? [c] ((:done? (ops c)) c))
 (defn quote-of [c] ((:quote (ops c)) c))
+
+(defn worth-of
+  "What a shut is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  [c]
+  (second (get-in (quote-of c) [:uses :job-time])))

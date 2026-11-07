@@ -12,52 +12,52 @@
  [{:name "default-waits-on-hazard"
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
    :body {:at [17.5 2 16.5]}
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hazard}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :hazard}}}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-ends-at-once-with-hint"
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
    :body {:at [17.5 2 16.5]}
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16] :on-fluid :fail})]]
    :expect [{:event {:source :job :kind :stopped :data {:dug false :reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :after [[:block [18 0 16] "stone"]]}
   {:name "fail-with-accept-digs"
    :blocks [[:set [17 0 16] "stone"] [:set [17 1 16] "stone"]]
    :body {:at [17.5 2 16.5]}
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :on-fluid :fail :accept #{:fluid-adjacent}})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [18 0 16] :on-fluid :fail :accept #{:fluid-adjacent}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    ;; the cell fills with water and the drop lies 2 below the pillar top, so the body rightly leaves it (collect-drops :too-deep)
    :after [[:block [18 0 16] "water"]]}
   {:name "fail-on-dry-block-digs"
    :blocks [[:set [14 0 16] "stone"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [14 0 16] :on-fluid :fail})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [14 0 16] :on-fluid :fail})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 60 :of-job true}]
    :after [[:block [14 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "mine-only-wet-stone-says-wet-skipped"
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 90 :of-job true}]
    :after [[:block [18 0 16] "stone"]]
    :limit-s 100}
   {:name "mine-wet-stone-no-descent-says-wet-skipped"
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :ways #{:seen} :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 1 :ways #{:seen} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "stone"]]
    :limit-s 70}
   {:name "mine-wet-stone-tunnel-4-says-wet-skipped"
    :body {:yaw 270}
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :tunnel-length 4 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 1 :tunnel-length 4 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :wet :wet-skipped [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:block [18 0 16] "stone"]]
    :limit-s 140}
   {:name "mine-wet-true-digs"
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :wet true :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :wet true :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]
    :limit-s 140}
   {:name "mine-dry-stone-beside-wet-digs-dry"
    :blocks [[:set [14 0 16] "stone"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 120 :of-job true}]
    :after [[:not-block [14 0 16] "stone"] [:item "cobblestone" [:>= 1]]]
    :limit-s 140}]}

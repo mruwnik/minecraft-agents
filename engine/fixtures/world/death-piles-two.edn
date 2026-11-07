@@ -11,7 +11,7 @@
         [:kill-body]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}} {:data {:pos [:any]}}]}}] 15]
         [:until-rcon "data get entity $BODY Health" "data: 20" 20]
-        [:job (jobs.survival.recover-drops)]]
+        [:job (jobs.survival.recover-drops {:worth 1200})]]
   :limit-s 200}
  :cases
  [{:name "older-valuable-pile-fetched-after-a-second-death"

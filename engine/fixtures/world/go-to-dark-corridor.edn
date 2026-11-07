@@ -12,13 +12,13 @@
  :cases
  [{:name "walks-to-the-end-of-a-dark-corridor"
    :blocks [[:fill [0 5 0] [9 5 31] "glowstone"] [:fill [10 0 0] [31 5 31] "stone"] [:fill [10 0 16] [29 1 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [28 0 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [28 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [28.5 0 16.5] 1]]}
   {:name "a-goal-worth-little-across-a-dark-hall-waits"
    :plot {:height 6 :floor "stone" :light :dark :length 40}
    :blocks [[:set [4 4 16] "glowstone"] [:set [35 0 15] "torch"]]
    :act [[:summon "item" [35.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.items.collect-drops {:radius 34})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 34})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}]}

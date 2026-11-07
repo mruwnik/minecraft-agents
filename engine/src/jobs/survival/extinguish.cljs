@@ -112,6 +112,11 @@
 (def fit? ready/ok)
 
 
+(defn worth-of
+  "The loss the reflex averts: a death where the body stands (cost/death-s)."
+  [c]
+  (cost/death-s (:primitives c) (ctx/view c)))
+
 (defn done?
   "Out: not burning and no poured water left to scoop."
   [c]

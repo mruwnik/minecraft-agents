@@ -9,10 +9,10 @@
  :cases
  [{:name "water-part-is-poured-from-the-carried-bucket"
    :plans [{:id "pool" :metadata {:by "$body"} :parts [{:id "water" :cells [#at [20 0 16]] :want "water"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:pool" :part "water" :ways #{:carried}})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:pool" :part "water" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [20 0 16] "water"] [:item "bucket" 1]]}
   {:name "bucket-clicked-on-the-floor-face-fills-the-cell-above"
-   :act [[:job (jobs.items.use {:on #at [20 -1 16] :face "up" :item "water_bucket"})]]
+   :act [[:job (jobs.items.use {:worth 1200 :on #at [20 -1 16] :face "up" :item "water_bucket"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:block [20 0 16] "water"] [:item "bucket" 1]]}]}

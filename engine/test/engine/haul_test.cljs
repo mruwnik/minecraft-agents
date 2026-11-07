@@ -109,7 +109,7 @@
           (let [first-run (setup {:containers two-sources})
                 {:keys [eng p dir]} first-run]
             (tu/shutdown-at! first-run "transfer" n)
-            (core/submit! eng (list 'jobs.storage.haul {:from [[10 64 0]]}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.storage.haul {:from [[10 64 0]]})) {})
             (await (core/tick! eng))
             (let [resumed (start dir p nil)]
               (await (run-until-empty (:eng resumed) 30))
@@ -124,7 +124,7 @@
         (let [first-run (setup {:containers {"10,64,0" [] "10,64,4" (stacks "b" 5) "20,64,0" []}})
               {:keys [eng p dir]} first-run]
           (tu/shutdown-at! first-run "transfer" 1)
-          (core/submit! eng (list 'jobs.storage.haul {:from [[10 64 0] [10 64 4]]}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.storage.haul {:from [[10 64 0] [10 64 4]]})) {})
           (await (core/tick! eng))
           (swap! (fake/state p) assoc-in [:containers [10 64 0]] (stacks "a" 3))
           (await (run-until-empty (:eng (start dir p nil)) 30))
@@ -139,7 +139,7 @@
                                 :containers {"10,64,0" [{:name "a0" :count 5}] "20,64,0" []}})
               {:keys [eng p dir]} first-run]
           (tu/shutdown-at! first-run "transfer" 1)
-          (core/submit! eng (list 'jobs.storage.haul {:from [[10 64 0]]}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.storage.haul {:from [[10 64 0]]})) {})
           (await (core/tick! eng))
           (swap! (fake/state p) assoc-in [:containers [10 64 0]] [{:name "a0" :count 2}])
           (await (run-until-empty (:eng (start dir p nil)) 30))
@@ -158,7 +158,7 @@
               {:keys [eng p dir]} first-run
               args {:from [[10 64 0] [10 64 4]]}]
           (tu/shutdown-at! first-run "transfer" 1)
-          (core/submit! eng (list 'jobs.storage.haul args) {})
+          (core/submit! eng (tu/order eng (list 'jobs.storage.haul args)) {})
           (await (core/tick! eng))
           (let [id (first (:list (core/state eng)))
                 before (inspects-of p 10 0)]

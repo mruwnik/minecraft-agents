@@ -16,7 +16,7 @@
   :limit-s 90}
  :cases
  [{:name "swims-back-out-of-the-dark-tunnel"
-   :act [[:job (jobs.movement.go-to {:pos #at [10 1 8] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [10 1 8] :range 0})]
          [:until-effect-gone "water_breathing" 60]
          [:wait-s 5]
          [:cli "triggers" ["$body" "--world" "$world" "put" "suffocating" "--trigger" "suffocating" "--persistence" "cooldown" "--cooldown-s" "2" "--job" "(jobs.survival.breathe)" "--by" "world-test"]]]

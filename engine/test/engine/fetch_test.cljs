@@ -114,7 +114,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the dig ended")
           (is (= "air" (block-at s 2 64 3)))
@@ -130,7 +130,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 40))
           (is (= "air" (block-at s 2 64 3)))
           (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
@@ -140,7 +140,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"})) {})
           (await (run-ticks s 40))
           (is (= "cobblestone" (block-at s 1 64 1)))
           (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started))))))))))
@@ -155,7 +155,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1})) {})
           (await (run-ticks s 60))
           (is (= "air" (block-at s 0 64 1)))
           (is (= 1 (count (filter #(= :need (:slot %)) (events-of s :child_started))))))))))
@@ -165,13 +165,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (empty? (listed s)))
           (is (= "air" (block-at s 2 64 3))))
         (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"})) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (empty? (listed s)))
@@ -182,7 +182,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:ways #{:carried}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {:ways #{:carried}})) {})
           (await (run-ticks s 10))
           (is (= [:no-tool] (distinct (mapv :reason (events-of s :waiting)))))
           (is (empty? (stopped-reasons s)))
@@ -195,7 +195,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [foreign-zone])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 15))
           (is (= [:no-tool] (stopped-reasons s)))
           (is (empty? (inspects s)))
@@ -206,7 +206,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [(assoc foreign-zone :allow #{:take})])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 40))
           (is (= "air" (block-at s 2 64 3)))
           (is (= 1 (count (transfers s)))))))))
@@ -216,7 +216,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 40))
           (is (= "air" (block-at s 2 64 3)))
           (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
@@ -233,7 +233,7 @@
     (let [chests {"6,64,0" [{:name "bread" :count 4}] "-12,64,0" [{:name "bread" :count 4}]}
           {:keys [eng p clock]} (lib/setup {:floor tu/walk-floor :blocks (update-vals chests (constantly "chest")) :containers chests})]
       (core/record-death! eng {:t (- @clock 5000) :data {:pos killed-at :cause "zombie"}})
-      (core/submit! eng '(jobs.items.obtain {:item "bread" :count 1 :ways #{:chest}}) {})
+      (core/submit! eng (tu/order eng '(jobs.items.obtain {:item "bread" :count 1 :ways #{:chest}})) {})
       (await (tu/run-until-empty eng 20))
       (filterv #(not= [{:name "bread" :count 4}] (get-in @(fake/state p) [:containers %])) [[6 64 0] [-12 64 0]]))))
 
@@ -249,7 +249,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (world pickaxe-stock) :blocks merge walled-chest) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 15))
           (is (empty? (inspects s)))
           (is (empty? (transfers s)))
@@ -262,7 +262,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "cobblestone" :count 5}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.blocks.place {:pos [1 64 1] :item "cobblestone"})) {})
           (await (run-ticks s 40))
           (is (= "cobblestone" (block-at s 1 64 1)))
           (is (empty? (listed s))))))))
@@ -279,7 +279,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1})) {})]
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (= "air" (block-at s 0 64 1)))
@@ -309,7 +309,7 @@
                                (when (= 1 (swap! n inc))
                                  (swap! (.. world -state) assoc :inventory []))
                                r)))
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 2}) {})]
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 2})) {})]
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (core/waiting (:eng s) id)))
           (is (empty? (events-of s :stopped)) "no stop for the lost pickaxe")
@@ -338,7 +338,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1})) {})]
           (await (with-waiting-fetch-child
                    (fn ^:async waiting-round [n]
                      (await (run-ticks s 1))
@@ -357,7 +357,7 @@
                         :containers {"-3,64,2" [{:name "dirt" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})]
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1})) {})]
           (await (run-ticks s 40))
           (is (nil? (:need/return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
@@ -375,7 +375,7 @@
                              (do (swap! n inc) (js/Promise.resolve (contract/ending :done nil nil)))
                              (orig c slot job args))))
           (try
-            (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1}) {})
+            (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1})) {})
             (await (run-ticks s 6))
             (finally (set! ctx/call orig)))
           (is (< @n 5) (str "tool fetches asked " @n)))))))
@@ -390,7 +390,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :ways #{:carried} :need-drop true}) {})]
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :ways #{:carried} :need-drop true})) {})]
           (await (run-ticks s 10))
           (is (= :no-tool (:reason (core/waiting (:eng s) id))))
           (is (empty? (inspects s))))))))
@@ -423,7 +423,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "dirt" :count 2}])) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3})) {})
           (await (run-ticks s 5))
           (is (empty? (inspects s)) "no chest seen: no look either")
           (is (= 1 (count (no-source-events s :stopped))))
@@ -435,7 +435,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {chest-at [{:name "dirt" :count 1}]}) (assoc :inventory [{:name "dirt" :count 2}])) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 5}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 5})) {})
           (await (run-ticks s 30))
           (is (= 3 (get (inv s) "dirt")) "the chest's dirt is carried")
           (is (re-find #"1 chest\(s\) already looked in or taken from hold no more dirt \(3 carried\)" (no-source-why s :stopped)))
@@ -447,7 +447,7 @@
       (fn ^:async t []
         (let [s (start (-> (world {chest-at []}) (assoc :inventory [{:name "dirt" :count 2}])) [own-zone])]
           (.override (.-world (:p s)) "inspectContainer" (fn [_ _ _] #js {:status "timeout"}))
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3 :ways #{:chest}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 3 :ways #{:chest}})) {})
           (await (run-ticks s 5))
           (is (= 2 (count (inspects s))) "a timeout is asked once more, then the chest is given up")
           (is (re-find #"could not be opened.*timeout" (no-source-why s :stopped)))
@@ -461,7 +461,7 @@
               n (atom 0)]
           (.override (.-world (:p s)) "inspectContainer"
                      (fn [token a impl] (if (= 1 (swap! n inc)) #js {:status "timeout"} (impl token a))))
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}})) {})
           (await (run-ticks s 12))
           (is (= 2 (get (inv s) "oak_log"))))))))
 
@@ -478,7 +478,7 @@
       (fn ^:async t []
         (let [s (start (-> (world {chest-at [{:name "oak_log" :count 2}]}) (assoc-in [:blocks "-2,65,3"] "dirt")) [own-zone])]
           (shut-under-a-block s)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}})) {})
           (await (run-ticks s 30))
           (is (not= "dirt" (block-at s -2 65 3)) "the block above was dug")
           (is (= 2 (get (inv s) "oak_log")))
@@ -491,7 +491,7 @@
         (let [roof {:name "roof" :min [-2 65 3] :max [-2 65 3] :owner "Miles"}
               s (start (-> (world {chest-at [{:name "oak_log" :count 2}]}) (assoc-in [:blocks "-2,65,3"] "dirt")) [own-zone roof])]
           (shut-under-a-block s)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest}})) {})
           (await (run-ticks s 12))
           (is (= "dirt" (block-at s -2 65 3)))
           (is (re-find #"chest at -2 64 3 could not be opened" (no-source-why s :stopped))))))))
@@ -501,7 +501,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore false}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore false})) {})
           (await (run-ticks s 5))
           (is (re-find #"pickaxe" (no-source-why s :stopped))))))))
 
@@ -510,7 +510,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "stick" :count 1}])) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt}})) {})
           (await (run-ticks s 5))
           (is (re-find #"needs 2 stick, have 1" (no-source-why s :waiting))))))))
 
@@ -521,7 +521,7 @@
         (let [far-at "40,64,3"
               s (start (-> (world {far-at [{:name "stone_pickaxe" :count 1}]}) (update :blocks #(-> % (dissoc chest-at) (assoc far-at "chest")))) [own-zone])]
           (mem/write! (:store (:eng s)) stock/stock-kind {:pos [40 64 3] :items {"stone_pickaxe" 1}} stock/stock-policy)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"})) {})
           (await (run-ticks s 120))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
 
@@ -531,7 +531,7 @@
       (fn ^:async t []
         (let [s (start (-> (world {}) (assoc :inventory [{:name "oak_planks" :count 2}]) (update :blocks dissoc chest-at)) [own-zone])]
           (mem/write! (:store (:eng s)) stock/stock-kind {:pos [4000 64 3] :items {"stick" 5}} stock/stock-policy)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stick" :count 4 :ways #{:chest :craft} :explore false}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stick" :count 4 :ways #{:chest :craft} :explore false})) {})
           (await (run-ticks s 20))
           (is (empty? (events-of s :obtain.chest)) "no walk to the chest 4000 blocks away"))))))
 
@@ -541,7 +541,7 @@
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
           (mem/write! (:store (:eng s)) stock/stock-kind {:pos [4000 64 3] :items {"stone_axe" 1}} stock/stock-policy)
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["stone_axe" "wooden_axe"] :ways #{:chest} :explore false :spend {:job-time 60}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:any-of ["stone_axe" "wooden_axe"] :ways #{:chest} :explore false :spend {:job-time 60}})) {})
           (await (run-ticks s 20))
           (is (empty? (events-of s :obtain.chest)) "4000 blocks take longer than the 60 s the call may run"))))))
 
@@ -550,7 +550,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "stone_pickaxe" :count 1} {:name "iron_pickaxe" :count 1}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["wooden_pickaxe" "stone_pickaxe" "iron_pickaxe"]}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:any-of ["wooden_pickaxe" "stone_pickaxe" "iron_pickaxe"]})) {})
           (await (run-ticks s 30))
           (is (empty? (listed s)))
           (is (= {"stone_pickaxe" 1} (select-keys (inv s) ["stone_pickaxe" "iron_pickaxe"]))))))))
@@ -563,7 +563,7 @@
                            (assoc :containers {"-2,64,-3" [{:name "oak_planks" :count 8}]}
                                   :inventory [{:name "oak_log" :count 2}]))
                        [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4})) {})
           (await (run-ticks s 30))
           (is (seq (calls s "look")))
           (is (= 4 (get (inv s) "oak_planks"))))))))
@@ -579,7 +579,7 @@
                            (when (= 'jobs.items.craft j) (swap! seen conj args))
                            (orig c slot j args)))
           (try
-            (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4 :for-plan "house"}) {})
+            (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4 :for-plan "house"})) {})
             (await (run-ticks s 30))
             (finally (set! ctx/call orig)))
           (is (seq @seen))
@@ -590,7 +590,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.get-tool {:block "dirt"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.get-tool {:block "dirt"})) {})
           (await (run-ticks s 5))
           (is (empty? (listed s)))
           (is (empty? (inspects s))))))))
@@ -600,7 +600,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (world {}) :blocks dissoc chest-at) [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.items.get-tool {:block "stone" :explore false}) {})]
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.get-tool {:block "stone" :explore false})) {})]
           (await (run-ticks s 5))
           (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (inspects s))))))))
@@ -610,7 +610,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "dirt" :count 5}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.storage.withdraw {:chest [-2 64 3] :items {"dirt" 2}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.storage.withdraw {:chest [-2 64 3] :items {"dirt" 2}})) {})
           (await (run-ticks s 20))
           (is (= {"dirt" 3} (get (stock/stock-of (mem/view (:store (:eng s)))) [-2 64 3]))))))))
 
@@ -622,12 +622,12 @@
   (-> (world {}) (update :blocks dissoc chest-at stone-at) (assoc :inventory inv)))
 
 (defn ^:async get-tool! [s args n]
-  (let [id (core/submit! (:eng s) (list 'jobs.items.get-tool args) {})]
+  (let [id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.get-tool args)) {})]
     (await (run-ticks s n))
     id))
 
 (defn ^:async one-tick! [s spec]
-  (core/submit! (:eng s) spec {})
+  (core/submit! (:eng s) (tu/order (:eng s) spec) {})
   (await (run-ticks s 1)))
 
 (defn tables [s]
@@ -658,7 +658,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone] sight-opts own-house)]
-          (core/submit! (:eng s) (list 'jobs.items.get-tool {:kind "pickaxe" :for-plan "house"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.get-tool {:kind "pickaxe" :for-plan "house"})) {})
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "wooden_pickaxe")))
           (is (empty? (tables s)) "the table is not left in a cell the build wants"))))))
@@ -679,7 +679,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "oak_log" :count 12}])) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (dig-spec {})) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)) "the dig ended")
           (is (= "air" (block-at s 2 64 3)))
@@ -768,7 +768,7 @@
       (fn ^:async t []
         (let [s (start (bare [{:name "oak_log" :count 12}]) [own-zone])]
           (swap! (fake/state (:p s)) assoc-in [:recipes "oak_planks"] {:count 4 :needs {"oak_log" 1000}})
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4})) {})
           (await (run-ticks s 30))
           (is (empty? (listed s)))
           (is (= :no-source (:reason (first (events-of s :stopped))))))))))
@@ -871,7 +871,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc-in (world {chest-at [{:name "bone_meal" :count 4}]}) [:blocks "3,63,1"] "grass_block") [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1})) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
           (is (= 1 (count (calls s "useOn"))))
@@ -883,7 +883,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc-in (world {chest-at [{:name "bone_meal" :count 4}]}) [:blocks "3,63,1"] "grass_block") [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.fertilize {:grass true :max 1})) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
           (is (= 1 (count (calls s "useOn")))))))))
@@ -895,7 +895,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"})) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
           (is (= "oak_sapling" (block-at s 4 64 3))))))))
@@ -909,7 +909,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (forest-world) [own-zone] sight-opts oak-plan)]
-          (core/submit! (:eng s) (list 'jobs.forestry.maintain {:plan "forest"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.maintain {:plan "forest"})) {})
           (await (run-ticks s 60))
           (is (= "oak_sapling" (block-at s 3 64 0)))
           (is (= 1 (count (filter #(= :plant (:slot %)) (events-of s :child_started))))))))))
@@ -919,7 +919,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (forest-world) [own-zone] sight-opts oak-plan)]
-          (core/submit! (:eng s) (list 'jobs.forestry.maintain {:plan "forest" :ways #{:carried}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.maintain {:plan "forest" :ways #{:carried}})) {})
           (await (run-ticks s 10))
           (is (= 1 (count (listed s))) "still queued")
           (is (empty? (transfers s)))
@@ -931,7 +931,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "oak_sapling" :count 2}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :ways #{:carried}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak" :ways #{:carried}})) {})
           (await (run-ticks s 10))
           (is (= 1 (count (listed s))) "still queued")
           (is (empty? (transfers s)))
@@ -942,7 +942,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"})) {})
           (await (run-ticks s 20))
           (is (empty? (listed s)) "the job ended")
           (is (= :need (:reason (last (events-of s :stopped))))))))))
@@ -952,7 +952,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {chest-at [{:name "mangrove_propagule" :count 2}]}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "mangrove"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "mangrove"})) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the job ended")
           (is (= "mangrove_propagule" (block-at s 4 64 3))))))))
@@ -970,7 +970,7 @@
 
 (defn ^:async obtain-bed! [items]
   (let [s (start (assoc (far-table-world items) :recipes bed-recipe) [own-zone])]
-    (core/submit! (:eng s) (list 'jobs.items.obtain {:item "white_bed"}) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "white_bed"})) {})
     (await (run-ticks s 80))
     s))
 
@@ -1028,7 +1028,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
+              id (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3})) {})
               call ctx/call]
           (set! ctx/call (fn [c slot job args] (if (= :pickaxe slot) (js/Promise.resolve :continue) (call c slot job args))))
           (try (await (run-ticks s 20))
@@ -1043,7 +1043,7 @@
       (fn ^:async t []
         (let [birch (into {} (for [y (range 64 68)] [(str "4," y ",9") "birch_log"]))
               s (start (update (bare []) :blocks merge birch {"4,68,9" "birch_leaves"}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4})) {})
           (await (run-ticks s 60))
           (is (empty? (calls s "dig")))
           (is (nil? (get (inv s) "birch_log")))
@@ -1056,7 +1056,7 @@
       (fn ^:async t []
         (let [birch (into {} (for [y (range 64 68)] [(str "4," y ",9") "birch_log"]))
               s (start (update (bare []) :blocks merge birch {"4,68,9" "birch_leaves"}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe"})) {})
           (await (run-ticks s 60))
           (is (pos? (get (inv s) "birch_log" 0)) (pr-str (inv s))))))))
 
@@ -1065,7 +1065,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "wooden_pickaxe" :count 1} {:name "oak_planks" :count 4} {:name "stick" :count 4} {:name "crafting_table" :count 1}]) [])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"})) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
@@ -1075,7 +1075,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"]))) :inventory [{:name "oak_planks" :count 12} {:name "crafting_table" :count 1}]) [])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"})) {})
           (await (run-ticks s 160))
           (is (empty? (listed s)))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
@@ -1085,7 +1085,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare []) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false})) {})
           (await (run-ticks s 6))
           (is (= 1 (count (no-source-events s :stopped))))
           (is (re-find #"nothing seen to gather" (no-source-why s :stopped)))
@@ -1096,7 +1096,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt :chest}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :ways #{:craft :smelt :chest}})) {})
           (await (run-ticks s 10))
           (is (empty? (calls s "dig"))))))))
 
@@ -1108,7 +1108,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge leaf-blocks) :drops {"oak_leaves" "oak_sapling"}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"})) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)))
           (is (pos? (get (inv s) "oak_sapling" 0)))
@@ -1120,7 +1120,7 @@
       (fn ^:async t []
         (let [ground {"0,63,4" "andesite" "1,63,4" "andesite"}
               s (start (assoc (update (bare []) :blocks merge ground leaf-blocks) :drops {"oak_leaves" "oak_sapling"}) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.forestry.plant-sapling {:at sapling-spot :species "oak"})) {})
           (await (run-ticks s 120))
           (is (empty? (listed s)) "the job ended")
           (is (seq (calls s "dig")) "a leaf was broken")
@@ -1131,7 +1131,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (bare []) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"})) {})
           (await (run-ticks s 6))
           (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (calls s "dig"))))))))
@@ -1141,7 +1141,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (bare []) :blocks merge leaf-blocks) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :ways #{:chest :craft :smelt}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_sapling" :ways #{:chest :craft :smelt}})) {})
           (await (run-ticks s 10))
           (is (empty? (calls s "dig"))))))))
 
@@ -1150,7 +1150,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (bare []) :blocks merge tree-blocks) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe" :explore false}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe" :explore false})) {})
           (await (run-ticks s 10))
           (is (= 1 (count (no-source-events s :stopped))))
           (is (empty? (calls s "dig")) "no tree felled for a chain that then lacks stone")
@@ -1165,7 +1165,7 @@
         (let [s (start (assoc (update (world {}) :blocks merge {"1,64,5" "deepslate_coal_ore" "2,64,5" "deepslate_coal_ore"})
                               :drops {"deepslate_coal_ore" "coal"}
                               :inventory [{:name "wooden_pickaxe" :count 1} {:name "stick" :count 4}]) [])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "torch"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "torch"})) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)))
           (is (pos? (get (inv s) "torch" 0))))))))
@@ -1176,7 +1176,7 @@
       (fn ^:async t []
         (let [s (start (assoc (update (world {}) :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "stone"])))
                               :inventory [{:name "oak_log" :count 4}]) [])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3})) {})
           (await (run-ticks s 160))
           (is (empty? (listed s)) (pr-str (map :why (events-of s :waiting))))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s)))
@@ -1187,7 +1187,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (bare [{:name "oak_log" :count 4}]) :floor [-30 -30 40 30]) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore true}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "cobblestone" :count 3 :explore true})) {})
           (await (run-ticks s 60))
           (is (= 1 (get (inv s) "wooden_pickaxe")) (pr-str (inv s)))
           (is (empty? (events-of s :obtain.exploring)) "no surface search")
@@ -1202,7 +1202,7 @@
                                                "1,62,5" "stone" "2,62,5" "stone" "3,62,5" "stone"})
                               :drops {"grass_block" "dirt"}
                               :inventory []) [])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["dirt" "cobblestone"] :count 2}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:any-of ["dirt" "cobblestone"] :count 2})) {})
           (await (run-ticks s 80))
           (is (empty? (events-of s :waiting)))
           (is (<= 2 (get (inv s) "dirt" 0))))))))
@@ -1212,7 +1212,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore false})) {})
           (await (run-ticks s 200))
           (is (empty? (listed s)))
           (is (nil? (get (inv s) "wooden_pickaxe")))
@@ -1224,7 +1224,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true})) {})
           (await (run-ticks s 120))
           (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
           (is (= 1 (count (events-of s :obtain.exploring))) "one search")
@@ -1271,7 +1271,7 @@
                                     :blocks merge (into {} (for [x [0 1] z [5 6]] [(str x ",64," z) "deepslate"])))
                               :drops {"deepslate" "cobbled_deepslate"}
                               :recipes {"stone_pickaxe" {:count 1 :needs {"cobbled_deepslate" 3 "stick" 2} :table true}}) [])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "stone_pickaxe"})) {})
           (await (run-ticks s 80))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
 
@@ -1281,7 +1281,7 @@
       (fn ^:async t []
         (let [leaves {"-2,65,3" "oak_leaves" "-2,66,3" "oak_leaves"}
               s (start (assoc (update (bare []) :blocks merge leaves) :drops {"oak_leaves" "oak_sapling"}) [own-zone foreign-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"})) {})
           (await (run-ticks s 60))
           (is (empty? (calls s "dig")))
           (is (nil? (get (inv s) "oak_sapling"))))))))
@@ -1294,7 +1294,7 @@
               s (start (update (bare [{:name "oak_log" :count 1}]) :blocks merge tree-blocks {"1,64,2" "crafting_table"}) [own-zone])
               eng (assoc-in (:eng s) [:jobs 'jobs.forestry.harvest-wood :round]
                             (fn ^:async f [c] (swap! seen-args conj (:args c)) :done))]
-          (core/submit! eng (list 'jobs.items.obtain {:item "wooden_pickaxe"}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.items.obtain {:item "wooden_pickaxe"})) {})
           (await (run-ticks (assoc s :eng eng) 12))
           (is (= 2 (:count (first @seen-args))) "one log carried, one more needed: harvest-wood's :count is logs carried in all"))))))
 
@@ -1381,7 +1381,7 @@
                              (do (when (= 3 (swap! calls inc)) (swap! (fake/state (:p s)) fake/give "oak_log" 1))
                                  (js/Promise.resolve {:kind :done})))))
           (try
-            (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 20 :explore false}) {})
+            (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.items.obtain {:item "oak_log" :count 20 :explore false})) {})
             (await (run-ticks s 40))
             (finally (set! ctx/call orig)))
           (is (= 6 @calls) "two empty rounds, one with a log, then three empty ones end it"))))))

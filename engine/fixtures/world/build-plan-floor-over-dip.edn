@@ -13,7 +13,7 @@
  :cases
  [{:name "floor-over-a-two-deep-dip"
    :blocks [[:fill [13 -3 18] [19 -3 24] "stone"] [:fill [13 -2 18] [19 -1 24] "air"]]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 200 :of-job true}]
    :after [[:block [15 0 20] "oak_planks"] [:block [17 0 22] "oak_planks"] [:block [16 0 21] "oak_planks"]]}
   {:name "floor-over-a-dip-with-no-dirt-carried"

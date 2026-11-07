@@ -4,9 +4,9 @@
 ;; Cut and replant oak, then put the wood in a known chest. Deposit declines
 ;; until body memory has a :chest entry, and sleep needs a :bed entry.
 {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45))
-             :job (jobs.movement.look-around)}
+             :job (jobs.movement.look-around {:worth 1200})}
             {:trigger :hostile-near}
             {:trigger :night}
             {:trigger :hungry}]
- :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
-         (jobs.storage.deposit {:make-chests? false})]}
+ :queue [(jobs.forestry.harvest-wood {:worth 1200 :species "oak" :radius 16})
+         (jobs.storage.deposit {:worth 1200 :make-chests? false})]}

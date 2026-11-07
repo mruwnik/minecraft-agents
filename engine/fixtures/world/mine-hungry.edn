@@ -9,7 +9,7 @@
  :cases
  [{:name "hungry-mid-mine-feeds-through-the-trigger"
    :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
          [:wait-s 4]
          [:rcon "effect give $BODY minecraft:hunger 8 243 true"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 90}
@@ -20,14 +20,14 @@
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
    :memory [{:kind :hungry :data {:food 2} :age-s 5 :policy {:cap 10 :ttl 3600000}}]
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-3]$" 30]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]]
+         [:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.gather.mine"}} :within-s 140 :of-job true}]
    :after [[:item "raw_iron" 1]]}
   {:name "last-pickaxe-worn-out-ends-condition-failed-no-tool"
    :blocks [[:set [21 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
    :body {:inventory [["cobblestone" 16] ["torch" 8] ["bread" 4]]}
    :act [[:rcon "item replace entity $BODY hotbar.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 3 :direction :east :tunnel-length 8 :radius 16 :mend false :ways #{:carried}})]]
+         [:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 3 :direction :east :tunnel-length 8 :radius 16 :mend false :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 30 :of-job true}]}
   {:name "hurt-mid-mine-with-no-food-carried-stops-cannot-heal"
@@ -35,7 +35,7 @@
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "effect give $BODY minecraft:mining_fatigue 100 2 true"]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
+         [:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
          [:wait-s 3]
          [:rcon "effect clear $BODY minecraft:resistance"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]]

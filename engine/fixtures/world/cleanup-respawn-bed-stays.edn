@@ -13,6 +13,6 @@
    :memory [{:kind :spawn-bed :data {:pos #xyz [14 0 8]} :policy {:cap 1 :ttl :forever}}
             {:kind :scaffold :data {:entries [{:cell #at [14 0 8] :item "red_bed" :before "air" :job "j0" :purpose :bed :state :placed}
                                               {:cell #at [6 0 8] :item "red_bed" :before "air" :job "j0" :purpose :bed :state :placed}]}}]
-   :act [[:job (jobs.access.cleanup {:of :all :purpose :bed :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :purpose :bed :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.access.cleanup"}} :within-s 80 :of-job true}]
    :after [[:not-block [6 0 8] "red_bed"] [:block [14 0 8] "red_bed"]]}]}

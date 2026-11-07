@@ -11,7 +11,7 @@
   :limit-s 240}
  :cases
  [{:name "stair-blocked-by-water-on-four-sides-moves-and-mines"
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :item "cobblestone" :count 2 :ways #{:descend-stair} :radius 6})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :item "cobblestone" :count 2 :ways #{:descend-stair} :radius 6})]]
    :expect [{:event {:source :job :kind :mine.moved} :within-s 200 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 2]}} :within-s 220 :of-job true}]
    :after [[:item "cobblestone" [:>= 2]]]}]}

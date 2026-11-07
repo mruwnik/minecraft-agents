@@ -15,7 +15,7 @@
             [:fill [7 -34 8] [11 -31 12] "stone"] [:fill [9 -33 10] [9 -30 10] "air"]
             [:fill [4 -1 10] [8 -1 10] "stone"]
             [:set [10 -4 10] "stone"] [:set [11 -3 10] "stone"] [:set [10 -3 9] "stone"] [:set [10 -3 11] "stone"] [:set [10 -3 10] "water"]]
-   :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [16 -29 14] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:wait-s 10] [:job (jobs.movement.go-to {:worth 1200 :pos #at [16 -29 14] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 80 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:body-far [16.5 -29 14.5] 6] [:block [9 -10 10] "water"]]}]}

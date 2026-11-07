@@ -8,14 +8,14 @@
   :limit-s 80}
  :cases
  [{:name "second-same-name-submit-is-held"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
-         [:http :submit (jobs.movement.go-to {:pos #at [100 0 16] :range 1}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.movement.go-to"}]}]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]
+         [:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.movement.go-to"}]}]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "next-jumps-ahead-of-an-earlier-plain-submit"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
-         [:http :submit (jobs.memory.set-place {:name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
-         [:http :submit (jobs.memory.forget-place {:name :wt-c}) [:next] {:ok true}]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]
+         [:http :submit (jobs.memory.set-place {:worth 1200 :name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
+         [:http :submit (jobs.memory.forget-place {:worth 1200 :name :wt-c}) [:next] {:ok true}]
          [:cli "jobs" ["$body" "--world" "$world" "list"]
           {:items [{:name [:contains "go-to"] :status :running}
                    {:name [:contains "forget-place"]}
@@ -23,9 +23,9 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "plain-submits-keep-their-order"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
-         [:http :submit (jobs.memory.set-place {:name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
-         [:http :submit (jobs.memory.forget-place {:name :wt-c}) [] {:ok true}]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]
+         [:http :submit (jobs.memory.set-place {:worth 1200 :name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
+         [:http :submit (jobs.memory.forget-place {:worth 1200 :name :wt-c}) [] {:ok true}]
          [:cli "jobs" ["$body" "--world" "$world" "list"]
           {:items [{:name [:contains "go-to"] :status :running}
                    {:name [:contains "set-place"]}
@@ -33,22 +33,22 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "old-front-flag-refused"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--front"]
           {:ok false :reason :bad-args :message [:contains "front"]}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}] 20]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "now-cuts-in-and-the-cut-go-to-continues-after-it"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
-         [:http :submit (jobs.memory.set-place {:name :wt-d :pos #at [6 0 16]}) [] {:ok true}]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]
+         [:http :submit (jobs.memory.set-place {:worth 1200 :name :wt-d :pos #at [6 0 16]}) [] {:ok true}]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--now"]
           {:ok true}]]
    :expect [{:event {:source :job :kind :completed :data {:name [:contains "forget-place"]}} :within-s 30}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [100.5 0 16.5] 2]]}
   {:name "next-with-now-refused"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]
          [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.forget-place {:name :wt-c})" "--next" "--now"]
           {:ok false :reason :bad-args :message [:contains "exclusive"]}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}] 20]]

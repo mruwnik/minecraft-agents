@@ -7,7 +7,7 @@
   :body {:at [10.5 0 16.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]
-        [:job (jobs.survival.get-food {:explore false})]]
+        [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
   :limit-s 100}
  :cases
  [{:name "a-chest-in-anothers-zone-is-not-taken-from"

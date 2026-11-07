@@ -8,7 +8,7 @@
  :cases
  [{:name "long-lure-walk-raises-no-idle-notice"
    :act [[:summon "cow" [6.5 0 18.5]]
-         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [170 0 16]})]]
+         [:job (jobs.animals.lure-to {:worth 1200 :mob "cow" :pos #xyz [170 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived}} :within-s 380 :of-job true}
             {:no-event {:source :body :kind :idle} :for-s 380 :until {:source :job :kind :completed}}]
    :after [[:entities "type=cow,tag=wt" [[160 0 8] [180 3 24]] 1]]}]}

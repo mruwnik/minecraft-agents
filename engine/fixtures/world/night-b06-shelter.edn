@@ -13,11 +13,11 @@
    :time :night-exclusive
    :sleep-skip true
    :body {:inventory [["cobblestone" 24] ["wooden_pickaxe" 1]]}
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:event {:source :job :kind :dig-in.took-back} :within-s 150}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :within-s 200 :of-job true}]
@@ -29,11 +29,11 @@
    :sleep-skip true
    :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]]
    :body {:inventory [["cobblestone" 16]]}
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:event {:source :job :kind :dig-in.left} :within-s 120}
             {:no-event {:source :job :kind :dig-in.took-back} :for-s 150}]
@@ -44,11 +44,11 @@
    :sleep-skip true
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :body {:inventory [["oak_log" 24]]}
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
-         [:job (jobs.survival.leave-shelter)]]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed :message [:contains "oak_log"]} :within-s 60}
             {:event {:source :job :kind :dig-in.took-back} :within-s 200}]
    :after [[:item "oak_log" [:>= 8]]]
@@ -58,7 +58,7 @@
    :time :any
    :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"]]
    :body {:inventory [["oak_log" 12]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:item "oak_log" [:>= 11]]]
@@ -69,7 +69,7 @@
    :blocks [[:set [16 -1 16] "stone"] [:set [16 0 16] "stone"] [:set [16 1 16] "stone"]]
    :body {:at [16.5 2 16.5] :inventory [["dirt" 24]]}
    :plot {:height 12 :light :dark}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 100}
@@ -80,7 +80,7 @@
             [:set [12 0 8] "oak_door[facing=north,half=lower,hinge=left,open=true]"]
             [:set [12 1 8] "oak_door[facing=north,half=upper,hinge=left,open=true]"]]
    :body {:at [13.5 0 13.5] :inventory [["cobblestone" 16]]}
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:no-event {:source :job :kind :stopped} :for-s 25}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 25}]
    :after [[:block [12 0 8] "oak_door[open=false]"]]
@@ -92,7 +92,7 @@
             [:set [12 0 8] "iron_door[facing=north,half=lower,hinge=left,open=true]"]
             [:set [12 1 8] "iron_door[facing=north,half=upper,hinge=left,open=true]"]]
    :body {:at [13.5 0 13.5] :inventory [["cobblestone" 24]]}
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 150}]
    :limit-s 160}
   ;; 712a8df7: first light with a hostile known near the shelter: the body stays in, and leaves once the mob is gone
@@ -132,7 +132,7 @@
   ;; f6fef9d5: the hold names the failed sites' reasons
   {:name "exposed-hold-names-the-failed-sites"
    :blocks [[:fill [12 -1 12] [20 -1 20] "stone"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]
    :expect [{:event {:source :job :kind :shelter.exposed :message [:not [:contains "no site tried"]]} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f: a wide dark natural cave is no shelter; with no pickaxe the quotes price dig-pit :no-tool, so the night job walls the body in where it stands
@@ -140,7 +140,7 @@
    :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
    :plot {:height 12}
    :body {:at [16.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :walls}} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f: the same cave with a pickaxe and a deep stone floor: a player digs a pit into the floor, so the body does not wall in (a 1-thick floor over void gave a 1-deep pit ringed with walls)
@@ -149,7 +149,7 @@
    :blocks [[:fill [2 -6 2] [30 9 30] "stone"] [:fill [4 0 4] [28 6 28] "air"]]
    :plot {:height 12 :light :dark}
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 20]]}
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed :data {:way :pit}} :within-s 90}]
    :limit-s 100}
   ;; 1fbd292f, b0e3b890, 49c6d276: in a dark 1-wide tunnel it cut itself the body keeps working; the night reflex does not fire (it saw each wall close up as it cut, a tunnel it never walked is not known shut)
@@ -158,8 +158,8 @@
    :plot {:height 12}
    :register [{:trigger :night}]
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.gather.strip-tunnel {:heading "east" :limit 16 :torches false})]
-         [:job (jobs.blocks.dig {:pos #at [21 0 16]})]]
+   :act [[:job (jobs.gather.strip-tunnel {:worth 1200 :heading "east" :limit 16 :torches false})]
+         [:job (jobs.blocks.dig {:worth 1200 :pos #at [21 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} :within-s 120 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
@@ -171,7 +171,7 @@
    :plot {:length 48 :width 48 :height 12}
    :register [{:trigger :night}]
    :body {:at [6.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [3 0 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [3 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} :within-s 60 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
    :limit-s 70}
@@ -181,7 +181,7 @@
    :plot {:length 48 :width 48 :height 12}
    :memory [{:kind :shelter :data {:pos #xyz [6 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:at [6.5 0 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #xyz [26 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #xyz [26 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 90 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [26.5 0 16.5] 2.5]]
@@ -195,7 +195,7 @@
             [:fill [17 0 16] [17 2 16] "air"]]
    :plot {:height 16}
    :body {:at [8.5 9 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #xyz [17 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #xyz [17 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [17.5 0 16.5] 2.5]]
@@ -206,7 +206,7 @@
    :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
    :plot {:height 14}
    :body {:at [14.5 0 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #xyz [20 9 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #xyz [20 9 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason #{:risky :exposed}}} :for-s 20 :of-job true}]
    :limit-s 50}
@@ -216,7 +216,7 @@
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [11 0 12] "red_bed[facing=east,part=foot]"] [:set [12 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.sleep {:bed #at [11 0 12]})]]
+   :act [[:job (jobs.survival.sleep {:worth 1200 :bed #at [11 0 12]})]]
    :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed"]} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :bed_unreachable :message [:contains "shut in"]} :for-s 5 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 30}]
@@ -232,8 +232,8 @@
             [:set [100 1 10] "oak_door[facing=north,half=upper,hinge=left,open=false]"]
             [:set [100 0 16] "red_bed[facing=east,part=foot]"] [:set [101 0 16] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 16.5]}
-   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [100 0 16]}) [:now]]
-         [:job (jobs.survival.night)]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :bed :pos #at [100 0 16]}) [:now]]
+         [:job (jobs.survival.night {:worth 1200})]]
    :expect [{:no-event {:source :job :kind :night.bed-too-far} :for-s 60 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 150}]
    :limit-s 170}
@@ -241,7 +241,7 @@
   {:name "midday-night-reflex-stays-quiet"
    :time :day :time-why :dawn-decision
    :register [{:trigger :night}]
-   :act [[:job (jobs.movement.go-to {:pos #xyz [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #xyz [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40}]
    :limit-s 50}
@@ -250,8 +250,8 @@
    :time :night-exclusive :time-why :sleep
    :blocks [[:fill [10 0 10] [17 3 14] "stone"] [:fill [12 0 11] [15 1 13] "air"]]
    :body {:at [4.5 0 12.5] :inventory [["stone_pickaxe" 1] ["red_bed" 1]]}
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]})]
-         [:job (jobs.survival.night)]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [12 0 12]})]
+         [:job (jobs.survival.night {:worth 1200})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 180]]
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 180}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 180}]
@@ -261,8 +261,8 @@
    :plot {:length 200 :width 32}
    :blocks [[:set [150 0 16] "red_bed[facing=east,part=foot]"] [:set [151 0 16] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [150 0 16]}) [:now]]
-         [:job (jobs.survival.night)]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :bed :pos #at [150 0 16]}) [:now]]
+         [:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :night.bed-too-far} :within-s 60}
             {:event {:source :job :kind :shut-in.sealed} :within-s 100}]
    :after [[:body-far [150.5 0 16.5] 100]]
@@ -273,9 +273,9 @@
    :plot {:length 60 :width 32}
    :blocks [[:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]
          [:await {:source :job :kind :shut-in.sealed} 60]
-         [:job (jobs.survival.sleep {:bed #at [24 0 16]})]]
+         [:job (jobs.survival.sleep {:worth 1200 :bed #at [24 0 16]})]]
    :expect [{:no-event {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}} :for-s 30 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 110}]
    :limit-s 120}
@@ -285,7 +285,7 @@
    :plot {:length 60 :width 32}
    :blocks [[:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 16.5] :inventory [["cobblestone" 20]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:job (jobs.survival.sleep {:bed #at [24 0 16] :worth 200})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 110}]
@@ -297,7 +297,7 @@
    :blocks [[:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 16.5] :inventory [["cobblestone" 20]]}
    :act [[:summon "zombie" [14.5 0 16.5] "{UUID:[I;2006101,3,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
+         [:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:job (jobs.survival.sleep {:bed #at [24 0 16] :worth 200})]
          [:await {:source :job :kind :stopped :data {:name "jobs.survival.sleep"}} 100]
@@ -311,7 +311,7 @@
    :blocks [[:fill [8 0 8] [24 16 24] "stone"] [:set [16 1 16] "air"] [:set [16 0 16] "air"]]
    :plot {:height 22}
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #xyz [16 17 20] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #xyz [16 17 20] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 240 :of-job true}]
    :after [[:body-near [16.5 17 20.5] 3]]
@@ -321,7 +321,7 @@
    :blocks [[:fill [8 0 8] [24 16 24] "bedrock"] [:set [16 1 16] "air"] [:set [16 0 16] "air"]]
    :plot {:height 22}
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #xyz [16 17 20] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #xyz [16 17 20] :range 1})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 60 :until {:source :job :kind :stopped}}]
    :after [[:body-near [16.5 0 16.5] 1.5]]
@@ -333,7 +333,7 @@
    :register [{:trigger :dusk-home}]
    :blocks [[:set [70 0 16] "torch"]]
    :body {:at [4.5 0 16.5]}
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [70 0 16]}) [:now]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [70 0 16]}) [:now]]
          [:time-set 12000]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dusk-home}} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :dusk-home}} :within-s 120}]
@@ -345,7 +345,7 @@
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :register [{:trigger :night}]
    :body {:at [13.5 0 13.5] :inventory [["oak_planks" 4]] :settle-s 2}
-   :act [[:job (jobs.items.craft {:item "stick"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "stick"})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.craft"}} :within-s 60 :of-job true}]
    :after [[:item "stick" [:>= 4]]]
    :limit-s 80}
@@ -354,7 +354,7 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
    :body {:at [13.5 0 13.5]}
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :status :completed :kind :done}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-night}} :for-s 30}]
    :limit-s 40}]}

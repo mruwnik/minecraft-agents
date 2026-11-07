@@ -98,12 +98,14 @@
             [jobs.time.wait-for-light :as wait-for-light]
             [jobs.lib.world-files :as world-files]))
 
+
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job), staying at its place long enough that no exposure is affordable (jobs.lib.price)."
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
     (game/select! p)
-    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})}))
+    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})
+     :worth (constantly tu/order-worth)}))
 
 (defn remembering-ctx
   "ctx-of world over a real perception that has looked all round, so the blocks of world are in the body's memory (a threat field reads memory only)."
@@ -119,10 +121,10 @@
 (defn worthless "ctx c of a goal worth nothing: it affords no risk." [c] (assoc c :worth (constantly 0)))
 
 (defn under
-  "ctx c checked at the worth the engine gives a root call of job with args (engine.core.ending/root-worth)."
+  "ctx c checked at the worth job's own price gives a call with args (its worth-of), as an agent would pass it."
   [c job args]
   (let [d (get registry/jobs job)]
-    (assoc c :worth (constantly (ending/root-worth (assoc c :args args) d)))))
+    (assoc c :worth (constantly ((:worth-of d) (assoc c :args args))))))
 
 (defn for-a-log "ctx c checked for a root obtain of one oak log." [c] (under c 'jobs.items.obtain {:item "oak_log" :count 1}))
 
@@ -200,10 +202,10 @@
     (is (= :later (first (status (constantly 1199)))) "the whole night is waited for")
     (is (= :never (first (status (constantly nil)))) "no light within a day (a storm that lasts) is not waited for")))
 
-(deftest a-root-call-at-the-default-worth-refuses-a-dark-stay-no-wait-beats-that-costs-more-than-it-is-worth
+(deftest a-hand-order-refuses-a-dark-stay-no-wait-beats-that-costs-more-than-it-is-worth
   (let [[kind text] (with-redefs [sh-sense/light-in (constantly nil)]
                       (lit 0 15 (fn [] ((ready/safe-at (constantly outside)) (ctx-of open-night)))))]
-    (is (= :never kind) (str "a means job at the root, no light within a day: a stay of ctx-of's 1e6 s is past a game day's worth: " text))))
+    (is (= :never kind) (str "a means job ordered by hand, no light within a day: a stay of ctx-of's 1e6 s is past the order's worth: " text))))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
   (are [world to expected] (= expected (showing #(kind (ready/safe-at (constantly to)) world)))

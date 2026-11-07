@@ -10,10 +10,10 @@
   (get-in (world/request-for (workspace/route ctx "world" argv)) [:request :by]))
 
 (deftest world-submits-as-the-body-by-default
-  (is (= "Probe" (who-of ["submit" "dig" "1" "2" "3"]))))
+  (is (= "Probe" (who-of ["submit" "--worth" "60" "dig" "1" "2" "3"]))))
 
 (deftest an-explicit-who-is-kept
-  (is (= "Other" (who-of ["submit" "dig" "1" "2" "3" "--who" "Other"]))))
+  (is (= "Other" (who-of ["submit" "--worth" "60" "dig" "1" "2" "3" "--who" "Other"]))))
 
 (deftest plans-check-gets-the-workspace-body
   (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "--body" "Probe" "check" "p1"]

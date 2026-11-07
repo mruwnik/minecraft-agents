@@ -111,6 +111,27 @@
   (try (parse registry form) nil
        (catch :default e (ex-message e))))
 
+(defn leaves
+  "node's leaves, in order."
+  [{:keys [op child children] :as node}]
+  (case op
+    :leaf [node]
+    :repeat (leaves child)
+    (into [] (mapcat leaves) children)))
+
+(defn worth-problem
+  "Why node cannot be submitted for want of a worth, or nil: every job of a submit gives :worth in its args."
+  [node]
+  (when-let [js (seq (distinct (keep #(when-not (number? (:worth (:args %))) (:job %)) (leaves node))))]
+    (str "worth is required: give " (str/join ", " js) " a :worth in its args, the seconds of the body's time the goal is worth to you")))
+
+(defn fired-worth-problem
+  "Why a trigger cannot fire node for want of a worth, or nil: each job gives :worth or prices itself (worth-of)."
+  [registry node]
+  (when-let [js (seq (distinct (keep #(when-not (or (number? (:worth (:args %))) (:worth-of (get registry (:job %)))) (:job %))
+                                     (leaves node))))]
+    (str "worth is required: " (str/join ", " js) " has no worth-of, so its trigger's :job gives it a :worth")))
+
 (defn label
   "A short printable name of a node: the job symbol, or the combinator form."
   [{:keys [op job children child times]}]

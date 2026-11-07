@@ -43,7 +43,7 @@
     (fn ^:async t []
       (let [{:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} body))]
         (die-noted! eng (cond-> {:pos dt/death-pos :inventory pile} cause (assoc :cause cause)) 5000)
-        (core/submit! eng job {})
+        (core/submit! eng (tu/order eng job) {})
         (await (run-until-empty eng 20))
         {:eng eng :seen seen :p p})))))
 
@@ -129,7 +129,7 @@
               {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile)) :blocks {"20,64,3" "red_bed"}})]
           (mem/write! (:store eng) :spawn-bed {:pos {:x 20 :y 64 :z 3}} {:cap 1 :ttl :forever})
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))) "a death on the way costs a short walk back, not the pile"))))))
 
@@ -143,7 +143,7 @@
               pack (for [i (range 24)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 18.5 (mod i 6)) :y 64 :z (+ 3.5 (quot i 6))}})
               {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) pack))})]
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 20))
           (is (nil? (recovered eng)) "a death on the way loses the kit too")
           (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton, skeleton, skeleton" (decided-text eng)))
@@ -183,7 +183,7 @@
   [n]
   (let [{:keys [eng c]} (await (kit-world n))
         expected (expected-numbers c)]
-    (core/submit! eng job {})
+    (core/submit! eng (tu/order eng job) {})
     (await (run-until-empty eng 20))
     {:eng eng :expected expected}))
 
@@ -246,7 +246,7 @@
     (fn ^:async t []
       (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) [{:id 20 :name "skeleton" :kind "hostile" :pos {:x 20 :y 64 :z 8}}]))})]
         (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
-        (core/submit! eng '(jobs.survival.recover-drops {:value-overrides {"unknown" 10}}) {})
+        (core/submit! eng (tu/order eng '(jobs.survival.recover-drops {:value-overrides {"unknown" 10}})) {})
         (await (run-until-empty eng 20))
         (:chance (decided-numbers eng))))))
 
@@ -284,7 +284,7 @@
                    (merge {:death-t (death-t eng) :decided {:value 1400 :cost 50} :baseline {} :phase :go} trip)
                    {:cap 1 :ttl 1000000})
        (before eng)
-       (core/submit! eng job {})
+       (core/submit! eng (tu/order eng job) {})
        (await (run-until-empty eng 20))
        {:eng eng :seen seen}))))
 
@@ -348,10 +348,10 @@
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng p]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})) {})
           (await (run-until-empty eng 5))
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
-          (core/submit! eng (list 'jobs.survival.recover-drops {:retry true :value-overrides dt/pile-values}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops {:retry true :value-overrides dt/pile-values})) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng)))))))))
 
@@ -428,7 +428,7 @@
               {:keys [eng p seen]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
           (die-noted! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"} 5000)
-          (core/submit! eng cheap-pile {})
+          (core/submit! eng (tu/order eng cheap-pile) {})
           (await (run-until-empty eng 5))
           (is (re-find #"danger [1-9][0-9.]*.*: skeleton, skeleton" (decided-text eng)) (str "both deaths' killers guard the pile: " (decided-text eng))))))))
 
@@ -438,7 +438,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})]
           (die! eng {:pos dt/death-pos :inventory [] :cause "skeleton"})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= :skip (:decision (recovered eng))))
           (is (false? (died/died nil (mem/view (:store eng)) {})))
@@ -451,11 +451,11 @@
         (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds} 60000)
           (die! eng {:pos {:x 5 :y 64 :z 0} :inventory []} 5000)
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))) "the pile with the diamonds first")
           (is (true? (died/died nil (mem/view (:store eng)) {})) "the newer death is still open")
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 20))
           (is (= [:collected :skip] (mapv (comp :decision :data) (mem/entries (mem/view (:store eng)) :recovered))))
           (is (false? (died/died nil (mem/view (:store eng)) {}))))))))
@@ -466,9 +466,9 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops})
               _ (die! eng {:pos dt/death-pos :inventory dt/junk})
-              _ (core/submit! eng job {})
+              _ (core/submit! eng (tu/order eng job) {})
               _ (await (run-until-empty eng 5))
-              id (core/submit! eng job {})]
+              id (core/submit! eng (tu/order eng job) {})]
           (await (core/tick! eng))
           (let [w (core/waiting eng id)]
             (is (= [:no-drops :skip] [(:reason w) (:decision w)]) (pr-str w))
@@ -500,7 +500,7 @@
               {:keys [eng]} (setup {:floor tu/walk-floor :blocks blocks :entities (vec (pile-drops pile))})]
           (ledger/write! (:store eng) (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells))
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 40))
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
 
@@ -516,7 +516,7 @@
     (ledger/write! (:store eng) (into (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells)
                                       extra-entries))
     (die! eng {:pos dt/death-pos :inventory pile})
-    (core/submit! eng job {})
+    (core/submit! eng (tu/order eng job) {})
     {:eng eng :seen seen :p p}))
 
 (deftest the-seal-cleanup-takes-back-only-blocks-near-the-pile
@@ -615,7 +615,7 @@
            {:keys [eng seen p]} (setup (merge {:floor [-30 -10 (+ far-x 20) 10] :entities (vec drops)} world))
            _ (sky/with-sky p)]
        (die! eng {:pos at :inventory pile})
-       (let [id (core/submit! eng job-form {})]
+       (let [id (core/submit! eng (tu/order eng job-form) {})]
          (await (run-until-empty eng 20))
          {:eng eng :seen seen :p p :id id})))))
 
@@ -635,12 +635,12 @@
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
               dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 5))
           (swap! clock + 151000)
           (swap! (fake/state p) #(-> (update % :entities (fn [es] (filterv (fn [e] (not= "hostile" (:kind e))) es)))
                                       (assoc-in [:self :pos] {:x -40 :y 64 :z 0})))
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 20))
           (is (not= :collected (:decision (recovered eng))) "the mob forgotten out of sight is still priced")
           (is (= [] (tu/walk-calls p)) "no walk back toward it"))))))
@@ -654,9 +654,9 @@
               {:keys [eng p clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) zombie)})
               dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 5))
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (core/tick! eng))
           (swap! clock + 151000)
           (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
@@ -671,11 +671,11 @@
               {:keys [eng p seen clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
               dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 5))
           (is (nil? (recovered eng)) "a danger skip is not final")
           (is (false? (died/died nil (mem/view (:store eng)) {})) "the died trigger rests while the danger is remembered")
-          (let [id (core/submit! eng dear {})]
+          (let [id (core/submit! eng (tu/order eng dear) {})]
             (await (core/tick! eng))
             (is (= :danger (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
             (is (re-find #"zombie" (str (:text (core/waiting eng id)))) "the wait names what made it decline")
@@ -697,7 +697,7 @@
         (let [pile dt/death-pile-of-the-field-report
               {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
           (die-noted! eng {:pos dt/death-pos :inventory pile} 5000)
-          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides drowned-pile-values}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops {:value-overrides drowned-pile-values})) {})
           (await (run-until-empty eng 20))
           (is (= :collected (:decision (recovered eng))) "without the drowned the safe trip is worth the pile"))))))
 
@@ -711,7 +711,7 @@
               ;; the body respawned 20 blocks off, so a death costs the short walk back and the drowned costs ~11 s: the pile (43 s) is over the 34 s safe trip, under its 45 s
               dear (list 'jobs.survival.recover-drops {:value-overrides drowned-pile-values})]
           (die-noted! eng {:pos dt/death-pos :inventory pile :cause "drowned"} 5000)
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 5))
           (is (nil? (recovered eng)) "the first weigh declines")
           (swap! clock + 151000)
@@ -729,11 +729,11 @@
               {:keys [eng clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
               dear (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})]
           (die! eng {:pos dt/death-pos :inventory pile})
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 5))
           (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "the first sight of the danger holds")
           (swap! clock + 151000)
-          (core/submit! eng dear {})
+          (core/submit! eng (tu/order eng dear) {})
           (await (run-until-empty eng 20))
           (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "no second hold for the same mob")
           (is (= :skip (:decision (recovered eng))) "the danger is still in the price: the pile is left"))))))
@@ -748,7 +748,7 @@
           (swap! clock + 270000)
           (mem/write! (:store eng) :recover-trip {:death-t (:t (mem/latest (mem/view (:store eng)) :died)) :cuts 2 :hostile-cut true :phase :go}
                       {:cap 1 :ttl 1000000})
-          (core/submit! eng (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops {:value-overrides dt/pile-values})) {})
           (await (run-until-empty eng 20))
           (is (empty? (mem/entries (mem/view (:store eng)) :recover-danger)) "no wait for the danger to pass was set")
           (is (= :skip (:decision (recovered eng))))
@@ -769,7 +769,7 @@
                          [{:name "iron_pickaxe" :count 1} {:name "iron_sword" :count 1} {:name "iron_axe" :count 1} {:name "iron_shovel" :count 1}])
               {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 20))
           (let [text (decided-text eng)]
             (is (re-find #"value [0-9.]+ \(.*, [0-9]+ other kinds [0-9.]+\)" text) text)))))))

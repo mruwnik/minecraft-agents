@@ -13,19 +13,19 @@
   :limit-s 120}
  :cases
  [{:name "wall-at-x-plus-2-steps-off-to-a-free-side"
-   :act [[:job (jobs.apiary.guard {:radius 20})]]
+   :act [[:job (jobs.apiary.guard {:worth 1200 :radius 20})]]
    :blocks [[:fill [16 0 12] [16 2 20] "stone"]]
    :expect [{:event {:kind :completed :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [14 -1 16] "campfire[lit=true]"] [:not-block [14 0 16] "campfire"]]}
   {:name "box-with-vector-corners-guards-the-fire"
-   :act [[:job (jobs.apiary.guard {:box {:min #at [10 -2 12] :max #at [18 4 20]}})]]
+   :act [[:job (jobs.apiary.guard {:worth 1200 :box {:min #at [10 -2 12] :max #at [18 4 20]}})]]
    :blocks [[:fill [16 0 12] [16 2 20] "stone"]]
    :expect [{:event {:kind :completed :data {:sunk 1 :carpeted 1 :reason :guarded}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [14 -1 16] "campfire[lit=true]"] [:not-block [14 0 16] "campfire"]]}
   {:name "lava-at-x-plus-2-never-ends-on-the-lava"
-   :act [[:job (jobs.apiary.guard {:radius 20})]]
+   :act [[:job (jobs.apiary.guard {:worth 1200 :radius 20})]]
    :blocks [[:set [16 0 16] "lava"]]
    ;; the lava spreads to x+1, beside the fire: the sink's dig is refused (hazard), the fire is left as it was
    :expect [{:event {:source :job :kind :stopped :data {:reason :refused}} :within-s 100 :of-job true}]

@@ -9,6 +9,6 @@
  :cases
  [{:name "a-bed-seen-30-blocks-off-is-walked-to-and-slept-in"
    :blocks [[:set [36 0 6] "red_bed[facing=east,part=foot]"] [:set [37 0 6] "red_bed[facing=east,part=head]"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 100}]
    :after [[:body-near [36.5 0 6.5] 4]]}]}

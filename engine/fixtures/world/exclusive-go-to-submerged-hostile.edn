@@ -16,5 +16,5 @@
  :cases
  [{:name "exclusive-go-to-ends-with-the-head-out-of-the-water"
    :act [[:summon "drowned" [16.5 1 15.5] "{NoAI:1b}"]
-         [:http :submit (jobs.movement.go-to {:pos #at [3.5 4 15.5]}) [:exclusive] {:ok true}]]
+         [:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [3.5 4 15.5]}) [:exclusive] {:ok true}]]
    :expect [{:event {:source :job :kind :stopped :data {:pos {:y [:>= #y 3]}}} :within-s 40}]}]}

@@ -12,7 +12,7 @@
  [{:name "healing-body-in-a-dark-field-goes-on-to-the-lit-hut"
    :act [[:rcon "damage $BODY 15 minecraft:generic"]
          [:wait-s 6]
-         [:job (jobs.movement.go-to {:pos #at [41 0 11] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [41 0 11] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
    :after [[:body-near [41.5 0 11.5] 2.5]]}]}

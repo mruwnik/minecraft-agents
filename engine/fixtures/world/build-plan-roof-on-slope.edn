@@ -14,6 +14,6 @@
   :limit-s 330}
  :cases
  [{:name "hut-beside-a-hill"
-   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 300 :of-job true}]
    :after [[:block [15 3 20] "spruce_planks"] [:block [17 2 22] "cobblestone"]]}]}

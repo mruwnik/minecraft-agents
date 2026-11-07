@@ -15,7 +15,7 @@
  [{:name "no-furnace-seen-crafts-and-places-one"
    :settings {:jobs.lib.stock/chest-radius 12}
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
   ;; 2d299045: no furnace in sight, none can be made (no cobblestone, no table, no logs): the remembered furnace 36 blocks off is walked to
@@ -25,7 +25,7 @@
    :blocks [[:set [40 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [40 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:at [4.5 0 16.5] :inventory [["raw_iron" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]
@@ -33,7 +33,7 @@
   {:name "carried-only-no-furnace-seen-gives-up"
    :settings {:jobs.lib.stock/chest-radius 12}
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2 :ways #{:carried}})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 2]]
@@ -41,20 +41,20 @@
   {:name "product-name-cooks-its-input-in-a-furnace-ten-off"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["chicken" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item "cooked_chicken" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "cooked_chicken" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "cooked_chicken" 2]]}
   {:name "diamond-is-no-input"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["diamond" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item "diamond"})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "diamond"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :not-smeltable}} :within-s 30 :of-job true}]
    :after [[:item "diamond" 2]]
    :limit-s 50}
   {:name "carried-furnace-is-placed-and-used"
    :body {:inventory [["furnace" 1] ["raw_iron" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]}
@@ -62,13 +62,13 @@
    :plot {:height 8 :length 64 :width 32}
    :blocks [[:set [46 0 16] "furnace[facing=west]"]]
    :body {:inventory [["furnace" 1] ["raw_iron" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2] [:body-near [16.5 0 16.5] 8]]}
   {:name "furnace-still-cooking-copper-is-waited-for-then-iron-loaded"
    :blocks [[:set [20 0 14] "furnace[facing=west,lit=true]{BurnTime:1600s,CookTime:0s,CookTimeTotal:200s,Items:[{Slot:0b,id:\"minecraft:raw_copper\",count:3},{Slot:1b,id:\"minecraft:coal\",count:2}]}"]]
    :body {:inventory [["raw_iron" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :furnace #xyz [20 0 14] :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :furnace-busy}} :for-s 20 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2] [:item "copper_ingot" 3]]}
@@ -76,7 +76,7 @@
   {:name "carried-birch-logs-are-the-fuel"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 2] ["birch_log" 4]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-fuel}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]}
@@ -85,14 +85,14 @@
             [:set [20 0 12] "chest[facing=south]{Items:[{Slot:0b,id:\"minecraft:birch_planks\",count:8}]}"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 12]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["raw_iron" 2]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
   ;; card f23d925d: an :item list cooks each raw food named
   {:name "an-item-list-cooks-each-raw-food"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["chicken" 2] ["beef" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item ["chicken" "beef"]})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item ["chicken" "beef"]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 130 :of-job true}]
    :after [[:item "cooked_chicken" 2] [:item "cooked_beef" 2]]
    :limit-s 150}
@@ -100,7 +100,7 @@
   {:name "charcoal-with-no-furnace-to-be-had-leaves-the-logs"
    :settings {:jobs.lib.stock/chest-radius 12}
    :body {:inventory [["oak_log" 11]]}
-   :act [[:job (jobs.items.smelt {:item "charcoal" :count 3 :ways #{:carried :chest}})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "charcoal" :count 3 :ways #{:carried :chest}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "oak_log" 11] [:item "oak_planks" 0] [:item "charcoal" 0]]
@@ -109,7 +109,7 @@
    :settings {:jobs.lib.stock/chest-radius 12}
    :blocks [[:fill [22 0 12] [24 2 20] "stone"]]
    :body {:inventory [["oak_log" 11] ["stone_pickaxe" 1] ["crafting_table" 1]]}
-   :act [[:job (jobs.items.smelt {:item "charcoal" :count 1})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "charcoal" :count 1})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 1}} :within-s 200 :of-job true}]
    :after [[:item "charcoal" 1]]
    :limit-s 230}
@@ -119,7 +119,7 @@
    :settings {:jobs.lib.stock/chest-radius 12}
    :blocks [[:set [8 0 16] "furnace[facing=east]"]]
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}]
    :after [[:item "iron_ingot" 2] [:item "cobblestone" 16]]}
  ;; card 60655c1d: at night a seen furnace in the dark 12 blocks off is not walked to; the lit body makes its own from carried cobblestone
@@ -128,7 +128,7 @@
    :settings {:jobs.lib.stock/chest-radius 12}
    :blocks [[:set [28 0 16] "furnace[facing=west]"] [:set [14 0 14] "torch"] [:set [14 0 18] "torch"] [:set [18 0 14] "torch"] [:set [18 0 18] "torch"]]
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]}]}

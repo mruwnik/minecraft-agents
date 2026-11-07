@@ -20,32 +20,32 @@
   {:name "search-waits-in-the-room-instead-of-roaming-out"
    :mobs :keep
    :body {:inventory [["shears" 1] ["iron_pickaxe" 1] ["diamond" 20]]}
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
          [:summon "zombie" [22.5 0 21.5] "{NoAI:1b}"]
          [:summon "zombie" [28.5 0 23.5] "{NoAI:1b}"]
          [:summon "zombie" [34.5 0 21.5] "{NoAI:1b}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.explore.search {:target "oak_log" :pattern :outward :heading :east})]]
+         [:job (jobs.explore.search {:worth 1200 :target "oak_log" :pattern :outward :heading :east})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.explore.search"}} :for-s 15}]
    :after [[:body-near [14.5 0 22.5] 2]]}
   {:name "mine-waits-in-the-room-for-a-center-outside"
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.gather.mine {:block "stone" :count 1 :center #at [26 0 22] :radius 8})]]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.gather.mine {:worth 1200 :block "stone" :count 1 :center #at [26 0 22] :radius 8})]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.gather.mine"}} :for-s 15}]
    :after [[:body-near [14.5 0 22.5] 2]]}
   {:name "shear-waits-in-the-room-for-a-sheep-outside"
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
          [:summon "sheep" [28.5 0 22.5] "{NoAI:1b}"]
          [:until-seen {:entity "sheep"} 10]
-         [:job (jobs.animals.shear {:radius 16})]]
+         [:job (jobs.animals.shear {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.animals.shear"}} :for-s 15}]
    :after [[:body-near [14.5 0 22.5] 2]]}
   {:name "shear-shears-a-sheep-inside-the-room"
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
          [:summon "sheep" [14.5 0 21.5] "{NoAI:1b}"]
          [:until-seen {:entity "sheep"} 10]
-         [:job (jobs.animals.shear {:radius 16})]]
+         [:job (jobs.animals.shear {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]}]}

@@ -16,11 +16,11 @@
   :limit-s 150}
  :cases
  [{:name "bend-is-laid-with-a-curved-corner"
-   :act [[:job (jobs.build.from-plan {:plan "$plan:bend"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:bend"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:block [16 0 16] "rail[shape=north_west]"] [:block [12 0 16] "rail[shape=east_west]"] [:block [16 0 12] "rail[shape=north_south]"]]}
   {:name "stone-in-a-rail-cell-is-dug-and-the-rail-placed"
    :blocks [[:set [12 0 16] "stone"]]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:bend"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:bend"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:block [12 0 16] "rail[shape=east_west]"] [:block [16 0 16] "rail[shape=north_west]"]]}]}

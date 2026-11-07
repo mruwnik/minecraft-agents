@@ -14,6 +14,6 @@
   :limit-s 120}
  :cases
  [{:name "sealed-over-a-dark-shaft-far-unloaded-goal-escalates"
-   :act [[:job (jobs.movement.go-to {:pos #at [-1000 3 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [-1000 3 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :goal-unloaded}} :for-s 90 :until {:source :job :kind :go-to.escalated}}]}]}

@@ -12,13 +12,13 @@
   :limit-s 90}
  :cases
  [{:name "swimming-in-a-lake-lands-on-the-bank-and-gives-up-there"
-   :act [[:job (jobs.movement.go-to {:pos #at [126 4 10] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [126 4 10] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 70 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [17.5 3 10.5] 6]]}
   {:name "a-walled-lake-has-no-stand-and-gives-up-honestly"
    :blocks [[:fill [9 4 1] [25 9 19] "stone"] [:fill [10 4 2] [24 9 18] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [126 4 10] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [126 4 10] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 70 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [17.5 3 10.5] 9]]}]}

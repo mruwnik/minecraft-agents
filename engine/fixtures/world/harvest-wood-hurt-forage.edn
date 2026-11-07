@@ -13,7 +13,7 @@
    :body {:inventory [["iron_axe" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.forestry.harvest-wood {:radius 16})]]
+         [:job (jobs.forestry.harvest-wood {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 20 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 3]]]}
@@ -21,6 +21,6 @@
    :body {:inventory [["iron_axe" 1] ["bread" 4]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.forestry.harvest-wood {:radius 16})]]
+         [:job (jobs.forestry.harvest-wood {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
    :after [[:item "oak_log" 0]]}]}

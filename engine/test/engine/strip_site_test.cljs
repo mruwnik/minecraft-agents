@@ -438,7 +438,7 @@
                                                           (core/cancel! (:eng @env-at) (first (:list (core/state (:eng @env-at)))))
                                                           {:status :done :taken {} :new-segments []})})
               _ (reset! env-at env)]
-          (core/submit! (:eng env) (list job args) {})
+          (core/submit! (:eng env) (tu/order (:eng env) (list job args)) {})
           (await (tu/run-until-empty (:eng env) 600))
           (is (= 1 (count (called env 'jobs.strip.corridor))) "cut after the first corridor")
           (is (= :not-done (await (wait! env (dissoc args :at)))) "the resume yields every round")

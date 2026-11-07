@@ -12,14 +12,14 @@
  [{:name "moss-block-room-with-pickaxe-is-dug-out"
    :blocks [[:fill [14 -1 14] [18 2 18] "moss_block" :hollow]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "stone-room-with-bare-hands-is-dug-out"
    :blocks [[:fill [14 -1 14] [18 2 18] "stone" :hollow]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :no-tool}}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
@@ -31,21 +31,21 @@
             [:fill [15 3 16] [15 5 16] "air"] [:fill [16 4 16] [16 6 16] "air"] [:fill [17 5 16] [17 7 16] "dirt"]
             [:fill [18 6 16] [18 8 16] "air"]]
    :body {:at [16.5 4 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [20 6 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 6 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :ladder-gap}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [20.5 6 16.5] 2]]}
   {:name "one-wide-dirt-tunnel-open-end-walks-out"
    :blocks [[:fill [2 0 15] [27 2 17] "dirt"] [:fill [3 0 16] [27 1 16] "air"]]
    :body {:at [5.5 0 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [30.5 0 16.5] 2]]}
   {:name "one-wide-dirt-tunnel-plugged-digs-out"
    :blocks [[:fill [2 0 15] [27 2 17] "dirt"] [:fill [3 0 16] [25 1 16] "air"]]
    :body {:at [5.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 2]]}
@@ -53,7 +53,7 @@
    :plot {:height 14 :length 64} ; a 32 cell drains as start-enclosed: the body would count as shut in
    :blocks [[:fill [22 -1 14] [26 2 18] "stone" :hollow]]
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
@@ -62,21 +62,21 @@
    :blocks [[:fill [10 -5 6] [22 3 26] "stone"] [:fill [13 -4 10] [19 -2 16] "air"] [:fill [16 0 10] [16 1 13] "air"]
             [:fill [13 0 16] [19 1 18] "air"] [:set [15 1 11] "glowstone"] [:set [16 2 17] "glowstone"]]
    :body {:at [16.5 0 11.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 17] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 17] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [16.5 0 17.5] 1.5]
            [:block [16 -1 10] "stone"] [:block [16 -1 11] "stone"] [:block [16 -1 12] "stone"] [:block [16 -1 13] "stone"]]}
   {:name "bedrock-room-with-pickaxe-gives-up-and-digs-nothing"
    :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [18 1 16] "bedrock"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "goal-in-a-bedrock-room-gives-up-for-a-free-body"
    :blocks [[:fill [22 -1 14] [26 2 18] "bedrock" :hollow]]
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 0})]]
    ;; the floor under the goal is unseen from outside and reads as rock, so one stone of the ground may be dug to look; the room stays whole
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
    :after [[:block [22 1 16] "bedrock"] [:block [26 1 16] "bedrock"] [:block [24 -1 16] "bedrock"] [:block [24 2 16] "bedrock"]]}
@@ -85,27 +85,27 @@
    :blocks [[:fill [22 -2 14] [26 3 18] "bedrock" :hollow]]
    :plot {:height 14 :length 64}
    :body {:at [4.5 0 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
    :after [[:block [22 1 16] "bedrock"]]}
   {:name "door-onto-a-3-deep-trench-bare-hands-drops-in-and-digs-out"
    ;; dirt room (inside x 15..17, lintel over the door at x 18), a trench 3 deep across the yard right outside the door: the far wall is 3 high, nothing to place
    :blocks [[:fill [14 -1 14] [18 2 18] "dirt" :hollow] [:fill [18 0 16] [18 1 16] "air"]
             [:fill [19 -5 4] [26 -1 28] "dirt"] [:fill [19 -3 4] [19 -1 28] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "cobble-door-onto-a-3-deep-trench-drops-in-and-digs-out"
    ;; the room is cobblestone (not dug), the trench is dirt: the planner will not enter a pit it cannot climb out of, so the shut-in body drops in and digs its stair from the bottom
    :blocks [[:fill [14 -1 14] [18 3 18] "cobblestone" :hollow] [:fill [18 0 16] [18 1 16] "air"]
             [:fill [19 -5 4] [26 -1 28] "dirt"] [:fill [19 -3 4] [19 -1 28] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "cobble-door-onto-a-bedrock-trench-stays-in-the-room"
    ;; a closed trench no way out of which can be dug: the shut-in body does not drop into it
    :blocks [[:fill [14 -1 14] [18 3 18] "cobblestone" :hollow] [:fill [18 0 16] [18 1 16] "air"]
             [:fill [19 -5 10] [26 -1 22] "bedrock"] [:fill [19 -3 12] [19 -1 20] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 3]]}]}

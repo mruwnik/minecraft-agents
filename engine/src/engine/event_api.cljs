@@ -532,13 +532,15 @@
 
 (defn ^:async quote-view
   "A promise of the answer to GET /quote: job name's quote for args-text (EDN text of its args, or nil), as {:ok true
-  :job :quote}, else {:ok false :reason :unknown-job|:bad-args|:quote-failed}."
+  :job :quote}, else {:ok false :reason :unknown-job|:bad-args|:worth-required|:quote-failed}: args give a :worth, as a submit does."
   [eng name args-text]
   (let [sym (symbol name)
         args (try (if (str/blank? args-text) {} (reader/read-string args-text)) (catch :default _ ::bad))]
     (cond
       (not (contains? (:jobs eng) sym)) {:ok false :reason :unknown-job :job sym}
       (not (map? args)) {:ok false :reason :bad-args :message "args must be one EDN map"}
+      (not (number? (:worth args))) {:ok false :reason :worth-required
+                                     :message "worth is required: give the args a :worth, the seconds of the body's time the goal is worth to you"}
       :else (try (let [[def args] (update (expr/leaf (:jobs eng) sym args) 0 assoc :sym sym)
                        base {:root "quote" :slots [] :chain [] :token nil :args {} :round 0 :t0s []}]
                    {:ok true :job sym

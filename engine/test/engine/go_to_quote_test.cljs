@@ -23,7 +23,7 @@
 (defn ^:async quote-reply
   "eng's answer to GET /quote for go-to with args (what ./bin/quote prints)."
   [eng args]
-  (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str args))))
+  (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str (merge {:worth tu/order-worth} args)))))
 
 (declare preview*)
 

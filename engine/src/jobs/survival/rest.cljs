@@ -2,6 +2,7 @@
   (:require [jobs.lib.shelter.fill :as fill]
             [engine.args :as a]
             [engine.contract :as contract]
+            [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -64,6 +65,11 @@
   [c cause data]
   (mem/write! (:store (:engine c)) :rest-gave-up {:health (:health data)} gave-up-policy)
   (ctx/end c :nothing-possible cause data))
+
+(defn worth-of
+  "The loss the rest averts: the hp the body lacks, each at what regaining it costs (cost/hp-cost)."
+  [c]
+  (cost/hp-cost (- 20 (.-health (.self (:primitives c))))))
 
 (defn done? [c]
   (checks/goal (not (hostile-loss/too-hurt? c (ctx/view c) :heal nil)) [:rested "healed"] [:resting "resting to heal"]

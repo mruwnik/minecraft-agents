@@ -8,7 +8,7 @@
   :blocks [[:fill [8 0 8] [24 0 24] "stone"]
            [:set [16 0 16] "lava"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
-  :act [[:job (jobs.survival.extinguish {})]]
+  :act [[:job (jobs.survival.extinguish {:worth 1200})]]
   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
   :limit-s 60}
  :cases

@@ -15,7 +15,7 @@
   :body {:at [16.5 1 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 8]] :settle-s 2}
   :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
         [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
-        [:job (jobs.survival.extinguish {})]]
+        [:job (jobs.survival.extinguish {:worth 1200})]]
   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
   :limit-s 60}
  :cases

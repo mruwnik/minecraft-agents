@@ -12,13 +12,13 @@
  [{:name "equip-fetches-an-item-from-a-seen-chest-by-default"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.items.equip {:item "iron_pickaxe"})]]
+         [:job (jobs.items.equip {:worth 1200 :item "iron_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed :data {:item "iron_pickaxe"}} :within-s 70 :of-job true}]
    :after [[:item "iron_pickaxe" 1]]}
   {:name "equip-fetch-false-waits-no-item-chest-untouched"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:iron_pickaxe\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.items.equip {:item "iron_pickaxe" :ways #{:carried}})]]
+         [:job (jobs.items.equip {:worth 1200 :item "iron_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "inspectContainer"}} :for-s 30}]
    :after [[:item "iron_pickaxe" 0]]}
@@ -26,7 +26,7 @@
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
+         [:job (jobs.access.tunnel {:worth 1200 :target #at [16 6 20] :max-length 12})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :limit-s 220
@@ -35,14 +35,14 @@
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :ways #{:carried} :need-drop true})]]
+         [:job (jobs.access.tunnel {:worth 1200 :target #at [16 6 20] :max-length 12 :ways #{:carried} :need-drop true})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 40 :until {:source :job :kind :stopped}}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:item "stone_pickaxe" 0] [:not-block [16 9 16] "air"]]}
   {:name "tunnel-no-source-fetch-fails-and-stops-no-tool"
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :need-drop true})]]
+   :act [[:job (jobs.access.tunnel {:worth 1200 :target #at [16 6 20] :max-length 12 :need-drop true})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :stopped}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 70 :until {:source :job :kind :stopped}}]
@@ -53,7 +53,7 @@
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]
+         [:job (jobs.access.tunnel {:worth 1200 :target #at [16 6 20] :max-length 12})]
          [:await {:source :job :kind :child_started :data {:slot :dig}} 60]
          [:rcon "clear $BODY stone_pickaxe"]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 180 :of-job true}
@@ -65,7 +65,7 @@
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
+         [:job (jobs.access.tunnel {:worth 1200 :target #at [16 6 20] :max-length 12})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 90}
             {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :limit-s 220

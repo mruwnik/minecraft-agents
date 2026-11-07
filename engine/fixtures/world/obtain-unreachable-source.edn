@@ -12,14 +12,14 @@
  [{:name "stone-seen-through-a-window-but-unreachable-is-not-no-source"
    :blocks [[:fill [14 -1 14] [18 3 18] "bedrock" :hollow] [:fill [19 0 8] [30 4 24] "stone"] [:set [18 1 16] "glass"]]
    :body {:inventory [["wooden_pickaxe" 1]]}
-   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 4 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "cobblestone" :count 4 :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:why [:contains "could not get to a source of"]}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 100 :until {:source :job :kind :stopped} :of-job true}]
    :after [[:item "cobblestone" 0]]}
   {:name "logs-only-on-an-unreachable-pillar-explores-first-and-says-unreachable"
    :plot {:light :sky}
    :blocks [[:fill [22 0 15] [22 6 15] "bedrock"] [:fill [22 7 15] [22 12 15] "oak_log"]]
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 2 :explore true})]]
    :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 20 :until {:source :job :kind :obtain.exploring} :of-job true}]
    :after [[:item "oak_log" 0]]
@@ -32,7 +32,7 @@
             [:fill [16 0 14] [16 5 14] "bedrock"] [:set [16 6 14] "stone"]
             [:fill [16 0 18] [16 5 18] "bedrock"] [:set [16 6 18] "stone"]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "cobblestone" :count 3 :explore false})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 110 :of-job true}
             {:count-event {:source :job :kind :mine.unreachable} :for-s 110 :at-least 4 :at-most 8 :of-job true}]
    :after [[:item "cobblestone" 0]]

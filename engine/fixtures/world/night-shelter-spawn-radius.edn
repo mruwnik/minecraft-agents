@@ -12,7 +12,7 @@
   :limit-s 90}
  :cases
  [{:name "lit-closed-room-is-shelter"
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
             [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
@@ -20,7 +20,7 @@
    :after [[:body-near [13.5 0 13.5] 1.5]]}
   {:name "lit-room-open-to-the-dark-by-an-iron-door-is-no-shelter"
    ;; the lit room's south wall holds an open iron door no hand shuts: the dark ground's mobs walk in, so the stay is priced and the body walls in
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
             [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]
             [:set [12 0 8] "iron_door[facing=south,half=lower,hinge=left,open=true]"] [:set [12 1 8] "iron_door[facing=south,half=upper,hinge=left,open=true]"]]
@@ -29,15 +29,15 @@
    ;; a body sees no block in the dark: the torches show it the whole room (a look round), then go out and the room is dark but known
    :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
             [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]]
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
          [:rcon "execute positioned $X $Y $Z run fill ~9 ~-1 ~9 ~15 ~3 ~15 air replace torch"]
          [:wait-s 2]
-         [:job (jobs.survival.night {})]]
+         [:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [13.5 0 13.5] 1.5]]}
   {:name "dark-big-hall-is-no-shelter"
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :plot {:length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]]
    :body {:at [9.5 0 9.5]}
@@ -48,18 +48,18 @@
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [40 3 10] "stone" :hollow] [:fill [9 0 9] [39 2 9] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [21 1 9] "torch"] [:set [27 1 9] "torch"] [:set [33 1 9] "torch"] [:set [39 1 9] "torch"]]
    :body {:at [9.5 0 9.5] :inventory [["torch" 16]]}
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
-         [:job (jobs.movement.go-to {:pos #at [38 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
-         [:job (jobs.movement.look-around)] [:await {:source :job :kind :completed :data {:name "jobs.movement.look-around"}} 30] [:job (jobs.movement.go-to {:pos #at [9 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [38 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
+         [:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed :data {:name "jobs.movement.look-around"}} 30] [:job (jobs.movement.go-to {:worth 1200 :pos #at [9 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
          [:rcon "execute positioned $X $Y $Z run fill ~8 ~-1 ~8 ~40 ~3 ~10 air replace torch"]
          [:wait-s 2]
-         [:job (jobs.survival.night {})]]
+         [:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150}
             {:event {:source :action :kind :started :data {:name "place"}} :within-s 150}]
    :limit-s 200}
   {:name "lit-tunnel-is-shelter"
    ;; a 1-wide dead-end tunnel, 40 long, torch every 6: no room, but lit all along and closed. The night walks along it to see its far walls (an unseen cell is open until seen), so the body ends anywhere in the tunnel
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {})]]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {:worth 1200})]]
    :plot {:length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [21 1 9] "torch"] [:set [27 1 9] "torch"] [:set [33 1 9] "torch"] [:set [39 1 9] "torch"] [:set [45 1 9] "torch"]]
@@ -69,7 +69,7 @@
    :after [[:body-near [29.5 0 9.5] 21]]}
   {:name "lit-tunnel-with-an-unseen-side-branch-to-a-dark-hall-is-no-shelter"
    ;; the same lit tunnel with a side branch at x 20 into a dark hall: the branch cannot be seen from the tunnel, so the region is not known shut
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {})]]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {:worth 1200})]]
    :plot {:length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]
             [:fill [19 0 10] [46 3 22] "stone" :hollow] [:fill [20 0 11] [45 2 21] "air"] [:fill [20 0 10] [20 2 10] "air"]
@@ -78,21 +78,21 @@
    :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 150}]}
   {:name "tunnel-lit-at-its-start-only-opens-into-the-dark"
    ;; the same tunnel with torches on the first 12 cells only: a dark spawnable cell lies beyond 24 blocks
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {})]]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {:worth 1200})]]
    :plot {:length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 9] "torch"]]
    :body {:at [9.5 0 9.5]}
    :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 150}]}
   {:name "tiny-dark-cell-is-shelter"
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 0 10] [12 3 13] "stone" :hollow] [:fill [11 0 11] [11 2 12] "air"]]
    :body {:at [11.5 0 11.5]}
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [11.5 0 11.5] 1.5]]}
   {:name "lit-roof-with-open-sides-is-no-shelter"
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 3 10] [16 3 16] "stone"]
             [:fill [10 0 10] [10 2 10] "stone"] [:fill [16 0 10] [16 2 10] "stone"] [:fill [10 0 16] [10 2 16] "stone"] [:fill [16 0 16] [16 2 16] "stone"]
             [:set [12 1 12] "torch"] [:set [14 1 14] "torch"] [:set [12 1 14] "torch"] [:set [14 1 12] "torch"]]

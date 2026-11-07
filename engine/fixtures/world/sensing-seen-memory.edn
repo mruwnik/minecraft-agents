@@ -9,15 +9,15 @@
   :limit-s 90}
  :cases
  [{:name "ore-behind-three-stone-is-named-once-the-stone-is-dug"
-   :act [[:job (jobs.access.tunnel {:target #at [22 0 16] :max-length 8 :ways #{:carried}})]
+   :act [[:job (jobs.access.tunnel {:worth 1200 :target #at [22 0 16] :max-length 8 :ways #{:carried}})]
          [:await {:source :job :kind :completed :of-job true} 80]
-         [:job (jobs.explore.look {:at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
+         [:job (jobs.explore.look {:worth 1200 :at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore" :seen? true}}} :within-s 40 :of-job true}]}
   {:name "a-seen-ore-is-still-remembered-after-a-restart"
    :keep-memory true
-   :act [[:job (jobs.explore.look {:block-names ["iron_ore"] :radius 16 :max-blocks 6})]
+   :act [[:job (jobs.explore.look {:worth 1200 :block-names ["iron_ore"] :radius 16 :max-blocks 6})]
          [:await {:source :job :kind :completed :of-job true} 30]
          [:restart-body]
          [:cli "observe" ["$body" "--world" "$world" "seen" "--names" "iron_ore"] {:ok true :blocks [:has {:name "iron_ore"}]}]
-         [:job (jobs.explore.look {:at #at [18 0 16] :max-blocks 0 :max-entities 0})]]
+         [:job (jobs.explore.look {:worth 1200 :at #at [18 0 16] :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore"}}} :within-s 40 :of-job true}]}]}

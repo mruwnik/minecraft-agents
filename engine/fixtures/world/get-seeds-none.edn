@@ -10,13 +10,13 @@
   :limit-s 60}
  :cases
  [{:name "grass-beyond-radius-is-walked-to"
-   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 6})]]
+   :act [[:job (jobs.gather.get-seeds {:worth 1200 :item "wheat_seeds" :count 1 :radius 6})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :count}} :within-s 150 :of-job true}]
    :after [[:item "wheat_seeds" [:>= 1]]]
    :limit-s 170}
   {:name "grass-within-radius-gives-seeds"
    :blocks [[:fill [6 0 14] [9 0 18] "short_grass"]]
-   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 12})]]
+   :act [[:job (jobs.gather.get-seeds {:worth 1200 :item "wheat_seeds" :count 1 :radius 12})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :count}} :within-s 120 :of-job true}]
    :after [[:item "wheat_seeds" [:>= 1]]]
    :limit-s 140}]}

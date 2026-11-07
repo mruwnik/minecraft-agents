@@ -10,6 +10,6 @@
   :limit-s 150}
  :cases
  [{:name "dirt-block-in-front-of-the-door-is-dug"
-   :act [[:job (jobs.movement.go-to {:pos #at [13 0 12] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [13 0 12] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [13.5 0 12.5] 2]]}]}

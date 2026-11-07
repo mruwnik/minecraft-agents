@@ -14,12 +14,12 @@
    ;; cd3e838f: a 1-wide ledge with a 22-deep drop on both sides, dark, 11.5 hp: any slip is a lethal fall
    :blocks [[:fill [6 -22 0] [44 -1 31] "air"] [:fill [6 -1 16] [44 -1 16] "stone"] [:fill [6 -1 17] [10 -1 17] "stone"]]
    :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [40 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [40.5 0 16.5] 2]]}
   {:name "dark-gap-ends-not-arrived-with-a-reason"
    :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [40 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :unseen-floors :cells [:any]}} :within-s 40 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 16]]}
   {:name "dark-gap-with-torches-ends-not-arrived-without-pacing-the-rim"
@@ -28,6 +28,6 @@
    :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :inventory [["torch" 16]]}
    :limit-s 150
    :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [40 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 120 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 16]]}]}

@@ -99,7 +99,7 @@
                          #js {:status "no-support"}
                          (await (impl token a)))))
           (st/dawn-after! p 12)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 120))
           (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled))))
           (is (some #(<= 27 (:x (st/arg-pos %))) (st/calls p "place")) "the pit's roof is placed at the patch"))))))
@@ -112,7 +112,7 @@
           (is (seq (filter #(= :flee (first %)) log)))
           (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the quote's price is reported")
           (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it")
-          (is (and (seq calls) (every? #(= (ctx/default-worth) (:worth %)) calls)) "each candidate is quoted at the root default worth: the flight's own worth is derived from the quote"))))))
+          (is (and (seq calls) (every? #(nil? (:worth %)) calls)) "each candidate is quoted at the night's worth, inherited: the flight's own worth is derived from the quote"))))))
 
 (deftest a-flee-prices-the-fight-at-its-target-once
   (async done
@@ -340,7 +340,7 @@
           (tu/seeing-all p)
           (set! pick/quote! (fn [_ a] (swap! asked conj a) (js/Promise.resolve {:uses {:job-time [0 1 1]}})))
           (try
-            (core/submit! eng '(worth-probe) {})
+            (core/submit! eng (tu/order eng '(worth-probe)) {})
             (await (tu/run-until-empty eng 20))
             (finally (set! pick/quote! quote!)))
           (is (= 2 (count @asked)) "worth 50 twice: one ask; worth 900: another"))))))
@@ -369,7 +369,7 @@
           (tu/seeing-all p)
           (set! pick/quote! (fn [c args] (swap! asked inc) (quote! c args)))
           (try
-            (core/submit! eng '(flee-probe) {})
+            (core/submit! eng (tu/order eng '(flee-probe)) {})
             (await (tu/run-until-empty eng 20))
             (finally (set! pick/quote! quote!)))
           (let [[[at n] [again m] [_ k]] @out]
@@ -390,7 +390,7 @@
                          #js {:status "no-support"}
                          (await (impl token a)))))
           (st/dawn-after! p 12)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 160))
           (is (seq (st/calls p "look")))
           (is (= [:ground] (mapv :target (st/emitted seen :shelter.fled)))))))))
@@ -403,7 +403,7 @@
               {:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks (merge stone-and-dirt-patch wet-patch)})]
           (tu/seeing-all p)
           (st/dawn-after! p 12)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 160))
           (let [fled (st/emitted seen :shelter.fled)]
             (is (= [:ground] (mapv :target fled)))
@@ -416,7 +416,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup (assoc hut/night-bed-world :inventory [{:name "red_bed" :count 1}]))]
           (tu/seeing-after-look p)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (seq (st/calls p "look")) "looked around first")
           (is (= 1 (count (st/calls p "sleep"))) "slept in the seen bed")
@@ -428,7 +428,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"1,64,0" "red_bed"} :monstersNear true})
-              _ (core/submit! eng '(jobs.survival.sleep {:bed {:x 1 :y 64 :z 0}}) {})]
+              _ (core/submit! eng (tu/order eng '(jobs.survival.sleep {:bed {:x 1 :y 64 :z 0}})) {})]
           (tu/seeing-after-look p)
           (await (st/tick-n eng 6))
           (is (empty? (st/emitted seen :bed_unusable)) "not a failed sleep")
@@ -440,7 +440,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (held-starving [zombie] {:food 20 :health 20} [{:name "red_bed" :count 1}])]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (core/tick! eng))
           (is (empty? (st/calls p "sleep")) "no sleep with a hostile near")
           (is (>= 1 (count (filterv #(and (= :child_started (:kind %)) (= :bed-down (:slot %))) @seen))) "one bed-down, then the round ends")
@@ -459,7 +459,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})
-              id (core/submit! eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}})) {})]
           (tu/seeing-after-look p)
           (await (st/tick-n eng 6))
           (is (empty? (st/calls p "sleep")) "no sleep on an occupied bed")
@@ -472,7 +472,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :skipNight false})]
           (tu/seeing-after-look p)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (seq (st/calls p "place")) "put the bed down")
           (let [names (mapv #(.-name %) (.-calls (.-world p)))]
@@ -487,7 +487,7 @@
         (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :self {:pos {:x 1 :y 64 :z 0}}
                                          :blocks (merge st/floor {"1,64,0" "red_bed" "2,64,0" "red_bed"})})]
           (st/know-bed! eng {:x 1 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 60))
           (is (empty? (filter #(#{{:x 1 :y 64 :z 0} {:x 2 :y 64 :z 0}} %) (map st/arg-pos (st/calls p "dig")))) "no bed half dug")
           (is (= "red_bed" (.-name (.blockAt p (tu/pos 2 64 0))))))))))
@@ -498,7 +498,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}]
                                          :blocks (merge (tu/box -4 63 -4 4 63 4 "chest") {"2,63,2" "crafting_table"})})]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 30))
           (is (empty? (st/calls p "place")) "no bed on a container floor")
           (is (= 1 (count (st/entries eng :bed-place-failed)))))))))
@@ -508,7 +508,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (st/setup {:time night :blocks {"6,64,0" "red_bed"} :states {"6,64,0" {:occupied true}}})
-              id (core/submit! eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.survival.sleep {:bed {:x 6 :y 64 :z 0}})) {})]
           (tu/seeing-after-look p)
           (await (st/tick-n eng 3))
           (is (= 1 (count (:list (core/state eng)))) "holds, not condition-failed at the start")
@@ -523,7 +523,7 @@
   [world]
   (let [asked (atom nil)
         c {:primitives (tu/seeing-all (tu/fake-on-floor (merge {:time night :players ["Alex"]} (update world :entities #(conj (vec %) sleeper))))) :args {} :id "j" :root "j" :slots []
-           :view (fn [] {:now 0 :data mem/empty-data}) :engine {:warned (atom #{})}}]
+           :view (fn [] {:now 0 :data mem/empty-data}) :engine {:warned (atom #{})} :worth (constantly tu/order-worth)}]
     (with-redefs [bed-down/answers (fn ^:async answers [_ opts] (reset! asked (:log-out? opts)) {:exposed 1})]
       (await (bed-down/carried-answer c)))
     @asked))
@@ -545,7 +545,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [c (sense-t/stub-ctx (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}}))
+        (let [c (assoc (sense-t/stub-ctx (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}})) :worth (constantly 900))
               reads {:cells [[3 64 0]]}
               delta (fn ^:async delta [dig-s prices]
                       (let [opts (atom nil)]
@@ -558,7 +558,7 @@
                         (some-> (:price @opts) (apply [nil reads]) :delta)))]
           (is (= 12 (await (delta 12 [{:niche 50 :stay 30} nil]))) "a dig-in quoted: a place spares it")
           (is (= 30 (await (delta ##Inf [{:niche 50 :stay 30} nil]))) "none quoted: the cheapest other way, not ##Inf")
-          (is (= (ctx/default-worth) (await (delta ##Inf [{} nil]))) "no way priced at all: the night's own worth bounds the looks")
+          (is (= 900 (await (delta ##Inf [{} nil]))) "no way priced at all: the night's own worth bounds the looks")
           (is (nil? (await (delta ##Inf :searching))) "the other ways still searching: no look this pass"))))))
 
 (deftest the-other-ways-a-place-spares-are-priced-once-a-dig-in-and-not-when-no-look-follows

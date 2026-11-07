@@ -18,13 +18,13 @@
   :limit-s 180}
  :cases
  [{:name "a-cave-the-stair-broke-into-is-sealed-and-the-way-back-kept"
-   :act [[:job (jobs.access.record-stair {})]
-         [:job (jobs.blocks.seal-opening {:radius 8 :ways #{:carried}})]]
+   :act [[:job (jobs.access.record-stair {:worth 1200})]
+         [:job (jobs.blocks.seal-opening {:worth 1200 :radius 8 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:sealed [:>= 5]}} :within-s 150 :of-job true}]
    :after [[:block [16 1 17] "cobblestone"] [:block [16 2 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
            [:block [17 2 17] "cobblestone"] [:block [18 2 17] "cobblestone"]
            [:not-block [21 4 16] "cobblestone"] [:not-block [21 5 16] "cobblestone"] [:not-block [18 1 17] "cobblestone"]]}
   {:name "no-own-passage-near-is-impossible"
-   :act [[:job (jobs.blocks.seal-opening {:radius 8})]]
+   :act [[:job (jobs.blocks.seal-opening {:worth 1200 :radius 8})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-own-cells}} :within-s 30 :of-job true}]
    :after [[:not-block [17 1 17] "cobblestone"]]}]}

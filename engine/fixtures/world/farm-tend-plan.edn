@@ -15,21 +15,21 @@
   :limit-s 120}
  :cases
  [{:name "just-harvested-cell-replanted-below-the-reserve"
-   :act [[:job (jobs.farm.tend {:area {:plan "$plan:field"}})]]
+   :act [[:job (jobs.farm.tend {:worth 1200 :area {:plan "$plan:field"}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 1 :replanted 1}}}} :within-s 100 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "air"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}
   ;; a tree standing on crop cells is reported (:field :blocked) while the free cells are sown; tend never digs it
   {:name "crop-cells-filled-by-a-tree-are-reported-blocked-and-the-rest-sown"
    :blocks [[:set [10 0 16] "oak_log"] [:set [11 0 16] "oak_leaves"]]
    :body {:inventory [["carrot" 40]]}
-   :act [[:job (jobs.farm.tend {:area {:plan "$plan:field"}})]]
+   :act [[:job (jobs.farm.tend {:worth 1200 :area {:plan "$plan:field"}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:plant {:planted 2}} :field {:blocked [:any]}}} :within-s 100 :of-job true}]
    :after [[:block [10 0 16] "oak_log"] [:block [11 0 16] "oak_leaves"] [:block [12 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}
   ;; maintain clears a tree standing on its own plan cells itself (a tidy step), then sows them
   {:name "maintain-clears-a-tree-on-its-crop-cells-then-sows-them"
    :blocks [[:set [10 0 16] "oak_log"] [:set [11 0 16] "oak_leaves"]]
    :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
-   :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field"} :irrigate false})]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:field"} :irrigate false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tidy {:dug [:>= 1]}}}} :within-s 110 :of-job true}]
    :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}
   ;; the plan names the soil under the crop cells as dirt (a soil part): maintain still tills it and sows
@@ -40,7 +40,7 @@
             :parts [{:id "soil" :box [#at [10 -1 16] #at [13 -1 16]] :want "dirt"}
                     {:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
    :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
-   :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field" :part "row"} :irrigate false})]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:field" :part "row"} :irrigate false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tend {:field {:crops 4 :untilled 0}}}}} :within-s 110 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}
   ;; Card ebfb053a: a plan of melon and pumpkin stems inside a foreign "common" zone (allows harvest/take/put, no :place) is tilled and sown
@@ -54,7 +54,7 @@
             :parts [{:id "melons" :box [#at [10 0 16] #at [11 0 16]] :want {:crop "melon_stem"}}
                     {:id "pumpkins" :box [#at [12 0 16] #at [13 0 16]] :want {:crop "pumpkin_stem"}}]}]
    :body {:inventory [["melon_seeds" 4] ["pumpkin_seeds" 4] ["stone_hoe" 1]]}
-   :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field"} :irrigate false})]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:plan "$plan:field"} :irrigate false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tend {:field {:crops 4 :untilled 0}}}}} :within-s 110 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "melon_stem[age=0]"] [:block [11 0 16] "melon_stem[age=0]"]
            [:block [12 0 16] "pumpkin_stem[age=0]"] [:block [13 0 16] "pumpkin_stem[age=0]"]]}]}

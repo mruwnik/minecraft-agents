@@ -11,7 +11,7 @@
  :cases
  [{:name "plant-field-queued-at-night-waits-then-sows-at-day"
    :blocks [[:fill [10 -1 20] [13 -1 20] "farmland[moisture=7]"]]
-   :act [[:job (jobs.farm.plant {:area {:min #xyz [10 -1 20] :max #xyz [13 -1 20]}})]
+   :act [[:job (jobs.farm.plant {:worth 1200 :area {:min #xyz [10 -1 20] :max #xyz [13 -1 20]}})]
          [:await {:source :job :kind :waiting} 30]
          [:wait-s 10]
          [:time-set 1000]]
@@ -20,7 +20,7 @@
    :after [[:block [10 0 20] "wheat"] [:block [13 0 20] "wheat"]]}
   {:name "path-box-queued-at-night-waits-then-paths-at-day"
    :blocks [[:fill [10 -1 20] [12 -1 22] "grass_block"]]
-   :act [[:job (jobs.build.path {:from #at [10 -1 20] :to #at [12 -1 22]})]
+   :act [[:job (jobs.build.path {:worth 1200 :from #at [10 -1 20] :to #at [12 -1 22]})]
          [:await {:source :job :kind :waiting} 30]
          [:wait-s 10]
          [:time-set 1000]]
@@ -29,7 +29,7 @@
    :after [[:block [11 -1 21] "dirt_path"]]}
   {:name "clear-cells-of-dirt-queued-at-night-waits-then-digs-at-day"
    :blocks [[:fill [10 0 20] [12 0 22] "dirt"]]
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [10 0 20] :max #at [12 0 22]}})]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [10 0 20] :max #at [12 0 22]}})]
          [:await {:source :job :kind :waiting} 30]
          [:wait-s 10]
          [:time-set 1000]]
@@ -38,7 +38,7 @@
    :after [[:block [11 0 21] "air"]]}
   {:name "hunt-queued-at-night-in-the-open-waits-dark-then-hunts-at-day"
    :act [[:summon "cow" [13.5 0 12.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:item "beef" :count 1 :keep 0})]
+         [:job (jobs.combat.hunt {:worth 1200 :item "beef" :count 1 :keep 0})]
          [:await {:source :job :kind :waiting :data {:reason :exposed}} 30]
          [:wait-s 10]
          [:time-set 1000]]
@@ -50,7 +50,7 @@
    ;; Q382: the dark of a fight seconds long costs under the hp the body may risk
    :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie" :min 1} 10]
-         [:job (jobs.combat.attack {:targets "zombie"})]]
+         [:job (jobs.combat.attack {:worth 1200 :targets "zombie"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}

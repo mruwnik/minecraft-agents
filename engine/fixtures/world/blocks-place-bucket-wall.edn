@@ -7,6 +7,6 @@
   :limit-s 60}
  :cases
  [{:name "wall-in-the-line"
-   :act [[:wait-s 2] [:job (jobs.blocks.place {:pos #at [19 0 16] :item "lava_bucket"})]]
+   :act [[:wait-s 2] [:job (jobs.blocks.place {:worth 1200 :pos #at [19 0 16] :item "lava_bucket"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 50 :of-job true}]
    :after [[:block [19 0 16] "lava[level=0]"] [:item "lava_bucket" 0] [:item "bucket" 1]]}]}

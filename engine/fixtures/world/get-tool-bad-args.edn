@@ -7,6 +7,6 @@
   :limit-s 40}
  :cases
  [{:name "no-args-a"
-   :act [[:job (jobs.items.get-tool {})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:status :stopped :kind :impossible :reason :bad-args :cause {:why [:contains ":block"]}}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:status :stopped :kind :impossible :reason :bad-args :cause {:why [:contains ":block"]}}}}]}]}

@@ -24,7 +24,7 @@
 (defn ^:async run-job
   "Submit spec and tick until the list is empty (at most 8 ticks)."
   [eng spec]
-  (core/submit! eng spec {})
+  (core/submit! eng (tu/order eng spec) {})
   (loop [i 0]
     (when (and (< i 8) (seq (:list (core/state eng))))
       (await (core/tick! eng))

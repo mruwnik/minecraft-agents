@@ -12,7 +12,7 @@
   :limit-s 300}
  :cases
  [{:name "no-pickaxe-pocket-stair-cut-by-hand"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 3 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:cause {:why :start-enclosed}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
@@ -20,7 +20,7 @@
   {:name "no-pickaxe-own-shelter-pocket-is-left-by-hand"
    :memory [{:kind :shelter :data {:pos #xyz [16 -3 16] :roof #xyz [16 -1 16] :state :built}
              :policy {:cap 10 :ttl 1200000}}]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 3 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:cause {:why :start-enclosed}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]

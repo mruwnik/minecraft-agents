@@ -30,7 +30,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world 50)]
-    (core/submit! (:eng s) (spec args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (spec args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
@@ -222,7 +222,7 @@
                  ["Miles" {:ignore-zones? true} [1 2] []]
                  [nil {} [] []]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.cull (merge {:mob "cow" :keep 0} extra)) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.cull (merge {:mob "cow" :keep 0} extra))) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (sort (distinct (attacked s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :cull.declined))) (pr-str owner extra))))))))
@@ -233,7 +233,7 @@
       (fn ^:async t []
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.cull {:mob "cow" :keep 0}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.cull {:mob "cow" :keep 0})) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= 0 (rounds s)) (pr-str owner reason))
             (is (empty? (attacked s)) (pr-str owner reason))))))))
@@ -243,7 +243,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2) (cow 2 3)]} 50 (h/zone-store 2 "Miles"))]
-          (core/submit! eng (list 'jobs.animals.cull {:mob "cow" :keep 0 :count 2 :least 2}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.animals.cull {:mob "cow" :keep 0 :count 2 :least 2})) {})
           (await (tu/run-ticks eng (:clock s) 30 700))
           (is (= [2] (vec (distinct (attacked s)))) "the allowed cow is killed")
           (is (not (finished? s)) "the refused one is waited for")
@@ -263,7 +263,7 @@
         (doseq [[author acted] [["Fake" [1]] ["Miles" []]]]
           (let [plan (shape/with-author {:id "pen" :parts [{:id "p" :box [[2 64 0] [2 64 0]] :want "stone"}]} author)
                 {:keys [eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 2)]} 50 (ew/of-data {"pen" plan} {} []))]
-            (core/submit! eng (list 'jobs.animals.cull {:mob "cow" :keep 0}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.cull {:mob "cow" :keep 0})) {})
             (await (tu/run-ticks eng (:clock s) 20 700))
             (is (= acted (vec (distinct (attacked s)))) author)))))))
 
@@ -294,7 +294,7 @@
       (fn ^:async t []
         (let [{:keys [p eng clock] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3)]} 50)]
           (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
-          (core/submit! eng (spec {:count 1 :keep 0}) {})
+          (core/submit! eng (tu/order eng (spec {:count 1 :keep 0})) {})
           (await (tu/run-ticks eng clock 40 700))
           (is (= 1 (:killed (done-event s))))
           (is (finished? s)))))))
@@ -305,7 +305,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]} 50)]
           (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:keep 0 :count 1})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= #{1} (set (attacked s))) "it looked round, saw the cow and culled it"))))))
 
@@ -320,7 +320,7 @@
                                          (if (some #(= "look" (.-name %)) (.-calls (.-world p)))
                                            (to-array all)
                                            (to-array (take 2 all)))))))
-          (core/submit! (:eng s) (spec {:keep 2}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:keep 2})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (= 2 (:killed (done-event s))) "the four cows were seen before the goal was judged")
           (is (= 2 (count (world-ids s)))))))))
@@ -334,7 +334,7 @@
               entities (.-entities p)
               looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))]
           (aset p "entities" (fn [q] (if (<= (looks) 4) (.call entities p q) #js [])))
-          (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:keep 0 :count 1})) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (is (= #{1} (set (attacked s))) "the cow in the cone of an early look is culled, not lost to the last look"))))))
 

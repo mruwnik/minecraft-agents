@@ -17,7 +17,7 @@
    :blocks [[:set [20 0 16] "stone"]
             [:set [21 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:red_bed\",count:1}]}"]]
    :act [[:until-seen {:block "chest"} 10]
-         [:job (jobs.build.from-plan {:plan "$plan:house"})]]
+         [:job (jobs.build.from-plan {:worth 1200 :plan "$plan:house"})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true
              :until {:source :job :kind :child_ended :data {:slot :place}}}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}]
@@ -27,7 +27,7 @@
             [:set [20 0 12] "red_bed[facing=east,part=foot]"] [:set [21 0 12] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 0 12] :item "red_bed" :before "air" :job "j99" :purpose :bed :state :placed}]}}]
    :body {:yaw -120}
-   :act [[:until-seen {:block "red_bed"} 10] [:job (jobs.build.from-plan {:plan "$plan:house"})]]
+   :act [[:until-seen {:block "red_bed"} 10] [:job (jobs.build.from-plan {:worth 1200 :plan "$plan:house"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :take-bed}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true :until {:source :job :kind :completed}}]
@@ -36,7 +36,7 @@
   ;; once per search (not every round) the bed is never placed.
   {:name "no-bed-source-roof-goes-in-and-the-search-is-said-once"
    :blocks [[:set [20 0 16] "stone"]]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:house" :explore true})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:house" :explore true})]]
    :expect [{:count-event {:source :job :kind :obtain.exploring} :for-s 140 :at-least 1 :at-most 3}
             {:no-event {:source :system :kind :error} :for-s 140}]
    :after [[:block [20 1 16] "dirt"] [:block [17 0 19] "air"]]}
@@ -44,7 +44,7 @@
   {:name "carried-cell-behind-the-body-is-looked-at-before-the-bed-is-fetched"
    :blocks [[:set [20 0 16] "stone"]]
    :body {:yaw 90}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:house" :explore true})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:house" :explore true})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true
              :until {:source :job :kind :child_ended :data {:slot :place}}}]
    :after [[:block [20 1 16] "dirt"]]}]}

@@ -13,7 +13,7 @@
         [:wait-s 3]
         [:rcon "execute positioned $X $Y $Z run fill ~1 ~ ~5 ~42 ~ ~7 air replace torch"]
         [:wait-s 2]
-        [:job (jobs.items.obtain {:item "raw_iron" :count 1 :explore false})]]
+        [:job (jobs.items.obtain {:worth 1200 :item "raw_iron" :count 1 :explore false})]]
   :limit-s 200}
  :cases
  [{:name "ore-in-a-dark-hall-is-lit-then-mined"

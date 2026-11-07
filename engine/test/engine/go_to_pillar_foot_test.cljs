@@ -27,7 +27,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
                           :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(planning-parent) {})
+    (core/submit! eng (tu/order eng '(planning-parent)) {})
     (await (tu/tick-until-idle! eng 20))
     @out))
 

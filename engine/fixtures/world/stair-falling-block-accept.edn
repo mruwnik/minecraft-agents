@@ -8,16 +8,16 @@
   :limit-s 200}
  :cases
  [{:name "gravel-in-the-line-with-accept-is-dug-through"
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}]
    :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}
   {:name "gravel-in-the-line-without-accept-stops-naming-the-hazard"
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}
   ;; in the dark the stair's own step walks must not wait for light (job.waiting :exposed) or sit silent
   {:name "gravel-in-the-line-with-accept-is-dug-through-in-the-dark"
    :plot {:light :dark}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 150 :until {:source :job :kind :completed} :of-job true}]
    :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}
@@ -25,7 +25,7 @@
   {:name "stair-up-under-gravel-with-accept-digs-it-out"
    :blocks [[:fill [10 3 16] [10 4 16] "air"] [:fill [10 6 16] [10 7 16] "gravel"]]
    :body {:at [10.5 3 16.5] :yaw 270}
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :accept #{:falling-block}})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 190 :of-job true}]
    :after [[:body-near [14.5 7 16.5] 1.5] [:not-block [10 6 16] "gravel"]]}
   ;; Card a9dae429 (Hollin #85): at 7 hp, with a cell behind to stand in, the body cuts the headroom cell (the gravel over it
@@ -37,7 +37,7 @@
    :body {:at [10.5 3 16.5] :yaw 270 :effects []}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 13 minecraft:generic"]
-         [:job (jobs.access.stair {:dir :up :heading :east :steps 4 :accept #{:falling-block}})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :stair.undermine :data {:cell #at [10 5 16]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 4}} :within-s 190 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["suffocation"]}} :for-s 190 :until {:source :job :kind #{:completed :stopped}}}]
@@ -45,5 +45,5 @@
   {:name "stair-up-under-gravel-without-accept-stops-naming-the-hazard"
    :blocks [[:fill [10 3 16] [10 4 16] "air"] [:fill [10 6 16] [10 7 16] "gravel"]]
    :body {:at [10.5 3 16.5] :yaw 270}
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}]}

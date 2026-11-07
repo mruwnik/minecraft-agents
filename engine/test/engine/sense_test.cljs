@@ -33,7 +33,8 @@
      :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data @m}]}}})
      :act (fn [k args] (.call (aget p (name k)) p "t1" args))
      :update-mem (fn [f args] (apply swap! m f args))
-     :emit (fn [kind level fields] (swap! events conj (assoc fields :kind kind :level level)))}))
+     :emit (fn [kind level fields] (swap! events conj (assoc fields :kind kind :level level)))
+     :worth (constantly tu/order-worth)}))
 
 (defn looks [p] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
 

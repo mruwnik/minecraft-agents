@@ -22,7 +22,7 @@
   "Submit (jobs.animals.unleash args) in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world)]
-    (core/submit! (:eng s) (list 'jobs.animals.unleash args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.unleash args)) {})
     (await (run-ticks s n 700))
     s))
 
@@ -82,7 +82,7 @@
               order (atom [])]
           (doseq [name ["interact" "wait" "collect"]]
             (.override (.-world p) name (fn [token args impl] (swap! order conj name) (impl token args))))
-          (core/submit! eng '(jobs.animals.unleash {}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.unleash {})) {})
           (await (run-ticks s 8 700))
           (is (= ["interact" "wait" "collect"] (vec (distinct @order)))))))))
 
@@ -158,7 +158,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (h/setup {:entities [(led 1 3)]})]
           (.override (.-world p) "interact" (fn [_token _args _impl] #js {:status "no-effect" :consumed 0 :worn 0 :love false :leash nil :changed #js {}}))
-          (core/submit! eng '(jobs.animals.unleash {}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.unleash {})) {})
           (await (run-ticks s 8 700))
           (is (finished? s))
           (is (not= :unleashed (:reason (done-event s))))
@@ -188,7 +188,7 @@
                        (when (= 2 (swap! waits inc))
                          (swap! (fake/state p) update :entities (partial mapv #(assoc % :leashed false :leashed-to-me false))))
                        (impl token args)))
-          (core/submit! eng '(jobs.animals.unleash {}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.unleash {})) {})
           (await (run-ticks s 8 700))
           (is (finished? s))
           (is (= :unleashed (:reason (done-event s))))
@@ -205,7 +205,7 @@
                  ["Miles" {:ignore-zones? true} ["u1" "u2"] []]
                  [nil {} [] [:no-zones]]]]
           (let [s (h/setup {:entities [(led 1 3) (led 2 1)]} 0 (h/zone-store 3 owner))]
-            (core/submit! (:eng s) (list 'jobs.animals.unleash extra) {})
+            (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.unleash extra)) {})
             (await (run-ticks s 12 700))
             (is (= freed (vec (sort (:freed (done-event s))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :unleash.declined))) (pr-str owner extra))))))))
@@ -216,7 +216,7 @@
       (fn ^:async t []
         (let [s (h/setup {:entities [(led 1 3)]})]
           (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (list 'jobs.animals.unleash {}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.unleash {})) {})
           (await (run-ticks s 8 700))
           (is (= ["u1"] (:freed (done-event s))))
           (is (empty? (still-leashed s))))))))

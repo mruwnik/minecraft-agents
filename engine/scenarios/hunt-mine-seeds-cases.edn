@@ -13,8 +13,8 @@
              :job (jobs.survival.night)}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}]
- :queue [(jobs.combat.hunt {:item "beef" :count 2 :keep 0 :radius 16})
-         (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
+ :queue [(jobs.combat.hunt {:worth 1200 :item "beef" :count 2 :keep 0 :radius 16})
+         (repeat (jobs.time.noop {:worth 1200 :seconds 2 :why :idle}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeStuck-g1
 ;; ;; ProbeStuck (composite-a) live case: get-seeds from a short_grass patch

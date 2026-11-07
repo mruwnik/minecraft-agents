@@ -82,3 +82,8 @@
   "A reflex run (the :ore-seen trigger) never gives :continue: pace/steps! makes a waiting child another step."
   [c]
   (await (pace/steps! c #(step c))))
+
+(defn worth-of
+  "What picking the ores is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  [c]
+  (second (get-in (quote-of c) [:uses :job-time])))

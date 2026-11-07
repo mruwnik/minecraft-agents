@@ -25,67 +25,67 @@
  [{:name "dark-false-takes-the-direct-corridor"
    :settings {:jobs.lib.walk.world/dark false}
    :limit-s 120
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 16] :range 0})]
          [:until-pos {:x-min 25} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "walked-lit-lane-beats-the-dark-direct-corridor"
    :limit-s 150
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 16] :range 0})]
          [:until-pos {:x-min 25} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
          [:rcon "execute positioned $X $Y $Z run fill ~3 ~ ~18 ~27 ~1 ~18 air"]
          [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~13 ~ ~18 torch"]
          [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~18 torch"]
-         [:job (jobs.movement.go-to {:pos #at [26 0 18] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 18] :range 0}) [:alongside]]
          [:until-pos {:x-min 25 :z-min 18} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 17] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 17] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :at-least 4 :at-most 4 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 17.5] 1]]}
   {:name "lane-torches-broken-out-of-sight-still-light-it"
    :limit-s 150
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 16] :range 0})]
          [:until-pos {:x-min 25} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
          [:rcon "execute positioned $X $Y $Z run fill ~3 ~ ~18 ~27 ~1 ~18 air"]
          [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~13 ~ ~18 torch"]
          [:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~18 torch"] [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~18 torch"]
-         [:job (jobs.movement.go-to {:pos #at [26 0 18] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 18] :range 0}) [:alongside]]
          [:until-pos {:x-min 25 :z-min 18} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 17] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 17] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
          [:rcon "execute positioned $X $Y $Z run fill ~10 ~ ~18 ~19 ~ ~18 air"]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 17] :range 0 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30] :dark [:< 5]}}}] 30]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :at-least 4 :at-most 4 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 17.5] 1]]}
   {:name "unseen-lit-detour-counts-dark-takes-the-direct-corridor"
    :limit-s 120
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 16] :range 0})]
          [:until-pos {:x-min 25} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "all-dark-route-is-still-found"
    :blocks [[:set [10 0 24] "air"] [:set [13 0 24] "air"] [:set [16 0 24] "air"] [:set [19 0 24] "air"]]
    :limit-s 120
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 0})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [26 0 16] :range 0})]
          [:until-pos {:x-min 25} 40]
-         [:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0}) [:alongside]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [2 0 16] :range 0}) [:alongside]]
          [:until-pos {:x-max 3} 40]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 90 :at-least 2 :at-most 2 :of-job true}
             {:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}]}

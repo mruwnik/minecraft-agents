@@ -18,19 +18,19 @@
  [{:name "body-below-out-of-sight-walks-up-to-the-remembered-field"
    :body {:at [11.5 12 15.5]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~-3 ~-12 ~-15"]
-         [:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
+         [:http :submit (repeat (jobs.farm.tend {:worth 1200 :area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}
             {:event {:source :job :kind :waiting :data #{{:reason :nothing-to-do} {:after :nothing-to-do}}} :within-s 60}]
    :after [[:not-block [17 12 18] "wheat[age=7]"]]}
   {:name "body-away-from-the-field-it-saw-unripe-comes-back-to-harvest"
    :body {:at [11.5 12 15.5]}
    :blocks [[:fill [10 12 16] [17 12 16] "wheat[age=5]"] [:fill [10 12 18] [17 12 18] "wheat[age=5]"]]
-   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})]
+   :act [[:job (jobs.farm.tend {:worth 1200 :area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})]
          [:await {:source :job :kind :waiting} 60]
          [:rcon "execute as $BODY at @s run tp @s ~-3 ~-12 ~-15"]
          [:rcon "execute positioned $X $Y $Z run fill ~10 ~12 ~16 ~17 ~12 ~16 wheat[age=7]"]
          [:rcon "execute positioned $X $Y $Z run fill ~10 ~12 ~18 ~17 ~12 ~18 wheat[age=7]"]
-         [:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
+         [:http :submit (repeat (jobs.farm.tend {:worth 1200 :area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 40}
             {:event {:source :job :kind :tidy.dug} :within-s 400}
             {:event {:source :job :kind :waiting :data {:after :nothing-to-do}} :within-s 400}]
@@ -38,12 +38,12 @@
    :limit-s 420}
   {:name "body-on-the-field-cuts-the-wheat"
    :body {:at [11.5 12 15.5]}
-   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
+   :act [[:http :submit (repeat (jobs.farm.tend {:worth 1200 :area {:min #xyz [10 11 16] :max #xyz [17 12 18]} :irrigate false})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}
             {:event {:source :job :kind :waiting :data #{{:reason :nothing-to-do} {:after :nothing-to-do}}} :within-s 60}]
    :after [[:not-block [10 12 16] "wheat[age=7]"]]}
   {:name "one-unseen-crop-is-not-worth-the-walk-up"
    :body {:at [8.5 0 0.5]}
-   :act [[:http :submit (jobs.farm.tend {:area {:min #xyz [17 11 18] :max #xyz [17 12 18]} :irrigate false}) [] {:ok true}]]
+   :act [[:http :submit (jobs.farm.tend {:worth 1200 :area {:min #xyz [17 11 18] :max #xyz [17 12 18]} :irrigate false}) [] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}]
    :after [[:block [17 12 18] "wheat[age=7]"]]}]}

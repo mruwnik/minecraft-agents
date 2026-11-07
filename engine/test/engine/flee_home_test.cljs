@@ -60,7 +60,7 @@
 
 (defn ^:async flee! [world]
   (let [{:keys [eng] :as s} (setup world)]
-    (core/submit! eng '(test.flight) {})
+    (core/submit! eng (tu/order eng '(test.flight)) {})
     (await (tu/run-until-empty eng 6))
     s))
 
@@ -156,7 +156,7 @@
                         (assoc-in [:self :health] 4))
               {:keys [eng raw seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)]
           (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
-          (core/submit! eng '(test.flight) {})
+          (core/submit! eng (tu/order eng '(test.flight)) {})
           (await (tu/run-until-empty eng 6))
           (is (ran-home? seen))
           (is (in-room? (body raw)) (str "inside the hut: " (body raw)))
@@ -173,7 +173,7 @@
                         (assoc-in [:self :health] 4))
               {:keys [eng raw seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)]
           (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
-          (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {})) {})
           (await (tu/run-until-empty eng 3))
           (is (nil? (:cover (first (filter #(= :hostile.decided (:kind %)) @seen)))) "the home is the refuge, no cover built here")
           (is (in-room? (body raw)) (str "inside the hut: " (body raw)))
@@ -198,7 +198,7 @@
                       (when closed-chance (set! cost/closed-chance closed-chance))
                       ;; a look's one flood (rooms/flood-s), not kept, that the race does not pay for; survey's searches cost other sums
                       (when-not flood-pays? (set! reach-room/boundary-kept? (constantly false)) (set! cost/refuge-search-pays? (fn [spent cost-s & more] (and (not= cost-s (rooms/flood-s)) (apply pays? spent cost-s more)))))
-                      (try (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+                      (try (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {})) {})
                            (await (tu/run-until-empty eng 1))
                            (finally (set! cost/closed-chance chance) (set! cost/refuge-search-pays? pays?) (set! reach-room/boundary-kept? kept-fn)))
                       [(first (filter #(= :hostile.look-in (:kind %)) @seen)) (first (filter #(= :hostile.decided (:kind %)) @seen))]))
@@ -228,7 +228,7 @@
           (with-redefs [pass/shut-column! (fn ^:async s [c col]
                                             (reset! snap (mapv :data (mem/entries (ctx/view c) :opened)))
                                             (await (shut c col)))]
-            (core/submit! eng '(test.flight) {})
+            (core/submit! eng (tu/order eng '(test.flight)) {})
             (await (tu/run-until-empty eng 6)))
           (is (= [{:x 5 :y 64 :z 2}] (map :cell @snap)) "the open door was recorded while open")
           (is (every? :until @snap) "with an expiry"))))))
@@ -242,7 +242,7 @@
                         (assoc-in [:self :health] 4))
               {:keys [eng raw seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)]
           (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
-          (core/submit! eng '(test.flight) {})
+          (core/submit! eng (tu/order eng '(test.flight)) {})
           (await (tu/run-until-empty eng 6))
           (is (not (ran-home? seen)))
           (is (not (hs/door-open? raw)) "the door was never opened for a look"))))))
@@ -304,7 +304,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (hut {:x 5.5 :y 64 :z 9.5} hs/door-states [(zombie 5.5 3.5 nil)]))]
-          (core/submit! eng '(test.flight) {})
+          (core/submit! eng (tu/order eng '(test.flight)) {})
           (await (core/tick! eng))
           (is (= [:race-lost] (room-whys seen)) "the flight says why the hut was no refuge")
           (is (> (:z (first (walk-targets eng))) 9) (str "the first step is not toward the zombie: " (walk-targets eng)))
@@ -349,7 +349,7 @@
 
 (defn ^:async first-step [world]
   (let [{:keys [eng] :as s} (setup world)]
-    (core/submit! eng '(test.flight) {})
+    (core/submit! eng (tu/order eng '(test.flight)) {})
     (await (core/tick! eng))
     s))
 
@@ -378,7 +378,7 @@
   the mobs so the round ends."
   [world]
   (let [{:keys [eng p seen] :as s} (setup world)]
-    (core/submit! eng '(test.flight) {})
+    (core/submit! eng (tu/order eng '(test.flight)) {})
     (let [round (core/tick! eng)
           ended (atom false)]
       (.then round #(reset! ended true))
@@ -458,7 +458,7 @@
         (let [world (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)]) :home false)
               {:keys [eng p seen]} (setup world)
               _ (seeing-all-but p (fn [[x _ z]] (and (<= 3 x 7) (<= -2 z 2))))]
-          (core/submit! eng '(test.flight) {})
+          (core/submit! eng (tu/order eng '(test.flight)) {})
           (await (tu/run-until-empty eng 6))
           (is (not (ran-home? seen)) "no run to a building it never saw")
           (is (not (in-room? (body p)))))))))
@@ -818,7 +818,7 @@
                                                 (reset! hidden (disj @hidden (let [q (.-pos args)] [(js/Math.floor (.-x q)) 64 (js/Math.floor (.-z q))])))
                                                 (swap! (fake/state p) update :blocks #(into {} %))
                                                 (await (impl token args))))]
-          (core/submit! eng '(test.flight) {})
+          (core/submit! eng (tu/order eng '(test.flight)) {})
           (await (tu/run-until-empty eng 6))
           (is (empty? @hidden) "every unseen side was looked at")
           (is (<= 2 @looks) "one look cannot show two sides")
@@ -837,7 +837,7 @@
               _ (.override (.-world p) "look" (fn ^:async o [token args impl]
                                                 (swap! looks inc)
                                                 (await (impl token args))))]
-          (core/submit! eng '(test.flight) {})
+          (core/submit! eng (tu/order eng '(test.flight)) {})
           (await (tu/run-until-empty eng 6))
           (is (zero? @looks) "a creeper behind is not led to a door for a look"))))))
 

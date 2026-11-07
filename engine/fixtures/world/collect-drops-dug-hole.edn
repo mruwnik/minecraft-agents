@@ -11,13 +11,13 @@
  :cases
  [;; should succeed: seen solid stone under the hole, the drop is collected and the walk down is told (card 1fef8d9e)
   {:name "safe-hole-drop-collected"
-   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 9 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :stepped-down [:any]}} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" [:>= 1]]]}
   ;; should stay: a 1-cell cave under the dug cell, the drop is left (too-deep at rest in the cave, or unsafe-floor if judged in the dug cell over air)
   {:name "cave-opening-drop-left"
    :blocks [[:set [16 8 16] "air"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 9 16]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason #{:too-deep :unsafe-floor}}} :within-s 80 :of-job true}
             {:event {:source :job :kind :completed :data {:dug true}} :within-s 80 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
@@ -25,7 +25,7 @@
   ;; should stay: a magma floor under the dug cell (an item does not burn on it), the body does not step in
   {:name "magma-floor-drop-left"
    :blocks [[:set [16 8 16] "magma_block"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 9 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 9 16]})]]
    :expect [{:event {:source :job :level :debug :kind :collect-drops.left :data {:reason :unsafe-floor}} :within-s 80 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
    :after [[:item "cobblestone" 0] [:body-far [16.5 9.0 16.5] 0.8]]}]}

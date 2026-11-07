@@ -15,7 +15,7 @@
    :blocks [[:fill [4 0 16] [4 1 16] "air"] [:fill [10 0 16] [22 1 16] "air"] [:fill [23 0 15] [23 1 17] "iron_ore"]
             [:set [12 1 15] "wall_torch[facing=south]"] [:set [16 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"]]
    :body {:at [4.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 150 :of-job true}
             {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 150}
             {:no-event {:source :job :kind :mine.torch-left-out} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
@@ -25,12 +25,12 @@
   {:name "lone-ore-down-a-lit-corridor-is-found"
    :blocks [[:fill [16 0 17] [16 1 28] "air"] [:fill [16 0 29] [16 1 29] "iron_ore"]
             [:set [15 1 19] "wall_torch[facing=east]"] [:set [15 1 23] "wall_torch[facing=east]"] [:set [15 1 27] "wall_torch[facing=east]"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 150 :of-job true}]
    :after [[:item "raw_iron" [:>= 1]]]}
   {:name "ore-three-off-the-line-gets-no-torch"
    :blocks [[:fill [16 0 17] [16 1 19] "air"] [:set [16 0 20] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1] [:not-block [16 0 20] "iron_ore"]]}]}

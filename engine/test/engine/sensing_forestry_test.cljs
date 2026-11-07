@@ -30,7 +30,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (tu/blind p)
-          (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
           (await (tu/run-until-empty eng 4))
           (is (= [] (lt/calls p "dig"))))))))
 
@@ -48,7 +48,7 @@
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (tu/blind p)
           (seeing-after-look p)
-          (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
           (await (tu/run-until-empty eng 40))
           (is (seq (lt/calls p "dig")) "the tree it saw after turning is dug"))))))
 

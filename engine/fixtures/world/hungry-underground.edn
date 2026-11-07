@@ -12,7 +12,7 @@
    :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow]]
    :act [[:rcon "effect give $BODY minecraft:hunger 60 60 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [5-9]$" 60] [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 14 minecraft:generic"]
-         [:job (jobs.survival.get-food {:carry 0})]]
+         [:job (jobs.survival.get-food {:worth 1200 :carry 0})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40}
             {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:body-near [16.5 1 16.5] 3]]}
@@ -22,10 +22,10 @@
    :body {:at [16.5 0 16.5] :yaw 0 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 60 60 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [5-9]$" 60] [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
+         [:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]
          [:await {:source :job :kind :stopped :data {:reason :cannot-heal}} 30]
          [:rcon "effect give $BODY minecraft:instant_health 1 2 true"]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
+         [:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :cannot-heal}} :within-s 30}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 90}]
    :after [[:item "raw_iron" 1]]}]}

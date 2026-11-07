@@ -9,7 +9,7 @@
           [:fill [1 0 1] [15 1 30] "stone"]
           [:fill [16 0 1] [18 0 27] "pointed_dripstone"]]
  :body {:at [8.5 2 16.5]}
- :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk}})]]
+ :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1 :ways #{:walk}})]]
  :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
           {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
  :after [[:body-near [22.5 0 16.5] 2]]

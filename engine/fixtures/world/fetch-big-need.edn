@@ -15,7 +15,7 @@
  [{:name "100-cobblestone-fetched-from-a-seen-chest"
    :blocks [[:set [4 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:64},{Slot:1b,id:\"minecraft:cobblestone\",count:64}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+         [:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 220 :of-job true}]
    :after [[:block [18 0 12] "cobblestone"] [:block [27 0 21] "cobblestone"] [:block [22 0 17] "cobblestone"]]}
@@ -26,7 +26,7 @@
    :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"]
             [:fill [0 -1 0] [0 11 31] "obsidian"] [:fill [31 -1 0] [31 11 31] "obsidian"]
             [:fill [1 -1 0] [30 11 0] "obsidian"] [:fill [1 -1 31] [30 11 31] "obsidian"]]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-items}} :within-s 150 :of-job true}]
    :after [[:not-block [22 0 17] "cobblestone"]]
    :limit-s 160}]}

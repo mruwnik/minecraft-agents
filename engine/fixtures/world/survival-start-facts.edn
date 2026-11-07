@@ -12,7 +12,7 @@
    :time :night
    :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
             [:set [18 0 16] "red_bed[facing=east,part=foot]"] [:set [19 0 16] "red_bed[facing=east,part=head]"]]
-   :act [[:job (jobs.survival.sleep {:bed #at [18 0 16] :open-bed false})]]
+   :act [[:job (jobs.survival.sleep {:worth 1200 :bed #at [18 0 16] :open-bed false})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :bed-open}} :within-s 40 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 20 :until {:source :job :data {:reason :bed-open}}}]}
   {:name "sleep-open-bed-false-in-a-closed-room-sleeps"
@@ -22,5 +22,5 @@
             [:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [13.5 0 13.5]}
-   :act [[:job (jobs.survival.sleep {:bed #at [10 0 12] :open-bed false})]]
+   :act [[:job (jobs.survival.sleep {:worth 1200 :bed #at [10 0 12] :open-bed false})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 40}]}]}

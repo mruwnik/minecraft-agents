@@ -18,7 +18,7 @@
  :cases
  [{:name "a-lit-pile-in-plain-sight-is-collected"
    :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"]
-         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :near #xyz [28 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}
             {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
    :after [[:item "iron_ingot" 3]]}
@@ -29,14 +29,14 @@
    :memory [{:kind :spawn-bed :data {:pos #xyz [2 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:spawnpoint [3 0 16]}
    :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:diamond\",count:3}}"]
-         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :near #xyz [28 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}]
    :after [[:item "diamond" 3]]}
   {:name "rotten-flesh-at-a-dark-corridor-end-waits"
    :plot {:height 6 :floor "stone" :light :dark}
    :blocks [[:fill [0 5 0] [9 5 31] "glowstone"] [:fill [10 0 0] [31 5 31] "stone"] [:fill [10 0 16] [29 1 16] "air"]]
    :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:rotten_flesh\",count:1}}"]
-         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :near #xyz [28 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :collect-drops.left :data {:reason :risky}} :within-s 40 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none-collected}} :within-s 40 :of-job true}]
    :after [[:item "rotten_flesh" 0]]}
@@ -45,7 +45,7 @@
    :body {:inventory []}
    :blocks [[:fill [0 5 0] [9 5 31] "glowstone"] [:fill [10 0 0] [31 5 31] "stone"] [:fill [10 0 16] [29 1 16] "air"]]
    :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:diamond\",count:3}}"]
-         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :near #xyz [28 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :collect-drops.left :data {:reason :risky}} :within-s 40 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none-collected}} :within-s 40 :of-job true}]
    :after [[:item "diamond" 0]]}]}

@@ -185,7 +185,7 @@
                                          [[-5000 64 0] diamond-kit true]]]
           (let [world (-> night-hut (assoc :inventory inventory) (assoc-in [:self :worldSpawn] spawn))
                 {:keys [eng p seen]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)
-                id (core/submit! eng '(jobs.movement.go-to {:pos [800 64 0]}) {})
+                id (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [800 64 0]})) {})
                 c (ready-test/ctx-of (assoc world :self {:pos inside :health 20 :food 20 :worldSpawn spawn}))]
             (await (st/tick-n eng 6))
             (is (= held? (= :risky (:reason (core/waiting eng id)))) (pr-str spawn (mapv :name inventory)))
@@ -240,7 +240,7 @@
         (let [{:keys [eng p]} (st/setup (update night-hut :blocks merge hut-bed))
               _ (sky/with-sky p)
               _ (st/know-bed! eng {:x 4 :y 64 :z -1})
-              id (core/submit! eng '(jobs.movement.go-to {:pos [800 64 0]}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [800 64 0]})) {})]
           (await (st/tick-n eng 4))
           (is (= [:risky :sleep] ((juxt :reason :wait) (core/waiting eng id))) "go-to holds for the sleep")
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
@@ -392,7 +392,7 @@
           (set! drive/follow! (fn [c plan opts] (swap! walked conj (:steps plan)) (follow! c plan opts)))
           (try
             (let [{:keys [eng p]} (let [r (st/setup world)] (sky/with-sky (:p r)) r)]
-              (core/submit! eng '(jobs.movement.go-to {:pos [70 64 0] :unknown false}) {})
+              (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [70 64 0] :unknown false})) {})
               (await (st/tick-n eng 40))
               (is (seq @walked) "go-to walks")
               (is (some #{(first @walked)} @priced) "its first plan is a way priced (a search's partial plan may be priced before it)")
@@ -443,11 +443,11 @@
     (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
     (is (contains? #{:later :never} (first (:risk (check plan false)))) "its blow asks again, and the price holds the walk")))
 
-(deftest a-walk-past-the-zombie-at-the-pillar-s-foot-is-priced-ok-at-a-roots-default-worth
+(deftest a-walk-past-the-zombie-at-the-pillar-s-foot-is-priced-ok-at-a-hand-orders-worth
   (let [c (ready-test/ctx-of {:time st/noon :blocks (tu/box 0 64 0 0 65 0 "stone") :self {:pos {:x 0 :y 66 :z 0} :health 20 :food 20}
                               :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})
         s (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells))]
-    (is (= (ctx/default-worth) (ctx/worth c)) "a plain go-to is worth the root default")
+    (is (= tu/order-worth (ctx/worth c)) "a go-to ordered by hand is worth what the order gives")
     (is (= :ok (first s)) (pr-str s))))
 
 (def pool-world {:time st/noon :blocks (tu/box -2 64 -2 2 66 2 "water")})
@@ -715,7 +715,7 @@
                                            (with-death {:x 80 :y 64 :z 5} "skeleton" 120000)
                                            (assoc :worth (constantly worth)))]
                                  (in-lit-cave #(first (planned-status c far-goal)))))]
-    (is (= :ok (status-for (ctx/default-worth))) "a root's default worth: all but 1 hp, and no wait lowers a death spot's price")
+    (is (= :ok (status-for tu/order-worth)) "a hand order's worth: all but 1 hp, and no wait lowers a death spot's price")
     (is (= :never (status-for 5)) "a goal worth little buys little risk")
     (is (= :ok (status-for 400)))))
 
@@ -951,7 +951,7 @@
                         (let [c (assoc c :worth (constantly worth))
                               [k _ {:keys [reason]}] (planned-status c far-goal)]
                           [k reason])))]
-    (is (= [:ok :acceptable] (status-with 15 (ctx/default-worth))) "a root's default worth: no wait makes it cheaper")
+    (is (= [:ok :acceptable] (status-with 15 tu/order-worth)) "a hand order's worth: no wait makes it cheaper")
     (is (= [:ok :cheaper-than-staying] (status-with 0 5)) "a goal worth little, but staying in the dark hall costs its spawns for ever")
     (is (= [:never :risky] (status-with 15 5)) "a goal worth little, a lit spot free to stay at")))
 

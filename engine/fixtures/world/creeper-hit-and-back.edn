@@ -25,7 +25,7 @@
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 8}]
    :limit-s 30}
   {:name "flight-from-a-near-creeper-steps-away-from-a-goal-on-its-side"
-   :act [[:job (jobs.movement.go-to {:pos #at [20 0 25] :range 1})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 25] :range 1})]
          [:wait-s 1]
          [:summon "creeper" [19.5 0 16.5]]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 10}
@@ -96,7 +96,7 @@
    :blocks [[:fill [8 0 15] [28 3 17] "stone"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
    :body {:at [21.5 0 16.5] :yaw 90}
    :act [[:summon "creeper" [25.5 0 16.5] "{active_effects:[{id:\"minecraft:slowness\",amplifier:6b,duration:2400}]}"]
-         [:job (jobs.movement.go-to {:pos #at [9 0 16] :range 0})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [9 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 5}]
    :limit-s 30}
   {:name "dead-end-body-still-walls-off-a-creeper-five-blocks-off"

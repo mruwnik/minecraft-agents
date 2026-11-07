@@ -9,6 +9,6 @@
   :limit-s 60}
  :cases
  [{:name "bucket-on-another-bodys-plan-names-the-plan"
-   :act [[:job (jobs.items.use {:on #at [20 0 14] :item "bucket"})]]
+   :act [[:job (jobs.items.use {:worth 1200 :on #at [20 0 14] :item "bucket"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed :by :footprint :text [:contains "refused by plan"]}} :within-s 30 :of-job true}]
    :after [[:item "bucket" 1]]}]}

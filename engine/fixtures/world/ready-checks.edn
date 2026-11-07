@@ -17,7 +17,7 @@
   ;; default worth) waits :exposed, the body stays in, and starts once the day comes
   {:name "l1-queued-at-night-waits-exposed-then-starts-at-day"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :stay-s 3600})]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12] :stay-s 3600})]
          [:await {:source :job :kind :waiting :data {:reason :exposed}} 30]
          [:wait-s 10]
          [:time-set 1000]]
@@ -28,13 +28,13 @@
   ;; the same place for a click's stay (the default): its spawn risk costs less than waiting for dawn, so the probe starts at once
   {:name "l1-a-short-stay-in-the-dark-starts-at-night"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12]})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12]})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :until {:source :job :kind :job.ready-probe}}]
    :limit-s 60}
   {:name "l1-stays-queued-all-night"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :stay-s 3600})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12] :stay-s 3600})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
    :after [[:body-near [10.5 0 12.5] 5]]
@@ -42,13 +42,13 @@
   ;; L2: a call's :checks {:safe? (not (threatened))} replaces the exposure check: it starts at night
   {:name "l2-override-without-the-exposure-check-starts-at-night"
    :time-why :night-light
-   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12] :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20}]
    :limit-s 60}
   {:name "l2-override-keeping-the-jobs-own-check-still-waits"
    :time-why :dawn-decision
-   :act [[:job (jobs.debug.ready-probe {:at #at [4 0 12] :stay-s 3600 :checks {:safe? (job-safe)}})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12] :stay-s 3600 :checks {:safe? (job-safe)}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
    :limit-s 60}
@@ -59,7 +59,7 @@
    :body {:at [16.5 0 16.5] :settle-s 2}
    :blocks [[:fill [8 0 8] [16 3 16] "air"]]
    :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.debug.ready-probe {})]
+         [:job (jobs.debug.ready-probe {:worth 1200})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:rcon "kill @e[type=zombie,$BOX]"]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 60 :of-job true}]}
@@ -69,7 +69,7 @@
    :body {:at [16.5 0 16.5] :settle-s 2}
    :blocks [[:fill [8 0 8] [16 3 16] "air"]]
    :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.debug.ready-probe {})]]
+         [:job (jobs.debug.ready-probe {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 25}]
    :limit-s 60}
@@ -97,7 +97,7 @@
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 20]
-         [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
+         [:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12] :checks {:safe? (not (threatened))}})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:restart-body]
          [:wait-s 8]
@@ -112,7 +112,7 @@
    :mobs :keep
    :act [[:summon "zombie" [4.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 20]
-         [:job (jobs.debug.ready-probe {:at #at [4 0 12] :checks {:safe? (not (threatened))}})]
+         [:job (jobs.debug.ready-probe {:worth 1200 :at #at [4 0 12] :checks {:safe? (not (threatened))}})]
          [:await {:source :job :kind :waiting :data {:reason :hostile-near}} 30]
          [:restart-body]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}

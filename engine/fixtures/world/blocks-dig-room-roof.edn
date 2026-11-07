@@ -26,7 +26,7 @@
    :after [[:block [16 2 16] "stone"] [:block [16 4 16] "dirt"] [:item "cobblestone" 8] [:body-near [16.5 0 16.5] 3]]}
   {:name "a-root-dig-with-no-other-way-digs-through-the-roof"
    :blocks [[:set [16 3 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 3 16] :pillar false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [16 2 16] "air"] [:block [16 3 16] "air"]]}
   {:name "a-root-dig-walks-round-by-the-door-and-keeps-the-roof"
@@ -34,11 +34,11 @@
             [:set [19 0 16] "oak_door[facing=east,half=lower,hinge=left,open=false]"]
             [:set [19 1 16] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
             [:set [22 0 13] "stone"] [:set [21 1 13] "stone"] [:set [16 4 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 4 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 4 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [16 2 16] "stone"] [:block [16 4 16] "air"]]}
   {:name "an-open-rooms-roof-is-dug-through-to-the-dirt-over-it"
    :blocks [[:fill [19 0 16] [20 1 16] "air"] [:set [16 3 16] "dirt"]]
-   :act [[:job (jobs.blocks.dig {:pos #at [16 3 16] :pillar false})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [16 3 16] :pillar false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [16 2 16] "air"] [:block [16 3 16] "air"]]}]}

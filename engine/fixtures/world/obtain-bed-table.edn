@@ -13,17 +13,17 @@
  :cases
  [{:name "planks-and-wool-no-table-makes-the-bed"
    :body {:inventory [["cherry_planks" 4] ["oak_planks" 3] ["white_wool" 3]]}
-   :act [[:job (jobs.items.obtain {:item "white_bed"})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "white_bed"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "white_bed" 1]]}
   {:name "planks-short-of-table-and-bed-names-the-shortage"
    :body {:inventory [["oak_planks" 4] ["white_wool" 3]]}
-   :act [[:job (jobs.items.obtain {:item "white_bed" :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "white_bed" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "short: 3 oak_planks"]}} :within-s 40 :of-job true}]
    :after [[:item "white_bed" 0]]}
   {:name "string-and-planks-no-sheep-make-a-white-bed"
    :body {:inventory [["oak_planks" 7] ["string" 12]]}
-   :act [[:job (jobs.items.obtain {:any-of ["white_bed" "orange_bed" "magenta_bed" "light_blue_bed" "yellow_bed" "lime_bed" "pink_bed" "gray_bed" "light_gray_bed" "cyan_bed" "purple_bed" "blue_bed" "brown_bed" "green_bed" "red_bed" "black_bed"] :count 1 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :any-of ["white_bed" "orange_bed" "magenta_bed" "light_blue_bed" "yellow_bed" "lime_bed" "pink_bed" "gray_bed" "light_gray_bed" "cyan_bed" "purple_bed" "blue_bed" "brown_bed" "green_bed" "red_bed" "black_bed"] :count 1 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "white_bed" 1] [:item "string" 0]]}
   {:name "seen-spider-is-hunted-for-the-string-of-a-white-bed"
@@ -35,6 +35,6 @@
          [:summon "spider" [29.5 0 4.5] "{NoAI:1b}"]
          [:summon "spider" [29.5 0 28.5] "{NoAI:1b}"]
          [:until-seen {:entity "spider"} 10]
-         [:job (jobs.items.obtain {:any-of ["white_bed" "orange_bed" "magenta_bed" "light_blue_bed" "yellow_bed" "lime_bed" "pink_bed" "gray_bed" "light_gray_bed" "cyan_bed" "purple_bed" "blue_bed" "brown_bed" "green_bed" "red_bed" "black_bed"] :count 1 :explore true})]]
+         [:job (jobs.items.obtain {:worth 1200 :any-of ["white_bed" "orange_bed" "magenta_bed" "light_blue_bed" "yellow_bed" "lime_bed" "pink_bed" "gray_bed" "light_gray_bed" "cyan_bed" "purple_bed" "blue_bed" "brown_bed" "green_bed" "red_bed" "black_bed"] :count 1 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "white_bed" 1]]}]}

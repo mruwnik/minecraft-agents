@@ -9,6 +9,6 @@
   :limit-s 200}
  :cases
  [{:name "rising-stair-dug-in-one-call"
-   :act [[:job (jobs.blocks.clear-cells {:area {:cells [#at [10 0 10] #at [10 1 10] #at [10 2 10] #at [10 1 11] #at [10 2 11] #at [10 3 11] #at [10 2 12] #at [10 3 12] #at [10 4 12] #at [10 3 13] #at [10 4 13] #at [10 5 13] #at [10 4 14] #at [10 5 14] #at [10 6 14]]}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:cells [#at [10 0 10] #at [10 1 10] #at [10 2 10] #at [10 1 11] #at [10 2 11] #at [10 3 11] #at [10 2 12] #at [10 3 12] #at [10 4 12] #at [10 3 13] #at [10 4 13] #at [10 5 13] #at [10 4 14] #at [10 5 14] #at [10 6 14]]}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug 15 :skipped {}}} :within-s 150 :of-job true}]
    :after [[:block [10 0 10] "air"] [:block [10 6 14] "air"]]}]}

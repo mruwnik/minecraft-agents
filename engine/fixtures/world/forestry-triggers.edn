@@ -43,7 +43,7 @@
    :register [{:trigger :part-cut-tree}]
    :body {:inventory [["iron_axe" 1] ["wheat" 4]]}
    :act [[:summon "cow" [13.5 0 21.5]]
-         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [12 0 6]})]
+         [:job (jobs.animals.lure-to {:worth 1200 :mob "cow" :pos #xyz [12 0 6]})]
          [:rcon "execute at $BODY run fill ~2 ~0 ~-6 ~2 ~9 ~-6 air"]
          [:rcon "execute at $BODY run fill ~2 ~1 ~-6 ~2 ~6 ~-6 oak_log"]
          [:rcon "execute at $BODY run fill ~0 ~5 ~-8 ~4 ~7 ~-4 oak_leaves[persistent=true]"]
@@ -125,7 +125,7 @@
    :memory [{:kind :forestry/tree-unreachable :data {:column #at [16 16]} :policy {:cap 20 :ttl 600000}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
-   :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 24})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :part-cut? true :radius 24})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tree}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind #{:stopped :completed}} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tree}}}]
    :after [[:block [16 6 16] "oak_log"] [:block [16 1 16] "oak_log"]]

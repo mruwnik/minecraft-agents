@@ -11,24 +11,24 @@
  :cases
  [{:name "harvest-wood-no-tree-waits-unstarted"
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tree}} :within-s 25 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 10 :until {:source :job :kind :waiting :data {:reason :no-tree}} :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]}
   {:name "fell-tree-no-tree-waits-unstarted"
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:job (jobs.forestry.fell-tree {:radius 16})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :radius 16})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tree}} :within-s 25 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 15 :of-job true}]}
   {:name "wait-for-light-in-a-dark-cell-waits"
    :time :any
    :plot {:height 8 :floor "stone" :light :dark}
-   :act [[:job (jobs.time.wait-for-light)]]
+   :act [[:job (jobs.time.wait-for-light {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]}
   {:name "smelt-uncookable-item-is-impossible"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["diamond" 3] ["coal" 3]]}
-   :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "diamond" :count 3})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :furnace #xyz [20 0 14] :item "diamond" :count 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :not-smeltable}} :within-s 20 :of-job true}]
    :after [[:item "diamond" 3] [:item "coal" 3]]}]}

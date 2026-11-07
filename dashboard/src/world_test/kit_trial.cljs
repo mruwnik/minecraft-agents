@@ -30,7 +30,7 @@
 
 (defn- ms [e] (:time-ms e))
 
-(def goal-spec "(jobs.items.get-kit {})")
+(def goal-spec "(jobs.items.get-kit {:worth 3600})")
 
 (def kit-pieces
   ["iron_pickaxe" "iron_sword" "iron_axe" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])

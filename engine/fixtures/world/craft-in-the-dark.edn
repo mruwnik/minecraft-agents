@@ -11,12 +11,12 @@
  [{:name "sticks-and-a-pickaxe-are-crafted-in-the-dark-without-waiting"
    :blocks [[:set [20 0 16] "crafting_table"]]
    :body {:inventory [["oak_planks" 6]]}
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :data {:reason :exposed}} :for-s 5 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "a-stack-of-raw-iron-is-not-smelted-in-the-open-dark"
    :body {:inventory [["raw_iron" 64] ["coal" 16] ["furnace" 1]]}
-   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 64})]]
+   :act [[:job (jobs.items.smelt {:worth 1200 :item "raw_iron" :count 64})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}]
    :after [[:item "raw_iron" 64]]}]}

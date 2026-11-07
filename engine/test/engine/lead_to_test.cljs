@@ -41,7 +41,7 @@
 (defn ^:async submit
   "Submit (jobs.animals.lead-to args) in the setup s; run n ticks 700 ms apart."
   [s args n]
-  (core/submit! (:eng s) (list 'jobs.animals.lead-to (merge {:mob "cow" :pos goal} args)) {})
+  (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.lead-to (merge {:mob "cow" :pos goal} args))) {})
   (await (run-ticks s n 700))
   s)
 
@@ -308,7 +308,7 @@
               steers (atom 0)
               pull-slot #(get-in (mem/job-mem (mem/view (:store eng)) "j1" []) [:children :pull])]
           (stall-steers-from! p 27 steers)
-          (core/submit! eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.animals.lead-to {:mob "cow" :pos goal})) {})
           (await (run-ticks s 20 700))
           (is (pos? @steers) "a pull was walked")
           (is (nil? (pull-slot)) "its child is dropped")
@@ -650,7 +650,7 @@
                                    :inventory [{:name "string" :count 5} {:name "oak_planks" :count 4}]
                                    :entities [(cow 1 3)]}
                                   [])]
-          (core/submit! (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.lead-to {:mob "cow" :pos goal})) {})
           (await (fetch-test/run-ticks s 60))
           (is (empty? (fetch-test/listed s)))
           (is (= 2 (get (fetch-test/inv s) "lead")) "the crafted pair is carried, the cow let go"))))))

@@ -20,11 +20,11 @@
    :blocks [[:set [24 5 21] "glowstone"] [:set [29 5 21] "glowstone"] [:set [34 5 21] "glowstone"]
             [:set [24 5 26] "glowstone"] [:set [29 5 26] "glowstone"] [:set [34 5 26] "glowstone"]
             [:set [24 5 31] "glowstone"] [:set [29 5 31] "glowstone"] [:set [34 5 31] "glowstone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 31] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}]
    :after [[:body-near [30.5 0 31.5] 2]]}
   {:name "dark-cave-past-the-turn-is-walked-at-its-price"
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 31] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 150 :of-job true}]
    :after [[:body-near [30.5 0 31.5] 2]]}
   {:name "dark-cave-past-the-turn-waits-risky-outside"
@@ -32,6 +32,6 @@
    :settings {:jobs.lib.cost.risk/risk-share 0.01}
    :act [[:rcon "effect clear $BODY"] [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 16 minecraft:generic"] [:rcon "effect give $BODY minecraft:resistance 600 4 true"]
-         [:job (jobs.movement.go-to {:pos #at [30 0 31] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 31] :range 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 120}]
    :after [[:body-near [30.5 0 16.5] 2.4]]}]}

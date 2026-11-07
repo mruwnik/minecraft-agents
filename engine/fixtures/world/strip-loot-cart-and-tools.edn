@@ -13,14 +13,14 @@
  [{:name "chest-minecart-emptied-and-taken"
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3},{Slot:1b,id:\"minecraft:bread\",count:2}]}"]
          [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.loot-cart {})]]
+         [:job (jobs.strip.loot-cart {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "iron_ingot" 3] [:item "bread" 2] [:item "chest_minecart" [:>= 1]]
            [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 0]]}
   {:name "unknown-cart-id-stops"
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.loot-cart {:id 99999999})]]
+         [:job (jobs.strip.loot-cart {:worth 1200 :id 99999999})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :gone}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
@@ -28,7 +28,7 @@
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.loot-cart {})]]
+         [:job (jobs.strip.loot-cart {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]
@@ -37,7 +37,7 @@
    :zones [{:name "z" :min [18 -1 15] :max [20 2 17] :owner "SomeoneElse"}]
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.loot-cart {})]]
+         [:job (jobs.strip.loot-cart {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
@@ -45,20 +45,20 @@
    :plans [{:id "other" :metadata {:by "SomeoneElse"} :parts [{:id "p" :cells [#at [19 0 16]] :want [:any "stone"]}]}]
    :act [[:summon "chest_minecart" [19.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:until-seen {:entity "chest_minecart"} 10]
-         [:job (jobs.strip.loot-cart {})]]
+         [:job (jobs.strip.loot-cart {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[10 -1 10] [26 6 22]] 1]]}
   {:name "shears-cut-a-cobweb-to-a-cobweb-item"
    :blocks [[:set [18 0 16] "cobweb"]]
    :body {:inventory [["shears" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #xyz [18 0 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #xyz [18 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:not-block [18 0 16] "cobweb"] [:item "cobweb" 1] [:item "string" 0]]}
   {:name "sword-only-cuts-a-cobweb-to-string"
    :blocks [[:set [18 0 16] "cobweb"]]
    :body {:inventory [["iron_sword" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #xyz [18 0 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #xyz [18 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:not-block [18 0 16] "cobweb"] [:item "string" [:>= 1]] [:item "cobweb" 0]]}
   {:name "field-base-blueprint-built-by-from-plan"
@@ -66,7 +66,7 @@
    :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [8 -1 8]}]}]
    :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 64] ["oak_planks" 96] ["chest" 4] ["furnace" 2] ["crafting_table" 1]
                                                  ["white_bed" 1] ["oak_door" 1] ["torch" 2]]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:base"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:base"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 280 :of-job true}]
    :after [[:block [9 0 9] "chest"] [:block [13 0 10] "furnace[facing=west]"] [:block [9 0 11] "crafting_table"] [:block [11 0 12] "oak_door"]]
    :limit-s 300}
@@ -74,7 +74,7 @@
    :blocks [[:fill [8 -1 8] [14 -1 12] "grass_block"]]
    :plans [{:id "base" :metadata {:by "$body"} :parts [{:id "base" :blueprint "field-base" :at #at [8 -1 8]}]}]
    :body {:at [11.5 0 16.5] :yaw 180 :inventory [["cobblestone" 4]]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:base" :ways #{:carried}})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:base" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed :data {:missing []}} :for-s 60}]
    :after [[:not-block [9 0 9] "chest"]]

@@ -15,7 +15,7 @@
         eng (core/create {:primitives (tu/fake {}) :jobs jobs :triggers {} :dir (tu/tmp-dir)
                           :events (events/make {:stdout? false :sinks [sink]})})]
     (api/mutate! eng {:op :submit :request-id "r1" :generation-id (:generation-id (core/state eng))
-                      :spec '(say)})
+                      :spec '(say {:worth 60})})
     (await (core/tick! eng))
     (core/shutdown! eng)
     (first (filter #(= :gave-up (:kind %)) @seen))))

@@ -467,3 +467,8 @@
   (await (settle-intents! c))
   (let [run (atom {:chest-done false :looked false})]
     (await (pace/steps! c #(step! c run)))))
+
+(defn worth-of
+  "What making room is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  [c]
+  (second (get-in (quote-of c) [:uses :job-time])))

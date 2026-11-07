@@ -13,7 +13,7 @@
   :limit-s 140}
  :cases
  [{:name "ore-over-flooded-cave-no-dive"
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :item "raw_iron" :count 1 :radius 12 :torches false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :item "raw_iron" :count 1 :radius 12 :torches false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:kind :hurt} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [3 6 7] "iron_ore"]]}]}

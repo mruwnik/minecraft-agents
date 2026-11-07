@@ -10,7 +10,7 @@
  :cases
  [{:name "sealed-pen-far-unloaded-goal-is-start-enclosed"
    :blocks [[:fill [1 -1 16] [5 4 20] "stone" :hollow]]
-   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :start-enclosed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "goal-unloaded"}} :for-s 30 :until {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :start-enclosed}}}]
    :after [[:body-near [3.5 0 17.5] 2] [:block [1 0 18] "stone"]]}
@@ -18,7 +18,7 @@
    ;; card 5a822a99: with escalate on and a pickaxe the pen is dug out; it does not end :start-enclosed
    :blocks [[:fill [1 -1 16] [5 4 20] "stone" :hollow]]
    :body {:at [3.5 0 17.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [-1000 0 17] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :start-enclosed}} :for-s 20}]}
   {:name "open-field-unloaded-goal-never-start-enclosed"
@@ -26,7 +26,7 @@
    ;; search reads the start as shut in while the body walks east toward the goal (a default plot is a sealed cell or an island)
    :plot {:height 10 :light :sky :length 1024 :width 16}
    :body {:at [3.5 0 8.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [3000 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [3000 0 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :planned :data {:status "partial"}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :start-enclosed}} :for-s 60}]

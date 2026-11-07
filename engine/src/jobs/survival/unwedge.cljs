@@ -3,6 +3,7 @@
             [jobs.lib.checks :as checks]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -41,6 +42,11 @@
 
 (def fit? ready/ok)
 
+
+(defn worth-of
+  "The loss the reflex averts: a death where the body stands (cost/death-s)."
+  [c]
+  (cost/death-s (:primitives c) (ctx/view c)))
 
 (defn done? [c]
   (let [wedged (some? (breath/wedged-cell (:primitives c)))]

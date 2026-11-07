@@ -12,7 +12,7 @@
    ;; 14 uses left (low after one dig); a 10-step stair from the west edge of the mass digs well over 14 blocks
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :ways #{:carried}})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 10 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :tool.low} :within-s 40}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :tool-spent}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]}
@@ -21,37 +21,37 @@
    :blocks [[:fill [8 0 8] [24 9 24] "dirt"]]
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["stone_shovel" 1]]}
    :act [[:rcon "item replace entity $BODY container.1 with minecraft:stone_shovel[minecraft:damage=128]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 4 :ways #{:carried}})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 4 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "pickaxe-already-low-at-first-hold"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=125]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :tool.low} :within-s 30}]}
   {:name "pickaxe-breaks-mid-stair"
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried} :need-drop true :settings {:jobs.lib.trip/spent-uses 0}})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 3 :ways #{:carried} :need-drop true :settings {:jobs.lib.trip/spent-uses 0}})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 30}
             {:event {:source :job :kind :tool.none} :within-s 30}
             {:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}]}
   {:name "pickaxe-breaks-spare-carried-no-tool-none"
    :body {:inventory [["stone_pickaxe" 1] ["iron_pickaxe" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 30}
             {:no-event {:source :job :kind :tool.none} :for-s 25}]}
   {:name "diamond-ore-stone-pickaxe-no-tool"
    :blocks [[:set [17 9 16] "diamond_ore"]]
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [17 9 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [17 9 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 30 :of-job true}]
    :after [[:block [17 9 16] "diamond_ore"]]}
   {:name "diamond-ore-iron-pickaxe-digs"
    :blocks [[:set [17 9 16] "diamond_ore"]]
    :body {:inventory [["stone_pickaxe" 1] ["iron_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [17 9 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [17 9 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:block [17 9 16] "air"] [:item "diamond" 1]]}
   {:name "stair-off-stair-detail"
@@ -66,7 +66,7 @@
   {:name "pickaxe-wears-out-next-one-is-crafted"
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 12] ["stick" 4] ["crafting_table" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 10})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 10})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 10}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :completed}}]
@@ -76,7 +76,7 @@
   {:name "pickaxe-wears-out-fetch-off-crafts-from-planks"
    :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 12] ["oak_planks" 6]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
-         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :ways #{:carried}})]]
+         [:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 10 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 10}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :completed}}]

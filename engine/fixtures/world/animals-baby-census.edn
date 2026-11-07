@@ -14,20 +14,20 @@
    :act [[:summon "cow" [15.5 0 15.5] "{NoAI:1b}"]
          [:summon "cow" [15.5 0 17.5] "{NoAI:1b,Age:-24000}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2 :items [:has {:baby true}]}] 20]
-         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 20 :ways #{:carried}})]]
+         [:job (jobs.animals.breed {:worth 1200 :mob "cow" :pairs 1 :radius 20 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :too-few :text [:contains "adults 1, babies 1"]}} :within-s 40 :of-job true}]
    :after [[:item "wheat" 4]]}
   {:name "lure-to-a-lone-calf-says-babies-are-not-lured"
    :act [[:summon "cow" [15.5 0 16.5] "{NoAI:1b,Age:-24000}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 1 :items [:has {:baby true}]}] 20]
-         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [24 0 16] :radius 25})]]
+         [:job (jobs.animals.lure-to {:worth 1200 :mob "cow" :pos #xyz [24 0 16] :radius 25})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-animal :text [:contains "babies are not lured"]}} :within-s 40 :of-job true}]
    :after [[:item "wheat" 4]]}
   {:name "breed-with-one-wheat-for-four-cows-ends-food-out"
    :body {:inventory [["wheat" 1]]}
    :act [[:summon "cow" [15.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [15.5 0 16.5] "{NoAI:1b}"]
          [:summon "cow" [15.5 0 18.5] "{NoAI:1b}"] [:summon "cow" [17.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :pairs 2 :radius 20 :ways #{:carried}})]]
+         [:job (jobs.animals.breed {:worth 1200 :mob "cow" :pairs 2 :radius 20 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :food-out :fed [:any]}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "wheat" 0]]}
@@ -39,7 +39,7 @@
             [:fill [14 0 15] [14 0 18] "oak_fence"] [:fill [19 0 15] [19 0 18] "oak_fence"]]
    :act [[:summon "cow" [16.5 0 16.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [17.5 0 17.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried}})]]
+         [:job (jobs.animals.breed {:worth 1200 :mob "cow" :pairs 1 :radius 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 60 :of-job true}]}
   ;; Should-succeed: the cows are already in view of a gated pen (known :box); breed walks in through the gate to feed, then leaves
   ;; to where it started with the gate shut, so the body is not left inside and the calf cannot slip out.
@@ -49,7 +49,7 @@
             [:set [14 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [21.5 0 15.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [15 0 14] :max #xyz [23 0 18]}})]]
+         [:job (jobs.animals.breed {:worth 1200 :mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [15 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 120 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 3.2] [:block [14 0 16] "oak_fence_gate[open=false]"]]}
   ;; Should-succeed (card 7671afe8): a pen 20 blocks off, two AI cows in it, none in view (:radius 12): breed with the known :box walks
@@ -61,6 +61,6 @@
             [:set [28 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [30.5 0 15.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [31.5 0 17.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [29 0 14] :max #xyz [32 0 18]}})]]
+         [:job (jobs.animals.breed {:worth 1200 :mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [29 0 14] :max #xyz [32 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 120 :of-job true}]
    :after [[:block [28 0 16] "oak_fence_gate[open=false]"]]}]}

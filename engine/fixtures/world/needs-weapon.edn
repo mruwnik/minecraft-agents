@@ -39,7 +39,7 @@
    :time :any
    :blocks [[:set [24 0 16] "chest"]]
    :body {:inventory [["stone_sword" 1]] :settle-s 6}
-   :act [[:job (jobs.storage.deposit {:chest #at [24 0 16] :items ["stone_sword"]})]
+   :act [[:job (jobs.storage.deposit {:worth 1200 :chest #at [24 0 16] :items ["stone_sword"]})]
          [:await {:source :job :kind :completed} 40]
          [:wait-s 30]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}

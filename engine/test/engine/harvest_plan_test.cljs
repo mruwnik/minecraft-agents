@@ -79,7 +79,7 @@
   "Submit harvest with args over the mixed field and plans, tick a few times: [digs, places, the why of the last wait]."
   [plans args]
   (let [{:keys [eng p seen]} (start mixed-field plans)]
-    (core/submit! eng (list h/job args) {})
+    (core/submit! eng (tu/order eng (list h/job args)) {})
     (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
     [(count (h/calls p "dig")) (count (h/calls p "place")) (some :why (reverse (deref seen)))]))
 
@@ -93,7 +93,7 @@
 (deftest a-broken-plan-declines-naming-the-error
   (let [{:keys [eng p seen w]} (start mixed-field {})]
     (reset! (:state w) (assoc @(:state w) :plans {"field" {:error "unreadable EDN: eof"}}))
-    (core/submit! eng (list h/job {:area {:plan "field"}}) {})
+    (core/submit! eng (tu/order eng (list h/job {:area {:plan "field"}})) {})
     (dotimes [_ 3] (swap! h/clock + 700) (core/tick! eng))
     (is (zero? (count (h/calls p "dig"))))
     (is (= "the plan cannot be read: unreadable EDN: eof" (some :why (reverse (deref seen)))))))
@@ -116,7 +116,7 @@
 
 (deftest without-a-plan-the-check-does-not-ask-for-one
   (let [{:keys [eng seen]} (start mixed-field {})]
-    (core/submit! eng (list h/job {}) {})
+    (core/submit! eng (tu/order eng (list h/job {})) {})
     (swap! h/clock + 700)
     (core/tick! eng)
     (is (empty? (h/events-of seen :harvest.declined)))))

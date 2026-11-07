@@ -1,6 +1,6 @@
 ;; apiary.maintain live: open fire + ripe hive at 6100,101..103,6100, chest at 6103,101,6096; carpet and shears carried
 {:register []
- :queue [(jobs.apiary.maintain {:box {:min {:x 6096 :y 100 :z 6096} :max {:x 6104 :y 110 :z 6104}}
+ :queue [(jobs.apiary.maintain {:worth 1200 :box {:min {:x 6096 :y 100 :z 6096} :max {:x 6104 :y 110 :z 6104}}
                                 :chest {:x 6103 :y 101 :z 6096}})]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-apiary-guard-nocarpet

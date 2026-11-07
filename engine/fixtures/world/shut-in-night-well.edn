@@ -9,13 +9,13 @@
  :cases
  [{:name "open-topped-well-gets-its-roof"
    :blocks [[:fill [15 0 15] [17 3 17] "stone"] [:fill [16 0 16] [16 3 16] "air"] [:fill [8 6 8] [24 6 24] "stone"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:walls} :for :night})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [16 2 16] "cobblestone"]]
    :limit-s 80}
   {:name "two-cell-well-is-cut-to-one-and-roofed"
    :blocks [[:fill [15 0 15] [18 3 17] "stone"] [:fill [16 0 16] [17 3 16] "air"] [:fill [8 6 8] [24 6 24] "stone"]]
-   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:walls} :for :night})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [16 2 16] "cobblestone"] [:block [17 0 16] "cobblestone"] [:block [17 1 16] "cobblestone"]]
    :limit-s 80}]}

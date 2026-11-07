@@ -180,7 +180,7 @@
   "Submit the job with args (the open-s setting 0 unless given: no grace) and tick up to n times until the list is empty; {:eng :p :seen :ticks}."
   [spec plans args n & [extra-jobs]]
   (let [s (start spec plans extra-jobs)]
-    (core/submit! (:eng s) (list 'jobs.maintenance.shut (merge {:openings :gates :settings {:jobs.lib.shut-gates/open-s 0}} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.maintenance.shut (merge {:openings :gates :settings {:jobs.lib.shut-gates/open-s 0}} args))) {})
     (loop [i 0]
       (if (or (>= i n) (empty? (:list (core/state (:eng s)))))
         (assoc s :ticks i)
@@ -223,7 +223,7 @@
       (fn ^:async t []
         (let [cow {:id 1 :uuid "u1" :name "cow" :kind "passive" :pos {:x 8 :y 64 :z -6}}
               s (start (pen-world true 2 -7 {:entities [cow] :inventory [{:name "wheat" :count 4}]}) {"pen-a" pen-a})]
-          (core/submit! (:eng s) '(jobs.animals.lure-to {:mob "cow" :pos {:x 2 :y 64 :z -3}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.animals.lure-to {:mob "cow" :pos {:x 2 :y 64 :z -3}})) {})
           (dotimes [_ 3] (swap! clock + 700) (await (core/tick! (:eng s))))
           (is (contains? (pg/held-cells (mem/view (:store (:eng s))) 30000) [2 64 0])))))))
 
@@ -371,7 +371,7 @@
       (fn ^:async t []
         (let [s (start (pen-world true 2 7 {:unreachable ["2,64,0"]}) {"pen-a" pen-a})
               p (:p s)]
-          (core/submit! (:eng s) '(jobs.maintenance.shut {:openings :gates :settings {:jobs.lib.shut-gates/open-s 0}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.maintenance.shut {:openings :gates :settings {:jobs.lib.shut-gates/open-s 0}})) {})
           (dotimes [_ 12]
             (swap! clock + 700)
             (await (core/tick! (:eng s))))
@@ -467,7 +467,7 @@
   [never? n]
   (let [s (start (pen-world true 2 -9) {"pen-a" pen-a} nil)]
     (unseen-from-afar (:p s) [2 64 0] 4 never?)
-    (core/submit! (:eng s) (list 'jobs.maintenance.shut {:openings :gates :plan "pen-a"}) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.maintenance.shut {:openings :gates :plan "pen-a"})) {})
     (js/Promise.resolve s)))
 
 (deftest a-planned-gate-aged-out-is-walked-to-looked-at-and-shut

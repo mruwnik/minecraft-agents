@@ -14,13 +14,13 @@
    :register [{:trigger :hungry}]
    :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
    :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["bread" 5]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 30] :range 1})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 30] :range 1})]
          [:cli "observe" ["$body" "--world" "$world" "settings" "--changed"] {:settings {:engine.backoff/after {:value 5 :layer :body}}}]]
    :after [[:item "bread" 5] [:memory {:entries {:food-source [{:data {:pos [:any]}}]}}]]}
   {:name "next-case-starts-clean"
    :act [[:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}]
          [:cli "observe" ["$body" "--world" "$world" "settings"] {:settings {:engine.backoff/after {:layer :code}}}]
-         [:job (jobs.movement.go-to {:pos #at [16 0 30] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 30] :range 1})]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 5}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:item "bread" 0] [:body-near [16.5 0 30.5] 3]]}]}

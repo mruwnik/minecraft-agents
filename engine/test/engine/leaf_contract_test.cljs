@@ -30,7 +30,7 @@
   (let [[seen sink] (tu/capture-sink)
         eng (core/create {:primitives (tu/seeing-all (tu/fake {})) :jobs registry/jobs :dir (tu/tmp-dir)
                           :events (events/make {:sinks [sink]})})]
-    (core/submit! eng spec {})
+    (core/submit! eng (tu/order eng spec) {})
     (await (core/tick! eng))
     (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
       (core/shutdown! eng)
@@ -40,7 +40,7 @@
   (let [[seen sink] (tu/capture-sink)
         eng (core/create {:primitives (tu/seeing-all (tu/fake {})) :jobs registry/jobs :dir (tu/tmp-dir)
                           :events (events/make {:sinks [sink]})})]
-    (core/submit! eng spec {})
+    (core/submit! eng (tu/order eng spec) {})
     (await (core/tick! eng))
     (await (core/tick! eng))
     (let [r {:listed (count (:list (core/state eng)))

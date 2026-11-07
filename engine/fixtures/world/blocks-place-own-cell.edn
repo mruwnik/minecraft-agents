@@ -9,12 +9,12 @@
   :limit-s 40}
  :cases
  [{:name "seeds-into-the-cell-under-the-feet-are-placed"
-   :act [[:job (jobs.blocks.place {:pos #at [16 0 16] :item "wheat_seeds"})]]
+   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [16 0 16] :item "wheat_seeds"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}
             {:no-event {:source :job :data {:reason :own-body}} :for-s 5 :of-job true}]
    :after [[:block [16 0 16] "wheat[age=0]"]]}
   {:name "stone-into-the-cell-under-the-feet-steps-off-and-places"
-   :act [[:job (jobs.blocks.place {:pos #at [16 0 16] :item "cobblestone"})]]
+   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [16 0 16] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}
             {:no-event {:source :job :data {:reason :own-body}} :for-s 5 :of-job true}]
    :after [[:block [16 0 16] "cobblestone"] [:item "cobblestone" 3]]}]}

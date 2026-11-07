@@ -9,25 +9,25 @@
   :limit-s 220}
  :cases
  [{:name "no-pickaxe-stair-up-digs-stone-by-hand-to-the-surface"
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 210 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-tool}} :for-s 200 :until {:source :job :kind :completed}}]
    :after [[:body-near [14.5 10 16.5] 3]]}
   {:name "no-pickaxe-and-no-source-stops-no-tool-with-the-fetch-as-because"
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :need-drop true})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4 :need-drop true})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :of-job true}]
    :after [[:block [11 6 16] "stone"]]}
   {:name "bedrock-in-the-line-stops-with-a-reason-and-digs-nothing"
    :blocks [[:fill [11 6 16] [14 9 16] "bedrock"]]
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 210 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :of-job true}]
    :after [[:block [11 6 16] "bedrock"] [:body-near [10.5 6 16.5] 2]]}
   {:name "a-crafting-table-in-the-cut-is-dug-and-the-stair-goes-on"
    :body {:at [10.5 6 16.5] :yaw 270 :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
    :blocks [[:set [11 7 16] "crafting_table"]]
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :up :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 210 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :base-block}} :for-s 200 :until {:source :job :kind :completed}}]
    :after [[:not-block [11 7 16] "crafting_table"] [:body-near [14.5 10 16.5] 3]]}]}

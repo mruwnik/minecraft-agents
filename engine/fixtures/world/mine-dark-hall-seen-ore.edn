@@ -8,7 +8,7 @@
   :blocks [[:fill [2 0 2] [44 6 30] "stone"] [:fill [5 0 4] [40 1 28] "air"] [:fill [4 0 16] [4 1 16] "air"]
            [:set [3 1 16] "iron_ore"]]
   :body {:at [4.5 0 16.5] :yaw 90 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
-  :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :radius 4 :mend false :ways #{:seen :carried}})]]
+  :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :radius 4 :mend false :ways #{:seen :carried}})]]
   :limit-s 120}
  :cases
  [{:name "torches-carried-dig-the-ore-beside-the-body"

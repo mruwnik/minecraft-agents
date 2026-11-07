@@ -15,7 +15,7 @@
  [{:name "hurt-fed-body-rests-before-its-walk"
    :body {:inventory [["dirt" 32] ["bread" 8]]}
    :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
             {:no-event {:source :job :kind :rest.unsheltered} :for-s 30 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
             {:no-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
@@ -26,7 +26,7 @@
    :blocks [[:fill [3 0 14] [3 1 18] "dirt"]]
    :body {:inventory [["dirt" 16] ["bread" 8]]}
    :act [[:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
             {:no-event {:source :job :kind :rest.unsheltered} :for-s 150 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
             {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :done}} :within-s 170}
@@ -39,7 +39,7 @@
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:summon "item" [10.5 0 16.5] "{Item:{id:\"minecraft:bread\",count:8}}"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 75}
             {:no-event {:source :job :kind :completed :data {:arrived true}} :for-s 180 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
             {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :done}} :within-s 230}
@@ -52,7 +52,7 @@
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :nothing-possible}} :within-s 260}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :for-s 300 :at-most 1}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 300 :of-job true}]

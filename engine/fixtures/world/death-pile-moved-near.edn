@@ -10,10 +10,10 @@
   :limit-s 100}
  :cases
  [{:name "too-far-skip-is-weighed-again-after-a-tp-near-the-pile"
-   :act [[:job (jobs.survival.recover-drops)]
+   :act [[:job (jobs.survival.recover-drops {:worth 1200})]
          [:await {:source :job :kind :stopped} 30]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~58 ~ ~58"]
          [:wait-s 3]
-         [:job (jobs.survival.recover-drops)]]
+         [:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:decision :skip}} :within-s 30}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :unreachable}} :within-s 30}]}]}

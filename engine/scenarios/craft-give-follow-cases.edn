@@ -1,11 +1,11 @@
 ;; batch-craft live: the chat limit in act! - one public line, then six whispers to itself in a burst (the 6th within 30 s is blocked/rate)
 {:register []
- :queue [(seq (jobs.debug.notify {:text "batch-craft limiter test (ignore)" :chat? true})
-                    (jobs.debug.notify {:text "w1" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w2" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w3" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w4" :chat? true :to "ProbeAttack"})
-                    (jobs.debug.notify {:text "w5" :chat? true :to "ProbeAttack"}))]}
+ :queue [(seq (jobs.debug.notify {:worth 1200 :text "batch-craft limiter test (ignore)" :chat? true})
+                    (jobs.debug.notify {:worth 1200 :text "w1" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:worth 1200 :text "w2" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:worth 1200 :text "w3" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:worth 1200 :text "w4" :chat? true :to "ProbeAttack"})
+                    (jobs.debug.notify {:worth 1200 :text "w5" :chat? true :to "ProbeAttack"}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeAttack-16
 ;; ;; batch-craft live: items.craft walks to a table 10 blocks off for bread, crafts planks in the pockets, then reports a shortfall

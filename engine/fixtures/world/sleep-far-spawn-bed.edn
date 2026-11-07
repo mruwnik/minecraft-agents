@@ -11,5 +11,5 @@
  :cases
  [{:name "sleep-walks-to-the-spawn-bed-60-blocks-away"
    :memory [{:kind :spawn-bed :data {:pos #xyz [70 0 8]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.sleep {})]]
+   :act [[:job (jobs.survival.sleep {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.sleep"}} :within-s 140 :of-job true}]}]}

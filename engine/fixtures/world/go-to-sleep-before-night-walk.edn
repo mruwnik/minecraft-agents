@@ -20,11 +20,11 @@
  [{:name "a-bed-in-the-hut-holds-the-walk-for-the-sleep"
    :memory [{:kind :sleep-status :data {:sleeping 0 :needed 1}}]
    :blocks [[:set [3 0 4] "red_bed[facing=east,part=foot]"] [:set [4 0 4] "red_bed[facing=east,part=head]"]]
-   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [4 0 4]})]
-         [:job (jobs.movement.go-to {:pos #at [29 0 29]})]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :bed :pos #at [4 0 4]})]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [29 0 29]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky :wait :sleep}} :within-s 30}]
    :after [[:body-near [5.5 0 5.5] 3]]}
   {:name "no-bed-has-no-sleep-wait"
-   :act [[:job (jobs.movement.go-to {:pos #at [29 0 29]})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [29 0 29]})]]
    :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:wait :sleep}} :for-s 20}]}]}

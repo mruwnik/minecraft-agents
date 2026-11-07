@@ -12,7 +12,7 @@
   :limit-s 200}
  :cases
  [{:name "tall-tree-with-its-foot-floor-behind-a-wall-is-looked-at-and-felled"
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}
             {:no-event {:source :job :kind :fell-tree.declined} :for-s 180 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 0 16] "oak_log"]]}]}

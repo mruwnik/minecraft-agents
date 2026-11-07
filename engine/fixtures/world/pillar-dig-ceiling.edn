@@ -11,18 +11,18 @@
  :cases
  [{:name "dirt-roof-is-dug-and-pillar-done"
    :blocks [[:fill [16 7 16] [16 8 16] "dirt"]]
-   :act [[:job (jobs.access.pillar {:height 3})]]
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 3})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:body-near [16.5 8 16.5] 2]]
    :limit-s 100}
   {:name "bedrock-roof-ends-ceiling"
    :blocks [[:fill [16 7 16] [16 8 16] "bedrock"]]
-   :act [[:job (jobs.access.pillar {:height 3})]]
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 60 :of-job true}]
    :limit-s 70}
   {:name "gravel-over-the-head-is-dug-and-pillar-done"
    :blocks [[:fill [16 7 16] [16 9 16] "gravel"] [:fill [16 10 16] [16 12 16] "stone"]]
-   :act [[:job (jobs.access.pillar {:height 2})]]
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 2})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:body-near [16.5 7 16.5] 2]]
    :limit-s 100}

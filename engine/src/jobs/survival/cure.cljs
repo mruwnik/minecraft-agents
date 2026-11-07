@@ -58,6 +58,8 @@
                                    (.-health self))]
     (if (>= hp (.-health self)) (cost/death-s p (ctx/view c)) (cost-health/hp-cost hp))))
 
+(def worth-of "The loss the cure averts: waiting the poison out (wait-cost)." wait-cost)
+
 (defn fetch-plan
   "{:item :price} of the fetchable cure the call's ways bring at the least price, when that is less than waiting the poison out; else nil."
   [c]

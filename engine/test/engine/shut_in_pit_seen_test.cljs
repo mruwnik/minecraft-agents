@@ -41,7 +41,7 @@
     (.override (.-world p) "wait" (fn ^:async f [token a impl]
                                     (swap! clock + (.-ms a))
                                     (await (impl token a))))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     {:eng eng :p p :clock clock :seen seen :out out}))
 
 (defn ^:async tick-out! [{:keys [eng clock] :as s}]

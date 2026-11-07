@@ -1,12 +1,12 @@
 ;; View speed test: no reflexes, walk a loop of six waypoints over the grass hills east of 2000 -2000
 ;; (the wooded hills to the west have leaf litter, which the pathfinder gets stuck on).
 {:register []
- :queue [(repeat (seq (jobs.movement.go-to {:pos {:x 2040 :y 69 :z -2010} :range 3})
-                      (jobs.movement.go-to {:pos {:x 2100 :y 66 :z -2020} :range 3})
-                      (jobs.movement.go-to {:pos {:x 2140 :y 82 :z -2080} :range 3})
-                      (jobs.movement.go-to {:pos {:x 2120 :y 69 :z -2140} :range 3})
-                      (jobs.movement.go-to {:pos {:x 2100 :y 68 :z -2100} :range 3})
-                      (jobs.movement.go-to {:pos {:x 2040 :y 65 :z -2040} :range 3})))]}
+ :queue [(repeat (seq (jobs.movement.go-to {:worth 1200 :pos {:x 2040 :y 69 :z -2010} :range 3})
+                      (jobs.movement.go-to {:worth 1200 :pos {:x 2100 :y 66 :z -2020} :range 3})
+                      (jobs.movement.go-to {:worth 1200 :pos {:x 2140 :y 82 :z -2080} :range 3})
+                      (jobs.movement.go-to {:worth 1200 :pos {:x 2120 :y 69 :z -2140} :range 3})
+                      (jobs.movement.go-to {:worth 1200 :pos {:x 2100 :y 68 :z -2100} :range 3})
+                      (jobs.movement.go-to {:worth 1200 :pos {:x 2040 :y 65 :z -2040} :range 3})))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeView-natural
 ;; ;; explore live: a natural surface target with a short look

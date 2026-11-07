@@ -13,6 +13,6 @@
   :limit-s 60}
  :cases
  [{:name "leave-shelter-by-night-stays-sealed-and-is-not-done"
-   :act [[:job (jobs.survival.leave-shelter)]]
+   :act [[:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :for-s 30 :at-most 0}]
    :after [[:body-near [16.5 -2 16.5] 1]]}]}

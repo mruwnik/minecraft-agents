@@ -56,7 +56,7 @@
                           :events (events/make {:sinks [sink] :now #(deref clock)})})]
     (doseq [floors olds] (mem/write! (:store eng) :stair-way {:dim "overworld" :floors floors}))
     (doseq [[kind data] extra] (mem/write! (:store eng) kind data))
-    (core/submit! eng (list job args) {})
+    (core/submit! eng (tu/order eng (list job args)) {})
     (loop [i 0]
       (when (and (< i 30) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 500)

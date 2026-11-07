@@ -67,7 +67,7 @@
 
 (defn ^:async dig-in! [world]
   (let [{:keys [eng p seen] :as s} (st/setup (merge world {:time st/night :inventory st/wall-stack}))]
-    (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+    (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
     (await (tu/run-until-empty eng 8))
     (assoc s :eng eng :p p :seen seen)))
 
@@ -174,7 +174,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 6))
           (is (= 1 (count (st/calls p "sleep"))) "slept in the bed")
           (is (= [] (st/calls p "dig")))
@@ -186,7 +186,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
-              id (core/submit! eng '(jobs.survival.night) {})]
+              id (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (swap! (fake/state p) assoc-in [:self :isSleeping] true)
                               (js/Promise.resolve #js {:status "sleeping"})))
@@ -222,7 +222,7 @@
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
                                                {:time st/night :skipNight false :inventory [{:name "red_bed" :count 1}]}))]
           (let [mid (st/mid-night! p 1 #(hash-map :digs (count (st/calls p "dig")) :bed (mapv :pos (st/entries eng :bed))))]
-            (core/submit! eng '(jobs.survival.night) {})
+            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
             (await (st/tick-n eng 8))
             (is (= 1 (count (st/calls p "place"))) "one bed placed")
             (is (= "red_bed" (.-item (.-args (first (st/calls p "place"))))))
@@ -237,7 +237,7 @@
         (let [boxed (into {} (for [x [4 5 6] z [-1 0 1] :when (not= [x z] [5 0])] [(str x ",64," z) "cobblestone"]))
               world (merge (hut-world {:x 5 :y 64 :z 0} boxed) {:time st/night :inventory [{:name "red_bed" :count 1}]})
               {:keys [eng p]} (st/setup world)]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 4))
           (is (= [] (st/calls p "place")) "one free cell is no room")
           (is (= 1 (count (st/entries eng :bed-place-failed))))
@@ -250,7 +250,7 @@
         (let [boxed (into {} (for [x [4 5 6] z [-1 0 1] :when (not (#{[5 0] [4 0] [5 -1] [4 -1]} [x z]))] [(str x ",64," z) "cobblestone"]))
               {:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} boxed)
                                                {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 4))
           (is (= [] (st/calls p "place")))
           (is (= [] (st/calls p "sleep")))
@@ -340,7 +340,7 @@
       (fn ^:async t []
         (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]]]]
           (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
-            (core/submit! eng '(jobs.survival.night) {})
+            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
             (await (st/tick-n eng 6))
             (is (= 1 (count (st/calls p "sleep"))) (pr-str [zones claims]))
             (is (= [{:pos bed-cell}] (st/entries eng :bed)) "recorded as :bed")))))))
@@ -354,7 +354,7 @@
                 zones [[] [(bed-zone "Miles")]]]
           (let [{:keys [eng p]} (zoned-setup w zones [])]
             (when known? (st/know-bed! eng bed-cell))
-            (core/submit! eng '(jobs.survival.night) {})
+            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
             (await (st/tick-n eng 6))
             (is (= [] (st/calls p "sleep")) (pr-str [known? zones]))
             (is (= ({true [{:pos bed-cell}] false []} known?) (st/entries eng :bed)) "nothing new recorded as :bed")))))))
@@ -366,7 +366,7 @@
         (doseq [w [occupied-world lying-world]]
           (let [{:keys [eng p]} (zoned-setup w [(bed-zone self-name)] [])]
             (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
-            (core/submit! eng '(jobs.survival.night) {})
+            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
             (await (st/tick-n eng 12))
             (is (= [{:pos bed-cell}] (st/entries eng :sleep-failed)) "the normal failed-sleep memory")
             (is (= [] (st/entries eng :bed-unreachable)) "not a permanent skip")))))))
@@ -379,7 +379,7 @@
               tries (atom 0)]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (swap! tries inc) (js/Promise.resolve #js {:status "obstructed"})))
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= 1 @tries) "one try: a retry cannot change an obstructed bed")
           (is (= 1 (count (st/ended-because seen :bed-obstructed))))
@@ -392,7 +392,7 @@
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (= [{:pos {:x 6 :y 64 :z 0}}] (st/entries eng :sleep-failed)))
           (is (false? (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {})))
@@ -437,7 +437,7 @@
                            {:time st/night :inventory [{:name "red_bed" :count 1}]})
               {:keys [eng p]} (st/setup world)]
           (is (true? (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))) "holds for the seen bed")
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 8))
           (is (= [] (st/calls p "place")) "no second bed")
           (is (= 1 (count (st/calls p "sleep"))))
@@ -455,7 +455,7 @@
               {:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {"80,64,0" "red_bed"})
                                                     {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
           (st/know-bed! eng far)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 8))
           (is (= 1 (count (st/calls p "place"))) "put the carried one down")
           (is (= 1 (count (st/calls p "sleep"))))
@@ -469,7 +469,7 @@
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 6} {})
                                                {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
           (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
-          (core/submit! eng '(jobs.survival.bed-down) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.bed-down {})) {})
           (await (st/tick-n eng 12))
           (let [foot (st/arg-pos (first (st/calls p "place")))]
             (is (and (<= 4 (:x foot) 6) (<= -1 (:z foot) 1)) (str "the bed went down in the room, not beside the door: " foot))))))))
@@ -486,7 +486,7 @@
                                               dx (- (:x foot) (:x stand)) dz (- (:z foot) (:z stand))]
                                           {:call call :foot foot :dx dx :dz dz
                                            :head (block-at p [(+ (:x foot) dx) (:y foot) (+ (:z foot) dz)])}))]
-            (core/submit! eng '(jobs.survival.night) {})
+            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
             (await (st/tick-n eng 8))
             (let [{:keys [call foot dx dz head]} @mid
                   click (js->clj (.-click (.-args call)) :keywordize-keys true)]
@@ -515,7 +515,7 @@
      (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {})
                                                  {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
        (refuse-bed! p n)
-       (core/submit! eng '(jobs.survival.night) {})
+       (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
        (.then (st/tick-n eng ticks) #(resolve {:p p :seen seen}))))))
 
 (deftest a-bed-the-server-refuses-once-is-placed-on-the-next-try
@@ -561,7 +561,7 @@
         (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
           (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "failed" :reason "bot is not sleeping"})))
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 12))
           (is (re-find #"cannot sleep: failed \(bot is not sleeping\)" (str (:text (first (st/emitted seen :bed_unusable)))))))))))
 
@@ -579,7 +579,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup big-room)]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (st/tick-n eng 6))
           (is (= [] (st/calls p "place")) "no dig-in")
           (is (= [] (st/emitted seen :night.answers)) "no way through the night priced: shut in already")

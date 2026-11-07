@@ -11,6 +11,6 @@
   :limit-s 60}
  :cases
  [{:name "iron-door-is-opened-through-the-lever-beside-it"
-   :act [[:job (jobs.access.toggle {:pos #at [12 0 12] :state :open})]]
+   :act [[:job (jobs.access.toggle {:worth 1200 :pos #at [12 0 12] :state :open})]]
    :expect [{:event {:source :job :kind :completed :data {:wanted :open}} :within-s 40 :of-job true}]
    :after [[:block [12 0 12] "iron_door[open=true]"] [:block [13 0 13] "lever[powered=true]"]]}]}

@@ -12,7 +12,7 @@
  :cases
  [{:name "far-drop-is-walked-to-by-go-to-round-a-trench"
    :act [[:summon "item" [26.5 10.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.items.collect-drops {:radius 12})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 12})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :walk}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :completed}}]

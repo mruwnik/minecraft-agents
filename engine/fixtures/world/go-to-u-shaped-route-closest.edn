@@ -18,11 +18,11 @@
   :limit-s 400}
  :cases
  [{:name "u-shaped-route-open-walls-arrives"
-   :act [[:job (jobs.movement.go-to {:pos #at [108 0 12] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [108 0 12] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [108.5 0 12.5] 3]]}
   {:name "u-shaped-route-roofed-arrives"
    :blocks [[:fill [0 5 0] [123 5 43] "bedrock"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [108 0 12] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [108 0 12] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [108.5 0 12.5] 3]]}]}

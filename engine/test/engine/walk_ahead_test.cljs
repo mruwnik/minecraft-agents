@@ -248,7 +248,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'driving-parent parent)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(driving-parent) {})
+    (core/submit! eng (tu/order eng '(driving-parent)) {})
     (loop [i 0]
       (when (and (< i 200) (seq (:list (core/state eng))))
         (swap! clock + 500)
@@ -360,7 +360,7 @@
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i 40) (seq (:list (core/state eng))))
         (await (core/tick! eng))

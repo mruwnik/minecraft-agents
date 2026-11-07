@@ -15,7 +15,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :nothing-possible}} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 12] "oak_fence"]]}
@@ -29,7 +29,7 @@
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}
                     {:id "house" :cells [#at [20 0 12]] :want "white_bed"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 12] "oak_fence"] [:not-block [20 0 12] "white_bed"]]}
@@ -42,7 +42,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:build}})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:build}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :leak}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
@@ -56,7 +56,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [10 0 12] "oak_fence"]]}
   ;; Card a5d213e2: a ring planned one above the ground on its west side (the rest stands on a raised terrace) leaves a gap under those fences; the check names them and the patch fills them (a player fills under a floating fence).
@@ -70,7 +70,7 @@
                     {:id "e1" :box [#at [14 1 11] #at [14 1 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 1 12] #at [14 1 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 1 13] #at [14 1 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :uneven? true})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :uneven? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [10 0 11] "oak_fence"] [:block [10 0 12] "oak_fence"] [:block [10 0 13] "oak_fence"]]}
   ;; Card f24fa9d6: a gate with a trunk on the cell outside it is refused before anything is placed (no pen the body cannot leave).
@@ -84,7 +84,7 @@
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
    :body {:yaw 270}
-   :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :uneven}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting}}]
    :after [[:not-block [10 0 12] "oak_fence"]]}
@@ -98,7 +98,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:not-block [11 0 13] "oak_log"] [:not-block [11 1 12] "oak_leaves"] [:block [10 0 12] "oak_fence"]]}
   ;; Card f84912c5: with the fences carried (8, the ring needs 7 and a gate) the pen is placed from the bag at once; nothing is fetched
@@ -110,7 +110,7 @@
                     {:id "s" :box [#at [10 0 12] #at [12 0 12]] :want "oak_fence"}
                     {:id "w" :box [#at [10 0 11] #at [10 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [12 0 11] #at [12 0 11]] :want "oak_fence_gate"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 11] "oak_fence"] [:block [12 0 11] "oak_fence_gate"]]}
@@ -124,7 +124,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:not-block [15 0 11] "oak_leaves"] [:not-block [14 1 11] "oak_fence"]]}
 ]}

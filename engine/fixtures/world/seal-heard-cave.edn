@@ -18,7 +18,7 @@
    :body {:at [9.5 0 11.5]}
    :act [[:summon "skeleton" [3.5 0 11.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [18 0 11] :range 1 :checks {:safe? (always)}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [18 0 11] :range 1 :checks {:safe? (always)}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:not-block [11 0 11] "dirt"] [:not-block [11 1 11] "dirt"]
            [:block [7 0 10] "dirt"] [:block [7 0 11] "dirt"] [:block [7 0 12] "dirt"] [:block [7 1 10] "dirt"] [:block [7 1 11] "dirt"] [:block [7 1 12] "dirt"]
@@ -39,7 +39,7 @@
    :body {:at [9.5 0 11.5]}
    :act [[:summon "skeleton" [3.5 0 11.5] "{NoAI:1b,PersistenceRequired:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 3]
-         [:job (jobs.movement.go-to {:pos #at [18 0 11] :range 1 :checks {:safe? (always)}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [18 0 11] :range 1 :checks {:safe? (always)}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :hostile.decided} :for-s 20}]
    :after [[:not-block [11 0 11] "dirt"] [:not-block [11 1 11] "dirt"]

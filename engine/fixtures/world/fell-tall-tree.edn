@@ -13,21 +13,21 @@
   :limit-s 200}
  :cases
  [{:name "twelve-log-tree-felled-from-a-pillar"
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}
             {:no-event {:source :job :kind #{:stopped :fell-tree.declined}} :for-s 180 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "dirt" [:>= 14]]]}
   {:name "maintain-fells-the-tall-tree-by-default"
    :plans [{:id "forest" :metadata {:by "$body"}
             :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
-   :act [[:job (jobs.forestry.maintain {:plan "$plan:forest"})]]
+   :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest"})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :forest.left} :for-s 190 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [16 11 16] "oak_log"] [:not-block [16 5 16] "oak_log"]]}
   {:name "maintain-without-pillar-leaves-the-tall-tree"
    :plans [{:id "forest" :metadata {:by "$body"}
             :parts [{:id "t" :cells [#at [16 0 16]] :want {:tree "oak"}}]}]
-   :act [[:job (jobs.forestry.maintain {:plan "$plan:forest" :ways #{:carried :chest :craft :gather}})]]
+   :act [[:job (jobs.forestry.maintain {:worth 1200 :plan "$plan:forest" :ways #{:carried :chest :craft :gather}})]]
    :expect [{:event {:source :job :kind :forest.left :data {:reason :too-tall}} :within-s 90 :of-job true}]
    :after [[:block [16 11 16] "oak_log"] [:item "dirt" 20]]
    :limit-s 100}
@@ -36,7 +36,7 @@
   {:name "hungry-reflex-mid-pillar-then-the-same-tree-is-finished"
    :register [{:trigger :hungry}]
    :body {:inventory [["iron_axe" 1] ["dirt" 20] ["bread" 8]]}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})] [:until-pos {:y-min 3} 40]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 0 16]})] [:until-pos {:y-min 3} 40]
          [:rcon "effect give $BODY minecraft:hunger 7 255 true"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 80}
             {:event {:source :job :kind :completed} :within-s 190 :of-job true}]

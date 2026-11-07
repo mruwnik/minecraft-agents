@@ -7,18 +7,18 @@
   :limit-s 40}
  :cases
  [{:name "main-hand"
-   :act [[:job (jobs.items.equip {:item "iron_pickaxe"})]]
+   :act [[:job (jobs.items.equip {:worth 1200 :item "iron_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed :data {:item "iron_pickaxe" :slot "hand"}} :within-s 20 :of-job true}]}
   {:name "off-hand-shield"
-   :act [[:job (jobs.items.equip {:item "shield" :hand "off"})]]
+   :act [[:job (jobs.items.equip {:worth 1200 :item "shield" :hand "off"})]]
    :expect [{:event {:source :job :kind :completed :data {:item "shield" :slot "off-hand"}} :within-s 20 :of-job true}]}
   {:name "shield-goes-to-off-hand-unasked"
-   :act [[:job (jobs.items.equip {:item "shield"})]]
+   :act [[:job (jobs.items.equip {:worth 1200 :item "shield"})]]
    :expect [{:event {:source :job :kind :completed :data {:item "shield" :slot "off-hand"}} :within-s 20 :of-job true}]}
   {:name "no-item"
-   :act [[:job (jobs.items.equip {:item "diamond_pickaxe" :ways #{:carried}})]]
+   :act [[:job (jobs.items.equip {:worth 1200 :item "diamond_pickaxe" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-item}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10}]}
   {:name "unknown-item"
-   :act [[:job (jobs.items.equip {:item "iron_pickaxx"})]]
+   :act [[:job (jobs.items.equip {:worth 1200 :item "iron_pickaxx"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :unknown-item}} :within-s 20 :of-job true}]}]}

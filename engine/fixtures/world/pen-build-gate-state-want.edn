@@ -17,6 +17,6 @@
  :cases
  [{:name "build-pen-places-the-gate-for-a-state-want"
    :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 16] ["oak_fence_gate" 1]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried} :ignore-zones? true})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.build.pen"}} :within-s 130 :of-job true}]
    :after [[:block [12 0 10] "oak_fence_gate"] [:block [11 0 10] "oak_fence"]]}]}

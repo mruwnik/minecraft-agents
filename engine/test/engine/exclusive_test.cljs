@@ -28,8 +28,8 @@
 
 (def triggers
   (merge real-triggers/all
-         {:probe {:name :probe :job '(nop) :when (fn [_ _ _] (swap! probes inc) false)}
-          :always {:name :always :job '(walk) :when (fn [_ _ _] true)}}))
+         {:probe {:name :probe :job '(nop {:worth 60}) :when (fn [_ _ _] (swap! probes inc) false)}
+          :always {:name :always :job '(walk {:worth 60}) :when (fn [_ _ _] true)}}))
 
 (defn make [dir clock]
   (let [[seen sink] (tu/legacy-capture-sink)
@@ -56,8 +56,8 @@
       (fn ^:async t []
         (let [clock (atom t0)
               {:keys [eng seen]} (make (tu/tmp-dir) clock)]
-          (core/submit! eng '(nop) {})
-          (let [r (exclusive eng '(nop))]
+          (core/submit! eng '(nop {:worth 60}) {})
+          (let [r (exclusive eng '(nop {:worth 60}))]
             (is (true? (:ok r)) (pr-str r))
             (is (true? (:exclusive (:job r))))
             (is (= {:reason :exclusive-run :job "j2"} (:waiting (api/summary eng "j1")))))
@@ -76,7 +76,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (exclusive eng '(spin))
+          (exclusive eng '(spin {:worth 60}))
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "unlisted")
           (is (nil? (core/exclusive-job eng)))
@@ -85,7 +85,7 @@
 
 (deftest a-failing-check-ends-the-run-at-once-with-its-cause
   (let [{:keys [eng seen]} (setup)]
-    (exclusive eng '(blocked))
+    (exclusive eng '(blocked {:worth 60}))
     (is (nil? (core/tick! eng)) "no round starts")
     (is (nil? (core/exclusive-job eng)))
     (is (empty? (ran seen)))
@@ -98,7 +98,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup)]
-          (exclusive eng '(boom))
+          (exclusive eng '(boom {:worth 60}))
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))))
           (is (empty? (:failed (core/state eng))) "not parked")
@@ -111,7 +111,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen world]} (setup)]
           (.override world "moveTo" (fn [_ _ _] (js/Promise.reject (core/cut-error))))
-          (exclusive eng '(walk))
+          (exclusive eng '(walk {:worth 60}))
           (await (core/tick! eng))
           (is (nil? (core/exclusive-job eng)))
           (is (= [:cut] (mapv :reason (kinds seen :stopped))))
@@ -123,7 +123,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup)]
           (core/register-reflex! eng {:trigger :probe})
-          (exclusive eng '(spin))
+          (exclusive eng '(spin {:worth 60}))
           (reset! probes 0)
           (await (core/tick! eng))
           (is (= 0 @probes) "not during the run")
@@ -137,11 +137,11 @@
         (let [clock (atom t0)
               {:keys [eng seen world]} (make (tu/tmp-dir) clock)
               release (.hold world "moveTo")]
-          (core/submit! eng '(walk) {})
+          (core/submit! eng '(walk {:worth 60}) {})
           (let [walking (core/tick! eng)]
             (await (settle-ms))
             (release)
-            (exclusive eng '(nop))
+            (exclusive eng '(nop {:worth 60}))
             (await walking))
           (is (= "j1" (:resume (core/state eng))))
           (await (core/tick! eng))
@@ -161,7 +161,7 @@
             (await (settle-ms))
             (is (:reflex (core/running eng)))
             (release)
-            (exclusive eng '(nop))
+            (exclusive eng '(nop {:worth 60}))
             (await walking))
           (await (core/tick! eng))
           (is (= "j2" (last (ran seen))) "the exclusive job runs, not the reflex")
@@ -173,7 +173,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen world]} (setup)
               release (.hold world "moveTo")]
-          (exclusive eng '(walk))
+          (exclusive eng '(walk {:worth 60}))
           (let [round (core/tick! eng)]
             (await (settle-ms))
             (core/cancel! eng "j1" "claude")
@@ -184,7 +184,7 @@
 
 (deftest death-cancels-the-run-and-normal-ticking-resumes
   (let [{:keys [eng seen]} (setup)]
-    (exclusive eng '(spin))
+    (exclusive eng '(spin {:worth 60}))
     (core/drop-jobs-on-death! eng)
     (is (empty? (:list (core/state eng))))
     (is (nil? (core/exclusive-job eng)))
@@ -196,21 +196,21 @@
 
 (deftest a-second-run-and-a-run-while-offline-are-refused
   (let [{:keys [eng state]} (setup)]
-    (is (true? (:ok (exclusive eng '(spin)))))
-    (is (= :exclusive-running (:reason (exclusive eng '(spin)))))
+    (is (true? (:ok (exclusive eng '(spin {:worth 60})))))
+    (is (= :exclusive-running (:reason (exclusive eng '(spin {:worth 60})))))
     (is (= ["j1"] (:list (core/state eng))) "the second was not listed")
     (core/cancel! eng "j1" "claude")
     (swap! state assoc :offline true)
-    (is (= :offline (:reason (exclusive eng '(spin)))))
+    (is (= :offline (:reason (exclusive eng '(spin {:worth 60})))))
     (swap! state assoc :offline false)
     (with-redefs [core/settling? (constantly true)]
-      (is (= :settling (:reason (exclusive eng '(spin)))) "a settling body answers the reason the tools retry on"))
+      (is (= :settling (:reason (exclusive eng '(spin {:worth 60})))) "a settling body answers the reason the tools retry on"))
     (is (empty? (:list (core/state eng))))))
 
 (deftest a-run-takes-no-queue-position-or-survive-death
   (let [{:keys [eng]} (setup)]
     (doseq [extra [{:next? true} {:survive-death? true}]]
-      (is (= :bad-field (:reason (exclusive eng '(spin) extra))) (pr-str extra)))
+      (is (= :bad-field (:reason (exclusive eng '(spin {:worth 60}) extra))) (pr-str extra)))
     (is (empty? (:list (core/state eng))))))
 
 (deftest do-now-during-a-run-lists-the-job-without-cutting-the-run
@@ -219,10 +219,10 @@
       (fn ^:async t []
         (let [{:keys [eng seen world]} (setup)
               release (.hold world "moveTo")]
-          (exclusive eng '(walk))
+          (exclusive eng '(walk {:worth 60}))
           (let [round (core/tick! eng)]
             (await (settle-ms))
-            (core/do-now! eng '(nop))
+            (core/do-now! eng '(nop {:worth 60}))
             (is (= "j1" (:id (core/running eng))) "the run goes on")
             (release)
             (await round))
@@ -237,7 +237,7 @@
         (let [dir (tu/tmp-dir)
               clock (atom t0)
               first-run (make dir clock)]
-          (exclusive (:eng first-run) '(spin))
+          (exclusive (:eng first-run) '(spin {:worth 60}))
           (await (settle-ms))
           (let [{:keys [eng seen]} (make dir clock)]
             (is (= [] (:list (core/state eng))))

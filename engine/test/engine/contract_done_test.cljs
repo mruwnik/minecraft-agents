@@ -43,7 +43,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'builder builder})]
           (swap! world assoc :placed 3)
-          (core/submit! eng '(builder) {})
+          (core/submit! eng (tu/order eng '(builder)) {})
           (await (core/tick! eng))
           (is (= {:kind :done :cause :already :placed 3}
                  (select-keys (:data (first (job-ev seen :completed))) [:kind :cause :placed])))
@@ -55,7 +55,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'builder builder})]
-          (core/submit! eng '(builder) {})
+          (core/submit! eng (tu/order eng '(builder)) {})
           (dotimes [_ 5] (await (core/tick! eng)))
           (is (= 3 (:placed @world)) "no round once the goal holds")
           (is (= {:kind :done :placed 3} (select-keys (:data (first (job-ev seen :completed))) [:kind :cause :placed])))
@@ -68,7 +68,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'builder builder})]
-          (core/submit! eng '(builder) {})
+          (core/submit! eng (tu/order eng '(builder)) {})
           (await (core/tick! eng))
           (swap! world assoc :paused true)
           (await (core/tick! eng))
@@ -90,7 +90,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'stepper stepper})]
-          (core/submit! eng '(stepper) {})
+          (core/submit! eng (tu/order eng '(stepper)) {})
           (await (core/tick! eng))
           (is (= 3 (:placed @world)) "the steps stop once the goal holds")
           (is (= {:kind :done :placed 3} (select-keys (:data (first (job-ev seen :completed))) [:kind :cause :placed]))))))))
@@ -100,7 +100,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {'builder builder})]
-          (core/submit! eng '(builder) {})
+          (core/submit! eng (tu/order eng '(builder)) {})
           (await (core/tick! eng))
           (swap! world assoc :paused true)
           (swap! clock + 61000)
@@ -114,7 +114,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'builder builder})
-              id (core/submit! eng '(builder) {})]
+              id (core/submit! eng (tu/order eng '(builder)) {})]
           (await (core/tick! eng))
           (core/cancel! eng id)
           (is (= {:kind :cut-off :cause :agent :placed 0} (select-keys (:data (first (job-ev seen :cancelled))) [:kind :cause :placed])))
@@ -130,7 +130,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'fragile fragile})
-              id (core/submit! eng '(fragile) {})]
+              id (core/submit! eng (tu/order eng '(fragile)) {})]
           (await (core/tick! eng))
           (swap! world assoc :boom true)
           (core/cancel! eng id)
@@ -143,7 +143,7 @@
       (fn ^:async t []
         (let [asked (atom 0)
               {:keys [eng]} (setup {'counted (assoc builder :done? (fn [c] (swap! asked inc) (goal c)))})]
-          (core/submit! eng '(counted) {})
+          (core/submit! eng (tu/order eng '(counted)) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= 2 @asked) "one ask per round"))))))
@@ -155,7 +155,7 @@
         (let [asked (atom 0)
               {:keys [eng]} (setup {'counted (assoc builder :done? (fn [c] (swap! asked inc) (goal c)))})]
           (swap! world assoc :paused true)
-          (core/submit! eng '(counted) {})
+          (core/submit! eng (tu/order eng '(counted)) {})
           (await (core/tick! eng))
           (let [n @asked]
             (await (core/tick! eng))

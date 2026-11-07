@@ -10,11 +10,11 @@
   :limit-s 60}
  :cases
  [{:name "queued-repeat-waits-between-exclusive-calls"
-   :act [[:http :submit (jobs.primitive.look {:pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]
+   :act [[:http :submit (jobs.primitive.look {:worth 1200 :pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]
          [:await {:source :job :kind :completed} 20]
-         [:http :submit (repeat (jobs.movement.go-to {:pos #at [24 10 16]})) [] {:ok true}]
-         [:http :submit (jobs.primitive.look {:pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]
+         [:http :submit (repeat (jobs.movement.go-to {:worth 1200 :pos #at [24 10 16]})) [] {:ok true}]
+         [:http :submit (jobs.primitive.look {:worth 1200 :pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]
          [:await {:source :job :kind :completed :after-previous true} 20]
-         [:http :submit (jobs.primitive.look {:pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]]
+         [:http :submit (jobs.primitive.look {:worth 1200 :pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]]
    :expect [{:event {:source :job :kind :completed} :within-s 20 :of-job true}]
    :after [[:body-near [16.5 10 16.5] 2]]}]}

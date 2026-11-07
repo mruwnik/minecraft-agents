@@ -11,9 +11,9 @@
  :cases
  [{:name "a-noted-cow-that-is-gone-is-looked-for-not-reported-found"
    :act [[:summon "cow" [26.5 0 16.5]]
-         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :use-notes false :within 1})]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :scan-radius 24 :use-notes false :within 1})]
          [:rcon "kill @e[type=cow,tag=wt,$BOX]"]
          [:wait-s 3]
-         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :within 15 :settings {:jobs.explore.search/stale-s 1}})]]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :scan-radius 24 :within 15 :settings {:jobs.explore.search/stale-s 1}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]}]}

@@ -8,13 +8,13 @@
   :limit-s 130}
  :cases
  [{:name "standing-tend-with-nothing-to-do-stays-listed-and-waits"
-   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [12 0 18]}})) [] {:ok true}]
+   :act [[:http :submit (repeat (jobs.farm.tend {:worth 1200 :area {:min #xyz [10 -1 16] :max #xyz [12 0 18]}})) [] {:ok true}]
          [:await {:source :job :kind :yielded :data {:status :continue}} 40]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting :after :nothing-to-do}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 45}]}
   {:name "repeat-of-an-impossible-child-ends"
    :limit-s 40
-   :act [[:http :submit (repeat (jobs.gather.mine {:torches false })) [] {:ok true}]
+   :act [[:http :submit (repeat (jobs.gather.mine {:worth 1200 :torches false })) [] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 30]]
    :expect [{:event {:source :job :kind :stopped} :within-s 30 :of-job true}]}]}

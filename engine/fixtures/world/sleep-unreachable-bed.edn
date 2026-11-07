@@ -16,7 +16,7 @@
   :body {:at [10.5 0 10.5] :yaw 270 :settle-s 2}}
  :cases
  [{:name "sleep-unreachable-bed-not-walked-to"
-   :act [[:job (jobs.survival.sleep {:bed #at [20 0 12]})]]
+   :act [[:job (jobs.survival.sleep {:worth 1200 :bed #at [20 0 12]})]]
    :expect [{:event {:source :job :kind :bed_unreachable :message [:contains "cannot reach the bed on foot"]} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :bed_unreachable :message [:contains "shut in"]} :for-s 5 :of-job true}]
    :limit-s 60}

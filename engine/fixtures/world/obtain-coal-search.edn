@@ -30,7 +30,7 @@
    :blocks [[:fill [0 2 0] [63 2 63] "light"] [:fill [7 0 32] [7 3 32] "oak_log"] [:set [7 4 32] "oak_leaves[persistent=true]"]
             [:set [4 0 35] "furnace"] [:set [56 -1 56] "coal_ore"]]
    :body {:inventory [["stick" 2] ["oak_planks" 4]]}
-   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "torch" :count 4 :explore true})]]
    :expect [{:event {:source :job :kind :smelt.loaded} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring :data {:for ["coal_ore" "deepslate_coal_ore"]}} :for-s 120 :until {:source :job :kind :smelt.loaded}}]
    :limit-s 160}]}

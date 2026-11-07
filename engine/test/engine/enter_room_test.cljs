@@ -29,7 +29,7 @@
   [world args & [home]]
   (let [{:keys [eng p seen] :as s} (st/setup (merge {:time st/night} world))]
     (when home (mem/write! (:store eng) :home {:pos home} mem/place-policy))
-    (core/submit! eng (list 'jobs.survival.enter-room args) {})
+    (core/submit! eng (tu/order eng (list 'jobs.survival.enter-room args)) {})
     (await (tu/run-until-empty eng 30))
     s))
 
@@ -49,7 +49,7 @@
         (let [world (assoc (hut-world {:x 5 :y 64 :z 0} {}) :states open-door-states)
               {:keys [eng p seen]} (st/setup (assoc world :time st/night))]
           (.override (.-world p) "useOn" (fn [token a impl] (impl token (clj->js {:pos {:x 3 :y 64 :z 0}}))))
-          (core/submit! eng '(jobs.survival.enter-room {}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.enter-room {})) {})
           (await (tu/run-until-empty eng 30))
           (is (true? (door-open? p)) "the click did nothing")
           (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
@@ -82,7 +82,7 @@
           (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
           (with-redefs [risk/status (let [r #(contract/later :risky "test: the walk costs more than waiting" :recheck-after-ms 1000)]
                                       (fn ([_ _] (r)) ([_ _ _] (r))))]
-            (core/submit! eng '(jobs.survival.enter-room {}) {})
+            (core/submit! eng (tu/order eng '(jobs.survival.enter-room {})) {})
             (await (tu/run-until-empty eng 5)))
           (is (= [:risky] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end no-walk"))))))
@@ -198,7 +198,7 @@
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
                                 :world (ew/of-data {} {} [{:name "yard" :min [3 60 -2] :max [7 70 2] :owner "Miles"}])})]
           (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
-          (core/submit! eng '(jobs.survival.enter-room {}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.enter-room {})) {})
           (await (tu/run-until-empty eng 30))
           (is (seq (st/ended-because seen :no-room)))
           (is (> (:z (st/pos-of p)) 3) "stayed outside"))))))

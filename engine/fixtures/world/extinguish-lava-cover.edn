@@ -19,7 +19,7 @@
    :body {:inventory [["cobblestone" 8]]}
    :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
          [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
-         [:job (jobs.survival.extinguish {})]]
+         [:job (jobs.survival.extinguish {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
    :after [[:item "cobblestone" [:>= 6]]
            [:block [17 1 16] "cobblestone"]]}
@@ -30,7 +30,7 @@
          [:rcon "execute at $BODY run setblock ~ ~ ~1 lava"]
          [:rcon "execute at $BODY run setblock ~ ~ ~-1 lava"]
          [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
-         [:job (jobs.survival.extinguish {})]]
+         [:job (jobs.survival.extinguish {:worth 1200})]]
    ;; three covers leave the fourth lava cell open and the fire at the feet: the blocked walk escapes through go-to (stepping up onto a cover or pillaring), and the run completes
    :expect [{:event {:source :job :kind :completed} :within-s 55 :of-job true}]
    :after [[:item "cobblestone" [:<= 5]]]}
@@ -38,6 +38,6 @@
    :body {:inventory [["sand" 8] ["gravel" 8]]}
    :act [[:rcon "execute at $BODY run setblock ~1 ~ ~ lava"]
          [:rcon "execute at $BODY run setblock ~ ~ ~ fire"]
-         [:job (jobs.survival.extinguish {})]]
+         [:job (jobs.survival.extinguish {:worth 1200})]]
    :expect [{:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}]
    :after [[:item "sand" 8] [:item "gravel" 8] [:block [17 1 16] "lava"]]}]}

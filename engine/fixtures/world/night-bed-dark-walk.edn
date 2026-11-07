@@ -25,13 +25,13 @@
    :blocks [[:set [48 0 8] "air"] [:set [49 0 8] "air"]
             [:set [16 0 8] "red_bed[facing=east,part=foot]"] [:set [17 0 8] "red_bed[facing=east,part=head]"]]
    :body {:inventory []}
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}
             {:no-event {:source :job :kind :night.bed-walk-unsafe} :for-s 60 :until {:source :action :kind :done :data {:name "sleep"}}}]}
   {:name "a-far-bed-down-a-lit-way-is-walked-to-from-dark-ground"
    :blocks [[:set [48 0 8] "red_bed[facing=east,part=foot]"] [:set [49 0 8] "red_bed[facing=east,part=head]"]
             [:set [24 0 6] "glowstone"] [:set [36 0 6] "glowstone"] [:set [48 0 6] "glowstone"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 100}
             {:no-event {:source :job :kind :night.bed-walk-unsafe} :for-s 100 :until {:source :action :kind :done :data {:name "sleep"}}}]}
   {:name "a-far-bed-out-of-a-lit-tunnel-is-not-walked-to"
@@ -41,7 +41,7 @@
             [:fill [0 0 7] [20 3 9] "stone"] [:fill [1 0 8] [20 1 8] "air"]
             [:set [20 0 8] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [20 1 8] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
             [:set [4 2 8] "glowstone"] [:set [12 2 8] "glowstone"] [:set [20 2 8] "glowstone"]]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 100}]
    :after [[:body-near [10.5 0 8.5] 11]]}
@@ -52,6 +52,6 @@
             [:set [4 2 8] "glowstone"] [:set [12 2 8] "glowstone"] [:set [20 2 8] "glowstone"] [:set [28 2 8] "glowstone"] [:set [36 2 8] "glowstone"] [:set [44 2 8] "glowstone"] [:set [52 2 8] "glowstone"] [:set [60 2 8] "glowstone"] [:set [68 2 8] "glowstone"] [:set [76 2 8] "glowstone"] [:set [84 2 8] "glowstone"]]
    :memory [{:kind :bed :data {:pos #xyz [88 0 8]} :policy {:cap 1 :ttl :forever}}]
    :act [[:time-set 12600]
-         [:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+         [:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 100}
             {:no-event {:source :job :kind :night.bed-walk-unsafe} :for-s 100 :until {:source :action :kind :done :data {:name "sleep"}}}]}]}

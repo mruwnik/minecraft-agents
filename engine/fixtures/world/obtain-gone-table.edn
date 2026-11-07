@@ -13,7 +13,7 @@
         [:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~12 ~16 ~3 ~20 stone"]
         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: 90\\b" 10]
         [:rcon "execute positioned $X $Y $Z run setblock ~19 ~ ~16 air"]
-        [:job (jobs.items.get-tool {:item "wooden_pickaxe" :explore false})]]
+        [:job (jobs.items.get-tool {:worth 1200 :item "wooden_pickaxe" :explore false})]]
   :limit-s 90}
  :cases
  [{:name "planks-a-new-table-replaces-the-gone-one"

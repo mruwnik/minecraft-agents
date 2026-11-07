@@ -14,10 +14,10 @@
   :limit-s 90}
  :cases
  [{:name "walk-only-walks-to-the-wall-it-did-not-see-built-and-gives-up-there"
-   :act [[:job (jobs.movement.go-to {:pos #at [4 0 16] :range 0 :unknown true :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [4 0 16] :range 0 :unknown true :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}]
    :after [[:block [8 0 16] "stone"] [:body-near [11 0 16.5] 1.6]]}
   {:name "walks-to-the-wall-it-did-not-see-built-and-digs-through"
-   :act [[:job (jobs.movement.go-to {:pos #at [4 0 16] :range 0 :unknown true})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [4 0 16] :range 0 :unknown true})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 1.5]]}]}

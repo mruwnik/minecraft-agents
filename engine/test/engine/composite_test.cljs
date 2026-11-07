@@ -157,7 +157,7 @@
          eng (core/create {:primitives (tu/fake {}) :jobs {'kid (ending-kid ending runs) 'never (tu/job [(constantly (contract/later :not-ready "not ready"))] nil)} :triggers {} :dir (tu/tmp-dir)
                            :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks sinks :now #(deref clock)})})]
-     (core/submit! eng spec {})
+     (core/submit! eng (tu/order eng spec) {})
      {:eng eng :clock clock :ending ending :runs runs})))
 
 (defn ^:async run-s! [{:keys [eng clock]} s]
@@ -256,7 +256,7 @@
                                   :now #(deref clock) :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
                 s {:eng eng :clock clock}
                 ended #(count (filter (fn [e] (= [:job :child_ended :done] [(:source e) (:kind e) (:status (:data e))])) @seen))]
-            (core/submit! eng spec {})
+            (core/submit! eng (tu/order eng spec) {})
             (await (run-s! s 2))
             (let [n (ended)]
               (is (pos? n) (str spec ": ended done at once"))

@@ -335,7 +335,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
-          (core/submit! eng '(bump) {})
+          (core/submit! eng (tu/order eng '(bump)) {})
           (dotimes [_ 10] (await (tick-at r t0)))
           (is (= 10 (count (ran seen))) "every round failed and every tick gave it a round")
           (is (= {} (core/backoff-entries eng)))
@@ -346,9 +346,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
-          (core/submit! eng '(bump) {})
+          (core/submit! eng (tu/order eng '(bump)) {})
           (dotimes [_ 2] (await (tick-at r t0)))
-          (core/submit! eng (list 'script {:statuses ["blocked"] :end :done}) {})
+          (core/submit! eng (tu/order eng (list 'script {:statuses ["blocked"] :end :done})) {})
           (dotimes [_ 2] (await (tick-at r t0)))
           (is (= 1 (count (of-kind seen :completed))))
           (is (= {} (core/backoff-entries eng))))))))
@@ -565,7 +565,7 @@
               fired-reflexes #(mapv :reflex (of-kind seen :fired))]
           (core/register-reflex! eng {:trigger :always})
           (core/register-reflex! eng {:trigger :low})
-          (core/submit! eng '(idle) {})
+          (core/submit! eng (tu/order eng '(idle)) {})
           (dotimes [_ 3] (await (tick-at r t0)))
           (is (= [:always :always :always] (fired-reflexes)))
           (is (some? (:until (entry eng :always))))
@@ -626,7 +626,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
-          (core/submit! eng '(bump) {})
+          (core/submit! eng (tu/order eng '(bump)) {})
           (dotimes [i 2] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= [] (of-kind seen :fruitless)))
           (await (tick-at r (+ t0 120000)))
@@ -644,7 +644,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen eng] :as r} (setup)]
-          (core/submit! eng '(idle) {})
+          (core/submit! eng (tu/order eng '(idle)) {})
           (dotimes [i 4] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= [] (of-kind seen :fruitless))))))))
 
@@ -654,7 +654,7 @@
       (fn ^:async t []
         (reset! alt-rounds 0)
         (let [{:keys [seen eng] :as r} (setup)]
-          (core/submit! eng '(alternating) {})
+          (core/submit! eng (tu/order eng '(alternating)) {})
           (dotimes [i 6] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= [["j1" 3]] (mapv (juxt :job :rounds) (of-kind seen :fruitless)))
               "three failed rounds raise it although yielded no-act rounds lie between"))))))
@@ -673,7 +673,7 @@
       (fn ^:async t []
         (reset! calls 0)
         (let [{:keys [seen eng] :as r} (setup {:jobs (assoc jobs 'third (tu/job third-round))})]
-          (core/submit! eng '(third) {})
+          (core/submit! eng (tu/order eng '(third)) {})
           (dotimes [i 3] (await (tick-at r (+ t0 (* i 60000)))))
           (is (= 1 (count (of-kind seen :completed))))
           (is (= [] (of-kind seen :fruitless)) "the job reached its goal on its third fruitless-looking round"))))))

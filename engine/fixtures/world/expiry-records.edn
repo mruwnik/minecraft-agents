@@ -17,14 +17,14 @@
  [{:name "leave-open-gate-shut-once-its-time-is-out"
    :register [{:trigger :door-left}]
    :settings {:jobs.lib.pass/leave-open-s 20}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :leave-open})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1 :doors :leave-open})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :within-s 80}
             {:event {:source :reflex :kind :ended :context {:reflex-id :door-left} :data {:outcome :done}} :within-s 110}]
    :after [[:block [16 0 16] "oak_fence_gate[open=false]"]]}
   {:name "leave-open-gate-kept-open-within-its-time"
    :register [{:trigger :door-left}]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :leave-open})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 1 :doors :leave-open})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :door-left}} :for-s 50}]
    :after [[:block [16 0 16] "oak_fence_gate[open=true]"]]
@@ -32,7 +32,7 @@
   {:name "a-finished-pillar-is-taken-back-once-its-time-is-out"
    :register [{:trigger :scaffold-left}]
    :settings {:jobs.lib.ledger/ttl-s 30}
-   :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 25}
             {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any] [:any]]}} :within-s 110}]
@@ -40,8 +40,8 @@
   {:name "a-root-fills-scaffold-is-taken-back-once-its-root-ends"
    :plot {:height 10 :light :lit}
    :register [{:trigger :scaffold-left}]
-   :act [[:job (jobs.movement.look-around)]
-         [:job (jobs.blocks.fill-cells {:cells [#at [11 0 16]] :use {:blocks ["cobblestone"]} :purpose :plug :ignore-zones? true})]]
+   :act [[:job (jobs.movement.look-around {:worth 1200})]
+         [:job (jobs.blocks.fill-cells {:worth 1200 :cells [#at [11 0 16]] :use {:blocks ["cobblestone"]} :purpose :plug :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :scaffold-left} :data {:removed [[:any]]}} :within-s 110}]
@@ -49,8 +49,8 @@
   {:name "a-root-fill-with-no-purpose-leaves-nothing-for-the-reflex"
    :plot {:height 10 :light :lit}
    :register [{:trigger :scaffold-left}]
-   :act [[:job (jobs.movement.look-around)]
-         [:job (jobs.blocks.fill-cells {:cells [#at [11 0 16]] :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
+   :act [[:job (jobs.movement.look-around {:worth 1200})]
+         [:job (jobs.blocks.fill-cells {:worth 1200 :cells [#at [11 0 16]] :use {:blocks ["cobblestone"]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 40}]
    :after [[:block [11 0 16] "cobblestone"]]

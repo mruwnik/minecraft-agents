@@ -11,14 +11,14 @@
  :cases
  [{:name "overlay-radius-is-the-default-of-a-look-without-it"
    :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}
-   :act [[:job (jobs.explore.look {:max-blocks 0 :max-entities 0})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:radius 8}} :within-s 20 :of-job true}]}
   {:name "explicit-radius-beats-the-overlay"
    :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}
-   :act [[:job (jobs.explore.look {:radius 12 :max-blocks 0 :max-entities 0})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :radius 12 :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:radius 12}} :within-s 20 :of-job true}]}
   {:name "no-overlay-keeps-the-code-default"
-   :act [[:job (jobs.explore.look {:max-blocks 0 :max-entities 0})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:radius 16}} :within-s 20 :of-job true}]}
   {:name "catalog-shows-the-overlay-default-from-body"
    :settings {:engine.settings/job-args {jobs.explore.look {:radius 8}}}

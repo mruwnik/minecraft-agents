@@ -53,7 +53,7 @@
   (let [out (atom :not-done)
         parent (tu/recording-parent job args out)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i n) (seq (:list (core/state eng))))
         (swap! clock + 700)
@@ -736,7 +736,7 @@
                        (when (and (not @cut) (not= "lectern" (get-in w [:blocks ws-pos])))
                          (reset! cut true)
                          (core/cancel! eng (first (:list (core/state eng)))))))
-          (core/submit! eng (list job {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}}) {})
+          (core/submit! eng (tu/order eng (list job {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}})) {})
           (loop [i 0]
             (when (and (< i 300) (seq (:list (core/state eng))))
               (swap! clock + 700)

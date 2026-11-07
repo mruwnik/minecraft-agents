@@ -18,9 +18,9 @@
             {:trigger :hungry :persistence :cooldown :cooldown-s 90
              :job (jobs.survival.get-food)}
             {:trigger :night :persistence :cooldown :cooldown-s 10
-             :job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})}
+             :job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})}
             {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}
             {:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
- :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
+ :queue [(repeat (jobs.time.noop {:worth 1200 :seconds 2 :why :idle}))]}

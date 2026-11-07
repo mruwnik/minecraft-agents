@@ -10,11 +10,11 @@
   :limit-s 70}
  :cases
  [{:name "nothing-seen-starts-exploring"
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :no-source}} :for-s 40 :until {:source :job :kind :obtain.exploring}}]}
   {:name "explore-false-waits-no-source-naming-cobblestone"
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :data {:reason :no-source :why [:contains "cobblestone"]}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 15 :until {:source :job :data {:reason :no-source}}}]
    :limit-s 60}]}

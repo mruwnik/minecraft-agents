@@ -10,19 +10,19 @@
  [{:name "leave-boat-on-land"
    :act [[:summon "oak_boat" [10.5 0 16.5] "{}"]
          [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,$BOX,limit=1]"]
-         [:job (jobs.movement.leave-vehicle {})]]
+         [:job (jobs.movement.leave-vehicle {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:landed :dry}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :dismount-failed}} :for-s 40 :until {:source :job :kind :completed :data {:landed :dry}} :of-job true}]}
   {:name "leave-minecart-on-land"
    :act [[:summon "minecart" [10.5 0 16.5] "{}"]
          [:rcon "execute at $BODY run ride $BODY mount @e[type=minecart,tag=wt,$BOX,limit=1]"]
-         [:job (jobs.movement.leave-vehicle {})]]
+         [:job (jobs.movement.leave-vehicle {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:landed :dry}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :dismount-failed}} :for-s 40 :until {:source :job :kind :completed :data {:landed :dry}} :of-job true}]}
   {:name "leave-boat-on-dark-land"
    :plot {:height 8 :floor "stone" :light :dark}
    :act [[:summon "oak_boat" [10.5 0 16.5] "{}"]
          [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,$BOX,limit=1]"]
-         [:job (jobs.movement.leave-vehicle {})]]
+         [:job (jobs.movement.leave-vehicle {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:landed :dry}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 40 :until {:source :job :kind :completed :data {:landed :dry}} :of-job true}]}]}

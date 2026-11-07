@@ -15,10 +15,10 @@
  :cases
  [{:name "scaffold-beside-lava-is-left-and-never-walked-to"
    :blocks [[:set [28 0 14] "lava"]]
-   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :stopped :data {:open [:any :any]}} :within-s 100 :of-job true}]
    :after [[:block [28 0 16] "dirt"] [:block [28 1 16] "dirt"] [:body-far [28.5 0 14.5] 8]]}
   {:name "scaffold-without-lava-is-taken-back"
-   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any] [:any]] :open []}} :within-s 100 :of-job true}]
    :after [[:not-block [28 0 16] "dirt"] [:not-block [28 1 16] "dirt"]]}]}

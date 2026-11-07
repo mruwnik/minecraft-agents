@@ -196,3 +196,8 @@
 (defn quote-of [c]
   (let [n (count (:spots (lighting c)))]
     {:uses {:job-time [0 (work-s c) (* 20 (max 1 n))] :items {(torch/torch-item (:primitives c)) [0 n n]}}}))
+
+(defn worth-of
+  "What lighting the area is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  [c]
+  (second (get-in (quote-of c) [:uses :job-time])))

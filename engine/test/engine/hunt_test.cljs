@@ -38,7 +38,7 @@
   [args world n]
   (let [s (h/setup world 20)]
     (sky/with-sky (:p s))
-    (core/submit! (:eng s) (spec args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (spec args)) {})
     (await (run-ticks s n 700))
     s))
 
@@ -90,7 +90,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3)]} 20)]
           (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
-          (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :count 1 :keep 0})) {})
           (await (run-ticks s 30 700))
           (is (= 1 (:killed (done-event s))))
           (is (finished? s) "no loop on the pickup"))))))
@@ -134,7 +134,7 @@
                  [{:keep 1} [(cow 1 3) (animal 2 "sheep" 2) (animal 3 "sheep" 3)] "other kinds do not count"]
                  [{:keep 1 :radius 10} [(cow 1 3) (cow 2 30)] "outside the radius does not count"]]]
           (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword :entities entities})]
-            (core/submit! eng (spec args) {})
+            (core/submit! eng (tu/order eng (spec args)) {})
             (await (run-ticks s 40 700))
             (is (zero? (count (h/calls p "attack"))) note)
             (is (zero? (count (h/calls p "equip"))) note)
@@ -157,7 +157,7 @@
         (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]} 20)]
           (fake/add-entity! (:p s) {:id 50 :kind "item" :name "item" :item {:name "dirt" :count 1}
                                     :pos [3 64 0]})
-          (core/submit! (:eng s) (spec {:item "beef" :keep 0}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :keep 0})) {})
           (await (run-ticks s 1 700))
           (is (= 1 (get (inv s) "beef")))
           (is (nil? (get (inv s) "dirt")) "dirt stays on the ground")
@@ -197,7 +197,7 @@
                                                    (reset! added true)
                                                    (fake/add-entity! (:p s) {:id 2 :kind "passive" :name "cow" :health 20 :pos [1 64 0]}))
                                                  (impl t a)))
-          (core/submit! (:eng s) (spec {:item "beef" :keep 0 :count 1}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :keep 0 :count 1})) {})
           (await (run-ticks s 1 700))
           (is (= #{1} (set (attacked s))) "only the original cow is hit")
           (is (not (contains? (world-ids s) 1)))
@@ -211,7 +211,7 @@
               out (atom nil)
               parent (tu/recording-parent 'jobs.combat.hunt {:item "beef" :count 2 :keep 0} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'hunting-parent parent))]
-          (core/submit! eng '(hunting-parent) {})
+          (core/submit! eng (tu/order eng '(hunting-parent)) {})
           (await (tu/run-ticks eng clock 60 700))
           (is (= {:killed 2 :gained 2 :reason :count :spared 0 :remaining 0 :status :done} (dissoc @out :text))))))))
 
@@ -232,7 +232,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword
                                               :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
-          (core/submit! eng (spec {:item "beef" :keep 2}) {})
+          (core/submit! eng (tu/order eng (spec {:item "beef" :keep 2})) {})
           (await (run-ticks s 40 700))
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting)))) "two adults and three babies: nothing to take")
           (is (zero? (count (h/calls p "attack")))))))))
@@ -269,7 +269,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword
                                         :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
-          (core/submit! eng (spec {:item "beef"}) {})
+          (core/submit! eng (tu/order eng (spec {:item "beef"})) {})
           (await (core/tick! eng))
           (is (zero? (count (h/calls p "attack"))))
           (is (= 5 (count (fake/entities p)))))))))
@@ -323,7 +323,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zombie 1 3)]} 20)]
-          (core/submit! eng (spec {:item "rotten_flesh"}) {})
+          (core/submit! eng (tu/order eng (spec {:item "rotten_flesh"})) {})
           (await (core/tick! eng))
           (is (pos? (count (h/calls p "attack")))))))))
 
@@ -390,7 +390,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [(north-cow 1 -8) (north-cow 2 -9)]} 20)
               _ (hear-passives-until! (:p s) #(<= (:z %) -2))
-              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24})) {})
               _ (await (run-ticks s 60 700))]
           (is (= :count (:reason (done-event s))) "walked north toward the sound, saw the cows, killed one")
           (is (= 1 (:killed (done-event s)))))))))
@@ -401,7 +401,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [(north-cow 1 -8)]} 20)
               _ (hear-passives-until! (:p s) (constantly false))
-              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24})) {})
               _ (await (run-ticks s 80 700))]
           (is (finished? s))
           (is (<= 1 (count (h/calls (:p s) "steer")) 4) "a few steps toward the sound, no more")
@@ -413,7 +413,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities []} 20)
               _ (hear-passives-until! (:p s) (constantly false))
-              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24})) {})
               _ (await (run-ticks s 60 700))]
           (is (zero? (count (h/calls (:p s) "steer"))) "no sound, no steps")
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting))))))))))
@@ -423,7 +423,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [(cow 1 45)]} 20)
-              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 10 :center [45 64 0]}) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 10 :center [45 64 0]})) {})
               _ (await (run-ticks s 200 700))]
           (is (empty? (events-of s :waiting)) "never waits outside the area")
           (is (= :count (:reason (done-event s))))
@@ -439,7 +439,7 @@
           (set! (.-entities p)
                 (fn [opts] (let [all (.call orig p opts)]
                              (if (seq (h/calls p "look")) all (.filter all #(not= "passive" (.-kind %)))))))
-          (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24})) {})
           (await (run-ticks s 20 700))
           (is (seq (h/calls p "look")) "the body turned before it called the hunt too-few")
           (is (= [1] (distinct (attacked s)))))))))
@@ -489,7 +489,7 @@
           (set! (.-entities p)
                 (fn [opts] (let [all (.call orig p opts)]
                              (if (seq (h/calls p "look")) all (.filter all #(not= "passive" (.-kind %)))))))
-          (core/submit! (:eng s) (spec {:item "white_wool" :count 1 :keep 0 :radius 24}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (spec {:item "white_wool" :count 1 :keep 0 :radius 24})) {})
           (await (run-ticks s 40 700))
           (is (empty? (attacked s)))
           (is (not= :keep (:reason (done-event s))))
@@ -538,7 +538,7 @@
         (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :time st/night :entities [(cow 1 3)]} 20)]
           (sky/with-sky p)
           (fake/swap-self! p assoc :health 4)
-          (core/submit! eng (spec {:item "beef" :count 1 :keep 0}) {})
+          (core/submit! eng (tu/order eng (spec {:item "beef" :count 1 :keep 0})) {})
           (await (tu/with-looks-showing #(run-ticks s 10 700)))
           (is (empty? (attacked s)) "nothing attacked at night")
           (is (= [:exposed] (distinct (map :reason (events-of s :waiting))))))))))
@@ -565,7 +565,7 @@
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zombie 1 3) (zombie 2 5)]} 20)]
           (.override (.-world p) "attack" (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 0.5) r)))))
-          (core/submit! eng (spec {:item "rotten_flesh" :count 2}) {})
+          (core/submit! eng (tu/order eng (spec {:item "rotten_flesh" :count 2})) {})
           (await (run-ticks s 15 700))
           (is (= #{1} (set (attacked s))) "the first zombie was attacked, the second waits for the body to heal")
           (is (not (finished? s)) "low health does not end the hunt")
@@ -583,7 +583,7 @@
 
 (defn ^:async spared-hunt [args world zones]
   (let [s (h/setup world 20 (ew/of-data {} {} zones))]
-    (core/submit! (:eng s) (spec (merge {:item "white_wool" :count 2 :keep 0} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (spec (merge {:item "white_wool" :count 2 :keep 0} args))) {})
     (await (run-ticks s 30 700))
     s))
 

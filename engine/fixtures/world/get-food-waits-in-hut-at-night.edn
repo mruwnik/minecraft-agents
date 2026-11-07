@@ -11,6 +11,6 @@
  :cases
  [{:name "no-food-known-in-a-closed-hut-does-not-search-out"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
-         [:job (jobs.survival.get-food {:food 12 :carry 0})]]
+         [:job (jobs.survival.get-food {:worth 1200 :food 12 :carry 0})]]
    :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.explore.search"}} :for-s 25}]
    :after [[:body-near [5.5 1 17.5] 3]]}]}

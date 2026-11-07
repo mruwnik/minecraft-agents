@@ -9,7 +9,7 @@
  [{:name "unfed-now-get-food-lets-the-go-to-run"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false}) [:now]]
-         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false}) [:now]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40}]
    :after [[:body-near [20.5 0 16.5] 3]]}]}

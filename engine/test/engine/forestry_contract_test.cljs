@@ -29,7 +29,7 @@
                   :let [job (get registry/jobs sym)]]
             (is (vector? (:target job)) (str sym " has a target"))
             (is (fn? (:done? job)) (str sym " has done?"))
-            (is (nil? (contract/quote-problem (:quote (await (event-api/quote-view eng (str sym) "{:radius 10}")))))
+            (is (nil? (contract/quote-problem (:quote (await (event-api/quote-view eng (str sym) "{:radius 10 :worth 1200}")))))
                 (str sym))))))))
 
 ;; ------------------------------------------------------------------ harvest-wood
@@ -123,7 +123,7 @@
                  (if (= "water_bucket" (.-item a))
                    (do (swap! placed inc) #js {:status "placed" :block "water"})
                    (impl token a))))
-    (core/submit! eng (list obsidian args) {})
+    (core/submit! eng (tu/order eng (list obsidian args)) {})
     (await (tu/run-until-empty eng 80))
     (assoc s :waits (count (filter #(= "wait" (.-name %)) (.-calls (.-world p)))) :placed @placed)))
 
@@ -141,7 +141,7 @@
   pour); scoop-fails? makes the bucket's place answer failed. {:p :end} with the job's stopped event data."
   [scoop-fails?]
   (let [{:keys [eng p seen]} (lt/setup (ot/world ot/lava-lake [ot/pick {:name "water_bucket" :count 1}]))
-        id (core/submit! eng (list obsidian {:count 1}) {})]
+        id (core/submit! eng (tu/order eng (list obsidian {:count 1})) {})]
     (.override (.-world p) "place"
                (fn ^:async f [token a impl]
                  (cond

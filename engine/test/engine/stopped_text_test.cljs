@@ -19,7 +19,7 @@
                           :jobs (assoc registry/jobs 'stopper job)
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world (world/of-data {} {} [])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(stopper) {})
+    (core/submit! eng (tu/order eng '(stopper)) {})
     (await (tu/run-ticks eng clock 4 500))
     [(:text (first (filter #(= :stopped (:kind %)) @seen))) (first (vals (core/recent-results eng)))]))
 

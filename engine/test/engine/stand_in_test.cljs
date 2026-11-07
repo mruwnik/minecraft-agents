@@ -62,7 +62,7 @@
     (.override (.-world p) "steer"
                (fn [token a impl] (-> (impl token a)
                                       (.then (fn [r] (when-let [t (and (not stuck?) (some-> a .-pos))] (fake/swap-self! p assoc :pos [(.-x t) (.-y t) (.-z t)])) r)))))
-    (core/submit! eng (list 'jobs.survival.stand-in args) {})
+    (core/submit! eng (tu/order eng (list 'jobs.survival.stand-in args)) {})
     {:eng eng :p p :seen seen})))
 
 (deftest a-body-walks-to-the-nearest-water-and-ends-done-in-it

@@ -9,11 +9,11 @@
  [{:name "far-item-left-lying"
    :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
          [:summon "item" [28.5 0 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
-         [:job (jobs.items.collect-drops {:radius 8})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 8})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" 1] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1]]}
   {:name "thrown-drop-collected"
    :act [[:summon "item" [17.5 0.5 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1},Motion:[0.3d,0.2d,0.0d]}"]
-         [:job (jobs.items.collect-drops {:radius 8})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :radius 8})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 60 :of-job true}]
    :after [[:item "cobblestone" 1] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 0]]}]}

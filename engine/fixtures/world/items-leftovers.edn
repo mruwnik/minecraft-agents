@@ -12,30 +12,30 @@
  :cases
  [{:name "kitchen-bakes-chest-wheat-and-stores-the-bread"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"] [:set [20 0 18] "crafting_table"]]
-   :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
+   :act [[:job (jobs.items.kitchen {:worth 1200 :chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
    :expect [{:event {:source :job :kind :completed :data {:text [:contains "stored bread 3"]}} :within-s 80 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
   {:name "kitchen-without-a-table-or-wood-stops-no-table"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
-   :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
+   :act [[:job (jobs.items.kitchen {:worth 1200 :chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-table}} :within-s 60 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
   {:name "kitchen-crafts-a-table-from-carried-planks-and-bakes"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
    :body {:inventory [["oak_planks" 8]]}
-   :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
+   :act [[:job (jobs.items.kitchen {:worth 1200 :chest #xyz [20 0 16] :reserve {} :stock {"bread" 3}})]]
    :expect [{:event {:source :job :kind :completed :data {:text [:contains "stored bread 3"]}} :within-s 80 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0]]}
   {:name "kitchen-fetch-false-skips-no-table-even-with-planks"
    :blocks [[:set [20 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:wheat\",count:9}]}"]]
    :body {:inventory [["oak_planks" 8]]}
-   :act [[:job (jobs.items.kitchen {:chest #xyz [20 0 16] :reserve {} :stock {"bread" 3} :ways #{:carried}})]]
+   :act [[:job (jobs.items.kitchen {:worth 1200 :chest #xyz [20 0 16] :reserve {} :stock {"bread" 3} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :skipped {:take :no-table :bake :no-table}}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:item "bread" 0] [:item "wheat" 0] [:item "oak_planks" 8]]}
   {:name "enchant-without-a-table-waits-no-table"
    :body {:inventory [["diamond_pickaxe" 1] ["lapis_lazuli" 3]]}
-   :act [[:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
+   :act [[:job (jobs.items.enchant {:worth 1200 :item "diamond_pickaxe"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-table}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10}]
    :after [[:item "diamond_pickaxe" 1]]}
@@ -43,10 +43,10 @@
    :blocks [[:set [19 0 16] "enchanting_table"]]
    :body {:inventory [["diamond_pickaxe" 1]]}
    :act [[:rcon "xp set $BODY 30 levels"]
-         [:job (jobs.items.enchant {:item "diamond_pickaxe"})]]
+         [:job (jobs.items.enchant {:worth 1200 :item "diamond_pickaxe"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need :cause {:item "lapis_lazuli"}}} :within-s 60 :of-job true}]
    :after [[:item "diamond_pickaxe" 1]]}
   {:name "get-tool-unknown-block-is-bad-args"
-   :act [[:job (jobs.items.get-tool {:block "not_a_block"})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :block "not_a_block"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :bad-args :cause {:why [:contains "not_a_block"]}}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]}]}

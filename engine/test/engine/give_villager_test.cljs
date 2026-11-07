@@ -50,7 +50,7 @@
         eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'recording-parent parent))]
     (prepare (:p s))
     (when prepare-eng (prepare-eng eng))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (loop [i 0]
       (when (and (< i n) (seq (:list (core/state eng))))
         (swap! (:clock s) + 700)
@@ -224,7 +224,7 @@
               {:keys [eng p clock]} s]
           (taking p (all-taken "v-1"))
           (perception/pass! (aget p "perception"))
-          (core/submit! eng (list job {:to "v-1" :count 2}) {})
+          (core/submit! eng (tu/order eng (list job {:to "v-1" :count 2})) {})
           (loop [i 0]
             (when (and (< i 120) (seq (:list (core/state eng))))
               (swap! clock + 700)
@@ -325,7 +325,7 @@
     (with-redefs [ctx/mem (fn [_] @m)
                   ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
                   child/call-chase* (fn [& _] (leg (swap! i inc)))
-                  ctx/worth (fn [_] (ctx/default-worth))
+                  ctx/worth (fn [_] 1200)
                   feed/stop! (fn [_ reason] [:stop reason])]
       (loop [k 0 out []]
         (if (= k n) out (recur (inc k) (conj out (await (feed/walk! {} pos 0)))))))))

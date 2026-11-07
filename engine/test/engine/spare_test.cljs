@@ -49,7 +49,7 @@
           (swap! (.. p -world -state) assoc-in [:self :pos] [0 64 0])
           (fake/set-block! p [0 64 0] "air")
           (reset! (:out s) :not-done)
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (st/tick-out! s))
           (is (> (count (st/events-of s :obtain.exploring)) @looked) "the second job looked for a spare too")
           (is (= 1 (count (st/events-of s :tool.no-spare))) "a second job does not tell it again"))))))

@@ -10,7 +10,7 @@
   :limit-s 300 :time :any}
  :cases
  [{:name "stone-and-andesite-walls-no-pickaxe-stair-by-hand"
-   :act [[:job (jobs.movement.go-to {:pos #at [20 2 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 2 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.by-hand :data {:step :stair}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [20.5 2 16.5] 2]]}]}

@@ -13,7 +13,7 @@
  :cases
  [{:name "worn-last-pick-gets-a-spare-and-the-table-leaves-the-stair"
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 8}} :within-s 240 :of-job true}
             {:count-event {:source :job :kind :tool.low} :for-s 100 :at-most 1}]
@@ -22,49 +22,49 @@
   ;; Card ed4fd2c3: go-to's way-out stair runs with spent-uses 0; the worn last pick still gets a spare first
   {:name "way-out-stair-with-spent-uses-0-and-a-worn-last-pick-gets-a-spare"
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :settings {:jobs.lib.trip/spent-uses 0}})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8 :settings {:jobs.lib.trip/spent-uses 0}})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 8}} :within-s 240 :of-job true}]
    :after [[:item "stone_pickaxe" [:>= 1]]]
    :limit-s 260}
   {:name "worn-last-pick-nothing-to-make-a-spare-warns-and-goes-on"
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["torch" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :tool.no-spare} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :tool.spare} :for-s 60 :until {:source :job :kind :tool.no-spare}}]}
   {:name "worn-iron-pick-gets-a-stone-spare"
    :body {:inventory [["iron_pickaxe[damage=245]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60 :until {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}}}]}
   ;; card 040fa149: a whole iron pickaxe is kept for iron and diamond: with cobblestone carried a stone one is made for the stair
   ;; (card 7c19ca54: 8 steps, so the iron wear its 24 digs save pays for the 4 crafts)
   {:name "whole-iron-pick-gets-a-stone-spare-when-cobble-is-carried"
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 8}} :within-s 200 :of-job true}]}
   ;; card 36941f70: with fetching off the stone pickaxe is still made, from what is carried (cobblestone, sticks, a table)
   {:name "whole-iron-pick-with-fetch-off-crafts-the-stone-spare-from-carried-cobble"
    :body {:inventory [["iron_pickaxe" 1] ["stick" 4] ["crafting_table" 1] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried}})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 3 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 3}} :within-s 200 :of-job true}]}
   {:name "whole-iron-pick-with-no-cobble-digs-on-with-no-spare"
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 4] ["torch" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 2})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 2})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 2}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind #{:tool.spare :tool.no-spare}} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "fell-tree-with-a-worn-last-axe-gets-a-stone-spare"
    :blocks [[:fill [16 10 16] [16 17 16] "oak_log"] [:fill [14 16 14] [18 18 18] "oak_leaves[persistent=true]"] [:fill [16 16 16] [16 17 16] "oak_log"]]
    :body {:at [16.5 10 21.5] :yaw 180 :inventory [["iron_axe[damage=249]" 1] ["oak_planks" 12] ["stick" 4] ["cobblestone" 4]]}
-   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 10 16]})]]
+   :act [[:job (jobs.forestry.fell-tree {:worth 1200 :at #xyz [16 10 16]})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_axe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed} :within-s 190 :of-job true}]
    :after [[:not-block [16 17 16] "oak_log"]]}
   {:name "craft-puts-its-table-outside-the-body-box"
    :body {:at [16.01 10 16.5] :inventory [["oak_planks" 8] ["stick" 4] ["cobblestone" 4]]}
-   :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 90 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "stone_pickaxe" 1]]}
@@ -73,7 +73,7 @@
    :blocks [[:set [23 10 16] "iron_ore"] [:set [23 10 18] "iron_ore"]
             [:set [12 10 14] "torch"] [:set [20 10 14] "torch"] [:set [16 10 18] "torch"]]
    :body {:at [12.5 10 16.5] :inventory [["stone_pickaxe[damage=130]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 2})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 150 :of-job true}
             {:event {:source :job :kind :completed} :within-s 280 :of-job true}]
    :after [[:item "raw_iron" 2]]
@@ -83,7 +83,7 @@
   {:name "stair-spare-fetch-walks-to-a-far-table-and-back"
    :blocks [[:set [28 10 20] "crafting_table"]]
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 6})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 6}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 190 :of-job true :until {:source :job :kind :completed}}]
@@ -94,7 +94,7 @@
    :blocks [[:set [12 9 16] "iron_ore"] [:set [12 9 17] "iron_ore"]
             [:set [28 10 22] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["stone_pickaxe[damage=130]" 1] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 2 :ways #{:seen} :radius 6})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 2 :ways #{:seen} :radius 6})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 2}} :within-s 190 :of-job true}]
    :after [[:item "raw_iron" 2] [:body-near [10.5 10 16.5] 6]]}
@@ -102,7 +102,7 @@
   {:name "mine-throws-away-cobblestone-it-does-not-need"
    :blocks [[:set [12 9 16] "iron_ore"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 320]]}
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :ways #{:seen} :radius 6})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 6})]]
    :expect [{:event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}]
    :after [[:item "raw_iron" 1] [:item "cobblestone" [:<= 128]]]}]}

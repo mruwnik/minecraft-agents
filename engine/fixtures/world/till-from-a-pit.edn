@@ -10,6 +10,6 @@
   :limit-s 120}
  :cases
  [{:name "pit-body-tills-the-rim-dirt-without-digging-it"
-   :act [[:job (jobs.farm.till {:area {:pos #xyz [22 2 16] :radius 0} :ignore-zones? true})]]
+   :act [[:job (jobs.farm.till {:worth 1200 :area {:pos #xyz [22 2 16] :radius 0} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 1}} :within-s 100 :of-job true}]
    :after [[:block [22 2 16] "farmland"]]}]}

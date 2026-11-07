@@ -14,7 +14,7 @@
    :body {:at [8.5 0 0.5]}
    :act [[:summon "cow" [11.5 11 15.5]]
          [:summon "cow" [13.5 11 17.5]]
-         [:http :submit (repeat (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}})) [] {:ok true}]]
+         [:http :submit (repeat (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}})) [] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting :after :already}} :within-s 100}
             {:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 20}]
    :limit-s 110}
@@ -24,7 +24,7 @@
    :body {:at [8.5 0 0.5]}
    :act [[:summon "cow" [11.5 11 15.5]]
          [:summon "cow" [13.5 11 17.5]]
-         [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
+         [:http :submit (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 20}
             {:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 90}]
    :limit-s 100}
@@ -32,6 +32,6 @@
    :body {:at [7.5 11 16.5]}
    :act [[:summon "cow" [11.5 11 15.5]]
          [:summon "cow" [13.5 11 17.5]]
-         [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
+         [:http :submit (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [10 11 14] :max #xyz [14 11 18]}}) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 20}
             {:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 60}]}]}

@@ -11,8 +11,8 @@
  :cases
  [{:name "lure-walks-to-the-cow-a-search-noted-behind-a-wall"
    :act [[:summon "cow" [26.5 0 16.5]]
-         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :use-notes false :within 1})]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :scan-radius 24 :use-notes false :within 1})]
          [:rcon "execute at $BODY run fill ~10 ~ ~-8 ~10 ~8 ~8 stone"]
-         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [6 0 16] :radius 20})]]
+         [:job (jobs.animals.lure-to {:worth 1200 :mob "cow" :pos #xyz [6 0 16] :radius 20})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:reason #{:arrived :lost}}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-animal}} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]}]}

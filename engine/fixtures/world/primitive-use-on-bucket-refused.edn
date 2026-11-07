@@ -8,6 +8,6 @@
  :cases
  [{:name "empty-bucket-on-water-refused"
    :blocks [[:set [18 -1 16] "water"]]
-   :act [[:job (jobs.primitive.use-on {:pos #at [18 -1 16] :item "bucket" :face "up"})]]
+   :act [[:job (jobs.primitive.use-on {:worth 1200 :pos #at [18 -1 16] :item "bucket" :face "up"})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :bad-args}} :within-s 15 :of-job true}]
    :after [[:item "bucket" 1]]}]}

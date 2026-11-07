@@ -9,5 +9,5 @@
  :cases
  [{:name "ore-eight-behind-a-glass-window-is-seen"
    :blocks [[:fill [18 0 14] [18 2 18] "glass"]]
-   :act [[:job (jobs.explore.look {:at #at [26 1 16] :max-blocks 0 :max-entities 0})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :at #at [26 1 16] :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore"}}} :within-s 40 :of-job true}]}]}

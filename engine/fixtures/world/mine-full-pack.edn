@@ -9,7 +9,7 @@
  :cases
  [{:name "full-pack-of-cobble-makes-room-and-reaches-the-ore"
    :register [{:trigger :inventory-nearly-full}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :mend false})]]
    :expect [{:event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :within-s 120}
             {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :after [[:item "raw_iron" 1]]}]}

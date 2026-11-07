@@ -96,7 +96,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (night-hut {}))]
-          (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0]}) {})
+          (core/submit! eng (tu/order eng (list 'jobs.movement.go-to {:pos [15 64 0]})) {})
           (await (tu/run-until-empty eng 40))
           (is (empty? (:list (core/state eng))))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the short walk is not waited for dawn"))))))
@@ -106,7 +106,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (night-hut {}))]
-          (core/submit! eng '(jobs.movement.go-to {:pos [6 64 -1] :range 0}) {})
+          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [6 64 -1] :range 0})) {})
           (await (tu/run-until-empty eng 20))
           (is (empty? (:list (core/state eng))))
           (is (= {:x 6 :z -1} (select-keys (st/pos-of p) [:x :z]))))))))
@@ -117,7 +117,7 @@
       (fn ^:async t []
         (doseq [safe ['(not (threatened)) '(always)]]
           (let [{:keys [eng p]} (setup (far-hut {}))]
-            (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0] :checks {:safe? safe}}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.movement.go-to {:pos [15 64 0] :checks {:safe? safe}})) {})
             (await (tu/run-until-empty eng 40))
             (is (empty? (:list (core/state eng))))
             (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) (pr-str safe))))))))
@@ -127,7 +127,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (hut-with (far-hut {}) {'escaper escaper-job})]
-          (core/submit! eng '(escaper) {})
+          (core/submit! eng (tu/order eng '(escaper)) {})
           (await (tu/run-until-empty eng 200))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk ignores the risk"))))))
 
@@ -137,7 +137,7 @@
       (fn ^:async t []
         (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
           (let [{:keys [eng p seen]} (setup (far-hut {}))
-                id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
+                id (core/exclusive-run! eng (tu/order eng (list 'jobs.movement.go-to args)))]
             (await (ticks eng 40))
             (is (nil? (waiting-of eng id)) "the exclusive go-to is not held")
             (is (= walks? (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))) (pr-str args))
@@ -164,7 +164,7 @@
                                               (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
                                                 (swap! rounds conj r)
                                                 (if (= :continue r) r (ctx/end c :done nil)))))]
-          (core/submit! eng '(walker) {})
+          (core/submit! eng (tu/order eng '(walker)) {})
           (await (ticks eng 4))
           (is (= inside (st/pos-of p)))
           (is (= [:condition-failed :risky] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))]))))))))
@@ -177,7 +177,7 @@
         (doseq [walk [(fn ^:async walker [c] (await (child/walk-into!* c :walk [15 64 0])))
                       (fn ^:async walker [c] (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))]]
           (let [{:keys [eng p]} (parent-world walk)
-                id (core/submit! eng '(walker) {})]
+                id (core/submit! eng (tu/order eng '(walker)) {})]
             (await (ticks eng 4))
             (is (= inside (st/pos-of p)))
             (is (= :risky (:reason (waiting-of eng id))) "the parent waits with the child's reason"))))))))
@@ -187,7 +187,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (night-hut {}))]
-          (core/exclusive-run! eng (list 'jobs.movement.go-to {:pos [15 64 0]}))
+          (core/exclusive-run! eng (tu/order eng (list 'jobs.movement.go-to {:pos [15 64 0]})))
           (await (ticks eng 40))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))))
           (is (empty? (filter #(= :risky (:reason %)) (st/emitted seen :stopped)))))))))
@@ -201,7 +201,7 @@
         (let [{:keys [eng p]} (setup (-> (night-hut {})
                                          (update :blocks merge {"10,64,0" "short_grass" "11,64,0" "short_grass"})
                                          (assoc :drops {"short_grass" "wheat_seeds"})))
-              id (core/submit! eng '(jobs.gather.get-seeds {:count 2}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.gather.get-seeds {:count 2})) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)))
           (is (= :dark (:reason (waiting-of eng id)))))))))
@@ -217,7 +217,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(jobs.forestry.harvest-wood {:count 1 :radius 16}) {})
+    (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:count 1 :radius 16})) {})
     (await (ticks eng 60))
     {:eng eng :p p :seen seen}))
 
@@ -235,7 +235,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge (far-hut {"5,64,2" "cobblestone" "5,65,2" "cobblestone"})
                                             {:inventory [{:name "iron_pickaxe" :count 1}]}))
-              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
+              id (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [15 64 0]})) {})
               holds (atom []) ends (atom 0)
               orig-hold escalation/start-hold orig-end reprice/end]
           ;; the hold is priced once a choice: each start-hold's :later ends the round (a reprice walk is ~40 ms)
@@ -256,7 +256,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge (far-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))
-              id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [15 64 0]})) {})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (await (ticks eng 20))
           (is (= inside (st/pos-of p)) "the body stays in its room all night")
@@ -270,7 +270,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
+          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [15 64 0]})) {})
           (await (tu/run-until-empty eng 60))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the walk runs at night")
           (is (<= (count (st/calls p "place")) 1) "no dig-in on the way"))))))
@@ -284,7 +284,7 @@
         (let [{:keys [eng p]} (setup (-> (night-hut {})
                                             (assoc-in [:self :food] 2)
                                             (assoc :inventory [{:name "bread" :count 4}])))]
-          (core/submit! eng '(jobs.survival.get-food) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.get-food {})) {})
           (await (tu/run-until-empty eng 20))
           (is (= ["bread"] (distinct (map #(aget (.-args %) "item") (st/calls p "eat")))) (pr-str (map #(.-name %) (.-calls (.-world p)))))
           (is (= inside (st/pos-of p))))))))
@@ -297,7 +297,7 @@
       (fn ^:async t []
         (doseq [bed [{:x 150 :y 64 :z 0} outside]]
           (let [{:keys [eng seen]} (setup (night-hut {}))]
-            (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.survival.sleep {:bed bed})) {})
             (await (ticks eng 4))
             (is (not-any? #{:night-sheltered} (map :reason (st/emitted seen :holding))) (pr-str bed))))))))
 
@@ -308,7 +308,7 @@
         (let [{:keys [eng p]} (setup (-> (far-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
                                          (assoc :inventory [{:name "wheat" :count 3}])))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}})) {})
           (await (ticks eng 20))
           (is (= inside (st/pos-of p)) "the body stays in the hut"))))))
 
@@ -319,7 +319,7 @@
         (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
                                             (assoc :inventory [{:name "wheat" :count 3}])))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}})) {})
           (await (tu/run-until-empty eng 60))
           (is (> 4 (js/Math.abs (- 10 (:x (st/pos-of p))))) "it walks to the table"))))))
 
@@ -328,7 +328,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (far-hut {}))
-              id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.items.use {:on [15 64 0]})) {})]
           (await (ticks eng 6))
           (is (= inside (st/pos-of p)))
           (is (= [:risky :dawn] ((juxt :reason :wait) (waiting-of eng id)))))))))

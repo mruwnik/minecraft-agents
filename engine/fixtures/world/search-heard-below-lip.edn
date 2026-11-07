@@ -10,5 +10,5 @@
  :cases
  [{:name "search-steps-to-the-lip-and-finds-a-heard-cow"
    :act [[:summon "cow" [16.5 -5 20.5] "{NoAI:1b}"] [:summon "cow" [17.5 -5 21.5] "{NoAI:1b}"] [:summon "cow" [18.5 -5 20.5] "{NoAI:1b}"]
-         [:job (jobs.explore.search {:target "cow"})]]
+         [:job (jobs.explore.search {:worth 1200 :target "cow"})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.explore.search" :reason :found}} :within-s 60 :of-job true}]}]}

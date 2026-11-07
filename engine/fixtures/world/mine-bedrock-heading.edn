@@ -11,13 +11,13 @@
   :limit-s 200}
  :cases
  [{:name "faced-bedrock-wall-starts-on-an-open-heading"
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :level false :tunnel-length 6 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :level false :tunnel-length 6 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 180 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :unbreakable}} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1]]}
   {:name "ordered-heading-into-bedrock-stops-unbreakable"
    ;; should fail to dig: a :heading is an order, so the mine ends on the bedrock instead of turning
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :level false :heading :west :tunnel-length 6 :radius 8 :mend false})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :count 1 :level false :heading :west :tunnel-length 6 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :stop :unbreakable :length 0}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 0]]}
   {:name "stair-down-onto-bedrock-above-the-world-floor-turns"
@@ -26,7 +26,7 @@
    :plot {:height 12 :floor "dirt"}
    :blocks [[:fill [0 -2 0] [31 -2 31] "bedrock"] [:fill [0 0 0] [31 2 31] "dirt"] [:fill [0 3 8] [12 3 24] "air"]]
    :body {:at [16.5 3 16.5] :yaw 90 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.gather.dig-for {:torches false :block "stone" :count 2 :tunnel-length 4})]]
+   :act [[:job (jobs.gather.dig-for {:worth 1200 :torches false :block "stone" :count 2 :tunnel-length 4})]]
    :expect [{:event {:source :job :kind :mine.turned} :within-s 150}
             {:event {:source :job :kind :stopped :data {:got 0 :reason :no-stone-found}} :within-s 150 :of-job true}]
    :after [[:item "cobblestone" 0]]}]}

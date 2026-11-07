@@ -12,21 +12,21 @@
  :cases
  [{:name "full-pack-of-cheap-bits-tosses-for-the-craft"
    :body {:inventory [["dandelion" 1] ["poppy" 1] ["blue_orchid" 1] ["allium" 1] ["azure_bluet" 1] ["red_tulip" 1] ["orange_tulip" 1] ["white_tulip" 1] ["pink_tulip" 1] ["oxeye_daisy" 1] ["cornflower" 1] ["lily_of_the_valley" 1] ["oak_sapling" 1] ["spruce_sapling" 1] ["birch_sapling" 1] ["jungle_sapling" 1] ["acacia_sapling" 1] ["dark_oak_sapling" 1] ["cherry_sapling" 1] ["mangrove_propagule" 1] ["granite" 1] ["diorite" 1] ["andesite" 1] ["tuff" 1] ["gravel" 1] ["sand" 1] ["red_sand" 1] ["netherrack" 1] ["sandstone" 1] ["calcite" 1] ["dripstone_block" 1] ["cobbled_deepslate" 1] ["deepslate" 1] ["blackstone" 1] ["basalt" 1] ["oak_log" 1]]}
-   :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "oak_planks" :count 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "oak_planks" [:>= 4]]]}
   {:name "full-pack-of-dear-stacks-puts-a-chest-down"
    :body {:inventory [["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["oak_log" 1] ["chest" 1]]}
-   :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "oak_planks" :count 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:item "oak_planks" [:>= 4]] [:item "raw_iron" [:>= 1792]]]}
   {:name "full-pack-of-tools-stops-with-full"
    :body {:inventory [["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["iron_pickaxe" 1] ["oak_log" 1]]}
-   :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "oak_planks" :count 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:cause {:reason :full}}} :within-s 120 :of-job true}]}
   {:name "full-pack-of-dear-stacks-and-no-chest-makes-no-chest-from-the-logs"
    :body {:inventory [["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["raw_iron" 64] ["oak_log" 4]]}
-   :act [[:job (jobs.items.craft {:item "oak_planks" :count 4})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "oak_planks" :count 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:cause {:reason :full}}} :within-s 120 :of-job true}]
    :after [[:item "oak_log" [:>= 4]] [:item "raw_iron" [:>= 2240]] [:item "chest" [:<= 0]]]}]}

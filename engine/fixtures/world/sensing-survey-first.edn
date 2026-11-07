@@ -12,7 +12,7 @@
  [{:name "craft-uses-the-table-behind-it"
    :blocks [[:set [16 0 20] "crafting_table"]]
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 30 :of-job true :until {:source :job :kind :completed}}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
@@ -20,13 +20,13 @@
   {:name "compost-feeds-the-composter-behind-it"
    :blocks [[:set [16 0 20] "composter"]]
    :body {:inventory [["wheat_seeds" 64]]}
-   :act [[:job (jobs.farm.compost {:items ["wheat_seeds"] :times 1})]]
+   :act [[:job (jobs.farm.compost {:worth 1200 :items ["wheat_seeds"] :times 1})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:bone-meal [:>= 1]}} :within-s 80 :of-job true}]
    :after [[:item "bone_meal" [:>= 1]]]
    :limit-s 100}
   {:name "get-seeds-cuts-the-cane-behind-it"
    :blocks [[:set [16 -1 20] "sand"] [:set [17 -2 20] "stone"] [:set [17 -1 20] "water"] [:fill [16 0 20] [16 2 20] "sugar_cane"]]
-   :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 16})]]
+   :act [[:job (jobs.gather.get-seeds {:worth 1200 :item "sugar_cane" :count 1 :radius 16})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :count}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :none}} :for-s 30 :of-job true :until {:source :job :kind :completed :data {:reason :count}}}]
    :after [[:block [16 0 20] "sugar_cane"] [:item "sugar_cane" [:>= 1]]]}
@@ -34,7 +34,7 @@
    :blocks [[:fill [10 -1 20] [12 -1 20] "farmland[moisture=7]"] [:fill [10 -2 21] [12 -2 21] "stone"] [:fill [10 -1 21] [12 -1 21] "water"]
             [:fill [10 0 20] [12 0 20] "wheat[age=7]"]]
    :body {:inventory [["wheat_seeds" 10]]}
-   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 20] :max #xyz [12 0 20]}})]]
+   :act [[:job (jobs.farm.tend {:worth 1200 :area {:min #xyz [10 -1 20] :max #xyz [12 0 20]}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
    :after [[:block [10 0 20] "wheat[age=0]"] [:block [12 0 20] "wheat[age=0]"]]}
   ;; Since Q18 a patch may take a pond cell as a priced fill: the best pick is a corner patch holding one (pos 24 or 36, 40: 8.2 from the pond's middle); the dry pick on the body would be 12 off.
@@ -42,44 +42,44 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 64 :light :lit}
    :blocks [[:fill [28 -2 44] [36 -2 48] "stone"] [:fill [28 -1 44] [36 -1 48] "water"]]
    :body {:at [32.5 0 32.5]}
-   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :settings {:jobs.farm.find-spot/depth 7}})]]
+   :act [[:job (jobs.farm.find-spot {:worth 1200 :w 5 :h 5 :range 24 :settings {:jobs.farm.find-spot/depth 7}})]]
    :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [32 -1 42] 9] :spots [:first {:water-share [:>= 0.9]}]}} :within-s 40 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 20}]
    :limit-s 60}
   {:name "boat-launch-finds-the-water-behind-it"
    :blocks [[:fill [12 -2 20] [20 -2 24] "stone"] [:fill [12 -1 20] [20 -1 24] "water"]]
    :body {:inventory [["oak_boat" 1]]}
-   :act [[:job (jobs.movement.boat-launch {:board false})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200 :board false})]]
    :expect [{:event {:source :job :kind :completed :data {:boat "oak_boat"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :no-water}} :for-s 20 :of-job true :until {:source :job :kind :completed}}]}
 
   {:name "shear-the-sheep-behind-it"
    :body {:inventory [["shears" 1]]}
-   :act [[:summon "sheep" [16.5 0 20.5]] [:job (jobs.animals.shear {:count 1})]]
+   :act [[:summon "sheep" [16.5 0 20.5]] [:job (jobs.animals.shear {:worth 1200 :count 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
   {:name "leash-the-cow-behind-it"
    :body {:inventory [["lead" 1]]}
-   :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:mob "cow"})]]
+   :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:worth 1200 :mob "cow"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :leashed}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
   {:name "unleash-the-cow-led-behind-it"
    :body {:inventory [["lead" 1]]}
-   :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:mob "cow"})] [:await {:source :job :kind :completed} 60]
+   :act [[:summon "cow" [16.5 0 20.5]] [:job (jobs.animals.leash {:worth 1200 :mob "cow"})] [:await {:source :job :kind :completed} 60]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"]
-         [:job (jobs.animals.unleash {:mob "cow"})]]
+         [:job (jobs.animals.unleash {:worth 1200 :mob "cow"})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :unleashed}} :within-s 60 :of-job true}]
    :after [[:item "lead" [:>= 1]]]}
   {:name "breed-the-cows-behind-it"
    :body {:inventory [["wheat" 4]]}
-   :act [[:summon "cow" [16.5 0 20.5]] [:summon "cow" [17.5 0 20.5]] [:job (jobs.animals.breed {:mob "cow" :pairs 1 :ways #{:carried}})]]
+   :act [[:summon "cow" [16.5 0 20.5]] [:summon "cow" [17.5 0 20.5]] [:job (jobs.animals.breed {:worth 1200 :mob "cow" :pairs 1 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :fed}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]}
 
   {:name "fish-the-pond-behind-it"
    :blocks [[:fill [12 -3 20] [20 -3 24] "stone"] [:fill [12 -2 20] [20 -1 24] "water"]]
    :body {:inventory [["fishing_rod" 1]]}
-   :act [[:job (jobs.food.fish {:count 1})]]
+   :act [[:job (jobs.food.fish {:worth 1200 :count 1})]]
    :expect [{:event {:source :job :kind :fish.caught} :within-s 170 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-water}} :for-s 30 :of-job true :until {:source :job :kind :fish.caught}}]
    :limit-s 185}
@@ -89,14 +89,14 @@
   {:name "bridge-with-the-body-looking-up"
    :blocks [[:fill [9 -1 16] [13 -1 16] "air"]]
    :body {:at [8.5 0 16.5] :yaw 270 :pitch -70 :inventory [["dirt" 8]]}
-   :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]]
+   :act [[:job (jobs.access.bridge {:worth 1200 :heading :east :length 5 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:built 5}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
    :after [[:block [11 -1 16] "dirt"] [:body-near [13.5 0 16.5] 3]]}
   {:name "pillar-with-the-body-looking-down"
    :plot {:height 12 :floor "grass_block"}
    :body {:pitch 80 :inventory [["dirt" 8]]}
-   :act [[:job (jobs.access.pillar {:height 3 :use {:blocks ["dirt"]} :ignore-zones? true})]]
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 3 :use {:blocks ["dirt"]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :ceiling}} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
    :after [[:body-near [16.5 3 16.5] 1.5]]}
@@ -107,7 +107,7 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [8 0 2] "emerald_block"]]
    :body {:at [8.5 0 28.5] :yaw 0}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :scan-radius 8 :use-notes false
+   :act [[:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :spiral :scan-radius 8 :use-notes false
                                      :within 32 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :stuck}} :for-s 140 :of-job true :until {:source :job :kind :completed}}]
@@ -116,7 +116,7 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [26 0 16] "emerald_block"]]
    :body {:at [8.5 0 16.5] :yaw 0}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :scan-radius 6 :use-notes false
+   :act [[:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :spiral :scan-radius 6 :use-notes false
                                      :within 20 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 150 :of-job true :until {:source :job :kind :stopped}}]
@@ -130,7 +130,7 @@
    :plans [{:id "pen" :metadata {:by "$body"} :parts [{:id "pen" :box [#at [4 0 12] #at [12 1 20]] :want "dirt"}]}]
    :body {:at [8.5 0 24.5] :yaw 180}
    :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2] ; the cow is behind the body, so no poll can see it: the 2 s only lets the summon land
-         [:job (jobs.explore.search {:target "cow" :within 12 :use-notes false})]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :within 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
          [:job (jobs.explore.search {:target "cow" :worth 1 :within 60 :use-notes true})]] ; worth 1 s: no leg is worth its walk, so the search ends at once instead of walking the plot
@@ -140,10 +140,10 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :body {:at [8.5 0 24.5] :yaw 180}
    :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2] ; the cow is behind the body, so no poll can see it: the 2 s only lets the summon land
-         [:job (jobs.explore.search {:target "cow" :within 12 :use-notes false})]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :within 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
          [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
-         [:job (jobs.explore.search {:target "cow" :within 60 :use-notes true})]]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :within 60 :use-notes true})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:noted true}] :text [:contains "found 1 cow at"]}} :within-s 70 :of-job true}]
    :limit-s 90}
 
@@ -156,7 +156,7 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 0 9] "torch"] [:fill [16 1 12] [16 2 12] "glass"] [:set [40 0 28] "emerald_block"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:time-set 22000] [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:time-set 22000] [:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :within 60 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 45}})]
          [:wait-s 70] ; the job time (45 s of work) does not run while waiting
          [:time-set 1000]]
@@ -174,7 +174,7 @@
    :plot {:light :sky :height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"] [:set [15 0 9] "torch"] [:set [9 0 15] "torch"] [:set [15 0 15] "torch"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:time-set 22000] [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:time-set 22000] [:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :within 60 :spend {:job-time 45}})]
          [:wait-s 70]
          [:time-set 1000]]
@@ -190,7 +190,7 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
+   :act [[:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :outward :heading :east :scan-radius 8
                                      :use-notes false :within 60 :spend {:job-time 45}})]
          [:wait-s 60]]
    :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 90}

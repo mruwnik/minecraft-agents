@@ -18,7 +18,7 @@
               p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (floor -2 -3 40 3)})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng '(jobs.movement.go-to {:pos [10 64 0] :range 0}) {})
+          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [10 64 0] :range 0})) {})
           (dotimes [_ 10] (await (core/tick! eng)))
           (let [planned (filter #(= :planned (:kind %)) @seen)
                 data (map #(or (:data %) %) planned)]
@@ -40,7 +40,7 @@
                                          (box 2 58 0 31 59 0 "water") (box 32 58 0 32 59 0 "air"))})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng '(jobs.movement.go-to {:pos [32 58 0] :range 0 :ways #{:walk :clear-seal}}) {})
+          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [32 58 0] :range 0 :ways #{:walk :clear-seal}})) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (let [data (map #(or (:data %) %) (filter #(= :planned (:kind %)) @seen))]
             (is (= 10 (:oxygen (first data))) (pr-str (first data)))

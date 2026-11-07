@@ -10,21 +10,21 @@
  [{:name "launch-and-board"
    :body {:inventory [["oak_boat" 1]]}
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:boat "oak_boat"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :child_ended :data {:slot :mount :ending {:kind :done}}} :within-s 60 :of-job true}]}
   {:name "launch-without-boarding"
    :body {:inventory [["oak_boat" 1]]}
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {:board false})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200 :board false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :mount}} :for-s 10}]}
   {:name "no-water-waits"
    :body {:inventory [["oak_boat" 1]]}
-   :act [[:job (jobs.movement.boat-launch {})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-water}} :within-s 20 :of-job true}]}
   {:name "non-boat-item-is-bad-args"
    :body {:inventory [["stick" 1]]}
    :blocks [[:fill [14 -2 14] [20 -2 18] "stone"] [:fill [14 -1 14] [20 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {:item "stick"})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200 :item "stick"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 30 :of-job true}]}]}

@@ -10,46 +10,46 @@
  :cases
  [{:name "land-on-the-nearest-shore"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]
-         [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
-         [:job (jobs.movement.boat-land {})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
+         [:job (jobs.movement.boat-drive {:worth 1200 :pos #at [18 -1 16]})]
+         [:job (jobs.movement.boat-land {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}
   ;; card 9a842ea8: a bank covered with short grass and flowers is a shore; the land cell's feet are a passable plant
   {:name "grass-and-flower-covered-bank-is-a-shore"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]
             [:fill [11 0 13] [25 0 19] "short_grass" :outline] [:set [11 0 16] "poppy"] [:set [25 0 16] "dandelion"]]
-   :act [[:job (jobs.movement.boat-launch {})]
-         [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
-         [:job (jobs.movement.boat-land {})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
+         [:job (jobs.movement.boat-drive {:worth 1200 :pos #at [18 -1 16]})]
+         [:job (jobs.movement.boat-land {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}
   {:name "land-and-recover-the-boat"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]
-         [:job (jobs.movement.boat-land {:recover true})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
+         [:job (jobs.movement.boat-land {:worth 1200 :recover true})]]
    :expect [{:event {:source :job :kind :completed :data {:recovered true}} :within-s 120 :of-job true}]}
   {:name "hurt-body-afloat-still-lands"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
          [:rcon "damage $BODY 16 minecraft:generic"]
-         [:job (jobs.movement.boat-land {})]]
+         [:job (jobs.movement.boat-land {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-land {})]]
+   :act [[:job (jobs.movement.boat-land {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-aboard}} :within-s 30 :of-job true}]}
   {:name "no-shore-within-radius"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]
-         [:job (jobs.movement.boat-drive {:pos #at [18 -1 16]})]
-         [:job (jobs.movement.boat-land {:settings {:jobs.movement.boat-launch/radius 1}})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
+         [:job (jobs.movement.boat-drive {:worth 1200 :pos #at [18 -1 16]})]
+         [:job (jobs.movement.boat-land {:worth 1200 :settings {:jobs.movement.boat-launch/radius 1}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-shore}} :within-s 100 :of-job true}]}
   {:name "given-cell-is-not-a-shore"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]
-         [:job (jobs.movement.boat-land {:pos #at [18 0 16]})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
+         [:job (jobs.movement.boat-land {:worth 1200 :pos #at [18 0 16]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-shore}} :within-s 60 :of-job true}]}
   {:name "given-shore-across-land-is-blocked"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"] [:fill [12 -2 24] [24 -2 28] "stone"] [:fill [12 -1 24] [24 -1 28] "water"]]
-   :act [[:job (jobs.movement.boat-launch {})]
-         [:job (jobs.movement.boat-land {:pos #at [18 0 29]})]]
+   :act [[:job (jobs.movement.boat-launch {:worth 1200})]
+         [:job (jobs.movement.boat-land {:worth 1200 :pos #at [18 0 29]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 120 :of-job true}]}]}

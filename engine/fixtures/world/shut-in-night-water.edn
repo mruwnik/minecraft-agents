@@ -14,10 +14,10 @@
  :cases
  [{:name "wading-body-makes-no-shelter-in-water"
    :body {:at [15.5 0 15.5]}
-   :act [[:job (jobs.survival.shut-in {:for :night :ways #{:walls :pit}})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :for :night :ways #{:walls :pit}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :in-water}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}]}
   {:name "dry-body-beside-the-pool-walls-in"
    :body {:at [5.5 0 15.5]}
-   :act [[:job (jobs.survival.shut-in {:for :night :ways #{:walls}})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :for :night :ways #{:walls}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 45 :of-job true}]}]}

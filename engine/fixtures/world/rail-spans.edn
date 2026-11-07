@@ -13,7 +13,7 @@
  :cases
  [{:name "bridges-a-chasm-then-lays-the-line"
    :blocks [[:fill [12 -3 12] [16 -1 20] "air"]]
-   :act [[:job (jobs.build.rail-line {:plan "$plan:line"})]]
+   :act [[:job (jobs.build.rail-line {:worth 1200 :plan "$plan:line"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 400 :of-job true}
             {:no-event {:source :job :kind #{:waiting :stopped}} :for-s 400 :until {:source :job :kind :completed}}]
    :after [[:block [14 -1 16] "cobblestone"] [:block [12 -1 16] "cobblestone"] [:block [16 -1 16] "cobblestone"]
@@ -21,14 +21,14 @@
   {:name "tunnels-a-hill-then-lays-the-line"
    :blocks [[:fill [17 0 12] [21 4 20] "stone"]]
    :body {:inventory [["rail" 22] ["powered_rail" 8] ["redstone_torch" 2] ["cobblestone" 50] ["stone_pickaxe" 1] ["torch" 8]]}
-   :act [[:job (jobs.build.rail-line {:plan "$plan:line"})]]
+   :act [[:job (jobs.build.rail-line {:worth 1200 :plan "$plan:line"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 400 :of-job true}
             {:no-event {:source :job :kind #{:waiting :stopped}} :for-s 400 :until {:source :job :kind :completed}}]
    :after [[:block [19 0 16] "rail[shape=east_west]"] [:block [17 0 16] "rail[shape=east_west]"] [:block [21 0 16] "rail[shape=east_west]"]
            [:block [19 3 16] "stone"] [:block [19 1 16] "air"]]}
   {:name "a-hill-without-a-pickaxe-is-not-tunnelled"
    :blocks [[:fill [17 0 12] [21 4 20] "stone"]]
-   :act [[:job (jobs.build.rail-line {:plan "$plan:line" :ways #{:carried}})]]
+   :act [[:job (jobs.build.rail-line {:worth 1200 :plan "$plan:line" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:stopped :waiting}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 300 :until {:source :job :kind #{:stopped :waiting}}}]
    :after [[:not-block [19 0 16] "rail"]]

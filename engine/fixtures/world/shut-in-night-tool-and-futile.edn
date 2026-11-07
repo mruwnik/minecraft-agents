@@ -13,7 +13,7 @@
    ;; a thick stone pad under the plot floor (the floor is one block over void; shut-in will not dig through it)
    :blocks [[:fill [2 -6 2] [9 -1 9] "stone"]]
    :body {:at [5.5 0 5.5] :inventory [["stick" 1] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    ;; no equip is asked when the pooled body's held slot already holds the pickaxe: the stone it digs and the roof it places
    ;; from the dug cobblestone show the pickaxe was in hand
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
@@ -22,7 +22,7 @@
   {:name "no-pickaxe-no-blocks-fails-without-digging"
    :blocks [[:fill [12 -6 12] [20 -1 20] "stone"]]
    :body {:at [16.5 0 16.5]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-way}}}]
    :after [[:block [16 -1 16] "stone"]]
@@ -31,7 +31,7 @@
    :blocks [[:fill [20 5 20] [30 5 30] "stone"]]
    :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1]]}
    :plot {:height 12}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit} :for :night})]]
    ;; the zigzag pit may dig the side cell at floor level (it cannot see under a block); it never digs the cell under the feet
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 20 :of-job true}]
    :after [[:block [25 5 25] "stone"] [:body-near [25.5 6 25.5] 1.5]]

@@ -15,13 +15,13 @@
   :limit-s 40}
  :cases
  [{:name "nothing-met-wades-across-the-channel"
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :after [[:body-near [3.5 0 15.5] 2]]}
   {:name "drowned-hit-up-the-channel-goes-round-its-end"
    :memory [{:kind :hurt :age-s 60 :data {:health 15 :pos #xyz [15.5 0 2.5] :attacker {:name "drowned"}}}]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 34]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:> 34]}}}] 30]]
    :after [[:body-near [3.5 0 15.5] 2]]}
   {:name "zombie-hit-up-the-channel-still-wades-across"
    :memory [{:kind :hurt :age-s 60 :data {:health 15 :pos #xyz [15.5 0 2.5] :attacker {:name "zombie"}}}]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :after [[:body-near [3.5 0 15.5] 2]]}]}

@@ -16,7 +16,7 @@
   :limit-s 120}
  :cases
  [{:name "the-shelter-seal-waits-for-day"
-   :act [[:job (jobs.blocks.dig {:pos #at [14 1 16]})]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [14 1 16]})]
          [:wait-s 30]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}

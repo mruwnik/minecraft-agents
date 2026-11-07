@@ -72,7 +72,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir) :now now
                           :world (world/of-data {} {} [])
                           :events (events/make {:sinks [sink] :now now})})]
-    (core/submit! eng spec {})
+    (core/submit! eng (tu/order eng spec) {})
     (loop [i 0]
       (when (and (< i 80) (not-any? #(#{:completed :stopped} (:kind %)) @seen))
         (swap! clock + 700)
@@ -176,7 +176,7 @@
   "Whether job sym with args, submitted as a root job in world, is still listed (waiting on a condition) after 12 ticks."
   [world sym args]
   (let [eng (core/create {:primitives (tu/seeing-all (tu/fake-on-floor world)) :jobs registry/jobs :dir (tu/tmp-dir)})]
-    (core/submit! eng (list sym args) {})
+    (core/submit! eng (tu/order eng (list sym args)) {})
     (await (tu/run-until-empty eng 12))
     (boolean (seq (:list (core/state eng))))))
 

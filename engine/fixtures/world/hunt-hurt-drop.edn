@@ -13,7 +13,7 @@
    :act [[:summon "cow" [12.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 13 minecraft:generic"]
-         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
+         [:job (jobs.combat.hunt {:worth 1200 :item "beef" :keep 0 :radius 24})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 75 :of-job true}]
    :after [[:item "beef" [:>= 1]]]
    :limit-s 90}
@@ -21,7 +21,7 @@
    :body {:inventory [["iron_sword" 1] ["bread" 4]]}
    :act [[:summon "cow" [12.5 0 16.5] "{NoAI:1b}"]
          [:rcon "damage $BODY 13 minecraft:generic"]
-         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
+         [:job (jobs.combat.hunt {:worth 1200 :item "beef" :keep 0 :radius 24})]]
    :expect [{:event {:source :job :kind :queued} :within-s 10 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 8}]
    :limit-s 20}]}

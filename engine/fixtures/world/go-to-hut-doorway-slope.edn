@@ -15,10 +15,10 @@
   :limit-s 150}
  :cases
  [{:name "go-to-leaves-through-the-dug-doorway"
-   :act [[:job (jobs.movement.go-to {:pos #at [13 3 24] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [13 3 24] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [13.5 3 24.5] 2] [:block [12 1 17] "air"] [:block [15 1 17] "stone"] [:block [14 0 19] "stone"]]}
   {:name "search-starting-in-the-hut-finds-a-cow-outside"
    :act [[:summon "cow" [13.5 3 25.5]]
-         [:job (jobs.explore.search {:target "cow" :scan-radius 24})]]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :scan-radius 24})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]}} :within-s 120 :of-job true}]}]}

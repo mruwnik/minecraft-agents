@@ -338,3 +338,8 @@
   (let [i (volatile! 0)
         r (await (pace/steps! c #(if (< (max-passes) (vswap! i inc)) :done (pass! c))))]
     (if (= :continue r) :continue (report! c))))
+
+(defn worth-of
+  "What a put-back is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  [c]
+  (second (get-in (quote-of c) [:uses :job-time])))

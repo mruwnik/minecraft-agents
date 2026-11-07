@@ -11,7 +11,7 @@
    :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"]]
    :zones [{:name "pen" :min [13 0 13] :max [19 4 19] :owner "Other" :allow #{:place}}]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 100 :until {:source :job :kind :completed :data {:arrived true}}}]
@@ -20,7 +20,7 @@
    :blocks [[:fill [12 0 12] [20 0 20] "stone"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
    :act [[:summon "cow" [16.9 1 16.5] "{NoAI:1b}"]
-         [:job (jobs.access.pillar {:height 2 :here true})]
+         [:job (jobs.access.pillar {:worth 1200 :height 2 :here true})]
          [:wait-s 4]
          [:rcon "kill @e[type=cow,$BOX]"]]
    :expect [{:event {:source :job :kind :completed} :within-s 40}
@@ -30,7 +30,7 @@
    :blocks [[:fill [12 0 12] [20 0 20] "stone"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
    :act [[:summon "cow" [16.9 1 16.5] "{NoAI:1b}"]
-         [:job (jobs.access.pillar {:height 2 :here true})]]
+         [:job (jobs.access.pillar {:worth 1200 :height 2 :here true})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :mob-in-cell :mob "cow"}} :within-s 40}]
    :after [[:block [16 1 16] "air"]]}
   {:name "night-pit-pillar-climbs-under-a-caller-safe-form"
@@ -40,7 +40,7 @@
    :blocks [[:fill [8 0 8] [24 3 24] "dirt"] [:fill [14 1 14] [18 3 18] "air"]]
    :zones [{:name "pen" :min [13 0 13] :max [19 4 19] :owner "Other" :allow #{:place}}]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 8]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1 :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 4 16] :range 1 :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 100 :until {:source :job :kind :completed :data {:arrived true}}}]

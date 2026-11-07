@@ -14,7 +14,7 @@
   :limit-s 80}
  :cases
  [{:name "no-pending-side-control-ends-roofed-without-an-edge-walk"
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night"}} 60]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :within-s 60 :of-job true}
             {:no-event {:source :job :data {:pos [:not #{nil [:near #at [24.5 -5 16.5] 14]}]}} :of-job true :for-s 40}]
@@ -22,7 +22,7 @@
   {:name "unseen-lit-side-edge-walk-is-bought-and-walked" :plot {:length 72 :width 32}
    :blocks [[:fill [32 -6 8] [70 -1 20] "stone"] [:fill [30 -5 16] [66 -4 16] "air"]
             [:set [36 -5 16] "torch"] [:set [45 -5 16] "torch"] [:set [54 -5 16] "torch"] [:set [63 -5 16] "torch"]]
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night"}} 60]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :edge-walk}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night" :night :roofed}} :within-s 60 :of-job true}]}
@@ -30,7 +30,7 @@
    :blocks [[:fill [32 -6 8] [70 -1 20] "stone"] [:fill [30 -5 16] [66 -4 16] "air"]
             [:set [36 -5 16] "torch"] [:set [45 -5 16] "torch"] [:set [54 -5 16] "torch"] [:set [63 -5 16] "torch"]
             [:fill [30 -5 14] [66 -4 14] "lava"] [:fill [30 -5 15] [66 -4 15] "glass"]]
-   :act [[:job (jobs.survival.night)]
+   :act [[:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind #{:completed :stopped} :data {:name "jobs.survival.night"}} 60]]
    :expect [{:event {:source :job :kind :stopped :data {:cause :exposed :prices {:exposed 0}}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :edge-walk}} :of-job true :for-s 40}]}]}

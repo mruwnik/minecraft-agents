@@ -12,10 +12,10 @@
  :cases
  [{:name "block-in-rock-is-tunnelled-to-and-built"
    :body {:inventory [["stone_pickaxe" 1] ["dirt" 64]]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :after [[:block [14 1 15] "dirt"] [:block [16 2 15] "dirt"] [:block [15 1 14] "dirt"] [:block [14 1 13] "dirt"]]}
   {:name "block-in-rock-without-pickaxe-stays-given-up"
    :body {:inventory [["dirt" 64]]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 200 :of-job true}]}]}

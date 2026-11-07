@@ -41,7 +41,7 @@
     (when drop (drop! p [4 64 0] drop) (drop! p [5 64 0] drop))
     (if (:worth args)
       (await (tu/child-outcome eng job args 10))
-      (do (core/submit! eng (list job args) {}) (await (tu/run-until-empty eng 10))))
+      (do (core/submit! eng (tu/order eng (list job args)) {}) (await (tu/run-until-empty eng 10))))
     (first @worths)))
 
 (defn seen-from-above!
@@ -162,8 +162,8 @@
               {:keys [eng p seen]} (bd/setup {:self body :blocks pocket})]
           (drop! p [5 58 0] "dirt")
           (seen-from-above! p)
-          (let [result (await (tu/child-outcome eng job {:radius 8} 30))]
-            (is (= 0 (:collected result)))
+          (let [result (await (tu/child-outcome eng job {:radius 8 :worth (:value (cost/goal-value [{:name "dirt" :count 1}]))} 30))]
+            (is (= 0 (:collected result)) "at the dirt's own worth no dig to it pays")
             (is (= :nothing-possible (get-in result [:ending :kind])) "drops seen, none collected: never :done")
             (is (= :none-collected (:reason result)))
             (is (= [:unreachable] (mapv :reason (:left result))))
@@ -200,7 +200,7 @@
           (aset p "sensedAt" (fn [pos] (if (= [2 63 0] [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
           (drop! p [5 58 0] "dirt")
           (seen-from-above! p)
-          (await (tu/child-outcome eng job {:radius 8 :dig true} 30))
+          (await (tu/child-outcome eng job {:radius 8 :dig true :worth (:value (cost/goal-value [{:name "dirt" :count 1}]))} 30))
           (is (some #(= [2.5 63.5 0.5] [(.-x (.-pos (.-args %))) (.-y (.-pos (.-args %))) (.-z (.-pos (.-args %)))])
                      (bd/calls p "look"))
               "the unseen floor cell was looked at before the route was planned"))))))
@@ -263,14 +263,12 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
-(deftest a-search-walk-takes-the-calls-worth-and-a-root-search-the-missing-items
+(deftest a-search-walk-takes-the-calls-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [args {:radius 6 :items ["cobblestone"] :least-items ["cobblestone"] :near {:x 4 :y 64 :z 0} :search 3 :least 1}]
-          (is (= 50 (await (first-walk-worth nil (assoc args :worth 50)))) "a child's search is worth its caller's goal")
-          (is (= (cost/find-worth nil ["cobblestone"] (:pos body) 1) (await (first-walk-worth nil args)))
-              "a root search is worth the missing drop"))))))
+          (is (= 50 (await (first-walk-worth nil (assoc args :worth 50)))) "a child's search is worth its caller's goal"))))))
 
 (deftest a-search-walks-to-cells-whose-floor-it-has-not-seen
   (async done
@@ -368,13 +366,11 @@
           (is (= [:done 1] ((juxt :status :collected) result)))
           (is (= 1 @walks) "no second search walk once the log came in"))))))
 
-(deftest a-walk-to-drops-takes-the-calls-worth-and-a-root-walk-the-drops-in-sight
+(deftest a-walk-to-drops-takes-the-calls-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= 50 (await (first-walk-worth "diamond" {:radius 6 :items ["diamond"] :worth 50}))) "a child's walk is worth its caller's goal")
-        (is (= (:value (cost/goal-value [{:name "diamond" :count 2}])) (await (first-walk-worth "diamond" {:radius 6 :items ["diamond"]})))
-            "a root walk is worth getting the drops in sight again")))))
+        (is (= 50 (await (first-walk-worth "diamond" {:radius 6 :items ["diamond"] :worth 50}))) "a child's walk is worth its caller's goal")))))
 
 (deftest ids-not-in-sight-are-left-unseen
   (async done
@@ -745,7 +741,7 @@
           (drop! p [3 64 0] "porkchop")
           (drop! p [4 64 0] "porkchop")
           (drop! p [90 64 0] "dirt")
-          (let [{:keys [ok quote]} (await (event-api/quote-view eng (str job) "{:radius 6}"))
+          (let [{:keys [ok quote]} (await (event-api/quote-view eng (str job) "{:radius 6 :worth 1200}"))
                 [least mean most] (get-in quote [:uses :job-time])]
             (is (true? ok))
             (is (= {"porkchop" [0 2 2]} (get-in quote [:yields :items])) "only what is in the radius")
@@ -759,7 +755,7 @@
         (let [{:keys [eng p]} (bd/setup {:self body :blocks {"0,62,0" "air"}})
               held #(mem/entries (mem/view (:store eng)) loose/hold-kind)]
           (drop! p [0 63 0] "dirt")
-          (core/submit! eng '(jobs.items.collect-drops {:radius 6 :holes [[0 63 0]]}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.collect-drops {:radius 6 :holes [[0 63 0]]})) {})
           (await (core/tick! eng))
           (is (seq (held)) "held while it waits")
           (core/cancel! eng (first (:list (core/state eng))))

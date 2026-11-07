@@ -12,7 +12,7 @@
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:rcon "give $BODY minecraft:iron_pickaxe 1"]
-        [:job (jobs.survival.recover-drops)]]
+        [:job (jobs.survival.recover-drops {:worth 1200})]]
   :limit-s 330}
  :cases
  [{:name "stair-starts-behind-the-body-where-the-run-up-is-open"

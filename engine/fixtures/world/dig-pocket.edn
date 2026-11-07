@@ -12,35 +12,35 @@
  :cases
  [{:name "stone-hill-seals"
    :blocks [[:fill [22 0 8] [30 4 24] "stone"]]
-   :act [[:job (jobs.survival.dig-pocket {})]]
+   :act [[:job (jobs.survival.dig-pocket {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 90 :until {:source :job :kind :completed}}]
    :limit-s 120}
   {:name "flat-ground-no-site"
-   :act [[:job (jobs.survival.dig-pocket {})]]
+   :act [[:job (jobs.survival.dig-pocket {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-site}} :within-s 30 :of-job true}]
    :limit-s 45}
   {:name "sand-hill-no-site"
    :blocks [[:fill [22 0 8] [30 4 24] "sand"]]
-   :act [[:job (jobs.survival.dig-pocket {})]]
+   :act [[:job (jobs.survival.dig-pocket {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-site}} :within-s 30 :of-job true}]
    :limit-s 45}
   {:name "hidden-water-behind-the-wall-stops-the-pocket"
    :blocks [[:fill [22 0 15] [24 4 17] "stone"] [:set [23 0 16] "water"]]
-   :act [[:job (jobs.survival.dig-pocket {})]]
+   :act [[:job (jobs.survival.dig-pocket {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :limit-s 45}
   {:name "stone-without-pickaxe-no-tool"
    :blocks [[:fill [22 0 8] [30 4 24] "stone"]]
    :body {:inventory []}
-   :act [[:job (jobs.survival.dig-pocket {})]]
+   :act [[:job (jobs.survival.dig-pocket {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-tool}} :within-s 30 :of-job true}]
    :limit-s 45}
   ;; card 6fa0c797: the hill is the footprint of a plan this body made: no niche is cut in it
   {:name "hill-in-the-bodys-own-plan-is-no-site"
    :blocks [[:fill [22 0 8] [30 4 24] "stone"]]
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "hill" :box [#at [22 0 8] #at [30 4 24]] :want [:any "stone"]}]}]
-   :act [[:job (jobs.survival.dig-pocket {})]]
+   :act [[:job (jobs.survival.dig-pocket {:worth 1200})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-site}} :within-s 30 :of-job true}]
    :after [[:block [22 0 16] "stone"] [:block [23 0 16] "stone"]]
    :limit-s 45}
@@ -49,7 +49,7 @@
    :blocks [[:fill [0 -10 0] [47 -5 47] "sandstone"] [:fill [0 -4 0] [47 -1 47] "sand"]]
    :plot {:light :sky :length 48 :width 48}
    :body {:at [24.5 0 24.5] :inventory []}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit :pocket} :for :night})]
          [:until-pos {:y-max -6} 150]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 150 :until {:source :job :kind :completed}}]
@@ -59,6 +59,6 @@
    :blocks [[:fill [0 -12 0] [47 -1 47] "sand"]]
    :plot {:light :sky :length 48 :width 48}
    :body {:at [24.5 0 24.5] :inventory []}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:room :walls :pit :pocket} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 150 :of-job true}]
    :limit-s 170}]}

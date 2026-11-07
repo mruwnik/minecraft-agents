@@ -18,7 +18,7 @@
     {:eng eng :seen seen}))
 
 (defn ^:async run-job [eng spec]
-  (core/submit! eng spec {})
+  (core/submit! eng (tu/order eng spec) {})
   (await (run-until-empty eng 8)))
 
 (defn live [eng] (reserve/entries (mem/view (:store eng))))

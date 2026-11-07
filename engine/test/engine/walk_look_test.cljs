@@ -37,7 +37,7 @@
                   look/unseen? (fn [p _]
                                  (swap! reached max (.-x (.-pos (.self p))))
                                  (not (and sight (<= (- 8 @reached) sight))))]
-      (core/submit! eng '(jobs.movement.walk-look {:side [8 64 0] :to [6 64 0]}) {})
+      (core/submit! eng (tu/order eng '(jobs.movement.walk-look {:side [8 64 0] :to [6 64 0]})) {})
       (await (tu/tick-until-idle! eng 40)))
     [(js/Math.floor @reached)
      (mapv js/Math.floor ((juxt #(.-x %) #(.-y %) #(.-z %)) (.-pos (.self p))))
@@ -93,7 +93,7 @@
                                              [sx _ sz] (if (map? side) [(:x side) 0 (:z side)] side)]
                                          (swap! visited conj [(js/Math.floor x) (js/Math.floor z)])
                                          (> (js/Math.hypot (- sx x) (- sz z)) 2)))]
-            (core/submit! eng '(jobs.movement.walk-look {:side [9 64 0] :to [8 64 0]}) {})
+            (core/submit! eng (tu/order eng '(jobs.movement.walk-look {:side [9 64 0] :to [8 64 0]})) {})
             (await (tu/tick-until-idle! eng 80)))
           (is (contains? @visited [-8 0]) "the third leg is walked")
           (is (= [0 0] (mapv js/Math.floor [(.-x (.-pos (.self p))) (.-z (.-pos (.self p)))])) "and the body walks home once"))))))
@@ -107,10 +107,10 @@
               eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs registry/jobs
                                 :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now #(deref clock)})})
               sides (mapv (fn [z] [8 64 z]) (range 21))]
-          (with-redefs [ctx/worth (fn [_] (ctx/default-worth))
+          (with-redefs [ctx/worth (fn [_] 1200)
                         look/unseen? (constantly true)]
             (doseq [side sides]
-              (core/submit! eng (list 'jobs.movement.walk-look {:side side :to [6 64 0]}) {})
+              (core/submit! eng (tu/order eng (list 'jobs.movement.walk-look {:side side :to [6 64 0]})) {})
               (await (tu/tick-until-idle! eng 40))))
           (is (= [(last sides)] (:cells (:data (mem/latest (mem/view (:store eng)) :walk-looked))))
               "each call is a decision of its own: the sides of the calls before it are not kept")
@@ -126,7 +126,7 @@
                                 :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now #(deref clock)})})]
           (with-redefs [ctx/worth (constantly 0)
                         look/unseen? (constantly true)]
-            (core/submit! eng '(jobs.movement.walk-look {:side [8 64 0] :to [6 64 0]}) {})
+            (core/submit! eng (tu/order eng '(jobs.movement.walk-look {:side [8 64 0] :to [6 64 0]})) {})
             (await (tu/tick-until-idle! eng 40)))
           (let [d (:data (mem/latest (mem/view (:store eng)) :walk-looked))]
             (is (= [[8 64 0]] (:declined d)))

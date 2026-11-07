@@ -13,7 +13,7 @@
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "red_carpet"]
             [:set [14 0 22] "campfire[lit=true]"]]
    :body {:inventory [["iron_pickaxe" 1] ["campfire" 2] ["white_carpet" 1]]}
-   :act [[:job (jobs.apiary.guard {:radius 20})]]
+   :act [[:job (jobs.apiary.guard {:worth 1200 :radius 20})]]
    :expect [{:event {:kind :completed :data {:sunk 2 :carpeted 2 :reason :guarded}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [14 -1 10] "campfire[lit=true]"] [:block [14 -1 22] "campfire[lit=true]"]
@@ -23,14 +23,14 @@
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]
             [:set [14 0 22] "campfire[lit=true]"] [:set [14 1 22] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
-   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :act [[:job (jobs.apiary.harvest {:worth 1200 :radius 20})]]
    :expect [{:event {:kind :completed :data {:harvested 2 :reason :harvested}} :within-s 100 :of-job true}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:block [14 1 22] "beehive[honey_level=0]"]
            [:item "honeycomb" [:>= 6]]]}
   {:name "maintain-nothing-ripe-does-not-act"
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=0]"]]
    :body {:inventory [["shears" 1] ["campfire" 1] ["white_carpet" 1]]}
-   :act [[:job (jobs.apiary.maintain {:radius 20})]]
+   :act [[:job (jobs.apiary.maintain {:worth 1200 :radius 20})]]
    :expect [{:event {:kind :completed :data {:cause :already}} :within-s 30 :of-job true}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" 0] [:item "white_carpet" 1]]}
   ;; card 87dab6c8: an apiary part never seen (open ground behind a wall) is not in order; the walk to look from the
@@ -39,14 +39,14 @@
   {:name "maintain-unseen-apiary-far-waits-not-worth"
    :blocks [[:fill [20 0 10] [20 4 22] "stone"]]
    :body {:inventory [["shears" 1]]}
-   :act [[:job (jobs.apiary.maintain {:center #at [22 0 16] :radius 1 :ways #{:carried}})]]
+   :act [[:job (jobs.apiary.maintain {:worth 1200 :center #at [22 0 16] :radius 1 :ways #{:carried}})]]
    :expect [{:event {:kind :waiting :data {:worth [:any]}} :within-s 30 :of-job true}
             {:no-event {:kind #{:completed :stopped}} :for-s 20 :of-job true}
             {:no-event {:kind :walk-look.ended} :for-s 20}]}
   {:name "harvest-unsmoked-hive-stops"
    :blocks [[:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
-   :act [[:job (jobs.apiary.harvest {:radius 20})]]
+   :act [[:job (jobs.apiary.harvest {:worth 1200 :radius 20})]]
    :expect [{:event {:kind :waiting :data {:reason :not-smoked}} :within-s 60 :of-job true}
             {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}
@@ -54,14 +54,14 @@
   {:name "harvest-least-three-with-one-hive-is-not-done"
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["shears" 1]]}
-   :act [[:job (jobs.apiary.harvest {:radius 20 :least 3})]]
+   :act [[:job (jobs.apiary.harvest {:worth 1200 :radius 20 :least 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:harvested 1}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30}]
    :after [[:block [14 1 10] "beehive[honey_level=0]"] [:item "honeycomb" [:>= 3]]]}
   {:name "harvest-without-a-tool-stops"
    :blocks [[:set [14 0 10] "campfire[lit=true]"] [:set [14 1 10] "beehive[honey_level=5]"]]
    :body {:inventory [["stick" 1]]}
-   :act [[:job (jobs.apiary.harvest {:radius 20 :ways #{:carried}})]]
+   :act [[:job (jobs.apiary.harvest {:worth 1200 :radius 20 :ways #{:carried}})]]
    :expect [{:event {:kind :waiting :data {:reason :no-tool}} :within-s 60 :of-job true}
             {:no-event {:kind :completed} :for-s 20}]
    :after [[:block [14 1 10] "beehive[honey_level=5]"] [:item "honeycomb" 0]]}]}

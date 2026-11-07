@@ -15,13 +15,13 @@
    :blocks [[:fill [15 -1 15] [17 3 17] "stone" :hollow]
             [:set [15 1 16] "stone_slab[type=bottom]"]]
    :act [[:summon "villager" [16.2 0 16.5] "{NoAI:1b,UUID:[I;20263,7,3,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00030000034b" :buy "bread" :count 6})]]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00030000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 60 :of-job true}]
    :after [[:item "bread" 6] [:item "emerald" 7]]}
   {:name "sealed-behind-stone-is-unreachable"
    :blocks [[:fill [15 -1 15] [17 3 17] "stone" :hollow]]
    :act [[:summon "villager" [16.2 0 16.5] "{NoAI:1b,UUID:[I;20263,7,4,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00040000034b" :buy "bread" :count 6})]]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00040000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 60 :of-job true}]
    :after [[:item "bread" 0]]}
   {:name "lectern-and-top-slab-gap-trades-from-here"
@@ -31,7 +31,7 @@
             [:fill [15 0 16] [15 1 16] "andesite"]]
    :body {:at [18.5 0 16.5] :yaw 90 :settle-s 2 :inventory [["emerald" 8]] :effects [["resistance" 600 4]]}
    :act [[:summon "villager" [16.4 0 16.5] "{NoAI:1b,UUID:[I;20263,7,5,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:emerald\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00050000034b" :buy "bread" :count 6})]]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00050000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 60 :of-job true}]
    :after [[:item "bread" 6] [:item "emerald" 7]]}
   {:name "deep-in-the-pod-only-the-legs-show-over-the-lectern"
@@ -49,7 +49,7 @@
             [:set [15 1 16] "stone_slab[type=bottom]"]]
    :body {:at [14.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["paper" 24]] :effects [["resistance" 600 4]]}
    :act [[:summon "villager" [16.2 0 16.5] "{NoAI:1b,UUID:[I;20263,7,6,843],VillagerData:{profession:\"minecraft:librarian\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:paper\",count:24},sell:{id:\"minecraft:emerald\",count:1},maxUses:16,xp:2}]}}"]
-         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00060000034b" :buy "emerald" :count 1 :spend {:items {"paper" 24}}})]]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00060000034b" :buy "emerald" :count 1 :spend {:items {"paper" 24}}})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 1}} :within-s 60 :of-job true}]
    :after [[:item "emerald" 1] [:item "paper" 0]]}
   {:name "named-villager-walled-out-of-view-is-walked-to-and-traded-with"
@@ -58,7 +58,7 @@
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "villager"] {:items [:has {:sense :seen}]}] 30]
          [:rcon "execute at $BODY run fill ~3 ~ ~-4 ~3 ~3 ~4 stone"]
          [:wait-s 6]
-         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00080000034b" :buy "bread" :count 6})]]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00080000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :completed :data {:bought 6}} :within-s 80 :of-job true}]
    :after [[:item "bread" 6] [:item "emerald" 7]]}
   {:name "unnamed-diamond-payment-is-not-spent"
@@ -66,6 +66,6 @@
             [:set [15 1 16] "stone_slab[type=bottom]"]]
    :body {:at [14.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["diamond" 2] ["emerald" 1]] :effects [["resistance" 600 4]]}
    :act [[:summon "villager" [16.2 0 16.5] "{NoAI:1b,UUID:[I;20263,7,7,843],VillagerData:{profession:\"minecraft:farmer\",level:2,type:\"minecraft:plains\"},Xp:20,Offers:{Recipes:[{buy:{id:\"minecraft:diamond\",count:1},sell:{id:\"minecraft:bread\",count:6},maxUses:12,xp:1}]}}"]
-         [:job (jobs.village.trade {:villager "00004f27-0000-0007-0000-00070000034b" :buy "bread" :count 6})]]
+         [:job (jobs.village.trade {:worth 1200 :villager "00004f27-0000-0007-0000-00070000034b" :buy "bread" :count 6})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-offer}} :within-s 60 :of-job true}]
    :after [[:item "diamond" 2] [:item "bread" 0]]}]}

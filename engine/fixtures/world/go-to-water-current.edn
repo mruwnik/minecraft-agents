@@ -14,13 +14,13 @@
  :cases
  [{:name "cross-current-field-to-a-dry-goal"
    :body {:at [4.5 1 1.5] :yaw 0 :settle-s 10}
-   :act [[:job (jobs.movement.go-to {:pos #at [4 1 10] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [4 1 10] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :replan :data {:why :pushed}} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [4.5 1 10.5] 2]]}
   {:name "wade-out-and-walk-the-bank-up-the-stream"
    :body {:at [8.5 0 6.5] :yaw 0 :settle-s 10}
-   :act [[:job (jobs.movement.go-to {:pos #at [1 1 2] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [1 1 2] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :replan :data {:why :pushed}} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [1.5 1 2.5] 2]]}]}

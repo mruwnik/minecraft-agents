@@ -12,7 +12,7 @@
   :limit-s 60}
  :cases
  [{:name "coal-outside-a-closed-hut-waits-for-light"
-   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "coal_ore"} 10] [:job (jobs.gather.mine {:item "coal" :count 1})]]
+   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "coal_ore"} 10] [:job (jobs.gather.mine {:worth 1200 :item "coal" :count 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:block [14 0 15] "coal_ore"] [:item "coal" 0]]}]}

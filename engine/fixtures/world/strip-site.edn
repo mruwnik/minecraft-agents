@@ -19,7 +19,7 @@
   :limit-s 700}
  :cases
  [{:name "branch-stripped-and-sealed-leaf-first-without-a-base"
-   :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :shaft false})]]
+   :act [[:job (jobs.strip.site {:worth 1200 :site "wt-mine" :at #at [10 0 16] :shaft false})]]
    :expect [{:event {:source :job :kind :completed :data {:segments [:any] :taken [:any]}} :within-s 650 :of-job true}]
    :after [[:not-block [10 0 16] "rail"] [:not-block [20 0 12] "rail"] [:not-block [12 1 16] "cobweb"] [:not-block [20 1 13] "cobweb"]
            [:block [20 1 15] "cobblestone"]]}]}

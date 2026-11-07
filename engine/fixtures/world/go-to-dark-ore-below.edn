@@ -48,12 +48,12 @@
   :limit-s 400}
  :cases
  [{:name "no-torch-ore-below-tours-the-edge-not-drifting"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.edge-tour :data {:text [:contains "ran out of nodes"]}} :within-s 300 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :context {:chain [[:any]]}} :within-s 380 :of-job true}
             {:no-event {:source :job :data {:why :moved-while-searching}} :for-s 380 :until {:source :job :kind #{:completed :stopped} :context {:chain [[:any]]}} :of-job true}]}
   {:name "no-torch-sealed-ore-below-gives-up-named"
    :blocks [[:fill [98 0 14] [103 2 18] "stone"] [:fill [100 0 16] [100 1 16] "air"] [:set [101 0 16] "iron_ore"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 0 16] :range 1 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :why [:not :moved-while-searching]}} :within-s 380 :of-job true}
             {:no-event {:source :job :data {:why :moved-while-searching}} :for-s 380 :until {:source :job :kind :stopped :context {:chain [[:any]]}} :of-job true}]}]}

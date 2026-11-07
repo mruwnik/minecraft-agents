@@ -26,7 +26,7 @@
    :expect [{:event {:source :body :kind :respawned} :within-s 60}]}
   {:name "repeated-notice-is-one-missed-item-with-its-count"
    :act [[:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "2s"]]
-         [:job (repeat 4 (jobs.debug.notify {:text "again"}))]
+         [:job (repeat 4 (jobs.debug.notify {:worth 1200 :text "again"}))]
          [:await {:source :job :kind :completed} 30]
          [:cli "observe" ["$body" "--world" "$world" "status"]
           {:missed {:items [:has {:event :job.notify :count 4}]}}]]
@@ -35,12 +35,12 @@
    :time :day :time-why :dawn-decision
    :act [[:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "2s"]]
          [:kill-body] [:await {:source :body :kind :respawned} 30]
-         [:job (jobs.survival.night {})]
+         [:job (jobs.survival.night {:worth 1200})]
          [:await {:source :job :kind :waiting :data {:reason :not-night}} 20]
          [:cli "observe" ["$body" "--world" "$world" "status" "--wait" "--timeout" "4s" "--watch" "$job"] {:wake :timeout}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-night}} :within-s 30 :of-job true}]}
   {:name "finished-job-result-is-answered-and-unknown-id-refused"
-   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 16] :range 1})]
          [:await {:source :job :kind #{:completed :stopped}} 40]
          [:cli "observe" ["$body" "--world" "$world" "result" "$job"] {:ok true :status [:any]}]
          [:cli "observe" ["$body" "--world" "$world" "result" "j999999"] {:ok false :reason :unknown-job}]]
@@ -53,7 +53,7 @@
    :expect [{:no-event {:source :job :kind :queued} :for-s 3}]
    :after [[:block [20 0 16] "crafting_table"]]}
   {:name "world-usage-points-gates-and-doors-at-access-toggle"
-   :act [[:job (jobs.debug.notify {:text "usage"})]
+   :act [[:job (jobs.debug.notify {:worth 1200 :text "usage"})]
          [:await {:source :job :kind :completed} 30]
          [:cli "world" ["$body" "--world" "$world"]
           {:ok false :reason :bad-args :usage [:contains "prefer jobs.mjs submit '(jobs.access.toggle"]}]]
@@ -71,7 +71,7 @@
    :body {:at [17.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
    :act [[:summon "sheep" [19.5 0 16.5] "{NoAI:1b}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "sheep"] {:total [:>= 1]}] 20]
-         [:job (jobs.debug.notify {:text "sheep listed"})]]
+         [:job (jobs.debug.notify {:worth 1200 :text "sheep listed"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "snapshot-text-gives-the-distance-in-metres"
    :body {:at [16.5 0 16.5] :yaw 270 :spawnpoint [4 0 4]}
@@ -79,7 +79,7 @@
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total [:>= 1]}] 20]
          [:until [:cli "snapshot" ["$body" "--world" "$world" "--width" "160" "--height" "90"]
                   {:ok true :text [:contains " m centre"]}] 30]
-         [:job (jobs.debug.notify {:text "snap"})]]
+         [:job (jobs.debug.notify {:worth 1200 :text "snap"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   ;; An idle, standing body is centred on its own position: entities answers with items, not :origin-unavailable.
   {:name "entities-of-an-idle-body-centres-on-itself"

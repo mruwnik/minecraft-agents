@@ -65,7 +65,7 @@
    :body {:effects [] :at [16.5 0 18.5]}
    :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
             [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:rcon "damage $BODY 15 minecraft:generic"]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30] [:rcon "damage $BODY 15 minecraft:generic"]
          [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:cover :door}} :within-s 40}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]

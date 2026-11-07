@@ -97,7 +97,7 @@
   (let [{:keys [eng stop step] :as s} (setup world)
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (let [ticks (await (tick-out! eng 30 step))]
       (stop)
       (assoc s :eng eng :out out :ticks ticks))))
@@ -211,7 +211,7 @@
                 out (atom :not-done)
                 parent (tu/recording-parent 'jobs.movement.go-to args out)
                 eng (assoc eng :jobs (assoc (:jobs eng) 'old-parent parent))]
-            (core/submit! eng '(old-parent) {})
+            (core/submit! eng (tu/order eng '(old-parent)) {})
             (await (tick-out! eng 30))
             (is (= want (select-keys @out (keys want))) (pr-str @out))))))))
 
@@ -220,7 +220,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}}))
-              _ (core/submit! eng '(jobs.movement.go-to {:pos [10 65 1] :ways #{:walk}}) {})
+              _ (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [10 65 1] :ways #{:walk}})) {})
               _ (await (tick-out! eng 30))
               ev (filter #(and (= :job (:source %)) (#{:stopped :completed} (:kind %))) @seen)]
           (is (= [:stopped] (mapv :kind ev)))
@@ -373,7 +373,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0]})))]
           (set! (.-pathWorld p) nil)
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tick-out! eng 10))
           (is (= {:status :stopped :arrived false :reason :unsupported} (select-keys @out [:status :arrived :reason])))
           (is (= :impossible (:kind (:ending (meta @out)))))
@@ -387,7 +387,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0})))
               world (.-world p)]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (.hold world "steer")
           (let [running (core/tick! eng)]
             (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
@@ -424,7 +424,7 @@
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (prepare! p)
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (let [ticks (await (tick-out! eng 30))]
       (stop)
       (assoc s :eng eng :out out :ticks ticks))))
@@ -518,7 +518,7 @@
                 parent (assoc (recording-parent out {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}) :defaults {:spend {:tries n}})
                 {:keys [eng p]} (setup {:blocks flat :jobs {'recording-parent parent}})]
             (override-steer! p (fn ^:async f [_ _ _] (swap! steers inc) #js {:status "done"}))
-            (core/submit! eng '(recording-parent) {})
+            (core/submit! eng (tu/order eng '(recording-parent {})) {})
             (await (tick-out! eng 30))
             (is (= n @steers) (str "the caller's {:tries " n "} caps the walks"))
             (is (= :not-done @out) "go-to is cut off with its caller, which has no tries left")))))))
@@ -586,7 +586,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 8] :range 0 :spend {:health 7}})))]
           (reset! wsearch/searches {})
           (set! wsearch/round-budget 64)
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tu/with-expansion-budget 16 #(tick-out! eng 600)))
           (set! wsearch/round-budget budget)
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
@@ -610,7 +610,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0] :range 0})))]
           (reset! wsearch/searches {})
           (set! wsearch/round-budget 32)
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (let [plans (atom 0)
                 plan-walk wsearch/plan-walk-budgeted!]
             (set! wsearch/plan-walk-budgeted! (fn [& args] (swap! plans inc) (apply plan-walk args)))
@@ -667,7 +667,7 @@
          returns (atom [])
          eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent (returns-parent out returns args seed)))]
      (prepare! p)
-     (core/submit! eng '(returns-parent) {})
+     (core/submit! eng (tu/order eng '(returns-parent)) {})
      (await (tick-out! eng 30))
      (assoc s :eng eng :out out :returns returns))))
 
@@ -752,7 +752,7 @@
                      returns (atom [])
                      eng (assoc eng :jobs (assoc (:jobs eng) 'returns-parent
                                                  (returns-parent out returns {:pos [6 64 0] :range 0} nil)))]
-                 (core/submit! eng '(returns-parent) {})
+                 (core/submit! eng (tu/order eng '(returns-parent)) {})
                  (let [running (core/tick! eng)]
                    (loop [i 0]
                      (when (and (< @paces 2) (< i 400))
@@ -969,7 +969,7 @@
                                      (core/cut! eng (core/holder eng) :test nil)))
                                  (decide pose))]
                    (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
-    (reset! id (core/submit! eng '(returns-parent) {}))
+    (reset! id (core/submit! eng (tu/order eng '(returns-parent)) {}))
     (let [mems (loop [[[pred after!] & more] cuts mems []]
                  (if-not pred
                    mems
@@ -1042,7 +1042,7 @@
                                                       (if (= :continue r) r (ctx/end c :done nil))))}))]
           (set! go-to/step! (fn [_ _] (js/Promise.resolve :continue)))
           (try
-            (core/submit! eng '(open-parent) {})
+            (core/submit! eng (tu/order eng '(open-parent)) {})
             (await (core/tick! eng))
             (finally (set! go-to/step! step)))
           (is (= [:none] @opens) "a :continue return closes the call: the next start is no cut"))))))
@@ -1118,7 +1118,7 @@
               go (fn ^:async go []
                    (let [out (atom :not-done)
                          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [6 64 0] :range 0})))]
-                     (core/submit! eng '(recording-parent) {})
+                     (core/submit! eng (tu/order eng '(recording-parent {})) {})
                      (await (tick-out! eng 30))
                      @out))]
           (east-stall-at-start! p)
@@ -1157,7 +1157,7 @@
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (doseq [[k pos] places] (mem/write! (:store eng) k {:pos pos} mem/place-policy))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tick-out! eng 30))
     (assoc s :out out)))
 
@@ -1281,7 +1281,7 @@
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out args)))]
     (doseq [[k pos] places] (mem/write! (:store eng) k {:pos pos} mem/place-policy))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tick-out! eng 30))
     (assoc s :out out)))
 
@@ -1391,7 +1391,7 @@
                 out (atom :not-done)
                 eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [10 64 0] :range 0 :worth goal-worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))
                 _ (mem/write! (:store eng) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 11 :y 64 :z 1} :ended 1} threats/threat-policy)]
-            (core/submit! eng '(recording-parent) {})
+            (core/submit! eng (tu/order eng '(recording-parent {})) {})
             (await (tick-out! eng 30))
             (is (= arrived (:arrived @out)) (pr-str entities @out))))))))
 
@@ -1443,7 +1443,7 @@
                                        (decide (js/Object.assign #js {} pose #js {:x (+ (.-x pose) @off)})))]
                        (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
           (with-redefs [ctx/note-walk! (fn [_ status _] (swap! booked conj status))]
-            (core/submit! eng '(recording-parent) {})
+            (core/submit! eng (tu/order eng '(recording-parent {})) {})
             (await (tick-out! eng 30 (:step s))))
           ((:stop s))
           (is (not-any? #{"blocked" "partial"} @booked) (str "the jumped walk is no walk to book: " @booked))
@@ -1462,9 +1462,9 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out {:pos [30 64 0] :range 0})))]
           ;; the left round's walk goes on 30 blocks off, under the same job id j1/kid
-          (core/submit! stale-eng '(recording-parent) {})
+          (core/submit! stale-eng (tu/order stale-eng '(recording-parent {})) {})
           (let [left (core/tick! stale-eng)]
-            (core/submit! eng '(recording-parent) {})
+            (core/submit! eng (tu/order eng '(recording-parent {})) {})
             (await (tick-out! eng 30))
             (await left))
           (is (empty? (events-of s :go-to.jumped)) "the other call's poses are no jump of this body")
@@ -1486,7 +1486,7 @@
                              wrapped (fn [pose]
                                        (decide (js/Object.assign #js {} pose #js {:x (+ (.-x pose) (if (< 1 (swap! poses inc)) 14 0))})))]
                          (impl token (js/Object.assign #js {} a #js {:decide wrapped})))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tick-out! eng 30 (:step s)))
           ((:stop s))
           (is (false? (:arrived @out)) (pr-str @out))

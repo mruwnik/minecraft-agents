@@ -10,11 +10,11 @@
  :cases
  [{:name "use-on-gate-seen-edge-on-walks-to-a-stand-and-opens-it"
    :body {:at [19.5 0 17.5] :yaw 90}
-   :act [[:job (jobs.items.use {:on #at [16 0 16]})]]
+   :act [[:job (jobs.items.use {:worth 1200 :on #at [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:used true}} :within-s 60 :of-job true}]
    :after [[:block [16 0 16] "oak_fence_gate[open=true]"]]}
   {:name "go-to-through-the-gate-leaves-it-shut"
    :body {:at [16.5 0 20.5] :yaw 180 :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 12] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 12] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:block [16 0 16] "oak_fence_gate[open=false]"] [:body-near [16.5 0 12.5] 2]]}]}

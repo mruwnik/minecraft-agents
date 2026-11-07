@@ -10,7 +10,7 @@
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:summon "zombie" [8.5 0 4.5] "{NoAI:1b}"]
         [:until-seen {:entity "zombie"} 10]
-        [:job (jobs.survival.recover-drops)]]
+        [:job (jobs.survival.recover-drops {:worth 1200})]]
   :limit-s 150}
  :cases
  [{:name "zombie-near-is-priced-and-the-pile-fetched"

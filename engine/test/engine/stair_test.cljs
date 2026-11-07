@@ -232,7 +232,7 @@
     (mem2 (:store eng))
     (reset! args second-east)
     (reset! (:out s) :not-done)
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tick-out! s))))
 
 (deftest a-second-stair-under-the-first-stops-at-its-floor
@@ -348,7 +348,7 @@
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock) :world w
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (prep p)
-    (let [id (core/submit! eng '(recording-parent) {})]
+    (let [id (core/submit! eng (tu/order eng '(recording-parent {})) {})]
       {:eng eng :p p :clock clock :seen seen :out out :id id})))
 
 (defn waiting
@@ -724,7 +724,7 @@
         stops (count (events-of first-run :stopped))
         _ (reset! flood? false)
         _ (swap! (.. (.-world p) -state) assoc-in [:blocks [1 64 1]] behind)
-        _ (core/submit! eng '(jobs.access.stair {:dir :down :heading :east :steps 3 :here true}) {})
+        _ (core/submit! eng (tu/order eng '(jobs.access.stair {:dir :down :heading :east :steps 3 :here true})) {})
         _ (await (tick-out! first-run))]
     {:plug (block-at p [1 64 0])
      :plug-digs (count (filter #{{:x 1 :y 64 :z 0}} (digs p)))
@@ -868,7 +868,7 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock) :world (world/of-data {} {} [])
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng (list job (assoc up-east :ways #{:carried})) {})
+          (core/submit! eng (tu/order eng (list job (assoc up-east :ways #{:carried}))) {})
           (await (tick-out! {:eng eng :clock clock}))
           (let [ended (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)
                 e (first ended)]
@@ -1477,7 +1477,7 @@
                     (reset! marks 0)
                     (with-redefs [ore-pick/mark! (fn [_ _] (swap! marks inc))]
                       (let [s (setup {:blocks ground} (atom east) (fn [_]))]
-                        (when root? (core/submit! (:eng s) (list 'jobs.access.stair east) {}))
+                        (when root? (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.access.stair east)) {}))
                         (await (tick-out! s))))
                     @marks)]
           (is (pos? (await (run true))) "a stair called by an agent")
@@ -1536,7 +1536,7 @@
                        (aset p "sensedAt" (fn [pos] (if @shown (.blockAt p pos) #js {:unknown true})))
                        (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a))))
               {:keys [eng clock p]} (setup {:blocks ground :inventory []} (assoc east :ways #{:carried} :need-drop true) unseen)
-              id (core/submit! eng (list job (assoc east :ways #{:carried} :need-drop true)) {})]
+              id (core/submit! eng (tu/order eng (list job (assoc east :ways #{:carried} :need-drop true))) {})]
           (dotimes [_ 6]
             (swap! clock + 700)
             (await (core/tick! eng)))

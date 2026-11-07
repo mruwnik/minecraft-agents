@@ -9,11 +9,11 @@
   :limit-s 160}
  :cases
  [{:name "bone-meal-on-grass-when-none-is-left-to-break"
-   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 8})]]
+   :act [[:job (jobs.gather.get-seeds {:worth 1200 :item "wheat_seeds" :count 1 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 0]}} :within-s 150 :of-job true}]
    :after [[:item "bone_meal" [:<= 7]]]}
   {:name "break-only-ways-keep-the-bone-meal"
-   :act [[:job (jobs.gather.get-seeds {:item "wheat_seeds" :count 1 :radius 8 :ways #{:break}})]]
+   :act [[:job (jobs.gather.get-seeds {:worth 1200 :item "wheat_seeds" :count 1 :radius 8 :ways #{:break}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :none}} :within-s 60 :of-job true}]
    :after [[:item "bone_meal" 8]]
    :limit-s 70}]}

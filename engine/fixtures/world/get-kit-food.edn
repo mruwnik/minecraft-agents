@@ -16,16 +16,16 @@
  :cases
  [{:name "cows-near-are-hunted-for-the-pack-before-the-work"
    :act [[:summon "cow" [10.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [11.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "cows-behind-past-hearing-are-found-by-looking-round"
    :body {:at [4.5 0 16.5] :yaw 90 :inventory [["iron_sword" 1]] :settle-s 2}
    :act [[:summon "cow" [21.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [22.5 0 16.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 18.5] "{NoAI:1b}"]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "fed-with-no-animals-warns-and-goes-on"
    :body {:inventory [["iron_sword" 1] ["bread" 2]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
   {:name "twelve-loaves-and-a-stocked-chest-at-home-carry-the-whole-kits-trip"
@@ -33,7 +33,7 @@
    :body {:inventory [["iron_sword" 1] ["bread" 12]]}
    :blocks [[:set [8 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [8 0 16] :items {"bread" 40}} :policy {:cap 64 :ttl :forever}}]
-   :act [[:job (jobs.items.get-kit {:explore false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :kit.no-food} :for-s 60 :until {:source :job :kind :stopped}}]
    :after [[:item "bread" 12]]}
@@ -42,37 +42,37 @@
    :body {:inventory [["iron_sword" 1] ["bread" 5]]}
    :blocks [[:set [8 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:40}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [8 0 16] :items {"bread" 40}} :policy {:cap 64 :ttl :forever}}]
-   :act [[:job (jobs.items.get-kit {:explore false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :food.took-from-chest} :within-s 60}
             {:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 90 :of-job true}]
    :after [[:item "bread" [:>= 9]]]}
   {:name "five-loaves-and-no-home-food-still-top-up"
    :body {:inventory [["iron_sword" 1] ["bread" 5]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}]}
   {:name "fed-with-an-empty-pack-and-no-animals-goes-on"
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
   {:name "thin-stomach-with-a-little-bread-and-no-animals-stops-before-mining"
    :body {:inventory [["iron_sword" 1] ["bread" 1]]}
    ;; 12 s drains the bar and the setup's saturation to 0 (4 s left it at 20 live, not hungry): the bread brings it to 5, still hungry
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 100 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30 :of-job true}]}
   {:name "starving-with-no-food-warns-and-stops-before-mining"
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 100 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30 :of-job true}]}
   {:name "unarmed-body-makes-a-stone-sword-before-the-work"
    :body {:inventory [["cobblestone" 3] ["stick" 2] ["crafting_table" 1] ["bread" 12]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 90 :of-job true}]
    :after [[:item "stone_sword" 1]]}
   {:name "food-false-runs-no-food-child"
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :kit.no-food} :for-s 30 :until {:source :job :kind :stopped}}]}
   {:name "hurt-foodless-body-underground-is-not-held-for-health"
@@ -82,7 +82,7 @@
    :body {:at [16.5 3 16.5] :inventory [["iron_sword" 1]] :effects [["hunger" 120 255]]}
    :act [[:wait-s 6]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :of-job true :from-event {:source :job :kind :kit.no-food}}]}
   {:name "hurt-body-with-a-fair-bar-and-no-food-stops-before-mining"
@@ -93,5 +93,5 @@
    :body {:at [16.5 3 16.5] :inventory [["iron_sword" 1]] :effects [["hunger" 4 255]]}
    :act [[:wait-s 6]
          [:rcon "damage $BODY 18.5 minecraft:generic"]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90 :of-job true}]}]}

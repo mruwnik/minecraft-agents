@@ -17,7 +17,7 @@
    :body {:inventory [["diamond_sword" 1]]}
    :act [[:summon "zombie" [22.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 42]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:> 42]}}}] 30]]
    :after [[:body-near [2.5 0 24.5] 2]]}
   {:name "a-sword-and-diamond-armour-pass-a-zombie-near"
    :body {:inventory [["diamond_sword" 1]]}
@@ -27,7 +27,7 @@
          [:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots"]
          [:summon "zombie" [22.5 0 26.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 82]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [42 0 24] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:< 82]}}}] 30]]
    :after [[:body-near [2.5 0 24.5] 2]]}
   {:name "a-lone-zombie-far-from-a-pack-keeps-its-own-detour"
    :plot {:length 130}
@@ -40,6 +40,6 @@
          [:until-seen {:entity "zombie"} 10]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"]
          [:until-seen {:entity "zombie" :min 5} 10]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [20 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 50]}}}] 30]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [110 0 24] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 162]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [20 0 24] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:> 50]}}}] 30]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [110 0 24] :range 1 :unknown false :worth 1200}] {:ok true :quote {:route {:found true :length [:< 162]}}}] 30]]
    :after [[:body-near [65.5 0 24.5] 2]]}]}

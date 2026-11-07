@@ -32,7 +32,7 @@
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (core/create {:primitives (tu/seeing-all (tu/fake-on-floor world)) :jobs (assoc registry/jobs 'recording-parent parent)
                           :dir (tu/tmp-dir)})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-until-empty eng 40))
     @out))
 
@@ -82,7 +82,7 @@
                                  (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :data])) (ctx/end c :done nil)))))}
               eng (core/create {:primitives (wrap (tu/seeing-all (tu/fake-on-floor world))) :jobs (assoc registry/jobs 'recording-parent parent)
                                 :dir (tu/tmp-dir)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tu/run-until-empty eng 40))
           (is (= {:kind :done :data {:used true :id 7 :item "wheat" :text "used wheat on entity 7"}}
                  (update @out :data dissoc :raw))))))))
@@ -105,7 +105,7 @@
                                  (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :data])) (ctx/end c :done nil)))))}
               eng (core/create {:primitives (wrap (tu/seeing-all (tu/fake-on-floor world))) :jobs (assoc registry/jobs 'recording-parent parent)
                                 :dir (tu/tmp-dir)})]
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tu/run-until-empty eng 80))
           (is (= :done (:kind @out)) "an animal that walked off was followed, not clicked from afar"))))))
 
@@ -123,7 +123,7 @@
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent 'jobs.movement.go-to go-to)
                           :dir (tu/tmp-dir)})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-until-empty eng 60))
     {:ending @out :walks @walks}))
 
@@ -171,7 +171,7 @@
   "Whether job sym with args, submitted as a root job in world, is still listed (waiting on a condition) after 12 ticks."
   [world sym args]
   (let [eng (core/create {:primitives (tu/seeing-all (tu/fake-on-floor world)) :jobs registry/jobs :dir (tu/tmp-dir)})]
-    (core/submit! eng (list sym args) {})
+    (core/submit! eng (tu/order eng (list sym args)) {})
     (await (tu/run-until-empty eng 12))
     (boolean (seq (:list (core/state eng))))))
 

@@ -40,9 +40,10 @@
 (def always (constantly true))
 
 (def jobs
-  {'quick {:round #(ctx/end % :done nil) :args {}}
-   'spin {:round (fn [_] :continue) :args {}}
-   'bump {:round bump-round :args {}}})
+  {'quick {:round #(ctx/end % :done nil) :args {} :worth-of (constantly 60)}
+   'spin {:round (fn [_] :continue) :args {} :worth-of (constantly 60)}
+   'bump {:round bump-round :args {} :worth-of (constantly 60)}
+   'unpriced {:round #(ctx/end % :done nil) :args {}}})
 
 (def base-triggers
   {:high {:name :high :when (fn [_ _ args & _] (>= @level (:at args 5))) :job '(quick) :args {:at 5}
@@ -91,6 +92,7 @@
     {:trigger :condition :id :x :job '(quick)} :bad-trigger [:trigger]
     {:trigger :high :job '(fly)} :bad-job [:job]
     {:trigger :high :job '(hold (quick))} :bad-job [:job]
+    {:trigger :high :job '(unpriced)} :bad-job [:job]
     {:trigger :high :persistence :sometimes} :bad-persistence [:persistence]
     {:trigger :high :cooldown-s -1} :bad-cooldown [:cooldown-s]
     {:trigger :high :backoff {:after 0}} :bad-backoff [:backoff]
@@ -140,7 +142,8 @@
 (deftest scenario-problems-use-the-same-validation
   (let [ts (triggers)]
     (is (= [] (scenario/problems jobs ts '{:register [{:trigger :high} {:id :bread-low :when (flag :low) :job (quick)}]
-                                           :queue [(quick)]})))
+                                           :queue [(quick {:worth 60})]})))
+    (is (= 1 (count (scenario/problems jobs ts '{:queue [(quick)]}))) "a queued job gives a worth")
     (let [ps (scenario/problems jobs ts '{:register [{:id :x :when (nope 1) :job (quick)}
                                                      {:trigger :high} {:trigger :high}]
                                           :queue []})]
@@ -363,7 +366,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen] :as r} (setup)]
           (api/load-scenario! eng '{:register [{:trigger :high} {:id :bread-low :when (flag :low) :job (quick)}]
-                                    :queue [(spin)]})
+                                    :queue [(spin {:worth 60})]})
           (is (= [:scenario :scenario] (mapv :by (:register (core/state eng)))))
           (is (= ["j1"] (:list (core/state eng))))
           (swap! flags conj :low)
@@ -405,7 +408,7 @@
                   one (await (http-request socket-path "GET" "/triggers?id=bread-low" nil))
                   job (await (http-request socket-path "POST" "/jobs"
                                            (pr-str {:op :submit :request-id "r1" :generation-id gen
-                                                    :spec '(quick) :next? true :by "steward"})))]
+                                                    :spec '(quick {:worth 60}) :next? true :by "steward"})))]
               (is (= [200 true true] [(:status put) (get-in put [:value :ok]) (get-in put [:value :created?])]))
               (is (= [409 :bad-condition [:when]] [(:status bad) (get-in bad [:value :reason]) (get-in bad [:value :at])]))
               (is (= 400 (:status unreadable)))

@@ -15,8 +15,8 @@
  [{:name "tend-and-maintain-far-from-each-other-both-finish"
    :act [[:summon "cow" [133.5 0 15.5]]
          [:summon "cow" [135.5 0 17.5]]
-         [:http :submit (jobs.farm.tend {:area {:min #xyz [70 -1 16] :max #xyz [73 0 16]}}) [] {:ok true}]
-         [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [131 0 14] :max #xyz [137 0 18]}}) [] {:ok true}]]
+         [:http :submit (jobs.farm.tend {:worth 1200 :area {:min #xyz [70 -1 16] :max #xyz [73 0 16]}}) [] {:ok true}]
+         [:http :submit (jobs.animals.maintain {:worth 1200 :mob "cow" :target 2 :box {:min #xyz [131 0 14] :max #xyz [137 0 18]}}) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}
             {:event {:source :job :kind :completed :data {:name "jobs.farm.tend"}} :within-s 200}
             {:event {:source :job :kind :completed :data {:name "jobs.animals.maintain" :kind :done :adults 2}} :within-s 280}]

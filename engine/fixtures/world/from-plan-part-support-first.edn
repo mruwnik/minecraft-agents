@@ -10,6 +10,6 @@
   :limit-s 120}
  :cases
  [{:name "torch-part-places-its-table-first"
-   :act [[:job (jobs.build.from-plan {:plan "$plan:hut" :part "torch"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut" :part "torch"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [12 0 12] "crafting_table"] [:block [12 1 12] "torch"]]}]}

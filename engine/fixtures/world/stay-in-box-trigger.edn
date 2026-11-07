@@ -13,11 +13,11 @@
   :limit-s 90}
  :cases
  [{:name "walk-out-is-cut-and-body-returns"
-   :act [[:job (jobs.movement.go-to {:pos #at [30 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [30 0 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :stay-in-box}} :within-s 60}
             {:event {:source :reflex :kind :ended :context {:reflex-id :stay-in-box}} :within-s 60}]
    :after [[:body-near [10.5 0 8.5] 12]]}
   {:name "walk-inside-never-fires"
-   :act [[:job (jobs.movement.go-to {:pos #at [15 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [15 0 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 5}]}]}

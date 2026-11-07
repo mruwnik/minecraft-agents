@@ -11,13 +11,13 @@
  [{:name "harvest-wood-takes-a-shallow-drop-to-a-far-centre"
    :blocks [[:fill [90 0 32] [90 3 32] "oak_log"] [:fill [88 3 30] [92 4 34] "oak_leaves[persistent=true]"] [:set [90 3 32] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
-   :act [[:job (jobs.forestry.harvest-wood {:radius 6 :center #at [90 0 36]})]]
+   :act [[:job (jobs.forestry.harvest-wood {:worth 1200 :radius 6 :center #at [90 0 36]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
    :after [[:item "oak_log" [:>= 3]]]}
   {:name "dig-for-takes-a-shallow-drop-to-a-far-centre"
    :blocks [[:set [90 0 32] "iron_ore"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8]]}
-   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 4 :center #at [90 0 32]})]]
+   :act [[:job (jobs.gather.dig-for {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 4 :center #at [90 0 32]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 180 :of-job true}]
    :after [[:item "raw_iron" 1]]}
   {:name "hunt-takes-a-shallow-drop-to-a-far-centre"

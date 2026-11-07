@@ -16,6 +16,6 @@
  :cases
  [{:name "ore-seen-through-zoned-glass-is-reached-the-way-round"
    :zones [{:name "glass-$tag" :min [6 0 16] :max [17 1 21] :owner "Other"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 20 :ways #{:seen}})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 20 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [10 0 18] "glass"] [:block [14 0 17] "glass"] [:block [8 1 20] "glass"]]}]}

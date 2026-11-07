@@ -10,19 +10,19 @@
   :limit-s 150}
  :cases
  [{:name "capped-body-digs-a-stair-down-the-face-to-a-goal-below"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 3 :see true :spend {:health 0}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 3 :see true :spend {:health 0}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 0 16.5] 5]]}
   {:name "capped-body-digs-a-stair-down-to-a-plain-position-goal"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 3 :spend {:health 0}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 16] :range 3 :spend {:health 0}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 0 16.5] 5]]}
   {:name "capped-body-digs-a-stair-down-to-a-goal-in-sight"
    :blocks [[:fill [11 0 1] [15 12 30] "air"] [:fill [14 0 16] [14 0 16] "iron_ore"]]
    :body {:at [10.8 13 16.5] :settle-s 2 :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [14 0 16] :range 3 :spend {:health 0}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 0 16] :range 3 :spend {:health 0}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [14.5 0 16.5] 5]]}]}

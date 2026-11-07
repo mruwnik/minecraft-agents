@@ -12,7 +12,7 @@
    ;; an open room around a 7x7 own zone with a plank floor: the body leaves it first, the floor stands
    :blocks [[:fill [4 0 10] [28 3 22] "air"] [:fill [13 -1 13] [19 -1 19] "birch_planks"]]
    :zones [{:name "home" :min [13 -1 13] :max [19 3 19] :owner "$body"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.left-zone} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 150 :of-job true}]
    :after [[:block [16 -1 16] "birch_planks"] [:block [13 -1 13] "birch_planks"]]
@@ -23,7 +23,7 @@
             [:fill [10 -1 9] [10 7 23] "bedrock"] [:fill [10 -1 9] [29 7 9] "bedrock"] [:fill [10 -1 23] [29 7 23] "bedrock"] [:fill [10 4 9] [29 4 23] "bedrock"]]
    :body {:at [14.5 0 16.5]}
    :zones [{:name "home" :min [13 -1 13] :max [19 3 19] :owner "$body"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.left-zone} :within-s 60 :of-job true}]
    :after [[:block [16 -1 16] "birch_planks"] [:block [13 -1 13] "birch_planks"] [:block [10 0 16] "bedrock"]]
    :limit-s 90}
@@ -32,7 +32,7 @@
    ;; walks the body back to its start in between (card 50a1a534: a stair out was undone step by step)
    :blocks [[:fill [15 0 15] [17 1 17] "air"]]
    :zones [{:name "home" :min [13 -1 13] :max [19 3 19] :owner "$body"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.left-zone} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :back}} :for-s 150 :until {:source :job :kind :mine.left-zone}}]
    :limit-s 180}
@@ -41,14 +41,14 @@
    :blocks [[:fill [2 0 8] [30 9 24] "air"] [:fill [13 0 13] [19 4 19] "stone"]]
    :body {:at [16.5 5 16.5]}
    :zones [{:name "home" :min [13 0 13] :max [19 9 19] :owner "$body"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.left-zone} :within-s 90 :of-job true}]
    :after [[:block [16 4 16] "stone"]]
    :limit-s 110}
   {:name "ignore-zones-digs-in-place"
    :blocks [[:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
    :zones [{:name "home" :min [14 -1 14] :max [18 3 18] :owner "$body"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8 :ignore-zones? true})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8 :ignore-zones? true})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.left-zone} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 1]]
@@ -57,7 +57,7 @@
    :blocks [[:fill [12 0 16] [12 1 16] "air"] [:set [29 0 16] "iron_ore"]]
    :body {:at [12.5 0 16.5]}
    :zones [{:name "home" :min [24 -1 14] :max [28 3 18] :owner "$body"}]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 20 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 20 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :own-zone}} :within-s 120 :of-job true}]
    :after [[:block [24 0 16] "stone"] [:item "raw_iron" 0]]
    :limit-s 140}]}

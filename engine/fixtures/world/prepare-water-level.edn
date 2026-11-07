@@ -15,18 +15,18 @@
   :limit-s 120}
  :cases
  [{:name "water-source-filled-with-dirt-then-readied"
-   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]]
+   :act [[:http :submit (jobs.forestry.prepare {:worth 1200 :plan "$plan:wood"}) [] {:ok true}]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [16 0 16] "air"]]}
   {:name "wet-cell-without-dirt-stays-wet"
    :body {:inventory [["oak_sapling" 1] ["iron_pickaxe" 1]]}
-   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]
+   :act [[:http :submit (jobs.forestry.prepare {:worth 1200 :plan "$plan:wood"}) [] {:ok true}]
          [:wait-s 25]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:not-block [16 0 16] "oak_sapling"] [:item "oak_sapling" 1]]}
   {:name "flow-traced-to-its-source-then-readied"
    :blocks [[:set [16 0 16] "air"] [:set [15 0 16] "water"]]
    :body {:at [16.5 0 5.5]}
-   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]]
+   :act [[:http :submit (jobs.forestry.prepare {:worth 1200 :plan "$plan:wood"}) [] {:ok true}]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:block [16 0 16] "air"] [:block [15 0 16] "dirt"]]}]}

@@ -13,7 +13,7 @@
   :limit-s 200}
  :cases
  [{:name "calm-enderman-near-the-pile-is-no-reason-to-skip"
-   :act [[:job (jobs.survival.recover-drops)]]
+   :act [[:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :danger}} :for-s 30}
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
    :after [[:item "raw_iron" 24]]}]}

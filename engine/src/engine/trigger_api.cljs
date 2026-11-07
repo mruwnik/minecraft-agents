@@ -112,9 +112,9 @@
 ;; ------------------------------------------------------------------ validation
 
 (defn job-problem
-  "Why job spec job cannot be a register entry's job, or nil."
+  "Why job spec job cannot be a register entry's job, or nil: it does not parse, or a job of it has no worth to fire at."
   [jobs job]
-  (try (expr/parse jobs job) nil
+  (try (expr/fired-worth-problem jobs (expr/parse jobs job))
        (catch :default e (ex-message e))))
 
 (defn backoff-problem [cfg]
@@ -433,6 +433,7 @@
       (throw (ex-info (:message problem) problem)))
     (put! eng (assoc e :by :scenario)))
   (doseq [spec queue]
+    (core/require-worth! eng spec)
     (core/submit! eng spec {:by :scenario})))
 
 ;; ------------------------------------------------------------------ boot and every tick

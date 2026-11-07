@@ -15,7 +15,7 @@
  [{:name "pit-in-the-tunnel-is-bridged"
    :blocks [[:fill [2 -5 14] [30 3 18] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:job (jobs.movement.reach {:pos #at [27 0 16] :range 0})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [27 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :reach.span :data {:step :bridge}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 160 :of-job true}]
    :after [[:block [14 -1 16] "dirt"] [:body-near [27.5 0 16.5] 2]]}
@@ -30,7 +30,7 @@
    :blocks [[:fill [2 -5 14] [30 3 20] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]
             [:fill [4 0 17] [4 1 17] "air"] [:fill [4 0 18] [28 1 18] "air"] [:fill [28 0 17] [28 1 17] "air"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:job (jobs.movement.reach {:pos #at [27 0 16] :range 0})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [27 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :reach.span} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:block [14 -1 16] "air"] [:body-near [27.5 0 16.5] 2]]}
@@ -45,7 +45,7 @@
   {:name "walk-only-does-not-bridge"
    :blocks [[:fill [2 -5 14] [30 3 18] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:job (jobs.movement.reach {:pos #at [27 0 16] :range 0 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [27 0 16] :range 0 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :reach.span} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [14 -1 16] "air"] [:body-far [27.5 0 16.5] 8]]
@@ -54,7 +54,7 @@
    ;; Dark unlit tunnel with a 2 drop to a lower tunnel; the body carries coal and sticks, no torch: it makes torches and lights the way, as a player would, and builds no stair.
    :blocks [[:fill [2 -6 14] [30 3 18] "stone"] [:fill [4 0 16] [15 1 16] "air"] [:fill [15 -2 16] [28 -1 16] "air"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["coal" 2] ["stick" 2] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.reach {:pos #at [27 -2 16] :range 0})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [27 -2 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :reach.span} :for-s 200 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [27.5 -2 16.5] 2]]
@@ -63,7 +63,7 @@
    :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [10 2 16] [10 3 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
-   :act [[:job (jobs.movement.reach {:pos #at [10 2 16] :range 0})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [10 2 16] :range 0})]]
    :expect [{:event {:source :job :kind :reach.span :data {:step :stair}} :within-s 150 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [10.5 2 16.5] 2]]
@@ -74,7 +74,7 @@
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["hunger" 120 255]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
    :act [[:rcon "damage $BODY 17 minecraft:generic"]
-         [:job (jobs.movement.reach {:pos #at [10 2 16] :range 0})]]
+         [:job (jobs.movement.reach {:worth 1200 :pos #at [10 2 16] :range 0})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 150 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:body-far [10.5 2 16.5] 8]]
@@ -83,7 +83,7 @@
    :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [4 1 4] [28 3 28] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [5.5 1 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
-   :act [[:job (jobs.movement.reach {:pos #at [26 17 16] :range 1})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [26 17 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [26.5 17 16.5] 2]]
    :limit-s 400}
@@ -91,7 +91,7 @@
    :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [10 2 16] [10 3 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
-   :act [[:job (jobs.movement.reach {:pos #at [10 2 16] :range 0 :ways #{:walk :bridge}})]]
+   :act [[:job (jobs.movement.reach {:worth 1200 :pos #at [10 2 16] :range 0 :ways #{:walk :bridge}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 200 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 200 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:body-far [10.5 2 16.5] 8]]
@@ -100,6 +100,6 @@
    :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [1 12 1] [31 12 31] "bedrock"] [:fill [16 13 16] [16 14 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [16.5 1 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 13 16] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 13 16] :range 0})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 300 :of-job true}]
    :limit-s 330}]}

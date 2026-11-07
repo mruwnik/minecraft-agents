@@ -21,7 +21,7 @@
             [:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
-         [:job (jobs.items.get-kit {:items ["stone_sword" "stone_pickaxe" "iron_pickaxe"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["stone_sword" "stone_pickaxe" "iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 290 :of-job true}]
    :after [[:item "stone_sword" 1] [:item "stone_pickaxe" 1] [:item "iron_pickaxe" 0]]
    :limit-s 300}
@@ -30,7 +30,7 @@
             [:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :partial-first false :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe" "stone_sword"] :partial-first false :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "stone_sword" 0] [:item "iron_pickaxe" 0]]
@@ -39,7 +39,7 @@
   {:name "no-source-names-the-mine-then-the-kit-again"
    :time :any
    :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped
                      :data {:reason :no-source
                             :next [:has {:job "jobs.gather.mine" :args {:item "raw_iron"}}]}} :within-s 60 :of-job true}
@@ -51,38 +51,38 @@
             [:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe" "stone_sword"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 200 :of-job true}]
    :after [[:item "stone_sword" 1] [:item "iron_pickaxe" 0]]
    :limit-s 220}
   {:name "carried-raw-iron-smelted-when-no-ore-is-seen"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 3] ["coal" 3] ["stick" 2] ["stone_pickaxe" 1] ["stone_sword" 1] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:item "iron_pickaxe" 1] [:item "iron_nugget" 0]]}
   {:name "carried-ingots-make-sword-and-shovel-never-nuggets"
    :body {:inventory [["iron_ingot" 3] ["stick" 6] ["stone_pickaxe" 1] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_sword" "iron_shovel" "iron_axe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_sword" "iron_shovel" "iron_axe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 100 :of-job true}]
    :after [[:item "iron_sword" 1] [:item "iron_shovel" 1] [:item "iron_nugget" 0]]
    :limit-s 120}
   {:name "worn-out-pickaxe-does-not-count-and-a-fresh-one-is-made"
    :body {:inventory [["iron_pickaxe[damage=249]" 1] ["iron_ingot" 3] ["stick" 2] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "iron_pickaxe" 2] [:item "iron_ingot" 0]]
    :limit-s 120}
   ;; a spent pickaxe in a kit with armour: the fresh one is made and the rest of the kit goes on (leggings, boots made and worn)
   {:name "worn-out-pickaxe-in-a-kit-with-armour-still-finishes-the-armour"
    :body {:inventory [["iron_pickaxe[damage=249]" 1] ["iron_ingot" 14] ["stick" 2] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe" "iron_leggings" "iron_boots"] :wear true :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe" "iron_leggings" "iron_boots"] :wear true :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:item "iron_pickaxe" 2] [:item "iron_ingot" 0]]
    :limit-s 170}
   {:name "stone-pickaxe-from-carried-logs-chains-planks-and-sticks"
    :body {:inventory [["oak_log" 6] ["cobblestone" 5] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["stone_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["stone_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]
    :limit-s 120}
@@ -91,14 +91,14 @@
             [:set [20 0 20] "furnace[facing=west]"] [:set [12 0 20] "red_bed[facing=east,part=foot]"] [:set [13 0 20] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 14]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["oak_planks" 6] ["cobblestone" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["stone_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["stone_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "stone_pickaxe" 1] [:item "wheat_seeds" 0] [:item "poppy" 0] [:item "dirt" 0]
            [:block [20 0 14] "chest"] [:block [20 0 20] "furnace"] [:block [12 0 20] "red_bed"] [:block [13 0 20] "red_bed"]]
    :limit-s 120}
   {:name "armour-crafted-in-order-and-worn"
    :body {:inventory [["iron_ingot" 5]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_helmet"] :wear true :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_helmet"] :wear true :explore false :food false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :wear :ending {:kind :done :data {:worn [:any]}}}} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "iron_helmet" 0]]
@@ -106,7 +106,7 @@
   ;; card 0bd50e60: 10 ingots cover helmet (5) and boots (4) but not the chestplate (8): both are made and worn before the kit stops for the missing iron
   {:name "carried-ingots-make-and-wear-covered-pieces-before-fetching-more"
    :body {:inventory [["iron_ingot" 10] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_helmet" "iron_chestplate" "iron_boots"] :wear true :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_helmet" "iron_chestplate" "iron_boots"] :wear true :explore false :food false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :wear :ending {:kind :done :data {:worn [:any]}}}} :within-s 100 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-source :item "iron_chestplate"}} :within-s 160 :of-job true}]
    :after [[:item "iron_helmet" 0] [:item "iron_boots" 0] [:item "iron_chestplate" 0] [:item "iron_ingot" 1]]
@@ -115,7 +115,7 @@
   {:name "carried-raw-iron-makes-and-wears-the-covered-piece-before-the-stop"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 5] ["coal" 3] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_helmet" "iron_chestplate"] :wear true :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_helmet" "iron_chestplate"] :wear true :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :item "iron_ingot"}} :within-s 220 :of-job true}]
    :after [[:item "iron_helmet" 0] [:item "iron_chestplate" 0]]
    :limit-s 240}
@@ -123,7 +123,7 @@
   {:name "raw-iron-on-plank-fuel-waits-for-the-cook"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 3] ["oak_planks" 3] ["stick" 2] ["stone_pickaxe" 1] ["stone_sword" 1] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 200 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_pickaxe" 1]]
@@ -133,7 +133,7 @@
    :plot {:height 12 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"] [:set [36 2 16] "iron_ore"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true}]
    :after [[:not-block [36 0 16] "iron_ore"]]
    :limit-s 160}
@@ -143,7 +143,7 @@
    :plot {:height 12 :floor "grass_block" :length 64 :width 32}
    :blocks [[:fill [20 -1 14] [30 3 24] "stone"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 3] ["cooked_beef" 3] ["coal" 2] ["crafting_table" 1]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore true :food false})]]
    :expect [{:event {:source :job :kind :torch.stocked} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-torches}} :for-s 60 :of-job true}]
    :limit-s 100}
@@ -154,7 +154,7 @@
    :blocks [[:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"] [:set [36 2 16] "iron_ore"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]]}
    :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}]
    :after [[:item "stone_pickaxe" 2]]
    :limit-s 140}
@@ -166,7 +166,7 @@
             [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
             [:fill [14 0 10] [19 2 15] "stone"] [:set [18 3 14] "furnace"] [:set [17 0 21] "coal_ore"]]
    :body {:at [16.5 3 12.5] :inventory [["stone_pickaxe" 1] ["stick" 4] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.obtain {:item "torch" :count 4})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "torch" :count 4})]]
    :expect [{:event {:source :job :kind :obtain.gathering :data {:item "coal"}} :within-s 220 :of-job true}
             {:event {:source :job :kind :completed} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :smelt.loaded} :for-s 200 :of-job true :until {:source :job :kind :completed}}]
@@ -180,7 +180,7 @@
    :blocks [[:fill [4 -16 12] [31 3 20] "stone"] [:fill [4 2 12] [31 3 20] "bedrock"] [:fill [16 0 16] [16 1 16] "air"]
             [:set [8 0 16] "iron_ore"] [:set [8 1 16] "iron_ore"] [:set [9 0 16] "iron_ore"] [:set [9 1 16] "iron_ore"] [:set [24 0 16] "iron_ore"] [:set [24 1 16] "iron_ore"] [:set [25 0 16] "iron_ore"] [:set [25 1 16] "iron_ore"]]
    :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["torch" 16] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]] :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore true :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}
             {:no-event {:source :job :kind :obtain.climbed} :for-s 380 :until {:source :job :kind :completed}}]
    :after [[:item "iron_pickaxe" 1]]
@@ -191,7 +191,7 @@
    :plot {:height 12 :floor "grass_block"}
    :blocks [[:fill [4 -8 12] [31 3 20] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["torch" 16] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]] :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore true :food false})]]
    :expect [{:event {:source :job :kind :kit.retry} :within-s 500 :of-job true}]
    :limit-s 520}
   ;; card 1b97f7b8: shut in a closed lit stone pocket with raw iron, coal, cobblestone and planks but no furnace or table (8 planks: table 4 + sticks 2): the kit places its own and smelts and crafts, never "no source ... have 0"
@@ -200,7 +200,7 @@
    :plot {:height 12 :floor "grass_block"}
    :blocks [[:fill [12 -16 12] [20 3 20] "stone"] [:fill [15 0 15] [17 2 17] "air"] [:set [16 3 16] "glowstone"]]
    :body {:at [16.5 0 16.5] :inventory [["raw_iron" 11] ["coal" 4] ["cobblestone" 16] ["oak_planks" 8] ["stone_pickaxe" 1] ["cooked_beef" 3]] :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_pickaxe" 1]]
@@ -212,7 +212,7 @@
    :blocks [[:fill [12 -16 12] [20 4 20] "bedrock"] [:fill [14 0 14] [18 2 18] "air"] [:set [16 3 16] "glowstone"]
             [:set [13 0 16] "iron_ore"] [:set [13 1 16] "iron_ore"] [:set [13 0 17] "iron_ore"]]
    :body {:at [16.5 0 16.5] :yaw 90 :inventory [["coal" 4] ["cobblestone" 16] ["oak_planks" 8] ["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3]] :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe" "iron_helmet"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe" "iron_helmet"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 330 :of-job true}]
    :after [[:item "iron_pickaxe" 1]]
    :limit-s 350}
@@ -224,7 +224,7 @@
             [:fill [11 0 17] [11 1 17] "water"] [:fill [12 0 17] [12 1 17] "glass"] [:set [11 0 16] "iron_ore"] [:set [11 1 16] "iron_ore"] [:set [11 0 13] "iron_ore"]
             [:set [14 3 14] "glowstone"] [:set [18 3 14] "glowstone"] [:set [14 3 18] "glowstone"] [:set [18 3 18] "glowstone"]]
    :body {:at [14.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["torch" 16] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1] ["furnace" 1]] :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_shovel"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_shovel"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 200 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_shovel" 1] [:not-block [11 0 13] "iron_ore"]]
@@ -237,7 +237,7 @@
             [:fill [12 -2 12] [15 -1 18] "water"] [:set [11 0 16] "iron_ore"] [:set [11 1 16] "iron_ore"] [:set [29 0 16] "iron_ore"]
             [:set [14 3 14] "glowstone"] [:set [18 3 14] "glowstone"] [:set [14 3 18] "glowstone"] [:set [22 3 14] "glowstone"] [:set [26 3 18] "glowstone"] [:set [22 3 18] "glowstone"] [:set [26 3 14] "glowstone"] [:set [18 3 18] "glowstone"]]
    :body {:at [18.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["torch" 16] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1] ["furnace" 1]] :effects [["resistance" 900 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_shovel"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_shovel"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 200 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_shovel" 1]]
@@ -248,7 +248,7 @@
    :blocks [[:set [20 0 12] "chest[facing=west]"] [:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 12]} :policy {:cap 1 :ttl :forever}}]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1] ["raw_iron" 1] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :trip.deposited :data {:result {:free [:>= 12]}}} :within-s 120}
             {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :after [[:item "iron_pickaxe" 1] [:not-block [20 0 12] "chest{Items:[{id:\"minecraft:raw_iron\"}]}"]]
@@ -259,7 +259,7 @@
    :blocks [[:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3]]}
    :act [[:summon "husk" [28.5 0 12.5] "{UUID:[I;2006103,2,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.items.get-kit {:items ["stone_sword"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["stone_sword"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :hostile-near}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 25 :of-job true}]
    :after [[:item "stone_sword" 0]]
@@ -272,7 +272,7 @@
    :blocks [[:fill [27 -1 10] [31 3 15] "glass"] [:fill [28 0 11] [30 1 14] "air"] [:set [29 2 12] "sea_lantern"]]
    :body {:yaw 270 :inventory [["oak_planks" 3] ["stick" 2] ["cooked_beef" 3]]}
    :act [[:summon "husk" [29.5 0 12.5] "{UUID:[I;2006103,2,1,2],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.items.get-kit {:items ["wooden_sword"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["wooden_sword"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_sword" 1]]
    :limit-s 80}
@@ -282,7 +282,7 @@
    :time :any
    :body {:inventory [["oak_planks" 3] ["stick" 2] ["cooked_beef" 3]]}
    :act [[:summon "husk" [28.5 0 12.5] "{UUID:[I;2006103,2,1,3],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 90 :of-job true}]
    :after [[:item "wooden_sword" 1]]
    :limit-s 110}
@@ -293,14 +293,14 @@
    :blocks [[:fill [14 -1 14] [18 3 18] "bedrock"] [:fill [15 0 15] [17 2 17] "air"] [:set [16 1 18] "glass"]
             [:fill [12 -1 19] [20 3 24] "stone"]]
    :body {:at [16.5 0 16.5] :yaw 0 :inventory [["wooden_pickaxe" 1] ["stick" 2] ["crafting_table" 1] ["cooked_beef" 3]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.items.get-kit {:items ["stone_pickaxe"] :explore false :food false})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["stone_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 120 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 140}
   ;; card e7aa371a: a :spend that runs out with part of the kit had ends limit-reached with what it has, never completed
   {:name "a-spend-that-runs-out-with-part-of-the-kit-is-a-limit-not-done"
    :body {:inventory [["iron_ingot" 3] ["stick" 4] ["stone_sword" 1] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe" "iron_shovel"] :explore true :food false :spend {:job-time 90}})]]
+   :act [[:job (jobs.items.get-kit {:worth 1200 :items ["iron_pickaxe" "iron_shovel"] :explore true :food false :spend {:job-time 90}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :limit-reached :have ["iron_pickaxe"]}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 120 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "iron_pickaxe" 1]]

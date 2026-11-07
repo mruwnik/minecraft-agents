@@ -21,12 +21,12 @@
  [{:name "build-pen-digs-the-fence-off-its-gate-and-walks-out"
    :blocks [[:set [14 1 12] "oak_fence"]]
    :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 4] ["oak_fence_gate" 1]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried} :ignore-zones? true})]]
+   :act [[:job (jobs.build.pen {:worth 1200 :plan "$plan:ring" :ways #{:carried} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.build.pen"}} :within-s 100 :of-job true}]
    :after [[:not-block [14 1 12] "oak_fence"]]}
   {:name "craft-never-puts-its-table-inside-the-fence-ring"
    :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_planks" 7] ["stick" 2]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :for-plan "ring"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe" :for-plan "ring"})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}]
    :after [[:not-block [11 0 11] "crafting_table"] [:not-block [12 0 11] "crafting_table"] [:not-block [13 0 11] "crafting_table"]
            [:not-block [11 0 12] "crafting_table"] [:not-block [13 0 12] "crafting_table"]

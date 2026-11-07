@@ -12,7 +12,7 @@
   :limit-s 60}
  :cases
  [{:name "lava-outside-a-closed-hut-waits-for-light"
-   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "lava"} 10] [:job (jobs.gather.cast-obsidian {:count 1})]]
+   :act [[:time-set 18000] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "lava"} 10] [:job (jobs.gather.cast-obsidian {:worth 1200 :count 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :after [[:item "obsidian" 0]]}]}

@@ -23,18 +23,18 @@
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 5] ["coal" 2]]}
    :register [{:trigger :hostile-near}]
-   :act [[:job (jobs.survival.get-food {:carry 0 :explore false})]]
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 0 :explore false})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :cook}} :for-s 40}]
    :after [[:item "beef" [:<= 2]] [:body-far [28.5 0 16.5] 6]]}
   {:name "raw-beef-is-eaten-instead-of-mining-for-a-furnace"
    :blocks [[:fill [8 0 14] [12 2 18] "stone"]]
    :body {:inventory [["beef" 5] ["wooden_pickaxe" 1]]}
    :register [{:trigger :hostile-near}]
-   :act [[:job (jobs.survival.get-food {:carry 0 :explore false})]]
+   :act [[:job (jobs.survival.get-food {:worth 1200 :carry 0 :explore false})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :cook}} :for-s 40}]
    :after [[:item "beef" [:<= 2]] [:body-near [4.5 0 16.5] 4]]}
   {:name "hungry-body-with-nothing-to-eat-hunts-the-cow-nearby"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "cow" [12.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 70}]}]}

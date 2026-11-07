@@ -83,7 +83,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'gated gated})
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order eng '(gated)) {})]
           (swap! world assoc :run true)
           (await (core/tick! eng))
           (is (nil? (:rounds @world)))
@@ -102,7 +102,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'gated gated})]
           (swap! world assoc :start :never :run true)
-          (core/submit! eng '(gated) {})
+          (core/submit! eng (tu/order eng '(gated)) {})
           (await (core/tick! eng))
           (is (= {:kind :impossible :cause {:reason :gone :item "x" :text "gone for good"} :reason :gone}
                  (select-keys (:data (first (job-ev seen :stopped))) [:kind :cause :reason])))
@@ -113,7 +113,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen clock]} (setup {'gated gated})
-              id (core/submit! eng '(gated) {})]
+              id (core/submit! eng (tu/order eng '(gated)) {})]
           (swap! world assoc :start true :run true)
           (await (core/tick! eng))
           (swap! world assoc :run false)
@@ -137,7 +137,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'gated gated})]
           (swap! world assoc :start true :run true)
-          (core/submit! eng '(gated) {})
+          (core/submit! eng (tu/order eng '(gated)) {})
           (await (core/tick! eng))
           (swap! world assoc :run :never)
           (await (core/tick! eng))
@@ -158,7 +158,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'stepper stepper})
-              id (core/submit! eng '(stepper) {})]
+              id (core/submit! eng (tu/order eng '(stepper)) {})]
           (swap! world assoc :run true :then false)
           (await (core/tick! eng))
           (is (= 1 (:steps @world)) "a :later after the first step yields the round")
@@ -177,7 +177,7 @@
                                                       (swap! world assoc :child (await (ctx/call c :kid gated {})))
                                                       (ctx/end c :done nil))}})]
           (swap! world assoc :run true)
-          (core/submit! eng '(parent) {})
+          (core/submit! eng (tu/order eng '(parent)) {})
           (await (core/tick! eng))
           (is (= {:kind :condition-failed :cause {:reason :paused :have 0 :text "torches 0 < 4"}}
                  (select-keys (:child @world) [:kind :cause]))))))))
@@ -205,11 +205,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {'later-look (kinds-job :later) 'never-look (kinds-job :never)})]
-          (core/submit! eng '(later-look) {})
+          (core/submit! eng (tu/order eng '(later-look)) {})
           (await (core/tick! eng))
           (is (zero? (looks-at p)))
           (is (= [:paused] (mapv #(:reason (:data %)) (job-ev seen :waiting))))
-          (core/submit! eng '(never-look) {})
+          (core/submit! eng (tu/order eng '(never-look)) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (zero? (looks-at p)))
@@ -221,7 +221,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'held {:can-start? (constantly (contract/never :not-yet "no")) :done? (constantly (contract/ok :done "done" :units :items :done 0 :left 0))
                                                 :round (fn [c] (ctx/end c :done nil))}})]
-          (core/submit! eng '(held) {})
+          (core/submit! eng (tu/order eng '(held)) {})
           (await (core/tick! eng))
           (is (= [:already] (mapv #(:cause (:data %)) (job-ev seen :completed)))))))))
 
@@ -231,7 +231,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'counted {:can-run? (fn [_] (swap! world update :asks (fnil inc 0)) (contract/ok :go "go"))
                                               :round (fn [_] :continue)}})]
-          (core/submit! eng '(counted) {})
+          (core/submit! eng (tu/order eng '(counted)) {})
           (await (core/tick! eng))
           (is (= 1 (:asks @world)) "the first round")
           (await (core/tick! eng))
@@ -273,7 +273,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'stayer (stayer #(contract/never :gone "gone")) 'looker (looker 2)})]
-          (core/submit! eng '(stayer) {})
+          (core/submit! eng (tu/order eng '(stayer)) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= {:look-rounds 2 :looked true :asks 1} (select-keys @world [:look-rounds :looked :asks :ran]))
@@ -291,7 +291,7 @@
                                                                   (contract/ok :go "go")))
                                              :round (fn [_] (swap! world update :rounds (fnil inc 0)) :continue)}
                                     'looker (looker 1)})]
-          (core/submit! eng '(worker) {})
+          (core/submit! eng (tu/order eng '(worker)) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (is (= {:rounds 2} (select-keys @world [:rounds :look-rounds]))))))))
@@ -302,7 +302,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'stayer (stayer #(contract/ok :seen "seen"))
                                          'looker {:round (fn [c] (ctx/end c :nothing-possible {:reason :no-carry :text "no food to carry"} nil))}})]
-          (core/submit! eng '(stayer) {})
+          (core/submit! eng (tu/order eng '(stayer)) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (let [e (:data (first (job-ev seen :stopped)))]
@@ -318,7 +318,7 @@
                                                            (swap! world assoc :child (await (ctx/call c :kid gated {})))
                                                            :continue)}})]
           (swap! world assoc :start true :run true)
-          (core/submit! eng '(parent) {})
+          (core/submit! eng (tu/order eng '(parent)) {})
           (await (core/tick! eng))
           (swap! world assoc :run false)
           (await (core/tick! eng))
@@ -351,7 +351,7 @@
         (let [{:keys [eng seen]} (setup {'bad {:can-start? (constantly (contract/never :bad-args "count 0"))
                                                :done? (constantly (contract/ok :done "done" :units :items :done 0 :left 0))
                                                :round (fn [c] (ctx/end c :done nil))}})]
-          (core/submit! eng '(bad) {})
+          (core/submit! eng (tu/order eng '(bad)) {})
           (await (core/tick! eng))
           (is (= [:impossible] (mapv #(:kind (:data %)) (job-ev seen :stopped))))
           (is (empty? (job-ev seen :completed))))))))
@@ -362,7 +362,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {'bad {:can-start? (constantly (contract/never :bad-args "count 0"))
                                                :round (fn [c] (ctx/end c :done nil))}})]
-          (core/submit! eng '(bad) {})
+          (core/submit! eng (tu/order eng '(bad)) {})
           (await (core/tick! eng))
           (is (= 1 (count (job-ev seen :stopped))) "refused with its reason")
           (is (empty? (job-ev seen :round_started))))))))
@@ -389,7 +389,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'asker (asker) 'probe probe})]
           (swap! world assoc :run true :step :ask :n 1)
-          (core/submit! eng '(asker) {})
+          (core/submit! eng (tu/order eng '(asker)) {})
           (await (core/tick! eng))
           (swap! world assoc :run false :step :call)
           (await (core/tick! eng))
@@ -402,7 +402,7 @@
         (let [{:keys [eng]} (setup {'asker (asker) 'probe probe})
               asks (fn [] (:asks @world))]
           (swap! world assoc :run true :step :ask :n 1)
-          (core/submit! eng '(asker) {})
+          (core/submit! eng (tu/order eng '(asker)) {})
           (await (core/tick! eng))
           (is (= [1] (asks)))
           (swap! world assoc :step :call :n 2)
@@ -423,7 +423,7 @@
                                     'look-kid (kid (contract/look :unseen "unseen"))
                                     'later-kid (kid (contract/later :paused "paused"))
                                     'ok-kid (kid (contract/ok :go "go"))})]
-          (core/submit! eng '(parent) {})
+          (core/submit! eng (tu/order eng '(parent)) {})
           (await (core/tick! eng))
           (is (= [[:never :gone] [:look :unseen] [:later :paused] [:ok :ready]] (:answers @world))))))))
 

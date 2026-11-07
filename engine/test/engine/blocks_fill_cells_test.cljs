@@ -24,7 +24,7 @@
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data :because])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tu/run-until-empty eng 20))
     @out))
 
@@ -251,7 +251,7 @@
       (fn ^:async t []
         (let [env (bd/setup {:self body :inventory [{:name "dirt" :count 5}]})
               eng (:eng env)]
-          (core/submit! eng (list job {:cells [(first cells)] :use {:blocks ["dirt"]} :purpose :plug}) {})
+          (core/submit! eng (tu/order eng (list job {:cells [(first cells)] :use {:blocks ["dirt"]} :purpose :plug})) {})
           (await (tu/run-until-empty eng 20))
           (let [v (mem/view (:store eng)) l (ledger/open-entries v)]
             (is (= 1 (count (bd/calls (:p env) "place"))) "the cell was filled")

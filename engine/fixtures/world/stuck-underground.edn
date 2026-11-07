@@ -24,12 +24,12 @@
  :cases
  [{:name "idle-body-twelve-under-its-home-walks-out"
    :blocks [[:set [31 12 16] "torch"]]
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [31 12 16]}) [:now]]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [31 12 16]}) [:now]]]
    :expect [{:count-event {:source :reflex :kind :fired :context {:reflex-id :stuck-underground}} :for-s 100 :at-least 1 :at-most 1}
             {:event {:source :reflex :kind :ended :context {:reflex-id :stuck-underground}} :within-s 140}]
    :after [[:body-near [31.5 12 16.5] 5]]}
   {:name "home-only-four-above-never-fires"
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [16 4 16]}) [:now]]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [16 4 16]}) [:now]]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :stuck-underground}} :for-s 40}]
    :after [[:body-near [16.5 0 16.5] 3]]
    :limit-s 60}]}

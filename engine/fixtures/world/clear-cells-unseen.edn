@@ -9,6 +9,6 @@
  :cases
  [{:name "box-behind-the-body-is-walked-to-looked-at-and-dug"
    :blocks [[:fill [16 0 6] [17 1 6] "dirt"]]
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [16 0 6] :max #at [17 1 6]}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [16 0 6] :max #at [17 1 6]}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:block [16 0 6] "air"] [:block [17 1 6] "air"]]}]}

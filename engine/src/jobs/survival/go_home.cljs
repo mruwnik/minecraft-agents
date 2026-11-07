@@ -64,6 +64,11 @@
 
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 
+(defn worth-of
+  "The loss going home averts: a death where the body stands when the night finds it out (cost/death-s), the most a night in the open costs."
+  [c]
+  (cost/death-s (:primitives c) (ctx/view c)))
+
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (at-home? c))]
     (checks/goal d [:home "already home"] [:away "not home"] {:units :visits :done (if d 1 0) :left (if d 0 1)})))

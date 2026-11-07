@@ -88,7 +88,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}})]
-          (core/submit! eng (list job {:ways #{:carried}}) {})
+          (core/submit! eng (tu/order eng (list job {:ways #{:carried}})) {})
           (is (nil? (core/tick! eng)) "no bone meal: not yet")
           (is (empty? (calls p "useOn"))))))))
 
@@ -154,7 +154,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup two-wheat (ew/of-data {} {} nil))]
-          (core/submit! eng (list job {}) {})
+          (core/submit! eng (tu/order eng (list job {})) {})
           (await (tu/run-until-empty eng 10))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
@@ -214,7 +214,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (dissoc two-grass :inventory))]
-          (core/submit! eng (list job {:grass true :ways #{:carried}}) {})
+          (core/submit! eng (tu/order eng (list job {:grass true :ways #{:carried}})) {})
           (is (nil? (core/tick! eng)))
           (is (empty? (calls p "useOn"))))))))
 

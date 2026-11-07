@@ -36,7 +36,7 @@
               (await ((:plan-fn opts) []))
               (let [s (fake/self p)] (reset! seen [(get-in s [:pos 1]) (:onGround s)])))
             (await (follow! c plan opts))))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (gt/tick-out! eng 60))
     (set! drive/follow! follow!)
     @seen))

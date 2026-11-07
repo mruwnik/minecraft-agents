@@ -51,7 +51,7 @@
 (defn ^:async waiting-after
   "Submit spec top level and run n ticks: why it waits (core/waiting), nil when it does not."
   [{:keys [eng clock]} spec n]
-  (let [id (core/submit! eng spec {})]
+  (let [id (core/submit! eng (tu/order eng spec) {})]
     (dotimes [_ n]
       (swap! clock + 700)
       (await (core/tick! eng)))
@@ -60,7 +60,7 @@
 (defn ^:async ended-in-one-tick?
   "Submit spec as a top-level job and run one tick: whether the job is over (one call is one whole attempt)."
   [{:keys [eng clock]} spec]
-  (core/submit! eng spec {})
+  (core/submit! eng (tu/order eng spec) {})
   (swap! clock + 700)
   (await (core/tick! eng))
   (empty? (:list (core/state eng))))
@@ -721,7 +721,7 @@
   "Run spec as a top-level job; hold the primitive act, cut the tick while it is held, release, and run on until the
   list is empty (at most 40 ticks)."
   [{:keys [eng p]} spec act]
-  (core/submit! eng spec {})
+  (core/submit! eng (tu/order eng spec) {})
   (.hold (.-world p) act)
   (let [running (core/tick! eng)]
     (await (js/Promise. (fn [resolve] (js/setTimeout resolve 20))))
@@ -822,7 +822,7 @@
                                    "0,65,0" "stone" "1,65,0" "stone" "-1,65,0" "stone" "0,65,1" "stone" "0,65,-1" "stone"
                                    "0,66,0" "stone" "1,66,0" "stone"}
                           :plans {"roof" (shape/with-author roof "Fake")}})]
-          (core/submit! (:eng env) '(jobs.survival.breathe) {})
+          (core/submit! (:eng env) (tu/order (:eng env) '(jobs.survival.breathe {})) {})
           (await (core/tick! (:eng env)))
           (is (= [{:was "stone" :any-of ["stone" "cobblestone"]}] (mend-entries (:eng env)))))))))
 
@@ -973,7 +973,7 @@
               ys (atom [])]
           (heights p ys)
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :loose-items}]}"))
-          (core/submit! eng (list job {:pos under-feet}) {})
+          (core/submit! eng (tu/order eng (list job {:pos under-feet})) {})
           (dotimes [_ 60]
             (swap! clock + 700)
             (await (core/tick! eng)))
@@ -1338,7 +1338,7 @@
                             (if (= :continue r) :continue (do (reset! out r) (ctx/end c :done nil))))))}]
     (hiding p #(= [0 62 0] %))
     (core/submit! (assoc eng :jobs (assoc (:jobs eng) 'dig-cleanup-probe probe))
-                  (list 'dig-cleanup-probe {:pos under-feet :on-lava :seal :collect true}) {})
+                  (tu/order (assoc eng :jobs (assoc (:jobs eng) 'dig-cleanup-probe probe)) (list 'dig-cleanup-probe {:pos under-feet :on-lava :seal :collect true})) {})
     (await (run-until-empty (assoc eng :jobs (assoc (:jobs eng) 'dig-cleanup-probe probe)) 30))
     [@out p]))
 

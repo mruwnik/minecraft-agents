@@ -38,7 +38,7 @@
   (a hold that is then cancelled): up to six ticks, each given tick-timeout-ms to end or hide, else the test fails; the setup map."
   [spec]
   (let [{:keys [eng] :as s} (g/setup (:zones spec []) (merge {:entities [g/pit-skeleton] :blocks (merge wide-ground g/pit g/shell) :act-ms 1000} (dissoc spec :zones)))]
-    (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+    (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {})) {})
     (loop [i 0]
       (when (and (< i 6) (not (hiding-seen? s)))
         (let [stop (atom false)

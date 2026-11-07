@@ -36,7 +36,7 @@
                          (let [e (await (ctx/call c :kid job args))]
                            (if (= :continue e) :continue (do (reset! out (into {} (remove (comp nil? val)) (select-keys e [:kind :cause :data]))) (ctx/end c :done nil)))))}
         eng (assoc-in eng [:jobs 'recording-parent] parent)]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (run-until-empty eng n))
     @out))
 
@@ -114,7 +114,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "bread" :count 5}]}})]
-          (core/submit! eng (list job {:items {"bread" 3}}) {})
+          (core/submit! eng (tu/order eng (list job {:items {"bread" 3}})) {})
           (is (nil? (core/tick! eng)) "no chest known: blocked")
           (is (empty? (calls p "transfer")))
           (know-place! eng :chest chest)
@@ -188,7 +188,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {})]
-          (core/submit! eng (list job {:items {"bread" 3}}) {})
+          (core/submit! eng (tu/order eng (list job {:items {"bread" 3}})) {})
           (core/tick! eng)
           (is (some #(and (= :waiting (:kind %)) (= :no-chest (:reason %))) @seen)))))))
 

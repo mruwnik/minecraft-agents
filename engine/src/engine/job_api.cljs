@@ -89,7 +89,9 @@
   (let [prior (get-in (core/state eng) [:job-requests :records request-id])
         signature (fingerprint request)
         spec-error (when (#{:submit :interrupt :exclusive} op)
-                     (if (bounded-spec? spec) (expr/problem (:jobs eng) spec) "job expression exceeds size/depth limits"))]
+                     (if (bounded-spec? spec) (expr/problem (:jobs eng) spec) "job expression exceeds size/depth limits"))
+        worth-error (when (and (#{:submit :interrupt :exclusive} op) (nil? spec-error))
+                      (expr/worth-problem (expr/parse (:jobs eng) spec)))]
     (cond
       (not (map? request)) (fail :bad-request)
       (not (contains? #{:submit :interrupt :exclusive :cancel :cancel-all :retry} op)) (fail :bad-op)
@@ -105,6 +107,7 @@
               (fail :request-id-conflict))
       spec-error (fail :bad-spec spec-error)
       (and spec (checks-problem spec)) (fail :bad-args (checks-problem spec))
+      worth-error (fail :worth-required worth-error)
       (some #(and (contains? request %) (not (boolean? (get request %)))) [:next? :survive-death?]) (fail :bad-field ":next? and :survive-death? are true or false")
       (not (valid-by? by)) (fail :bad-by ":by is a short string or keyword naming who asks")
       (and (#{:cancel :retry} op) (not (valid-job-id? id))) (fail :bad-job-id)

@@ -9,6 +9,6 @@
  [{:name "stands-on-a-cocoa-pod-over-a-hole"
    :blocks [[:fill [10 -2 10] [10 0 10] "air"] [:set [10 1 9] "jungle_log"] [:set [10 1 10] "cocoa[age=2,facing=north]"]]
    :body {:at [10.6 1.75 10.6]}
-   :act [[:job (jobs.movement.go-to {:pos #at [14 1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 1 14] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:body-near [14.5 1 14.5] 1.5]]}]}

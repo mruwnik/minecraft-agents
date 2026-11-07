@@ -8,5 +8,5 @@
  [{:name "herd-only-part-places-nothing"
    :plans [{:id "farm" :metadata {:by "$body"}
             :parts [{:id "pen" :box [#at [10 0 10] #at [14 0 16]] :want "air" :herd {:mob "sheep" :target 2}}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:farm" :part "pen"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:farm" :part "pen"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 0}} :within-s 40 :of-job true}]}]}

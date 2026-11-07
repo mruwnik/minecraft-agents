@@ -35,7 +35,7 @@
         eng (core/create {:primitives p :jobs (merge registry/jobs stubs {'recording-parent parent})
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     {:eng eng :p p :clock clock :seen seen :out out})))
 
 (defn ^:async run-ticks
@@ -216,7 +216,7 @@
         eng (core/create {:primitives (tu/fake-on-floor {}) :jobs (merge registry/jobs extra-jobs) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng (list job args) {})
+    (core/submit! eng (tu/order eng (list job args)) {})
     {:eng eng :clock clock :seen seen}))
 
 (deftest a-cell-needs-a-positive-for-s-when-given-and-one-target
@@ -354,7 +354,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [least (fn ^:async least-of [pos] (let [{:keys [eng]} (setup {} {:pos pos :range 3 :for-s 30})]
-                                        (let [q (:quote (await (event-api/quote-view eng (str job) (pr-str {:pos pos :range 3 :for-s 30}))))]
+                                        (let [q (:quote (await (event-api/quote-view eng (str job) (pr-str (merge {:worth tu/order-worth} {:pos pos :range 3 :for-s 30})))))]
                                           (is (nil? (contract/quote-problem q)))
                                           (is (= (stay-near/budget-s) (last (get-in q [:uses :job-time]))) "most is the job-time budget")
                                           (first (get-in q [:uses :job-time])))))
@@ -368,5 +368,5 @@
       (fn ^:async t []
         (let [pos {:x 13 :y 64 :z 0}
               {:keys [eng]} (setup {} {:pos pos :range 3 :for-s 30})
-              q (:quote (await (event-api/quote-view eng (str job) (pr-str {:pos pos :range 3 :for-s 30}))))]
+              q (:quote (await (event-api/quote-view eng (str job) (pr-str (merge {:worth tu/order-worth} {:pos pos :range 3 :for-s 30})))))]
           (is (< (js/Math.abs (- (+ 30 (/ 10 cost/walk-speed)) (second (get-in q [:uses :job-time])))) 1e-6)))))))

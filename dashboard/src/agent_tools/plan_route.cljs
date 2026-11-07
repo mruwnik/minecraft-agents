@@ -81,5 +81,5 @@
                    (seq spans) (assoc :spans spans))
            :summary {:from from :to to :waypoints (:waypoints routed) :spans (:spans routed)
                      :materials (:materials laid)
-                     :next (str "plans check " id " judges it; jobs submit '(jobs.build.rail-line {:plan \"" id "\"})' builds it"
+                     :next (str "plans check " id " judges it; jobs submit '(jobs.build.rail-line {:plan \"" id "\" :worth <seconds>})' builds it"
                                 (when (seq spans) ", cutting the tunnels and bridges first"))}})))))

@@ -44,7 +44,7 @@
       (fn ^:async t []
         (doseq [k [:safe? :fit?]]
           (let [{:keys [eng]} (setup {'root (assoc (leaf k) :round (count-round :rounds))})
-                id (core/submit! eng '(root) {})]
+                id (core/submit! eng (tu/order eng '(root)) {})]
             (await (core/tick! eng))
             (is (nil? (:rounds @world)) (str k " not started"))
             (is (= :dark (:reason (core/waiting eng id))) (str k " waits with the reason"))
@@ -64,12 +64,12 @@
       (fn ^:async t []
         (let [job {:safe? '(daytime) :round (count-round :rounds)}
               {:keys [eng]} (setup {'root job} nil {:time 15000})
-              id (core/submit! eng '(root) {})]
+              id (core/submit! eng (tu/order eng '(root)) {})]
           (await (core/tick! eng))
           (is (nil? (:rounds @world)))
           (is (= :night (:reason (core/waiting eng id)))))
         (let [{:keys [eng]} (setup {'root {:fit? '(daytime) :round (count-round :rounds)}} nil {:time 6000})]
-          (core/submit! eng '(root) {})
+          (core/submit! eng (tu/order eng '(root)) {})
           (await (core/tick! eng))
           (is (= 1 (:rounds @world))))))))
 
@@ -79,7 +79,7 @@
       (fn ^:async t []
         (doseq [k [:safe? :fit? :can-run?]]
           (let [{:keys [eng]} (setup {'root (parent k)})]
-            (core/submit! eng '(root) {})
+            (core/submit! eng (tu/order eng '(root)) {})
             (await (core/tick! eng))
             (is (nil? (:leaf-rounds @world)) (str k " child not run"))
             (is (= [:condition-failed :dark] [(:kind (:after-child @world)) (:reason (:cause (:after-child @world)))])
@@ -95,7 +95,7 @@
                                                      (swap! world assoc :after-child e)
                                                      :continue)))})]
           (swap! world assoc :go true)
-          (core/submit! eng '(root) {})
+          (core/submit! eng (tu/order eng '(root)) {})
           (await (core/tick! eng))
           (is (= :continue (:after-child @world)))
           (swap! world dissoc :go)
@@ -124,7 +124,7 @@
                                                         (let [e (await (ctx/call c :leaf (leaf :safe?) {}))]
                                                           (swap! world assoc :after-child e)
                                                           :continue)))})]
-          (api/mutate! eng {:op :exclusive :spec '(root) :by "claude" :request-id "r1"
+          (api/mutate! eng {:op :exclusive :spec '(root {:worth 60}) :by "claude" :request-id "r1"
                             :generation-id (:generation-id (core/state eng))})
           (await (core/tick! eng))
           (is (nil? (:leaf-rounds @world)))
@@ -142,7 +142,7 @@
                 {:keys [eng seen clock]} (setup {'reflex (assoc (leaf k) :round (count-round :reflex-rounds))
                                            'other {:round (count-round :other-rounds)}}
                                           triggers)]
-            (core/submit! eng '(other) {})
+            (core/submit! eng (tu/order eng '(other)) {})
             (core/register-reflex! eng {:trigger :r})
             (await (core/tick! eng))
             (is (nil? (:reflex-rounds @world)) (str k " held"))
@@ -172,7 +172,23 @@
           (core/register-reflex! eng {:trigger :r})
           (await (core/tick! eng))
           (is (= :dark (:reason (core/held-trigger eng :r))))
-          (is (= #{7} @worths) "safe? and can-start? read the job's worth-of, not the default"))))))
+          (is (= #{7} @worths) "safe? and can-start? read the job's worth-of")
+          (reset! worths #{})
+          (is (thrown-with-msg? js/Error #"worth is required"
+                                (core/load-scenario! eng {:queue ['(reflex)]})) "a scenario's queue gives each job a worth"))))))
+
+(deftest a-fired-job-is-called-at-its-worth-of
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [worths (atom [])
+              triggers {:r {:name :r :job '(reflex) :persistence :retry :when (fn [_ _ _] true)}}
+              {:keys [eng]} (setup {'reflex {:worth-of (fn [_] 7)
+                                             :round (fn [c] (swap! worths conj (ctx/worth c)) (ctx/end c :done nil))}}
+                                   triggers)]
+          (core/register-reflex! eng {:trigger :r})
+          (await (core/tick! eng))
+          (is (= [7] @worths) "the trigger passes the job's worth-of as the call's :worth"))))))
 
 (defn raw-mem [eng root slots] (mem/job-mem (mem/view (:store eng)) root slots))
 
@@ -180,7 +196,7 @@
   "Submit (root args) over a parent whose child leaf is gated by key; one tick."
   [jobs args]
   (let [{:keys [eng] :as s} (setup jobs)
-        id (core/submit! eng (list 'root args) {})]
+        id (core/submit! eng (tu/order eng (list 'root args)) {})]
     (assoc s :id id)))
 
 (deftest checks-flow-down-per-key
@@ -207,7 +223,7 @@
               again (fn [] (core/create {:primitives (tu/fake {}) :dir dir :now (constantly 1000000) :jobs jobs :triggers {}
                                          :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})}))
               first-eng (again)
-              id (core/submit! first-eng '(root {:checks {:safe? (always)}}) {})
+              id (core/submit! first-eng (tu/order first-eng '(root {:checks {:safe? (always)}})) {})
               restarted (again)]
           (is (= {:safe? '(always)} (get-in (core/state restarted) [:instances id :spec :args :checks])) "the form survives the restore")
           (await (core/tick! restarted))
@@ -235,7 +251,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {'root (assoc (leaf :safe?) :defaults {:checks {:safe? '(always)}}
                                                  :round (count-round :rounds))})]
-          (core/submit! eng '(root) {})
+          (core/submit! eng (tu/order eng '(root)) {})
           (await (core/tick! eng))
           (is (= 1 (:rounds @world))))))))
 
@@ -248,7 +264,7 @@
       '(nonsense)
       '(health))
     (is (= :bad-spec (:reason (submit '(root {:checks {:other (always)}}) "k2"))) "the shape is checked too")
-    (is (true? (:ok (submit '(root {:checks {:safe? (and (job-safe) (not (threatened)))}}) "k3"))))))
+    (is (true? (:ok (submit '(root {:worth 60 :checks {:safe? (and (job-safe) (not (threatened)))}}) "k3"))))))
 
 (defn counting [k f] (fn [_] (swap! world update k (fnil inc 0)) (f)))
 
@@ -264,7 +280,7 @@
                                           'reflex {:safe? (gate :always :never) :fit? (gate :always :never)
                                                    :round (fn ^:async r [c] (await held) (ctx/end c :done nil))}}
                                          {:r (assoc always :job '(reflex))})
-              id (core/submit! eng '(root) {})]
+              id (core/submit! eng (tu/order eng '(root)) {})]
           (await (core/tick! eng))
           (is (= :dark (:reason (core/waiting eng id))))
           (swap! world assoc :go true :always true)

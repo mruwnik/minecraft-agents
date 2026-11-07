@@ -19,7 +19,7 @@
    :blocks [[:fill [16 0 17] [16 1 22] "air"] [:fill [14 0 22] [18 1 23] "air"] [:set [16 0 23] "crafting_table"]
             [:set [15 0 21] "torch"] [:set [17 0 18] "torch"] [:set [21 0 16] "iron_ore"]]
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 4] ["cobblestone" 8] ["torch" 8]]}
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 10 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 10 :radius 8})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :ending {:kind :done}}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:reason :not-back}} :for-s 190 :until {:source :job :kind #{:completed :stopped}}}]
@@ -28,7 +28,7 @@
   {:name "stair-walks-back-after-the-body-is-moved-off-it"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8})]
          [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~10 ~10 ~20"]]
    :expect [{:event {:source :job :kind :stair.return} :within-s 120 :of-job true}
@@ -38,7 +38,7 @@
    :plot {:height 20 :length 64 :width 32}
    :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:fill [36 0 8] [60 9 24] "stone"]]
    :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 8})]
          [:await {:source :job :kind :stair.step :data {:at #at [12 8 16]}} 100]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~50 ~10 ~20"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason #{:off-stair :dig-failed}}} :within-s 120 :of-job true}
@@ -47,7 +47,7 @@
    :plot {:height 20 :length 64 :width 32}
    :blocks [[:fill [8 0 8] [60 9 24] "stone"]]
    :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 9})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 9})]
          [:await {:source :job :kind :stair.step :data {:at #at [18 2 16]}} 150]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~52 ~10 ~16"]]
    :expect [{:event {:source :job :kind :completed :data {:steps 9}} :within-s 200 :of-job true}
@@ -57,7 +57,7 @@
    :plot {:height 20 :length 64 :width 32}
    :blocks [[:fill [8 0 8] [60 9 24] "stone"]]
    :body {:at [10.5 10 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 9})]
+   :act [[:job (jobs.access.stair {:worth 1200 :dir :down :heading :east :steps 9})]
          [:await {:source :job :kind :stair.step :data {:at #at [18 2 16]}} 150]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~34 ~8 ~0"]]
    :expect [{:event {:source :job :kind :completed :data {:steps 9}} :within-s 220 :of-job true}
@@ -67,12 +67,12 @@
    :blocks [[:fill [3 0 16] [14 1 16] "air"] [:set [8 0 16] "torch"] [:set [18 0 16] "iron_ore"]]
    :body {:at [3.5 0 16.5]}
    :memory [{:kind :tunnel-way :data {:dim "overworld" :origin #at [3 0 16] :delta [1 0] :steps 11} :policy {:cap 30 :ttl :forever}}]
-   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 8})]]
    :expect [{:event {:source :job :kind :mine.tunnel-skipped} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [8 0 16] "torch"]]}
   {:name "heading-west-beats-the-facing-east"
    :blocks [[:set [12 0 16] "iron_ore"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :heading :west :tunnel-length 8 :radius 8})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :level false :count 1 :heading :west :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [17 0 16] "stone"] [:block [20 0 16] "stone"]]}]}

@@ -30,7 +30,7 @@
                       (ew/set-data! w {} {}))
                     r))
         eng (assoc-in eng [:jobs sym] (ending/wrap (assoc raw :can-run? wrapped)))]
-    (core/submit! eng form {})
+    (core/submit! eng (tu/order eng form) {})
     (dotimes [_ n] (await (core/tick! eng)))
     (boolean (seq (:list (core/state eng))))))
 
@@ -91,7 +91,7 @@
 (defn ^:async alive?
   "Whether the job sym with args is still on the list after 12 ticks: it waits, not ended."
   [[eng] sym args]
-  (core/submit! eng (list sym args) {})
+  (core/submit! eng (tu/order eng (list sym args)) {})
   (dotimes [_ 12] (await (core/tick! eng)))
   (boolean (seq (:list (core/state eng)))))
 

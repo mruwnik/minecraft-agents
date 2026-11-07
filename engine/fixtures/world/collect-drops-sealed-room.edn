@@ -13,12 +13,12 @@
  [;; should succeed: the wall is dug through and the pile is collected
   {:name "pile-beyond-the-wall-is-collected-with-dig"
    :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
-         [:job (jobs.items.collect-drops {:near #at [22 0 16] :radius 4 :search 4 :dig true})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :near #at [22 0 16] :radius 4 :search 4 :dig true})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}]
    :after [[:item "oak_log" 1]]}
   ;; should fail: without :dig the closed room stays shut and nothing is collected
   {:name "pile-beyond-the-wall-stays-without-dig"
    :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
-         [:job (jobs.items.collect-drops {:near #at [22 0 16] :radius 4 :search 4})]]
+         [:job (jobs.items.collect-drops {:worth 1200 :near #at [22 0 16] :radius 4 :search 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :none-collected}} :within-s 150 :of-job true}]
    :after [[:item "oak_log" 0]]}]}

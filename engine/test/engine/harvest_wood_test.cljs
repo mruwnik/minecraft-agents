@@ -19,7 +19,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 30 0 "oak" 3)})]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10 :center [30 64 0]}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10 :center [30 64 0]})) {})
           (await (tu/run-until-empty eng 60))
           (is (= 3 (get (lt/inv p) "oak_log")) "walked to the area and felled its tree")
           (is (empty? (filterv #(= :outside-area (:reason %)) @seen)) "never waits outside"))))))
@@ -43,7 +43,7 @@
            (fn ^:async dear []
              (doseq [[inventory logs] [[[] 3] [[{:name "bread" :count 3}] 0]]]
                (let [{:keys [eng p]} (lt/setup {:self {:health 0.5 :food 5} :blocks (lt/tree 3 0 "oak" 3) :inventory inventory})]
-                 (core/submit! eng harvest {})
+                 (core/submit! eng (tu/order eng harvest) {})
                  (await (tu/run-until-empty eng 30))
                  (is (= logs (get (lt/inv p) "oak_log" 0)) (pr-str inventory)))))))))))
 
@@ -52,7 +52,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})
-              id (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:radius 2})) {})]
           (await (core/tick! eng))
           (let [n (count (lt/calls p "look"))]
             (is (pos? n) "it looked round")
@@ -70,7 +70,7 @@
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 9 0 "oak" 3)})
               looks #(count (lt/calls p "look"))
               move! (fn [x] (fake/swap-self! p assoc :pos [x 64 0]))]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 2}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:radius 2})) {})
           (await (tu/run-until-empty eng 3))
           (let [n (looks)]
             (move! 1)
@@ -85,7 +85,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:radius 32})) {})
           (is (< (await (tu/run-until-empty eng 40)) 40))
           (is (= [] (filterv #(= :failed (:kind %)) @seen)) "no crash")
           (is (= 3 (get (lt/inv p) "oak_log")))
@@ -97,7 +97,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:inventory [{:name "oak_sapling" :count 1}] :unloaded ["1500,66,1500"]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 1500 :y 66 :z 1500} :species "oak"} {:cap 50 :ttl :forever})
-          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.plant-sapling {})) {})
           (await (tu/run-until-empty eng 5))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no crash"))))))
 
@@ -107,7 +107,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:inventory [{:name "oak_sapling" :count 1}] :unloaded ["5,66,5"]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 5 :y 66 :z 5} :species "oak"} {:cap 50 :ttl :forever})
-          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.plant-sapling {})) {})
           (await (tu/run-until-empty eng 8))
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)))
           (is (= [] (lt/calls p "place")) "nothing placed into an unknown cell")
@@ -135,7 +135,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3)})]
           (after-last-dig! p #(fake/swap-self! p assoc :pos [-30 64 0]))
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10})) {})
           (await (tu/run-until-empty eng 30))
           (is (= 3 (get (lt/inv p) "oak_log")) "the drops at the tree are fetched, not forgotten")
           (is (= [] (:list (core/state eng)))))))))
@@ -146,7 +146,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
           (after-last-dig! p #(do (clear-drops! p) (fake/add-item! p "oak_log" 3)))
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10})) {})
           (await (tu/run-until-empty eng 30))
           (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "the logs are in the inventory: not stopped")
           (is (= 1 (count (lt/debts eng)))))))))
@@ -157,7 +157,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "stone" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 3 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
-          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.plant-sapling {})) {})
           (await (tu/run-until-empty eng 12))
           (is (= [] (lt/debts eng)) "nothing can be planted there, so nothing is owed")
           (is (= [] (filterv #(= :stopped (:kind %)) @seen))))))))
@@ -167,7 +167,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "stone" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
-          (core/submit! eng '(jobs.forestry.plant-sapling {:at {:x 3 :y 64 :z 0}}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.plant-sapling {:at {:x 3 :y 64 :z 0}})) {})
           (await (tu/run-until-empty eng 12))
           (is (= [:occupied] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))))))))
 
@@ -178,7 +178,7 @@
         (let [{:keys [eng p seen]} (lt/setup {:blocks {"3,63,0" "grass_block" "6,63,0" "short_grass"} :inventory [{:name "oak_sapling" :count 2}]})]
           (doseq [x [3 6]]
             (mem/write! (:store eng) :forestry/replant {:pos {:x x :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever}))
-          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.plant-sapling {})) {})
           (await (tu/run-until-empty eng 30))
           (is (= [[3 64 0]] (mapv (juxt :x :y :z) (map #(js->clj (.-pos (.-args %)) :keywordize-keys true) (lt/calls p "place")))) "only the first is planted")
           (is (= [:no-soil] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))))))))
@@ -189,7 +189,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "oak_sapling" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 3 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
-          (core/submit! eng '(jobs.forestry.plant-sapling) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.plant-sapling {})) {})
           (await (tu/run-until-empty eng 12))
           (is (= [] (lt/debts eng)) "the debt is cleared")
           (is (= [] (filterv #(#{:error :failed} (:kind %)) @seen)) "no failure"))))))
@@ -207,7 +207,7 @@
   and whether the job is still listed."
   [n args]
   (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
-    (core/submit! eng (list 'jobs.forestry.harvest-wood args) {})
+    (core/submit! eng (tu/order eng (list 'jobs.forestry.harvest-wood args)) {})
     (await (tu/run-until-empty eng n))
     [(mapv :reason (filterv #(= :stopped (:kind %)) @seen)) (boolean (seq (:list (core/state eng))))]))
 
@@ -226,7 +226,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 3 6 "oak" 3) {"3,63,0" "grass_block" "3,63,6" "grass_block"})
                                          :inventory [{:name "oak_sapling" :count 2}]})]
-          (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:species "oak" :radius 12 :count 6})) {})
           (is (< (await (tu/run-until-empty eng 80)) 80) "the job ends")
           (is (= 6 (get (lt/inv p) "oak_log")) "both trees felled and collected"))))))
 
@@ -248,7 +248,7 @@
         (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})
               eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round]
                             (fn ^:async f [c] (ctx/end c :condition-failed {:reason :exposed} nil)))
-              id (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6}) {})]
+              id (core/submit! eng (tu/order eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6})) {})]
           (await (tu/run-until-empty eng 20))
           (is (= [id] (:list (core/state eng))) "still queued, not ended condition-failed")
           (is (some #(= :exposed (:reason %)) (filterv #(= :waiting (:kind %)) @seen))))))))

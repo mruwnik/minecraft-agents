@@ -18,7 +18,7 @@
   :limit-s 200}
  :cases
  [{:name "sealed-in-at-night-waits-dark-then-cuts-the-wheat-at-dawn"
-   :act [[:job (jobs.farm.maintain {:area {:min #xyz [36 -1 16] :max #xyz [40 0 19]}})]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:min #xyz [36 -1 16] :max #xyz [40 0 19]}})]
          [:wait-s 40]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
@@ -27,7 +27,7 @@
    :after [[:not-block [36 0 16] "wheat[age=7]"]]}
   {:name "own-shelter-by-day-is-left-and-the-wheat-cut"
    :time :day
-   :act [[:job (jobs.farm.maintain {:area {:min #xyz [36 -1 16] :max #xyz [40 0 19]}})]]
+   :act [[:job (jobs.farm.maintain {:worth 1200 :area {:min #xyz [36 -1 16] :max #xyz [40 0 19]}})]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 20}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 150 :of-job true}]
    :after [[:not-block [36 0 16] "wheat[age=7]"]]}]}

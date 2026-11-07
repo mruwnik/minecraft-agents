@@ -21,7 +21,7 @@
 
 (defn ^:async scenario [args spec n]
   (let [s (setup spec)]
-    (core/submit! (:eng s) (list 'jobs.farm.grow args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.farm.grow args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 

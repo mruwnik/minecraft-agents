@@ -47,7 +47,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 10))
           (is (= {:kind :done} (end-of seen)))
           (is (= :collected (:decision (recovered eng)))))))))
@@ -61,7 +61,7 @@
                                  go-to {:target [] :ways #{:walk} :round (fn [c] (swap! worths conj (ctx/worth c)) (ctx/end c :done nil {:arrived false}))}
                                  {:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops} {'jobs.movement.go-to go-to})]
                              (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-                             (core/submit! eng call {})
+                             (core/submit! eng (tu/order eng call) {})
                              (await (run-until-empty eng 10))
                              (first @worths)))]
           (is (= 500 (await (walk-worth '(jobs.survival.recover-drops {:worth 500})))) "a trip's walk is worth the call's goal")
@@ -75,7 +75,7 @@
         {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
     (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
     {:eng eng :seen seen :clock clock
-     :id (core/submit! eng (list 'jobs.survival.recover-drops (merge {:value-overrides dt/held-values} extra)) {})}))
+     :id (core/submit! eng (tu/order eng (list 'jobs.survival.recover-drops (merge {:value-overrides dt/held-values} extra))) {})}))
 
 (deftest a-danger-that-makes-the-pile-dear-waits-the-listed-job
   (async done
@@ -130,7 +130,7 @@
               "retry is given already: the call again is the retry"))
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/junk})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= {:kind :condition-failed :reason :not-worth} (end-of seen)))
           (is (empty? (next-of seen)) "calling again cannot make a junk pile worth the trip"))))))
@@ -141,7 +141,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops :unreachable ["20,64,0"]})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 6))
           (is (= {:kind :nothing-possible :reason :unreachable} (end-of seen)))
           (is (empty? (next-of seen)) "no unblocking call is named, and calling again would walk the same way"))))))
@@ -152,7 +152,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/junk})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= {:kind :condition-failed :reason :not-worth} (end-of seen)))
           (is (= :skip (:decision (recovered eng)))))))))
@@ -163,11 +163,11 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos {:x 1500 :y 64 :z 0} :inventory dt/diamonds})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= :too-far (:reason (recovered eng))))
           (swap! (fake/state p) assoc-in [:self :pos] [1480.5 64 0.5])
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= {:kind :nothing-possible :reason :unreachable} (end-of (atom (take-last 1 (filter #(#{:completed :stopped} (:kind %)) @seen)))))))))))
 
@@ -177,7 +177,7 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities [(dt/drop-item 1 20 "diamond_pickaxe")]})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 20))
           (is (= {:kind :nothing-possible :reason :not-visible} (end-of seen))))))))
 
@@ -188,7 +188,7 @@
         (let [{:keys [eng seen clock]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (swap! clock + 300000)
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= {:kind :condition-failed :reason :gone} (end-of seen)))
           (is (empty? (next-of seen)) "a despawned pile has nothing to recover"))))))
@@ -199,6 +199,6 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor})]
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (core/submit! eng job {})
+          (core/submit! eng (tu/order eng job) {})
           (await (run-until-empty eng 5))
           (is (= {:kind :condition-failed :reason :nothing-found} (end-of seen))))))))

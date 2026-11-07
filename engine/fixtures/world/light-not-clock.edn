@@ -11,7 +11,7 @@
  :cases
  [;; 467a000f: wait-for-light waits (:dark) in the dark and ends on any light, a torch included
   {:name "wait-for-light-ends-when-a-torch-is-placed"
-   :act [[:job (jobs.time.wait-for-light)]
+   :act [[:job (jobs.time.wait-for-light {:worth 1200})]
          [:await {:source :job :kind :waiting :data {:reason :dark}} 20]
          [:rcon "execute at $BODY run setblock ~1 ~ ~ torch"]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
@@ -49,7 +49,7 @@
    :body {:inventory [["furnace" 1] ["porkchop" 4] ["coal" 2]] :effects []}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false :carry 8})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false :carry 8})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:item "porkchop" 0]]

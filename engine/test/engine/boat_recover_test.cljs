@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (lt/setup {})]
-          (core/submit! eng '(jobs.movement.boat-recover {}) {})
+          (core/submit! eng (tu/order eng '(jobs.movement.boat-recover {})) {})
           (await (tu/run-until-empty eng 3))
           (is (= [:no-boat] (mapv :reason (filterv #(= :waiting (:kind %)) @seen)))))))))
 

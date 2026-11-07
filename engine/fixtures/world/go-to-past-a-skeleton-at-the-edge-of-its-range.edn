@@ -15,7 +15,7 @@
  :cases
  [{:name "a-go-to-past-a-skeleton-just-out-of-bow-range-arrives"
    :act [[:summon "skeleton" [30.5 0 0.9] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 70}
             {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-most 3
              :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
@@ -23,13 +23,13 @@
   {:name "an-armed-go-to-past-a-skeleton-just-out-of-bow-range-arrives"
    :body {:inventory [["iron_sword" 1]]}
    :act [[:summon "skeleton" [30.5 0 0.9] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 70}
             {:count-event {:source :job :kind :hostile.decided} :for-s 70 :at-most 3
              :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [56 0 16] 2]]}
   {:name "a-go-to-into-a-skeleton-fire-range-from-far-off-decides"
    :act [[:summon "skeleton" [30.5 0 3.5] "{NoAI:1b,equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.movement.go-to {:pos #at [56 0 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [56 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :hostile.decided} :within-s 70}
             {:no-event {:source :body :kind :died} :for-s 70}]}]}

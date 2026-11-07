@@ -726,7 +726,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [12 64 0] :range 0})))]
           (dark-at p (for [x (range -2 17) y (range 60 70) z (range -2 3) :when (or (>= x 7) (and (contains? step-up-tunnel (str x "," y "," z)) (inner? x y z)))] [x y z]))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (= :dig-route (:step (first (events-of seen :go-to.escalated)))) "the riser is cut before any stair")
           (is (= "air" (block p [6 63 0])) "the step up beyond the gap is cut level with the takeoff"))))))
@@ -791,7 +791,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 0})))]
           (gt/override-steer! p (fn [token a impl] (if (<= (swap! steers inc) 3) (stuck token a impl) (impl token a))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [:dig-route] (mapv :step (events-of seen :go-to.escalated))) "three stuck walks round the wall, then a dig through it"))))))
@@ -807,7 +807,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 0 :spend {:tries 1}})))]
           (gt/override-steer! p (fn [token a impl] (if (<= (swap! steers inc) 1) (stuck token a impl) (impl token a))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (false? (:arrived @out)) (pr-str @out))
           (is (empty? (events-of seen :go-to.escalated)) "a caller that re-aims itself gets the stuck walk back, no door dug")
@@ -957,7 +957,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [80 52 0] :range 0})))]
           (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)] (fn [n] (let [[_ used :as r] (run n)] (swap! nodes + used) r))))
                         esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))]
-            (core/submit! eng '(recording-parent) {})
+            (core/submit! eng (tu/order eng '(recording-parent {})) {})
             (await (settings/with-settings {::dig-route/max-nodes slice} #(tick-out! eng 3000))))
           (is (> @replans 1) "the dirt sent the route to be planned again, and a plan went on in a later round")
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
@@ -1380,7 +1380,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [40 72 0] :range 1})))
               _ (mem/write! (:store eng) :stair-way {:dim "overworld" :floors (vec (for [k (range 15)] [(+ 86 k) (+ 57 k) 0]))})
-              _ (core/submit! eng '(recording-parent) {})
+              _ (core/submit! eng (tu/order eng '(recording-parent {})) {})
               _ (await (tick-out! eng 1000))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (<= 72 (second (feet p))))
@@ -1454,7 +1454,7 @@
 
 (deftest a-dig-leg-whose-search-spends-its-slice-goes-on-in-the-next
   (let [p (tu/fake {:blocks (box -2 60 -2 20 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
         slice (atom nil)
         leg #(let [s (choose/route-slice "leg-resume")] (reset! slice s) (choose/dig-leg c [0 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice s}))]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
@@ -1468,7 +1468,7 @@
 ;; line reaches them; the leg goes round it, searched in slices over later rounds like the first pass
 (deftest a-dig-leg-goes-round-a-slab-wider-than-its-margin-across-the-line-over-several-slices
   (let [p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") (box 4 60 -1 5 70 1 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
         leg #(choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-slab")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
@@ -1480,7 +1480,7 @@
 (deftest a-dig-leg-to-a-goal-sealed-in-bedrock-ends-with-no-leg
   (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") (box 9 63 -1 11 66 1 "bedrock") {"10,64,0" "air" "10,65,0" "air"})
                     :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
         leg #(choose/dig-leg c [6 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-sealed")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (is (= [nil] (take 1 (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
@@ -1488,7 +1488,7 @@
 ;; the leg's far end hangs over a seen pit one block deep: the leg ends in the pit under it
 (deftest a-dig-leg-end-over-a-pit-ends-in-the-pit
   (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") {"9,63,0" "air"}) :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
         leg #(choose/dig-leg c [3 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-pit")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (is (= [9 64 0] (:cell (last (:cells (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))) "its last cut is the pit's head cell"))))
@@ -1498,7 +1498,7 @@
 ;; once the boxed searches have spent the way without a dig route (memory :route-search :fallback-s); only that price differs here
 (deftest a-dig-leg-widening-round-an-end-no-box-reaches-ends-at-the-cut-or-the-fallback-price
   (let [p (tu/fake {:blocks (box -2 50 -14 7 80 14 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
         ends (fn [fallback-s]
                (let [slice (choose/route-slice (str "leg-over-void-" fallback-s))
                      leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice slice})]
@@ -1562,7 +1562,7 @@
         _ (store/record! st (store/store-of st (.-dim st)) 1000 64 0 (.stateAt raw 1000 64 0) 1000000)
         p (perception/wrap f per)
         _ (tu/set-sensed! p (fn [pos] (if (in? (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"])) (.blockAt f pos) #js {:unknown true :pos pos})))
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly 1200)}
         margins (atom [])
         route-cells choose/route-cells
         leg #(choose/dig-leg c [2 64 0] [7 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-widens-past-memory")})]
@@ -2014,7 +2014,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 2 16] :range 0 :unknown false})))]
           (is (some #{[19 5 16]} (map :cell (choose/route-cells p [16 6 16] [19 2 16] (constantly true) (constantly false) false false {:range 0 :near [19 2 16]})))
               "planned before the water shows, the route digs beside it")
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
           (is (= [19 2 16] (feet p)))

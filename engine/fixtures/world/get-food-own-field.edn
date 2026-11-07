@@ -11,7 +11,7 @@
   :body {:at [18.5 0 19.5] :inventory [["wheat_seeds" 8]] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]
-        [:job (jobs.survival.get-food {:explore false})]]
+        [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
   :limit-s 150}
  :cases
  [{:name "own-wheat-baked"

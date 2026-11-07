@@ -176,7 +176,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (ht/setup (ht/world {}))
-              _ (core/submit! (:eng s) '(jobs.movement.go-to {:pos [13 63 3] :range 4 :doors :never :ways #{:walk :clear-seal} :spend {:tries 1}}) {})
+              _ (core/submit! (:eng s) (tu/order (:eng s) '(jobs.movement.go-to {:pos [13 63 3] :range 4 :doors :never :ways #{:walk :clear-seal} :spend {:tries 1}})) {})
               _ (await (ht/run-ticks s 10))]
           (is (empty? (ht/events-of s :walker-fault)) (pr-str (ht/events-of s :walker-fault)))
           (is (= [10 64 3] (mapv #(js/Math.floor %) (:pos (fake/self (:p s))))) "in the gate's cell")
@@ -231,7 +231,7 @@
   ([worth cells made-out?]
    (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :args {:mob "cow"}}]
      (with-redefs [cost/animal-find-worth (constantly worth)
-                   ctx/worth (fn [_] (ctx/default-worth))
+                   ctx/worth (fn [_] 1200)
                    lib-look/makes-out-fn (constantly made-out?)]
        (some-> (await (hp/unseen-cell! c {:leaks (mapv (fn [[x y z]] {:why :unloaded :pos {:x x :y y :z z}}) cells)} #{}))
                ((juxt :x :y :z)))))))

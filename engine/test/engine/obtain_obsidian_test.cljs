@@ -149,7 +149,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world ground [pick {:name "water_bucket" :count 1}]))]
-          (core/submit! eng '(jobs.gather.cast-obsidian {:count 1}) {})
+          (core/submit! eng (tu/order eng '(jobs.gather.cast-obsidian {:count 1})) {})
           (await (tu/run-until-empty eng 6))
           (is (pos? (sense/looks p))))))))
 

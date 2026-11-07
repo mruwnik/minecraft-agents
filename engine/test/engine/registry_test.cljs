@@ -106,9 +106,10 @@
     (is (map? (:args t)) (str id))
     (is (#{:cooldown :retry :stop} (:persistence t)) (str id))))
 
-(deftest default-trigger-jobs-are-valid
+(deftest default-trigger-jobs-are-valid-and-priced
   (doseq [[id t] triggers/all]
-    (is (nil? (expr/problem registry/jobs (:job t))) (str id))))
+    (is (nil? (expr/problem registry/jobs (:job t))) (str id))
+    (is (nil? (expr/fired-worth-problem registry/jobs (expr/parse registry/jobs (:job t)))) (str id " fires its job at a worth"))))
 
 (deftest mounted-never-latches-after-a-failed-dismount
   (let [t (:mounted triggers/all)]

@@ -65,7 +65,7 @@
                           :dir (tu/tmp-dir) :now #(deref clock) :world (ew/of-data {} {} [f/own-zone])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     {:eng eng :p p :seen seen :clock clock :out out})))
 
 (defn worn [{:keys [p]}]

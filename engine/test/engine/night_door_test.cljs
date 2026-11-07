@@ -41,7 +41,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
             (is (pos? (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))
                 "the shut is worth the cheapest way left with the door open, not the night's loss averted"))
@@ -56,7 +56,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"6,64,0" "red_bed"}) {:inventory st/dirt-stack}))]
           (st/know-bed! eng {:x 6 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
             (is (pos? (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))
                 "the bed's negative price is the shut room's answer, not floored away")))))))
@@ -66,7 +66,7 @@
   [extra bed]
   (let [{:keys [eng]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} extra) {:inventory st/dirt-stack}))]
     (when bed (st/know-bed! eng bed))
-    (core/submit! eng '(jobs.survival.night) {})
+    (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
     (let [log (await (with-child-log #(tu/run-until-empty eng 8)))]
       (some (fn [[k _ a]] (when (= :enter-room k) (:worth a))) log))))
 
@@ -85,7 +85,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:inventory st/dirt-stack}))]
           (st/know-bed! eng {:x 30 :y 64 :z 0})
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (let [log (await (with-child-log #(tu/run-until-empty eng 8)))
                 priced (st/emitted seen :night.door-shut-priced)]
             (is (= 1 (count priced)) "one event for the decision")
@@ -136,7 +136,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (seeing-setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (false? (door-open? p)) "the door is shut")
           (is (= [] (st/calls p "place")) "nothing placed"))))))
@@ -147,7 +147,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"3,64,0" "air" "3,65,0" "air"}) {:inventory st/dirt-stack}))]
           (mem/write! (:store eng) :bed-open {:pos {:x 4 :y 64 :z 0}} sh-beds/bed-open-policy)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 8))
           (is (false? (door-open? p)) "the door is shut though the room is open"))))))
 
@@ -157,7 +157,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 2} {"3,64,0" "air" "3,65,0" "air"}) {:inventory st/dirt-stack}))]
           (mem/write! (:store eng) :bed-open {:pos {:x 4 :y 64 :z 0}} sh-beds/bed-open-policy)
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 8))
           (is (false? (door-open? p)) "the door is shut though the body stood in it"))))))
 
@@ -166,7 +166,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,67,0" "air"}) {:inventory st/wall-stack}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 8))
           (is (seq (st/calls p "place")) "dug in: the room cannot be closed"))))))
 
@@ -183,7 +183,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z -7} long-hut-extra) {:inventory st/dirt-stack :light-default [15 14]}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (false? (door-open? p)) "the door is shut")
           (is (= [] (st/calls p "place")) "nothing placed"))))))
@@ -194,7 +194,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen] :as s} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/wall-stack}))]
           (.override (.-world p) "useOn" (fn [token a impl] (impl token (clj->js {:pos {:x 3 :y 64 :z 0}}))))
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (true? (door-open? p)) "the click did nothing")
           (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
@@ -207,7 +207,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 0} {"5,64,2" "iron_door" "5,65,2" "iron_door"}) {:inventory st/wall-stack}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (= 1 (count (st/entries eng :night-door-failed))) "the open iron door is named")
           (is (seq (st/calls p "place")) "dug in: the roofed hut is not shut"))))))
@@ -228,7 +228,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (zoned-setup (merge (open-door-hut {:x 5 :y 64 :z 0} {}) {:inventory st/dirt-stack})
                                            [{:name "yard" :min [5 60 2] :max [5 70 2] :owner "Miles"}])]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (false? (door-open? p)) "shutting a door changes no block: no zone rule applies")
           (is (= [] (st/entries eng :night-door-failed))))))))
@@ -245,7 +245,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (open-door-hut {:x 5 :y 64 :z 2} {}) {:inventory st/dirt-stack}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (< (:z (st/pos-of p)) 2) "the body stands inside the room, not in the door cell")
           (is (false? (door-open? p)) "the door is shut"))))))
@@ -255,7 +255,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (seeing-setup (merge (open-door-hut {:x 5 :y 64 :z 2} {}) {:inventory st/dirt-stack}))]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tu/run-until-empty eng 12))
           (is (< (:z (st/pos-of p)) 2) "the body stands inside the room, not in the door cell")
           (is (false? (door-open? p)) "the door is shut")
@@ -280,7 +280,7 @@
                   sh/unlooked-for-bed? (constantly false)
                   look-edge/pending (fn ([_] cells) ([_ _] cells))
                   look-edge/look! (fn ^:async ([_ _ _ worth] (swap! looks conj worth) :continue) ([_ _ _ _ _] :again))]
-      (core/submit! eng '(jobs.survival.night) {})
+      (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
       (await (tu/run-until-empty eng 8))
       {:looks @looks :failed (filter #(= :failed (:kind %)) @seen)})))
 
@@ -309,7 +309,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (seeing-setup three-high-world)]
-          (core/submit! eng '(jobs.survival.night {:ways #{:shelter}}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {:ways #{:shelter}})) {})
           (await (tu/run-until-empty eng 30))
           (is (false? (:open (js->clj (.-properties (.blockAt p (tu/pos 18 64 0))) :keywordize-keys true))) "the door is shut")
           (is (= [] (st/calls p "dig")) "nothing dug")

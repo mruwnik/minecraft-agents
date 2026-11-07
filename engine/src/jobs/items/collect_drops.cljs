@@ -271,7 +271,7 @@
 (defn worth-of
   "Seconds a root collect is worth: getting again the drops in sight round the anchor (cost/goal-value), and with :search
   the :least-items (else :items) not in sight (cost/find-worth of the :least count less those seen). With none in sight
-  (the drops show only after a look or a walk) the :least of those named, else, named none, nil (the root default)."
+  (the drops show only after a look or a walk) the :least of those named, else, named none, nil."
   [c]
   (let [{:keys [least-items items search least near]} (:args c)
         seen (map #(js->clj (.-item %) :keywordize-keys true) (candidates c (or near (u/self-pos c))))

@@ -11,7 +11,7 @@
    :plans [{:id "box" :metadata {:by "$body"}
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 120 :of-job true}
             {:event {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}} :within-s 120}
             {:no-event {:source :job :kind :stopped} :for-s 120 :until {:source :job :kind :child_ended :data {:ending {:data {:arrived true}}}}}]
@@ -26,7 +26,7 @@
    :blocks [[:fill [5 0 5] [22 0 22] "stone"] [:fill [15 1 5] [22 1 22] "stone"]
             [:set [11 1 11] "stone"] [:set [12 1 11] "stone"] [:set [11 1 12] "stone"]]
    :body {:at [11.5 2 11.5]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:box"})]]
    ;; interior roof cells wait (no-support) until the ring roof is there. Stand cells are put on the ground (card 51beca4c): the corner
    ;; roof [13 3 10] was given up :unreachable on the slope (stand cells at the body's feet height lay inside the hill).
    :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 40}} :within-s 120 :of-job true}
@@ -46,7 +46,7 @@
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:set [11 1 13] "oak_leaves[persistent=true]"] [:set [11 0 13] "oak_leaves[persistent=true]"] [:set [9 0 12] "sea_lantern"] [:set [14 0 12] "sea_lantern"]]
    :body {:at [11.5 0 17.5]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :until {:source :job :kind :completed}}]
    :after [[:block [11 1 13] "air"] [:block [11 0 13] "air"] [:block [10 0 10] "dirt"] [:block [13 2 13] "dirt"] [:block [12 1 13] "dirt"]]
@@ -59,7 +59,7 @@
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [4 0 4] [19 4 19] "stone"] [:fill [8 0 8] [15 4 15] "air"] [:set [9 0 12] "sea_lantern"] [:set [14 0 11] "sea_lantern"]]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 40}} :within-s 140 :of-job true}]
    :after [[:not-block [11 0 11] "dirt"] [:block [13 2 10] "dirt"]]
    :limit-s 170}
@@ -74,7 +74,7 @@
             [:fill [10 3 8] [13 3 10] "oak_leaves[persistent=true]"] [:fill [10 2 8] [13 2 9] "oak_leaves[persistent=true]"]
             [:set [9 0 12] "sea_lantern"] [:set [14 0 11] "sea_lantern"]]
    :body {:at [11.5 4 10.5]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}]
    :after [[:block [11 2 10] "dirt"] [:block [12 2 10] "dirt"]]
    :limit-s 170}
@@ -85,7 +85,7 @@
             :parts [{:id "walls" :outline [#at [10 0 10] #at [13 1 13]] :want "dirt"}
                     {:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
    :blocks [[:fill [0 -4 0] [31 -4 31] "stone"] [:fill [0 -3 0] [31 -1 31] "air"] [:fill [9 -1 9] [14 -1 14] "stone"]]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:box"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 40}} :within-s 140 :of-job true}]
    :after [[:not-block [11 0 11] "dirt"] [:block [10 0 10] "dirt"] [:block [11 0 10] "dirt"] [:block [12 2 12] "dirt"]]
    :limit-s 170}
@@ -107,7 +107,7 @@
             [:fill [11 0 9] [13 3 9] "oak_leaves[persistent=true]"]
             [:set [13 2 13] "light"] [:set [9 0 12] "sea_lantern"] [:set [15 0 12] "sea_lantern"] [:set [12 0 16] "sea_lantern"]]
    :body {:at [12.5 2 10.5] :inventory [["dirt" 8]]}
-   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 140 :until {:source :job :kind :completed}}]
    :after [[:block [12 2 10] "dirt"] [:block [12 3 10] "dirt"] [:block [12 3 11] "dirt"] [:block [12 0 14] "air"]]

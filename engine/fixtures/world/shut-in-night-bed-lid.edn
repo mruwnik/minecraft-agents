@@ -11,8 +11,8 @@
  [{:name "pit-lid-on-the-bed-respawn-cell-is-dug-away-by-day"
    :blocks [[:set [12 2 12] "red_bed[facing=north,part=foot]"] [:set [12 2 11] "red_bed[facing=north,part=head]"]]
    :memory [{:kind :spawn-bed :data {:pos #xyz [12 2 12]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]
-         [:job (jobs.survival.leave-shelter)]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit} :for :night})]
+         [:job (jobs.survival.leave-shelter {:worth 1200})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:event {:source :job :kind :dig-in.left} :within-s 100}]
    :after [[:not-block [12 2 13] "dirt"] [:block [12 2 12] "red_bed[facing=north,part=foot]"]]}]}

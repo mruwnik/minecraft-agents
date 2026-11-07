@@ -9,18 +9,18 @@
   :limit-s 90}
  :cases
  [{:name "steps-off-on-unseen-floor-and-clears-the-cell"
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [12 -1 12] :max #at [12 -1 12]}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [12 -1 12] :max #at [12 -1 12]}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug 1}} :within-s 60 :of-job true}]
    :after [[:block [12 -1 12] "air"]]}
   {:name "never-steps-onto-lava-floor"
    :blocks [[:fill [10 -1 10] [14 -1 14] "lava"] [:fill [12 -1 12] [15 -1 12] "stone"]]
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [12 -1 12] :max #at [12 -1 12]}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [12 -1 12] :max #at [12 -1 12]}})]]
    ;; the cell has lava beside it: clear-cells refuses the dig (hazard) and the body never steps onto the lava
    :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 60 :of-job true}]
    :after [[:block [12 -1 12] "stone"] [:body-near [13.5 0 12.5] 3.5]]}
   {:name "never-steps-onto-lava-floor-and-digs-the-cell-when-lava-adjacent-is-accepted"
    :blocks [[:fill [10 -1 10] [14 -1 14] "lava"] [:fill [12 -1 12] [15 -1 12] "stone"]]
    :body {:inventory [["cobblestone" 4]]}
-   :act [[:job (jobs.blocks.clear-cells {:area {:min #at [12 -1 12] :max #at [12 -1 12]} :accept #{:lava-adjacent}})]]
+   :act [[:job (jobs.blocks.clear-cells {:worth 1200 :area {:min #at [12 -1 12] :max #at [12 -1 12]} :accept #{:lava-adjacent}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug 1}} :within-s 60 :of-job true}]
    :after [[:not-block [12 -1 12] "stone"] [:body-near [13.5 0 12.5] 3.5]]}]}

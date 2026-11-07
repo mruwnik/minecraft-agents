@@ -13,13 +13,13 @@
   :limit-s 120}
  :cases
  [{:name "dirt-on-the-chest-is-dug-off-and-the-logs-taken"
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest} :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 2 :ways #{:chest} :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 100 :of-job true :until {:source :job :kind :completed}}]
    :after [[:not-block [20 1 14] "dirt"] [:item "oak_log" 2]]}
   {:name "dirt-in-another-owners-zone-is-left-and-the-chest-named-blocked"
    :zones [{:name "lid" :min [20 1 14] :max [20 1 14] :owner "Other" :allow #{}}]
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :ways #{:chest} :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 2 :ways #{:chest} :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "could not be opened"]}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:block [20 1 14] "dirt"] [:item "oak_log" 0]]}]}

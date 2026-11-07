@@ -11,7 +11,7 @@
  :cases
  [{:name "walls-fill-a-gap-over-a-drop-from-below"
    :body {:inventory [["dirt" 20]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:walls} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :shut-in.unsealed} :for-s 40 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:block [5 1 16] "dirt"] [:block [5 2 16] "dirt"] [:body-near [6.5 2 16.5] 1.0]]
@@ -19,7 +19,7 @@
   ;; should-fail: nothing to fill the gap with: the night does not end as if sheltered and its warn names why the walls cannot
   {:name "night-with-a-gap-over-a-drop-and-no-blocks-is-not-sheltered"
    :time :night :time-why :dawn-decision
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind :shelter.exposed :message [:contains "walls: "]} :within-s 30}
             {:no-event {:source :job :kind :completed} :for-s 45 :of-job true}]
    :limit-s 60}]}

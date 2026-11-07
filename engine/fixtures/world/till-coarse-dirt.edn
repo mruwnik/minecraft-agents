@@ -11,17 +11,17 @@
  :cases
  [{:name "coarse-and-rooted-dirt-end-as-farmland"
    :blocks [[:set [15 -1 15] "coarse_dirt"] [:set [16 -1 15] "coarse_dirt"] [:set [17 -1 15] "rooted_dirt"]]
-   :act [[:job (jobs.farm.till {:area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
+   :act [[:job (jobs.farm.till {:worth 1200 :area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 9}} :within-s 80 :of-job true}]
    :after [[:block [15 -1 15] "farmland"] [:block [16 -1 15] "farmland"] [:block [17 -1 15] "farmland"] [:block [16 -1 17] "farmland"]]}
   {:name "stone-cell-is-skipped-not-tillable"
    :blocks [[:set [16 -1 16] "stone"] [:set [15 -1 15] "coarse_dirt"]]
-   :act [[:job (jobs.farm.till {:area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
+   :act [[:job (jobs.farm.till {:worth 1200 :area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 8}} :within-s 80 :of-job true}]
    :after [[:block [16 -1 16] "stone"] [:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"]]}
   ;; Should-succeed: with only :for-plan the cells are the ground under the plan's crop cells (row at y 0, ground y -1).
   {:name "for-plan-alone-tills-the-ground-under-the-plans-crops"
    :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [15 0 16] #at [17 0 16]] :want {:crop "wheat"}}]}]
-   :act [[:job (jobs.farm.till {:for-plan "$plan:field"})]]
+   :act [[:job (jobs.farm.till {:worth 1200 :for-plan "$plan:field"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [15 -1 16] "farmland"] [:block [16 -1 16] "farmland"] [:block [17 -1 16] "farmland"]]}]}

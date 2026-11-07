@@ -17,62 +17,62 @@
   :limit-s 400}
  :cases
  [{:name "no-field-seed-and-bone-meal-grows-and-cuts-wheat"
-   :act [[:job (jobs.farm.grow {:count 2 :w 3 :h 3})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 2 :w 3 :h 3})]]
    :expect [{:event {:source :job :kind :completed :data {:got [:>= 2] :item "wheat"}} :within-s 380 :of-job true}]
    :after [[:item "wheat" [:>= 2]]]}
   {:name "a-dark-cave-floor-is-lit-with-torches-then-sown"
    :plot {:light :dark :floor "grass_block" :height 6}
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]
           :inventory [["wooden_hoe" 1] ["wheat_seeds" 9] ["water_bucket" 1] ["bone_meal" 24] ["torch" 8]]}
-   :act [[:job (jobs.farm.grow {:count 1 :w 3 :h 3})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 1 :w 3 :h 3})]]
    :expect [{:event {:source :job :kind :completed :data {:got [:>= 1] :item "wheat"}} :within-s 380 :of-job true}]
    :after [[:item "wheat" [:>= 1]]]
    :limit-s 420}
   {:name "seed-is-broken-out-of-grass-first"
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["water_bucket" 1] ["bone_meal" 24]]}
    :blocks [[:fill [8 0 8] [24 0 24] "short_grass"]]
-   :act [[:job (jobs.farm.grow {:count 1 :w 2 :h 2})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 1 :w 2 :h 2})]]
    :expect [{:event {:source :job :kind :completed :data {:got [:>= 1] :item "wheat"}} :within-s 380 :of-job true}]
    :after [[:item "wheat" [:>= 1]]]
    :limit-s 420}
   {:name "a-planted-field-the-body-is-away-from-is-not-given-up"
    :plot {:light :lit :floor "grass_block" :height 6 :length 100}
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["wheat_seeds" 9] ["water_bucket" 1]]}
-   :act [[:job (jobs.farm.grow {:count 1 :w 2 :h 2})] [:until-seen {:block "wheat"} 150]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 1 :w 2 :h 2})] [:until-seen {:block "wheat"} 150]
          [:rcon "execute as $BODY at @s run tp @s ~60 ~ ~"]
-         [:http :submit (jobs.time.noop {:seconds 60}) [] {:ok true}]]
+         [:http :submit (jobs.time.noop {:worth 1200 :seconds 60}) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :nothing-possible} :for-s 80}]
    :after [[:item "wheat_seeds" [:<= 8]]]
    :limit-s 260}
   {:name "a-growing-field-is-waited-for-not-replaced"
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["wheat_seeds" 9]]}
    :blocks [[:fill [14 -1 14] [15 -1 15] "farmland[moisture=7]"] [:fill [14 0 14] [15 0 15] "wheat[age=1]"]]
-   :act [[:job (jobs.farm.grow {:count 2})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 2})]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 60}]
    :after [[:item "wheat_seeds" 9] [:block [18 -1 16] "grass_block"]]
    :limit-s 80}
   {:name "a-job-queued-behind-a-growing-wait-runs"
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["wheat_seeds" 9]]}
    :blocks [[:fill [14 -1 14] [15 -1 15] "farmland[moisture=7]"] [:fill [14 0 14] [15 0 15] "wheat[age=1]"]]
-   :act [[:job (jobs.farm.grow {:count 2})] [:job (jobs.debug.notify {:text "queued ran"})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 2})] [:job (jobs.debug.notify {:worth 1200 :text "queued ran"})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.debug.notify"}} :within-s 60}]
    :limit-s 80}
   {:name "obtain-wheat-cuts-a-ripe-field-14-blocks-off"
    :body {:at [16.5 0 16.5] :yaw 90 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1]]}
    :blocks [[:fill [2 -1 16] [3 -1 16] "farmland[moisture=7]"] [:fill [2 0 16] [3 0 16] "wheat[age=7]"]]
-   :act [[:wait-s 4] [:job (jobs.items.obtain {:item "wheat" :count 2 :ways #{:crops}})]]
+   :act [[:wait-s 4] [:job (jobs.items.obtain {:worth 1200 :item "wheat" :count 2 :ways #{:crops}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "wheat" [:>= 2]]]
    :limit-s 140}
   {:name "an-unreachable-ripe-crop-is-given-up-and-a-field-is-made"
    :blocks [[:fill [1 -1 15] [3 1 17] "bedrock"] [:set [2 -1 16] "farmland[moisture=7]"] [:set [2 0 16] "wheat[age=7]"]]
-   :act [[:job (jobs.farm.grow {:count 1 :w 2 :h 2})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :count 1 :w 2 :h 2})]]
    :expect [{:event {:source :job :kind :completed :data {:got [:>= 1] :item "wheat"}} :within-s 380 :of-job true}]
    :after [[:block [2 0 16] "wheat"] [:item "wheat" [:>= 1]]]
    :limit-s 420}
   {:name "fewer-seeds-than-cells-still-sow-the-field"
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["beetroot_seeds" 5] ["water_bucket" 1]]}
-   :act [[:job (jobs.farm.grow {:crop "beetroots" :count 4 :w 3 :h 2})]]
+   :act [[:job (jobs.farm.grow {:worth 1200 :crop "beetroots" :count 4 :w 3 :h 2})]]
    :expect [{:no-event {:source :job :kind :nothing-possible} :for-s 90}]
    :after [[:item "beetroot_seeds" [:<= 4]]]
    :limit-s 110}]}

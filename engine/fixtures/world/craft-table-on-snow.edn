@@ -11,6 +11,6 @@
  [{:name "carried-table-goes-down-on-snow-layers"
    :blocks [[:fill [10 0 10] [14 3 14] "stone" :hollow] [:fill [11 0 11] [13 2 13] "air"] [:set [12 2 10] "glowstone"]
             [:fill [11 0 11] [13 0 13] "snow[layers=2]"]]
-   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :act [[:job (jobs.items.craft {:worth 1200 :item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "wooden_pickaxe" 1]]}]}

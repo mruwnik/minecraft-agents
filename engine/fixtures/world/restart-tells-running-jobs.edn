@@ -7,7 +7,7 @@
   :limit-s 120}
  :cases
  [{:name "restart-names-the-running-job"
-   :act [[:job (jobs.time.noop {:seconds 60})]
+   :act [[:job (jobs.time.noop {:worth 1200 :seconds 60})]
          [:wait-s 3]
          [:restart-body]
          [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:pos [:any] :mode [:any]}] 30]]

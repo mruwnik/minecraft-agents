@@ -5,6 +5,7 @@
             [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.contract :as contract]
+            [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.blocks :as blocks]
@@ -156,6 +157,11 @@
 
 (def fit? ready/ok)
 
+
+(defn worth-of
+  "The loss the reflex averts: a death where the body stands (cost/death-s)."
+  [c]
+  (cost/death-s (:primitives c) (ctx/view c)))
 
 (defn done?
   "Air at the head and, after a swim, solid ground under the feet."

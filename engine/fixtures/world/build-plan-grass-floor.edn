@@ -18,7 +18,7 @@
                     {:id "door" :cells [#at [20 0 18]] :want {:block "oak_door" :facing :south :half :lower}}
                     {:id "door-top" :cells [#at [20 1 18]] :want {:block "oak_door" :facing :south :half :upper}}
                     {:id "chest" :cells [#at [19 0 15]] :want "chest"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [20 0 18] "oak_door"] [:block [20 -1 18] "grass_block"] [:block [19 0 15] "chest"]]}
@@ -28,7 +28,7 @@
                     {:id "sill" :cells [#at [20 -1 18]] :want {:block "dirt" :exact true}}
                     {:id "door" :cells [#at [20 0 18]] :want {:block "oak_door" :facing :south :half :lower}}
                     {:id "door-top" :cells [#at [20 1 18]] :want {:block "oak_door" :facing :south :half :upper}}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:hut"})]]
    :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 60}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 110 :of-job true}]
    :after [[:block [20 0 18] "oak_door"] [:block [20 -1 18] "grass_block"] [:block [21 -1 16] "dirt"]]}]}

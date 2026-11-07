@@ -47,7 +47,7 @@
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]] :yaw 270}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets :hostiles :radius 8 :settings {:jobs.lib.hostile-fight/leash 3}})]]
+         [:job (jobs.combat.attack {:worth 1200 :targets :hostiles :radius 8 :settings {:jobs.lib.hostile-fight/leash 3}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-target}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 1] [:body-near [16.5 0 16.5] 3]]
@@ -57,7 +57,7 @@
    :body {:inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets :hostiles :radius 8})]]
+         [:job (jobs.combat.attack {:worth 1200 :targets :hostiles :radius 8})]]
    :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 20}
             {:event {:source :action :kind :done :data {:name "attack" :status "killed"}} :within-s 20}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]]
@@ -128,7 +128,7 @@
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
          [:wait-s 1]
-         [:job (jobs.survival.respond-to-hostile {})]]
+         [:job (jobs.survival.respond-to-hostile {:worth 1200})]]
    :expect [{:count-event {:source :job :kind :holding :data {:reason "in water, away from the enderman"}} :for-s 45 :at-least 1 :at-most 6 :of-job true}]
    :limit-s 60}
   ;; card ba8479cc: mobbed by a zombie, a skeleton and an angry enderman in a sealed stone hall with no water and no 2-high gap: the water and roof options find nothing and the flight falls through the options to the fight within seconds instead of holding on a search while hit
@@ -141,7 +141,7 @@
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
          [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [22.5 0 19.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.respond-to-hostile {})]]
+         [:job (jobs.survival.respond-to-hostile {:worth 1200})]]
    :expect [{:event {:source :action :kind :started :data {:name "attack"}} :within-s 20}
             {:no-event {:source :job :kind :holding :data {:reason "searching"}} :for-s 20}
             {:no-event {:source :body :kind :died} :for-s 40}]
@@ -156,7 +156,7 @@
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
          [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [22.5 0 19.5] "{equipment:{mainhand:{id:\"minecraft:bow\",count:1},head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.respond-to-hostile {})]]
+         [:job (jobs.survival.respond-to-hostile {:worth 1200})]]
    :expect [{:event {:source :action :kind :started :data {:name "attack"}} :within-s 20}
             {:no-event {:source :job :kind :holding :data {:reason "searching"}} :for-s 20}
             {:no-event {:source :body :kind :died} :for-s 40}]

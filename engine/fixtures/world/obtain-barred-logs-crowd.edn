@@ -15,13 +15,13 @@
  :cases
  [{:name "free-tree-beyond-72-barred-logs-is-felled"
    :blocks [[:fill [16 0 3] [16 3 3] "oak_log"] [:fill [15 4 2] [17 5 4] "oak_leaves[persistent=true]"]]
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :ways #{:gather} :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 2 :ways #{:gather} :explore true})]]
    :expect [{:event {:source :job :kind :obtain.gathering} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 40 :until {:source :job :kind :obtain.gathering}}
             {:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "oak_log" 4]]}
   {:name "barred-wall-alone-is-explored-past"
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 1 :ways #{:gather} :explore true})]]
    :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :obtain.gathering} :for-s 40 :until {:source :job :kind :obtain.exploring}}]
    :limit-s 90}]}

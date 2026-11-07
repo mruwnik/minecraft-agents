@@ -10,7 +10,7 @@
   :limit-s 150}
  :cases
  [{:name "stairs-out-of-a-pocket-whose-only-way-is-a-long-swim"
-   :act [[:job (jobs.movement.go-to {:pos #at [100 4 8] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [100 4 8] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [100.5 4 8.5] 3]]}]}

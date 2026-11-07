@@ -27,13 +27,13 @@
   {:name "cook-cut-after-the-load-is-collected-by-the-next-get-food"
    :blocks [[:set [8 0 16] "furnace[facing=west]"]]
    :body {:inventory [["porkchop" 3] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:furnace #xyz [8 0 16] :item "porkchop" :count 3})]
+   :act [[:job (jobs.items.smelt {:worth 1200 :furnace #xyz [8 0 16] :item "porkchop" :count 3})]
          [:await {:source :job :kind :smelt.loaded} 60]
          [:http :cancel "$job" {:ok true}]
          [:await {:source :job :kind :cancelled} 10]
          [:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false :carry 0})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false :carry 0})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:item "porkchop" 0] [:item "cooked_porkchop" 0]]
    :limit-s 140}
@@ -41,7 +41,7 @@
    :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
    :after [[:item "porkchop" 0]]}
@@ -50,7 +50,7 @@
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}]
    :after [[:item "beef" 0]]}
   ;; 2e4d9b7d: a furnace 36 blocks off, known as the :furnace memory place, still pays for the walk (cook-far-radius 64, not the 16 of a placed one)
@@ -61,7 +61,7 @@
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 100}]
    :after [[:item "beef" 0]]
    :limit-s 130}
@@ -71,7 +71,7 @@
    :body {:inventory [["beef" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "beef" [:<= 1]]]}
@@ -82,7 +82,7 @@
    :body {:inventory [["beef" 2] ["coal" 2] ["cobblestone" 8]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 120}]
    :after [[:item "beef" 0]]
    :limit-s 150}
@@ -92,7 +92,7 @@
    :act [[:summon "creeper" [14.5 0 16.5] "{NoAI:1b,Silent:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:worth 1200 :explore false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "beef" [:<= 1]]]}

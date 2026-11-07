@@ -24,7 +24,7 @@
   {:name "listed-repeat-of-a-blocked-job-rests-not-backed-off"
    :blocks [[:set [16 0 11] "chest"]]
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
-   :act [[:job (repeat (jobs.storage.deposit {:chest #at [16 0 11]}))]]
+   :act [[:job (repeat (jobs.storage.deposit {:worth 1200 :chest #at [16 0 11]}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :backoff} :for-s 30 :until {:source :job :kind :waiting}}]}
   {:name "burning-never-backs-off"

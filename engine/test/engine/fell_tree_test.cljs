@@ -528,14 +528,14 @@
   (let [digs (atom 0)]
     #(when (= n (swap! digs inc))
        (pickup)
-       (core/do-now! eng '(jobs.debug.notify {:text "cut"})))))
+       (core/do-now! eng (tu/order eng '(jobs.debug.notify {:text "cut"}))))))
 
 (defn ^:async run-job-cut
   "Submit job with args on the tall tree with a stone axe, cut it after its n-th dig (picking up logs logs by then), run ticks; the state."
   [job args n logs ticks]
   (let [s (fm/start (assoc tall :inventory [{:name "dirt" :count 20} {:name "stone_axe" :count 1}]) {})
         _ (eye-reach! (:p s) false (cut-after-digs (:eng s) n #(fake/add-item! (:p s) "oak_log" logs)))
-        _ (core/submit! (:eng s) (list job args) {})
+        _ (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
         _ (await (tu/run-until-empty (:eng s) ticks))]
     s))
 
@@ -574,7 +574,7 @@
               started (atom [])]
           (core/register-reflex! eng {:trigger :hungry})
           (eye-reach! p false (hungry-tick eng p started))
-          (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
+          (core/submit! eng (tu/order eng '(jobs.forestry.fell-tree {:radius 10})) {})
           (await (tu/run-until-empty eng 300))
           (is (= 8 (count (distinct (dug-ys p)))) "the whole trunk is dug")
           (is (not-any? true? @started) "no tick mid-tree cut the felling")

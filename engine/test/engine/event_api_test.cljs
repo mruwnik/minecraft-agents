@@ -688,13 +688,13 @@
   (async done
     (let [eng (core/create {:primitives (tu/fake {}) :dir (tu/tmp-dir) :now (constantly 1000) :jobs {'jobs.demo.q quoted-job} :triggers {}
                             :events (events/make {:body "Fake"})})]
-      (-> (js/Promise.all #js [(event-api/quote-view eng "jobs.demo.q" "{:pos {:x 1 :y 64 :z 2}}")
+      (-> (js/Promise.all #js [(event-api/quote-view eng "jobs.demo.q" "{:pos {:x 1 :y 64 :z 2} :worth 60}")
                                (event-api/quote-view eng "jobs.demo.q" nil)
                                (event-api/quote-view eng "jobs.demo.nope" nil)
                                (event-api/quote-view eng "jobs.demo.q" "{:pos")])
           (.then (fn [[ok no-args unknown bad]]
                    (is (= {:ok true :job 'jobs.demo.q :quote {:uses {:job-time [1 2 3]}}} ok))
-                   (is (true? (:ok no-args)))
+                   (is (= :worth-required (:reason no-args)) "a quote gives a :worth, as a submit does")
                    (is (= :unknown-job (:reason unknown)))
                    (is (= :bad-args (:reason bad)))
                    (done)))))))

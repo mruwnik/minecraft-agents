@@ -14,7 +14,7 @@
         [:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
-        [:job (jobs.survival.recover-drops)]
+        [:job (jobs.survival.recover-drops {:worth 1200})]
         [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"} :legs {:name "iron_leggings"} :feet {:name "iron_boots"} :offHand {:name "shield"}}}] 120]]
   :limit-s 150}
  :cases

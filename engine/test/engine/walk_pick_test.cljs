@@ -136,7 +136,7 @@
                                  (swap! out conj [(pick/walk-s (u/self-pos c) args) (second (get-in (await (pick/quote! c args)) [:uses :job-time]))]))
                                (ctx/end c :done nil))}]
           (let [eng (assoc-in eng [:jobs 'quoting-parent] parent)]
-            (core/submit! eng '(quoting-parent) {})
+            (core/submit! eng (tu/order eng '(quoting-parent)) {})
             (await (tu/run-until-empty eng 10)))
           (is (= 4 (count @out)) "the last walk climbs a ten-block stair: its height is free in the bound")
           (doseq [[bound mean] @out]

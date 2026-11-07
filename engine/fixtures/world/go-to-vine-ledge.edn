@@ -11,7 +11,7 @@
  [{:name "steps-down-off-a-vine-ledge"
    :blocks [[:fill [10 0 11] [10 3 11] "stone"] [:fill [11 0 11] [11 0 11] "stone"] [:fill [11 1 11] [11 1 11] "vine[west=true]"]]
    :body {:at [11.31 1 11.5] :yaw 270 :settle-s 2}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 11] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 0 11] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:body-near [16.5 0 11.5] 1.5]]}
@@ -19,7 +19,7 @@
    :blocks [[:fill [10 0 11] [10 4 11] "stone"] [:fill [11 0 11] [11 1 11] "stone"] [:fill [11 2 11] [11 2 11] "vine[west=true]"]
             [:fill [13 0 9] [17 0 13] "stone"]]
    :body {:at [11.31 2 11.5] :yaw 270 :settle-s 2}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 11] :range 0})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 1 11] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:body-near [16.5 1 11.5] 1.5]]}]}

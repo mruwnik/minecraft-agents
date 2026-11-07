@@ -13,7 +13,7 @@
   :limit-s 300}
  :cases
  [{:name "full-pack-stairs-out-leaving-the-drops"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 3 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-free-slot}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
@@ -21,7 +21,7 @@
   {:name "sealed-pit-full-pack-stairs-out"
    :blocks [[:fill [15 -3 16] [17 -2 16] "stone"]
             [:fill [16 -3 16] [16 -2 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 3 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-free-slot}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]

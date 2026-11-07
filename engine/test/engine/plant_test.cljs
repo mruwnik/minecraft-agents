@@ -237,11 +237,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (farmland [2] [2]) :inventory (inv "wheat_seeds" 1)})]
-          (core/submit! eng (list job {:area (box 5 5 6 6)}) {})
+          (core/submit! eng (tu/order eng (list job {:area (box 5 5 6 6)})) {})
           (await (run-until-empty eng 20))
           (is (= [] (calls p "place"))))
         (let [{:keys [eng p]} (start (field-world []))]
-          (core/submit! eng (list job {:area field-box}) {})
+          (core/submit! eng (tu/order eng (list job {:area field-box})) {})
           (await (run-until-empty eng 20))
           (is (= [] (calls p "place"))))))))
 
@@ -301,7 +301,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)) (ew/of-data {} {} nil))]
-          (core/submit! eng (list job {:area field-box}) {})
+          (core/submit! eng (tu/order eng (list job {:area field-box})) {})
           (await (run-until-empty eng 20))
           (is (empty? (calls p "place")))
           (is (empty? (events-of seen :plant.declined))))))))
@@ -315,7 +315,7 @@
 (defn ^:async run-plan [other-cells & [extra]]
   (let [{:keys [eng p seen]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor}
                                     (ew/of-data (shared-plans other-cells) {} []))]
-    (core/submit! eng (list job (merge {:area {:plan "mix"}} extra)) {})
+    (core/submit! eng (tu/order eng (list job (merge {:area {:plan "mix"}} extra))) {})
     (await (run-until-empty eng 40))
     {:p p :seen seen}))
 
@@ -337,7 +337,7 @@
           (let [plans (update (shared-plans [[3 64 2]]) "other" shape/with-author author)
                 {:keys [eng p]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor}
                                        (ew/of-data plans {} []))]
-            (core/submit! eng (list job {:area {:plan "mix"}}) {})
+            (core/submit! eng (tu/order eng (list job {:area {:plan "mix"}})) {})
             (await (run-until-empty eng 40))
             (is (= sown (block-at p 3 64 2)) author)))))))
 
@@ -356,7 +356,7 @@
                                    (reset! moved? true)
                                    (ew/set-zones! world [(assoc zone :owner "Miles")]))
                                  (orig pos))))
-          (core/submit! eng (list job {:area {:plan "mix"} :settings {:jobs.farm.plant/reach 0.1}}) {})
+          (core/submit! eng (tu/order eng (list job {:area {:plan "mix"} :settings {:jobs.farm.plant/reach 0.1}})) {})
           (is (< (await (run-until-empty eng 60)) 60) "the job ended")
           (is (true? @moved?) "the body walked"))))))
 
@@ -374,7 +374,7 @@
   [args seeds other-cells]
   (let [{:keys [eng seen]} (start {:blocks (farmland (range 2 4) [2]) :inventory seeds :floor tu/walk-floor}
                                   (ew/of-data (shared-plans other-cells) {} []))]
-    (core/submit! eng (list job args) {})
+    (core/submit! eng (tu/order eng (list job args)) {})
     (await (run-until-empty eng 6))
     (distinct (map :reason (events-of seen :waiting)))))
 
@@ -385,7 +385,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start {:blocks (farmland (range 2 4) [2]) :inventory (inv "wheat_seeds" 6) :floor tu/walk-floor :time st/night}
                                           (ew/of-data (shared-plans []) {} []))]
-          (core/submit! eng (list job {:area {:plan "mix"}}) {})
+          (core/submit! eng (tu/order eng (list job {:area {:plan "mix"}})) {})
           (await (run-until-empty eng 6))
           (is (empty? (calls p "place")) "nothing planted at night")
           (is (seq (:list (core/state eng))) "the job stays listed until dawn"))))))
@@ -412,7 +412,7 @@
   (let [s (h/setup-seeing {:blocks (assoc (farmland (range 2 4) [2]) seed-chest "chest")
                            :containers {seed-chest [{:name "wheat_seeds" :count 6}]}} nil)]
     (perception/pass! (aget (:p s) "perception"))
-    (core/submit! (:eng s) (list job (merge {:ignore-zones? true} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list job (merge {:ignore-zones? true} args))) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
@@ -498,7 +498,7 @@
         (let [p (tu/fake (field-world (inv "wheat_seeds" 6) {:blocks (farmland (range 2 4) [2])}))
               _ (look-then-see p)
               {:keys [eng seen]} (start-on p (ew/of-data (shared-plans []) {} []))]
-          (core/submit! eng (list job {:area {:plan "mix"}}) {})
+          (core/submit! eng (tu/order eng (list job {:area {:plan "mix"}})) {})
           (await (run-until-empty eng 40))
           (is (seq (calls p "look")))
           (is (= 2 (count (ce/ends seen :placed)))))))))

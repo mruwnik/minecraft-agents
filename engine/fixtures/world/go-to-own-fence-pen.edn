@@ -15,7 +15,7 @@
    :act [[:summon "cow" [23.5 0 13.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [24.5 0 14.5] "{PersistenceRequired:1b}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2}] 10]
-         [:job (jobs.movement.go-to {:pos #at [14 0 13] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [14 0 13] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.restored} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [14.5 0 13.5] 2] [:block [20 0 11] "oak_fence"] [:block [21 0 10] "oak_fence"] [:entities "type=cow,tag=wt" [[21 0 11] [25 2 15]] 2]]}]}

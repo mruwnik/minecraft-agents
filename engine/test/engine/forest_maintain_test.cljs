@@ -65,7 +65,7 @@
   "Submit the job with args in a world over plans and tick it n times: the start map."
   [spec plans args n]
   (let [s (start spec plans)]
-    (core/submit! (:eng s) (list job args) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list job args)) {})
     (await (ticks (:eng s) n))
     s))
 
@@ -317,7 +317,7 @@
       (fn ^:async t []
         (let [{:keys [p seen w eng]} (start oak-world {})]
           (reset! (:state w) (assoc @(:state w) :plans {"forest" {:error "unreadable EDN: eof"}}))
-          (core/submit! eng (list job {:plan "forest"}) {})
+          (core/submit! eng (tu/order eng (list job {:plan "forest"})) {})
           (await (ticks eng 4))
           (is (= [] (digs p)))
           (is (= "the plan cannot be read: unreadable EDN: eof" (some :why (reverse (deref seen))))))))))
@@ -361,7 +361,7 @@
           (is (= [] (vec (.-calls (.-world p)))))
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :too-tall}] (warns seen :forest.left)))
           (is (not (listed? eng)) "the run ends")
-          (core/submit! eng (list job {:plan "forest" :ways #{:carried :chest :craft :gather}}) {})
+          (core/submit! eng (tu/order eng (list job {:plan "forest" :ways #{:carried :chest :craft :gather}})) {})
           (await (ticks eng 40))
           (is (= [] (vec (.-calls (.-world p)))) "a second run leaves the tree again")
           (is (= 2 (count (warns seen :forest.left))) "no clock carries the first call's verdict over")
@@ -454,7 +454,7 @@
                      (fn ^:async f [token args impl]
                        (world/set-data! (:w s) {"forest" oak-cell "other" other-plan} {})
                        (await (impl token args))))
-          (core/submit! (:eng s) (list job {:plan "forest"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {})
           (await (ticks (:eng s) 30))
           (is (= [[3 64 0] [3 65 0]] (digs (:p s))) "the logs below the refused third are dug, then the felling stops")
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :refused :why :footprint}] (warns (:seen s) :forest.left)) "the tree is left standing"))))))
@@ -471,7 +471,7 @@
                                        (reset! dropped true)
                                        (world/set-data! w {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {}))
                                      (js/Promise.resolve nil))]
-            (core/submit! eng (list job {:plan "forest"}) {})
+            (core/submit! eng (tu/order eng (list job {:plan "forest"})) {})
             (await (ticks eng 30)))
           (is @dropped)
           (is (= [] (vec (.-calls (.-world p)))) "no dig, no place on the cell holding the tree")
@@ -496,8 +496,8 @@
         (let [s (start {:blocks (ground [[3 0]]) :inventory [(item "oak_sapling" 1)]} {"forest" oak-cell})
               refused (atom 6)]
           (.override (.-world (:p s)) "place" (fn ^:async f [token a impl] (if (pos? (swap! refused dec)) #js {:status "occupied"} (await (impl token a)))))
-          (core/submit! (:eng s) (list job {:plan "forest"}) {})
-          (await (settings/with-settings {:jobs.lib.trees/logs-per-tree 2} #(ticks (:eng s) 30)))
+          (await (settings/with-settings {:jobs.lib.trees/logs-per-tree 2}
+                   #(do (core/submit! (:eng s) (tu/order (:eng s) (list job {:plan "forest"})) {}) (ticks (:eng s) 30))))
           (is (= 1 (count (places (:p s)))) "a tree of 2 logs does not pay a second try")
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :no-sapling}] (map #(select-keys % [:pos :reason]) (warns (:seen s) :forest.left)))))))))
 
@@ -510,7 +510,7 @@
         (let [dir (tu/tmp-dir)
               p (tu/seeing-all (tu/fake-on-floor oak-world))
               first-run (start oak-world {"forest" oak-cell} dir p)]
-          (core/submit! (:eng first-run) (list job {:plan "forest"}) {})
+          (core/submit! (:eng first-run) (tu/order (:eng first-run) (list job {:plan "forest"})) {})
           (loop [i 0]
             (when (< i 30)
               (let [{:keys [eng]} (start oak-world {"forest" oak-cell} dir p)]

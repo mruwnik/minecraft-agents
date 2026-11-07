@@ -189,7 +189,7 @@
               worths (atom [])
               collect {:target [] :round (fn [c] (swap! worths conj (ctx/worth c)) (ctx/end c :done nil {:collected 0}))}
               eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.collect-drops collect))]
-          (core/submit! eng '(jobs.items.pick-up-loose) {})
+          (core/submit! eng (tu/order eng '(jobs.items.pick-up-loose {})) {})
           (await (tu/run-until-empty eng 10))
           (is (= [(:value (cost/goal-value [{:name "oak_log" :count 1}]))] @worths) "the log, not the dirt down the drop"))))))
 
@@ -221,8 +221,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (world dirt-down))]
-          (core/submit! eng '(jobs.items.pick-up-loose) {})
-          (core/submit! eng '(jobs.items.pick-up-loose) {})
+          (core/submit! eng (tu/order eng '(jobs.items.pick-up-loose {})) {})
+          (core/submit! eng (tu/order eng '(jobs.items.pick-up-loose {})) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (= 2 (count (:list (core/state eng)))))
           (is (empty? (filterv #(= :stopped (:kind %)) @seen)))
@@ -233,8 +233,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (world dirt-down))]
-          (core/submit! eng '(jobs.items.pick-up-loose) {})
-          (core/submit! eng '(jobs.movement.go-to {:pos [4.5 64 0.5] :range 1}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.pick-up-loose {})) {})
+          (core/submit! eng (tu/order eng '(jobs.movement.go-to {:pos [4.5 64 0.5] :range 1})) {})
           (dotimes [_ 40] (await (core/tick! eng)))
           (is (= 1 (count (:list (core/state eng)))) "the go-to ran and left; only the waiting job is listed")
           (is (some #(and (= :completed (:kind %)) (true? (:arrived %))) @seen) (pr-str (take-last 6 @seen))))))))
@@ -258,7 +258,7 @@
               holds (atom nil)
               held #(mapv (comp (juxt :anchor :radius) :data) (mem/entries (mem/view (:store eng)) loose/hold-kind))]
           (.override (.-world p) "collect" (fn [_ _] (reset! holds (held)) #js {:status "failed"}))
-          (core/submit! eng '(jobs.items.collect-drops {:radius 6 :near {:x 1 :y 64 :z 0}}) {})
+          (core/submit! eng (tu/order eng '(jobs.items.collect-drops {:radius 6 :near {:x 1 :y 64 :z 0}})) {})
           (await (tu/run-until-empty eng 20))
           (is (= [[{:x 1 :y 64 :z 0} 6]] @holds) "held while it collects")
           (is (= [] (held)) "released at the end"))))))
@@ -269,7 +269,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup (world log-near dirt-down))
               entry (get (:jobs eng) 'jobs.items.pick-up-loose)
-              {:keys [ok quote]} (await (event-api/quote-view eng "jobs.items.pick-up-loose" "{}"))]
+              {:keys [ok quote]} (await (event-api/quote-view eng "jobs.items.pick-up-loose" (pr-str {:worth tu/order-worth})))]
           (is (some? (:can-start? entry)))
           (is (true? ok))
           (is (= {"oak_log" [0 1 1]} (get-in quote [:yields :items])) "the dirt is not worth the detour")

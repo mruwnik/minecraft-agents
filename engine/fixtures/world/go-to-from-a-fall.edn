@@ -8,12 +8,12 @@
  :cases
  [{:name "fall-onto-floor-then-arrives"
    :blocks [[:fill [2 10 2] [24 10 14] "light"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [14 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 0 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [14.5 0 8.5] 3]]}
   {:name "fall-into-pool-then-arrives"
    :blocks [[:fill [2 10 2] [24 10 14] "light"]
             [:fill [3 -3 7] [5 -1 9] "water"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [14 0 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 0 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}]
    :after [[:body-near [14.5 0 8.5] 3]]}]}

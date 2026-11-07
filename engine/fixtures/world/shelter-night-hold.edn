@@ -16,8 +16,8 @@
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
             [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
    :body {:at [13.5 0 13.5]}
-   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
-         [:job (jobs.survival.night {})]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :bed :pos #at [10 0 12]})]
+         [:job (jobs.survival.night {:worth 1200})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]
          [:time-set 1000]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 60}
@@ -27,7 +27,7 @@
    :limit-s 100}
   {:name "day-shelter-does-nothing"
    :time :day :time-why :dawn-decision
-   :act [[:job (jobs.survival.night {})]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:event {:source :job :kind #{:completed :declined :waiting}} :within-s 20 :of-job true}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20 :until {:source :job :kind #{:completed :declined :waiting}}}]
    ;; no :after body check: another runner's night set while the job is parked would make it log the body out

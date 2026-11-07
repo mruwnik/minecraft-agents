@@ -9,7 +9,7 @@
  :cases
  [{:name "full-pack-of-cobble-in-a-stair-tosses-the-extra"
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64]]}
-   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 4})]]
    :expect [{:event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]}]}

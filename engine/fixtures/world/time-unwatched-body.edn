@@ -14,7 +14,7 @@
    :after [[:body-near [4.5 0 16.5] 2]]}
   {:name "clock-wakes-a-busy-unwatched-body"
    :act [[:wait-s 100]
-         [:job (jobs.movement.go-to {:pos #at [55 0 16] :range 1 :ways #{:walk :clear-seal}})]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [55 0 16] :range 1 :ways #{:walk :clear-seal}})]
          [:cli "time" ["--world" "$world" "--body" "$body" "clock"] {:ok true :age-ms [:<= 5000]}]
          [:await {:source :job :kind :completed} 100]]
    :after [[:body-near [55.5 0 16.5] 3]]}]}

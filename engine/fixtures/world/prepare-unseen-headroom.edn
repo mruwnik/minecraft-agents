@@ -12,7 +12,7 @@
   :limit-s 120}
  :cases
  [{:name "unseen-headroom-keeps-prepare-listed-then-it-works-once-seen"
-   :act [[:http :submit (jobs.forestry.prepare {:plan "$plan:wood"}) [] {:ok true}]
+   :act [[:http :submit (jobs.forestry.prepare {:worth 1200 :plan "$plan:wood"}) [] {:ok true}]
          [:wait-s 12]
          [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 1}]
          [:rcon "execute positioned $X $Y $Z run fill ~14 ~ ~14 ~18 ~8 ~18 air replace stone"]]

@@ -28,7 +28,7 @@
               [seen sink] (tu/capture-sink)
               eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir)
                                 :events (events/make {:sinks [sink]})})]
-          (core/submit! eng '(jobs.explore.look {:block-names ["no_such_block"]}) {})
+          (core/submit! eng (tu/order eng '(jobs.explore.look {:block-names ["no_such_block"]})) {})
           (await (core/tick! eng))
           (await (core/tick! eng))
           (let [event (first (filter #(= :stopped (:kind %)) @seen))]
@@ -63,7 +63,7 @@
               [seen sink] (tu/capture-sink)
               eng (core/create {:primitives p :jobs registry/jobs :dir (tu/tmp-dir)
                                 :events (events/make {:sinks [sink]})})]
-          (core/submit! eng '(jobs.explore.look {:max-blocks 2 :radius 16}) {})
+          (core/submit! eng (tu/order eng '(jobs.explore.look {:max-blocks 2 :radius 16})) {})
           (await (core/tick! eng))
           (let [event (first (filter #(= :completed (:kind %)) @seen))]
             (is (empty? (filter #(= :look.observed (:kind %)) @seen)))
@@ -80,7 +80,7 @@
         (let [[seen sink] (tu/capture-sink)
               eng (core/create {:primitives (tu/fake {}) :jobs registry/jobs :dir (tu/tmp-dir)
                                 :events (events/make {:sinks [sink]})})]
-          (core/submit! eng '(jobs.explore.look {:max-blocks 32}) {})
+          (core/submit! eng (tu/order eng '(jobs.explore.look {:max-blocks 32})) {})
           (await (core/tick! eng))
           (let [ended (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
             (is (= :stopped (:kind ended)))

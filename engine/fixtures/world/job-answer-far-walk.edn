@@ -11,5 +11,5 @@
   :limit-s 120}
  :cases
  [{:name "go-to-answer-names-the-far-walk"
-   :act [[:job (jobs.movement.go-to {:pos #at [40 10 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [40 10 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:trip {:far [:any]}} :message [:contains "blocks from the start)"]} :within-s 90 :of-job true}]}]}

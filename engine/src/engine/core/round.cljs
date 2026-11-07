@@ -5,7 +5,7 @@
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
-            [engine.core.list-edits :refer [submit!]]
+            [engine.core.list-edits :refer [require-worth! submit!]]
             [engine.core.cleanup :as cleanup]
             [engine.core.ending :as ending]
             [engine.core.limits :as limits]
@@ -147,7 +147,9 @@
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base) :child-wait child-wait
      :quote-deadline (:quote-deadline base)
-     :worth #(when (seq slots) (get-in (mem/job-mem (mem/view store) root (pop slots)) [:contract :call :worth]))
+     :worth (fn [] (or (:worth args)
+                 (some (fn [s] (let [m (mem/job-mem (mem/view store) root s)] (or (get-in m [:contract :call :worth]) (get-in m [:args :worth]))))
+                       (take-while some? (iterate #(when (seq %) (pop %)) (when (seq slots) (pop slots)))))))
      :left #(let [n (mark eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
                                      (contract/left state (first n) (elapsed n (get (:t0s base) (count s)))))))
@@ -187,7 +189,7 @@
                      (fn [q] (when (and token (owner? eng token)) (limits/check! eng base)) q)))
      :next-way quote/next-way
      :child-ending child-ending
-     :submit (fn [spec opts] (check!) (submit! eng spec (assoc opts :by id)))
+     :submit (fn [spec opts] (check!) (require-worth! eng spec) (submit! eng spec (assoc opts :by id)))
      :request-attention (fn [kind reason data message]
                           (check!)
                           (request-attention! eng {:job-id root :reason reason :kind kind

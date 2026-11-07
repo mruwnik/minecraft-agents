@@ -9,7 +9,7 @@
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]
         [:summon "cow" [24.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [25.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [24.5 0 25.5] "{NoAI:1b}"]
-        [:job (jobs.survival.get-food {})]]
+        [:job (jobs.survival.get-food {:worth 1200})]]
   :limit-s 100}
  :cases
  [{:name "own-plan-pen-surplus-is-hunted-keeping-two"

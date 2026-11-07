@@ -21,7 +21,7 @@
                                  (let [r2 (await (ctx/call c :b 'jobs.movement.go-to second))]
                                    (if (= :continue r2) r2 (do (swap! outs conj (tu/outcome r2)) (ctx/end c :done nil))))))))}
         eng (assoc eng :jobs (assoc (:jobs eng) 'two-walks parent))]
-    (core/submit! eng '(two-walks) {})
+    (core/submit! eng (tu/order eng '(two-walks)) {})
     (await (gd/tick-out! eng clock 40))
     {:outs @outs :s (assoc s :eng eng)}))
 

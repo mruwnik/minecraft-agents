@@ -18,12 +18,12 @@
   (api/mutate! eng (merge {:op op :request-id id :generation-id (:generation-id (core/state eng))} extra)))
 (deftest native-spec-validation-dedupe-conflict-and-bounded-ledger
   (let [{:keys [eng]} (setup)
-        good '(done)
+        good '(done {:worth 60})
         response (command eng "request-1" :submit {:spec good})]
     (is (= "j1" (get-in response [:job :id])))
     (is (= true (:duplicate (command eng "request-1" :submit {:spec good}))))
     (is (= ["j1"] (:list (core/state eng))))
-    (is (= :request-id-conflict (:reason (command eng "request-1" :submit {:spec '(wait)}))))
+    (is (= :request-id-conflict (:reason (command eng "request-1" :submit {:spec '(wait {:worth 60})}))))
     (is (= :bad-spec (:reason (command eng "bad" :submit {:spec '(unknown)}))))
     (is (nil? (get-in (core/state eng) [:job-requests :records "bad"])))
     (is (= :generation-mismatch (:reason (api/mutate! eng {:op :submit :request-id "old" :generation-id "wrong" :spec good}))))
@@ -39,16 +39,23 @@
     (core/shutdown! eng)))
 (deftest unknown-arg-keys-are-refused-as-bad-spec-naming-the-key
   (let [{:keys [eng]} (setup)
-        r (command eng "typo" :submit {:spec '(wait {:bogus 1})})]
+        r (command eng "typo" :submit {:spec '(wait {:worth 60 :bogus 1})})]
     (is (= :bad-spec (:reason r)))
     (is (re-find #"no arg :bogus; its args are :ms" (:message r)))
     (is (= [] (:list (core/state eng))))
-    (is (= :bad-spec (:reason (command eng "typo2" :interrupt {:spec '(done {:ms 1})}))))
-    (is (= "j1" (get-in (command eng "ok" :submit {:spec '(wait {:ms 5})}) [:job :id])))))
+    (is (= :bad-spec (:reason (command eng "typo2" :interrupt {:spec '(done {:worth 60 :ms 1})}))))
+    (is (= "j1" (get-in (command eng "ok" :submit {:spec '(wait {:worth 60 :ms 5})}) [:job :id])))))
+(deftest a-submit-without-a-worth-is-refused
+  (let [{:keys [eng]} (setup)]
+    (doseq [[op spec] [[:submit '(done)] [:interrupt '(done)] [:exclusive '(seq (done {:worth 5}) (wait))]]]
+      (let [r (command eng (str (random-uuid)) op {:spec spec})]
+        (is (= :worth-required (:reason r)) (pr-str op spec))
+        (is (re-find #"worth is required" (:message r)))))
+    (is (= [] (:list (core/state eng))) "nothing was listed")))
 
 (deftest ledger-survives-restore-and-pending-is-not-executed-twice
   (let [{:keys [eng p jobs]} (setup)
-        request {:op :submit :request-id "stable" :generation-id (:generation-id (core/state eng)) :spec '(done)}]
+        request {:op :submit :request-id "stable" :generation-id (:generation-id (core/state eng)) :spec '(done {:worth 60})}]
     (api/mutate! eng request)
     (api/remember! eng "pending" {:status :pending :signature (api/fingerprint (assoc request :request-id "pending"))})
     (let [again (core/create {:primitives p :jobs jobs :triggers {} :dir (:dir eng)
@@ -63,9 +70,9 @@
     (tu/run-async done
       (fn ^:async run []
         (let [{:keys [eng]} (setup)]
-          (command eng "original" :submit {:spec '(wait)})
+          (command eng "original" :submit {:spec '(wait {:worth 60})})
           (let [running (core/tick! eng)]
-            (command eng "interrupt" :interrupt {:spec '(fail)})
+            (command eng "interrupt" :interrupt {:spec '(fail {:worth 60})})
             (await running))
           (await (core/tick! eng))
           (is (contains? (:failed (core/state eng)) "j2"))
@@ -87,9 +94,9 @@
       (fn ^:async run []
         (let [{:keys [eng]} (setup)
               ran (atom [])]
-          (command eng "original" :submit {:spec '(wait)})
+          (command eng "original" :submit {:spec '(wait {:worth 60})})
           (let [running (core/tick! eng)]
-            (command eng "interrupt" :interrupt {:spec '(wait)})
+            (command eng "interrupt" :interrupt {:spec '(wait {:worth 60})})
             (await running))
           (dotimes [_ 2]
             (let [r (core/tick! eng)]
@@ -100,22 +107,22 @@
           (core/shutdown! eng))))))
 (deftest submit-takes-front-and-who-added-it
   (let [{:keys [eng]} (setup)]
-    (command eng "first" :submit {:spec '(wait)})
-    (let [r (command eng "second" :submit {:spec '(done) :next? true :by "steward"})
+    (command eng "first" :submit {:spec '(wait {:worth 60})})
+    (let [r (command eng "second" :submit {:spec '(done {:worth 60}) :next? true :by "steward"})
           id (get-in r [:job :id])]
       (is (true? (:ok r)))
       (is (= [id "j1"] (:list (core/state eng))))
       (is (= {:by "steward"} (select-keys (get-in (core/state eng) [:instances id]) [:backoff :by])))
     (is (= :agent (get-in (core/state eng) [:instances "j1" :by])) "who defaults to :agent")
-    (is (true? (:duplicate (command eng "second" :submit {:spec '(done) :next? true :by "steward"}))))
-    (is (= :request-id-conflict (:reason (command eng "second" :submit {:spec '(done)}))) "the options are part of the request")
+    (is (true? (:duplicate (command eng "second" :submit {:spec '(done {:worth 60}) :next? true :by "steward"}))))
+    (is (= :request-id-conflict (:reason (command eng "second" :submit {:spec '(done {:worth 60})}))) "the options are part of the request")
     (command eng "cancel-second" :cancel {:id id})
-    (let [replay (command eng "second" :submit {:spec '(done) :next? true :by "steward"})]
+    (let [replay (command eng "second" :submit {:spec '(done {:worth 60}) :next? true :by "steward"})]
       (is (= :absent (get-in replay [:job :status])))))
     (core/shutdown! eng)))
 (deftest bad-submit-options-are-refused-before-anything-changes
   (let [{:keys [eng]} (setup)]
-    (are [extra reason] (= reason (:reason (command eng (str (random-uuid)) :submit (merge {:spec '(done)} extra))))
+    (are [extra reason] (= reason (:reason (command eng (str (random-uuid)) :submit (merge {:spec '(done {:worth 60})} extra))))
       {:next? "yes"} :bad-field
       {:hold? true} :unknown-field
       {:backoff {:after 2}} :unknown-field
@@ -135,14 +142,14 @@
                     'done {:args {} :round #(ctx/end % :done nil)}
                     'fail {:args {} :round (fn [_] (throw (js/Error. "test failure")))}}
               eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
-                                :triggers {:probe {:name :probe :job '(done) :when (fn [_ _ _] false)}}
+                                :triggers {:probe {:name :probe :job '(done {:worth 60}) :when (fn [_ _ _] false)}}
                                 :events (events/make {:stdout? false :sinks [sink]})})]
           (core/register-reflex! eng {:trigger :probe})
-          (command eng "a" :submit {:spec '(wait)})
-          (command eng "b" :submit {:spec '(fail)})
-          (command eng "c" :submit {:spec '(done)})
-          (command eng "d" :submit {:spec '(done)})
-          (command eng "e" :submit {:spec '(done)})
+          (command eng "a" :submit {:spec '(wait {:worth 60})})
+          (command eng "b" :submit {:spec '(fail {:worth 60})})
+          (command eng "c" :submit {:spec '(done {:worth 60})})
+          (command eng "d" :submit {:spec '(done {:worth 60})})
+          (command eng "e" :submit {:spec '(done {:worth 60})})
           (command eng "e-cancel" :cancel {:id "j5" :by "scout"})
           (is (= [["j5" "scout"]] (mapv (juxt :job :by) (cancelled-events seen))) "a single cancel records who asked too")
           (reset! seen [])
@@ -176,7 +183,7 @@
               jobs {'wait {:args {:ms {:default 1000}}
                            :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}}
               eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
-                                :triggers {:probe {:name :probe :job '(wait) :when (fn [_ _ _] true)}}
+                                :triggers {:probe {:name :probe :job '(wait {:worth 60}) :when (fn [_ _ _] true)}}
                                 :events (events/make {:stdout? false})})
               _ (core/register-reflex! eng {:trigger :probe})
               round (core/tick! eng)
@@ -201,7 +208,7 @@
               jobs {'wait {:args {:ms {:default 1000}}
                            :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}}
               eng (core/create {:primitives p :jobs jobs :dir (tu/tmp-dir)
-                                :triggers {:probe {:name :probe :job '(wait) :when (fn [_ _ _] true)}}
+                                :triggers {:probe {:name :probe :job '(wait {:worth 60}) :when (fn [_ _ _] true)}}
                                 :events (events/make {:stdout? false :sinks [sink]})})
               _ (core/register-reflex! eng {:trigger :probe})
               round (core/tick! eng)
@@ -217,12 +224,12 @@
           (await round))))))
 (deftest submit-takes-survive-death-and-listings-show-it
   (let [{:keys [eng]} (setup)
-        r (command eng "keep" :submit {:spec '(wait) :survive-death? true})
-        plain (command eng "plain" :submit {:spec '(done)})]
+        r (command eng "keep" :submit {:spec '(wait {:worth 60}) :survive-death? true})
+        plain (command eng "plain" :submit {:spec '(done {:worth 60})})]
     (is (true? (get-in r [:job :survive-death?])))
     (is (nil? (get-in plain [:job :survive-death?])) "only a flagged job carries the key")
     (is (true? (:survive-death? (first (:items (api/list-jobs eng 0 8))))))
-    (is (= :bad-field (:reason (command eng "bad" :submit {:spec '(done) :survive-death? "yes"}))))
+    (is (= :bad-field (:reason (command eng "bad" :submit {:spec '(done {:worth 60}) :survive-death? "yes"}))))
     (core/shutdown! eng)))
 
 (deftest a-cancel-of-a-job-with-a-cleanup-owed-says-cleaning-up-not-cancelled
@@ -233,7 +240,7 @@
               eng (core/create {:primitives p :triggers {} :dir (tu/tmp-dir) :events (events/make {:stdout? false})
                                 :jobs {'tidy {:args {} :round (fn [_] :continue)
                                               :cleanup (fn [c _] (ctx/end c :done nil))}}})]
-          (command eng "s" :submit {:spec '(tidy)})
+          (command eng "s" :submit {:spec '(tidy {:worth 60})})
           (await (core/tick! eng))
           (is (= {:ok true :id "j1" :status :cleaning-up} (select-keys (command eng "c" :cancel {:id "j1"}) [:ok :id :status])))
           (is (= ["j1"] (:list (core/state eng))))
@@ -251,8 +258,8 @@
                                 :jobs {'tidy {:args {} :round (fn [_] :continue)
                                               :cleanup (fn [c _] (ctx/end c :done nil))}
                                        'other {:args {} :round (fn [_] :continue)}}})]
-          (command eng "a" :submit {:spec '(tidy)})
-          (command eng "b" :submit {:spec '(other)})
+          (command eng "a" :submit {:spec '(tidy {:worth 60})})
+          (command eng "b" :submit {:spec '(other {:worth 60})})
           (await (core/tick! eng))
           (command eng "c" :cancel {:id "j1"})
           (swap! (:state eng) assoc :resume "j2" :cursor 1)

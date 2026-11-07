@@ -12,7 +12,7 @@
  [{:name "dig-cut-then-finishes-a"
    :blocks [[:set [27 0 16] "stone"]]
    :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [27 0 16]})]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #at [27 0 16]})]
          [:wait-s 3]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
@@ -23,7 +23,7 @@
    :after [[:block [27 0 16] "air"] [:item "cobblestone" [:>= 1]]]}
   {:name "place-cut-then-finishes-a"
    :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}
-   :act [[:job (jobs.blocks.place {:pos #at [27 0 16] :item "cobblestone"})]
+   :act [[:job (jobs.blocks.place {:worth 1200 :pos #at [27 0 16] :item "cobblestone"})]
          [:wait-s 3]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]

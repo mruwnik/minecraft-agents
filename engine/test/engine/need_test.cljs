@@ -61,7 +61,7 @@
                                   (if (and (map? e) (not= :done (:kind e))) e :continue)))}}
         eng (core/create {:primitives p :dir (tu/tmp-dir) :now (fn [] @clock) :jobs jobs :triggers {}
                           :events (events/make {:body "Fake" :sinks [sink] :now (fn [] @clock)})})]
-    (core/submit! eng '(caller {}) {})
+    (core/submit! eng (tu/order eng '(caller {})) {})
     {:eng eng :p p :seen seen :obtain obtain :tool tool :walks walks}))
 
 (defn ^:async run!

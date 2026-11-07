@@ -24,8 +24,8 @@
           {:ok true :hint [:not [:contains "reflex"]]}]]
    :expect [{:event {:source :job :kind :completed} :within-s 30}]}
   {:name "observe-places-lists-a-set-place"
-   :act [[:job (jobs.memory.set-place {:name :wt-listed :pos #at [6 0 6]}) [:now]]
-         [:job (jobs.memory.set-place {:name :wt-listed-b :pos #at [8 0 6]}) [:now]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :wt-listed :pos #at [6 0 6]}) [:now]]
+         [:job (jobs.memory.set-place {:worth 1200 :name :wt-listed-b :pos #at [8 0 6]}) [:now]]
          [:until [:cli "observe" ["$body" "--world" "$world" "places"] {:ok true :places [:has {:name :wt-listed}]}] 30]
          [:cli "observe" ["$body" "--world" "$world" "places" "--limit" "1"] {:ok true :more? true}]]
    :expect [{:event {:source :job :kind :completed} :within-s 30}]}
@@ -38,9 +38,9 @@
    :expect [{:event {:source :body :kind :weather-changed :data {:raining false}} :within-s 30}
             {:event {:source :body :kind :weather-changed :data {:raining true}} :within-s 60}]}
   {:name "a-fresh-body-knows-no-job-of-the-case-before"
-   :act [[:http :submit (jobs.debug.notify {:text "a"}) [] {:ok true}]
-         [:http :submit (jobs.debug.notify {:text "b"}) [:alongside] {:ok true}]
-         [:http :submit (jobs.debug.notify {:text "c"}) [:alongside] {:ok true}]
+   :act [[:http :submit (jobs.debug.notify {:worth 1200 :text "a"}) [] {:ok true}]
+         [:http :submit (jobs.debug.notify {:worth 1200 :text "b"}) [:alongside] {:ok true}]
+         [:http :submit (jobs.debug.notify {:worth 1200 :text "c"}) [:alongside] {:ok true}]
          [:until [:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}] 30]]
    :expect [{:count-event {:source :job :kind :completed} :for-s 20 :at-least 3}]}
   {:name "second-case-asks-for-a-job-of-the-first"

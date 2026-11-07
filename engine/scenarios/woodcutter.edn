@@ -3,5 +3,5 @@
 {:register [{:trigger :hostile-near}
             {:trigger :night}
             {:trigger :hungry}]
- :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
-         (jobs.storage.deposit {:make-chests? false})]}
+ :queue [(jobs.forestry.harvest-wood {:worth 1200 :species "oak" :radius 16})
+         (jobs.storage.deposit {:worth 1200 :make-chests? false})]}

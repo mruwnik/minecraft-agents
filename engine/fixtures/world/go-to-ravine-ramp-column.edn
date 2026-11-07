@@ -13,12 +13,12 @@
  :cases
  [{:name "column-over-a-dark-ravine-is-reached-down-a-ramp-that-first-leads-away"
    :blocks [[:fill [18 1 10] [19 19 10] "stone"] [:fill [18 1 11] [19 18 11] "stone"] [:fill [18 1 12] [19 17 12] "stone"] [:fill [18 1 13] [19 16 13] "stone"] [:fill [18 1 14] [19 15 14] "stone"] [:fill [18 1 15] [19 14 15] "stone"] [:fill [18 1 16] [19 13 16] "stone"] [:fill [18 1 17] [19 12 17] "stone"] [:fill [18 1 18] [19 11 18] "stone"] [:fill [18 1 19] [19 10 19] "stone"] [:fill [18 1 20] [19 9 20] "stone"] [:fill [18 1 21] [19 8 21] "stone"] [:fill [18 1 22] [19 7 22] "stone"] [:fill [18 1 23] [19 6 23] "stone"] [:fill [18 1 24] [19 5 24] "stone"] [:fill [18 1 25] [19 4 25] "stone"] [:fill [18 1 26] [19 3 26] "stone"] [:fill [18 1 27] [19 2 27] "stone"] [:fill [18 1 28] [19 1 28] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [21 8] :range 2 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [21 8] :range 2 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 220 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 220 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [21.5 1 8.5] 3]]}
   {:name "column-over-a-dark-ravine-with-no-ramp-is-not-reached-and-the-body-never-falls"
-   :act [[:job (jobs.movement.go-to {:pos #at [21 8] :range 2 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [21 8] :range 2 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 220 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 220 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [21.5 1 8.5] 4]]}]}

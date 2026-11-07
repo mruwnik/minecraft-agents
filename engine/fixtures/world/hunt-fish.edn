@@ -10,16 +10,16 @@
  [{:name "hunt-salmon-from-the-bank"
    :blocks [[:fill [8 -3 15] [12 -1 19] "water"]]
    :act [[:summon "salmon" [10.5 -1.5 17.5] "{NoAI:1b}"] [:wait-s 5]
-         [:job (jobs.combat.hunt {:item "salmon" :count 1 :keep 0})]]
+         [:job (jobs.combat.hunt {:worth 1200 :item "salmon" :count 1 :keep 0})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 60}]
    :after [[:item "salmon" [:>= 1]]]}
   {:name "hunt-salmon-in-a-pool-17-blocks-off"
    ;; A long pool: a fish 1.5 deep is out of sight behind a bank that is nearer than the water, for a player as well.
    :blocks [[:fill [8 -3 15] [24 -1 19] "water"]]
    :act [[:summon "salmon" [21.5 -1.5 17.5] "{NoAI:1b}"] [:wait-s 5]
-         [:job (jobs.combat.hunt {:item "salmon" :count 1 :keep 0})]]
+         [:job (jobs.combat.hunt {:worth 1200 :item "salmon" :count 1 :keep 0})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 90}]
    :after [[:item "salmon" [:>= 1]]]}
   {:name "hunt-an-item-no-mob-drops-is-bad-args"
-   :act [[:job (jobs.combat.hunt {:item "diamond" :count 1})]]
+   :act [[:job (jobs.combat.hunt {:worth 1200 :item "diamond" :count 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 20 :of-job true}]}]}

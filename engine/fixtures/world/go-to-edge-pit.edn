@@ -12,7 +12,7 @@
             [:fill [16 0 15] [16 3 16] "air"]
             [:set [16 -1 16] "air"]]
    :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}]
    :after [[:body-near [22.5 4 16.5] 3]]}
@@ -21,7 +21,7 @@
             [:fill [16 0 15] [16 3 16] "air"]
             [:set [16 -1 16] "air"]]
    :body {:at [16.5 0 16.2]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 110 :of-job true}]
    :after [[:body-near [22.5 4 16.5] 3]]
@@ -31,7 +31,7 @@
             [:fill [16 0 15] [16 3 16] "air"]
             [:set [16 -1 16] "air"]]
    :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 4 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :status :stopped}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped}} :within-s 60 :of-job true}]
    :limit-s 70}]}

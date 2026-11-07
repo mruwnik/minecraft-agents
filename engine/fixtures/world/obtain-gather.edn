@@ -17,69 +17,69 @@
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe"})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe"})]]
    :limit-s 280
    :expect [{:event {:source :job :kind :completed} :within-s 270 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]}
   ;; card 7331d47c: fell-tree's quote lists the logs it picks up, so harvest-wood (and obtain) see a log source that yields
   {:name "oak-logs-in-view-are-obtained-by-felling"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 4 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 4 :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 85 :of-job true}]
    :after [[:item "oak_log" [:>= 4]]]}
   {:name "logs-only-waits-naming-the-unseen-stone"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "log,"]}} :for-s 20}]
    :after [[:item "stone_pickaxe" 0] [:block [9 0 22] "oak_log"]]}
   {:name "andesite-diorite-granite-are-no-cobblestone-source"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [20 1 23] "andesite"] [:fill [21 0 22] [21 1 23] "diorite"] [:fill [22 0 22] [22 1 23] "granite"]]
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0] [:item "cobblestone" 0] [:block [20 0 22] "andesite"]]}
   {:name "nothing-in-view-waits-naming-both-needs"
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "log, cobblestone (from stone)"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0]]}
   {:name "an-empty-bucket-is-filled-at-a-seen-pond"
    :body {:inventory [["bucket" 1]]}
    :blocks [[:set [18 -1 20] "water"]]
-   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "water_bucket" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "water_bucket" 1] [:item "bucket" 0]]}
   {:name "sand-seen-on-the-ground-is-dug-by-hand"
    :blocks [[:fill [18 0 20] [19 0 21] "sand"]]
-   :act [[:job (jobs.items.obtain {:item "sand" :count 3 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "sand" :count 3 :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "sand" 3]]}
   {:name "sand-seen-far-off-is-not-worth-the-walk"
    :plot {:height 12 :floor "grass_block" :isolate true :length 32 :width 64}
    :blocks [[:fill [16 0 52] [17 0 52] "sand"]]
-   :act [[:job (jobs.items.obtain {:item "sand" :count 1 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "sand" :count 1 :explore false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}]
    :after [[:item "sand" 0]]}
   {:name "a-wooden-pickaxe-is-worth-the-walk-to-a-tree-far-off"
    :plot {:height 12 :floor "grass_block" :isolate true :length 32 :width 64}
    :blocks [[:fill [15 4 51] [17 5 53] "oak_leaves[persistent=true]"] [:fill [16 0 52] [16 4 52] "oak_log"]]
-   :act [[:job (jobs.items.obtain {:item "wooden_pickaxe" :count 1 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "wooden_pickaxe" :count 1 :explore false})]]
    :limit-s 150
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 30}]
    :after [[:item "wooden_pickaxe" 1]]}
   {:name "an-empty-bucket-with-no-pond-in-view-waits-naming-water"
    :body {:inventory [["bucket" 1]]}
-   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "water_bucket" :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "water"]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "water_bucket" 0] [:item "bucket" 1]]}
   {:name "how-without-gather-waits-no-source-with-no-gather-text"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
-   :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :ways #{:chest :craft} :explore false})]]
+   :act [[:job (jobs.items.get-tool {:worth 1200 :item "stone_pickaxe" :ways #{:chest :craft} :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:not [:contains "nothing seen to gather"]]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :stopped :data {:reason :no-source}}}]
    :after [[:item "stone_pickaxe" 0] [:block [20 0 22] "stone"]]}]}

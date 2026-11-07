@@ -11,7 +11,7 @@
   :limit-s 100}
  :cases
  [{:name "flee-leans-to-the-goal-past-the-chaser"
-   :act [[:job (jobs.movement.go-to {:pos #at [56 0 16] :range 2})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [56 0 16] :range 2})]
          [:summon "zombie" [24.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}]
    :after [[:body-far [4.5 0 16.5] 25]]

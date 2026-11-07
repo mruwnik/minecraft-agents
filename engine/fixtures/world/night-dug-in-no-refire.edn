@@ -11,7 +11,7 @@
    :blocks [[:fill [14 -1 14] [18 4 18] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
    :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :state :built} :policy {:cap 10 :ttl 1200000}}
             {:kind :bed :data {:pos #xyz [400 0 16]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.time.noop {:seconds 40 :why :idle})]]
+   :act [[:job (jobs.time.noop {:worth 1200 :seconds 40 :why :idle})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.time.noop"}} :within-s 60 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40 :until {:source :job :kind :completed :data {:name "jobs.time.noop"}}}]
    :limit-s 70}
@@ -19,6 +19,6 @@
    :blocks [[:fill [16 2 16] [16 2 16] "stone"] [:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :state :built} :policy {:cap 10 :ttl 1200000}}
             {:kind :bed :data {:pos #xyz [24 0 16]} :policy {:cap 1 :ttl :forever}}]
-   :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]]
+   :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 100}]
    :limit-s 150}]}

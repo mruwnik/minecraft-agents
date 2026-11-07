@@ -196,7 +196,7 @@
           (swap! clock + 1000)
           (is (true? (scaffold-left/scaffold-left p (mem/view (:store eng)) {} (ew/of-data {} {} [])))
               "the scaffold-left trigger offers it once its time is out")
-          (core/submit! eng '(jobs.access.cleanup) {})
+          (core/submit! eng (tu/order eng '(jobs.access.cleanup {})) {})
           (await (tick-out! eng 600))
           (is (every? #(= "air" (block p %)) column) "cleanup took every pillar block back"))))))
 
@@ -661,7 +661,7 @@
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [19 60 16] :range 0 :unknown false})))]
     (tu/set-sensed! p (fn [q] (let [cell (mapv js/Math.floor [(.-x q) (.-y q) (.-z q)])]
                                 (if (some open? (cons cell (faces cell))) (.blockAt p q) #js {:unknown true :pos q}))))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (tick-out! eng 3000))
     {:out @out :p p :seen seen}))
 

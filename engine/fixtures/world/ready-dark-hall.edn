@@ -9,19 +9,19 @@
  :cases
  [{:name "a-long-stay-in-a-short-dark-tunnel-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]]
-   :act [[:job (jobs.movement.look-around)]
+   :act [[:job (jobs.movement.look-around {:worth 1200})]
          [:await {:source :job :kind :completed :data {:name "jobs.movement.look-around"}} 30]
-         [:job (jobs.movement.go-to {:pos #at [20 0 16]})]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [20 0 16]})]
          [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
-         [:job (jobs.debug.ready-probe {:stay-s 5000})]]
+         [:job (jobs.debug.ready-probe {:worth 1200 :stay-s 5000})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 30 :of-job true}]}
   {:name "a-long-stay-down-a-short-dark-tunnel-whose-end-is-unseen-starts-priced-as-the-walk-to-look"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]]
-   :act [[:job (jobs.debug.ready-probe {:at #at [18 0 16] :stay-s 5000})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :at #at [18 0 16] :stay-s 5000})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 30 :of-job true}]}
   {:name "a-long-stay-where-the-body-stands-in-a-short-dark-tunnel-whose-end-is-unseen-walks-to-look-then-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]]
-   :act [[:job (jobs.debug.ready-probe {:stay-s 5000 :spend {:job-time 120}})]]
+   :act [[:job (jobs.debug.ready-probe {:worth 1200 :stay-s 5000 :spend {:job-time 120}})]]
    :expect [{:event {:source :job :kind :walk-look.ended} :within-s 60}
             {:event {:source :job :kind :job.ready-probe} :within-s 120 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 2]]}
@@ -40,13 +40,13 @@
             {:count-event {:source :job :kind :walk-look.ended} :for-s 120 :at-most 10}]}
   {:name "a-short-stay-at-the-far-end-of-a-long-dark-tunnel-starts"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [40 0 16]})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [40 0 16]})]
          [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
-         [:job (jobs.debug.ready-probe {:stay-s 5})]]
+         [:job (jobs.debug.ready-probe {:worth 1200 :stay-s 5})]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 30 :of-job true}]}
   {:name "a-long-stay-at-the-far-end-of-a-long-dark-tunnel-is-refused"
    :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [58 1 16] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [40 0 16]})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [40 0 16]})]
          [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
          [:job (jobs.debug.ready-probe {:stay-s 5000 :worth 208})]]
    :expect [{:no-event {:source :job :kind :job.ready-probe} :for-s 25 :of-job true}]

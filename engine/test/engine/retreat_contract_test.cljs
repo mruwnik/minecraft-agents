@@ -52,7 +52,7 @@
       (fn ^:async t []
         (let [out (atom nil)
               {:keys [eng]} (setup {:entities chaser} out)]
-          (core/submit! eng '(caller) {})
+          (core/submit! eng (tu/order eng '(caller)) {})
           (await (tu/run-until-empty eng 5))
           (is (= :done (:kind @out)))
           (is (= {:fled [7] :ended :far} (:data @out))))))))
@@ -64,7 +64,7 @@
         (await (settings/with-settings {:jobs.survival.respond-to-hostile/job-time-s 3}
                  (fn ^:async spend []
                    (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
-                     (core/submit! eng '(jobs.survival.respond-to-hostile {}) {})
+                     (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {})) {})
                      (await (tu/run-until-empty eng 5))
                      (let [{:keys [kind cause]} (:data (first (job-ev seen :stopped)))]
                        (is (= [:limit-reached {:line :job-time :spend 3}] [kind (select-keys cause [:line :spend])])))))))))))
@@ -77,7 +77,7 @@
           (await (settings/with-settings {:jobs.survival.respond-to-hostile/job-time-s time-s}
                    (fn ^:async near-budget []
                      (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
-                       (core/submit! eng '(jobs.survival.respond-to-hostile {}) {})
+                       (core/submit! eng (tu/order eng '(jobs.survival.respond-to-hostile {})) {})
                        (await (tu/run-until-empty eng 10))
                        (is (empty? (:list (core/state eng))) (str time-s " s: the flight left the list"))
                        (is (= [[:limit-reached :job-time]]

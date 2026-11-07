@@ -36,7 +36,7 @@
       (fn ^:async t []
         (let [s (m/start {:world {:blocks (m/soil-over-stone 63 59) :drops m/cobble :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 10}]}})]
           (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
-          (core/submit! (:eng s) (m/spec {:block "stone" :count 2 :direction "east" :tunnel-length 4}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "stone" :count 2 :direction "east" :tunnel-length 4})) {})
           ;; after a dig the stair yields :continue until a flow delay has passed (the fake clock moves 700 ms a tick)
           (await (m/run-ticks s 14))
           (is (m/finished? s) "ended once the flow delay passed")
@@ -73,7 +73,7 @@
                                 (swap! (fake/state (:p s)) assoc :entities [])
                                 (m/set-pos! s 3 64 0)
                                 r))))
-          (core/submit! (:eng s) (m/spec {:block "dirt" :count 1 :trip true :mend true}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "dirt" :count 1 :trip true :mend true})) {})
           (await (m/run-ticks s 1))
           (is (m/finished? s) "ended in one tick")
           (is (= 1 (count (m/events-of s :mine.mend-failed))))
@@ -90,7 +90,7 @@
   (let [dir (tu/tmp-dir)
         s (m/start {:world {:blocks blocks} :dir dir})]
     (cut! s)
-    (core/submit! (:eng s) (m/spec {:block "dirt" :count 3}) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "dirt" :count 3})) {})
     (await (m/run-ticks s 1))
     (let [again (m/start {:p (:p s) :dir dir :clock (:clock s)})]
       (await (m/run-ticks again 40))
@@ -111,7 +111,7 @@
                          1 (.then (impl token a) (fn [_] (cut!)))
                          2 (cut!)
                          (impl token a))))
-          (core/submit! (:eng s) (m/spec {:block "dirt" :count 3}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "dirt" :count 3})) {})
           (await (m/run-ticks s 1))
           (is (some? (:digging (m/job-mem s))) "the cut left the dig written")
           (let [first-cell (first (m/dug-cells s))
@@ -157,7 +157,7 @@
       (fn ^:async t []
         (let [s (m/start-lit (m/torch-world coal-stick) [0 0] {:call-ms 1000})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :made 0 :reason "server rejected the craft"})))
-          (core/submit! (:eng s) (m/spec (assoc torch-tunnel :trip true :spend {:job-time 120})) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (m/spec (assoc torch-tunnel :trip true :spend {:job-time 120}))) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-torches (:reason (m/done-event s))) "a root mine is worth its items (about 200 s for an iron ore), so the retries end when another craft no longer pays")
@@ -170,7 +170,7 @@
         (let [s (m/start {:world {:blocks (m/cells "stone" [4 5 6 7 8 9] [64] [0]) :drops {"stone" "cobblestone"}
                                   :inventory m/pickaxe :unreachable ["5,64,2"]}})]
           (m/drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (m/spec {:block "stone" :count 4 :settings {:jobs.gather.dig-for/dry-digs 2}}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "stone" :count 4 :settings {:jobs.gather.dig-for/dry-digs 2}})) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-drops (:reason (m/done-event s))) "nothing came in, so the digs ran dry")
@@ -181,7 +181,7 @@
   [food held]
   (let [s (m/start {:world (merge {:blocks (merge m/floor m/sand-patch)} {:self {:food food} :inventory held})})]
     (mem/write! (:store (:eng s)) :hungry {:food food} {:cap 10 :ttl 3600000})
-    (core/submit! (:eng s) (m/spec {:block "sand" :count 6}) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (m/spec {:block "sand" :count 6})) {})
     (await (m/run-ticks s 1))
     [(m/finished? s) (get (m/inv s) "sand" 0) (m/done-event s)]))
 

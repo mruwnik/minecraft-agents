@@ -7,7 +7,7 @@
   :blocks [[:fill [22 -1 22] [25 -1 22] "farmland[moisture=7]"] [:fill [22 -2 23] [25 -2 23] "stone"] [:fill [22 -1 23] [25 -1 23] "water"]
            [:fill [22 0 22] [25 0 22] "potatoes[age=7]"]]
   :body {:at [18.5 0 19.5] :settle-s 2}
-  :act [[:job (jobs.survival.get-food {:carry 20 :explore false})]]
+  :act [[:job (jobs.survival.get-food {:worth 1200 :carry 20 :explore false})]]
   :limit-s 100}
  :cases
  [{:name "not-hungry-leaves-anothers-potatoes-alone"

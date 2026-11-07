@@ -22,7 +22,7 @@
   :limit-s 150}
  :cases
  [{:name "shut-in-body-leaves-by-the-door-and-keeps-the-dirt-roof"
-   :act [[:job (jobs.movement.go-to {:pos #at [33 2 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [33 2 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:block [16 1 16] "dirt"] [:block [17 1 16] "dirt"] [:body-near [33.5 2 16.5] 3]]}
   {:name "pillar-under-a-laid-dirt-roof-stops-at-it-when-its-put-back-costs-more-than-the-call-is-worth"

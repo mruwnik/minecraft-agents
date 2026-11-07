@@ -16,12 +16,12 @@
   :limit-s 90}
  :cases
  [{:name "by-hand-use-on-in-the-shelter-walks-out-for-a-short-click"
-   :act [[:job (jobs.items.use {:on #at [24 0 16]})]]
+   :act [[:job (jobs.items.use {:worth 1200 :on #at [24 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.use"}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}
   {:name "use-on-with-a-checks-override-walks-out-and-opens-the-gate"
-   :act [[:job (jobs.items.use {:on #at [24 0 16] :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.items.use {:worth 1200 :on #at [24 0 16] :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.use"}} :within-s 70 :of-job true}]
    :after [[:block [24 0 16] "oak_fence_gate[open=true]"]]}
   {:name "reflex-does-not-leave-the-room-at-night-for-an-open-gate"

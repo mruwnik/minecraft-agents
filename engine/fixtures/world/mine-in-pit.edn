@@ -11,19 +11,19 @@
   :limit-s 120}
  :cases
  [{:name "pit-wall-stone-mined-and-collected"
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :item "cobblestone" :count 6 :tunnel-length 4 :radius 6})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :item "cobblestone" :count 6 :tunnel-length 4 :radius 6})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 6]}} :within-s 110 :of-job true}]
    :after [[:item "cobblestone" [:>= 6]]]}
   {:name "forty-five-from-a-few-stones-stops-never-completes"
    :blocks [[:fill [8 -1 8] [24 -1 24] "dirt"] [:fill [8 0 8] [24 5 24] "air"] [:fill [14 0 14] [18 0 14] "stone"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 45 :ways #{:seen} :radius 6})]]
+   :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 45 :ways #{:seen} :radius 6})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:item "cobblestone" [:< 45]]]}
   ;; card 3177e78a (a): obtain stone_sword from a pit does not loop dig-under-feet / step-aside; it mines, crafts and ends
   {:name "obtain-stone-sword-from-a-pit-ends"
    :body {:inventory [["wooden_pickaxe" 1] ["stick" 2] ["crafting_table" 1]]}
-   :act [[:job (jobs.items.obtain {:item "stone_sword" :count 1 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth 1200 :item "stone_sword" :count 1 :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:item "stone_sword" 1]]
    :limit-s 170}]}

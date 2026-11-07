@@ -15,6 +15,6 @@
   :limit-s 120}
  :cases
  [{:name "drop-with-diagonal-lava-is-taken-when-it-is-the-only-way"
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 20] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [22 0 20] :range 1})]]
    :expect [{:event {:source :job :kind #{:completed} :data {:status :completed}} :within-s 100 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]}]}

@@ -15,9 +15,9 @@
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:summon "cow" [20.5 0 28.5] "{NoAI:1b}"] [:summon "cow" [2.5 0 2.5] "{NoAI:1b}"]
          [:wait-s 3]
-         [:job (jobs.explore.search {:target "cow" :count 2 :scan-radius 24 :use-notes false :within 1})]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :count 2 :scan-radius 24 :use-notes false :within 1})]
          [:wait-s 8]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "a-third-cow-is-hunted-and-the-pair-apart-kept"
@@ -26,8 +26,8 @@
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:summon "cow" [20.5 0 28.5] "{NoAI:1b}"] [:summon "cow" [2.5 0 2.5] "{NoAI:1b}"] [:summon "cow" [9.5 0 16.5] "{NoAI:1b}"]
          [:wait-s 3]
-         [:job (jobs.explore.search {:target "cow" :count 3 :scan-radius 24 :use-notes false :within 1})]
+         [:job (jobs.explore.search {:worth 1200 :target "cow" :count 3 :scan-radius 24 :use-notes false :within 1})]
          [:wait-s 8]
-         [:job (jobs.survival.get-food {})]]
+         [:job (jobs.survival.get-food {:worth 1200})]]
    :expect [{:event {:source :job :kind :food.killed :data {:adults 3 :keep 2}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}]}

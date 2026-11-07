@@ -17,7 +17,7 @@
   :limit-s 200}
  :cases
  [{:name "sealed-in-its-shelter-leaves-and-finds-the-target"
-   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8 :use-notes false
+   :act [[:job (jobs.explore.search {:worth 1200 :target "emerald_block" :pattern :outward :heading :east :scan-radius 8 :use-notes false
                                      :within 60 :settings {:jobs.lib.cost.find/leg-spacing 8}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 150 :of-job true}]
    :limit-s 190}]}

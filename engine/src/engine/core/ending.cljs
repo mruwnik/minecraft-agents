@@ -173,15 +173,6 @@
                 call)))
           call (:use (:defaults def))))
 
-(defn root-worth
-  "The worth of a call that gets none from its args or its caller: def's worth-of for c, else (none, or nil) ctx/default-worth."
-  [c def]
-  (let [w (if-let [f (:worth-of def)] (f c) nil)]
-    (cond
-      (nil? w) (ctx/default-worth)
-      (and (number? w) (>= w 0) (js/isFinite w)) w
-      :else (throw (js/Error. (str (or (:sym def) "a job") "'s worth-of returned " (pr-str w) ", not a finite number >= 0"))))))
-
 (defn call-of
   "The call keys c's call is frozen with: its args over def's defaults (settings keys read) and the caller's call,
   clamped to the caller's remainder (engine.contract/clamp). [call lines], lines the clamp changed."
@@ -190,7 +181,6 @@
         caller (when (seq (:slots c)) (:contract (mem/job-mem view (:root c) (pop (:slots c)))))
         defaults (contract/resolve-settings (:defaults def) #(settings/get (:settings def) %) (:args c))
         call (fill-use c def (contract/freeze (assoc def :defaults defaults) (:args c) (:call caller)))
-        call (cond-> call (nil? (:worth call)) (assoc :worth (root-worth c def)))
         call (cond-> call (seq (inherited-checks c)) (update :checks #(merge (inherited-checks c) %)))]
     (if (:call caller)
       (let [n (mark (:engine c))]

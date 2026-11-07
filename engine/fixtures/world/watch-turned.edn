@@ -17,7 +17,7 @@
  :cases
  [{:name "zombie-heard-behind-wall-turns"
    :act [[:summon "zombie" [5.5 0 20.5] "{NoAI:1b}"]
-         [:job (jobs.movement.go-to {:pos #xyz [20 0 20] :range 0})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #xyz [20 0 20] :range 0})]]
    :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 20}
             {:no-event {:kind :watch.turned :data {:distance [:any]}} :for-s 20}]
    :after [[:body-near [20.5 0 20.5] 1.5]]}
@@ -29,17 +29,17 @@
          [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
          [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
          [:summon "zombie" [16.5 0 29.5] "{NoAI:1b}"]
-         [:job (jobs.gather.mine {:torches false :block "diamond_ore" :level false :direction :n :tunnel-length 12 :count 1 :radius 8})]]
+         [:job (jobs.gather.mine {:worth 1200 :torches false :block "diamond_ore" :level false :direction :n :tunnel-length 12 :count 1 :radius 8})]]
    :expect [{:event {:kind :watch.turned :data {:name "zombie" :band [:any] :direction [:any]}} :within-s 15}
             {:no-event {:kind :watch.turned :data {:distance [:any]}} :for-s 15}]
    :limit-s 40}
   {:name "zombie-beyond-hearing-no-turn"
    :act [[:summon "zombie" [31.5 0 0.5] "{NoAI:1b}"]
-         [:job (jobs.movement.go-to {:pos #xyz [16 0 16] :range 0})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #xyz [16 0 16] :range 0})]]
    :expect [{:no-event {:kind :watch.turned} :for-s 15}]
    :after [[:body-near [16.5 0 16.5] 1.5]]}
   {:name "cow-heard-behind-wall-no-turn"
    :act [[:summon "cow" [5.5 0 20.5] "{NoAI:1b}"]
-         [:job (jobs.movement.go-to {:pos #xyz [16 0 16] :range 0})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #xyz [16 0 16] :range 0})]]
    :expect [{:no-event {:kind :watch.turned} :for-s 15}]
    :after [[:body-near [16.5 0 16.5] 1.5]]}]}

@@ -1,6 +1,6 @@
 ;; trade primitive live case 141: adjusted price above :spend {:items {"emerald" 20}} (NBT 10 would pass, real 33 must not): expect reason price
 {:register []
- :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1 :spend {:items {"emerald" 20}}}))]}
+ :queue [(seq (jobs.movement.go-to {:worth 1200 :pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:worth 1200 :villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1 :spend {:items {"emerald" 20}}}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeDummy-trade-1
 ;; ;; trade primitive live case 1: buy 3 bread for 1 emerald each (pace first so entities are loaded)

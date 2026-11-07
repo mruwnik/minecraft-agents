@@ -9,7 +9,7 @@
   :limit-s 60}
  :cases
  [{:name "player-nobody-sees-is-waited-for-until-the-wall-time"
-   :act [[:job (jobs.movement.stay-near {:player "NoSuchPlayerHere" :spend {:wall-time 8}})]]
+   :act [[:job (jobs.movement.stay-near {:worth 1200 :player "NoSuchPlayerHere" :spend {:wall-time 8}})]]
    :expect [{:event {:source :job :kind :limit_reached} :within-s 40 :of-job true}
             {:no-event {:source :job :kind #{:failed :completed}} :for-s 30 :until {:source :job :kind :limit_reached} :of-job true}]
    :after [[:body-near [16.5 0 16.5] 2]]}]}

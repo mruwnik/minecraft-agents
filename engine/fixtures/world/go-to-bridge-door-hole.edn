@@ -17,15 +17,15 @@
  :cases
  [{:name "dirt-carried-bridges-the-hole-before-the-door"
    :body {:inventory [["dirt" 5]]}
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~12 ~ ~20 180 0"] [:until-pos {:x-min 11 :x-max 14 :z-min 19 :z-max 22} 10]
-         [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 2})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [11 1 11] :range 2})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 130 :of-job true}]
    :after [[:block [12 0 15] "dirt"]]}
   {:name "nothing-to-bridge-with-stops"
-   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+   :act [[:job (jobs.movement.look-around {:worth 1200})] [:await {:source :job :kind :completed} 30]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~12 ~ ~20 180 0"] [:until-pos {:x-min 11 :x-max 14 :z-min 19 :z-max 22} 10]
-         [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 2})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [11 1 11] :range 2})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]}} :within-s 110 :of-job true}]
    :after [[:not-block [12 0 15] "dirt"]]}]}

@@ -16,20 +16,20 @@
   :limit-s 120}
  :cases
  [{:name "surface-swim-crosses"
-   :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [34.5 4 8.5] 3]]}
   {:name "roofed-dive-taken"
    :blocks [[:fill [8 3 1] [29 3 14] "water"] [:fill [14 4 0] [25 9 15] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [34.5 4 8.5] 3]]}
   {:name "roofed-dive-refused-after-a-breathe"
    :blocks [[:fill [8 3 1] [29 3 14] "water"] [:fill [14 4 0] [25 9 15] "stone"]]
    :memory [{:kind :breathe :data {:pos #xyz [4.5 4 8.5] :why :drowning :oxygen 11} :age-s 5}]
-   :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]}
   {:name "dark-pond-crossed-by-looking"
@@ -37,7 +37,7 @@
             [:fill [3 1 1] [36 5 14] "air"]
             [:fill [3 1 1] [36 2 14] "water"]]
    :body {:at [1.5 4 8.5] :yaw 270 :settle-s 1}
-   :act [[:job (jobs.movement.go-to {:pos #at [38 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [38 4 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [38.5 4 8.5] 3]]}

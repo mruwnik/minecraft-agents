@@ -10,22 +10,22 @@
   :limit-s 40}
  :cases
  [{:name "no-death-goes-straight"
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}
   {:name "recent-fall-death-in-sight-bends-round-it"
    :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 20.5] :cause "fall"}}]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:> 28]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:> 28]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}
   {:name "recent-drowning-in-sight-bends-round-it"
    :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 20.5] :cause "drown"}}]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:> 28]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:> 28]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}
   {:name "faded-fall-death-goes-straight"
    :memory [{:kind :deaths :age-s 7800 :data {:pos #xyz [15.5 0 20.5] :cause "fall"}}]
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}
   {:name "zombie-death-seen-lit-goes-straight"
    :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 20.5] :cause "zombie"}}]
    :act [[:wait-s 3]
-         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1 :worth 1200}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
    :after [[:body-near [2.5 0 20.5] 2]]}]}

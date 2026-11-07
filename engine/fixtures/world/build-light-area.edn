@@ -12,7 +12,7 @@
  [{:name "dark-nine-by-nine-room-takes-one-torch"
    :blocks [[:fill [3 0 12] [11 1 20] "air"]]
    :body {:at [7.5 0 16.5]}
-   :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 12] #at [11 0 20]]]})]
+   :act [[:job (jobs.build.light-area {:worth 1200 :boxes [[#at [3 0 12] #at [11 0 20]]]})]
          [:await {:source :job :kind :completed} 150]
          [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 12]] {:ok true :light {:lit? true}}]
@@ -26,7 +26,7 @@
   {:name "dark-l-corridor-takes-two-torches"
    :blocks [[:fill [3 0 16] [30 1 16] "air"] [:fill [30 0 17] [30 1 24] "air"]]
    :body {:at [3.5 0 16.5]}
-   :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 16] #at [30 0 16]] [#at [30 0 17] #at [30 0 24]]]})]
+   :act [[:job (jobs.build.light-area {:worth 1200 :boxes [[#at [3 0 16] #at [30 0 16]] [#at [30 0 17] #at [30 0 24]]]})]
          [:await {:source :job :kind :completed} 150]
          [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 16]] {:ok true :light {:lit? true}}]
@@ -46,7 +46,7 @@
   {:name "lit-corridor-into-unseen-dark-room-gets-a-torch"
    :blocks [[:fill [3 0 16] [14 1 16] "air"] [:fill [14 0 17] [14 1 24] "air"] [:set [2 0 16] "glowstone"]]
    :body {:at [3.5 0 16.5]}
-   :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 16] #at [14 0 16]] [#at [14 0 17] #at [14 0 24]]]})]
+   :act [[:job (jobs.build.light-area {:worth 1200 :boxes [[#at [3 0 16] #at [14 0 16]] [#at [14 0 17] #at [14 0 24]]]})]
          [:await {:source :job :kind :completed} 150]
          [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [14 0 20]] {:ok true :light {:lit? true}}]
@@ -55,6 +55,6 @@
   {:name "lit-room-hangs-nothing"
    :blocks [[:fill [3 0 12] [11 1 20] "air"] [:set [7 0 16] "glowstone"] [:set [7 1 16] "glowstone"]]
    :body {:at [5.5 0 14.5]}
-   :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 12] #at [11 0 20]]]})]]
+   :act [[:job (jobs.build.light-area {:worth 1200 :boxes [[#at [3 0 12] #at [11 0 20]]]})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :torches []}} :within-s 60 :of-job true}]
    :after [[:item "torch" 16]]}]}

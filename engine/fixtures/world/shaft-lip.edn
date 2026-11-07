@@ -17,7 +17,7 @@
  [{:name "dig-from-a-shaft-lip-collects-without-falling"
    :blocks [[:set [17 9 16] "stone"]]
    :body {:at [16.2 9 16.5] :yaw -90 :settle-s 2 :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #xyz [17 9 16]})]]
+   :act [[:job (jobs.blocks.dig {:worth 1200 :pos #xyz [17 9 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :collected 1}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [17 9 16] "air"] [:item "cobblestone" 1] [:body-far [16.5 0 16.5] 5]]}

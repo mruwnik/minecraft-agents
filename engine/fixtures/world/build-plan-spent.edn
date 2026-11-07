@@ -9,6 +9,6 @@
  :cases
  [{:name "small-build-reports-what-it-placed"
    :plans [{:id "row" :metadata {:by "$body"} :parts [{:id "dirt" :cells [#at [20 0 16] #at [21 0 16] #at [22 0 16]] :want "dirt"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:row"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:row"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed 3 :report {:uses {:items {"dirt" 3}}}}} :within-s 70 :of-job true}]
    :after [[:block [20 0 16] "dirt"] [:block [22 0 16] "dirt"] [:item "dirt" 5]]}]}

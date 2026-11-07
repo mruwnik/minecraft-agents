@@ -13,7 +13,7 @@
    :memory [{:kind :hid :data {:pos #xyz [16 3 16] :mobs ["zombie"]} :policy {:cap 10 :ttl 600000}}]
    :act [[:wait-s 12]
          [:rcon "damage $BODY 17 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [25 3 16] :range 1})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [25 3 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 15 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
    :after [[:body-near [25.5 3 16.5] 2.5]]}]}

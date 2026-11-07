@@ -14,8 +14,8 @@
           {:name "w-north" :min [8 0 8] :max [16 3 8] :owner "Other"} {:name "w-south" :min [8 0 16] :max [16 3 16] :owner "Other"}
           {:name "w-roof" :min [8 3 8] :max [16 3 16] :owner "Other"} {:name "w-floor" :min [8 0 8] :max [16 0 16] :owner "Other"}]
   :body {:at [12.5 0 19.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 2 :inventory [["red_bed" 1]]}
-  :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
-        [:job (jobs.survival.night {:ways #{:bed :shelter}})]]}
+  :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [12 0 12]}) [:now]]
+        [:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]}
  :cases
  [{:name "no-failed-walk-the-carried-bed-is-walked-into-the-home"
    :blocks [[:fill [12 0 16] [12 1 16] "air"]]

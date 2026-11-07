@@ -17,7 +17,7 @@
 
 (defn ^:async run-dig! [world & [args]]
   (let [{:keys [eng p seen]} (st/setup (assoc world :time st/night))]
-    (core/submit! eng (list 'jobs.survival.shut-in (seen/night (or args {}))) {})
+    (core/submit! eng (tu/order eng (list 'jobs.survival.shut-in (seen/night (or args {})))) {})
     (await (run-until-empty eng 20))
     {:p p :seen seen}))
 
@@ -69,7 +69,7 @@
     (tu/run-async done
       (st/walls-cheap (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time st/night :inventory [logs] :blocks st/floor})]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (run-until-empty eng 40))
           (is (empty? (st/calls p "dig")))
           (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p)))))))))
@@ -80,7 +80,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time st/night :inventory [logs] :blocks dirt-floor})]
           (tu/seeing-within p 3.5)
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})) {})
           (await (run-until-empty eng 20))
           (is (seq (st/calls p "dig")))
           (is (<= (get (placed p) "oak_log" 0) 1) (pr-str (placed p))))))))

@@ -9,7 +9,7 @@
  :cases
  [{:name "stone-and-pickaxe-no-blocks-is-the-pit"
    :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit}})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:body-far [5.5 0 16.5] 1.5]]
    :limit-s 80}
@@ -17,7 +17,7 @@
   {:name "dirt-bare-hands-no-blocks-is-the-pit"
    :blocks [[:fill [2 -6 10] [30 -4 22] "stone"] [:fill [2 -3 10] [30 4 22] "dirt"] [:fill [5 0 16] [29 1 16] "air"]]
    :body {:inventory []}
-   :act [[:job (jobs.survival.shut-in {:ways #{:pit}})]]
+   :act [[:job (jobs.survival.shut-in {:worth 1200 :ways #{:pit}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:body-far [5.5 0 16.5] 1.5]]
    :limit-s 80}]}

@@ -96,7 +96,7 @@
          [:summon "skeleton" [18.5 0 19.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:summon "skeleton" [19.5 0 19.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:until-seen {:entity "skeleton"} 10]
-         [:job (jobs.survival.recover-drops)]]
+         [:job (jobs.survival.recover-drops {:worth 1200})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :danger}} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 40}]
    :limit-s 120}]}

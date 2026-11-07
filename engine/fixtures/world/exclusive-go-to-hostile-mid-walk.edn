@@ -11,7 +11,7 @@
   :limit-s 60}
  :cases
  [{:name "zombies-seen-ahead-mid-walk-stop-the-walk"
-   :act [[:http :submit (jobs.movement.go-to {:pos #at [26.5 0 16.5]}) [:exclusive] {:ok true}]
+   :act [[:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [26.5 0 16.5]}) [:exclusive] {:ok true}]
          [:until-pos {:x-min 7} 15]
          [:summon "zombie" [13.5 0 16.5] "{NoAI:1b}"]
          [:summon "zombie" [13.5 0 15.5] "{NoAI:1b}"]
@@ -20,7 +20,7 @@
             {:no-event {:source :job :kind :completed} :for-s 30}]
    :after [[:body-far [26.5 0 16.5] 5]]}
   {:name "zombies-seen-behind-mid-walk-are-left-behind"
-   :act [[:http :submit (jobs.movement.go-to {:pos #at [26.5 0 16.5]}) [:exclusive] {:ok true}]
+   :act [[:http :submit (jobs.movement.go-to {:worth 1200 :pos #at [26.5 0 16.5]}) [:exclusive] {:ok true}]
          [:until-pos {:x-min 9} 15]
          [:summon "zombie" [3.5 0 16.5] "{NoAI:1b}"]
          [:summon "zombie" [3.5 0 15.5] "{NoAI:1b}"]

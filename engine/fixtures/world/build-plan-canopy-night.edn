@@ -22,11 +22,11 @@
  [{:name "near-dawn-the-canopy-site-waits-for-day"
    :body {:at [30.5 0 24.5]}
    :act [[:time-set 22800] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 15"] [:until-seen {:block "chest"} 10]
-         [:rcon "execute as $BODY at @s run tp @s ~15 ~ ~ -90 0"] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+         [:rcon "execute as $BODY at @s run tp @s ~15 ~ ~ -90 0"] [:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed :text #{[:contains "a torch does"] [:contains "dawn does not light it"]}}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 15 :of-job true}]}
   {:name "dusk-the-torches-are-fetched"
-   :act [[:time-set 13500] [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :act [[:time-set 13500] [:job (jobs.build.from-plan {:worth 1200 :plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 240 :of-job true}]
    :after [[:block [64 0 24] "oak_planks"] [:block [65 0 24] "oak_planks"]]}]}

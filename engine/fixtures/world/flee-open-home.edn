@@ -11,7 +11,7 @@
   :limit-s 45}
  :cases
  [{:name "a-flight-from-an-open-home-moves-off-at-once"
-   :act [[:job (jobs.memory.set-place {:name :home :pos #at [13 0 15]}) [:now]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [13 0 15]}) [:now]]
          [:summon "creeper" [21.5 0 16.5] "{NoAI:1b}"]
          [:summon "zombie" [19.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.step-speed :data {:blocks [:>= 2]}} :within-s 10}

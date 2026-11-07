@@ -131,34 +131,34 @@ Rewritten by the tools on every workspace build: do not edit it.
 
 ## Play: goal jobs first
 
-Submit goal jobs and let them run: each fetches what it needs and ends with a reason. Use a smaller job only to unblock a goal job that stopped, then submit the goal job again. `./bin/observe catalog jobs` lists the goal jobs with a line each and the steps by family; `./bin/observe catalog job <name>` shows a job's args.
+Submit goal jobs and let them run. Every job of a submit needs `:worth` in its args: the seconds of the body's time the goal is worth to you (a submit without it is refused; a way dearer than it is refused). Each fetches what it needs and ends with a reason. Use a smaller job only to unblock a goal job that stopped, then submit the goal job again. `./bin/observe catalog jobs` lists the goal jobs with a line each and the steps by family; `./bin/observe catalog job <name>` shows a job's args.
 
 A fresh start, in this order (skip a step already done). First site the base with `--wait`, then write plan P there with parts \"house\", \"field\" and \"pen\" (`./bin/plans --help`, `./bin/blueprints list`):
 
-    ./bin/jobs submit '(jobs.farm.find-spot {:w 16 :h 16})' --wait
+    ./bin/jobs submit '(jobs.farm.find-spot {:w 16 :h 16 :worth 2400})' --wait
 
 On hilly ground no 16 x 16 patch may be flat enough and find-spot ends `:limit-reached`: ask for a smaller one (`{:w 10 :h 10}`), or search from elsewhere (`:center {:x X :y Y :z Z}`, `:range` up to 48).
 
 Then queue the rest at once, without `--wait`; each prints its job id:
 
-    ./bin/jobs submit '(jobs.items.obtain {:bill {\"stone_pickaxe\" 1 \"stone_sword\" 1 \"stone_axe\" 1}})'
-    ./bin/jobs submit '(seq (jobs.build.from-plan {:plan \"P\" :part \"house\"}) (jobs.survival.set-spawn) (jobs.memory.set-place {:name \"home\"}))'
-    ./bin/jobs submit '(jobs.survival.get-food)'
-    ./bin/jobs submit '(repeat (jobs.farm.maintain {:area {:plan \"P\" :part \"field\"}}))'
-    ./bin/jobs submit '(jobs.items.get-kit)'
-    ./bin/jobs submit '(jobs.build.pen {:plan \"P\"})'
-    ./bin/jobs submit '(repeat (jobs.animals.maintain {:plan \"P\" :part \"pen\"}))'
+    ./bin/jobs submit '(jobs.items.obtain {:bill {\"stone_pickaxe\" 1 \"stone_sword\" 1 \"stone_axe\" 1} :worth 3600})'
+    ./bin/jobs submit '(seq (jobs.build.from-plan {:plan \"P\" :part \"house\" :worth 6000}) (jobs.survival.set-spawn {:worth 600}) (jobs.memory.set-place {:name \"home\" :worth 60}))'
+    ./bin/jobs submit '(jobs.survival.get-food {:worth 1200})'
+    ./bin/jobs submit '(repeat (jobs.farm.maintain {:area {:plan \"P\" :part \"field\"} :worth 1200}))'
+    ./bin/jobs submit '(jobs.items.get-kit {:worth 3600})'
+    ./bin/jobs submit '(jobs.build.pen {:plan \"P\" :worth 3000})'
+    ./bin/jobs submit '(repeat (jobs.animals.maintain {:plan \"P\" :part \"pen\" :worth 1200}))'
 
 `jobs.build.pen` builds every fence, wall and gate cell of the plan (its `:part` must hold fence cells); `animals.maintain` takes the part that is the pen box with its herd. `(seq a b ...)` runs its jobs one after another; `(repeat a)` keeps a standing job going. Then `./bin/progress --goal jN --wait 60m` on the job you are waiting for.
 
-A stair or tunnel of yours that broke into a cave (a drop, water, deaths there): `./bin/jobs submit '(jobs.blocks.seal-opening)'` near it fills the openings and leaves the way back open.
+A stair or tunnel of yours that broke into a cave (a drop, water, deaths there): `./bin/jobs submit '(jobs.blocks.seal-opening {:worth 300})'` near it fills the openings and leaves the way back open.
 
 ## Reflexes (triggers)
 
 Default triggers start short jobs: danger (hostile-near, low-health, burning, suffocating, wedged, poisoned, died), needs (hungry, needs-bed, needs-weapon, inventory-nearly-full), time (night, dusk-home, dawn), tidying (door-left, scaffold-left, tidy-pending, replant-owed, pen-gate). `./bin/triggers list` shows them. Retune one rather than mute it; put replaces it under its id:
 
     ./bin/triggers put night --trigger night --job '(jobs.survival.log-out)' --persistence cooldown --cooldown-s 10
-    ./bin/triggers put low-bread --when '(< (inventory \"bread\") 8)' --job '(jobs.survival.get-food)' --persistence cooldown --cooldown-s 300
+    ./bin/triggers put low-bread --when '(< (inventory \"bread\") 8)' --job '(jobs.survival.get-food {:worth 1200})' --persistence cooldown --cooldown-s 300
 
 The first suits a body with no bed yet: it waits the night out offline. `./bin/triggers --help` lists the `--when` words.
 ")
@@ -168,7 +168,7 @@ The first suits a body with no bed yet: it waits the night out offline. `./bin/t
        "You operate body `" body "` in world `" world "`. Read `PLAYING.md` (how to play: goal jobs, the start recipe, reflexes), `context.edn`, `briefing.md`, and relevant `notes/` before acting. Keep private working notes and handoffs in `notes/`; publish lasting world discoveries through shared map/plans tools.\n\n"
        "Prefer the bound `bin/` tools even when older briefings mention `mc`. Read any existing `BRIEFING.md` and `journal.md` for mission history. Legacy `mc` and `start` launchers are obsolete; use `bin/` for agent commands. Body lifecycle is separate; workspace generation does not start or restart a body.\n\n"
        "Run `./bin/<tool>` here, or use its absolute path from elsewhere. Body/world/worlds/repository are bound; do not supply them. Each tool has `--help`. Bindings guide routing, not a security sandbox.\n\n"
-       "Start with `./bin/observe`, then `./bin/observe inventory` or `./bin/entities` as needed. Discover jobs and triggers with `./bin/observe catalog jobs` (by level: goal jobs first) and `./bin/observe catalog triggers`; inspect exact catalog entries (args, target, ways, defaults) before submitting unfamiliar work, and `./bin/quote jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'` to ask a job (or primitive, jobs.primitive.*) what a call would cost, without running it. `./bin/observe settings --changed` shows the tuning values that differ from the code defaults and the game tick rate; `./bin/observe settings set :ns/key <edn>` and `unset` edit your own settings.edn. To find crafting tables, furnaces, chests, beds and ores the body has seen (nearest first, with distance, nothing through walls), run `./bin/observe seen` (read-only, answers at once; `--radius 32 --names chest,*_ore --limit 16`; the radius is 1 to 64, a larger one is refused).\n\n"
+       "Start with `./bin/observe`, then `./bin/observe inventory` or `./bin/entities` as needed. Discover jobs and triggers with `./bin/observe catalog jobs` (by level: goal jobs first) and `./bin/observe catalog triggers`; inspect exact catalog entries (args, target, ways, defaults) before submitting unfamiliar work, and `./bin/quote jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2} :worth 300}'` to ask a job (or primitive, jobs.primitive.*) what a call would cost, without running it. `./bin/observe settings --changed` shows the tuning values that differ from the code defaults and the game tick rate; `./bin/observe settings set :ns/key <edn>` and `unset` edit your own settings.edn. To find crafting tables, furnaces, chests, beds and ores the body has seen (nearest first, with distance, nothing through walls), run `./bin/observe seen` (read-only, answers at once; `--radius 32 --names chest,*_ore --limit 16`; the radius is 1 to 64, a larger one is refused).\n\n"
        "Use `./bin/jobs` for managed work and `./bin/triggers` for event rules. `./bin/jobs submit` appends a job to the list; `--now` cuts the current job and runs the new one at once (the cut one continues after it); `--wait` blocks until the job ends and prints what happened meanwhile. To check in cheaply, run `./bin/progress --goal j12 --want iron_ingot:24` (one line; goal and want are kept), then `./bin/progress --wait 60m` in the background: it returns only when the goal ends, the body dies or you are needed; do not poll. Follow other jobs with `./bin/observe --wait --watch j12`; retrieve recorded outcomes with `./bin/observe result j12` after completion. To review what happened before a death or during a job, run `./bin/observe events --until death` (or `--job j12`, `--kinds hurt,fired`, `--since 10m`; page back with `--before` the printed `:next-before`). Use `./bin/say 'message'` to communicate. `./bin/snapshot` draws what the body sees into `snapshots/` (a PNG) and says what is under the crosshair; `--yaw`/`--pitch`/`--look-at X,Y,Z` (commas, block coordinates) turn only the picture. `./bin/progress --wait` also leaves a `snapshots/warn-*.png` of what the body saw when it wakes you for trouble (needs-you, a job giving up, no progress) and prints its path on a SNAPSHOT line. `./bin/goal 'what you are doing now'` sets the line the dashboard shows for your body; set it when your aim changes, `--clear` when done.\n\n"
        "`./bin/world submit` runs one body action (move-to, dig, place...) as a job; `./bin/jobs submit --exclusive` or `./bin/world submit --exclusive` runs a job alone with the engine paused (no triggers, no other job) until it ends, then returns to you.\n\n"
        "Shared memory: `./bin/map`, `./bin/plans`, `./bin/blueprints`, and `./bin/world-changes`. Read records before edits and use their revisions and an explicit author. A house you build by hand is spared from digs only inside a plan or zone: `./bin/map add zone <name> --box x0,y0,z0:x1,y1,z1 --by <you>`. `./bin/time clock` reads world time; `./bin/time dawn` waits for daylight.\n\n"

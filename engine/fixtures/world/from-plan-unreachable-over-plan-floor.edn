@@ -12,6 +12,6 @@
   :limit-s 200}
  :cases
  [{:name "cell-over-a-plan-floor-is-unreachable-not-refused-zone"
-   :act [[:job (jobs.build.from-plan {:plan "$plan:tower"})]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:tower"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 180 :of-job true}]
    :after [[:not-block [16 9 16] "cobblestone"]]}]}

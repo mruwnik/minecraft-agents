@@ -42,7 +42,7 @@
                                   (some #(= :night.bed-left (:kind %)) evs))
                          (reset! asleep-after-left (asleep? p)))))
           (st/dawn-after! p 40 (fn [n] (when (= n 3) (reset! asleep-at-hold (asleep? p)) (sleep-count! p 1 4))))
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tick-until eng #(seq (st/emitted seen :night.bed-left)) 60))
           (is (true? @asleep-at-hold) "alone, its sleep skips the night: it lay down and stayed")
           (let [[left & more] (st/emitted seen :night.bed-left)]
@@ -57,7 +57,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :players ["Alex" "Bo" "Cy"] :skipNight false :light {} :light-default [15 0]})]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tick-until eng #(asleep? p) 80))
           (is (= 1 (count (placed p "red_bed"))) "the bed goes down")
           (is (< 10 (count (placed p "dirt"))) "its row is walled and roofed")
@@ -69,7 +69,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt})]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tick-until eng #(seq (st/calls p "sleep")) 60))
           (is (= 1 (count (placed p "red_bed"))))
           (is (empty? (placed p "dirt")) "alone, its sleep ends the night: walls would only cost time")
@@ -81,7 +81,7 @@
       (fn ^:async t []
         (let [bed-price (fn ^:async b [light]
                           (let [{:keys [eng p seen]} (st/setup {:time night :blocks (cond-> st/floor (= 15 (second light)) (merge st/yard)) :inventory bed-and-dirt :light {} :light-default light})]
-                            (core/submit! eng '(jobs.survival.night) {})
+                            (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
                             (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
                             (:bed (:prices (first (st/emitted seen :night.answers))))))
               dark (await (bed-price [15 0]))
@@ -102,7 +102,7 @@
                        (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k k :n-s 1000}}
                          (fn ^:async inner []
                            (let [{:keys [eng seen]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :light {} :light-default [15 0]})]
-                             (core/submit! eng (list 'jobs.survival.night {}) {})
+                             (core/submit! eng (tu/order eng (list 'jobs.survival.night {})) {})
                              (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
                              (:prices (first (st/emitted seen :night.answers))))))))
               low (await (price 1))
@@ -127,7 +127,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :players ["Alex" "Bo" "Cy"]})]
           (sleep-count! p 0 5)
-          (core/submit! eng '(jobs.survival.night {:settings {:jobs.lib.cost.death/spawn-horizon-s 0}}) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {:settings {:jobs.lib.cost.death/spawn-horizon-s 0}})) {})
           (await (tick-until eng #(seq (placed p "dirt")) 60))
           (await (st/tick-n eng 20))
           (is (empty? (placed p "red_bed")) "the bed stays in the bag")
@@ -148,7 +148,7 @@
                                              :blocks (into {} (for [x (range -3 4) z (range -3 4) y [64 65]
                                                                     :when (or (#{-3 3} x) (#{-3 3} z))]
                                                                 [(str x "," y "," z) "cobblestone"]))})]
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
           (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
             (is (< (:exposed prices) (:shelter prices)) "nothing spawns here, so only the walls' morning is between them: the door dug out, the blocks left")
@@ -161,7 +161,7 @@
         (let [shelter (fn ^:async s [inventory]
                         (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"2,64,0" "red_bed"} :inventory inventory :players ["Alex" "Bo" "Cy"]})]
                           (st/know-bed! eng {:x 2 :y 64 :z 0})
-                          (core/submit! eng '(jobs.survival.night) {})
+                          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
                           (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
                           (:prices (first (st/emitted seen :night.answers)))))
               walls (await (shelter st/wall-stack))
@@ -187,7 +187,7 @@
     (when others (sleep-count! p others 4))
     (st/know-bed! eng {:x 2 :y 64 :z 0})
     (st/dawn-after! p 40 (fn [n] (when (= n 3) (f p))))
-    (core/submit! eng '(jobs.survival.night) {})
+    (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
     (await (tick-until eng #(<= 6 (count (st/calls p "wait"))) 80))
     (filterv :inputs (st/emitted seen :night.answers))))
 
@@ -235,7 +235,7 @@
           (.override (.-world p) "offline" (fn ^:async g [token a impl]
                                              (.setTime (.-world p) noon)
                                              (await (impl token a))))
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night {})) {})
           (await (tick-until eng #(seq (st/emitted seen :night.bed-left)) 60))
           (let [left (first (st/emitted seen :night.bed-left))]
             (is (true? (get-in left [:inputs :log-out])) "others are asleep: a log-out is open")
@@ -280,7 +280,7 @@
         (let [{:keys [eng seen]} (st/setup {:time night :blocks sealed-room :light {} :light-default [0 15]})]
           (st/know-bed! eng {:x 10 :y 64 :z 0})
           (mem/write! (:store eng) :spawn-bed {:pos {:x 10 :y 64 :z 0}} {:cap 1 :ttl :forever})
-          (core/submit! eng '(jobs.survival.night) {})
+          (core/submit! eng (tu/order eng '(jobs.survival.night)) {})
           (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
           (let [{:keys [pick prices]} (first (st/emitted seen :night.answers))]
             (is (< (:exposed prices) (:bed prices)) "the work goes on here through the night, so the skip saves nothing the walk to the bed costs")

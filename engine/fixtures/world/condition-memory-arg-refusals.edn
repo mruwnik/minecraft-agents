@@ -9,23 +9,23 @@
   :limit-s 40}
  :cases
  [{:name "remember-a-reserved-kind-is-refused-without-a-round"
-   :act [[:job (jobs.memory.remember {:kind :hurt})]]
+   :act [[:job (jobs.memory.remember {:worth 1200 :kind :hurt})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason [:any]}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 5 :of-job true}]}
   {:name "set-place-far-above-the-world-is-refused-without-a-round"
-   :act [[:job (jobs.memory.set-place {:name :wt-far :pos #at [2 999 3]})]]
+   :act [[:job (jobs.memory.set-place {:worth 1200 :name :wt-far :pos #at [2 999 3]})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason [:any]}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 5 :of-job true}]}
   {:name "look-for-a-bogus-block-name-is-refused-without-a-round"
-   :act [[:job (jobs.explore.look {:block-names ["bogus"]})]]
+   :act [[:job (jobs.explore.look {:worth 1200 :block-names ["bogus"]})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason [:any]}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :round_started} :for-s 5 :of-job true}]}
   {:name "valid-remember-and-look-complete"
-   :act [[:job (jobs.memory.remember {:kind :wt-note :data {:n 1}})]
+   :act [[:job (jobs.memory.remember {:worth 1200 :kind :wt-note :data {:n 1}})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.explore.look {:block-names ["stone"]})]]
+         [:job (jobs.explore.look {:worth 1200 :block-names ["stone"]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
   {:name "forget-place-of-an-unrecorded-name-ends-cleanly"
-   :act [[:job (jobs.memory.forget-place {:name :wt-never-set})]]
+   :act [[:job (jobs.memory.forget-place {:worth 1200 :name :wt-never-set})]]
    :expect [{:event {:source :job :kind :completed} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :failed} :for-s 5 :of-job true}]}]}

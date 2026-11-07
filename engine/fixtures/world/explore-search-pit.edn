@@ -13,7 +13,7 @@
   :body {:at [6.5 0 16.5] :spawnpoint [4 0 16] :settle-s 2 :effects [["hunger" 120 255]]}
   :act [[:wait-s 3]
         [:rcon "damage $BODY 8.5 minecraft:generic"]
-        [:job (jobs.explore.search {:target "emerald_block" :scan-radius 100 :use-notes false})]]
+        [:job (jobs.explore.search {:worth 1200 :target "emerald_block" :scan-radius 100 :use-notes false})]]
   :expect [{:event {:source :job :kind :planned} :within-s 30 :of-job true}
            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}
            {:event {:source :job :kind :completed :data {:reason :found}} :within-s 80 :of-job true}]

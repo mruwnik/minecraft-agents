@@ -11,7 +11,7 @@
    :time-why :night-light
    :body {:at [16.5 -1 16.5]}
    :blocks [[:fill [10 -6 10] [22 5 22] "stone"] [:fill [11 0 11] [21 3 21] "air"] [:fill [15 -4 15] [17 -1 17] "water"] [:set [12 0 12] "torch"] [:set [20 0 12] "torch"] [:set [12 0 20] "torch"] [:set [20 0 20] "torch"]]
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60 :of-job true}]
    :after [[:body-far [16.5 -1 16.5] 2] [:body-near [16.5 0 16.5] 6]]
@@ -21,7 +21,7 @@
    :time-why :night-light ; jobs.survival.night ends at once by day after leaving the water
    :body {:at [16.5 -1 16.5] :inventory [["stone_pickaxe" 1]]}
    :blocks [[:fill [10 -6 10] [22 5 22] "stone"] [:fill [11 0 11] [21 3 21] "air"] [:fill [15 -4 15] [17 -1 17] "water"]]
-   :act [[:job (jobs.survival.night)]]
+   :act [[:job (jobs.survival.night {:worth 1200})]]
    :expect [{:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
    :after [[:body-far [16.5 -1 16.5] 2]]

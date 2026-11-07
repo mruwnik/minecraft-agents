@@ -22,7 +22,7 @@
   "Submit (jobs.animals.leash args) in a world; run n ticks 700 ms apart; the setup map."
   [args world n]
   (let [s (h/setup world)]
-    (core/submit! (:eng s) (list 'jobs.animals.leash (merge {:mob "cow"} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.leash (merge {:mob "cow"} args))) {})
     (await (run-ticks s n 700))
     s))
 
@@ -146,7 +146,7 @@
                        (let [r (impl token args)]
                          (swap! (fake/state p) update :entities (partial mapv #(assoc % :leashed-to-me false)))
                          r)))
-          (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.leash {:mob "cow"})) {})
           (await (run-ticks s 6 700))
           (is (finished? s))
           (is (not= :leashed (:reason (done-event s)))))))))
@@ -161,7 +161,7 @@
                        (when (= 1 (.-id args))
                          (swap! (fake/state p) update :entities subvec 1))
                        (impl token args)))
-          (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.leash {:mob "cow"})) {})
           (await (run-ticks s 8 700))
           (is (finished? s))
           (is (= :leashed (:reason (done-event s))))
@@ -177,7 +177,7 @@
                  ["Miles" {:ignore-zones? true} [1] []]
                  [nil {} [] [:no-zones]]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 2) (cow 2 4)]} 0 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.leash (merge {:mob "cow"} extra)) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.leash (merge {:mob "cow"} extra))) {})
             (dotimes [_ 20]
               (swap! (:clock s) + 700)
               (await (core/tick! eng)))
@@ -190,7 +190,7 @@
       (fn ^:async t []
         (doseq [[owner reason] [["Miles" :refused] [nil :no-zones]]]
           (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 2)]} 0 (h/zone-store 2 owner))]
-            (core/submit! eng (list 'jobs.animals.leash {:mob "cow"}) {})
+            (core/submit! eng (tu/order eng (list 'jobs.animals.leash {:mob "cow"})) {})
             (dotimes [_ 20]
               (swap! (:clock s) + 700)
               (await (core/tick! eng)))
@@ -206,7 +206,7 @@
   [args world n]
   (let [s (h/setup-seeing world nil)]
     (perception/pass! (aget (:p s) "perception"))
-    (core/submit! (:eng s) (list 'jobs.animals.leash (merge {:mob "cow"} args)) {})
+    (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.leash (merge {:mob "cow"} args))) {})
     (await (run-ticks s n 700))
     s))
 
@@ -263,7 +263,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory lead :entities [(cow 1 2)]})]
           (ls/entities-after-look (:p s))
-          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.leash {:mob "cow"})) {})
           (await (run-ticks s 8 700))
           (is (= :leashed (:reason (done-event s)))))))))
 
@@ -276,7 +276,7 @@
               entities (.-entities p)
               looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))]
           (aset p "entities" (fn [q] (if (= 2 (looks)) (.call entities p q) #js [])))
-          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) (list 'jobs.animals.leash {:mob "cow"})) {})
           (await (run-ticks s 8 700))
           (is (= :leashed (:reason (done-event s)))))))))
 
@@ -285,7 +285,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (h/setup {:inventory lead :entities [(cow 1 7)]} (* 1000 (inc (leash/default-time {}))))]
-          (core/submit! eng '(jobs.animals.leash {:mob "cow"}) {})
+          (core/submit! eng (tu/order eng '(jobs.animals.leash {:mob "cow"})) {})
           (await (run-ticks s 8 700))
           (is (= :job-time (:reason (done-event s)))))))))
 
@@ -295,6 +295,6 @@
       (fn ^:async t []
         (let [s (h/setup-seeing (chest-world [{:name "lead" :count 2}]) nil 1000)]
           (perception/pass! (aget (:p s) "perception"))
-          (core/submit! (:eng s) '(jobs.animals.leash {:mob "cow"}) {})
+          (core/submit! (:eng s) (tu/order (:eng s) '(jobs.animals.leash {:mob "cow"})) {})
           (await (run-ticks s 120 700))
           (is (= :leashed (:reason (done-event s)))))))))

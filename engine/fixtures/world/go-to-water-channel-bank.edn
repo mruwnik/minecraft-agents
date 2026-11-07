@@ -133,6 +133,6 @@
             [:fill [13 9 7] [14 9 7] "grass_block"]]
    :body {:at [9.48 5 9.01] :yaw 180 :settle-s 6}
    :act [[:rcon "effect give $BODY minecraft:hunger 15 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-6]$" 30] [:rcon "effect clear $BODY minecraft:hunger"]
-         [:job (jobs.movement.go-to {:pos #at [9 6 7] :range 0 :ways #{:walk}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [9 6 7] :range 0 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:body-near [9.5 6 7.5] 1.5]]}]}

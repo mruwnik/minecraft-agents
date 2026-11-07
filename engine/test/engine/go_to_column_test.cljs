@@ -253,7 +253,7 @@
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out args)))]
     (aset p "sensedAt" (fn [pos] (if (hidden? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
-    (core/submit! eng '(recording-parent) {})
+    (core/submit! eng (tu/order eng '(recording-parent {})) {})
     (await (gt/tick-out! eng 30))
     (assoc s :eng eng :out out)))
 
@@ -309,7 +309,7 @@
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos [25 0] :range 1})))]
           (aset p "sensedAt" (fn [pos] (if (and (< (first (at p)) 12) (>= (.-x pos) 17) (< (.-y pos) 66)) #js {:unknown true} (.blockAt p pos))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (gt/tick-out! eng 30))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (> 2 (js/Math.abs (- 25 (first (at p))))) (str "at " (at p))))))))
@@ -520,7 +520,7 @@
       (fn ^:async t []
         (let [{:keys [eng stop]} (gt/setup ravine)
               quote-at (fn ^:async q [worth]
-                         (:route (:quote (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str {:pos {:x 44 :z 0} :range 2 :worth worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))))))
+                         (:route (:quote (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str (merge {:worth tu/order-worth} {:pos {:x 44 :z 0} :range 2 :worth worth :settings {:jobs.movement.go-to.tuning/goal-danger :end}})))))))
               dear (await (quote-at 500))
               cheap (await (quote-at 1))]
           (stop)
@@ -557,7 +557,7 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
                                           (gt/recording-parent out {:pos [25.5 72 0.5] :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}})))]
           (aset p "sensedAt" (fn [pos] (if (and (< (first (at p)) 12) (>= (.-x pos) 17) (< (.-y pos) 66)) #js {:unknown true} (.blockAt p pos))))
-          (core/submit! eng '(recording-parent) {})
+          (core/submit! eng (tu/order eng '(recording-parent {})) {})
           (await (gt/tick-out! eng 30))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (> 4 (js/Math.abs (- 25 (first (at p))))) (str "at " (at p)))

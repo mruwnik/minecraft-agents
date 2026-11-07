@@ -10,7 +10,7 @@
  [{:name "stream-of-mobs-keeps-the-held-fight-going"
    :act [[:summon "zombie" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets :hostiles :radius 8 :hold true})]
+         [:job (jobs.combat.attack {:worth 1200 :targets :hostiles :radius 8 :hold true})]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 5]
          [:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -31,7 +31,7 @@
   {:name "no-mob-comes-the-held-fight-declines-after-hold-s"
    :act [[:summon "zombie" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
-         [:job (jobs.combat.attack {:targets :hostiles :radius 8 :hold true})]]
+         [:job (jobs.combat.attack {:worth 1200 :targets :hostiles :radius 8 :hold true})]]
    :expect [{:no-event {:source :job :kind :stopped} :for-s 12 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 30 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[0 0 0] [32 4 32]] 1]]

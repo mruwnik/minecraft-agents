@@ -147,13 +147,27 @@
   (let [paused (paused-reflexes eng)]
     (or (some #(paused (:id %)) order) (first (vals paused)))))
 
+(defn priced
+  "node as a trigger fires it for instance inst: a leaf with no :worth gets its job's worth-of over inst's check ctx
+  (the loss the job averts or the goal it serves). The register refuses an entry whose job has neither
+  (expr/fired-worth-problem). Throws on a worth-of that is not a finite number >= 0."
+  [eng inst node]
+  (let [[def args] (when (= :leaf (:op node)) (job-of eng (assoc inst :spec node)))]
+    (if (or (number? (:worth args)) (nil? (:worth-of def)))
+      node
+      (let [w ((:worth-of def) (check-ctx eng inst args))]
+        (if (and (number? w) (>= w 0) (js/isFinite w))
+          (assoc-in node [:args :worth] w)
+          (throw (js/Error. (str (:job node) "'s worth-of returned " (pr-str w) ", not a finite number >= 0"))))))))
+
 (defn trigger-status
   "The status entry's job would start with now: its start and run checks as one (contract/all), over a ctx of the job
   as it would be fired, reading the call it would fire with (ctx/worth). A check that throws holds the trigger
   (:check-threw, told by startable-trigger?)."
   [eng entry]
-  (try (let [node (expr/parse (:jobs eng) (:job entry))
-             inst {:id (str "trigger:" (name (:id entry))) :spec node :reflex (:id entry)}
+  (try (let [inst {:id (str "trigger:" (name (:id entry))) :reflex (:id entry)}
+             node (priced eng inst (expr/parse (:jobs eng) (:job entry)))
+             inst (assoc inst :spec node)
              [def args] (job-of eng inst)
              c (check-ctx eng inst args)]
          (contract/all [(ctx/check-status c def) (run-status def (assoc c :quote-call (first (call-of c def))))]))
@@ -180,7 +194,7 @@
 
 (defn fire! [eng entry h]
   (let [id (new-id! eng)
-        node (expr/parse (:jobs eng) (:job entry))
+        node (priced eng {:id id :reflex (:id entry)} (expr/parse (:jobs eng) (:job entry)))
         fired (emit! eng {:source :reflex :kind :fired :level :info :reflex (:id entry)
                           :job id :interrupted (:id h) :text (reflex-text (:id entry) node)})]
     (when h (cut! eng h (:id entry) fired))

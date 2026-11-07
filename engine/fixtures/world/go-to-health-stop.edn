@@ -15,11 +15,11 @@
   :limit-s 200}
  :cases
  [{:name "full-health-walk-takes-the-10-drop"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}
   {:name "health-lost-on-the-way-ends-needs-health-before-the-drop"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]
          [:until-pos {:x-min 36 :x-max 39} 30]
          [:rcon "effect give $BODY minecraft:hunger 5 255 true"]
          [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]]
@@ -28,14 +28,14 @@
   {:name "full-health-over-budget-drop-says-damage-budget"
    :blocks [[:fill [1 10 1] [40 13 30] "stone"] [:fill [0 13 0] [40 13 31] "stone"]]
    :body {:at [3.5 14 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :damage-budget :heal :full}} :within-s 60 :of-job true}]
    :after [[:body-far [46.5 0 16.5] 10]]}
   {:name "shut-in-over-budget-drop-digs-down-unhurt"
    :blocks [[:fill [11 0 1] [40 9 30] "air"] [:fill [1 10 1] [10 13 30] "stone"]
             [:fill [0 13 0] [51 15 0] "stone"] [:fill [0 13 31] [51 15 31] "stone"] [:fill [0 13 0] [0 15 31] "stone"] [:fill [51 13 0] [51 15 31] "stone"]]
    :body {:at [3.5 14 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [46 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:why :damage-budget}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 190 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 190 :until {:source :job :kind #{:completed :stopped}}}]
@@ -52,6 +52,6 @@
   {:name "allow-over-budget-takes-the-drop"
    :blocks [[:fill [1 10 1] [40 13 30] "stone"] [:fill [0 13 0] [40 13 31] "stone"]]
    :body {:at [3.5 14 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}]}

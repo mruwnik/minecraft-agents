@@ -10,7 +10,7 @@
   :plot {:light :sky :length 24 :width 16 :height 6}
   :blocks [[:set [12 0 8] "red_bed[facing=east,part=foot]"] [:set [13 0 8] "red_bed[facing=east,part=head]"]]
   :body {:at [6.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
-  :act [[:job (jobs.survival.night {:ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
+  :act [[:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter} :settings {:jobs.lib.shelter.beds/max-days-awake 0}})]]
   :limit-s 90}
  :cases
  [{:name "a-bed-on-anothers-plan-is-not-slept-in"

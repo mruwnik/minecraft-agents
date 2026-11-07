@@ -11,9 +11,9 @@
   :limit-s 150}
  :cases
  [{:name "withdrawn-bread-stays-carried-and-only-the-new-loaf-is-stored"
-   :act [[:job (jobs.storage.withdraw {:chest #xyz [20 0 16] :items {"bread" 17}})]
+   :act [[:job (jobs.storage.withdraw {:worth 1200 :chest #xyz [20 0 16] :items {"bread" 17}})]
          [:await {:source :job :kind :completed :data {:name "jobs.storage.withdraw"}} 60]
-         [:http :submit (jobs.items.kitchen {:chest #xyz [20 0 16] :stock {"bread" 20} :reserve {"wheat" 0}}) [] {:ok true}]
+         [:http :submit (jobs.items.kitchen {:worth 1200 :chest #xyz [20 0 16] :stock {"bread" 20} :reserve {"wheat" 0}}) [] {:ok true}]
          [:await {:source :job :kind :completed :data {:name "jobs.items.kitchen"}} 100]
          [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 16] :items {"bread" 1}}]}]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.kitchen"}} :within-s 120}]

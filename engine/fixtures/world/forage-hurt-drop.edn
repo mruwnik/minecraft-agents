@@ -15,7 +15,7 @@
    :body {:inventory [["fishing_rod" 1]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]
-         [:job (jobs.food.fish {:count 1 :ways #{:carried}})]]
+         [:job (jobs.food.fish {:worth 1200 :count 1 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :fish.caught} :within-s 170 :of-job true}
             {:no-event {:source :job :kind :stopped} :of-job true :for-s 20}]
    :after [[:body-far [6.5 5 16.5] 4]]
@@ -23,7 +23,7 @@
   {:name "hurt-starving-body-plain-walk-to-the-bank-is-refused"
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 15 minecraft:generic"]
-         [:job (jobs.movement.go-to {:pos #at [11 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:worth 1200 :pos #at [11 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [11.5 0 16.5] 4]]}]}

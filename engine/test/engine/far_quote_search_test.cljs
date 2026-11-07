@@ -38,7 +38,7 @@
     (set! planner/new-search (fn [snap q o] (let [s (create snap q o)] (swap! searches conj s) s)))
     (try
       (loop [routes []]
-        (let [route (get-in (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str {:pos [100 64 16] :range 1})))
+        (let [route (get-in (await (event-api/quote-view eng "jobs.movement.go-to" (pr-str (merge {:worth tu/order-worth} {:pos [100 64 16] :range 1}))))
                             [:quote :route])
               routes (conj routes route)]
           (if (and (= :searching (:reason route)) (< (count routes) 12))
