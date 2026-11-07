@@ -109,6 +109,12 @@
         p (tu/fake {:self {:pos {:x -1 :y 64 :z 0}} :blocks pocket})]
     (is (= :stair (:step (escape-way/choose p [-1 64 0] [6 64 0]))))))
 
+(deftest escape-choose-stair-without-a-goal-above-stops-at-the-rim-of-the-wall-it-climbs-onto
+  ;; a 2-high wall 4 thick across the way, open ground on top: the stair stands on the rim after 2 steps, not max-depth
+  (let [wall-world (merge (box -10 63 -10 14 63 10 "stone") (box 0 64 -10 3 65 10 "stone"))
+        p (tu/fake {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks wall-world})]
+    (is (= {:step :stair :heading :east :steps 2} (escape-way/choose p [-1 64 0] [8 64 0])))))
+
 (deftest escape-choose-stair-checks-every-step
   (let [ba-pit (assoc pit "2,63,0" "bricks")]
     (is (not= :east (:heading (escape-way/choose (tu/fake (merge in-pit {:blocks ba-pit})) [0 61 0] [10 64 0] #(not= [2 63 0] (vec %)))))

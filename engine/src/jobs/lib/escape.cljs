@@ -184,6 +184,14 @@
              cell [(up f 2) (up nxt 1) nxt]]
          cell)))
 
+(defn rim-steps
+  "How many of the n steps of a stair up along dir from feet to cut: those up to and including the first one that stands on
+  seen open ground (all its cuts open and seen, a solid floor under it), the rim of a wall; n when none does."
+  [block-at unseen? feet dir n]
+  (let [done? (fn [[a b c]] (and (not-any? unseen? [a b c]) (every? #(bs/passable? (block-at %)) [a b c]) (solid? (block-at (add c [0 -1 0])))))
+        k (count (take-while (complement done?) (partition 3 (stair-cuts feet dir n))))]
+    (min n (inc k))))
+
 (def usable-door #"^(?!iron_door$)[a-z_]+_door$|_fence_gate$")
 
 (defn enclosed?

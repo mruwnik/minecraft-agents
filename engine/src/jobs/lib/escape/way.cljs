@@ -269,7 +269,7 @@
   - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
     floor the stair job lays.
   - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock): the deepest diggable one, up
-    to max-depth.
+    to max-depth and to the rim of a wall it climbs onto (rim-steps).
   - the pit's pillar with a seen solid cell in the column over it.
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
     the block over the head; :no-dig: nothing allowed to dig; :no-wall: no wall to walk to."
@@ -296,7 +296,8 @@
                                   (distinct (filter pos? [rise depth])))
                             [nil rise]))
          climb (delay (when-not (or (off :stair) (pos? rise))
-                        (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?) (vector n)))
+                        (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?)
+                                              (as-> h [h (escape/rim-steps block-at (escape/unseen-of p) feet (escape/heading-dirs h) n)])))
                               (range (escape/max-depth) 0 -1))))
          ledge (delay (when (and item (not (off :stair)) (pos? rise) (not (escape/walled-side? block-at feet)))
                         (escape/stair-heading block-at feet (remove #(contains? stands (escape/ahead feet % 1)) stair-dirs) rise may-dig? true)))
