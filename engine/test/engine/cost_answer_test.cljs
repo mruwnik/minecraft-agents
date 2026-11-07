@@ -628,6 +628,23 @@
         "the respawn refills only what was missing before the arrows: at 20 hp nothing, so the walk back is paid")
     (is (< 0 (:death pack)))))
 
+(deftest the-respawn-refills-at-most-the-twenty-hp-and-food-points-a-body-can-lack
+  (let [b (assoc (body 20) :respawn {:x 20 :y 64 :z 0} :carried 5000)]
+    (is (= (death/refill-s (assoc b :health 0 :food 0)) (death/refill-s (assoc b :health -50 :food -3))))
+    (is (< (js/Math.abs (- (death/refill-s (assoc b :health -50 :food 20)) (* 20 (health/hp-seconds)))) 1e-9))
+    (is (zero? (death/refill-s (assoc b :health 25 :food 30))))))
+
+(deftest a-death-in-a-later-round-is-priced-at-that-rounds-health
+  (let [b (assoc (body 20) :respawn {:x 20 :y 64 :z 0} :carried 5000)
+        lethal {:damage 100 :hit 5 :blasts [100] :seconds 1}
+        first-round {:damage 4 :hit 1 :seconds 1 :at-once true}
+        both (cost/answer-price b (assoc first-round :then [lethal]) here)
+        first-only (cost/answer-price b (dissoc first-round :at-once) here)
+        late (- both first-only)]
+    (is (< (js/Math.abs (- late (+ 1 (death/death-cost (assoc b :health 16) here)))) 1)
+        "a round met at once after blows that left 16 hp: its death refills the 4 hp they took")
+    (is (< 10 (- (death/death-cost b here) (death/death-cost (assoc b :health 16) here))) "the two health points differ: the test tells them apart")))
+
 (deftest a-skeleton-stands-and-shoots-while-the-body-walks-out-of-its-bow-range
   (let [v (danger/flee-walk-speed 20)
         walk (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 0)]})

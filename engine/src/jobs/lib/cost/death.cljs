@@ -96,10 +96,12 @@
 
 (defn refill-s
   "Seconds of healing and eating a respawn saves body: the hp under 20 at health/hp-seconds each and the food points
-  under 20 at ::fill-point-s each (cost.health)."
+  under 20 at ::fill-point-s each (cost.health); health and food are held to 0..20, so a struck body's negative
+  health credits no more than a body at 0."
   [{:keys [health food]}]
-  (+ (* (max 0 (- 20 (or health 20))) (health/hp-seconds))
-     (* (max 0 (- 20 (or food 20))) (health/fill-point-s))))
+  (let [missing #(- 20 (max 0 (min 20 (or % 20))))]
+    (+ (* (missing health) (health/hp-seconds))
+       (* (missing food) (health/fill-point-s)))))
 
 (defn back-cost
   "Seconds the walk from the body's :respawn to `at` and back for the items costs: a trip and the walk price."
