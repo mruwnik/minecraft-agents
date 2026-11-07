@@ -17,6 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.near :as near]
             [jobs.lib.cost.planner :as cost-planner]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.preview :as pv]))
 
 (defn ^:async quote-reply
@@ -128,6 +129,29 @@
           (is (> rest-dig-s 0) "the wall in the way is rock to dig")
           (is (< (js/Math.abs (- mean least rest-dig-s (cost-planner/rest-s near))) 1e-9)
               "the expected time digs the rest, not only walks it"))))))
+
+(deftest a-walk-still-going-over-unseen-floors-prices-its-rest-once-as-a-walk
+  ;; night-b06 fake repro: a dark open line 69 blocks on was priced as walked and dug by hand (843 s), the dig search cut by its budget
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [route! pv/route!
+              dig-price choose/dig-price
+              rest-dig-s choose/rest-dig-s
+              walk {:found false :reason :partial :near 96 :goal [96 64 0] :partial {:seconds 4.9 :waypoints [[27 64 0]]}}
+              mean (fn ^:async m [r]
+                     (set! pv/route! (fn ^:async rt [_] r))
+                     (second (get-in (await (preview (floor 0 0 11 2) {:pos [96 64 0] :range 0})) [:quote :uses :job-time])))]
+          (set! choose/dig-price (constantly :budget))
+          (set! choose/rest-dig-s (constantly 806.6))
+          (try
+            (let [walked (+ 4.9 (cost-planner/left-s 69 false))]
+              (is (< (js/Math.abs (- (await (mean (assoc walk :unseen-floors true))) walked)) 1e-9) "over unseen floors the rest is walked")
+              (is (< (js/Math.abs (- (await (mean (assoc walk :budget true))) walked)) 1e-9) "past the search's node budget too")
+              (is (< (js/Math.abs (- (await (mean walk)) walked 806.6)) 1e-9) "a walk that found no way on digs the rest as well"))
+            (finally (set! pv/route! route!)
+                     (set! choose/dig-price dig-price)
+                     (set! choose/rest-dig-s rest-dig-s))))))))
 
 (deftest a-dig-dearer-than-the-calls-worth-is-no-dig-price
   (async done

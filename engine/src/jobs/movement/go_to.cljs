@@ -171,13 +171,15 @@
   "The planner's route to the goal from where the body stands, with this call's policy, costs, dangers, tolls and
   limits, walked nowhere (go-to.preview): time from its seconds, health its planned damage, :moves-to the goal cell,
   :route what the planner found, with :dig-seconds (choose/dig-price: the dig route and the walk on) when it found no walk (its search not still going on) and the call may dig,
-  or :rest-dig-s (choose/rest-dig-s from the partial route's end) while that dig search is unfinished."
+  or :rest-dig-s (choose/rest-dig-s from the partial route's end) while that dig search is unfinished and no walk may still
+  get there (a partial over unseen floors or cut by its node budget walks the rest, the cheaper way, priced once)."
   [c]
   (let [c (with-limits (health/with-body-food c))]
     (let [r (await (preview/route! c))
           dig-s (when (and (not (:found r)) (not= :searching (:reason r)) (:goal r) (ways/escalating? c)) (choose/dig-price c (:goal r)))
           from (or (some->> (last (get-in r [:partial :waypoints])) (mapv js/Math.floor)) (end/feet-cell c))
-          r (cond (#{:searching :budget} dig-s) (assoc r :reason dig-s :near (or (:near r) 0) :rest-dig-s (choose/rest-dig-s c from (:goal r)))
+          r (cond (#{:searching :budget} dig-s) (cond-> (assoc r :reason dig-s :near (or (:near r) 0))
+                                                  (not (or (:unseen-floors r) (:budget r))) (assoc :rest-dig-s (choose/rest-dig-s c from (:goal r))))
                   dig-s (assoc r :dig-seconds dig-s)
                   :else r)]
       (preview/quote-of-route r (ways/escalating? c) (:back (:args c))))))
