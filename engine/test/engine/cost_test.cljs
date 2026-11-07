@@ -449,10 +449,9 @@
 (deftest a-goal-s-worth-budgets-the-tour-less-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
     (is (= 100 (cost/tour-worth 50 (+ 100 walk))) "no trip is taken off: the goal is known")
-    (is (zero? (cost/tour-worth 50 1)) "worth less than the walk: no tour")
-    (is (= ##Inf (cost/tour-worth 50 ##Inf)) "arrive: any tour")))
+    (is (zero? (cost/tour-worth 50 1)) "worth less than the walk: no tour")))
 
-(deftest a-chance-of-0-of-an-unbounded-worth-is-0-not-nan
+(deftest a-chance-of-0-of-an-endless-price-is-0-not-nan
   (is (zero? (cost/chance-times 0 ##Inf)))
   (is (= ##Inf (cost/chance-times 0.5 ##Inf)))
   (is (zero? (:cost (cost/turn-back-cost [{:look 0 :back 0 :p 0 :extra-s ##Inf}]))) "a floor surely there costs no next way"))
@@ -841,6 +840,9 @@
     (is (< (one "wooden_pickaxe") (one "stone_pickaxe") (one "iron_pickaxe")))
     (is (< (goal [{:name "crafting_table" :count 1} {:name "wooden_pickaxe" :count 1}]) (+ (one "crafting_table") (one "wooden_pickaxe")))
         "one table for all a goal's crafts")))
+
+(deftest an-item-nothing-makes-is-worth-its-item-value-as-a-goal-never-infinite
+  (is (= 10 (:value (cost/goal-value [{:name "item_0" :count 1}] {"unknown" 10}))) "a root's worth-of reads it: a worth is never ##Inf"))
 
 (deftest a-thin-measure-leans-on-the-recipe-tree-and-a-fruitless-one-costs-more-than-it
   (let [goal (fn [counts] (settings/with-settings {:jobs.lib.cost.value/gather-counts counts}

@@ -328,7 +328,7 @@
 
 (defn made-value
   "item-value of items as a goal from a reference start, nothing carried and no station near: each plain stack (no
-  durability, enchantments or nbt) at least what making its count takes (made), and each crafting table or furnace
+  durability, enchantments or nbt) at least what making its count takes (made; one nothing makes keeps its item-value), and each crafting table or furnace
   those crafts and smelts need, and what those need, once, unless the items hold it. Options as item-value's but :prices."
   [items & {:keys [overrides version basis] :as opts}]
   (let [version (or version @game/version)
@@ -337,7 +337,7 @@
         plain (set (keep (fn [[n es]] (when (every? (fn [e] (not-any? #(some? (get e %)) [:durability :enchants :nbt])) es) n)) named))
         rows (map (fn [{:keys [name count value] :as row}]
                     (if (plain name)
-                      (let [{:keys [s stations]} (made-memo version table basis name count) v (max value s)]
+                      (let [{:keys [s stations]} (made-memo version table basis name count) v (if (js/isFinite s) (max value s) value)]
                         (assoc row :value v :each (/ v count) :stations stations))
                       row))
                   (:items (apply item-value items (mapcat identity (dissoc opts :prices)))))
@@ -388,12 +388,12 @@
   (if (>= s 1) ##Inf (* value (/ s (- 1 s)))))
 
 (defn chance-times
-  "Chance p of seconds s, the expected seconds: 0 when p is 0, though s be ##Inf (a worth of arrival), where p x s is NaN."
+  "Chance p of seconds s, the expected seconds: 0 when p is 0, though s be ##Inf (a price with no way), where p x s is NaN."
   [p s]
   (if (zero? p) 0 (* p s)))
 
 (defn affords?
-  "Whether a price of `s` seconds is within `worth`: never a certain failure (##Inf), at any worth, ##Inf (arrive) too."
+  "Whether a price of `s` seconds is within `worth`: never a certain failure (##Inf)."
   [s worth]
   (and (js/isFinite s) (<= s worth)))
 
@@ -507,7 +507,7 @@
             (recur (mapv #(+ %2 (* (- %1 %2) (/ reach gap))) at p) (remove #{p} left) (+ s (:cost (walk-cost {:distance (- gap reach)}))))))))))
 
 (defn tour-worth
-  "Seconds of tour a goal `straight` blocks off is worth to a caller counting arrival `worth` seconds (##Inf: arrive):
+  "Seconds of tour a goal `straight` blocks off is worth to a caller counting arrival `worth` seconds:
   that less the straight walk, 0 at least. A goal go-to is given is known: a search nets its own trip in its worth."
   [straight worth]
   (max 0 (- worth (:cost (walk-cost {:distance straight})))))
