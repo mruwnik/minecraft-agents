@@ -743,12 +743,12 @@
 (defn woken
   "[body answers first-hit] of mob-name met beside body, caught at caught: its threat-answers; a body asleep (:asleep?)
   answers only once a blow wakes it, so the mob's first blow lands first (first-hit, off its life), and a creeper, whose
-  fuse wakes no one, blasts it where it lies (:stand)."
+  fuse wakes no one, walks up and blasts it at its swell start (:stand)."
   [body mob-name caught]
   (let [m (if (map? mob-name) mob-name {:name mob-name})]
     (cond
       (not (and (:asleep? body) (or (string? mob-name) (map? mob-name)))) [body (threat-answers body mob-name caught) 0]
-      (= "creeper" (:name m)) [(dissoc body :asleep?) {:stand (stand-answer {:equipment (:equipment body) :mobs [(assoc m :distance 0)] :seconds ##Inf})} 0]
+      (= "creeper" (:name m)) [(dissoc body :asleep?) {:stand (stand-answer {:equipment (:equipment body) :mobs [(assoc m :distance (or (:distance body) swell-start))] :seconds ##Inf})} 0]
       :else (let [hit (blow (armour/armour-stats (:equipment body)) m)
                   shield (or (:absorption body) 0)
                   struck (assoc (dissoc body :asleep?) :absorption (max 0 (- shield hit)) :health (- (or (:health body) 20) (max 0 (- hit shield))))]

@@ -127,7 +127,9 @@
 (deftest a-body-asleep-answers-a-mob-only-once-its-first-blow-wakes-it
   (let [asleep (assoc (body 20) :asleep? true)
         chance #(answer/threat-chance %1 %2 nil here)]
-    (is (= 1 (chance asleep "creeper")) "a creeper's fuse wakes no one: its blast beside the bed kills")
+    (is (< (chance asleep "creeper") 1) "a creeper walks up and swells at 3 blocks: a full-health sleeper lives through that blast")
+    (is (= 1 (chance (assoc asleep :health 5) "creeper")) "a weak sleeper does not")
+    (is (<= (answer/threat-hurt (body 20) "creeper" nil here) (+ 0.01 (answer/threat-hurt asleep "creeper" nil here))) "and pays about the swell-start blast")
     (is (< (chance (body 20) "zombie") (chance asleep "zombie")) "the zombie's first blow lands before any answer")
     (is (< (answer/threat-hurt (body 20) "zombie" nil here) (answer/threat-hurt asleep "zombie" nil here)) "and its hp are paid")
     (is (< (:chance (cost/spawn-kill (body 20) here)) (:chance (cost/spawn-kill asleep here))))))
