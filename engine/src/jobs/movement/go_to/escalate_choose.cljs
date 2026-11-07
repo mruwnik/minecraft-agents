@@ -509,10 +509,9 @@
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
   The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; a climb is searched round dig-route/climb-lane first (seeded-search, the pillar part of the route-opts :max-places carried); every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
-  within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
-  it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
-  :guess-risk {class chance}: guess-class), in the search; it is none over :worth-s seconds. Its :share-s is its :seconds
-  without the guesses' digs again, as a way's price reads unseen cells. The body's own blocks (own?) are dug free in the search and the worth checks; the reported :seconds and :share-s add their dig."
+  within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. Each guess on it pays, at the chance it is not diggable (its class's risk, route-opts :guess-risk {class
+  chance}: guess-class), a look and a replan round it, in the search; it is none over :worth-s seconds. Its :share-s is its
+  :seconds without those misses: a way's price (way-total) reads unseen cells at the chance they are solid only. The body's own blocks (own?) are dug free in the search and the worth checks; the reported :seconds and :share-s add their dig."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
   (let [own-s (:own-s route-opts)
         guess-risk (:guess-risk route-opts)
@@ -547,17 +546,15 @@
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
         solid-share (escape/dig-share-fn p unseen?)
         ;; an unseen cell is dug at the chance it is solid, as a way's price reads it (escape/dig-share-fn), so a bound
-        ;; cuts no route that would win on those prices; a guess is dug again till it holds: over the chance it does
-        prices (dig-route/by-share base (if (every? zero? (vals guess-risk)) solid-share #(/ (solid-share %) (- 1 (risk %)))))
-        ;; a guess that fails also costs the look that shows it and the walk back up the tunnel to try another way in
-        ;; (the retry's dig is in the division above): risk/(1 - risk) such misses per guess, as the digs again
-        prices (cond-> prices
+        ;; cuts no route that would win on those prices
+        shared (dig-route/by-share base solid-share)
+        ;; a harder guess is still dug (its dig's price); one not diggable breaks the route there, at its class's risk, once:
+        ;; the look that shows it and the replan round it, guessed (Q49) as two digs of the rock beside it and a step
+        miss-s (fn [name cell] (let [s ((:dig-s base) name cell) k (risk cell)]
+                                 (if (and s (pos? (solid-share cell)) (pos? k)) (* k (+ (cost/look-s 1) (* 2 s) (:step-s base))) 0)))
+        prices (cond-> shared
                  (not (every? zero? (vals guess-risk)))
-                 (update :dig-s (fn [dig-s]
-                                  (fn [name cell]
-                                    (let [s (dig-s name cell) k (risk cell)]
-                                      (cond-> s (and s (pos? s) (pos? k))
-                                        (+ (* (/ k (- 1 k)) (+ (cost/look-s 1) (* (:step-s prices) (reduce + (map #(js/Math.abs (- %1 %2)) cell from))))))))))))
+                 (update :dig-s (fn [dig-s] (fn [name cell] (some-> (dig-s name cell) (+ (miss-s name cell)))))))
         ;; a floor not seen is read as rock where the route may walk on it; the chance it is none (cost/floor-absent-chance of
         ;; the step's kind, the prior turn-back prices it by) is the fall at the measured depths past the step's own (cost/unseen-fall-s less its :fall-s) and the pillar
         ;; back up, priced onto each walk step that lands on one, in the search and the straight dig. Only a floor under a cell
@@ -677,14 +674,13 @@
       ;; the search dug at search-clear-ms: the route pays the fetch when that is the quicker, else digs with what is carried
       (let [tool (route-tool p block-at (:dig a) own? fetch? solid-share)
             a (update a :seconds + (- (:s tool) (:searched tool)))
-            dig-s (fn [pr cell] (or ((:dig-s pr) (block-at cell) cell) 0))
             ;; the search and the worth checks dig the body's own blocks free (its escape is not held to the worth); the reported price pays them
             own-s (if own? (transduce (comp (filter #(own? % (block-at %))) (map #(/ (clear-ms (block-at %)) 1000))) + 0 (:dig a)) 0)]
         (cond
           (not (cost/affords? (:s tool) (min (or worth-s ##Inf) (or (:bound-s route-opts) ##Inf)))) nil
           (cost/affords? (:seconds a) (or worth-s ##Inf))
           (assoc a :seconds (+ (:seconds a) own-s)
-                 :share-s (+ (:seconds a) own-s (transduce (map #(- (* (solid-share %) (dig-s base %)) (dig-s prices %))) + 0 (:dig a))))
+                 :share-s (- (+ (:seconds a) own-s) (transduce (map #(miss-s (block-at %) %)) + 0 (:dig a))))
           dearer? :dearer)))))
 
 (defn route-cells

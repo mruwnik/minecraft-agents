@@ -949,25 +949,28 @@
           (is (= [47 63 29] (feet p)))
           (is (<= (count (filter #{:approach} (map :step (events-of seen :go-to.escalated)))) 4) "it walks to the nearest cell and looks, not round the yard"))))))
 
-(deftest a-dig-route-over-guesses-is-priced-once-in-the-search-at-the-chance-each-holds
-  ;; each guess is dug at its dig's price over 1 - its class's risk, in the search: a route's seconds carry its risk and
-  ;; are held to :worth-s as they are; a guess beside seen undiggable rock (a chest) is of class :placed
-  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air" "2,66,0" "chest")
-        hidden #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]}
+(deftest a-dig-route-over-guesses-is-priced-once-in-the-search-at-the-chance-each-breaks-it
+  ;; a guess not diggable breaks the route where it lies: at its class's risk, once, the look that shows it and the replan
+  ;; round it (two digs of the rock beside it and a step), whatever its distance from the route's start (here 9 and 10 blocks off);
+  ;; :share-s leaves those misses out. A guess beside seen undiggable rock (a chest) is of class :placed
+  (let [world (assoc (box 0 60 -1 13 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "12,64,0" "air" "12,65,0" "air" "10,66,0" "chest")
+        hidden #{[9 64 0] [9 65 0] [10 64 0] [10 65 0]}
         p (hiding-with-pickaxe world hidden)
-        answer #(choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false %)
-        risk {:placed 0.5 :apart 0.2}
+        answer #(choose/route-answer p [0 64 0] [12 64 0] (constantly true) (constantly false) false false %)
+        risk {:placed 0.2 :apart 0.2}
         plain (answer {})
-        {:keys [seconds dig]} (answer {:guess-risk risk :worth-s ##Inf})
+        {:keys [seconds share-s dig]} (answer {:guess-risk risk :worth-s ##Inf})
+        stone-s (/ (tools/clear-ms p "stone") 1000)
+        misses (reduce + (map #(* 0.2 (+ (cost/look-s 1) (* 2 stone-s) (cost/walk-step-s))) hidden))
         priced (fn [worth] (some? (answer {:guess-risk risk :worth-s worth})))]
-    (is (= 6 (count (:dig plain))))
-    (is (= (set dig) hidden) "the straight tunnel, under the light, at this risk still the cheapest")
-    (is (> seconds (:seconds plain)) "the risk is in the route's seconds")
-    (is (>= seconds (+ (:seconds plain) (* (cost/look-s 1) (+ 1 (* 5 0.25))))) "each guess's misses (risk/(1 - risk) of them) cost at least the look that shows one")
+    (is (= 22 (count (:dig plain))))
+    (is (= (set dig) (set (:dig plain))) "the straight tunnel, under the light, at this risk still the cheapest")
+    (is (< (js/Math.abs (- seconds (:seconds plain) misses)) 1e-6) "each guess pays its risk of a look and a replan, once")
+    (is (< (js/Math.abs (- share-s (:seconds plain))) 1e-6) ":share-s is the route without its misses")
     (is (priced (* 1.01 seconds)) "priced once: no second factor on the route")
     (is (not (priced (* 0.99 seconds))))
     (is (not-any? hidden (:dig (answer {:guess-risk {:placed 0.9 :apart 0.9} :worth-s ##Inf}))) "guesses that nearly always fail are dug round through seen rock")
-    (is (= [[2 65 0]] (map :cell (filter (comp #{:placed} :class) (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))))))
+    (is (= [[10 65 0]] (map :cell (filter (comp #{:placed} :class) (choose/route-cells p [0 64 0] [12 64 0] (constantly true) (constantly false))))))))
 
 (deftest a-dig-route-search-ends-once-the-cheapest-open-cell-passes-its-worth
   ;; the same walled pocket 10 off through stone: a worth over the dig's price finds the route; a worth under it ends the
