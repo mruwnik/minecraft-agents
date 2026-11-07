@@ -98,4 +98,7 @@
                   (do (ctx/update-mem! c assoc-in [:craft :table-unreachable] true) :again)
 
                   ;; the craft child ran its own rounds and made nothing: another child of the same step would repeat them
-                  :else (tried! c :craft (stop-why e))))))))))
+                  :else (do (when-let [why (or (get-in e [:data :text]) (get-in e [:data :why]) (get-in e [:cause :why]))]
+                              (ctx/update-mem! c assoc-in [:craft :detail] why))
+                            (ctx/update-mem! c assoc-in [:craft :cause] (contract/cause-key e))
+                            (tried! c :craft (stop-why e)))))))))))

@@ -289,6 +289,12 @@
                          (some->> (get-in m [:gather :why]) (str ": ")))]
             (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a))
                      (next-call/with-next (assoc data :tried (:tried m) :why why) c 'jobs.items.obtain args nil)))
+          (and (get-in m [:tried :craft]) (not (get-in m [:tried :gather])) (#{:no-table :unreachable :cannot :craft-failed :not-a-table :full} (get-in m [:craft :cause])))
+          (let [k (get-in m [:craft :cause])
+                why (str "could not make " (clojure.string/join "/" names) ": crafting ended " (pr-str k)
+                         (some->> (get-in m [:craft :detail]) (str ": ")))]
+            (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a))
+                     (next-call/with-next (assoc data :tried (:tried m) :why why) c 'jobs.items.obtain args nil)))
           :else
           (let [tried (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail]))
                 why (str "no source for " (clojure.string/join "/" names) ": "

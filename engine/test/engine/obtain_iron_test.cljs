@@ -324,6 +324,17 @@
           (is (pos? @rounds) "the stone is gathered: the mine child ran")
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :stopped)))))))))
 
+(deftest a-pickaxe-whose-carried-table-cannot-be-put-down-ends-with-that-cause-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [around (vec (for [y [63 64 65] [dx dz] [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]]] [dx y dz]))
+              s (f/start (ore-world {} [{:name "oak_planks" :count 3} {:name "stick" :count 2} {:name "crafting_table" :count 1}]) [f/own-zone])]
+          (await (obtain! s {:item "wooden_pickaxe" :ways #{:craft} :avoid around :explore false} 40))
+          (let [e (last (f/events-of s :stopped))]
+            (is (= :no-table (:reason e)))
+            (is (re-find #"could not be put down" (str (:text e) (:why e))))))))))
+
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child
   (async done
     (tu/run-async done
