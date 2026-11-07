@@ -499,7 +499,8 @@
 (deftest spawns-hurt-is-at-most-the-life
   (let [body {:weapon nil :equipment nil :health 6 :respawn spawn-far :at {:x 0 :y 64 :z 0}}]
     (is (< (cost/spawns-hurt body 0.1 nil) 6))
-    (is (= 6 (cost/spawns-hurt body 50 nil)) "fifty spawns take the life, no more")))
+    (is (= 6 (cost/spawns-hurt body 50 nil)) "fifty spawns take the life, no more")
+    (is (= 0 (cost/spawns-hurt body 0 nil)) "no spawns take nothing")))
 
 (deftest a-lit-way-pays-its-seconds-once-and-its-torches-and-a-dark-one-its-spawns-over-its-seconds
   (let [bare {:weapon nil :equipment nil}

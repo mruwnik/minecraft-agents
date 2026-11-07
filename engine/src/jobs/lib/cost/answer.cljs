@@ -1031,9 +1031,11 @@
   "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (their death is
   spawns-chance's): each its threat-hurt, caught at the prior, over threat/spawn-weights."
   [body spawns at]
-  (min (life body)
-       (* spawns (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
-                    (reduce + (vals threat/spawn-weights))))))
+  (if (zero? spawns)
+    0
+    (min (life body)
+         (* spawns (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
+                      (reduce + (vals threat/spawn-weights)))))))
 
 (defn either
   "{:chance :death} of dying of any of parts {:chance :death}, met apart: the chance one of them kills, and what that
