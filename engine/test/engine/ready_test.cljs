@@ -78,6 +78,7 @@
             [jobs.items.pick-up-loose :as pick-up-loose]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.answer :as answer]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
             [jobs.storage.withdraw :as withdraw]
@@ -1469,6 +1470,23 @@
     (is (= 1510 (js/Math.round death)))
     (is (= (price/stay-hp c 0.005 10) (+ hurt (/ (* dies death) (cost/hp-seconds)))) "the death in hp at an hp's seconds")
     (is (< 2.5 (price/stay-hp c 0.005 10) 3.2) "about 3 hp: a fifth of an hp of hurt, the rest the death")))
+
+(deftest stays-at-several-chances-at-one-place-price-a-spawn-there-once
+  ;; a check prices the stay at its chance, the chance left after dawn and after a dark look: one spawn's hurt and death
+  ;; at the place are the same for each
+  (let [c (ctx-of open-night)
+        body (threats/death-body c)
+        at (u/self-pos c)
+        each (answer/spawn-hurt body at)
+        calls (atom [])
+        hurt answer/threat-hurt
+        parts answer/threat-parts]
+    (with-redefs [answer/threat-hurt (fn [b m caught at] (swap! calls conj [:hurt m]) (hurt b m caught at))
+                  answer/threat-parts (fn [b m caught at] (swap! calls conj [:parts m]) (parts b m caught at))]
+      (doseq [chance [0.001 0.002 0.004]]
+        (is (= (* chance 10 each) (:hurt (price/stay-parts c chance 10))))))
+    (is (seq @calls))
+    (is (= (distinct @calls) @calls) "each mob's hurt and death at the place read once")))
 
 (defn trip-ctx
   "A ctx at the origin carrying bread loaves, its job's trip the figure (::figure, trip-fed's quote), with a booked chest of 64 bread at chest (nil:

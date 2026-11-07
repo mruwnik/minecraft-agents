@@ -1044,15 +1044,22 @@
   ([body spawns at] (spawns-chance body spawns at nil))
   ([body spawns at kill] (- 1 (js/Math.exp (- (* spawns (or kill (:chance (spawn-kill body at)))))))))
 
+(defn spawn-hurt
+  "hp one mob spawned beside body takes off it at `at`: each its threat-hurt, caught at the prior, over threat/spawn-weights."
+  [body at]
+  (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
+     (reduce + (vals threat/spawn-weights))))
+
+(defn spawned-hurt
+  "hp spawns mobs (an expected count) each taking `each` (spawn-hurt) take off body, at most its life."
+  [body spawns each]
+  (min (life body) (* spawns each)))
+
 (defn spawns-hurt
-  "hp spawns mobs (an expected count) spawned beside body take off it at `at`, at most its life (their death is
-  spawns-chance's): each its threat-hurt, caught at the prior, over threat/spawn-weights."
+  "hp spawns mobs (an expected count) spawned beside body take off it at `at` (spawned-hurt of spawn-hurt; their death is
+  spawns-chance's)."
   [body spawns at]
-  (if (zero? spawns)
-    0
-    (min (life body)
-         (* spawns (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
-                      (reduce + (vals threat/spawn-weights)))))))
+  (if (zero? spawns) 0 (spawned-hurt body spawns (spawn-hurt body at))))
 
 (defn either
   "{:chance :death} of dying of any of parts {:chance :death}, met apart: the chance one of them kills, and what that
