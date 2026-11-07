@@ -1,8 +1,8 @@
 (ns world-test.pile-returns
   "tools/event-counts.mjs pile-returns: counts the measured prior behind jobs.lib.cost.death ::pile-returns from the trial
   bodies' logs alone (no fold): of n deaths whose respawn lies within threat/despawn-blocks of the death's spot (the walk
-  back beats the despawn), k where at least half the items carried at the death were picked up again within reach-blocks
-  of the spot, before the next death and within window-ms; a death with no pick-up logged within an hour of it is left
+  back beats the despawn), k the sum of the shares of the items carried at the death that were picked up again within
+  reach-blocks of the spot, before the next death and within window-ms (a death's share is a fraction, not all or none); a death with no pick-up logged within an hour of it is left
   out (its log records none). Pure: report."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
@@ -11,7 +11,7 @@
 (def hour-ms 3600000)
 
 (defn report
-  "{:k :n} of one body's log lines (any order)."
+  "{:k :n} (k a sum of shares) of one body's log lines (any order)."
   [lines window-ms reach-blocks]
   (let [rows (vec (sort-by :t (keep (fn [line] (when-let [t (second (re-find #":time-ms (\d+)" line))] {:t (js/parseInt t) :line line})) lines)))
         event (fn [{:keys [line]}] (reader/read-string line))
@@ -35,6 +35,6 @@
                                         (filter #(<= (dist (:pos %) pos) reach-blocks))
                                         (reduce (fn [m {:keys [item count]}] (update m item (fnil + 0) count)) {}))
                                back-n (reduce + (map (fn [[n c]] (min c (get got n 0))) carried))]
-                           (>= (* 2 back-n) (reduce + (vals carried))))))))
+                           (/ back-n (reduce + (vals carried))))))))
                  rows)]
-    {:k (count (filter true? returns)) :n (count returns)}))
+    {:k (reduce + 0 returns) :n (count returns)}))

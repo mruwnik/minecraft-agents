@@ -25,8 +25,8 @@
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
    ::extra-s {:default 0 :spec (a/num-in 0 nil)
               :doc "Seconds a death costs on top of its walk back, items and experience (death-cost); 0: the death is only what it takes to get back (Q79)."}
-   ::pile-returns {:default {:k 7 :n 27} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
-                   :doc "Of n deaths of the trial bodies whose respawn lay within cost.threat/despawn-blocks of the death (the walk back beats the despawn), k where at least half the items carried were picked up again within 12 blocks of the spot before the next death, 2026-11-07; bodies whose logs record no pick-ups that hour left out. Recount: node tools/event-counts.mjs pile-returns."}
+   ::pile-returns {:default {:k 7.06 :n 27} :spec (a/map-with {:k (a/num-in 0 nil) :n (a/int-in 0 nil)})
+                   :doc "Of n deaths of the trial bodies whose respawn lay within cost.threat/despawn-blocks of the death (the walk back beats the despawn), k the sum of the shares of the items carried that were picked up again within 12 blocks of the spot before the next death, 2026-11-07; bodies whose logs record no pick-ups that hour left out. Recount: node tools/event-counts.mjs pile-returns."}
    ::notice-rate {:default {:other {:k 8 :n-s 42.4}
                             :ranged [{:case "lit 2" :blocks 2 :k 8 :n-s 11.2} {:case "lit 5" :blocks 5 :k 8 :n-s 18.7}
                                      {:case "lit 9" :blocks 9 :k 9 :n-s 46.9} {:case "lit 13" :blocks 13 :k 8 :n-s 21.2}
