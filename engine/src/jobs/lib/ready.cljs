@@ -315,7 +315,8 @@
   goal up) at the chance a dark place has (a lit one is acted on free); ok
   :look-first while the walk is affordable and the look cheaper than the other ways and than the job's own answers to s (own-way); a way
   with a :child (walk-look) keeps the status those ways give, with the child as its :look-first call, run before the start,
-  while it and the legs before it on its hall (walked-data :spent) cost less than the stay, which bounds the child as its :worth.
+  while it and the legs before it on its hall (walked-data :spent) cost less than the stay; its :worth is what it may spare,
+  the cheapest of the stay and the job's own answers less the way after a dark look.
   A :never resting on such a guess whose walk to look costs more hp than the worth buys holds :later: the refusal is on
   price, not impossible. An own answer cheaper than the way taken leaves s to the job."
   [c s]
@@ -331,14 +332,15 @@
             own-s (keep #(% (dissoc c ::own-ways ::own-stays) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))
             dark (:dark look-way 1)
-            after (fn [] (let [{:keys [now-s now? best]} (ways (/ chance dark) (some-> left-chance (/ dark)))]
-                           (* dark (apply min (ctx/worth c) (cond-> own-s now? (conj now-s) best (conj (:s best)))))))
-            look-s (some->> look-way (walk-risk/look-cost c) (#(when (look-edge/affords-walk? c % (ctx/worth c)) %))
-                            (+ (if (pos? dark) (after) 0)))
-            look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
+            after-s (if (and look-way (pos? dark))
+                      (let [{:keys [now-s now? best]} (ways (/ chance dark) (some-> left-chance (/ dark)))]
+                        (* dark (apply min (ctx/worth c) (cond-> own-s now? (conj now-s) best (conj (:s best))))))
+                      0)
+            look-s (some->> look-way (walk-risk/look-cost c) (#(when (look-edge/affords-walk? c % (ctx/worth c)) %)) (+ after-s))
             toured (if-let [{:keys [at]} (second (:child look-way))]
                      (get (let [sp (:spent (walked-data c))] (when (map? sp) sp)) (hall-key at) 0)
                      0)
+            look (when (and look-s (every? #(< (+ look-s toured) %) own-s)) {:s look-s})
             look? (fn [than] (and look (or (nil? than) (< (+ (:s look) toured) than))))
             wait (fn [{:keys [wait] :as w}]
                    (if (= :light wait)
@@ -361,7 +363,7 @@
           (not (look? stay-s)) stay
           (:child look-way) (-> stay
                                 (update 1 str "; " look-text ", so it walks to look first")
-                                (assoc-in [2 :look-first] (cond-> (:child look-way) stay-s (assoc-in [1 :worth] stay-s))))
+                                (assoc-in [2 :look-first] (cond-> (:child look-way) stay-s (assoc-in [1 :worth] (- (apply min stay-s own-s) after-s)))))
           :else (contract/ok :look-first (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, but " look-text
                                               ": the stay is judged once looked")))))))
 

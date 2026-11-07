@@ -801,12 +801,16 @@
                                reach-room/unseen-sides (constantly sides)
                                sh-inside/dark-hall (constantly :roofed)
                                sh-sense/buried? (constantly true)]
-                   (lit 0 0 #(let [c (assoc (for-iron (ctx-of (assoc long-tunnel :time st/noon))) ::price/stay-s 60)]
-                               (ready/hall-status (assoc c :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:root (:root c) :spent {[0 64 0] spent}}} walk-look/walked-policy)}))
+                   (lit 0 0 #(let [c (assoc (for-iron (ctx-of (assoc long-tunnel :time st/noon))) ::price/stay-s 300)]
+                               (ready/hall-status (-> c
+                                                      (ready/own-way (constantly 120))
+                                                      (assoc :view (constantly {:now 0 :data (mem/add-entry mem/empty-data :walk-looked {:t 0 :data {:root (:root c) :spent {[0 64 0] spent}}} walk-look/walked-policy)})))
                                                   nil)))))
         worth (:worth (second (:look-first (nth (status 0) 2))))]
-    (is (number? worth) "the walk-look child is bought with the stay's price as its worth, not the goal's")
-    (is (= [:ok nil] ((juxt first #(:look-first (nth % 2))) (status worth))) "legs that spent the stay's price buy no more: the stay is judged as it is")))
+    ;; a 300 s stay costs ~158 s at the hall's chance; shown open (0.81) it is past health, so the job's own 120 s torches
+    ;; answer it: the look spares about 120 - 0.81 x 120 = 23 s
+    (is (< 0 worth 30) "the walk-look child is bought with what the look may spare as its worth, not the goal's")
+    (is (nil? (:look-first (nth (status worth) 2))) "legs that spent what the look may spare buy no more")))
 
 (deftest a-dark-room-with-an-unseen-roof-cell-is-looked-at-before-it-is-judged-a-hall
   (let [c (ctx-of (assoc tunnel :time st/noon))
