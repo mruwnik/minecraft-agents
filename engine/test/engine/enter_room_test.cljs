@@ -175,6 +175,15 @@
                                          (.call at p pos))))
           (is (= ##Inf (await (mean))) "an unseen sky beside a seen roof on open sides is no reason to walk"))))))
 
+(deftest walls-under-the-sky-are-unclosable-a-room-with-one-roof-hole-is-not
+  ;; A walled yard is a closed room (no walker gets in) that enter-room can never shut the night out of; the night walked
+  ;; into one as its :home and ended :open.
+  (let [yard (st/setup (hut-world {:x 5 :y 64 :z 12} (into {} (for [x [4 5 6] z [-1 0 1]] [(str x ",67," z) "air"]))))
+        holed (st/setup (assoc holed-hut :self {:pos {:x 5 :y 64 :z 12}}))]
+    (is (true? (room-lib/refuge-room? (:p yard) {:x 5 :y 64 :z 0})) "the yard is closed")
+    (is (true? (enter-room/unclosable? (:p yard) {:x 5 :y 64 :z 0})))
+    (is (false? (enter-room/unclosable? (:p holed) {:x 5 :y 64 :z 0})) "one hole is mended by a plug")))
+
 (deftest a-home-in-anothers-zone-is-not-walked-into
   (async done
     (tu/run-async done

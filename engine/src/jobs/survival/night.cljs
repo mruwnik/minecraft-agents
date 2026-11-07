@@ -284,7 +284,7 @@
 
 (defn ^:async seen-room!
   "{:at cell :price seconds :quote q} of the room behind a door the body has seen whose walk plus open-room-cost is the least (cheapest-walk!, a room
-  judged only when its turn comes) within limit-s seconds: a closed room (chance 1), or a room not seen inside yet (the chance none of its unseen
+  judged only when its turn comes) within limit-s seconds, none enter-room/unclosable? (walls under the sky): a closed room (chance 1), or a room not seen inside yet (the chance none of its unseen
   sides hides an opening, cost/closed-chance of the sides seen closed; the walk shows it). :searching or nil as cheapest-walk!."
   [c limit-s]
   (let [p (:primitives c)
@@ -294,7 +294,7 @@
     (when (seq poses)
       (let [dig-s (await (bed-down/dig-in-s c))
             walk #(rank-walk {:pos %})
-            best (await (cheapest-walk! c poses {:target walk :walk walk :limit-s limit-s :ok? #(some? (chance %))
+            best (await (cheapest-walk! c poses {:target walk :walk walk :limit-s limit-s :ok? #(and (some? (chance %)) (not (enter-room/unclosable? p %)))
                                                  :price (fn [pose s] (+ s (open-room-cost (chance pose) dig-s)))}))]
         (if (map? best) (assoc best :at (:pick best)) best)))))
 
