@@ -1099,13 +1099,22 @@
     (into {} (comp (remove #{"set" "done"}) (map (fn [f] [f (keyword (str/trim (str (fs/readFileSync (path/join d f) "utf8"))))])))
           (if (fs/existsSync d) (array-seq (fs/readdirSync d)) []))))
 
+(declare barrier-wait-open!)
+
 (defn barrier-wait!
   "Waits until n bodies of batch reached the barrier (or left it), then exactly one of them runs do-set! (-> promise) and the rest
   wait for it to finish. A wait past timeout-ms ends the waiting (note is called): one body still wins the set flag and runs do-set!,
   the others wait for its done flag for up to timeout-ms more, never setting twice (a stuck body must not hang the batch).
+  A body arriving after the barrier was released (done flag) sets the time itself at once: its peers' set was for them.
   env: {:dir :batch :n :pid :sleep :timeout-ms :note}."
   [{:keys [dir batch n pid sleep timeout-ms note]} do-set!]
   (barrier-write! dir batch pid :arrived)
+  (if (fs/existsSync (path/join (barrier-dir dir batch) "done"))
+    (do-set!)
+    (barrier-wait-open! {:dir dir :batch batch :n n :pid pid :sleep sleep :timeout-ms timeout-ms :note note} do-set!)))
+
+(defn- barrier-wait-open!
+  [{:keys [dir batch n pid sleep timeout-ms note]} do-set!]
   (let [until (+ (js/Date.now) timeout-ms)
         d (barrier-dir dir batch)
         flag (fn [name] (path/join d name))]
@@ -1691,7 +1700,8 @@
                                                               :note #(log-command! opts "time set barrier" %)}
                                                              do-set)
                                               (do-set)))
-                                          (fn [ok] (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
+                                          (fn [ok] (some-> (:barrier-end opts) (reset! (js/Date.now)))
+                                            (if ok ids (throw (js/Error. "a :time-set step needs --allow-time")))))
                          :await (.then (await-event opts offset a (await-since a t0 @cli-ms @prev-ms) (* 1000 b) ids)
                                        (fn [ev] (if ev (do (reset! event-job (get-in ev [:context :job-id])) (reset! prev-ms (:time-ms ev)) ids) (throw (js/Error. (str ":await " (pr-str a) " timed out after " b " s"))))))
                          :freeze-body (.then (freeze-body! {:pid (some-> (get @bodies (:body opts)) .-pid)
@@ -2130,11 +2140,12 @@
                        (.then #(rcon! (f/clear-hostiles-commands grid origin rc)))
                        (.then (fn []
                                 (let [t0 (js/Date.now)
+                                      barrier-end (atom nil)
                                       _ (ev/emit! (ev/phase :run))
                                       window (watch-window (some? register) @pre-register {:offset (log-cursor (events-file opts)) :from-ms t0})]
-                                  (-> (run-steps! opts origin rc (:offset window) (:from-ms window))
+                                  (-> (run-steps! (assoc opts :barrier-end barrier-end) origin rc (:offset window) (:from-ms window))
                                       (.then (fn [ids]
-                                               (.then (watch! opts rc c origin window t0 ids clock)
+                                               (.then (watch! opts rc c origin window (or @barrier-end t0) ids clock)
                                                       (fn [expects]
                                                         (.then (after-checks! opts origin rc)
                                                                (fn [afters]

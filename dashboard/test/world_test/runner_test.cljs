@@ -1645,6 +1645,18 @@
                    (fs/rmSync dir #js {:recursive true})
                    (done)))))))
 
+(deftest a-body-arriving-after-the-barrier-was-released-sets-the-time-itself-at-once
+  (async done
+    (let [dir (tmp-dir) sets (atom [])
+          at (fn [pid t] (r/barrier-wait! {:dir dir :batch "n1" :n 3 :pid pid :sleep r/sleep :timeout-ms t}
+                                          (fn [] (swap! sets conj pid) (js/Promise.resolve true))))]
+      (-> (at 1 100)
+          (.then (fn [_] (at 2 5000)))
+          (.then (fn [_]
+                   (is (= [1 2] @sets) "the late body set the time itself instead of trusting the setter's")
+                   (fs/rmSync dir #js {:recursive true})
+                   (done)))))))
+
 (deftest a-body-that-leaves-counts-for-the-barrier
   (async done
     (let [dir (tmp-dir)]
