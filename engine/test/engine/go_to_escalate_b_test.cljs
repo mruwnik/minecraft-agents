@@ -467,6 +467,22 @@
           (is (empty? (events-of seen :go-to.by-hand)))
           (is (= "stone" (block p [1 62 0])) "the stone is left"))))))
 
+(deftest a-detour-s-stair-with-no-tool-for-its-heading-takes-another-heading-not-the-detour-give-up
+  ;; sweep 225f36316 go-to-stair-heading/obsidian-east-other-heading-arrives: the detour's stair met obsidian east and the call gave up :detour
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (merge in-pit {:blocks (merge pit (box 1 61 0 1 64 0 "stone"))}))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [10 64 0] :range 1} :round 1})
+              detour {:status :no-path :reason :detour :route 25 :blocks 14 :straight 5 :allowed 18}]
+          (.setOwner (:primitives eng) "tx")
+          (ctx/update-mem! c assoc :detour-tried true :fruitless 1 :escalations 1 :give-up {:tries 0 :status :detour :result detour}
+                           :escalation {:step :stair :heading :east :steps 3} :escalation-from [0 61 0] :holes-before 0)
+          (is (= :again (await (esc/escalation-failed! c {:x 10 :y 64 :z 0} {:step :stair :reason :no-tool :block "stone"}))))
+          (let [e (:escalation (ctx/mem c))]
+            (is (= :stair (:step e)))
+            (is (not= :east (:heading e)) "the heading with no tool is ruled out, the others stay")))))))
+
 (deftest go-to-cancelled-mid-dig-route-notes-the-cell-dug-so-far
   (async done
     (tu/run-async done
