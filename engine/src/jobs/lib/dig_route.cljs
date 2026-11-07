@@ -158,7 +158,7 @@
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s held-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-s margin near sees back-h? full? prior-h? seen-steps seen-cells open-ys unseen-dig-s unseen-digs guess floor-absent-s flood lava-s searched-s read-s held-s only] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly access/hidden-guess) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -427,28 +427,28 @@
                      (.join (.sort (js/Array.from o) -) ","))
                    sig))
         sub-sig? (fn [a b] (or (= "" a) (let [o (js/Set. (.split b ","))] (.every (.split a ",") #(.has o %)))))
-        ;; the path state a way's next steps depend on beyond its cell and dug floors: blocks placed (max-places), dig seconds
-        ;; (max-dig-s) and the pillar run (a fn pillar-s: a later block of a run costs no less). A way with no more of each
-        ;; may take every step another may, at no higher price
-        path-state? (or (some? max-places) (some? max-dig-s) (fn? pillar-s))
-        no-more? (fn [placed ds run placed' ds' run']
-                   (and (or (nil? max-places) (<= placed placed')) (or (nil? max-dig-s) (<= ds ds')) (or (not (fn? pillar-s)) (<= run run'))))
+        ;; the path state a way's next steps depend on beyond its cell and dug floors: blocks placed (max-places) and the
+        ;; pillar run (a fn pillar-s: a later block of a run costs no less). A way with no more of each may take every step
+        ;; another may, at no higher price
+        path-state? (or (some? max-places) (fn? pillar-s))
+        no-more? (fn [placed run placed' run']
+                   (and (or (nil? max-places) (<= placed placed')) (or (not (fn? pillar-s)) (<= run run'))))
         dry-at (js/Map.)
         ;; a new label of cell key i in at (wet-at or dry-at) for a way of s seconds, its water at level (nil: dry), the head
         ;; under it for under seconds, the contested cells sig dug (fewer: no worse) and its path state; nil when one the cell
         ;; holds is no worse on all, or, dry, one expanded of the same sig is no worse on all but seconds (a cell expanded is
         ;; not reopened). The labels the new one is no worse than are dropped
-        label! (fn [^js at i s level under sig placed ds run]
+        label! (fn [^js at i s level under sig placed run]
                  (let [^js ids (or (.get at i) #js [])
                        wet? (some? level)
                        over? (fn [id] (let [^js a (.get best id)]
                                         (and (or (< (aget a 0) s) (and (== (aget a 0) s) (or wet? (= sig (aget a 10)))) (and (not wet?) (.has done id) (= sig (aget a 10))))
                                              (or (not wet?) (and (<= (aget a 8) level) (<= (aget a 9) under)))
-                                             (sub-sig? (aget a 10) sig) (no-more? (aget a 5) (aget a 2) (aget a 7) placed ds run))))
+                                             (sub-sig? (aget a 10) sig) (no-more? (aget a 5) (aget a 7) placed run))))
                        under? (fn [id] (let [^js a (.get best id)]
                                          (and (or (< s (aget a 0)) (and (== s (aget a 0)) (or wet? (= sig (aget a 10)))))
                                               (or (not wet?) (and (<= level (aget a 8)) (<= under (aget a 9))))
-                                              (sub-sig? sig (aget a 10)) (no-more? placed ds run (aget a 5) (aget a 2) (aget a 7)))))]
+                                              (sub-sig? sig (aget a 10)) (no-more? placed run (aget a 5) (aget a 7)))))]
                    (when-not (.some ids over?)
                      (let [id (vswap! wet-n dec)
                            kept (.filter ids #(or (not (under? %)) (do (.add dropped %) false)))]
@@ -460,8 +460,7 @@
                        wet-s (if (some? level) (let [[w u] (flood-walk flood level (aget acc 5) ny)] (aset acc 5 u) w) 0)
                        k (+ (aget from-node 1) (aget acc 1)) ds (+ (aget from-node 2) (aget acc 2))
                        placed (cond-> (aget from-node 5) (not (keyword-identical? :walk move)) inc)]
-                   (when (and (or (nil? max-dig-s) (<= ds max-dig-s))
-                              (or (nil? max-places) (<= placed max-places)))
+                   (when (or (nil? max-places) (<= placed max-places))
                      (let [unseen-s (let [u (unseen-at nx ny nz)] (if (zero? u) face-s u))
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
                            absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
@@ -469,8 +468,8 @@
                            sig (sig-of (aget from-node 10) (aget acc 3))
                            run (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0)]
                        (when-let [nk (cond
-                                       (some? level) (label! wet-at i nd level (aget acc 5) sig placed ds run)
-                                       (or path-state? (pos? (.-size contested))) (label! dry-at i nd nil 0 sig placed ds run)
+                                       (some? level) (label! wet-at i nd level (aget acc 5) sig placed run)
+                                       (or path-state? (pos? (.-size contested))) (label! dry-at i nd nil 0 sig placed run)
                                        :else (let [^js old (.get best i)] (when (and (not (.has done i)) (or (nil? old) (< nd (aget old 0)))) i)))]
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) run (aget acc 4) (aget acc 5) sig])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
@@ -812,7 +811,7 @@
   :floor-absent-s (fn [floor-cell rise]) the seconds a walk rising rise blocks onto a floor that is (:unseen? cell) adds, the chance it is none; a
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or, without :lava-s, with lava over or beside it (it would flow in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
-  given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
+  given: :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends, :only feet cells (none else is stepped onto), :seed the feet cells of a planned way searched round first (seeded-search); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
   :read-s seconds of CPU a cell read (priced-search; a cell expanded at cost/search-cell-s when that is more; past answer-s it answers with the cheapest route in hand, or ends :dearer
   under :held-s, the price of a route the caller holds), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with

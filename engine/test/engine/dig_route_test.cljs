@@ -51,8 +51,7 @@
     (is (seq (:dig (dr/route deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3 :max-nodes 100000}))) "within the bound it is found")
     (let [run (dr/search deep [0 20 0] [30 8 0] {:max-s 1000 :margin 3})]
       (run 10)
-      (is (= {:problem :dearer} (first (run 100000 5))) "a search begun under a larger bound goes on under the lower one it is handed"))
-    (is (= {:problem :no-route :boxed true :searched-s 0} (dr/route deep [0 20 0] [30 8 0] {:max-dig-s 5 :margin 3 :max-nodes 100000})) "a bound in seconds of digging")))
+      (is (= {:problem :dearer} (first (run 100000 5))) "a search begun under a larger bound goes on under the lower one it is handed"))))
 
 (deftest a-goal-walled-in-ends-without-a-flood-however-wide-the-wall
   (let [shell (fn [d name] (into {} (for [x (range (- 10 d) (+ 11 d)) y (range (- 10 d) (+ 11 d)) z (range (- d) (inc d))
@@ -98,8 +97,10 @@
   (let [w (world {[1 9 0] "air" [1 8 0] "air" [1 7 0] "air" [1 6 0] "air"})]
     (is (= [] (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4 :fall-s (constantly 0)}))))
     (is (seq (:dig (dr/route w [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 100 0) :margin 3}))) "a dear fall is dug round")
-    (is (= {:problem :no-route :boxed true :searched-s 0} (dr/route (world {[1 6 0] "air" [1 7 0] "air"}) [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 1 0) :max-dig-s 2 :margin 2}))
-        "no hole is dug to fall down it at a price in hp")))
+    (let [r (dr/route (world {[1 6 0] "air" [1 7 0] "air"}) [0 10 0] [1 6 0] {:max-fall 4 :fall-s #(if (> % 3) 1 0) :margin 2})]
+      (is (seq (:dig r)))
+      (is (every? #(<= % 3) (map (fn [m {[_ y _] :to}] (- (m 1) y)) (cons [0 10 0] (map :to (:steps r))) (:steps r)))
+          "no hole is dug to fall down it at a price in hp"))))
 
 (deftest a-pillar-climbs-out-of-a-pit-without-digging-when-blocks-are-carried
   (let [w (world {[0 8 0] "air" [0 9 0] "air"})
