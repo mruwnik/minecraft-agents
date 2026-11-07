@@ -42,8 +42,9 @@
         rows (concat (s/episodes [(flee 0 20) held died])
                      (s/episodes [(flee 0 20) (fled 500) held died])
                      (s/episodes [(flee 0 20) (assoc (fled 500) :fled "r2") held died]))]
+    (is (= [false] (map :unlogged? (s/episodes [(fled -100) (flee 0 20) held died]))) "a step logged before it: the logs reach back far enough to show its own")
     (is (= [true false true] (map :held? rows)) "a step of its own run before the hold: the flight ran, then was cornered")
-    (is (= {:flights {:zombie {:lived [] :died [[20 8 1]]}} :held {:zombie {:n 2 :died 2}}}
+    (is (= {:flights {:zombie {:lived [] :died [[20 8 1]]}} :held {:zombie {:n 2 :died 2 :unlogged 2}}}
            (select-keys (settings/with-settings {::threat/difficulty 1} #(s/report rows [])) [:flights :held])))))
 
 (deftest fights-are-counted-armed-and-dry
