@@ -1498,7 +1498,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 2.5 64 0.5)]})
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(enderman 2.5 64 0.5)]})
               sensed (.-sensedAt p)
               looked? #(some (fn [l] (let [at (.. l -args -pos)] (and (== 66 (js/Math.floor (.-y at))) (== 0 (js/Math.floor (.-x at)))))) (calls p "look"))]
           (aset p "sensedAt" (fn [pos] (if (and (>= (.-y pos) 66) (not (looked?))) #js {:unknown true} (sensed pos))))
@@ -1507,7 +1507,8 @@
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (looked?) "the cell over the head itself is looked at (a look at a cell far above glances only that one), not read as rock")
-          (is (pos? (count (calls p "place"))) "open sky is no roof: it walls itself in"))))))
+          (is (pos? (count (calls p "place"))) "open sky is no roof: it walls itself in")
+          (is (= 1 (count (filter #(= :retreat.cornered (:kind %)) @seen))) "it looks before it holds: the walls come in the step that found the sky, no hold under it"))))))
 
 (deftest nearest-first-orders-the-sides-by-the-melee-chaser-and-keeps-support-before-roof
   (let [feet {:x 0 :y 64 :z 0}

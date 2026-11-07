@@ -85,21 +85,24 @@
   ([block-at from reach] (roof-cell block-at from reach []))
   ([block-at from reach avoid]
   (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])
-        at (fn [cell dy] (block-at (update cell :y + dy)))
+        ;; deep? reads each cell for up to 25 gaps round it: one read a cell
+        seen (volatile! {})
+        at (fn [cell dy] (let [k (update cell :y + dy)]
+                           (if-let [[_ b] (find @seen k)] b (let [b (block-at k)] (vswap! seen assoc k b) b))))
         gap? (fn [cell] (and (escape/solid? (at cell -1)) (bs/passable? (at cell 0))
                              (bs/passable? (at cell 1)) (escape/solid? (at cell 2))))
         tall? (fn [cell] (and (escape/solid? (at cell -1)) (bs/passable? (at cell 0))
                               (bs/passable? (at cell 1)) (bs/passable? (at cell 2))))
         deep? (fn [cell] (not-any? tall? (for [dx (range -2 3) dz (range -2 3)]
-                                           (-> cell (update :x + dx) (update :z + dz)))))]
-    (->> (for [dx (range (- reach) (inc reach)) dy (range -1 2) dz (range (- reach) (inc reach))
-               :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))
-               :let [cell {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}]
-               :when (gap? cell)
-               :when (every? #(> (u/dist % {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))}) (settings/get settings ::enderman-gap)) avoid)]
-           cell)
-         (sort-by (juxt (complement deep?) #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))})))
-         first))))
+                                           (-> cell (update :x + dx) (update :z + dz)))))
+        gaps (->> (for [dx (range (- reach) (inc reach)) dy (range -1 2) dz (range (- reach) (inc reach))
+                        :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))
+                        :let [cell {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}]
+                        :when (gap? cell)
+                        :when (every? #(> (u/dist % {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))}) (settings/get settings ::enderman-gap)) avoid)]
+                    cell)
+                  (sort-by #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))})))]
+    (or (some #(when (deep? %) %) gaps) (first gaps)))))
 
 (defn dry-cell
   "The dry stand the hostile answer prices the swim to (jobs.lib.shore/swim-to-land: joined to the body by seen water and
@@ -128,7 +131,8 @@
         up (fn [n] (block-at (update here :y + n)))]
     (case (:where (:args c))
       :water (= "water" (block-at here))
-      :roof (and (bs/passable? (up 1)) (escape/solid? (up 2)))
+      :roof (and (bs/passable? (up 1)) (escape/solid? (up 2))
+                 (not (true? (some-> (u/sensed (:primitives c) (update here :y + 2)) .-unknown))))
       :dry (and (not= "water" (up 0)) (not= "water" (up 1))))))
 
 (defn done? [c]
