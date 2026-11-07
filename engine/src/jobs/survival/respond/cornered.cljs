@@ -229,6 +229,7 @@
         order (by-price (escape-order {:win? win?
                              :creeper? (boolean (some combat/creeper? hostiles))
                              :enderman? (angry-enderman? c hostiles)
+                             :melee? (boolean (or (seq (hitters c hostiles)) (seq (arriving c hostiles))))
                              :flyer? (boolean (some combat/flyer? hostiles))
                              :ranged? (boolean (or fire? (and threat (combat/ranged? threat))))
                              :climber? (boolean (some combat/climber? hostiles))

@@ -1500,6 +1500,7 @@
   (is (= [:water :roof :plug :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds")
   (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true}))))
+  (is (= [:plug :plug-dig :fight] (choose/escape-order {:enderman? true :melee? true})) "a roof or water keeps off the enderman only: a zombie beside the body hits it there")
   (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (choose/escape-order {:swim? true})))
   (is (= [:fight] (choose/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
   (is (= :back-off (first (choose/escape-order {:swim? true :creeper? true}))))
