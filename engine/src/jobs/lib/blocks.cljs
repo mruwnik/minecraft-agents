@@ -28,6 +28,7 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.trees :as forestry]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.shelter.keep :as shelter-keep]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]
             [engine.game :as game]))
@@ -307,12 +308,12 @@
 (def seal-radius "Blocks from the feet within which an own ledger block counts as the body's seal." 3)
 
 (defn walk-ways
-  "The ways of a block job's walk: :walk and :clear-seal; with own ledger blocks round the feet (a dig-in's seal) also :dig-out and :pillar, to leave the shaft they shut. A call with :clear-seal false (a seal cleanup's own dig) walks with :walk only: no way of it may start another cleanup."
+  "The ways of a block job's walk: :walk and :clear-seal; with a shelter's own ledger blocks round the feet (a dig-in's seal; not a pillar the body climbed) also :dig-out and :pillar, to leave the shaft they shut. A call with :clear-seal false (a seal cleanup's own dig) walks with :walk only: no way of it may start another cleanup."
   [c]
   (if (false? (:clear-seal (:args c)))
     #{:walk}
     (cond-> #{:walk :clear-seal}
-      (seq (ledger/near-of (ledger/entries c) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
+      (seq (ledger/near-of (filterv (comp shelter-keep/shelter-purposes :purpose) (ledger/entries c)) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar]))))
 
 (defn ^:async walk-request
   "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways (no :ignore-zones?: the call's leave to dig
