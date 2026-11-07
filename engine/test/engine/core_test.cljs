@@ -2254,3 +2254,11 @@
           (is (some #(and (= :stuck (:kind %)) (= "wait" (:name %))) @seen) "action.stuck names the act")
           (is (re-find #"act-stuck: wait" (str (get-in (core/state eng) [:failed "j1" :error]))) "the job is parked failed")
           (is (nil? (core/holder eng)) "the body is free"))))))
+
+(deftest respawns-are-kept-as-a-list-of-the-latest-eight
+  (let [{:keys [eng clock]} (setup)]
+    (doseq [i (range 10)]
+      (core/record-body-event! eng #js {:kind "respawned" :pos #js {:x i :y 64 :z 0}})
+      (swap! clock + (* 30 60 1000)))
+    (let [es (mem/entries (mem/view (:store eng)) :respawned)]
+      (is (= (range 2 10) (map #(get-in % [:data :pos :x]) es)) "the latest eight; each save swept, the oldest entries are over an hour old"))))

@@ -630,7 +630,7 @@
 
 (defn respawn-of
   "Where a death of the body of p would wake: the live spawn bed (sh-spawn/spawn-bed-pos; view nil: none), else where it
-  last respawned (the latest :respawned entry's :pos, kept an hour), else the world spawn the game gives every player;
+  last respawned (the latest :respawned entry's :pos, the eight latest are kept), else the world spawn the game gives every player;
   nil until the game has sent it."
   [p view]
   (or (when view (or (sh-spawn/spawn-bed-pos p view) (:pos (:data (mem/latest view :respawned)))))

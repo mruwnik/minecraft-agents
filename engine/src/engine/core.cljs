@@ -174,6 +174,8 @@
 
 (def deaths-policy "The :deaths list: the ten latest, kept for good." {:cap 10 :ttl :forever})
 
+(def respawned-policy "The :respawned list: eight latest, kept for good: enough history to see where respawns land, bounded." {:cap 8 :ttl :forever})
+
 (defn record-death!
   "Add the :died entry to the :deaths list (pos, dimension, cause) unless its :death-t is there already."
   [eng entry]
@@ -195,7 +197,8 @@
             m)
         pos (when (= "hurt" (:kind m)) (self-pos (:primitives eng)))
         m (cond-> m pos (assoc :pos pos))]
-    (let [entry (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind :survived))]
+    (let [entry (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind :survived)
+                            (when (= "respawned" (:kind m)) respawned-policy))]
       (when (= "died" (:kind m)) (record-death! eng entry)))
     (when (= "respawned" (:kind m)) (settle/rebase-queued! eng))
     (save-memory! eng)
