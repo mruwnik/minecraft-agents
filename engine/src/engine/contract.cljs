@@ -262,8 +262,8 @@
               :spec (a/valid-by "a map {setting-key value} of declared settings" #(when-not (map? %) "not a map"))}
    :deadline {:doc "the ms on the TTL clock (wall time less host suspends) by which the call must have ended; default the caller's" :default nil
               :spec (a/num-in 0 nil)}
-   :worth {:doc "what the goal is worth, in seconds of the body's time, ##Inf for \"arrive\"; default the caller's, at the root the job's worth-of, else ##Inf" :default nil
-           :spec (a/or-of (a/num-in 0 nil) #{##Inf})}
+   :worth {:doc "what the goal is worth, in seconds of the body's time; default the caller's, at the root the job's worth-of, else the engine.ctx/worth-s setting" :default nil
+           :spec (a/num-in 0 nil)}
    :submitted-at {:doc "where the body stood at submit (the agent tool adds it): the call waits :moved-since-submit before its first round while the body stands over ::moved-limit from it; each job of this body that ends before it starts, and a respawn, moves this mark to where the body then stands" :default nil
                   :spec a/position?}
    :here {:doc "true: start wherever the body is, whatever :submitted-at says" :default nil :spec boolean?}

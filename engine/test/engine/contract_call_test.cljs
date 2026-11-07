@@ -151,7 +151,7 @@
                             (await (ctx/call c :a 'kid {}))
                             (ctx/end c :done nil))}})
 
-(deftest worth-is-the-roots-hook-or-inf-inherited-and-overridable
+(deftest worth-is-the-roots-hook-or-the-setting-inherited-and-overridable
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -166,8 +166,8 @@
           (reset! worths {})
           (core/submit! eng '(bare) {})
           (await (core/tick! eng))
-          (is (= ##Inf (:bare @worths)) "no hook: arrive")
-          (is (= ##Inf (:kid @worths)) "inherited"))
+          (is (= (ctx/default-worth) (:bare @worths)) "no hook: the engine.ctx/worth-s setting")
+          (is (= (ctx/default-worth) (:kid @worths)) "inherited"))
         (let [{:keys [eng]} (setup worth-jobs)]
           (reset! worths {})
           (core/submit! eng '(top {:worth 12}) {})
@@ -177,4 +177,4 @@
           (is (= 12 (:kid @worths)) "inherited")
           (is (some? (contract/call-problem 'bare nil {:worth -1})) "a negative worth is refused")
           (is (some? (contract/call-problem 'bare nil {:worth js/NaN})) "NaN is refused")
-          (is (nil? (contract/call-problem 'bare nil {:worth ##Inf})) "##Inf is accepted"))))))
+          (is (some? (contract/call-problem 'bare nil {:worth ##Inf})) "##Inf is refused: no worth is infinite"))))))

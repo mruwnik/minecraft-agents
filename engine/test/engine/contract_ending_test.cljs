@@ -139,7 +139,7 @@
           (swap! world assoc :leaf-ok true :child-args {:spend {:items {"dirt" 2}}})
           (await (core/tick! eng))
           (is (= {:least 1 :ways #{:craft} :spend {:job-time 45 :items {"dirt" 2}} :use {:tools ["stone_pickaxe"]}
-                  :deadline 9000000 :worth ##Inf}
+                  :deadline 9000000 :worth 1200}
                  (:leaf-call @world)))
           (is (true? (:leaf-way? @world)))
           (is (= ["stone_pickaxe"] (:leaf-use @world)))

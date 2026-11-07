@@ -46,8 +46,9 @@
                {:uses {:job-time [1 2 ##Inf]} :yields {:items {"dirt" [0 1 2]}}})
    :round (fn [_] (swap! world assoc :kid-ran true) :continue)})
 
-(deftest worth-of-a-ctx-with-no-worth-fn-is-infinite
-  (is (= ##Inf (ctx/worth {:quote-call {}}))))
+(deftest worth-of-a-ctx-with-no-worth-fn-is-the-setting
+  (is (= 1200 (ctx/worth {:quote-call {}})))
+  (is (= 30 (settings/with-settings {:engine.ctx/worth-s 30} #(ctx/worth {:quote-call {}})))))
 
 (deftest a-quote-may-carry-a-death-chance-and-its-price
   (is (nil? (contract/quote-problem {:uses {:health [0 2 2]} :death {:chance 0.01 :death 900}})))

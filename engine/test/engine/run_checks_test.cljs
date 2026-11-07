@@ -172,7 +172,7 @@
           (core/register-reflex! eng {:trigger :r})
           (await (core/tick! eng))
           (is (= :dark (:reason (core/held-trigger eng :r))))
-          (is (= #{7} @worths) "safe? and can-start? read the job's worth-of, not the root's ##Inf"))))))
+          (is (= #{7} @worths) "safe? and can-start? read the job's worth-of, not the default"))))))
 
 (defn raw-mem [eng root slots] (mem/job-mem (mem/view (:store eng)) root slots))
 

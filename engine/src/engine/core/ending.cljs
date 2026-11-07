@@ -174,12 +174,13 @@
           call (:use (:defaults def))))
 
 (defn root-worth
-  "The worth of a call that gets none from its args or its caller: def's worth-of for c, else ##Inf (arrive)."
+  "The worth of a call that gets none from its args or its caller: def's worth-of for c, else (none, or nil) ctx/default-worth."
   [c def]
-  (let [w (if-let [f (:worth-of def)] (f c) ##Inf)]
-    (if (and (number? w) (>= w 0))
-      w
-      (throw (js/Error. (str (or (:sym def) "a job") "'s worth-of returned " (pr-str w) ", not a number >= 0 or ##Inf"))))))
+  (let [w (if-let [f (:worth-of def)] (f c) nil)]
+    (cond
+      (nil? w) (ctx/default-worth)
+      (and (number? w) (>= w 0) (js/isFinite w)) w
+      :else (throw (js/Error. (str (or (:sym def) "a job") "'s worth-of returned " (pr-str w) ", not a finite number >= 0"))))))
 
 (defn call-of
   "The call keys c's call is frozen with: its args over def's defaults (settings keys read) and the caller's call,

@@ -1,9 +1,17 @@
 (ns engine.ctx
   "Helpers a job's check and round call on their ctx. See README.md, section ctx."
   (:refer-clojure :exclude [quote use])
-  (:require [engine.contract :as contract]
+  (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.expr :as expr]
-            [engine.memory :as mem]))
+            [engine.memory :as mem]
+            [engine.settings :as settings]))
+
+(a/defargs settings
+  {::worth-s {:default 1200 :spec (a/num-in 0 nil)
+              :doc "Seconds a root call is worth when nobody gives it a worth and its job has no worth-of (a go-to or dig typed by hand): a game day."}})
+
+(defn default-worth "The ::worth-s setting." [] (settings/get settings ::worth-s))
 
 ;; ------------------------------------------------------------------ job memory
 
@@ -34,9 +42,9 @@
 
 (defn worth
   "What the goal of this call is worth, in seconds, never nil: the frozen call's (in a start check, the would-be call's),
-  else the caller's, else ##Inf. Sunk cost does not lower it."
+  else the caller's, else default-worth. Sunk cost does not lower it."
   [ctx]
-  (or (:worth (frozen-call ctx)) (when-let [f (:worth ctx)] (f)) ##Inf))
+  (or (:worth (frozen-call ctx)) (when-let [f (:worth ctx)] (f)) (default-worth)))
 
 (defn left
   "What is left of the call's limits and its callers', each line the least over the chain: {:spend {line remainder}

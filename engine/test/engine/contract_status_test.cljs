@@ -431,5 +431,5 @@
   (let [seen (atom nil)]
     (with-redefs [ctx/check-status (fn [c _] (reset! seen c) (contract/ok :ready "ready"))
                   ctx/child-job (fn [_ job args] [{:name job} args])]
-      (ctx/child-status {:quote-call {:worth ##Inf} :slots []} :kid 'probe {})
+      (ctx/child-status {:quote-call {:worth 50} :slots []} :kid 'probe {})
       (is (not (contains? @seen :quote-call)) "with it the child reads as started and skips its own start check"))))

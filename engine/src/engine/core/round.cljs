@@ -147,7 +147,7 @@
     {:engine eng :primitives (:primitives eng) :token token :args args :id id
      :root root :slots slots :chain chain :round round :reflex reflex :wait (:wait base) :t0s (:t0s base) :child-wait child-wait
      :quote-deadline (:quote-deadline base)
-     :worth #(or (when (seq slots) (get-in (mem/job-mem (mem/view store) root (pop slots)) [:contract :call :worth])) ##Inf)
+     :worth #(when (seq slots) (get-in (mem/job-mem (mem/view store) root (pop slots)) [:contract :call :worth]))
      :left #(let [n (mark eng)]
               (contract/least-left (for [[s state] (limits/frames eng root slots)]
                                      (contract/left state (first n) (elapsed n (get (:t0s base) (count s)))))))
