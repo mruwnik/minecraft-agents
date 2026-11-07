@@ -584,8 +584,8 @@
                        (settings/with-settings no-ceiling
                          #(with-redefs [cost-danger/race-margin-s (constantly margin)]
                             (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false))))))))
-              ;; a side is judged while the floods before it and its own price fit the lead
-              paid (fn [margin] (count (take-while #(< (+ (* % (rooms/flood-s)) (rooms/judge-s)) (- (rooms/here-s (:primitives eng) zombie) margin)) (range))))
+              ;; a side is judged while the floods before it (charged to the meter at the ceiling) and its own price fit the lead
+              paid (fn [margin] (count (take-while #(< (+ (* % reach-room/room-cells (cost/room-read-ceiling-s)) (rooms/judge-s)) (- (rooms/here-s (:primitives eng) zombie) margin)) (range))))
               [with-margin without] [(judged (margin)) (judged 0)]]
           (is (= (paid (margin)) with-margin) "as many sides as the lead less the margin pays for")
           (is (pos? with-margin) (str "a zombie 3 blocks off leaves lead for a flood: " with-margin))

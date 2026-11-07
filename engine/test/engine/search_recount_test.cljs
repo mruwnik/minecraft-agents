@@ -95,10 +95,12 @@
              @n))))
 
 (defn flood-room-scene
-  "reach-room/room-flood from [0 64 0]: the cells it reads (room-cells on a slab that floods open, the room's floor when walled)."
-  [blocks cells]
+  "reach-room/room-flood from [0 64 0]: the cells it charges a meter (room-cells on a slab that floods open, the room when walled)."
+  [blocks]
   (let [p (tu/fake {:blocks (merge (box -30 63 -30 30 63 30 "stone") blocks)})]
-    (fn [] (reach-room/room-flood p (reach-room/room-kind-at p (fn [x y z] (reach-room/body-kind-of (u/seen-block p {:x x :y y :z z})))) 0 64 0) cells)))
+    (fn [] (binding [reach/*search* (reach/meter 1e6 0 1 1 1)]
+             (reach-room/room-flood p (reach-room/room-kind-at p (fn [x y z] (reach-room/body-kind-of (u/seen-block p {:x x :y y :z z})))) 0 64 0)
+             (js/Math.round (- 1e6 @(:left reach/*search*)))))))
 
 (defn walled
   "A closed room: stone walls (two high) round x, z in -10..10 over the slab, and a roof."
@@ -108,7 +110,7 @@
 
 (deftest recount-prints-the-walk-and-room-flood-prices
   (let [scenes {:walk-slab (walk-scene {}) :walk-pillars (walk-scene (pillared))
-                :room-slab (flood-room-scene {} 1024) :room-pillars (flood-room-scene (pillared) 1024) :room-closed (flood-room-scene (walled) 441)}
+                :room-slab (flood-room-scene {}) :room-pillars (flood-room-scene (pillared)) :room-closed (flood-room-scene (walled))}
         rows (into {} (for [[k run] scenes] [k (timed-reps 7 run)]))
         pooled (fn [ks] (reduce (fn [a k] (-> a (update :cells + (:cells (rows k))) (update :s + (:s (rows k))))) {:cells 0 :s 0} ks))]
     (doseq [[k {:keys [per-cell low high]}] rows]
@@ -147,6 +149,23 @@
    :water #(scene-search (merge (into {} (for [x (range -30 31) y [10 11] z (range -30 31)] [[x y z] "water"])) (bedrock-shell [0 11 6])) (constantly false) [0 10 0] [0 11 6])})
 
 (defn percentile [xs q] (let [v (vec (sort xs))] (nth v (min (dec (count v)) (int (js/Math.ceil (* q (dec (count v)))))))))
+
+(deftest recount-prints-the-walk-and-room-spread
+  "RECOUNT-WALK / RECOUNT-ROOM: the p90 over runs (ms/cell) of the walk search and the room flood, per scene and pooled over all
+  runs, with the machine's load average: the lines the walk and room ceilings are set from."
+  (let [load1 (aget (.loadavg (js/require "os")) 0)
+        runs 60
+        spread (fn [label scenes]
+                 (let [rows (into {} (for [[k run] scenes] [k (vec (for [_ (range runs)] (let [t0 (now) cells (run)] (/ (- (now) t0) cells))))]))
+                       all (mapcat val rows)]
+                   (doseq [[k xs] rows]
+                     (println (str label " " k ": ms/cell median " (.toFixed (median xs) 4) " p90 " (.toFixed (percentile xs 0.9) 4) " max " (.toFixed (apply max xs) 4))))
+                   (println (str label " raw " (pr-str (mapv #(/ (js/Math.round (* 1e4 %)) 1e4) (sort all)))))
+                   (println (str label " all: n " (count all) " load " (.toFixed load1 1) " ms/cell median " (.toFixed (median all) 4)
+                                 " p90 " (.toFixed (percentile all 0.9) 4) " max " (.toFixed (apply max all) 4)))
+                   (count rows)))]
+    (is (= 2 (spread "RECOUNT-WALK" {:slab (walk-scene {}) :pillars (walk-scene (pillared))})))
+    (is (= 3 (spread "RECOUNT-ROOM" {:slab (flood-room-scene {}) :pillars (flood-room-scene (pillared)) :closed (flood-room-scene (walled))})))))
 
 (deftest recount-prints-the-ceiling-spread-over-big-scenes
   (let [rows (into {} (for [[k mk] (merge big-scenes scenes)] [k (vec (for [_ (range 5)] (to-cells (mk) 4000)))]))
