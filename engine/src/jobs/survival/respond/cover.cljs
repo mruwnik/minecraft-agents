@@ -9,6 +9,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
@@ -198,17 +199,18 @@
    (let [r (await (caught-chance-once! c specs))]
      (if-let [cells (:look r)]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
-           (await (dig-look/look-unknown! c cells))
+           (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
            (await (caught-chance-once! c specs)))
        r))))
 
 (defn ^:async look-ahead!
   "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes not looked at
-  this flight (flee-search/unseen-ahead); nil when there is none to look at."
+  this flight (flee-search/unseen-ahead), each with a sight pass (sense/look-at-unknown!: the search plans over memory,
+  so memory takes the whole view first); nil when there is none to look at."
   [c covered? judged]
   (when-let [cells (search/unseen-ahead (:ends judged) (:glanced (ctx/mem c)))]
     (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
-    (await (dig-look/look-unknown! c cells))
+    (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
     (assoc (await (respond.goal/judge! c (:homes judged) (:room judged) covered? (dead-end-covers c))) :homes (:homes judged))))
 
 (defn ^:async flight-target!

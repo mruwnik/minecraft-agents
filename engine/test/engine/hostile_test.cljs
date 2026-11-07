@@ -1082,17 +1082,19 @@
 
 (deftest a-flight-from-skeletons-looks-before-it-takes-a-cover-past-cells-it-has-not-seen
   ;; facing the skeletons, the body had not seen the cave wall beside them: a cover end in that unseen rock, a walk from
-  ;; their bows, was walked to whole with no look and won over the tunnel the body had seen
+  ;; their bows, was walked to whole with no look and won over the tunnel the body had seen. Facing north, the look
+  ;; turned to the cave wall but memory took only the cell looked at: the search after it planned through the wall
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup-seeing {:self {:health 20 :food 20 :pos {:x 13.5 :y 64 :z 16.5}} :yaw 90 :blocks skeleton-cave
-                                                :entities [(skeleton 1 4.5 14.5) (skeleton 2 4.5 18.5)]}
-                                               [0 14] 1000)]
-          (core/submit! eng respond {})
-          (dotimes [_ 3] (await (core/tick! eng)))
-          (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))]
-            (is (and (< 20 x) (= 16 z)) (str "the first step is the tunnel's cover: " x " " z))))))))
+        (doseq [yaw [90 0]]
+          (let [{:keys [eng seen]} (setup-seeing {:self {:health 20 :food 20 :pos {:x 13.5 :y 64 :z 16.5}} :yaw yaw :blocks skeleton-cave
+                                                  :entities [(skeleton 1 4.5 14.5) (skeleton 2 4.5 18.5)]}
+                                                 [0 14] 1000)]
+            (core/submit! eng respond {})
+            (dotimes [_ 3] (await (core/tick! eng)))
+            (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))]
+              (is (and (< 20 x) (= 16 z)) (str "yaw " yaw ": the first step is the tunnel's cover: " x " " z)))))))))
 
 
 ;; Wicken j3766: at 13 hp with a wooden sword the fight walked to a seen skeleton, beside a zombie heard further on

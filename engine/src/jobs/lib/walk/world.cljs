@@ -14,6 +14,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
             [jobs.lib.placement :as placement]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -216,12 +217,15 @@
 
 (defn shut-cell-fn
   "(fn [x y z]) the planner's options.unknown.cellAt: cost/unseen-cell-share of kit at the chance the feet and head cells
-  at x y z are not both open, an unseen one solid at look/unseen-solid-at-fn beside a seen solid cell or not. Each cell's
+  at x y z are not both open, an unseen one solid at look/unseen-solid-at-fn beside a seen solid cell or not, one the
+  body sees now that the mask's memory had not taken yet by its block. Each cell's
   reads are kept: every plan over one pathWorld asks the cells round the body again."
   [p kit]
   (let [solid-at (look/unseen-solid-at-fn p)
         seen (kept-by-cell (fn [x y z] (or (u/seen-block p {:x x :y y :z z}) false)))
-        open (kept-by-cell (fn [x y z] (if (seen x y z) 1 (- 1 (solid-at [x y z] (look/beside-seen-solid? seen [x y z]))))))]
+        open (kept-by-cell (fn [x y z] (if-let [b (seen x y z)]
+                                          (if (#{:solid :tall} (reach/kind-of b)) 0 1)
+                                          (- 1 (solid-at [x y z] (look/beside-seen-solid? seen [x y z]))))))]
     (kept-by-cell (fn [x y z] (cost/unseen-cell-share (- 1 (* (open x y z) (open x (inc y) z))) kit)))))
 
 (defn with-seeds

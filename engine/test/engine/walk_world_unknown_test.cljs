@@ -56,6 +56,16 @@
     (is (= @void (state pw 3 64 0)) "behind the wall, never seen")
     (is (= @stone (state pw 1 63 0)) "the floor ahead, seen")))
 
+(deftest a-cell-in-view-that-memory-has-not-taken-prices-by-its-block
+  ;; the mask reads memory, the cell price sensedAt (memory and what is in view now): a wall in view but in no pass yet
+  ;; was priced as open
+  (let [p (tu/fake (dissoc wall-world :now))
+        w (perception/wrap p (perception/create (fake-raw/create p) {:now (constantly 1000000)}))
+        kit (wworld/kit-of w nil)
+        price (wworld/shut-cell-fn w kit)]
+    (is (= (cost/unseen-cell-share 1 kit) (price 2 64 0)) "the wall face: shut")
+    (is (< (price 1 64 0) (cost/unseen-cell-share 1 kit)) "the air before it: open feet, only the head's chance")))
+
 (deftest an-unseen-cell-is-read-as-water-where-the-walk-reads-water
   (let [world (assoc wall-world :blocks (merge (:blocks wall-world) {"3,64,0" "water"}))
         {:keys [w]} (sensed world)

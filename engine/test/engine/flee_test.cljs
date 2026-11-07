@@ -27,7 +27,7 @@
             [jobs.survival.respond-to-hostile :as respond]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.survival.hide-out :as hide-out]
-            [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.sense :as sense]
             [jobs.lib.flee-search :as flee-search]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.cover :as cover]
@@ -988,7 +988,7 @@
               s (assoc-in s [:eng :jobs 'pricer]
                           {:round (fn ^:async r [c]
                                     (with-redefs [flee-search/caught-chance (fn [& _] {:chance 1 :look cells})
-                                                  dig-look/look-unknown! (fn [_c _cells] (swap! looks inc) (js/Promise.resolve nil))]
+                                                  sense/look-at-unknown! (fn ([_c _cells _n] (swap! looks inc) (js/Promise.resolve nil)) ([_c _cells _n _stop?] (swap! looks inc) (js/Promise.resolve nil)))]
                                       (await (cover/caught-chance! c)))
                                     (ctx/end c :done nil))})]
           (await (run-job! s 'pricer {}))
