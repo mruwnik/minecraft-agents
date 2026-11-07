@@ -2091,6 +2091,21 @@
     (is (< (open-s [0 64 0] 66) (open-s [0 64 0] 65)))
     (is (= whole (open-s [5 60 5] 66)) "a pillar in another column is a fresh one")))
 
+(deftest a-pillar-is-no-cover-from-a-flyer
+  (let [cover (fn [mob]
+                (let [p (tu/fake-on-floor {:inventory [{:name "dirt" :count 20}]})
+                      c (stub-ctx p (atom {}))]
+                  (with-stub-mem
+                    (fn []
+                      (with-redefs [respond.pillar/pillar-item (fn ([_] "dirt") ([_ _] "dirt"))
+                                    respond.pillar/pillar-climb (constantly 0)
+                                    respond.pillar/mob-class (constantly :clear)
+                                    ctx/since (constantly [])
+                                    ctx/now (constantly 1000)]
+                        (cornered/pillar-cover c [#js {:name mob}]))))))]
+    (is (some? (cover "zombie")))
+    (is (nil? (cover "phantom")) "a phantom flies to the pillar's top")))
+
 (deftest the-pillar-climb-priced-is-kept-for-the-plan-after-its-look
   (let [m (atom {})
         p (tu/fake-on-floor {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "dirt" :count 20}]})

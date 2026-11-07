@@ -198,9 +198,9 @@
   then the hide-out's quiet on top (the open seconds only for the blocks not yet under the body: pillar/lifted), all of it in a shooter's line of fire or a creeper's sight; it fails for a mob in its cell by
   ::pillar-mob-fails of the class the body stands in (wall-in/mob-fails, respond.pillar/mob-class), with the refusals this
   flight saw added (flight/with-seen-fails), or for a mob climbing to its top (respond.pillar/pillar-climb);
-  nil when no pillar fits here, a climber is near or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
+  nil when no pillar fits here, a climber or a flyer is near (both reach its top) or a shot was felt within ::hurt-window-s (the top stays in that line of fire)."
   [c hostiles]
-  (when-let [climb (and (pillar/pillar-item c) (not-any? combat/climber? hostiles)
+  (when-let [climb (and (pillar/pillar-item c) (not-any? #(or (combat/climber? %) (combat/flyer? %)) hostiles)
                         (not-any? #(pos? (shots-in %)) (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))
                         (pillar/climb-of c))]
     (let [s (* (settings/get settings ::pillar-s) (/ (- (pillar/pillar-height) (pillar/lifted c)) (pillar/pillar-height)))

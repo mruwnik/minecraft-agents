@@ -51,7 +51,7 @@
        in with carried blocks (or, with none to wall with, ones it digs), the sides towards a seen ranged hostile first. Every
        plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
      - pillar up 3 (jobs.access.pillar, the carried block with the most, at least 3). Needs a solid floor, free cells above and no slope or ledge a mob could climb to beside its top.
-       Not against a ranged mob or a spider (it climbs the pillar). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
+       Not against a ranged mob, a spider (it climbs the pillar) or a phantom (it flies to the top). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a close leg's run (respond.options/back-off!) to the best flee-search end that gains on every chaser.
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
        (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (respond.options ::fist-sweeps, 1).
