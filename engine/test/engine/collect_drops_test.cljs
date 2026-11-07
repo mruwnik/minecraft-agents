@@ -685,6 +685,12 @@
     (is (nil? (:problem r)))
     (is (seq (:dig r)))))
 
+(deftest a-drop-route-searches-round-a-walk-then-a-stair-down-first
+  (let [asked (atom nil)]
+    (with-redefs [dig-route/route (fn [_ _ _ opts] (reset! asked opts) {:problem :no-route})]
+      (job-ns/drop-route {:max-fall 3} nil nil (constantly nil) (constantly true) [0 64 0] [4 55 0]))
+    (is (= [[1 64 0] [2 61 0] [3 58 0] [4 55 0]] (:seed @asked)))))
+
 (deftest the-job-is-a-contract-job-naming-what-it-collects
   (let [{:keys [eng]} (bd/setup {:self body})
         entry (get (:jobs eng) job)]

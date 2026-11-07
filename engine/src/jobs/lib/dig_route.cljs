@@ -142,6 +142,13 @@
                         [[level' under'] (conj out (+ (or (dig-s name cell) 0) w))]))
                     [[nil 0] []] cells))))
 
+(defn stair-drop
+  "The blocks a dug stair of route's falls down a step under opts' :max-fall and :fall-s: a fall that costs hp is taken
+  only into a hole already open, so a dug one is no longer than the longest that costs none."
+  [{:keys [fall-s] :as opts}]
+  (let [mf (or (:max-fall opts) (:max-drop (armour/fall-profile {})))]
+    (max 1 (min mf (count (take-while #(or (nil? fall-s) (zero? (fall-s %))) (range 1 (inc mf))))))))
+
 (defn search
   "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
   once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
@@ -258,7 +265,7 @@
         pm (if r (* 2 r) 0)
         mf (max 1 max-fall)
         ;; a fall that opens cells is dug, so one costing hp never does (free-fall): the falls the unseen counts are shorter
-        dug-mf (max 1 (min mf (dec free-fall)))
+        dug-mf (stair-drop opts)
         across-to (fn [x z] (+ (js/Math.abs (- x px)) (js/Math.abs (- z pz))))
         steps-to (fn [x y z] (max 0 (- (js/Math.max (across-to x z) (- py y) (js/Math.ceil (/ (- y py) mf))) pm)))
         digs-of (fn [a dn up] (+ dn up (* 2 (js/Math.max a (js/Math.ceil (/ dn dug-mf)) (if pillar-s 0 up)))))
@@ -559,7 +566,7 @@
                           (.set best start-key start-node)
                           (heap-push! queue #js [(heuristic fx fy fz) 0 start-key])
                           nil))))
-        ended (fn [] (if (<= (aget incumbent 0) @max-s) (checked (aget incumbent 1)) {:problem :dearer}))
+        ended (fn [] (if (<= (aget incumbent 0) @max-s) (checked (aget incumbent 1)) (priced {:problem :dearer})))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
         ;; over the head too, a stair's step when it cuts; down: the cell entered; a pillar: the cell over the head), up and a
@@ -737,6 +744,51 @@
   [prices yield-s]
   (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (max 0 (- s (if name (yield-s name cell) 0))))))))
 
+(defn walk-then-stair
+  "Feet cells of a planned way from feet cell from to goal: across toward it (x first, then z) while the across left
+  outnumbers the steps the height left needs, each step then down drop blocks (or up one), back and forth across z
+  once over the goal."
+  [[fx fy fz] [gx gy gz] drop]
+  (let [sgn (fn [v] (cond (pos? v) 1 (neg? v) -1 :else 0))]
+    (loop [x fx y fy z fz zig 1 out []]
+      (if (and (== x gx) (== y gy) (== z gz))
+        out
+        (let [across (+ (js/Math.abs (- gx x)) (js/Math.abs (- gz z)))
+              rise? (>= (if (< gy y) (js/Math.ceil (/ (- y gy) drop)) (- gy y)) (max 1 across))
+              [dx dz zig] (cond (not= x gx) [(sgn (- gx x)) 0 zig]
+                                (not= z gz) [0 (sgn (- gz z)) zig]
+                                :else [0 zig (- zig)])
+              ny (cond (not rise?) y (< gy y) (max gy (- y drop)) :else (inc y))
+              [nx nz] [(+ x dx) (+ z dz)]]
+          (recur nx ny nz zig (conj out [nx ny nz])))))))
+
+(defn seeded-search
+  "search, but the cheapest route through the feet cells of :seed and their neighbours (one across, up or down) is
+  searched for first and the whole search proves on only while that pays: bounded by that route's price, its CPU counted
+  as spent (with :read-s, the proof goes on while what it spent stays under that price less its bound). The seed's
+  route is the answer when the proof ends dearer, too big or boxed. A fn of n as search's, n counting both searches' cells."
+  [block-at from goal {:keys [seed max-s] :as opts}]
+  (let [opts (dissoc opts :seed)
+        band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
+        first-way (search block-at from goal (assoc opts :only band))
+        found (volatile! nil)
+        whole (delay (let [b @found]
+                       (search block-at from goal (cond-> opts
+                                                    (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)))
+                                                    (:searched-s b) (assoc :searched-s (:searched-s b))))))]
+    (fn run
+      ([n] (run n nil))
+      ([n max-s']
+       (let [[b be b-stale? br] (first-way (if @found 0 n) max-s')]
+         (if-not b
+           [nil be b-stale? br]
+           (let [_ (vreset! found b)
+                 [a e stale? r] (@whole (max 1 (- n be)) max-s')
+                 a (if (and a (:dig b) (not (:dig a)) (or (nil? max-s') (<= (:seconds b) max-s')))
+                     (cond-> b (:searched-s a) (assoc :searched-s (:searched-s a)))
+                     a)]
+             [a (+ e be) (fn [] (or (b-stale?) (stale?))) (+ r br)])))))))
+
 (defn route
   "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
   cell goal, falls of at most :max-fall blocks (default: those a body with no hp to spend takes, cost.armour/fall-profile),
@@ -752,7 +804,7 @@
   block :dig-s prices nil is not dug, nor a cell under sand or gravel (it would fall on the body walking in) or, without :lava-s, with lava over or beside it (it would flow in), nor a
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
-  :margin cells round the two ends, :only feet cells (none else is stepped onto); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
+  :margin cells round the two ends, :only feet cells (none else is stepped onto), :seed the feet cells of a planned way searched round first (seeded-search); :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
   :read-s seconds of CPU a cell read (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, falls among cells never seen no longer than the longest :fall-s prices 0, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
@@ -765,7 +817,7 @@
   :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
-  (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
+  (or (first (((if (:seed opts) seeded-search search) block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
 
 (defn route-within
   "search's [answer expanded] stepping only onto the feet cells of route r's steps: r priced at opts' prices (the body's
@@ -789,7 +841,7 @@
   "search with its CPU priced (cost/search-read-s), the back search's bound in its heuristic (:back-h?), the unseen steps a
   way must take priced in it (:prior-h?, with :seen-steps and :seen-cells), grown only while the heap has room (heap-full?). A fn of n as search's."
   [block-at from goal opts]
-  (search block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?)))
+  ((if (:seed opts) seeded-search search) block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?)))
 
 (defn route-resumed
   "route, but a search that spends its nodes (:max-nodes) is kept under key and

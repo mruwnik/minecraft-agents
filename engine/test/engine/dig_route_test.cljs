@@ -2,6 +2,8 @@
   (:require [cljs.test :refer [deftest is testing]]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.base-rates :as br]
+            [jobs.lib.cost.ways :as cw]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu]
@@ -303,7 +305,7 @@
         [diag diag-cells] (to-end (dr/priced-search (world {}) [0 10 0] [150 4 150] (unseen-opts {} none none 600)))
         ;; a fall past 3 costs hp, so one through rock is dug 3 at most
         [falls falls-cells falls-reads] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (assoc (unseen-opts {} none none 400) :max-fall 16 :fall-s (fn [dy] (if (> dy 3) (* 2 (- dy 3)) 0)))))]
-    (is (= {:problem :dearer} far))
+    (is (= :dearer (:problem far)))
     (is (< far-cells 100) (str "a goal 300 blocks off through unseen rock is dearer than 208 s at once (" far-cells " cells)"))
     (is (< (:seconds wall) 90) "the way over a glass plane 600 wide is found")
     (is (< wall-cells 100) (str wall-cells " cells"))
@@ -580,6 +582,32 @@
       (is (< (js/Math.abs (- plain-s flat-s)) 1e-9))
       (is (< tier-n flat-n) (str from "->" goal ": " tier-n " cells, " flat-n " at the least of all"))
       (is (< (* 10 tier-n) plain-n) (str from "->" goal ": " tier-n " cells, " plain-n " by the plain search")))))
+
+(deftest a-walk-then-stair-plan-walks-across-while-the-height-allows-then-steps-down
+  (let [plan (dr/walk-then-stair [0 10 0] [6 1 0] 3)]
+    (is (= [[1 10 0] [2 10 0] [3 10 0] [4 7 0] [5 4 0] [6 1 0]] plan))
+    (is (= [[0 7 1] [0 4 0] [0 1 -1] [0 0 0]] (dr/walk-then-stair [0 10 0] [0 0 0] 3)) "back and forth over the goal")
+    (is (= [[1 10 0] [2 11 0]] (dr/walk-then-stair [0 10 0] [2 11 0] 3)) "up a step a block")))
+
+(deftest a-seeded-search-ends-its-proof-once-it-no-longer-pays-at-the-unbounded-price
+  ;; a fall of 24 and 30 across through rock never seen, each cell's dig at the measured solid chance by its distance from
+  ;; the seen air: with no way in hand the search reads on until its proof ends; the way round the seed's walk and stair
+  ;; bounds it, so the proof stops once what it spent passes what it could still save
+  (let [fy 64
+        rock 0.6
+        row (fn [dy-max] (mapv #(* rock (br/unseen-solid-least fy dy-max (js/Math.ceil (/ % 2)) nil)) (range 1 (inc (* 2 br/unseen-d-max)))))
+        tiers {:low-y (+ fy br/unseen-low-dy) :low (row br/unseen-low-dy) :any (row nil)}
+        unseen? (fn [[_ y _]] (< y 63))
+        opts {:dig-s (fn [_ [_ y _ :as c]] (* rock (if (unseen? c) (br/unseen-solid fy (- y fy) (max 1 (min 8 (- 63 y))) false nil) 1)))
+              :step-s (cost/walk-step-s) :stair-s (cw/stair-cost 1) :unseen? unseen? :unseen-step-s (cost/unseen-step-s (cost/unseen-share nil nil)) :max-fall 3
+              :seen-steps (fn [_ y _] (max 0 (- 64 y))) :seen-cells (fn [_ y _] (max 0 (- 63 y))) :guess (constantly "stone")
+              :unseen-digs tiers :unseen-dig-s (first (:any tiers)) :read-s (cost/search-read-s) :back-h? true :prior-h? true}
+        at (fn [[_ y _]] (if (>= y 64) "air" "stone"))
+        [from goal] [[0 64 0] [60 40 -30]]
+        [whole] (to-end (dr/search at from goal opts))
+        [seeded] (to-end (dr/seeded-search at from goal (assoc opts :seed (dr/walk-then-stair from goal 3))))]
+    (is (< (js/Math.abs (- (:seconds whole) (:seconds seeded))) 1e-9) (str (:seconds seeded) " s, unbounded " (:seconds whole)))
+    (is (< (:searched-s seeded) (:searched-s whole)) (str (:searched-s seeded) " s of CPU, unbounded " (:searched-s whole)))))
 
 (defn holed-climb
   "Stone below y 30 with about one cell in eight air round a climb from [0 10 0], seeded: [block-at goal]."

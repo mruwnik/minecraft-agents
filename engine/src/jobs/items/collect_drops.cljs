@@ -329,14 +329,14 @@
   "dig-route/route, priced by prices (dig-route/body-prices), from a feet cell to the cell of a drop lying at goal; block-at
   answers a cell's name or nil when never seen; a cell never seen is taken for stone where solid? (look/unseen-solid?-fn:
   the measured prior holds it likelier solid than open), else it may be air (no step lands on it); either is dug at stone's
-  price. A drop at rest has a solid floor, seen or not. A route priced over worth (seconds, nil: no bound) is none: {:problem :dearer}. With an owner (a job id)
+  price. A drop at rest has a solid floor, seen or not. A walk toward it, then a stair down, is searched first (dig-route/seeded-search). A route priced over worth (seconds, nil: no bound) is none: {:problem :dearer}. With an owner (a job id)
   a search that spends its nodes is kept and gone on at the next call: {:problem :searching} till it ends."
   [prices worth owner block-at solid? from [gx gy gz :as goal]]
   (let [guess (fn [cell] (when (or (= cell [gx (dec gy) gz]) (solid? cell)) blocks/hidden-guess))]
     ((if owner (partial dig-route/route-resumed [owner :drop-route from goal]) dig-route/route)
      (fn [cell] (or (block-at cell) (guess cell)))
      from goal
-     (merge prices {:guess guess} (when worth {:max-s worth})
+     (merge prices {:guess guess :seed (dig-route/walk-then-stair from goal (dig-route/stair-drop prices))} (when worth {:max-s worth})
             ;; a nameless cell is dug to see it, at the price of rock
             (when-let [dig-s (:dig-s prices)] {:dig-s (fn [name cell] (dig-s (or name blocks/hidden-guess) cell))})))))
 
