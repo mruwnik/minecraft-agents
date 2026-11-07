@@ -439,12 +439,18 @@
       :else (contract/later :hostile-near (str "a hostile is near: " heard ": " (price/round1 all) " s over the stay, more than the call's worth " (price/round1 worth) " s")
                             :loss all :worth worth :recheck-after-ms walk-risk/recheck-ms))))
 
+(defn hostile-now?
+  "Whether the hostile-near trigger would hold now (the radii and options of its register entry) for a mob seen or
+  remembered: read off the world, not from threatened's short cache, for a job that checks again mid-run."
+  [c]
+  (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true)))
+
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a
   mob seen or remembered; heard-only mobs are priced (heard-price)."
   [c]
   (check-cache/cached c ::threatened
-                      #(if (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))
+                      #(if (hostile-now? c)
                          (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first"))
                          (heard-price c))))
 

@@ -21,8 +21,8 @@
   entries jobs.lib.tidy and jobs.movement.go-to write; the body's own diggings elsewhere stay). A dug block is placed
   again from an item of the same name carried, or for an escalation hole what the block drops (cobblestone for stone). An escalation hole waits while
   the body is shut in (:shut-in), as it is the body's way on. A placed block is dug again. Both go through jobs.blocks.place / jobs.blocks.dig children (zones ignored on purpose, nothing fetched, no sight needed: the cell is one the body itself dug), so a cell with nothing solid beside it cannot be placed. It digs nothing else.
-  Works only when the body is safe and fit (the standard readiness checks, asked before every round); a danger mid-run
-  is the hostile reflex's: it cuts the run, and no cell is skipped for it.
+  Works only when the body is safe and fit (the standard readiness checks, asked before every round); a hostile that
+  comes in view mid-run holds the next walk or put-back (the run yields, no try is counted), and the hostile reflex cuts the run.
   Touches only a cell whose block is still what the job left (a changed cell is somebody's, left alone),
   with at most 3 tries per cell.
   One run over every entry, paced between steps, a cell put back forgotten at once; a step takes the first cell
@@ -222,9 +222,14 @@
   try is counted before the put-back (a cut run still used one), the cell is forgotten as soon as it is put back.
   A cell that failed is tried again on the next pass until it gave up."
   [c {:keys [cell tries] :as e}]
-  (let [walked (await (walk-to! c cell))]
-    (if (= :continue walked)
+  (let [walked (if (ready/hostile-now? c) :continue (await (walk-to! c cell)))]
+    (cond
+      (= :continue walked)
       (do (ctx/update-mem! c assoc :heading cell) :continue)
+
+      (ready/hostile-now? c) :continue
+
+      :else
       (do (tidy/count-try! c cell)
           (let [put (when walked (await (put-back! c e)))]
             (cond
