@@ -112,7 +112,7 @@
 
 (defn- rejections-of
   "The atom of the sites flee-target's searches picked and passed over (a site's own test failed, or go-to priced no
-  walk) of the body p: {[kind pos] {:memory :until}}, each counting while what the body remembers (sense/known-memory)
+  walk) of the body p: {[kind pos] {:memory :until}}, each counting while what the body remembers near the site (sense/site-memory)
   holds, for wsearch/search-max-age-ms (the land it read may have changed)."
   [p]
   (or (.get rejections p) (let [a (atom {})] (.set rejections p a) a)))
@@ -122,13 +122,16 @@
   [c {:keys [kind pos]}]
   (let [p (:primitives c)
         r (get @(rejections-of p) [kind pos])]
-    (boolean (and r (= (:memory r) (sense/known-memory p)) (expiry/current? (ctx/now c) r)))))
+    (boolean (and r (= (:memory r) (sense/site-memory p pos)) (expiry/current? (ctx/now c) r)))))
 
 (defn reject!
-  "Pass over site {:kind :pos} in flee-target's searches while what the body remembers holds, for wsearch/search-max-age-ms."
+  "Pass over site {:kind :pos} in flee-target's searches while what the body remembers near it holds, for
+  wsearch/search-max-age-ms; drops the rejections that ran out."
   [c {:keys [kind pos]}]
-  (let [p (:primitives c)]
-    (swap! (rejections-of p) assoc [kind pos] (expiry/stamp {:memory (sense/known-memory p)} (ctx/now c) wsearch/search-max-age-ms))))
+  (let [p (:primitives c)
+        now (ctx/now c)]
+    (swap! (rejections-of p) #(assoc (into {} (filter (fn [[_ r]] (expiry/current? now r))) %)
+                                     [kind pos] (expiry/stamp {:memory (sense/site-memory p pos)} now wsearch/search-max-age-ms)))))
 
 (defonce ^:private searches (js/WeakMap.))
 

@@ -218,6 +218,12 @@
   [p]
   (some-> ^js (:st (aget p "perception")) memory-age/epoch))
 
+(defn site-memory
+  "memory-age/writes-around of cell pos: the same while no cell near it is written (known-memory moves with every cell
+  the body sees anywhere); nil without a perception."
+  [p {:keys [x y z]}]
+  (some-> ^js (:st (aget p "perception")) (memory-age/writes-around x y z)))
+
 (defn step-ms
   "[total max] ms perception's sight steps have taken so far, nil without a perception."
   [p]

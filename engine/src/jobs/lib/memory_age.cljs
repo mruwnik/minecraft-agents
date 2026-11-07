@@ -412,3 +412,12 @@
   (when-let [^js sec (.get (store/store-of st (.-dim st)) (store/section-key cx sy cz))]
     (when-let [^js e (.get entries sec)]
       (when (pos? (.-length (.-cells e))) (.-flips e)))))
+
+(defn writes-around
+  "A number that moves whenever a cell is written in the section of cell x y z of st's current dimension or one beside
+  it (all of a site's near cells), 0 where nothing is remembered."
+  [^js st x y z]
+  (let [^js store (store/store-of st (.-dim st))
+        cx (bit-shift-right (js/Math.floor x) 4) sy (bit-shift-right (js/Math.floor y) 4) cz (bit-shift-right (js/Math.floor z) 4)]
+    (reduce + (for [[dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]]
+                (if-let [^js sec (.get store (store/section-key (+ cx dx) (+ sy dy) (+ cz dz)))] (or (.-wrote sec) 0) 0)))))
