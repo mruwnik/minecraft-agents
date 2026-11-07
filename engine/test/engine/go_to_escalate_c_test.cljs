@@ -755,7 +755,7 @@
           (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
           (is (= {:arrived true} @out)))))))
 
-(deftest a-go-to-sealed-in-a-cave-without-escalate-says-why-each-time-it-plans-again
+(deftest a-go-to-sealed-in-a-cave-without-escalate-does-not-plan-the-same-search-again
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -763,8 +763,7 @@
                                                    :inventory [{:name "iron_pickaxe" :count 1}]}
                                                   {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out))
-          (is (= [[:exhausted 1] [:exhausted 2]] (mapv (juxt :reason :try) (events-of seen :go-to.retrying)))
-              (pr-str (events-of seen :go-to.retrying))))))))
+          (is (empty? (events-of seen :go-to.retrying)) "an exhausted search from the same cell over the same memory answers the same"))))))
 
 (deftest an-approach-walk-may-take-back-its-own-seal
   (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false false))))))

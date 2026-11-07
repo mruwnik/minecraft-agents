@@ -183,7 +183,7 @@
           (is (re-find #"^gave up walking to \[10 65 1\]: .*step up" (:text @out)) "the reason in words")
           (is (not (re-find #"[{}]" (:text @out))) "no map dump")
           (is (= [0 64 1] (at p)) "the body did not move")
-          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "one :moved entry per round"))))))
+          (is (= ["blocked"] (mapv :status (moved eng))) "a search that found no way is not planned again from the same cell over the same memory"))))))
 
 (def roofed-step-world
   {:blocks (merge (box 0 63 0 3 63 0 "stone") (box 3 64 0 3 64 0 "stone") (box 0 66 0 3 66 0 "stone")
@@ -555,7 +555,7 @@
               {:keys [out eng p]} (await (go! world {:pos [10 64 8] :range 0 :spend {:health 7}}))]
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
           (is (>= (first (at p)) 46) "walked to the frontier")
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
+          (is (= ["partial" "blocked"] (mapv :status (moved eng)))
               "the walk to the frontier is progress"))))))
 
 ;; the same walkway, the goal in land never loaded: the far side was never seen, so that is the reason, not :exhausted
@@ -591,7 +591,7 @@
           (set! wsearch/round-budget budget)
           (is (= {:arrived false :reason :unreachable :why :exhausted} (select-keys @out [:arrived :reason :why])))
           (is (>= (first (at p)) 46) "walked to the frontier and stayed there")
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng)))
+          (is (= ["partial" "blocked"] (mapv :status (moved eng)))
               "one walk to the frontier, then three rounds that find no new one")
           (is (= [] (filter #(= :refresh (:why %)) (remove :kept (events-of s :replan))))
               "no refresh swapped the walk to the frontier for an unfinished search's nearest node"))))))
@@ -678,7 +678,7 @@
         (let [{:keys [out returns eng]} (await (go-returns! (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}})
                                                             {:pos [10 65 1] :ways #{:walk}}))]
           (is (= :unreachable (:reason @out)))
-          (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng))) "three fruitless walks")
+          (is (= ["blocked"] (mapv :status (moved eng))) "one fruitless search: the same search is not walked again")
           (is (= [:done] @returns) "all of them in one call"))))))
 
 (deftest one-go-to-call-walks-to-the-frontier-and-on-with-no-continue-between
@@ -689,7 +689,7 @@
                      :self {:pos {:x 18.5 :y 80 :z 8.5}}}
               {:keys [out returns eng]} (await (go-returns! world {:pos [10 64 8] :range 0 :spend {:health 7}}))]
           (is (= :exhausted (:why @out)))
-          (is (= ["partial" "blocked" "blocked" "blocked"] (mapv :status (moved eng))))
+          (is (= ["partial" "blocked"] (mapv :status (moved eng))))
           (is (= [:done] @returns)))))))
 
 (def joined-world

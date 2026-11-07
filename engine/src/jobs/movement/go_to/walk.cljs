@@ -424,10 +424,16 @@
   (boolean (some #(< (u/dist (zipmap [:x :y :z] %) pos) (dec best)) (or learned-cells cells))))
 
 (defn learn-again?
-  "Whether a failed try after tries in a row (a round that learned nothing near) is tried again: within the call's tries
+  "Whether a failed try after tries in a row is tried again: within the call's tries
   and while another is worth its price (cost/try-again? :walk-round)."
   [c tries]
   (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)) (cost/try-again? c :walk-round {:fails tries})))
+
+(defn plan-key
+  "What the next plan rests on: the body's cell and its memory of the world (choose/route-epoch). A round that ends on the
+  key it began on, after a search that found no way, re-plans the same search to the same answer (a stuck walk is not one)."
+  [c]
+  [(end/feet-cell c) (choose/route-epoch (:primitives c))])
 
 (defn surface-descent
   "The price (s per block) of a plan step down for this round, or nil: the body is not under ground and the goal (a cell,
@@ -575,6 +581,7 @@
       :else
       (let [_ (forget-known-land! c)
             absent-before (absent-floors c)
+            key0 (plan-key c)
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
@@ -725,7 +732,7 @@
                 rock-start? (and (not progress?) (not edge-start?) (= :exhausted (some-> (:reason result) keyword)) (not (:rock-edge (ctx/mem c)))
                                  (not (ways/escalating? c)) (wworld/rock-guess? (:primitives c) (:unknown c)))
                 edge-start? (or edge-start? rock-start?)
-                tries (cond edge-start? 0 looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
+                tries (cond edge-start? 0 looped? (max-blocked) (and (not progress?) (not learned?) (#{:exhausted :goal-not-standable :abilities} (some-> (:reason result) keyword)) (= key0 (plan-key c))) (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
             (when-not edge-start? (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress))))
             (ctx/update-mem! c assoc :blocked tries :starts starts :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
@@ -743,7 +750,7 @@
               (do (ctx/update-mem! c assoc :edge-mode true)
                   (ctx/emit! c :go-to.edge-tour :info {:text "the search over unseen land ran out of nodes: touring to the edge of what the body has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])})))
             (if (or unstuck? edge-start?
-                    (and (or progress? (if learned? (learn-again? c tries) (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c))))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
+                    (and (or progress? (learn-again? c tries)) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))

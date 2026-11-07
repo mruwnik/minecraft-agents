@@ -489,7 +489,7 @@
           (let [unreachable (fn [job] (count (filter #(and (= job (:job %)) (= :unreachable (:reason %))) (kinds seen :child_ended))))]
             (is (pos? (unreachable "j1/kid/dig")) "some cell is out of reach until another is dug")
             (is (< (unreachable "j1/kid/dig/walk") (* 2 (unreachable "j1/kid/dig"))) "a dig whose walk failed does not walk the same walk again")
-            (is (< (count (kinds seen :go-to.retrying)) 120) "160 go-to re-plans when each dig walked twice"))
+            (is (zero? (count (kinds seen :go-to.retrying))) "a walk that fails from the same cell over the same memory is not planned again (98 identical re-plans before)"))
           (is (= {} (:skipped result)))
           (is (<= (count (calls p "jumpPlace")) 6) "one pillar of at most six blocks for the room, not one per cell: a failed walk does not dig its own pillar away")
           (is (empty? left) "the pillar the dig children climbed is taken back when the job ends"))))))
