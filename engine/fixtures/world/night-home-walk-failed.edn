@@ -1,0 +1,45 @@
+;; Card c37254ac (4cb1bf737): the night prices the :home answer (a carried bed walked into a closed home and put down inside)
+;; at the chance another walk wins after tonight's :home-walk-failed entries for that home (cost/retry-chance :walk).
+;; Scene: a stone hut (x 8..16, z 8..16) with :home inside; the body stands 7 blocks south of it on lit ground with a carried bed,
+;; two others awake (seeded :sleep-status 0 of 2) and no log-out. Should-succeed: a doorway, no failed walk, so the walk in is
+;; taken (child :home-walk) and the bed goes down inside. Should-fail of the second: 12 failed walks seeded for that home and
+;; the walls other owners' zones (go-to may not dig them: the walk really cannot arrive), so no walk in is started and the bed
+;; goes down where the body stands; on old code the :home answer still won and the :home-walk child started.
+;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match-id).
+{:defaults
+ {:tags [:night :survival :sleep :bed]
+  :time :night-exclusive :time-why :sleep
+  :blocks [[:fill [8 0 8] [16 3 16] "stone_bricks" :hollow] [:fill [10 -1 17] [15 -1 22] "glowstone"]]
+  :zones [{:name "w-west" :min [8 0 8] :max [8 3 16] :owner "Other"} {:name "w-east" :min [16 0 8] :max [16 3 16] :owner "Other"}
+          {:name "w-north" :min [8 0 8] :max [16 3 8] :owner "Other"} {:name "w-south" :min [8 0 16] :max [16 3 16] :owner "Other"}
+          {:name "w-roof" :min [8 3 8] :max [16 3 16] :owner "Other"} {:name "w-floor" :min [8 0 8] :max [16 0 16] :owner "Other"}]
+  :body {:at [12.5 0 19.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 2 :inventory [["red_bed" 1]]}
+  :act [[:job (jobs.memory.set-place {:name :home :pos #at [12 0 12]}) [:now]]
+        [:job (jobs.survival.night {:ways #{:bed :shelter}})]]}
+ :cases
+ [{:name "no-failed-walk-the-carried-bed-is-walked-into-the-home"
+   :blocks [[:fill [12 0 16] [12 1 16] "air"]]
+   :zones []
+   :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :home-walk}} :within-s 60}
+            {:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [12 0 12] 4.5]}} :within-s 120}]
+   :after [[:item "red_bed" 0] [:body-near [12.5 0 12.5] 5]]
+   :limit-s 130}
+  {:name "twelve-failed-walks-into-a-walled-home-the-carried-bed-goes-down-outside"
+   :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
+            {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}]
+   :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true}} :within-s 90}
+            {:no-event {:source :job :kind :child_started :data {:slot :home-walk}} :for-s 60}]
+   :after [[:item "red_bed" 0] [:body-far [12.5 0 12.5] 5]]
+   :limit-s 100}]}
