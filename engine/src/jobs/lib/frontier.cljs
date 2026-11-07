@@ -50,22 +50,36 @@
                      (let [l (boolean (and lit-fn (lit-fn (+ x0 (mod q r)) (+ y0 (quot q rr)) (+ z0 (mod (quot q r) r)))))]
                        (aset litc q (if l 2 1))
                        l))))
-        frontier? (fn [q] (and (== 1 (aget kind q))
+        ;; whether each cell inside the margin's shell is a frontier cell, once (a row's scan reads each many times)
+        ^js front (js/Uint8Array. (* r r r))
+        _ (dotimes [j n]
+            (dotimes [k n]
+              (let [row (* r (+ (inc k) (* r (inc j))))]
+                (dotimes [i n]
+                  (let [q (+ row i 1)]
+                    (when (and (== 1 (aget kind q))
                                (or (zero? (aget kind (inc q))) (zero? (aget kind (dec q)))
                                    (zero? (aget kind (+ q r))) (zero? (aget kind (- q r)))
-                                   (zero? (aget kind (+ q rr))) (zero? (aget kind (- q rr))))))
-        ;; along x: the distance to the nearest frontier in the row, for the block's x only
+                                   (zero? (aget kind (+ q rr))) (zero? (aget kind (- q rr)))))
+                      (aset front q 1)))))))
+        ;; along x: the distance to the nearest frontier in the row, for the block's x only: the nearest at or before each
+        ;; cell and at or after it (-1: none), one sweep each way; equally near on both sides, lit only if both are
+        ^js before (js/Int32Array. n)
+        ^js after (js/Int32Array. n)
         ^js dx (js/Int8Array. (* side n n))
         _ (dotimes [j n]
             (dotimes [k n]
               (let [row (+ 1 (* r (+ (inc k) (* r (inc j))))) to (* side (+ k (* n j)))]
+                (loop [i 0 last -1] (when (< i n) (let [l (if (== 1 (aget front (+ row i))) i last)] (aset before i l) (recur (inc i) l))))
+                (loop [i (dec n) last -1] (when (>= i 0) (let [l (if (== 1 (aget front (+ row i))) i last)] (aset after i l) (recur (dec i) l))))
                 (dotimes [a side]
-                  (aset dx (+ to a) (loop [t 0]
-                                      (let [up (+ row m a t) dn (- (+ row m a) t)
-                                            fu (frontier? up) fd (frontier? dn)]
-                                        (cond (> t m) (* 2 cap)
-                                              (or fu fd) (+ (* 2 t) (if (and (or (not fu) (lit-at up)) (or (not fd) (lit-at dn))) 1 0))
-                                              :else (recur (inc t))))))))))
+                  (let [p (+ m a)
+                        b (aget before p) f (aget after p)
+                        lt (if (neg? b) ##Inf (- p b)) rt (if (neg? f) ##Inf (- f p))
+                        t (js/Math.min lt rt)]
+                    (aset dx (+ to a) (if (> t m)
+                                        (* 2 cap)
+                                        (+ (* 2 t) (if (and (or (not= lt t) (lit-at (+ row b))) (or (not= rt t) (lit-at (+ row f)))) 1 0)))))))))
         ;; then along y and along z: the nearest of max(|t|, the distance t off on the axis before)
         nearest (fn [^js from base stride]
                   (loop [t (- m) best (* 2 cap)]

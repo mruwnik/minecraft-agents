@@ -165,6 +165,15 @@
 
 (defonce ^:private unseen-kept (js/Map.))
 
+(def ^:private unseen-q-edges (into-array (:q-edges unseen-data)))
+
+(def ^:private unseen-dy-edges (into-array (:dy-edges unseen-data)))
+
+(defn- edges-under
+  "How many of edges (ascending) v is at or over."
+  [^js edges v]
+  (loop [i 0] (if (and (< i (alength edges)) (>= v (aget edges i))) (recur (inc i)) i)))
+
 (defn unseen-solid
   "The chance a cell a body whose feet are at height y has not seen is solid, dy blocks over the feet, d blocks
   (Chebyshev) from the nearest frontier cell (seen open beside unseen: where sight was cut by light or reach, not by a
@@ -176,12 +185,12 @@
   section centres."
   ([y dy d lit? q] (unseen-solid y dy d lit? q nil))
   ([y dy d lit? q beside-solid?]
-   (let [{:keys [q-edges dy-edges]} unseen-data
-         qb (if (nil? q) (count q-edges) (count (filter #(>= q %) q-edges)))
-         dyb (count (filter #(>= dy %) dy-edges))
+   (let [qb (if (nil? q) (alength unseen-q-edges) (edges-under unseen-q-edges q))
+         dyb (edges-under unseen-dy-edges dy)
          di (dec (-> d (max 1) (min unseen-d-max)))
          adj (cond (nil? beside-solid?) 2 beside-solid? 1 :else 0)
-         key (str y "," dyb "," di "," lit? "," qb "," adj)]
+         ;; one number: a string key was most of a call's cost, and a search prices thousands of cells; y is a whole number
+         key (+ (* y 4096) adj (* 3 (+ qb (* 4 (+ (if lit? 1 0) (* 2 (+ di (* 16 dyb))))))))]
      (or (.get unseen-kept key)
          (let [at [(if lit? :lit :dark) di qb dyb adj]
                {:keys [a b]} (prior-at unseen-sections y #(first (get-in % at)) #(second (get-in % at)))
