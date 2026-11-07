@@ -27,8 +27,8 @@
   "die!, the death on the :deaths list too (where walk-risk remembers a killer), as the engine records it."
   ([eng data ago-ms] (die-noted! eng data ago-ms {:x 0 :y 64 :z 0}))
   ([eng data ago-ms respawn-pos]
-  (die! eng data ago-ms respawn-pos)
-  (core/record-death! eng (mem/latest (mem/view (:store eng)) :died))))
+   (die! eng data ago-ms respawn-pos)
+   (core/record-death! eng (mem/latest (mem/view (:store eng)) :died))))
 
 (def cheap-pile
   "recover-drops with the field-report pile worth about 600 s: less than the walk past its skeleton killer costs an unarmed body."
