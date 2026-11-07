@@ -184,17 +184,6 @@
              cell [(up f 2) (up nxt 1) nxt]]
          cell)))
 
-(defn rim-steps
-  "How many of the n steps of a stair up along dir from feet to cut: those up to and including the first one that stands on
-  open ground (its cuts and the cell ahead on its level open over solid floors, all seen), the rim of a wall; n when
-  none does. A cut stair's own steps are no rim: the next tread is ahead."
-  [block-at unseen? feet dir n]
-  (let [done? (fn [[a b c]] (let [floor (add c [0 -1 0]) on (ahead c dir 1) on-floor (add on [0 -1 0])]
-                              (and (not-any? unseen? [a b c floor on on-floor]) (every? #(bs/passable? (block-at %)) [a b c on])
-                                   (solid? (block-at floor)) (solid? (block-at on-floor)))))
-        k (count (take-while (complement done?) (partition 3 (stair-cuts feet dir n))))]
-    (min n (inc k))))
-
 (def usable-door #"^(?!iron_door$)[a-z_]+_door$|_fence_gate$")
 
 (defn enclosed?
@@ -309,6 +298,20 @@
         (not-every? bs/passable? (map block-at [cell (up cell 1)])) nil
         (rules/solid-floor? block-at below) (cond-> {:through cell :fall d :on (block-at below)} (unseen? below) (assoc :floor-unseen true))
         :else (recur (inc d))))))
+
+(defn rim-steps
+  "How many of the n steps of a stair up along dir from feet to cut: those up to and including the first one that stands on
+  open ground (its cuts and the cell ahead on its level open, all seen, over solid floors or a seen landing at most
+  max-drop below the cell ahead: a wall's far side), the rim of a wall; n when none does. A cut stair's own steps are no
+  rim: the next tread is ahead."
+  [block-at unseen? feet dir n max-drop]
+  (let [done? (fn [[a b c]] (let [floor (add c [0 -1 0]) on (ahead c dir 1) on-floor (add on [0 -1 0])]
+                              (and (not-any? unseen? [a b c floor on on-floor]) (every? #(bs/passable? (block-at %)) [a b c on])
+                                   (solid? (block-at floor))
+                                   (or (solid? (block-at on-floor))
+                                       (let [l (landing block-at unseen? on max-drop)] (and l (not (:floor-unseen l))))))))
+        k (count (take-while (complement done?) (partition 3 (stair-cuts feet dir n))))]
+    (min n (inc k))))
 
 (defn door-from
   "door from row k on (rows before it already open): the wall's solid cells from row k and the first row beyond with

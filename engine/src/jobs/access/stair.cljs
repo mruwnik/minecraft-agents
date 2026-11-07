@@ -416,7 +416,7 @@
   (let [{:keys [dir heading y]} (:args c)
         p (:primitives c)]
     (if (and (= :up dir) (nil? y) (< i target))
-      (+ i (escape/rim-steps (escape/block-at-of p) (escape/unseen-of p) feet (shape/headings heading) (- target i)))
+      (+ i (escape/rim-steps (escape/block-at-of p) (escape/unseen-of p) feet (shape/headings heading) (- target i) (escape/drop-limit p)))
       target)))
 
 (defn ^:async work!

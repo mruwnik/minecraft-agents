@@ -119,9 +119,21 @@
   (let [wall-world (merge (box -10 63 -10 14 63 10 "stone") (box 0 64 -10 3 65 10 "stone"))
         p (tu/fake {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks wall-world})
         block-at (escape/block-at-of p)
-        steps (fn [unseen?] (escape/rim-steps block-at unseen? [-1 64 0] [1 0] 8))]
+        steps (fn [unseen?] (escape/rim-steps block-at unseen? [-1 64 0] [1 0] 8 3))]
     (is (= 2 (steps (constantly false))) "a seen floor under the second step is the rim")
     (is (= 8 (steps #(= [1 65 0] (vec %)))) "an unseen floor is not known to be solid")))
+
+(deftest a-stair-ends-on-a-thin-wall-with-lower-ground-beyond-but-not-on-a-cliff-or-its-own-tread
+  (let [steps (fn [world max-drop]
+                (let [p (tu/fake {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks world})]
+                  (escape/rim-steps (escape/block-at-of p) (constantly false) [-1 64 0] [1 0] 8 max-drop)))
+        floor (box -10 63 -10 14 63 10 "stone")
+        wall (merge floor (box 0 64 -10 1 65 10 "stone"))
+        cliff (apply dissoc wall (for [x (range 2 15) z (range -10 11)] (str x ",63," z)))]
+    (is (= 2 (steps wall 3)) "a 2-high wall 2 thick, ground 2 below its top beyond: the second step is the rim")
+    (is (= 8 (steps wall 1)) "a landing past the body's drop limit is no rim")
+    (is (= 8 (steps cliff 3)) "no floor beyond (a cliff edge): no rim")
+    (is (= 8 (steps (merge floor (box 0 64 -10 14 80 10 "stone")) 3)) "solid rock ahead: the cut stair's own next tread is no rim")))
 
 (deftest escape-choose-stair-checks-every-step
   (let [ba-pit (assoc pit "2,63,0" "bricks")]
@@ -685,7 +697,9 @@
           (is (seq (events-of seen :go-to.restored)))
           (is (= [] (filterv #(= "air" (block p %)) pen-cells)) "every cell of the pen's wall and floor is whole again")
           ;; the rim 2 above is unseen when the stair is chosen (sight 3): the stair ends on it once seen, not stopped needing a floor in the air past it
-          (is (= [] (filterv #(= :stair (:step %)) (events-of seen :go-to.escalation-stopped)))))))))
+          (is (= [:stair] (distinct (map :step (events-of seen :go-to.escalated)))) "the stair escalation was chosen")
+          (is (= [] (filterv #(= :stair (:step %)) (events-of seen :go-to.escalation-stopped))))
+          (is (= 62 (apply max (map #(get-in % [:at 1]) (events-of seen :stair.step)))) "the stair stepped up onto the rim (y 62), 2 steps"))))))
 
 (deftest go-to-takes-back-the-own-blocks-that-shut-the-body-in-when-the-goal-is-farther-than-the-clear-radius
   ;; a seal beside the feet, the goal 6 blocks past it: the cleanup takes back every own block near the feet, also the one behind

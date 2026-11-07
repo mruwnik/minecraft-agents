@@ -297,7 +297,7 @@
                             [nil rise]))
          climb (delay (when-not (or (off :stair) (pos? rise))
                         (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?)
-                                              (as-> h [h (escape/rim-steps block-at (escape/unseen-of p) feet (escape/heading-dirs h) n)])))
+                                              (as-> h [h (escape/rim-steps block-at (escape/unseen-of p) feet (escape/heading-dirs h) n (escape/drop-limit p))])))
                               (range (escape/max-depth) 0 -1))))
          ledge (delay (when (and item (not (off :stair)) (pos? rise) (not (escape/walled-side? block-at feet)))
                         (escape/stair-heading block-at feet (remove #(contains? stands (escape/ahead feet % 1)) stair-dirs) rise may-dig? true)))
