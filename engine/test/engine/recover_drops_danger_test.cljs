@@ -572,7 +572,7 @@
           (set! fetch/walk-leg! walk-leg!)
           (set! child/run!* run!*)
           (is (= 2 @seals) "the seal is tried again, up to twice a trip")
-          (is (and (seq @walk-worths) (every? #(and (number? %) (< % ##Inf)) @walk-worths)) (str "the walk to the seal is priced at the pile's value: " (pr-str @walk-worths))))))))
+          (is (and (seq @walk-worths) (every? nil? @walk-worths)) (str "the walk to the seal takes the call's worth: " (pr-str @walk-worths))))))))
 
 (deftest a-walk-stuck-far-from-a-sealed-pile-leaves-the-seal-alone
   ;; KitOak92: a walk that timed out 57 blocks off sent a walk-only, unpriced seal-walk down to the pile from the surface.

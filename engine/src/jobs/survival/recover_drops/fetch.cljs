@@ -26,10 +26,8 @@
     (child/fruitless! c :seal)
     (ctx/update-mem! c assoc :phase :go)
     (dth/save-trip! c)
-    (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))
-          worth (:value (:decided (ctx/mem c)))]
-      (await (child/run!* c :seal-walk 'jobs.movement.go-to (cond-> {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks cfg/own-checks}
-                                                             (number? worth) (assoc :worth worth)))))
+    (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
+      (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks cfg/own-checks})))
     (let [r (await (child/run!* c :seal 'jobs.access.cleanup {:of :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc cfg/own-checks :fit? '(always))}))]
       (when (and (= :done (:kind r)) (seq (:removed (:data r))))
         (ctx/update-mem! c assoc :seal-cleared true)))
@@ -41,13 +39,12 @@
 
 (defn ^:async walk-leg!
   "One leg of the walk to pos: [:danger d] when a danger the trip has not priced is near (no walk is made), else [r] of
-  a chase leg of ::leg-s seconds (:continue, or its ending; its :data has the result, with :arrived or :leg). go-to's :worth
-  is the pile's value."
+  a chase leg of ::leg-s seconds (:continue, or its ending; its :data has the result, with :arrived or :leg). go-to takes
+  the call's worth."
   [c pos]
-  (let [worth (:value (:decided (ctx/mem c)))]
-    (if-let [d (dg/threatened? c)]
-      [:danger d]
-      [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk (cond-> {:checks cfg/own-checks} (number? worth) (assoc :worth worth))}))])))
+  (if-let [d (dg/threatened? c)]
+    [:danger d]
+    [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk {:checks cfg/own-checks}}))]))
 
 (defn refused?
   "Whether the walk's ending r is go-to's verdict on the goal cell alone, given before any search (as chase passes it on)."

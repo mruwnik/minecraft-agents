@@ -38,7 +38,7 @@
   Memory: reads :died :respawned :bed :slept :recover-trip :recover-danger, the scaffold ledger; writes :recovered :recover-trip :recover-danger.")
 
 (a/defargs args
-  {:value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
+  {:value-overrides {:doc "jobs.lib.cost/item-value and goal-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -62,6 +62,14 @@
   (if (seq (dth/open-deaths c))
     (contract/ok :open-death "a death to serve")
     (checks/cause-status :later (or (dth/danger-wait (ctx/view c)) (est/decided-wait (ctx/view c))))))
+
+(defn worth-of
+  "Seconds a root trip is worth: getting the pile it serves again (cost/goal-value, args :value-overrides) and its
+  experience; 0 with none."
+  [c]
+  (if-let [{{:keys [inventory experience]} :data} (dth/current-death c)]
+    (+ (:value (cost/goal-value inventory (:value-overrides (:args c)))) (cost/experience-cost experience))
+    0))
 
 (defn done?
   "Ok once the latest death's pile is back or seen gone (its :recovered says :collected or :nothing-found); else how much of the pile is back since the decision."

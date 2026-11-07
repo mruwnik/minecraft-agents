@@ -638,9 +638,10 @@
 
 (defn goal-value
   "value/made-value of items as a goal: each measured item at its measured worth (value/measured-worth), what is made of
-  it after them, whole crafts and their stations from nothing."
-  [items]
-  (value/made-value items :overrides (value/measured-worths @game/version) :basis (:goal-basis (value/measured-worth @game/version))))
+  it after them, whole crafts and their stations from nothing. overrides (item-value's) go over the measured worths."
+  ([items] (goal-value items nil))
+  ([items overrides]
+   (value/made-value items :overrides (merge (value/measured-worths @game/version) overrides) :basis (:goal-basis (value/measured-worth @game/version)))))
 
 (defn death-body
   "The body of p as the death costs read it: :level, :respawn (respawn-of) and :carried (the goal-value of the inventory, its replacement cost)."

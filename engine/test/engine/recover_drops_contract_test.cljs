@@ -3,21 +3,24 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.death-test :as dt :refer [die! job recovered]]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.world-files :as ew]))
 
 (defn setup
-  "library-test/setup with the canonical event sink, so a root's ending data (its :kind and :reason) is readable."
-  [world]
+  "library-test/setup with the canonical event sink, so a root's ending data (its :kind and :reason) is readable; jobs
+  over the registry's."
+  [world & [jobs]]
   (let [clock (atom 1000000)
         [seen sink] (tu/capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
@@ -48,6 +51,22 @@
           (await (run-until-empty eng 10))
           (is (= {:kind :done} (end-of seen)))
           (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest the-walk-is-worth-the-calls-goal-and-a-root-trip-the-pile-got-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walk-worth (fn ^:async walk-worth [call]
+                           (let [worths (atom [])
+                                 go-to {:target [] :ways #{:walk} :round (fn [c] (swap! worths conj (ctx/worth c)) (ctx/end c :done nil {:arrived false}))}
+                                 {:keys [eng]} (setup {:floor tu/walk-floor :entities dt/drops} {'jobs.movement.go-to go-to})]
+                             (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+                             (core/submit! eng call {})
+                             (await (run-until-empty eng 10))
+                             (first @worths)))]
+          (is (= 500 (await (walk-worth '(jobs.survival.recover-drops {:worth 500})))) "a trip's walk is worth the call's goal")
+          (is (= (:value (cost/goal-value dt/diamonds)) (await (walk-worth job)))
+              "a root trip is worth getting the pile again"))))))
 
 (defn dear-zombie-run
   "Die beside a zombie that makes the cheapened pile dear, submit recover-drops with the extra args, run it out: [eng seen id]."
