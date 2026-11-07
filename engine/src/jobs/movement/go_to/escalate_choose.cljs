@@ -752,7 +752,7 @@
   doubled while it alone kept the search from an end (dig-route's :boxed), each sliced as the first; an end but the goal
   over seen air is the cell over the first floor under it, left out when that floor is unseen or there is none, and one
   no route ends in (lava, bedrock, a claim) the stand nearest it (searched outward ring by ring, as many cells as the
-  call's budget buys at cost/search-cell-s) that is nearer the goal than from. The wider boxes'
+  call's budget buys at cost/search-read-s) that is nearer the goal than from. The wider boxes'
   searches are bounded by the least of opts :bound-s, :worth-s and the way without a dig route (memory :route-search
   :fallback-s), and each counts the CPU the boxed searches before it spent (:searched-s): the widening ends :past-worth
   once the search has spent what the leg could save, and with no end reached once the body remembers nothing within a
@@ -782,7 +782,7 @@
           ;; route search itself, the nodes the call's route slice has left)
           budget-s (min (call-budget-s c) (or (:bound-s opts) ##Inf) (or (:worth-s opts) ##Inf))
           budget-s (if (infinite? budget-s) (rest-dig-s c from goal) budget-s)
-          scan-cells (if (infinite? budget-s) (if-let [left (some-> slice :left deref)] left ##Inf) (/ budget-s (cost/search-cell-s)))
+          scan-cells (if (infinite? budget-s) (if-let [left (some-> slice :left deref)] left ##Inf) (/ budget-s (cost/search-read-s)))
           read-cells (fn [r] (js/Math.pow (inc (* 2 r)) 3))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
           ;; priced by the route, on a floor seen (one never seen under seen air is no landing to plan a leg to: none); one no

@@ -1312,7 +1312,7 @@
   (let [p (tu/fake {:blocks (box -2 50 -14 7 80 14 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
         c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
         leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-void")})]
-    (with-redefs [ctx/mem (constantly {:route-search {:fallback-s 60}}) ctx/left (constantly {}) cost/search-cell-s (constantly 0.001)]
+    (with-redefs [ctx/mem (constantly {:route-search {:fallback-s 60}}) ctx/left (constantly {}) cost/search-read-s (constantly 0.001)]
       (is (= {:step :none :why :past-worth} (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
 
 ;; card 29cd6b4d: lava 5 long on the line and 15 wide holds both leg ends (3 and 6 on): each is moved to the stand nearest
@@ -1342,7 +1342,7 @@
 ;; the rock round the end: with the worth at 20 cells' time not one ring (27 cells) is read, where the geometric reach alone read hundreds of thousands;
 ;; at ##Inf worth the straight dig to the goal bounds it
 (deftest a-dig-leg-end-in-rock-with-no-stand-reads-cells-only-as-far-as-the-leg-is-worth
-  (doseq [[worth cap] [[(* 20 (cost/search-cell-s)) 100] [##Inf (* 4 (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes))]]]
+  (doseq [[worth cap] [[(* 20 (cost/search-read-s)) 100] [##Inf (* 4 (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes))]]]
     (let [p (tu/fake {:blocks (box -2 50 -15 50 80 15 "bedrock") :inventory [{:name "stone_pickaxe" :count 1}]})
           reads (atom 0)
           real-block-at (escape/block-at-of p)
