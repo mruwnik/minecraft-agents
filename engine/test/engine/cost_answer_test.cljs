@@ -182,6 +182,13 @@
     (is (zero? (death/death-cost (assoc bed :health 2) here)) "a death near the bed with nothing to lose heals more than it costs: never under nothing (Q145)")
     (is (< (price (body 5) lethal) ##Inf) "a sure death is a finite price, bed or none")))
 
+(deftest a-hurt-hungry-body-s-death-costs-less-than-a-healed-fed-one-s-by-what-the-respawn-refills
+  (let [bed (assoc (body 20) :respawn {:x 40 :y 64 :z 0} :level 3 :carried 200)
+        hurt (assoc bed :health 18 :food 16)
+        price (fn [b] (cost/answer-price b {:damage 100 :hit 5 :blasts [100] :seconds 1} here))]
+    (is (< 0 (death/death-cost hurt here) (death/death-cost bed here)) "dearer than nothing, cheaper than the healed one's")
+    (is (< (price hurt) (price bed)) "the answer that ends in a death is priced with the refill")))
+
 (deftest a-creepers-blast-costs-what-it-breaks-about-the-body-on-top-of-its-hurt
   (is (< 0.6 (answer/blast-break-chance 1 6) 0.8) "stone a block off: most of the blast's strengths break it")
   (is (= 1 (answer/blast-break-chance 0.5 0.5)) "dirt at the blast: always")
