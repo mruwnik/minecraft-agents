@@ -2,6 +2,7 @@
   (:require [cljs.test :refer [deftest is testing]]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.tolls :as cost-tolls]
             [jobs.lib.cost.base-rates :as br]
             [jobs.lib.cost.ways :as cw]
             [engine.fake.raw-world :as fake-raw]
@@ -682,6 +683,17 @@
         "no route enters a cell tolled ##Inf")
     (is (= 10 (:seconds (dr/route tolled-tunnel [0 10 0] [10 10 0] (assoc opts :tolls (map #(assoc % :trample true) tolls)))))
         "a trample toll counts only for a step that lands: none on the level tunnel")))
+
+(deftest a-route-pays-the-threat-tolls-table-on-top-of-the-calls-tolls
+  ;; :threat-tolls is the walk planner's packed threat table, summed with :tolls (zone tolls among them)
+  (let [opts {:step-s 1 :dig-s (constantly 1) :margin 2}
+        cells (vec (for [x (range 1 10)] [x 10 0]))
+        packed (cost-tolls/packed (count cells) (fn [i xs ys zs fs] (let [[x y z] (nth cells i)] (aset xs i x) (aset ys i y) (aset zs i z) (aset fs i 60))))
+        by-threat (dr/route tolled-tunnel [0 10 0] [10 10 0] (assoc opts :threat-tolls packed))
+        both (dr/route tolled-tunnel [0 10 0] [10 10 0] (assoc opts :threat-tolls packed :tolls [{:x 5 :y 10 :z 0 :factor ##Inf}]))]
+    (is (not-any? (set cells) (map :to (:steps by-threat))) "the threat-tolled tunnel is dug round")
+    (is (< (:seconds by-threat) (* 61 9)))
+    (is (not-any? (set cells) (map :to (:steps both))) "both tables apply together")))
 
 (defn holed-climb
   "Stone below y 30 with about one cell in eight air round a climb from [0 10 0], seeded: [block-at goal]."

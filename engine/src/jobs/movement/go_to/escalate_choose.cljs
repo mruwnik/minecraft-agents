@@ -33,6 +33,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]
+            [jobs.lib.threats :as threats]
+            [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.movement.go-to.aim :as goal-aim]
             [jobs.movement.go-to.climb :as climb]
@@ -572,7 +574,7 @@
                          (let [a (sensed x (inc y) z)]
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
         max-fall (get (merge prices route-opts) :max-fall)
-        toll-f (dig-route/toll-fn (:tolls route-opts))
+        toll-f (dig-route/toll-fn (:tolls route-opts) (:threat-tolls route-opts))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig, and the digs and steps inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
         ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of reading its feet and head cells (:read-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
@@ -729,18 +731,23 @@
   "route-answer's route-opts for a choice's opts: its :slice, its :spent searches, its :own-s and :own-cut
   (a way that may cut the body's own builds: searched apart), its :tolls, :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
-  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage plugs tolls]}]
+  [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage plugs tolls threat-tolls]}]
   (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :read-s (cost/search-read-s) :max-damage max-damage}
     closed? (assoc :max-fall 1)
-    plugs (assoc :plugs plugs) (seq tolls) (assoc :tolls tolls) slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
+    plugs (assoc :plugs plugs) (seq tolls) (assoc :tolls tolls) (seq threat-tolls) (assoc :threat-tolls threat-tolls) slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
     guess-risk (assoc :guess-risk guess-risk :worth-s worth-s)))
 
 (defn range-opts
-  "Where the go-to call c's dig routes to pos may end: :range, :near (pos's cell) and under :see :see, the block the end stand must see."
+  "Where the go-to call c's dig routes to pos may end: :range, :near (pos's cell) and under :see :see, the block the end stand must see;
+  and the tolls the walk planner adds to the call's: the cells of other bodies' zones near the way (:tolls, with the call's) and every known threat's field (:threat-tolls)."
   [c pos]
-  (cond-> {:range (:range (:args c) 1) :near (mapv #(js/Math.floor (% pos)) [:x :y :z])}
-    (goal-aim/see-cell c) (assoc :see (goal-aim/see-cell c))))
+  (let [zone (when (wworld/zone-tolls?) (tc/zone-walk-tolls c pos))
+        all (when (wworld/dangers?) (threats/known-threats c))]
+    (cond-> {:range (:range (:args c) 1) :near (mapv #(js/Math.floor (% pos)) [:x :y :z])}
+      (goal-aim/see-cell c) (assoc :see (goal-aim/see-cell c))
+      zone (assoc :tolls (into (walk-tolls c) zone))
+      (seq all) (assoc :threat-tolls (threats/shared-tolls c all all)))))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search

@@ -618,13 +618,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; another owner's zone covers the pit's column: the pillar may not place there, the stair digs beside it
+        ;; another owner's zone covers the pit's column: the dig route pays its zone toll, so it digs beside the pit and pillars up outside the zone
         (let [zones [{:name "shaft" :owner "Miles" :min [0 62 0] :max [0 64 0]}]
               {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
           (is (= {:arrived true} @out))
-          (is (= [:pillar :stair] (mapv :step (events-of seen :go-to.escalated))))
-          (is (empty? (calls p "jumpPlace"))))))))
+          (is (= [:dig-route :approach :pillar] (mapv :step (events-of seen :go-to.escalated))))
+          (is (not-any? #{"dirt"} (map #(block p %) [[0 62 0] [0 63 0] [0 64 0]])) "nothing is laid in the zone's cells"))))))
 
 (deftest go-to-puts-back-with-a-block-it-may-dig-again
   (async done
