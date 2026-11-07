@@ -1353,16 +1353,17 @@
     (is (< 0 (loss [(assoc (z 2) :weight 0.5)]) (loss [(z 2)])) "a mob as likely there as not lands some of its blows")
     (is (= (/ (+ (loss [(z 2)] nil 1) (loss [(z 2)] nil 20)) 2) (loss [(z 2)] nil [1 20])) "a spread of stays costs their mean")))
 
-(deftest a-creepers-blast-prices-what-the-worlds-files-hold-as-built
+(deftest a-creepers-blast-prices-the-plans-footprints-not-the-natural-ground-of-a-zone
   (let [p (tu/seeing-all (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (tu/box -6 63 -6 6 63 6 "stone") :entities []}))
         around {:min [-2 63 -2] :max [2 65 2]}
         zoned (ew/of-data {} {} [(assoc around :name "hut" :owner "Alex")])
         claimed (doto (ew/of-data {} {} []) (-> :state (swap! assoc :area-claims {:value [(assoc around :id "c1" :owner "Alex" :status "active" :until 5000)]})))
         blast #(hostile-loss/blast-s (ctx-of p %) {:now 1000})]
     (is (zero? (blast nil)) "natural stone, no file holds it: nothing")
-    (is (pos? (blast zoned)) "stone inside a zone is part of a build: put back")
-    (is (pos? (blast claimed)) "an active claim's area too")
-    (is (zero? (hostile-loss/blast-s (ctx-of p claimed) {:now 6000})) "an expired claim holds nothing, and the kept price of the claim is not served")))
+    (is (zero? (blast zoned)) "natural stone inside a zone box is still natural")
+    (is (zero? (blast claimed)) "an active claim's box too")
+    (with-redefs [ew/footprints (fn [_ _] {[0 63 0] "hut"})]
+      (is (pos? (blast zoned)) "a cell of a plan's footprint is a build: put back"))))
 
 ;; the shot's skeleton stands for a shooter not seen: one seen is that shooter, not a second
 (deftest a-seen-skeleton-and-its-shot-count-once

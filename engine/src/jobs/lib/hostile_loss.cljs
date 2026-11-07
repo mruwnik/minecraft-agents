@@ -6,7 +6,6 @@
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
-            [jobs.lib.access.zones :as zones]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -49,12 +48,11 @@
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 
 (defn built-fn
-  "(built? cell [x y z]) of what the world's files hold as built: a cell of a plan's footprint, in a zone, or in an
-  active claim at now (ms)."
-  [w now]
-  (let [footprints (world-files/footprints w nil)
-        areas (into (vec (world-files/zones w)) (world-files/live-claims (world-files/area-claims w) now))]
-    (fn [cell] (boolean (or (contains? footprints cell) (some #(zones/in-box? cell %) areas))))))
+  "(built? cell [x y z]) of what the world's files hold as built: a cell of a plan's footprint. A zone or claim box
+  is coarse, so its natural ground is not built (a block that looks built is, by cost/destroyed-fn)."
+  [w]
+  (let [footprints (world-files/footprints w nil)]
+    (fn [cell] (contains? footprints cell))))
 
 (defn blast-s*
   [p own?]
@@ -80,24 +78,22 @@
 (defn blast-s
   "Seconds a creeper's blast at the body's feet costs what is about it (cost/blast-env-s): each sensed cell within
   cost/blast-reach at what destroying it costs (cost/destroyed-fn: a block the body placed itself (ledger/own-placed
-  of its memory view), a cell the world's files hold as built (built-fn) or a block that looks built, a chest, farmland
+  of its memory view), a cell of a plan's footprint (built-fn) or a block that looks built, a chest, farmland
   and crops; natural terrain nothing) and its blast resistance. Kept while the body stays in its cell and neither the
-  world it knows, its placed blocks nor the files' plans, zones and claims change. c: {:primitives p :engine {:world
+  world it knows, its placed blocks nor the files' plans change. c: {:primitives p :engine {:world
   the world files}}."
   [c view]
   (let [p (:primitives c)
         w (:world (:engine c))
-        now (or (:now view) 0)
         self (u/pos-of (.-pos (.self p)))
-        sources [(world-files/footprints w nil) (world-files/zones w) (world-files/area-claims w)]
+        sources [(world-files/footprints w nil)]
         key [(threat-field/world-epoch p) (mapv #(js/Math.floor %) [(:x self) (:y self) (:z self)])
-             (count (mem/entries view :escalation-placed)) (hash (ledger/open-entries view))
-             (count (world-files/live-claims (world-files/area-claims w) now))]
+             (count (mem/entries view :escalation-placed)) (hash (ledger/open-entries view))]
         hit @blast-memo]
     (if (and (some? (first key)) (identical? p (:p hit)) (= key (:key hit)) (every? true? (map identical? sources (:sources hit))))
       (:value hit)
       (let [own? (ledger/own-placed view)
-            built? (built-fn w now)
+            built? (built-fn w)
             v (blast-s* p (fn [cell n] (or (own? cell n) (built? cell))))]
         (reset! blast-memo {:p p :key key :sources sources :value v})
         v))))
