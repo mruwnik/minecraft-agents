@@ -4,7 +4,7 @@
  {:tags [:explore :readiness]
   :time :any
   :plot {:length 48 :width 48 :height 6}
-  :body {:at [24.5 0 24.5] :settle-s 2}
+  :body {:spawnpoint :far :at [24.5 0 24.5] :settle-s 2}
   :limit-s 60}
  :cases
  [{:name "hurt-foodless-body-waits-instead-of-roaming-for-wood"

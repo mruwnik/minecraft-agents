@@ -2,7 +2,8 @@
 ;; regeneration) waits :low-health before a queued tunnel or pillar (fed at 1.2 hp too: the death a hit risks; at 5 hp it cuts; line 2.2 hp when fed), while go-to's escalation children carry :checks {:fit? (always)}
 ;; and still pillar a hurt body out of a pit.
 {:defaults
- {:tags [:access :readiness]
+ {:body {:spawnpoint :far}
+  :tags [:access :readiness]
   :time :any
   :plot {:height 20}
   :limit-s 90}

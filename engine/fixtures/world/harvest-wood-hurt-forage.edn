@@ -5,7 +5,7 @@
  {:tags [:forestry :harvest-wood :readiness]
   :time :any
   :plot {:height 10 :floor "grass_block"}
-  :body {:at [3.5 0 16.5] :settle-s 2}
+  :body {:spawnpoint :far :at [3.5 0 16.5] :settle-s 2}
   :blocks [[:fill [8 0 16] [8 3 16] "oak_log"] [:fill [6 3 14] [10 4 18] "oak_leaves[persistent=true]"] [:set [8 3 16] "oak_log"]]
   :limit-s 90}
  :cases

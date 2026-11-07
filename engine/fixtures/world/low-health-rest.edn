@@ -9,7 +9,7 @@
   :time :any
   :plot {:height 8 :floor "stone" :light :lit}
   :register [{:trigger :low-health}]
-  :body {:at [6.5 0 16.5]}
+  :body {:spawnpoint :far :at [6.5 0 16.5]}
   :limit-s 200}
  :cases
  [{:name "hurt-fed-body-rests-before-its-walk"

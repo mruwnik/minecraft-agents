@@ -8,7 +8,7 @@
   :plot {:height 6}
   :time :day :time-why :sleep
   :register [{:trigger :needs-bed}]
-  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 90}
  :cases
  [{:name "lost-spawn-bed-fetches-a-bed"

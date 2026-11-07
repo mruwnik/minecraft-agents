@@ -5,7 +5,7 @@
  {:tags [:explore :search :readiness]
   :time :any
   :plot {:height 6 :length 40 :width 32}
-  :body {:at [4.5 0 16.5] :settle-s 2}
+  :body {:spawnpoint :far :at [4.5 0 16.5] :settle-s 2}
   :limit-s 90}
  :cases
  [{:name "hurt-starving-body-searches-for-a-cow"
