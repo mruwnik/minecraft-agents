@@ -103,6 +103,7 @@
         ended? #(kit/gathering-ended? % true)]
     (is (ended? r))
     (is (not (kit/gathering-ended? r false)) "without :explore nothing new can be found")
+    (is (ended? (assoc r :cause :no-table)) "a craft cause beside the gather keeps the retry")
     (is (not (ended? (assoc r :gathered :none-seen))))
     (is (not (ended? (dissoc r :gathered))) "no gather tried: the wording of :why is not read")
     (is (not (ended? {:reason :no-source :why "gathering was tried and ended :no-plan"})))

@@ -335,7 +335,7 @@
             (is (= :no-table (:reason e)))
             (is (re-find #"could not be put down" (str (:text e) (:why e))))))))))
 
-(deftest a-stone-pickaxe-with-default-ways-and-no-table-cell-ends-with-the-table-cause
+(deftest a-stone-pickaxe-with-default-ways-and-no-table-cell-ends-no-source-with-the-table-cause
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -343,7 +343,8 @@
               s (f/start (ore-world {} [{:name "oak_planks" :count 3} {:name "stick" :count 2} {:name "cobblestone" :count 3} {:name "crafting_table" :count 1}]) [f/own-zone])]
           (await (obtain! s {:item "stone_pickaxe" :avoid around :explore false} 40))
           (let [e (last (f/events-of s :stopped))]
-            (is (= :no-table (:reason e)))
+            (is (= :no-source (:reason e)))
+            (is (= :no-table (get-in e [:cause :cause])))
             (is (re-find #"could not be put down" (str (:text e) (:why e))))))))))
 
 (deftest an-iron-ingot-with-raw-iron-carried-is-smelted-by-a-smelt-child

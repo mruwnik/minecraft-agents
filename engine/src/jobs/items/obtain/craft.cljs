@@ -100,5 +100,5 @@
                   ;; the craft child ran its own rounds and made nothing: another child of the same step would repeat them
                   :else (do (when-let [why (or (get-in e [:data :text]) (get-in e [:data :why]) (get-in e [:cause :why]))]
                               (ctx/update-mem! c assoc-in [:craft :detail] why))
-                            (ctx/update-mem! c update :craft #(if (get-in e [:data :short]) (dissoc % :cause) (assoc % :cause (contract/cause-key e))))
+                            (ctx/update-mem! c update :craft #(if (= :need (contract/cause-key e)) (dissoc % :cause) (assoc % :cause (contract/cause-key e))))
                             (tried! c :craft (stop-why e)))))))))))
