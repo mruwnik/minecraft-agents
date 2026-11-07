@@ -148,17 +148,21 @@
     (or (some #(paused (:id %)) order) (first (vals paused)))))
 
 (defn priced
-  "node as a trigger fires it for instance inst: a leaf with no :worth gets its job's worth-of over inst's check ctx
-  (the loss the job averts or the goal it serves). The register refuses an entry whose job has neither
-  (expr/fired-worth-problem). Throws on a worth-of that is not a finite number >= 0."
+  "node as a trigger fires it for instance inst: every leaf with no :worth gets its job's worth-of over inst's check ctx
+  (the loss the job averts or the goal it serves), so a seq or repeat of such jobs fires priced leaf by leaf. The register
+  refuses an entry with a leaf that has neither (expr/fired-worth-problem). Throws on a worth-of that is not a finite
+  number >= 0."
   [eng inst node]
-  (let [[def args] (when (= :leaf (:op node)) (job-of eng (assoc inst :spec node)))]
-    (if (or (number? (:worth args)) (nil? (:worth-of def)))
-      node
-      (let [w ((:worth-of def) (check-ctx eng inst args))]
-        (if (and (number? w) (>= w 0) (js/isFinite w))
-          (assoc-in node [:args :worth] w)
-          (throw (js/Error. (str (:job node) "'s worth-of returned " (pr-str w) ", not a finite number >= 0"))))))))
+  (case (:op node)
+    :leaf (let [[def args] (job-of eng (assoc inst :spec node))]
+            (if (or (number? (:worth args)) (nil? (:worth-of def)))
+              node
+              (let [w ((:worth-of def) (check-ctx eng inst args))]
+                (if (and (number? w) (>= w 0) (js/isFinite w))
+                  (assoc-in node [:args :worth] w)
+                  (throw (js/Error. (str (:job node) "'s worth-of returned " (pr-str w) ", not a finite number >= 0")))))))
+    :repeat (update node :child #(priced eng inst %))
+    (update node :children (fn [cs] (mapv #(priced eng inst %) cs)))))
 
 (defn trigger-status
   "The status entry's job would start with now: its start and run checks as one (contract/all), over a ctx of the job

@@ -2,6 +2,8 @@
   (:require [cljs.test :refer [deftest is are async]]
             [cljs.reader :as reader]
             [engine.core :as core]
+            [engine.core.schedule :as schedule]
+            [engine.expr :as expr]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.event-api :as event-api]
@@ -39,10 +41,14 @@
 
 (def always (constantly true))
 
+(def worths (atom []))
+
 (def jobs
   {'quick {:round #(ctx/end % :done nil) :args {} :worth-of (constantly 60)}
    'spin {:round (fn [_] :continue) :args {} :worth-of (constantly 60)}
    'bump {:round bump-round :args {} :worth-of (constantly 60)}
+   'read-a {:round (fn [c] (swap! worths conj [:a (ctx/worth c)]) (ctx/end c :done nil)) :args {} :worth-of (constantly 30)}
+   'read-b {:round (fn [c] (swap! worths conj [:b (ctx/worth c)]) (ctx/end c :done nil)) :args {} :worth-of (constantly 90)}
    'unpriced {:round #(ctx/end % :done nil) :args {}}})
 
 (def base-triggers
@@ -236,6 +242,19 @@
           (swap! flags conj :low)
           (await (tick-at r (+ t0 2250)))
           (is (= 2 (fired seen)) "false once re-armed it"))))))
+
+(deftest a-trigger-firing-a-seq-prices-each-leaf-by-its-own-worth-of
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng] :as r} (setup)
+              node (schedule/priced eng {:id "j" :reflex :bread-low} (expr/parse jobs '(seq (read-a) (repeat 2 (read-b)))))]
+          (is (= [30 90] (mapv #(:worth (:args %)) (expr/leaves node))) "every leaf of the combinator is priced")
+          (reset! worths [])
+          (is (:ok (api/request! eng (assoc adhoc :job '(seq (read-a))))))
+          (swap! flags conj :low)
+          (await (tick-at r t0))
+          (is (= [[:a 30]] @worths) "the leaf of a fired seq reads its worth-of"))))))
 
 (deftest each-adhoc-entry-answers-with-its-own-condition
   (async done
