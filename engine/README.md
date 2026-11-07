@@ -68,7 +68,7 @@ Layout:
   The ctx/call versions `child/call-walk*`, `run!*`, `walk-into!*`, `blocks/walk!*` return the child's ending (or `:continue`).
 - `src/triggers/` the triggers, plain fns by area (`triggers.survival.hungry`); `defaults.edn` is the default set.
 - `scenarios/*.edn` scenarios (`survival.edn`, `woodcutter.edn`, ...; `scratch/` is git-ignored for hand-run probe starts; `idle.edn` is the idle template).
-- `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world.
+- `test/engine/` cljs tests (helpers in `engine.test-util`); `test/engine/fake.cljs` is the scriptable fake world. A test fails when a call-guarded check threw during it (`engine.timing-test`); one that asserts the throw on purpose calls `timing-test/allow-throws!` with a regex.
 - `jobs.lib.clock/now`: the wall clock jobs time their own work by (search round cuts, plan ms, steer time left, looks for air); the `:test` build stops it and the engine's default CPU clock (`engine.core.clock/frozen`), so a test does the same work under any load.
 - `tools/*.mjs` agent CLI tools (below). `fixtures/world/` holds EDN world fixtures run by `../tools/world-test.mjs` (`--check` also fails an event kind no source emits, and a summon, body or go-to `#at` goal inside a solid `:blocks` cell).
 
