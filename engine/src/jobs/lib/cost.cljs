@@ -311,10 +311,18 @@
 
 (defn flood-reaches?
   "Whether water let in at cell [ox oy oz] up to level may reach cell: at or under the level and no farther across (x
-  plus z) than it flows, water-spread at oy and as far again for each block lower. Every cell between counts as open,
-  seen rock or not: never dry where the water could come."
-  [[ox oy oz] level [x y z]]
-  (and (<= y level) (<= (+ (js/Math.abs (- x ox)) (js/Math.abs (- z oz))) (* water-spread (inc (- oy y))))))
+  plus z) than it flows, water-spread at oy and as far again for each block lower, and the origin's extra (nil: 0) on top
+  (flood-origin-join). Every cell between counts as open, seen rock or not: never dry where the water could come."
+  [[ox oy oz extra] level [x y z]]
+  (and (<= y level) (<= (+ (js/Math.abs (- x ox)) (js/Math.abs (- z oz))) (+ (or extra 0) (* water-spread (inc (- oy y)))))))
+
+(defn flood-origin-join
+  "The origin of two floods let in at origins a and b: the higher one with an extra reach of the distance to the other
+  (and its extra), so every cell either reaches is reached (an upper bound, as flood-reaches?)."
+  [a b]
+  (let [[[hx hy hz he] [lx _ lz le]] (if (>= (a 1) (b 1)) [a b] [b a])
+        d (+ (js/Math.abs (- hx lx)) (js/Math.abs (- hz lz)))]
+    [hx hy hz (max (or he 0) (+ (or le 0) d))]))
 
 (defn wet-dig-pace
   "How many times its dry seconds a dig takes with the head under water, standing on ground (vanilla): 5, or 1 with Aqua

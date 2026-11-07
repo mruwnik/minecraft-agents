@@ -1141,6 +1141,16 @@
     (is (= dry (flood-s [open [:dig [16 64 0] "stone"]])))
     (is (= dry (flood-s [open [:step [20 64 0]]])) "a step past its reach is walked")))
 
+(deftest a-second-opening-within-the-reach-widens-the-flood
+  ;; the flood kept its first opening as origin: a cell only the second opening's water reaches was priced dry
+  (let [flood (:flood (dig-route/body-prices (tu/fake {:blocks {"1,66,0" "water" "8,66,0" "water"}}) (constantly false)))
+        dig (fn [[_ level under origin] cell] (dig-route/flood-dig flood level under origin cell "stone" 66))
+        [_ level _ origin] (-> (dig-route/flood-dig flood nil 0 nil [1 65 0] "stone" 66) (dig [8 65 0]))
+        reaches? (partial cost/flood-reaches? origin level)]
+    (is (reaches? [15 65 0]) "7 across from the second opening is wet")
+    (is (reaches? [-6 65 0]) "7 across from the first, still wet")
+    (is (not (reaches? [16 65 0])) "past both reaches it is dry")))
+
 (deftest a-fast-swimmer-pays-no-negative-price-for-time-under-water
   ;; wet-s lost its floor: swimming faster than the dry walk it replaces priced the flood below nothing
   (let [hp-s (cost/hp-seconds)]

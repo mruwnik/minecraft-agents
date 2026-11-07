@@ -112,11 +112,14 @@
   whose water, let in at cell origin, stands at level (nil: none let in yet), the head under it for under seconds:
   [seconds over its :dig-s, level after, under after, origin after], nil when it changes nothing. A dig at or under the
   level that the water may reach (cost/flood-reaches?), or beside more of it within that flow across, is made inside
-  the flood; water let in beyond it pays its opening, the first once; a higher pool's within it raises the level and
-  comes in there."
+  the flood; water let in beyond it pays its opening, the first once; a second pool's opening within the reach joins
+  the origin (cost/flood-origin-join), a farther one is a new flood."
   [flood level under origin [x y z :as cell] name l]
   (let [near? (and level (cost/flood-reaches? origin level [x (min y (origin 1)) z]))
-        [level' origin'] (if (and l (or (not near?) (< level l))) [l cell] [level origin])]
+        [level' origin'] (cond
+                           (not l) [level origin]
+                           (not near?) [l cell]
+                           :else [(max level l) (cost/flood-origin-join origin cell)])]
     (cond
       (and near? (<= y level) (or l (cost/flood-reaches? origin level cell))) (let [[w u] ((:dig flood) under name)] [w level' u origin'])
       near? [0 level' under origin']
