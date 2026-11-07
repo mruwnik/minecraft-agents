@@ -206,9 +206,13 @@
   [next-case]
   (not (and next-case (= :keep (body-start-plan next-case false)))))
 
-(def far-spawn-rise
-  "How far above the start the :spawnpoint :far pad stands: a body away from home (the death price reads the straight distance from the respawn point)."
-  100)
+(def far-spawn-y
+  "The absolute height of a :spawnpoint :far pad: 100 over the surface plots' floor, above every plot (the tallest, 31,
+  stands at 181) and the underground cells' rock, so nothing else lies there; a body away from home (the death price
+  reads the straight distance from the respawn point). Fixed, so it stays under build height (its air reaches 252)."
+  250)
+
+(declare light-of)
 
 (defn far-spawn?
   "Whether the case asks for a far respawn point (:spawnpoint :far)."
@@ -220,7 +224,8 @@
   (/spawnpoint takes only integers; a fractional one is refused and the body would respawn at the world spawn)."
   [c]
   (let [{:keys [spawnpoint at]} (:body c)
-        p (if (= :far spawnpoint) (some-> at (update 1 + far-spawn-rise)) (or spawnpoint at))]
+        floor-y (if (= :sky (light-of c)) (:y default-grid) (:y underground))
+        p (if (= :far spawnpoint) (some-> at (assoc 1 (- far-spawn-y floor-y))) (or spawnpoint at))]
     (some->> p (mapv #(js/Math.floor %)))))
 
 (defn memory-entries
@@ -906,11 +911,14 @@
                      :else [(block-command origin entry)])))
                (:blocks c))))
 
+(def refused-position
+  #"(?i)not loaded|outside (of )?the world|out of (the|this) world")
+
 (defn build-failure
   "The first RCON reply of a setup or block command that says the plot was not built (a position not loaded yet or outside
   the world), else nil. \"No blocks were filled\" is not one: a fill over identical blocks says that too."
   [replies]
-  (first (filter #(re-find #"(?i)not loaded|outside (of )?the world|out of the world" (or % "")) replies)))
+  (first (filter #(re-find refused-position (or % "")) replies)))
 
 (defn register-put-argvs
   "The `triggers.mjs` argument vectors that put each register entry on a running body, in order. The runner starts the
@@ -978,9 +986,10 @@
         (conj (str "spawnpoint " body " " (xyz-str (abs-pos origin (respawn-cell c))))))))
 
 (defn command-errors
-  "The commands whose reply is a command parse error (the game's \"<--[HERE]\" marker), with their replies."
+  "The commands whose reply is a command parse error (the game's \"<--[HERE]\" marker) or a refused position (not loaded, out of the world), with their replies."
   [commands replies]
-  (keep (fn [[cmd reply]] (when (str/includes? (str reply) "<--[HERE]") (str cmd " -> " (str/trim reply))))
+  (keep (fn [[cmd reply]] (when (or (str/includes? (str reply) "<--[HERE]") (re-find refused-position (str reply)))
+                            (str cmd " -> " (str/trim reply))))
         (map vector commands replies)))
 
 (declare reply-pos)

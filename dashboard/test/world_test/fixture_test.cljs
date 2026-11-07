@@ -414,16 +414,17 @@
     (is (some #{"spawnpoint ProbeFixture 20001 150 20002"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :spawnpoint] [1 0 2])))
         "a case's own :spawnpoint wins")
-    (let [far (assoc-in glass [:body :spawnpoint] :far)
-          cmds (f/body-commands origin "ProbeFixture" far)]
-      (is (some #{"spawnpoint ProbeFixture 20016 250 20016"} cmds) "a :far spawn point is 100 above the start")
+    (doseq [[light origin] [[:sky [20000 150 20000]] [:lit [20000 -40 20000]]]
+            :let [far (-> glass (assoc-in [:plot :light] light) (assoc-in [:body :spawnpoint] :far))
+                  cmds (f/body-commands origin "ProbeFixture" far)]]
+      (is (some #{"spawnpoint ProbeFixture 20016 250 20016"} cmds) "a :far spawn point is at y 250, over every plot and the underground rock")
       (is (= ["fill 20015 249 20015 20017 249 20017 minecraft:stone" "fill 20015 250 20015 20017 251 20017 minecraft:air"]
              (take 2 cmds))
           "a 3x3 stone pad under it with two air cells over, built before the point is set")
       (is (some #{"fill 20015 249 20015 20017 251 20017 minecraft:air"}
                 (f/cleanup-commands (f/case-grid far) origin "ProbeFixture" far))
-          "cleanup removes the pad")
-      (is (not-any? #(re-find #"minecraft:stone" %) (f/body-commands origin "ProbeFixture" glass)) "no pad without :far"))
+          "cleanup removes the pad"))
+    (is (not-any? #(re-find #"minecraft:stone" %) (f/body-commands origin "ProbeFixture" glass)) "no pad without :far")
     (is (some #{"tp ProbeFixture 20016.5 150 20016.5 180 0"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :yaw] 180)))
         "a case may turn the body (yaw, degrees: 0 south, 180 north) so it can see what lies behind the default view")
@@ -656,7 +657,10 @@
 (deftest command-errors-name-the-refused-commands
   (is (= ["spawnpoint P 1.5 2 3 -> Invalid integer '1.5' at position 12: ...int P <--[HERE]"]
          (f/command-errors ["tp P 1 2 3" "spawnpoint P 1.5 2 3"]
-                           ["Teleported P to 1.0, 2.0, 3.0" "Invalid integer '1.5' at position 12: ...int P <--[HERE]"]))))
+                           ["Teleported P to 1.0, 2.0, 3.0" "Invalid integer '1.5' at position 12: ...int P <--[HERE]"])))
+  (is (= ["fill 1 2 3 4 5 6 minecraft:air -> That position is not loaded"]
+         (f/command-errors ["fill 1 2 3 4 5 6 minecraft:air" "tp P 1 2 3"] ["That position is not loaded" "Teleported P to 1.0, 2.0, 3.0"]))
+      "a refused fill fails the setup too"))
 
 (deftest memory-entries-tell-the-body-where-it-respawns
   (let [pos #(-> (f/memory-entries %) (->> (filter (comp #{:respawned} :kind))) first (get-in [:data :pos]) (f/resolve-tags [100 50 200]))]
