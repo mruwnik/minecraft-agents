@@ -271,13 +271,17 @@
         to-glass (fn [x _ _] (js/Math.abs (- x 30)))
         [far far-cells] (to-end (dr/priced-search (world {}) [0 10 0] [300 4 0] (unseen-opts {} none none 208)))
         [wall wall-cells] (to-end (dr/priced-search (world glass) [0 10 0] [60 4 0] (unseen-opts glass to-glass to-glass 208)))
-        [deep deep-cells] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (unseen-opts {} none none 208)))]
+        [deep deep-cells] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (unseen-opts {} none none 208)))
+        ;; every way over the land's top to the far corner bounds alike: summed in other orders, some bounds came out a bit lower
+        [diag diag-cells] (to-end (dr/priced-search (world {}) [0 10 0] [150 4 150] (unseen-opts {} none none 600)))]
     (is (= {:problem :dearer} far))
     (is (< far-cells 100) (str "a goal 300 blocks off through unseen rock is dearer than 208 s at once (" far-cells " cells)"))
     (is (< (:seconds wall) 90) "the way over a glass plane 600 wide is found")
     (is (< wall-cells 100) (str wall-cells " cells"))
     (is (< (:seconds deep) 130))
-    (is (< deep-cells 400) (str "a goal 70 blocks down (" deep-cells " cells)"))))
+    (is (< deep-cells 400) (str "a goal 70 blocks down (" deep-cells " cells)"))
+    (is (< (:seconds diag) 400))
+    (is (< diag-cells 1000) (str "a goal 150 off on each axis (" diag-cells " cells)"))))
 
 (defn same-price?
   "Whether search prices each [from goal opts] of rows the same with the unseen-priced bound, bounded by that price (a

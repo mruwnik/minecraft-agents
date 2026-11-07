@@ -84,6 +84,12 @@
 
 (def dirs #js [1 0 -1 0 0 1 0 -1])
 
+(defn- tie
+  "A bound rounded to 1e-10 s: ways of one price summed in another order differ in the last bits, and a bound a bit lower
+  would be expanded first, so every way tied on the bound was (a plateau of them)."
+  [s]
+  (/ (js/Math.round (* s 1e10)) 1e10))
+
 (def back-pace "Steps of the search back from the goal (its lower bound) to each cell the search proper expands: one is cheaper." 4)
 
 (defn flood-dig
@@ -322,7 +328,7 @@
                          (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0) (aget acc 4) (aget acc 5)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
-                         (heap-push! queue #js [(+ nd (heuristic nx ny nz)) (if prior? (- nd) @tick) nk])
+                         (heap-push! queue #js [(tie (+ nd (heuristic nx ny nz))) (if prior? (- nd) @tick) nk])
                          (vswap! tick inc))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
         ;; stair that turns back over its own cut)
