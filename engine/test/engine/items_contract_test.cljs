@@ -109,6 +109,47 @@
           (await (tu/run-until-empty eng 80))
           (is (= :done (:kind @out)) "an animal that walked off was followed, not clicked from afar"))))))
 
+(defn ^:async use-with-walks
+  "items.use {:on 7} on a cow 8 blocks off with go-to stubbed by walk-fn (called with the fake primitives and the walk number):
+  {:ending :walks}."
+  [walk-fn]
+  (let [walks (atom 0)
+        out (atom nil)
+        p (tu/seeing-all (tu/fake-on-floor (merge {:entities [(cow 7 8)]} (stacks "wheat"))))
+        go-to {:ways [:walk :clear-seal]
+               :round (fn ^:async w [c] (walk-fn p (swap! walks inc) c))}
+        parent {:round (fn ^:async recording-round [c]
+                         (let [e (await (ctx/call c :kid 'jobs.items.use {:on 7 :item "wheat"}))]
+                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent 'jobs.movement.go-to go-to)
+                          :dir (tu/tmp-dir)})]
+    (core/submit! eng '(recording-parent) {})
+    (await (tu/run-until-empty eng 60))
+    {:ending @out :walks @walks}))
+
+(deftest interact-does-not-walk-again-after-a-failed-walk-to-an-entity-that-stayed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ending walks]} (await (use-with-walks (fn ^:async w [_ _ c] (ctx/end c :nothing-possible :unreachable {:why :no-route}))))]
+          (is (= {:kind :nothing-possible :cause :unreachable} (kc ending)))
+          (is (= 1 walks) "go-to's failure is the answer: a second walk had nothing changed"))))))
+
+(deftest interact-walks-again-after-a-failed-walk-when-the-entity-moved
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ending walks]}
+              (await (use-with-walks
+                      (fn ^:async w [p n c]
+                        (if (= 1 n)
+                          (do (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [9 64 0]) es)))
+                              (ctx/end c :nothing-possible :unreachable {:why :no-route}))
+                          (do (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [2 64 0]) es)))
+                              (ctx/end c :done nil {:arrived true}))))))]
+          (is (= 2 walks))
+          (is (= :done (:kind ending))))))))
+
 (deftest give-ends-before-the-toss-with-the-fact
   (async done
     (tu/run-async done

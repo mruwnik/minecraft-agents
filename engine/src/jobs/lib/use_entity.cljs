@@ -13,11 +13,9 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/num-in 0 nil)}
-   ::max-walks {:default 2 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::click-s {:default 0.5 :doc "Seconds one click takes (the quote)." :spec (a/num-in 0 nil)}
    ::scan-radius {:default 64 :doc "Blocks around the body in which the entity is looked for; the quote walks that far when it is not in sight." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
-(defn max-walks [] (settings/get settings ::max-walks))
 
 (declare entity-of)
 
@@ -26,7 +24,7 @@
   [dist]
   (let [click (settings/get settings ::click-s)
         walk (/ dist (cost/walk-blocks-per-s))]
-    [click (+ click walk) (+ click (* walk (max-walks)))]))
+    [click (+ click walk) (+ click walk)]))
 
 (defn worst-job-time
   "The most a use takes when the entity is not in sight: it is looked for out to the scan radius."
@@ -62,8 +60,9 @@
 
 (defn ^:async attempt-entity!
   "One walk or the click; :again after a walk that arrived (the click follows whatever the reach, the server judges it,
-  unless the target moved since: then it is walked to again) or failed below the limit."
-  [c fails]
+  unless the target moved since: then it is walked to again) or failed while the entity has moved off its cell and another
+  walk is worth its price (cost/try-again? :walk); a failed walk to an entity that stayed ends :unreachable."
+  [c]
   (let [{id :on :keys [item]} (:args c)
         item (when (not= "none" item) item)
         p (:primitives c)
@@ -78,8 +77,12 @@
         (cond
           (= :continue r) :continue
           (and (= :done (:kind r)) (:arrived (:data r))) (do (ctx/update-mem! c assoc :arrived target) :again)
-          (>= (swap! fails inc) (max-walks)) (finish-entity! c id item :unreachable {:why (contract/cause-key r)})
-          :else :again))
+          :else (let [now (some-> (entity-of p id) .-pos u/pos-of)
+                moved? (and now (not= (update-vals now js/Math.floor) (update-vals target js/Math.floor)))]
+            (u/failed! c)
+            (if (and moved? (cost/try-again? c :walk))
+              :again
+              (finish-entity! c id item :unreachable {:why (contract/cause-key r)})))))
       :else
       (let [r (await (ctx/act c :interact (clj->js (cond-> {:id id} item (assoc :item item)))))
             status (keyword (.-status r))]
@@ -87,8 +90,7 @@
         (finish-entity! c id item status {:raw (js->clj r :keywordize-keys true)})))))
 
 (defn ^:async run-round [c]
-  (let [fails (atom 0)]
-    (await (pace/steps! c #(attempt-entity! c fails)))))
+  (await (pace/steps! c #(attempt-entity! c))))
 
 (defn place
   "The cell of the entity the click is on, as sensed or last seen, when the body must walk to it; nil (judged where the body stands) within reach."

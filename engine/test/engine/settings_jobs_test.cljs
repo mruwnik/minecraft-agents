@@ -19,5 +19,4 @@
   (settings/with-settings {:jobs.lib.use-entity/reach 4 :jobs.gather.mine.drops/pickup-grace-ms 10}
     (fn []
       (is (= 4 (interact/reach)))
-      (is (= 10 (mine-drops/pickup-grace-ms)))
-      (is (= 2 (interact/max-walks)) "an unset key keeps its default"))))
+      (is (= 10 (mine-drops/pickup-grace-ms))))))
