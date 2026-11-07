@@ -7,6 +7,8 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.util :as u]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
+            [jobs.movement.go-to.climb-route :as climb-route]
             [jobs.movement.go-to.search-bound :as search-bound]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -802,10 +804,23 @@
           (is (not-any? #(= :climb-on (:why %)) (gt/events-of s :go-to.escalated)) "no climb")
           (is (every? #(< -1 (% 2) 1) track)))))))
 
+;; A chamber (x 0..1, feet 60) and a pocket (x 5, feet 63) seen, the rock between never seen.
+(def guess-rock (apply dissoc (box -4 50 -4 12 74 4 "stone") (for [[x y] [[0 60] [1 60] [5 63]] dy [0 1]] (str x "," (+ y dy) ",0"))))
+
+(deftest a-leg-and-a-climb-price-the-rock-they-guess-at-the-chance-it-is-solid
+  (let [p (:p (gt/setup {:blocks guess-rock :self {:pos {:x 0.5 :y 60 :z 0.5}} :light [0 15] :seen [[-1 59 -1 2 62 1] [4 62 -1 6 65 1]]
+                         :inventory [{:name "stone_pickaxe" :count 1}]}))
+        at (fn [chance f] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))] (f)))
+        leg {:step :dig-route :cells [{:cell [2 60 0]} {:cell [2 61 0]}]}
+        leg-s #(esc/way-total p [1 60 0] [5 63 0] leg (constantly true))
+        climb-s #(:route-s (climb-route/climb-way p [1 60 0] [5 63 0] (constantly true) {:skip #{}}))]
+    (is (< (at 0 leg-s) (at 1 leg-s)) "the leg's walk on digs the rock it guesses")
+    (is (< (at 0 climb-s) (at 1 climb-s)) "the climb digs it at the same chance")))
+
 (deftest a-climb-is-taken-over-a-way-when-it-costs-no-more
   (let [total {:leg 10 :climb 8 :dear 12 :tie 10}
         way (fn [step k] {:step step :k k})
-        pick #(:k (esc/or-climb %1 %2 (comp total :k)))]
+        pick #(:k (esc/or-climb %1 %2 (comp total :k) 0))]
     (are [w k want] (= want (pick w k))
       (way :dig-route :leg) (way :stair :climb) :climb
       (way :dig-route :leg) (way :stair :dear) :leg
@@ -813,4 +828,5 @@
       (way :dig-route :leg) nil :leg
       (way :none nil) (way :stair :dear) :dear
       (way :approach :leg) (way :stair :climb) :leg)
-    (is (= :searching (:step (esc/or-climb {:step :dig-route} {:step :searching} (constantly 1)))) "a climb still searched is waited for")))
+    (is (= :searching (:step (esc/or-climb {:step :dig-route} {:step :searching} (constantly 1) 0.5))) "a climb still searched is waited for")
+    (is (= :dig-route (:step (esc/or-climb {:step :dig-route} {:step :searching} (constantly 1) 1))) "no longer than the way in hand costs")))

@@ -23,7 +23,7 @@
 
 (defn climb-way
   "The way up for a shut-in body at feet to goal above it, its stair, pillar and dig route allowed (not in opts :skip):
-  the first of the climb's segments, the rest its :then, :route-s the whole route's seconds, its pillars and laid floors of the carried block (opts
+  the first of the climb's segments, the rest its :then, :route-s the whole route's seconds (route-answer :share-s), its pillars and laid floors of the carried block (opts
   :pillar-item), as many as are carried (go-to's pillar fetches none); {:step :searching} while the search goes on; nil when none
   reaches the goal or its first way is one that failed (opts :skip)."
   [p feet goal may-dig? {:keys [own? skip fetch? pillar-item] :as opts}]
@@ -39,4 +39,4 @@
                               (route-ways/segments (escape/block-at-of p) #(dig-look/unknown? p %) feet (:steps a)))]
           ;; a first way that failed here before (skip-key) would fail again: the other ways are tried instead
           (when (and e (not (skip (if (= :stair (:step e)) [:stair (:heading e)] (:step e)))))
-            (assoc e :then (vec then) :route-s (:seconds a))))))))
+            (assoc e :then (vec then) :route-s (:share-s a))))))))
