@@ -13,6 +13,6 @@
                                 (ended "j2" "dropped" 30 nil)
                                 (took "j3") (ended "j3" "done" 5 {"bread" 3})
                                 (ended "j4" "done" 10 {"beef" 1})])]
-    (is (= {:n 3 :s 100 :points 15 :point-s 6.67} (t/report rows))
-        "two chickens cooked count once at 6 each, a beef at 3, the chest call left out, the cut call's seconds kept")
+    (is (= {:n 3 :s 100 :points 15 :point-s 6.67 :saturation 16.2 :fill-s 3.21} (t/report rows))
+        "two chickens cooked count once at 6 each (7.2 saturation), a beef at 3 (1.8), the chest call left out, the cut call's seconds kept")
     (is (nil? (t/report [])))))
