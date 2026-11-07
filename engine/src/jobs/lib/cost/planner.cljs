@@ -19,6 +19,12 @@
   walk, a sprint and a swim): no plan crosses a block quicker."
   base/SPRINT-S)
 
+(defn least-route-s
+  "Seconds a planned route to within range blocks of a goal blocks off (horizontal) costs at the least: least-block-s
+  a block of the straight line."
+  [blocks range]
+  (* least-block-s (max 0 (- blocks range))))
+
 (def swim-sub-ms
   "Milliseconds a swim block takes with the head under water (the planner's swimSubH): breathe's trigger prices the swim to air the same."
   (* 1000 (unchecked-get base/DEFAULT-COSTS "swimSubH")))

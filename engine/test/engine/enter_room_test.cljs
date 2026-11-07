@@ -15,6 +15,8 @@
             [jobs.lib.walk-risk :as risk]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [engine.flee-home-test :as fh]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.enter-room :as enter-room]
             [engine.test-util :as tu]))
@@ -285,3 +287,17 @@
           (is (= (take (count quoted) doors) quoted) "nearest first")
           (is (> (+ (* 2 (room-lib/judge-s)) (room-lib/way-s)) (cost/search-budget-s)) "a door's floods and quote are over the search budget")
           (is (every? #(<= (count %) 1) calls) (str "so a call quotes one door and the next goes on from the state it left, none twice: " calls)))))))
+
+(deftest a-doors-unseen-check-floods-nothing-its-judgement-did-not
+  ;; candidate?'s unseen check rides on the floods side-s prices (reach-room/look, kept per body), none of its own
+  (let [{:keys [p]} (fh/setup (assoc (fh/hut {:x -13.5 :y 64 :z 10.5} (merge door-states fh/lone-door-states) [] fh/lone-doors)
+                                     :home false :perceive true))
+        side {:pos {:x -6 :y 64 :z 7}}
+        floods (atom 0)
+        flood reach-room/flood-cells
+        _ (enter-room/candidate? p side true)
+        kept? (zero? (room-lib/side-s p (:pos side)))
+        _ (set! reach-room/flood-cells (fn [n s b] (swap! floods inc) (flood n s b)))
+        again (try (enter-room/candidate? p side true) (finally (set! reach-room/flood-cells flood)))]
+    (is kept? "the side's judgement is kept: side-s prices it at none")
+    (is (= 0 @floods) (str "so asking again floods nothing: " @floods " floods, candidate " again))))

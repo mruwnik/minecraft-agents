@@ -91,9 +91,11 @@
 
 (defn candidate?
   "Whether the room behind start {:pos} may be a closed room to enter: a known closed room (refuge-room?), or with unseen?
-  one whose inside is not seen yet (the walk shows it; the open ground outside a door reads unseen too)."
+  one whose inside is not seen yet (the walk shows it; the open ground outside a door reads unseen too). Both from the
+  floods of reach-room/look, kept per body: what room-lib/side-s prices."
   [p {:keys [pos]} unseen?]
-  (or (room-lib/refuge-room? p pos) (and unseen? (reach-room/unseen-room? p pos))))
+  (let [look (reach-room/look p pos)]
+    (or (room-lib/refuge-room? p pos look) (and unseen? (some? @(:unseen look))))))
 
 (defn nearest-seen
   "{:pos} of the closed room to enter: the room picked by pick-seen (in the call's memory, or :room-pick of c for a quote)
@@ -116,7 +118,7 @@
   room (candidate?), else one whose inside is unseen; :pick nil when none has a route. Doors nearest first: a door's floods of
   its sides (room-lib/side-s each) and its quote (room-lib/way-s) are paid only while they could save more than they cost
   (cost/search-pays?) over the cheapest closed room quoted, no route to the door quicker than its straight line at
-  cost/least-block-s a block (horizontal). A call's searches stop at cost/search-budget-s: :done? false, and :state (kept in
+  cost/least-route-s. A call's searches stop at cost/search-budget-s: :done? false, and :state (kept in
   mem :pick-state by the step) carries the doors priced and the picks on to the next call while the doors seen stay the same."
   [c]
   (let [p (:primitives c)
@@ -132,7 +134,7 @@
       (if-not sides
         (answer true priced best picks)
         (let [d (:door (first sides))
-              lb (* cost/least-block-s (max 0 (- (u/flat-dist me (room-lib/mid d)) 0.7)))
+              lb (cost/least-route-s (u/flat-dist me (room-lib/mid d)) 0.7)
               cost (+ (reduce + (map #(room-lib/side-s p (:pos %)) sides)) (room-lib/way-s))]
           (cond
             (not (cost/under-ceiling? spent)) (answer false priced best picks)
