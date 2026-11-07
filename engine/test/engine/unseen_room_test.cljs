@@ -6,6 +6,7 @@
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.farm.harvest :as harvest]
             [jobs.gather.mine.targets :as targets]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.shelter.inside :as inside]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -81,3 +82,22 @@
   (doseq [hidden [#{[1 65 0]} #{[1 64 0] [1 65 0]}]]
     (let [p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks one-doorway}) hidden)]
       (is (true? (targets/last-exit? {:primitives p} [1 63 0]))))))
+
+(def stepped
+  "A one-cell room at (0 64 0), three high, walled, but for a stone block at (1 64 0) with air over it: a walker steps up
+  onto (1 65 0)."
+  (-> sealed (dissoc "1,65,0" "0,66,0") (assoc "1,64,0" "stone" "0,67,0" "stone")))
+
+(def step-top #{[1 65 0] [1 66 0]})
+
+(def hidden-column
+  "An unseen cell with seen air over it reads as a floor, so the whole column over the step is unseen."
+  #{[1 65 0] [1 66 0] [1 67 0] [1 68 0]})
+
+(deftest an-unseen-step-up-is-the-floods-edge-from-a-seen-start-and-a-side-of-its-boundary-but-opens-the-flood-from-a-door
+  (let [p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks stepped}) hidden-column)
+        kind-at (reach-room/room-kind-at p (reach-room/shut-kind-at p))
+        unseen-sides (set (map vec (:unseen (reach-room/boundary p {:x 0 :y 64 :z 0}))))]
+    (doseq [[entered? expected] [[false step-top] [true nil]]]
+      (is (= expected (:edge (reach-room/room-flood p kind-at 0 64 0 reach-room/room-cells entered?))) (str "entered? " entered?)))
+    (is (= #{[1 65 0]} unseen-sides) "boundary counts the step-up feet cell, no same-level side of the room, not the head over it")))

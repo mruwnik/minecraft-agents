@@ -348,20 +348,21 @@
 
 (defn boundary
   "{:seen n :unseen [[x y z]]} of the room around pos {:x :y :z} (as unseen-room?): how many feet cells beside its room
-  cells the body has seen (its walls and doors, as the flood closed over them) and those it has not seen, what a look
-  into the room has to show."
+  cells the body has seen (its walls and doors, as the flood closed over them) and those it has not seen (with the flood's
+  :edge cells but a head cell over another, which an up or down step leaves off the same-level sides), what a look into the room has to show."
   [p {:keys [x y z]}]
   (let [kind-at (room-kind-at p (shut-kind-at p))
         in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
         starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])
-        floods (keep (fn [[sx sy sz]] (:cells (room-flood p kind-at sx sy sz room-cells in-door?))) starts)
-        cells (set (map vec (mapcat identity floods)))
+        floods (keep (fn [[sx sy sz]] (room-flood p kind-at sx sy sz room-cells in-door?)) starts)
+        cells (set (map vec (mapcat :cells floods)))
+        edge (into #{} (mapcat :edge) floods)
         sides (->> cells
                    (mapcat (fn [[cx cy cz]] (map (fn [[dx dz]] [(+ cx dx) cy (+ cz dz)]) [[1 0] [-1 0] [0 1] [0 -1]])))
                    (remove cells)
                    distinct)
         {unseen true seen false} (group-by (fn [[cx cy cz]] (nil? (u/seen-block p {:x cx :y cy :z cz}))) sides)]
-    {:seen (count seen) :unseen (vec unseen)}))
+    {:seen (count seen) :unseen (vec (distinct (concat unseen (remove (fn [[ex ey ez]] (contains? edge [ex (dec ey) ez])) edge))))}))
 
 (defn open-sides
   "{:open n :closed n} of the feet cells [[x y z]] (boundary's :unseen, seen by now) by their columns (feet and head): open
