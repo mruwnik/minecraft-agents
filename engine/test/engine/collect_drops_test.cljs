@@ -781,7 +781,7 @@
   (let [seen (fn [[x y z]] (when (and (<= 16 x 22) (<= 0 y 1) (= z 16)) "air"))]
     (is (= [] (:dig (job-ns/drop-route {} nil nil seen (constantly true) [16 0 16] [22 0 16]))))))
 
-(deftest a-partial-dig-books-the-failing-cell-and-prices-unseen-cells-as-the-plan-did
+(deftest a-partial-dig-books-the-failing-cell-its-search-and-prices-unseen-cells-as-the-plan-did
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -793,13 +793,13 @@
                         dig-look/look-at! (fn [_ _] nil)
                         u/seen-name (fn [_ _] nil)
                         blocks/hidden-guess "obsidian"
-                        job-ns/drop-route (fn [prices worth _ _ _ _ _] (reset! priced prices) (swap! worths conj worth) (if (= 1 (swap! routes inc)) {:dig cells} {:dig []}))
+                        job-ns/drop-route (fn [prices worth _ _ _ _ _] (reset! priced prices) (swap! worths conj worth) (if (= 1 (swap! routes inc)) {:dig cells :searched-s 5} {:dig []}))
                         job-ns/dig-cells! (fn [_ cells] (if (= 1 @routes) {:out :unreachable :cell (nth cells 2) :n 2} :dug))]
             (is (= :dug (await (job-ns/dig-to! c item))))
             (let [[w1 w2] @worths
                   guess (reduce + (map #((:dig-s @priced) blocks/hidden-guess %) cells))]
               (is (not= guess (reduce + (map #((:dig-s @priced) "stone" %) cells))) "the guess is pinned apart from stone")
-              (is (< (js/Math.abs (- guess (- w1 w2))) 1e-6) "all three cells (two dug, one failed), unseen, at the guess the plan used, come out of the worth"))))))))
+              (is (< (js/Math.abs (- (+ guess 5) (- w1 w2))) 1e-6) "all three cells (two dug, one failed), unseen, at the guess the plan used, and the first search's CPU come out of the worth"))))))))
 
 (deftest a-drop-whose-only-dig-costs-more-than-it-is-worth-is-left-past-worth-not-no-route
   (async done

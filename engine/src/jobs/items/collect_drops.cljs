@@ -383,7 +383,7 @@
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
   never seen) is planned again from where the body now stands, at most ::replans times; when every route costs more than the
-  drop is worth, it is left {:reason :past-worth :worth-s the drop's worth less what earlier digs cost}. :dug when every cell is open now,
+  drop is worth, it is left {:reason :past-worth :worth-s the drop's worth less what earlier digs and route searches cost}. :dug when every cell is open now,
   :continue while a dig waits on the world, else why not: :no-route (no way), that map, :too-big (the heap was full) or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
   [c item]
   (let [p (:primitives c)]
@@ -405,8 +405,9 @@
           (let [priced (dig-route/cells-s prices #(or (seen-name %) blocks/hidden-guess) (:dig r))
                 start (cost/leg-start c)
                 d (await (dig-cells! c (:dig r)))
-                ;; the failing cell's attempt is paid for too; the plan's price is the least the dig leg cost
-                booked (fn [] (cost/dig-leg-price c start (take (inc (:n d)) priced)))]
+                ;; the failing cell's attempt is paid for too; the plan's price is the least the dig leg cost. The search's
+                ;; CPU is spent too: a replan's search is priced against what is left of the worth, not the whole of it
+                booked (fn [] (+ (cost/dig-leg-price c start (take (inc (:n d)) priced)) (:searched-s r 0)))]
             (cond
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
