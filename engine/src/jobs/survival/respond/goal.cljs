@@ -112,17 +112,17 @@
   "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, part of the step's one search, room-lib/step-meter, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
   cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only, the walks back
-  from dead ends priced with the fire of threats' shooters, fire-price, near (blocks, nil none) the search's near ring):
+  from dead ends priced with the fire of threats' shooters, fire-price, near-ring (blocks, nil none) the search's near ring):
   {:goal (active) :why (:given-up, else verdict; nil: it may go there) :home (safe-home of homes) :room :home-why (of the
   last of homes) :ends (the search's scored ends)}."
-  [c threats homes room covered? covers near]
+  [c threats homes room covered? covers near-ring]
   (let [goal (active c)
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
         m (room-lib/step-meter c)
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
-                                               :fire (:route (fire-price c threats covered?)) :meter m :near near}))
+                                               :fire (:route (fire-price c threats covered?)) :meter m :near near-ring}))
         _ (room-lib/spent-meter! c m)
         home (safe-home ends homes)]
     {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))
