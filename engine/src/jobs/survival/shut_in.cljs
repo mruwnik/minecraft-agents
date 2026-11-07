@@ -94,7 +94,7 @@
   [c]
   (let [p (:primitives c)
         hs (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius :fire-range})]
-    (when (seq hs) #(hostile-loss/loss-over p (ctx/view c) hs %))))
+    (when (seq hs) #(hostile-loss/loss-over c (ctx/view c) hs %))))
 
 (def exposed-s
   "Each way's seconds in the open before it covers the body (the :room walk: its whole quote)."

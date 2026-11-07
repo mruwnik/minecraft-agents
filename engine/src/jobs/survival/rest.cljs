@@ -66,7 +66,7 @@
   (ctx/end c :nothing-possible cause data))
 
 (defn done? [c]
-  (checks/goal (not (hostile-loss/too-hurt? (:primitives c) (ctx/view c) :heal nil)) [:rested "healed"] [:resting "resting to heal"]
+  (checks/goal (not (hostile-loss/too-hurt? c (ctx/view c) :heal nil)) [:rested "healed"] [:resting "resting to heal"]
                {:result {:health (health c)}}))
 
 (defn quote-of [_] {:uses {:job-time [0 60 (settings/get settings ::job-time-s)]}})

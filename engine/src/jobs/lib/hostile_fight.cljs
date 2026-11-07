@@ -193,7 +193,7 @@
 (defn body-of
   "What the answers' prices read of the body of c (hostile-loss/body-at)."
   [c]
-  (hostile-loss/body-at (:primitives c) (ctx/view c)))
+  (hostile-loss/body-at c (ctx/view c)))
 
 (defn comes?
   "Whether a creeper at, body-d blocks from the body, comes within its swell start of the body or of the fought mob at

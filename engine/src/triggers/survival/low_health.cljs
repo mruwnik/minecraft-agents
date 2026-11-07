@@ -30,7 +30,7 @@
   "Holds while the body is alive and should heal before the riskiest work (jobs.lib.hostile-loss/too-hurt? of the heal wait
   (:heal), the hostiles known near counted), not burning or poisoned (their reflexes come first), not asleep (a bed
   already rests it), and not waiting? on a rest that gave up."
-  [world memory _args]
+  [world memory _args & [plans]]
   (let [self (.self world)
         health (.-health self)]
     (and (not (body/recovery-pending? memory :low-health))
@@ -39,4 +39,4 @@
          (not (body/poisoned? world))
          (not (sh-sense/sleeping? world))
          (not (waiting? self memory))
-         (hostile-loss/too-hurt? world memory :heal nil))))
+         (hostile-loss/too-hurt? (hostile-loss/trigger-ctx world plans) memory :heal nil))))

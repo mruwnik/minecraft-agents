@@ -139,7 +139,7 @@
         near (flight/near-known p (dead c) (danger-q/hostile-radius) :fire-range)
         others (remove combat/creeper? near)
         shielded? (contains? #{:plug :plug-dig :pit} (:kind (:args c)))
-        loss #(hostile-loss/loss-over p (ctx/view c) %1 %2)
+        loss #(hostile-loss/loss-over c (ctx/view c) %1 %2)
         leave-s (settings/get settings ::leave-s)
         on-top (filter #(or (combat/creeper? %) (combat/climber? %) (combat/ranged? %)) near)
         stay (if shielded? (loss others (settings/get settings ::opened-s)) (loss on-top leave-s))]

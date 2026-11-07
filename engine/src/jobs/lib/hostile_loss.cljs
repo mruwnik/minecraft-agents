@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.access.zones :as zones]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -18,7 +19,8 @@
             [jobs.lib.game-facts :as game-facts]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shot :as shot]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.world-files :as world-files]))
 
 (def call-deciles? (a/pred "10 seconds" #(and (vector? %) (= 10 (count %)) (every? (fn [x] (and (a/finite? x) (>= x 0))) %))))
 
@@ -46,6 +48,14 @@
               (boolean (and (death-spot/bare-headed? e) (death-spot/burns-by-day? p (.-name e) at)))))
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 
+(defn built-fn
+  "(built? cell [x y z]) of what the world's files hold as built: a cell of a plan's footprint, in a zone, or in an
+  active claim at now (ms)."
+  [w now]
+  (let [footprints (world-files/footprints w nil)
+        areas (into (vec (world-files/zones w)) (world-files/live-claims (world-files/area-claims w) now))]
+    (fn [cell] (boolean (or (contains? footprints cell) (some #(zones/in-box? cell %) areas))))))
+
 (defn blast-s*
   [p own?]
   (let [{:keys [x y z]} (u/pos-of (.-pos (.self p)))
@@ -70,27 +80,37 @@
 (defn blast-s
   "Seconds a creeper's blast at the body's feet costs what is about it (cost/blast-env-s): each sensed cell within
   cost/blast-reach at what destroying it costs (cost/destroyed-fn: a block the body placed itself (ledger/own-placed
-  of its memory view) or one that looks built, a chest, farmland and crops; natural terrain nothing) and its blast
-  resistance. Kept while the body stays in its cell and neither the world it knows nor its placed blocks change."
-  [p view]
-  (let [self (u/pos-of (.-pos (.self p)))
+  of its memory view), a cell the world's files hold as built (built-fn) or a block that looks built, a chest, farmland
+  and crops; natural terrain nothing) and its blast resistance. Kept while the body stays in its cell and neither the
+  world it knows, its placed blocks nor the files' plans, zones and claims change. c: {:primitives p :engine {:world
+  the world files}}."
+  [c view]
+  (let [p (:primitives c)
+        w (:world (:engine c))
+        now (or (:now view) 0)
+        self (u/pos-of (.-pos (.self p)))
+        sources [(world-files/footprints w nil) (world-files/zones w) (world-files/area-claims w)]
         key [(threat-field/world-epoch p) (mapv #(js/Math.floor %) [(:x self) (:y self) (:z self)])
-             (count (mem/entries view :escalation-placed)) (hash (ledger/open-entries view))]
+             (count (mem/entries view :escalation-placed)) (hash (ledger/open-entries view))
+             (count (world-files/live-claims (world-files/area-claims w) now))]
         hit @blast-memo]
-    (if (and (some? (first key)) (identical? p (:p hit)) (= key (:key hit)))
+    (if (and (some? (first key)) (identical? p (:p hit)) (= key (:key hit)) (every? true? (map identical? sources (:sources hit))))
       (:value hit)
-      (let [v (blast-s* p (ledger/own-placed view))]
-        (reset! blast-memo {:p p :key key :value v})
+      (let [own? (ledger/own-placed view)
+            built? (built-fn w now)
+            v (blast-s* p (fn [cell n] (or (own? cell n) (built? (vec cell)))))]
+        (reset! blast-memo {:p p :key key :sources sources :value v})
         v))))
 
 (defn body-at
   "What the answers' prices read of the body of p (memory view): health, absorption, food, what a death costs it
   (cost/death-body) and, with a creeper known near, what its blast breaks about the body (:blast-s, blast-s)."
-  [p view]
-  (let [self (.self p)]
+  [c view]
+  (let [p (:primitives c)
+        self (.self p)]
     (cond-> (assoc (cost/death-body p view)
                    :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))
-      (some #(= "creeper" (.-name %)) (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (assoc :blast-s (blast-s p view)))))
+      (some #(= "creeper" (.-name %)) (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (assoc :blast-s (blast-s c view)))))
 
 (defn mobs-of
   "Hostiles hs (JS entities) of p as the answers take them (mob-near) and, while no shooter of hs is seen, one of each kind
@@ -101,39 +121,47 @@
     (into (map (fn [k] {:name k :distance (settings/get shot/settings ::shot/reach)})) (distinct (map :shooter (shot/view-spots p view))))))
 
 (defn loss-over
-  "Seconds doing nothing about hostiles hs (JS entities) of p for seconds (a number, or a spread as cost/stand-loss
+  "Seconds doing nothing about hostiles hs (JS entities) of c's body for seconds (a number, or a spread as cost/stand-loss
   takes) costs the body: cost/stand-loss of mobs-of them."
-  [p view hs seconds]
-  (let [mobs (mobs-of p view hs)]
+  [c view hs seconds]
+  (let [p (:primitives c)
+        mobs (mobs-of p view hs)]
     (if (empty? mobs)
       0
-      (cost/stand-loss (body-at p view) (cost/equipment-of (.-equipment (.self p))) mobs (u/pos-of (.-pos (.self p))) seconds))))
+      (cost/stand-loss (body-at c view) (cost/equipment-of (.-equipment (.self p))) mobs (u/pos-of (.-pos (.self p))) seconds))))
 
 (defn loss
   "Seconds doing nothing about hostiles hs costs the body over a respond call (loss-over the spread of call-s)."
-  [p view hs]
-  (loss-over p view hs (call-s)))
+  [c view hs]
+  (loss-over c view hs (call-s)))
 
 (defn present-fn
   "fn of a health h: what the hostiles the body knows of near (danger/known-hostiles within the hostile radius, shooters
   within their fire range) cost a body of p at h over a respond call (loss, with its health h); nil when none is known."
-  [p view]
-  (let [mobs (mobs-of p view (danger-q/known-hostiles p (danger-q/hostile-radius) {:ranged-radius :fire-range}))]
+  [c view]
+  (let [p (:primitives c)
+        mobs (mobs-of p view (danger-q/known-hostiles p (danger-q/hostile-radius) {:ranged-radius :fire-range}))]
     (when (seq mobs)
-      (let [body (body-at p view)
+      (let [body (body-at c view)
             equipment (cost/equipment-of (.-equipment (.self p)))
             at (u/pos-of (.-pos (.self p)))]
         (fn [h] (cost/stand-loss (assoc body :health h) equipment mobs at (call-s)))))))
 
 (defn too-hurt?
-  "cost.risk/too-hurt? of the body of p now for a job's work of category (`seconds` its own quoted stay, nil: the category's),
+  "cost.risk/too-hurt? of the body of c now for a job's work of category (`seconds` its own quoted stay, nil: the category's),
   the hostiles it knows of near counted (present-fn): the one low-health comparison (Q140)."
-  [p view category seconds]
-  (risk/too-hurt? (.-health (.self p)) category (cost/death-fn p view) {:seconds seconds :present (present-fn p view)}))
+  [c view category seconds]
+  (let [p (:primitives c)]
+    (risk/too-hurt? (.-health (.self p)) category (cost/death-fn p view) {:seconds seconds :present (present-fn c view)})))
+
+(defn trigger-ctx
+  "The c the functions above read for a trigger condition (world: the primitives, plans: the world files it is given)."
+  [world plans]
+  {:primitives world :engine {:world plans}})
 
 (defn hostile-near?
   "Whether the hostile-near trigger holds (args :radius, :ranged-radius, :visible-only): the loss of doing nothing about
   its dangers (danger/hostile-dangers) is positive. A dead body sees no danger."
-  [world memory args]
+  [c memory args]
   (boolean (and (not (body/dead? memory))
-                (pos? (loss world memory (danger-q/hostile-dangers world memory args))))))
+                (pos? (loss c memory (danger-q/hostile-dangers (:primitives c) memory args))))))

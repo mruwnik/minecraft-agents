@@ -423,7 +423,7 @@
         view (ctx/view c)
         hs (heard-dangers c)
         worth (ctx/worth c)
-        loss #(if (seq %) (hostile-loss/loss-over p view % (price/stay-s c)) 0)
+        loss #(if (seq %) (hostile-loss/loss-over c view % (price/stay-s c)) 0)
         all (loss hs)
         heard (when (seq hs) (dawn/hostile-text (map #(dawn/describe p %) hs)))
         seen-way (danger/seen-way-lookup p)
@@ -444,7 +444,7 @@
   mob seen or remembered; heard-only mobs are priced (heard-price)."
   [c]
   (check-cache/cached c ::threatened
-                      #(if (hostile-loss/hostile-near? (:primitives c) (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))
+                      #(if (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))
                          (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first"))
                          (heard-price c))))
 
@@ -750,7 +750,7 @@
   "Too hurt for a job's work of category (hostile-loss/too-hurt?, at `seconds` when given) with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
   ([c category] (hurt-cannot-heal? c category nil))
   ([c category seconds]
-   (and (cannot-heal? c) (hostile-loss/too-hurt? (:primitives c) (ctx/view c) category seconds))))
+   (and (cannot-heal? c) (hostile-loss/too-hurt? c (ctx/view c) category seconds))))
 
 (defn fed-fit-for
   "fit-for category, and later :low-health while hurt-cannot-heal? for that category: a hurt body that only food heals gets food before the work."
@@ -799,7 +799,7 @@
   "Whether the body must get food whatever the dark: food 0, or it should heal before the riskiest work (hostile-loss/too-hurt?
   of the heal wait (:heal)) with only food able to heal it (cannot-heal?)."
   [c]
-  (boolean (or (zero? (.-food (.self (:primitives c)))) (and (cannot-heal? c) (hostile-loss/too-hurt? (:primitives c) (ctx/view c) :heal nil)))))
+  (boolean (or (zero? (.-food (.self (:primitives c)))) (and (cannot-heal? c) (hostile-loss/too-hurt? c (ctx/view c) :heal nil)))))
 
 (defn or-starving
   "The status of `safe` for c, or while starving? the status of threatened when `safe` is not ok (a starving body walks by night)."

@@ -19,5 +19,5 @@
   The job's own :radius and :ranged-radius are set in the entry's :job spec.
   A danger reflex: it never cools down by default (:persistence :retry) and its job is never backed off.
   An agent may set :persistence :cooldown with :cooldown-s, or :backoff, in its own entry."
-  [world memory args]
-  (loss/hostile-near? world memory args))
+  [world memory args & [plans]]
+  (loss/hostile-near? (loss/trigger-ctx world plans) memory args))

@@ -106,6 +106,11 @@
 
 (defn hostile-entries [eng] (mapv #(dissoc (:data %) :health :run) (mem/entries (mem/view (:store eng)) :hostile)))
 
+(defn ctx-of
+  "The c the hostile-loss functions read: the primitives p and the world files w (default none)."
+  ([p] (ctx-of p nil))
+  ([p w] {:primitives p :engine {:world w}}))
+
 (defn zombie
   ([x z] (zombie 7 x z))
   ([id x z] {:id id :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}}))
@@ -1140,21 +1145,21 @@
         ground (tu/box -6 63 -6 6 63 6 "stone")
         wall (tu/box 2 64 -1 2 66 1 "oak_planks")
         creeper [{:id 8 :name "creeper" :kind "hostile" :pos {:x 4 :y 64 :z 4}}]]
-    (is (zero? (hostile-loss/blast-s (world ground []) {})) "a crater in natural stone costs nothing")
-    (is (< 0 (hostile-loss/blast-s (world (merge ground wall) []) {})) "a planks wall beside the body is put back")
-    (is (< 0 (hostile-loss/blast-s (world (merge ground {"2,64,0" "dirt"}) []) {:data {:entries {:escalation-placed [{:data {:cell [2 64 0] :block "dirt"} :t 0}]}} :now 0}))
+    (is (zero? (hostile-loss/blast-s (ctx-of (world ground [])) {})) "a crater in natural stone costs nothing")
+    (is (< 0 (hostile-loss/blast-s (ctx-of (world (merge ground wall) [])) {})) "a planks wall beside the body is put back")
+    (is (< 0 (hostile-loss/blast-s (ctx-of (world (merge ground {"2,64,0" "dirt"}) [])) {:data {:entries {:escalation-placed [{:data {:cell [2 64 0] :block "dirt"} :t 0}]}} :now 0}))
         "a dirt block go-to put back is the body's own build: put back, though dirt is natural terrain")
-    (is (zero? (hostile-loss/blast-s (world (merge ground {"2,64,0" "dirt"}) []) {})) "the same block unremembered is natural")
+    (is (zero? (hostile-loss/blast-s (ctx-of (world (merge ground {"2,64,0" "dirt"}) [])) {})) "the same block unremembered is natural")
     (let [w (world (merge ground wall) []) reads (atom 0) real u/sensed
           read-count (fn [view] (reset! reads 0)
-                       (with-redefs [u/sensed (fn [& a] (swap! reads inc) (apply real a))] (hostile-loss/blast-s w view))
+                       (with-redefs [u/sensed (fn [& a] (swap! reads inc) (apply real a))] (hostile-loss/blast-s (ctx-of w) view))
                        @reads)]
       (is (pos? (read-count {})) "the first read of the cells about the body")
       (is (zero? (read-count {})) "the same cell, the same world and placed blocks: kept, no cell read again")
       (is (pos? (read-count {:data {:entries {:escalation-placed [{:data {:cell [9 64 9] :block "dirt"} :t 0}]}} :now 0}))
           "a newly placed block: read again"))
-    (is (not (contains? (hostile-loss/body-at (world (merge ground wall) []) {}) :blast-s)) "no creeper known: no blast to price")
-    (is (pos? (:blast-s (hostile-loss/body-at (world (merge ground wall) creeper) {}))) "a creeper near: the answers pay it")))
+    (is (not (contains? (hostile-loss/body-at (ctx-of (world (merge ground wall) [])) {}) :blast-s)) "no creeper known: no blast to price")
+    (is (pos? (:blast-s (hostile-loss/body-at (ctx-of (world (merge ground wall) creeper)) {}))) "a creeper near: the answers pay it")))
 
 ;; Bramble #39: the fight walked to a skeleton with a creeper standing by it, beyond the trigger's melee radius; one blast did 17
 (deftest a-creeper-standing-by-the-mob-the-fight-would-walk-to-makes-it-a-flight
@@ -1333,11 +1338,22 @@
     (is (= (/ (+ (loss [(z 2)] nil 1) (loss [(z 2)] nil 20)) 2) (loss [(z 2)] nil [1 20])) "a spread of stays costs their mean")))
 
 ;; the shot's skeleton stands for a shooter not seen: one seen is that shooter, not a second
+(deftest a-creepers-blast-prices-what-the-worlds-files-hold-as-built
+  (let [p (tu/seeing-all (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks (tu/box -6 63 -6 6 63 6 "stone") :entities []}))
+        around {:min [-2 63 -2] :max [2 65 2]}
+        zoned (ew/of-data {} {} [(assoc around :name "hut" :owner "Alex")])
+        claimed (doto (ew/of-data {} {} []) (-> :state (swap! assoc :area-claims {:value [(assoc around :id "c1" :owner "Alex" :status "active" :until 5000)]})))
+        blast #(hostile-loss/blast-s (ctx-of p %) {:now 1000})]
+    (is (zero? (blast nil)) "natural stone, no file holds it: nothing")
+    (is (pos? (blast zoned)) "stone inside a zone is part of a build: put back")
+    (is (pos? (blast claimed)) "an active claim's area too")
+    (is (zero? (hostile-loss/blast-s (ctx-of p claimed) {:now 6000})) "an expired claim holds nothing, and the kept price of the claim is not served")))
+
 (deftest a-seen-skeleton-and-its-shot-count-once
   (let [p (tu/fake-on-floor {:entities [(assoc (skeleton 1 14 0) :visible true)]})
         quiet {:data mem/empty-data :now 2000}
         shot {:data (mem/add-entry mem/empty-data :hurt {:t 1500 :data {:damageType "arrow" :dir {:x 1 :z 0}}} {:cap 50 :ttl 60000}) :now 2000}
-        loss (fn [view] (hostile-loss/loss p view (danger-q/hostile-dangers p view {})))]
+        loss (fn [view] (hostile-loss/loss (ctx-of p) view (danger-q/hostile-dangers p view {})))]
     (is (= ["skeleton"] (mapv :name (hostile-loss/mobs-of p shot []))) "no shooter seen: the shot stands for one")
     (is (pos? (loss quiet)))
     (is (= (loss quiet) (loss shot)) "the seen skeleton is the shooter")))
@@ -2024,9 +2040,9 @@
             (is (= [7] (keys (body/watched view))) "the mob that never came is watched")
             (is (empty? (tu/walked-to eng)) "no flight")
             (is (= [] (:list (core/state eng))) "done, so the reflex does not fire again for it")
-            (is (not (hostile-loss/hostile-near? p view {})) "and the trigger stays quiet while it stays there, inside danger/watch-gap")
+            (is (not (hostile-loss/hostile-near? (ctx-of p) view {})) "and the trigger stays quiet while it stays there, inside danger/watch-gap")
             (swap! (fake/state raw) assoc-in [:entities 0 :pos] [2.5 64 0])
-            (is (hostile-loss/hostile-near? p (mem/view (:store eng)) {}) "it fires again once the mob comes nearer")))))))
+            (is (hostile-loss/hostile-near? (ctx-of p) (mem/view (:store eng)) {}) "it fires again once the mob comes nearer")))))))
 
 (deftest a-mob-that-stands-where-an-earlier-flight-left-it-is-watched-not-fled-from-again
   (async done

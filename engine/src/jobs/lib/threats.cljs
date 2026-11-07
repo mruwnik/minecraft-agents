@@ -213,7 +213,7 @@
 (defn death-body
   "The body of c as the answers' prices read it, as respond's (hostile-loss/body-at), with body-of."
   [c]
-  (let [p (:primitives c)] (merge (hostile-loss/body-at p (ctx/view c)) (body-of p))))
+  (let [p (:primitives c)] (merge (hostile-loss/body-at c (ctx/view c)) (body-of p))))
 
 (defn threat-id
   "What a threat's stance and toll are kept under: its field-key and the :held :key :chaser tolls-of reads."

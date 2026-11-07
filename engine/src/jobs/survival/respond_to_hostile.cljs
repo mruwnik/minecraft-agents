@@ -517,7 +517,7 @@
   "The loss the response averts: what doing nothing about the dangers near costs (hostile-loss/loss, as the hostile-near
   trigger weighs it)."
   [c]
-  (hostile-loss/loss (:primitives c) (ctx/view c) (near c)))
+  (hostile-loss/loss c (ctx/view c) (near c)))
 
 (defn signature
   "What a call may change: the body's cell, its health (a fight that costs health is a response), the ids of the

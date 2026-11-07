@@ -63,7 +63,7 @@
      (let [p (:primitives c)
            view (ctx/view c)
            health (.-health (.self p))
-           hurry (risk/hurry-s health category (cost/death-fn p view) {:seconds seconds :present (hostile-loss/present-fn p view)})
+           hurry (risk/hurry-s health category (cost/death-fn p view) {:seconds seconds :present (hostile-loss/present-fn c view)})
            wait (risk/heal-wait-s health)]
        (when (> hurry wait)
          {:reason :low-health :health health :hurry-s (round1 hurry) :wait-s (round1 wait)

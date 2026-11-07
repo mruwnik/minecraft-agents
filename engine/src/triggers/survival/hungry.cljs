@@ -72,7 +72,7 @@
   Nor with a real danger near and no food carried: the body hides first, whatever its health.
   It rests (resting?) for :rest-s (600; at most foods/::starving-rest-ms, 60 s, when starving) after get-food ended unfed (:no-food, :still-hungry), so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
-  [world memory args]
+  [world memory args & [plans]]
   (let [self (.self world)
         reserved (reserve/spared memory self)
         urgent? (or (meal/eat-now? self args reserved)
@@ -86,5 +86,5 @@
              (not (look/dark-here? world)))
          (or (meal/carries-food? self reserved)
              (not (danger-q/danger-near? world (danger-q/hostile-radius))))
-         (not (hostile-loss/too-hurt? world memory :heal nil))
+         (not (hostile-loss/too-hurt? (hostile-loss/trigger-ctx world plans) memory :heal nil))
          (if urgent? :urgent true))))
