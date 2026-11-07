@@ -4,6 +4,7 @@
 ;; over seen floors is the 13 drop (10 hp), over the 7 hp budget at full health; the block's other sides drop to floors it has not
 ;; seen. A look is the way to learn a floor, so the walk tries the unseen sides and learns them absent, with the budget or a cap
 ;; (:spend {:health 0}) alike, and ends without arriving, never :needs-health at full health (healing cannot help).
+;; With a pickaxe and the default (dig) ways, no cap: the over-budget end escalates (go-to.escalated :why :damage-budget) and the body digs a stair down the face, unhurt, and arrives.
 {:defaults
  {:tags [:movement]
   :time :any
@@ -26,4 +27,13 @@
    :expect [{:event {:source :job :kind :replan} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:arrived false}} :within-s 140 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-far [17.5 0 9.5] 4]]}]}
+   :after [[:body-far [17.5 0 9.5] 4]]}
+  {:name "uncapped-body-with-a-pickaxe-digs-a-stair-down-the-platform"
+   :body {:at [22.5 0 9.5] :yaw 90 :pitch 20 :settle-s 3 :inventory [["iron_pickaxe" 1]]}
+   :limit-s 220
+   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~22 ~ ~9 90 -40"] [:wait-s 3] [:rcon "execute positioned $X $Y $Z run tp $BODY ~9 ~13 ~9 270 40"] [:wait-s 3]
+         [:job (jobs.movement.go-to {:pos #at [17 0 9] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:why :damage-budget}} :within-s 140 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 200 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 200 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [17.5 0 9.5] 3]]}]}
