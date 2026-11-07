@@ -17,7 +17,8 @@
             [engine.test-util :as tu]
             [jobs.animals.pen-check :as pen-check]
             [jobs.lib.dig-look :as dig-look]
-            [jobs.lib.pen :as pen]))
+            [jobs.lib.pen :as pen]
+            [jobs.lib.util :as u]))
 
 (defn lcg [seed]
   (let [a (atom (+ 12345 (* 7919 seed)))]
@@ -384,6 +385,35 @@
           (is (= :leak (:reason event)))
           (is (some #{{:x 2 :y 64 :z -1}} (map :pos (:leaks event))))
           (is (<= fills (+ 6 looks)) (str fills " fills for " looks " looks")))))))
+
+(deftest an-open-gate-onto-open-ground-is-answered-without-a-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (assoc (world {"2,64,-1" "oak_fence_gate"} {"2,64,-1" {:open true}}) :blocks (merge plain fence-ring {"2,64,-1" "oak_fence_gate"}) :floor [-60 -60 65 65])
+              s (h/setup-seeing (assoc w :yaw 180 :rand (constantly 0.5)) nil)]
+          (core/submit! (:eng s) (list job {:ways #{:check} :at [2 64 2]}) {})
+          (dotimes [_ 6]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (let [event (ending-event @(:seen s))]
+            (is (= :leak (:reason event)))
+            (is (some #{{:pos {:x 2 :y 64 :z -1} :why :open-gate}} (:leaks event))))
+          (is (= {:x 2 :y 64 :z 2} (select-keys (u/self-pos {:primitives (:p s)}) [:x :y :z])) "seen ground round the pen proves the leak: no walk to the unseen far cells"))))))
+
+(deftest an-open-gate-in-a-divider-is-no-leak
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [outer (into {} (for [x (range -1 31) z (range -1 6) :when (or (#{-1 30} x) (#{-1 5} z))] [(str x ",64," z) "oak_fence"]))
+              divider (into {} (for [z (range 0 5)] [(str "5,64," z) (if (= z 2) "oak_fence_gate" "oak_fence")]))
+              w (assoc (world {}) :blocks (merge plain outer divider) :states {"5,64,2" {:open true}} :floor [-60 -60 65 65])
+              s (h/setup-seeing (assoc w :yaw -90 :rand (constantly 0.5)) nil)]
+          (core/submit! (:eng s) (list job {:ways #{:check} :at [2 64 2]}) {})
+          (dotimes [_ 30]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (true? (:closed? (ending-event @(:seen s)))) (pr-str (ending-event @(:seen s)))))))))
 
 (deftest a-leak-in-view-is-answered-without-a-look-round
   (async done

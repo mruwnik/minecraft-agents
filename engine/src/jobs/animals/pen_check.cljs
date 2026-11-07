@@ -17,6 +17,7 @@
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-patch :as pen-patch]
             [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.pen-world :as pen-world]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
@@ -26,7 +27,7 @@
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap: that is answered at once (an open gate may divide the pen, so it waits for the look). Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
+  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap, or through an open gate onto seen ground outside another side of the pen: that is answered at once (an open gate whose far side the eye has not seen round may lead into a part of the pen behind a divider, so it waits for the look). Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
 
   The fill stops after ::max-cells cells (a setting): a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
@@ -157,12 +158,42 @@
                           (or (not= :gap why) (not-any? #(dig-look/unknown? p %) (side-cells cell))))))
                  (:leaks final))))
 
+(def orthogonal-dirs [[1 0] [-1 0] [0 1] [0 -1]])
+
+(defn gate-opens-outside?
+  "Whether an open gate of the final read (no box) is a proven way out: with the open gates shut the fill closes round the
+  start, and through them it reaches seen ground outside a wall on another side of that pen, so the gate opens onto
+  the ground round the pen, not into a part of it walled off by a divider."
+  [p {:keys [at box max-cells]} final]
+  (let [gates (keep (fn [{:keys [pos why]}] (when (= :open-gate why) [(:x pos) (:y pos) (:z pos)])) (:leaks final))]
+    (boolean
+     (when (and (seq gates) (not box))
+       (let [opts {:block-at (pen-read/block-at-fn p (volatile! #{})) :at at :max-cells max-cells :blocks (pen-world/store)}
+             shut (:fill (pen/analyse (assoc opts :sealed (set gates))))
+             open (:fill (pen/analyse (assoc opts :sealed #{})))
+             col (fn [[x _ z]] [x z])
+             inner (set (map col (:order shut)))
+             walked (set (map col (:order open)))
+             step (fn [[x z] [dx dz] n] [(+ x (* n dx)) (+ z (* n dz))])
+             gate-dirs (set (for [g (map col gates) d orthogonal-dirs :when (inner (step g d -1))] d))]
+         (and (seq inner) (not (:truncated? shut))
+              (some (fn [b]
+                      (some (fn [d]
+                              (let [wall (step b d -1)]
+                                (and (not (gate-dirs d)) (not (walked wall)) (inner (step b d -2)))))
+                            orthogonal-dirs))
+                    (remove inner walked))))))))
+
+(defn proven-leak?
+  "Whether the final read names a way out the unseen cells cannot change: a seen leak, or an open gate onto the ground round the pen."
+  [p opts final at]
+  (or (seen-leak? p final at) (gate-opens-outside? p opts final)))
+
 (defn answered?
-  "Whether the read answer needs no more looks: closed, or a leak at a cell the body has seen (the unseen ground beyond it
-  does not matter)."
+  "Whether the read answer needs no more looks: closed, or a proven leak (the unseen ground beyond it does not matter)."
   [p opts answer at]
   (boolean (or (:closed? answer)
-               (seen-leak? p (if (= :unloaded (:reason answer)) (pen-read/read p (assoc opts :final? true)) answer) at))))
+               (proven-leak? p opts (if (= :unloaded (:reason answer)) (pen-read/read p (assoc opts :final? true)) answer) at))))
 
 (defn gate-note
   "Why herd could not use any gate of this closed pen (none in a wall, or its approach out-1..out-4 not free floor), or nil."
@@ -266,7 +297,7 @@
         checked (await (pen-read/read! c (assoc opts :early? true) #(not (answered? p opts % at))))
         final (when (= :unloaded (:reason checked))
                 (pen-read/read p (assoc opts :final? true)))
-        unseen (when-not (seen-leak? p (or final checked) at) (unseen-leak checked at (u/self-pos c)))
+        unseen (when-not (proven-leak? p opts (or final checked) at) (unseen-leak checked at (u/self-pos c)))
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck (settings/get settings ::max-walks)))
