@@ -14,7 +14,9 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :tool}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :tool}} :of-job true}]
    :after [[:block [16 -1 16] "grass_block"]]}
+  ;; the chest is east of the body: it faces east (yaw 270) so the chest is in its view cone, as a seen one must be
   {:name "hoe-in-a-seen-chest-is-fetched-and-tills"
+   :body {:yaw 270}
    :blocks [[:set [18 0 12] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]
    :act [[:job (jobs.farm.till {:worth 1200 :area {:pos #xyz [16 -1 16] :radius 1} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 9}} :within-s 80 :of-job true}]
