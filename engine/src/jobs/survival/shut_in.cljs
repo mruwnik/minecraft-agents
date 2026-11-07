@@ -10,6 +10,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-loss :as hostile-loss]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
@@ -170,7 +171,7 @@
   [c]
   (let [{:keys [costs barred]} (when-not (way/enclosed? c) (await (way-costs c)))
         [_ price risk seconds morning] (first (sort-by second costs))
-        s (if (way/enclosed? c) 0 (max (night/mean-s) (or price ##Inf)))
+        s (if (way/enclosed? c) 0 (max (sh/mean-s) (or price ##Inf)))
         named? (fn [x] (and (number? x) (pos? x) (js/isFinite s)))
         why (when (infinite? s) (seq (keep #(some->> (:text (stop-of c %)) (str (name %) ": ")) (concat (map first costs) barred))))]
     (cond-> {:uses {:job-time [s s (max (* 3 s) (settings/get settings ::job-time-s))]} :done (if (infinite? s) [0 0 0] [0 1 1])}

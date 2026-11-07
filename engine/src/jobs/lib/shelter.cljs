@@ -16,7 +16,8 @@
             [jobs.lib.shelter.spawn :as sh-spawn]))
 
 (a/defargs settings
-  {::breach-near {:default 8 :spec (a/int-in 0 nil)
+  {::mean-s {:default 12 :doc "Seconds an enclosing is guessed to take, for shut-in's quote and the night's rest price." :spec (a/num-in 0 nil)}
+   ::breach-near {:default 8 :spec (a/int-in 0 nil)
                   :doc "Blocks within which a fresh :bed-open entry makes a roofed body's room count as breached when it is not shut in."}
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
                      :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
@@ -24,6 +25,7 @@
                :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, slack factor on the straight line, and blocks within which the body counts as home."}})
 
 
+(defn mean-s [] (settings/get settings ::mean-s))
 (defn breach-near [] (settings/get settings ::breach-near))
 
 (defn door-failed-ms [] (settings/get settings ::door-failed-ms))

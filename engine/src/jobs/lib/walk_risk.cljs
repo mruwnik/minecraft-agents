@@ -30,6 +30,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -37,8 +38,8 @@
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
-            [jobs.lib.util :as u]
-            [jobs.survival.shut-in-night :as sin]))
+            [jobs.lib.util :as u]))
+
 
 (a/defargs settings
   {::exit-blocks {:default 8 :spec (a/num-in 0 nil)
@@ -395,7 +396,7 @@
     (if-not (pos? left)
       0
       (let [stay-s (fn [s] (max 0 (- (risk-s c (estimate-of c (estimate-inputs c goal {:plan plan :stay-s s}))) walk-s)))
-            seal-s (min left (sin/mean-s))]
+            seal-s (min left (sh/mean-s))]
         (min (stay-s left)
              (cost/night-way-s (sh-beds/in-ground? p (ctx/view c)) left {:busy-s seal-s :open-s (stay-s seal-s)}))))))
 

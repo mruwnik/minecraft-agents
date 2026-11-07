@@ -184,7 +184,7 @@
   (cond
     (not (#{:cave :ground} kind)) (sin/shelter-quote {:uses {:job-time [0 0 0]}})
     (js/isFinite (:seconds here)) here
-    :else (sin/shelter-quote {:uses {:job-time [0 (sin/mean-s) 0]}})))
+    :else (sin/shelter-quote {:uses {:job-time [0 (sh/mean-s) 0]}})))
 
 (defn arrival-chance
   "The chance a mob spawns and reaches a cell standing at chance a second within secs: it then stands in the rest box and the
