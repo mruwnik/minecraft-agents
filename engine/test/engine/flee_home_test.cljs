@@ -510,7 +510,12 @@
 
 (defn seen-zombie [x z] #js {:name "zombie" :visible true :pos #js {:x x :y 64 :z z}})
 
-(defn margin [] (settings/get cost-danger/settings ::cost-danger/race-margin-s))
+(defn margin [] (cost-danger/race-margin-s))
+
+(deftest the-race-margin-is-a-flights-median-start
+  ;; a race at body-speed leaves out the seconds from the decision until the body gets going
+  (is (= 2 (settings/with-settings {::cost-danger/flight-starts {"pooled" {:n 1 :deciles [0 0 0 0 1 3 9 9 9 9]}}}
+             cost-danger/race-margin-s))))
 
 (deftest a-chaser-3-blocks-off-leaves-lead-for-a-few-floods-less-the-race-margin
   ;; no distance gate: its lead at the body, less the race margin a race to a refuge is won by, prices the step's floods
@@ -524,8 +529,9 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
               zombie [(seen-zombie -13.5 13.5)]
-              judged (fn [margin] (settings/with-settings (assoc no-ceiling ::cost-danger/race-margin-s margin)
-                                    #(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false)))))))
+              judged (fn [margin] (settings/with-settings no-ceiling
+                                    #(with-redefs [cost-danger/race-margin-s (constantly margin)]
+                                       (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false))))))))
               [with-margin without] [(judged (margin)) (judged 0)]]
           (is (pos? with-margin) (str "a zombie 3 blocks off leaves lead for a flood: " with-margin))
           (is (< with-margin without) (str "the race margin's share of the lead buys none: " [with-margin without])))))))

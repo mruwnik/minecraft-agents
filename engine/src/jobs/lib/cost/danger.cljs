@@ -47,7 +47,6 @@
                     :spec (a/map-of a/name? (a/map-of #{:sprint :walk} (a/map-with {:blocks (a/pred "a number" a/finite?) :s (a/num-in 0 nil)})))}
    ::closing-prior-s {:default 5 :doc "Seconds of flight the prior closing rate (flee-pace less chase-speed) counts as against ::closing-rates' (closing-rate): a weak prior." :spec (a/num-in 0 nil)}
    ::search-budget-s {:default 0.1 :doc "Seconds of CPU one search may take, one flight step's or one quote's searches together (the owner's search budget, Q141): searches stop at it." :spec (a/num-in 0 nil)}
-   ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
    ::melee-reach {:default 1.4 :doc "Blocks from the body within which a melee mob's blow lands, vanilla's for a zombie (catches?)." :spec (a/num-in 0 nil)}})
 
 
@@ -186,14 +185,16 @@
   [e]
   (if (true? (.-baby e)) "baby" (.-name e)))
 
+(declare race-margin-s)
+
 (defn wins-race?
-  "Whether a body body-s seconds from a place gets there margin-s (default ::race-margin-s) before a chaser arrive-s
+  "Whether a body body-s seconds from a place gets there margin-s (default race-margin-s) before a chaser arrive-s
   seconds from it."
-  ([body-s arrive-s] (wins-race? body-s arrive-s (settings/get settings ::race-margin-s)))
+  ([body-s arrive-s] (wins-race? body-s arrive-s (race-margin-s)))
   ([body-s arrive-s margin-s] (< (+ body-s margin-s) arrive-s)))
 
 (defn reach-first?
-  "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there ::race-margin-s before every
+  "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there race-margin-s before every
   chaser, each (mob-dists) that many blocks from it at ::chase-speed, or its own chase-speed when that is more
   (mob-names, in the order of mob-dists). True with no chaser."
   ([body-dist mob-dists food] (reach-first? body-dist mob-dists food (repeat nil)))
@@ -230,7 +231,7 @@
 
 (defn refuge-search-pays?
   "Whether a search for a refuge of cost-s seconds of CPU pays, spent-s already spent this step. The CPU is lead the
-  body stands still for, so it must end ::race-margin-s (the margin reach-first? wins a race by) within the chasers'
+  body stands still for, so it must end race-margin-s (the margin reach-first? wins a race by) within the chasers'
   lead at the body (here-s) and at the refuge's door (lead-s, lead-s above), and within the run it could save
   (save-s, run-saved-s). With no melee chaser (here-s ##Inf) nothing races: the CPU is time in the shooters' fire
   (fire {:exposed?}: whether the body stands in it), which pays while it is shorter than the time in fire a refuge
@@ -238,7 +239,7 @@
   uncovered): both are seconds under the same fire, so its hit chance weighs them alike; out of the fire it spares none. With neither,
   every search pays but one that saves nothing. None starts at ::search-budget-s (under-ceiling?)."
   [spent-s cost-s here-s lead-s save-s fire]
-  (let [margin (settings/get settings ::race-margin-s)]
+  (let [margin (race-margin-s)]
     (and (pos? save-s)
          (cond
            (not (infinite? here-s)) (search-pays? spent-s cost-s (min (- here-s margin) (- lead-s margin) save-s))
@@ -263,6 +264,12 @@
   [mob-name]
   (let [rows (settings/get settings ::flight-starts)]
     (:deciles (get rows mob-name (get rows "pooled")))))
+
+(defn race-margin-s
+  "Seconds a body must win a race to a refuge by: a flight's start, from its decision until it gets going, which a race
+  at body-speed leaves out; the median of the pooled ::flight-starts (the mean of its 5th and 6th deciles)."
+  []
+  (let [d (flight-starts "pooled")] (/ (+ (nth d 4) (nth d 5)) 2)))
 
 (defn outruns?
   "Whether a body with food food gets away from every one of mob-names on foot: every one of their closing-rates is positive (flee-mob's test)."
@@ -313,10 +320,10 @@
 (defn caught-on?
   "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
   from the start the body is there): at some point of it the chaser arrives (swim-arrivals: at its swim speed over the
-  water swim shows) before the body wins the race there (wins-race?, by margin-s: default ::race-margin-s); way, a
+  water swim shows) before the body wins the race there (wins-race?, by margin-s: default race-margin-s); way, a
   fn of a route point to the chaser's blocks there (nil: the straight line); swim, its blocks of water there (nil: none)."
   [{:keys [chaser pos route margin-s way swim speed]}]
-  (let [margin (or margin-s (settings/get settings ::race-margin-s))]
+  (let [margin (or margin-s (race-margin-s))]
     (boolean (some true? (map (fn [p a] (not (wins-race? (:t p) a margin)))
                               route (swim-arrivals chaser pos route (or way (constantly nil)) swim speed))))))
 
