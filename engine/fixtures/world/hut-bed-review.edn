@@ -89,7 +89,7 @@
             {:no-event {:source :action :kind :done :data {:name "place"}} :for-s 40}]
    :after [[:item "red_bed" 1] [:body-near [10.5 0 12.5] 1.5]]
    :limit-s 80}
-  {:name "monster-near-one-sleep-failed-no-refire"
+  {:name "monster-near-sleep-job-holds-in-pauses-and-never-ends"
    :sleep-skip true
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
             [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
@@ -100,9 +100,21 @@
    ;; the sleep job itself (the night reflex prices a walk past a zombie in its own room dearer than staying, and does not sleep); sleep holds the monsters-near refusal in pauses (a :pause child each) and asks again, never ending :sleep-failed
    :expect [{:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 40}
             {:no-event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :for-s 75}
-            ;; no refire: the reflex's job would end sleep-failed and the trigger fire again; the sleep job must stay running (neither stopped nor completed)
+            ;; the sleep job must stay running (neither stopped nor completed); no reflex is registered here, the refire is the next case
             {:no-event {:source :job :kind #{:stopped :completed} :data {:name "jobs.survival.sleep"}} :for-s 75}]
    :limit-s 90}
+  {:name "monster-outside-bed-room-night-reflex-fires-once-and-sleeps-no-refire"
+   ;; zombie behind the room wall, 6 from the bed (inside the server's monsters-near refusal radius), unseen from inside. The night trigger
+   ;; (defaults.edn: cooldown-s 10, :backoff false) can fire again only after its job's round ends, then 10 s later; sleep holds in :pause-s (5)
+   ;; pauses, so one round-end plus the cooldown is 15 s at the earliest and the 40 s window holds two such cycles. A refire would show as a second :fired.
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]]
+   :body {:at [13.5 0 13.5] :yaw 90}
+   :act [[:summon "zombie" [10.5 0 6.5] "{NoAI:1b,Silent:1b}"] [:rcon "execute positioned $X $Y $Z run setblock ~10 ~ ~12 red_bed[facing=east,part=foot]"] [:rcon "execute positioned $X $Y $Z run setblock ~11 ~ ~12 red_bed[facing=east,part=head]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}
+            {:event {:source :job :kind :child_started :data {:slot :pause}} :within-s 40}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40 :at-most 1}]
+   :limit-s 50}
   {:name "far-known-bed-kept-carried-bed-placed"
    :sleep-skip true
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
