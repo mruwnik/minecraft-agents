@@ -29,7 +29,7 @@
             [jobs.survival.night.hold :as hold]
             [jobs.lib.util :as u]
             [engine.triggers :as triggers]
-            
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.targets :as targets]
             [jobs.survival.bed-down :as bed-down]
             [jobs.lib.food-animals :as animals]
@@ -119,10 +119,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [stays (atom [])
+              fought (atom [])
               prices (fn ^:async a [fight]
                        (let [real price/way-fight-hp
                              parts price/stay-parts]
-                         (set! price/way-fight-hp (fn [_ _] fight))
+                         (set! price/way-fight-hp (fn [c at] (when-not (= (u/cell-vec at) (u/cell-vec (u/self-pos c))) (swap! fought conj [(:primitives c) at])) fight))
                          (set! price/stay-parts (fn [c chance secs] (let [r (parts c chance secs)] (swap! stays conj [chance secs (:hurt r)]) r)))
                          (try
                            (let [[_ seen] (await (flee-with (fn [_] {:uses {:job-time [0 7 0]}})))]
@@ -132,9 +133,10 @@
               hurt (await (prices 2))
               more #(- (% hurt) (% calm))]
           (is (pos? (more :exposed)) (pr-str calm hurt))
-          (let [here (ffirst @stays)
-                ;; the flight's own stay is the shortest one priced at the target's chance, not the body's
-                ht (->> @stays (remove #(= here (first %))) (filter #(pos? (second %))) (sort-by second) first last)]
+          (let [[p target] (first @fought)
+                ;; the flight's own stay is the shortest one priced at the chance of the cell fought at, the target
+                chance (spawn-light/night-chance p target)
+                ht (->> @stays (filter #(and (= chance (first %)) (pos? (second %)))) (sort-by second) first last)]
             (is (some? ht) (pr-str @stays))
             (is (< (js/Math.abs (- (more :flee) (- (cost/hp-cost 20 (+ ht 2)) (cost/hp-cost 20 ht)))) 0.15)
                 "the fight adds its hp once, on top of the target's own hurt")))))))
