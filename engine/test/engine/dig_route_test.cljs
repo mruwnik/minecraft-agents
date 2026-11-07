@@ -114,6 +114,28 @@
     (is (= [:pillar :pillar] (map :move (:steps r))))
     (is (contains? @calls [2 0 9 0]) "the second block of the run is priced as the second")))
 
+(defn walls
+  "block-at over bedrock with the given cells air."
+  [open]
+  (fn [c] (if (contains? open c) "air" "bedrock")))
+
+;; a laid block up over the pit at x 1 reaches [2 11 0] cheapest (2.5 s); the stair round by z 1 (4 s) spends none, and
+;; the goal is reached only by laying one more from there
+(deftest a-cheaper-way-to-a-cell-that-placed-the-last-block-hides-no-way-that-did-not
+  (let [w (walls #{[0 10 0] [0 11 0] [0 12 0] [1 9 0] [1 10 0] [1 11 0] [1 12 0] [2 11 0] [2 12 0] [2 13 0] [3 11 0] [3 12 0] [3 13 0]
+                   [0 11 1] [0 12 1] [1 11 1] [1 12 1] [2 11 1] [2 12 1]})
+        opts {:step-s 1 :place-s 0.5 :margin 3}]
+    (is (= 4 (:seconds (dr/route w [0 10 0] [3 12 0] opts))) "two blocks carried: laid twice")
+    (is (= 5.5 (:seconds (dr/route w [0 10 0] [3 12 0] (assoc opts :max-places 1)))) "one: round by the stair, then laid")))
+
+;; a pillar's third block is dear: the cheapest way to the shaft's [0 12 0] is its first two (0.2 s), the dearer a laid
+;; step in from the ledge at x 1 (2.5 s), after which the goal's block is the first of its run
+(deftest a-cheaper-way-to-a-cell-up-a-longer-pillar-run-hides-no-way-up-a-shorter
+  (let [w (walls #{[0 10 0] [0 11 0] [0 12 0] [0 13 0] [0 14 0] [1 11 0] [1 12 0] [1 13 0]})
+        r (dr/route w [0 10 0] [0 13 0] {:step-s 1 :place-s 0.5 :pillar-s (fn [n _ _ _] (if (< n 3) 0.1 100)) :margin 3})]
+    (is (= [:walk :laid :pillar] (map :move (:steps r))))
+    (is (< (js/Math.abs (- 2.6 (:seconds r))) 1e-9))))
+
 (deftest a-step-up-lays-its-floor-against-a-face
   (let [w (fn [[_ y _ :as c]] (or ({[2 11 0] "stone"} c) (if (< y 10) "stone" "air")))
         r (dr/route w [0 10 0] [2 12 0] {:place-s 1 :step-s 0.2 :margin 2})]

@@ -163,8 +163,8 @@
                             (bit-or (bit-shift-left (+ dx 512) 20) (bit-shift-left (+ dz 512) 10) (+ dy 512))
                             (+ 1073741824 (* (+ (* (+ dx 131072) 262144) (+ dz 131072)) 65536) y 32768))))
         ;; a way that let water in is a label of its own, a negative id (label-cell: its cell's key): a dearer dry way to a cell
-        ;; is not lost to a flooded one, nor a flooded one to another unless that is no dearer, its water no higher and its
-        ;; head under no longer (wet-label!). So is a dry way that dug a contested cell (sig-key)
+        ;; is not lost to a flooded one, nor a flooded one to another unless that is no worse (label!). So is a dry way that
+        ;; dug a contested cell (sig-key), and with path state (path-state?) a dry way no other of its sig-key is no worse than
         label-cell (js/Map.)
         cell-of (fn [k] (let [k (if (neg? k) (.get label-cell k) k)]
                           (if (< k 1073741824)
@@ -373,10 +373,10 @@
         end-key? (fn [k] (or (== (if (neg? k) (.get label-cell k) k) goal-key) (and r (end? k))))
         ;; #js [seconds key] of the cheapest end cell any step reached so far: a route in hand before the search proves it cheapest
         incumbent #js [##Inf nil]
-        ;; the wet labels of a cell's key: none another is no worse than on seconds, level and under-water seconds
+        ;; the wet labels of a cell's key: none another is no worse than (label!)
         wet-at (js/Map.)
         wet-n (volatile! 0)
-        ;; wet labels another came to dominate: never expanded
+        ;; labels another came to dominate: never expanded
         dropped (js/Set.)
         ;; the floors refused where the way to a cell dug them (dug-behind?): only those an answer was found to stand on
         ;; (checked). Any other dug floor is stood on as the block it was, so a step costs the same whatever way led to it;
@@ -395,17 +395,33 @@
                               i
                               (let [sk (str i "/" sig)]
                                 (or (.get sig-labels sk) (let [id (vswap! wet-n dec)] (.set sig-labels sk id) (.set label-cell id i) id)))))
-        ;; a new wet label of cell key i for a way of s seconds, its water at level, the head under it for under seconds,
-        ;; the contested cells sig dug; nil when one the cell holds is no worse on all four
-        wet-label! (fn [i s level under sig]
-                     (let [^js ids (or (.get wet-at i) #js [])
-                           over? (fn [^js a] (and (<= (aget a 0) s) (<= (aget a 8) level) (<= (aget a 9) under) (sub-sig? (aget a 10) sig)))
-                           under? (fn [^js a] (and (<= s (aget a 0)) (<= level (aget a 8)) (<= under (aget a 9)) (sub-sig? sig (aget a 10))))]
-                       (when-not (.some ids #(over? (.get best %)))
-                         (let [id (vswap! wet-n dec)
-                               kept (.filter ids #(or (not (under? (.get best %))) (do (.add dropped %) false)))]
-                           (.push kept id) (.set wet-at i kept) (.set label-cell id i)
-                           id))))
+        ;; the path state a way's next steps depend on beyond its cell and dug floors: blocks placed (max-places), dig seconds
+        ;; (max-dig-s) and the pillar run (a fn pillar-s: a later block of a run costs no less). A way with no more of each
+        ;; may take every step another may, at no higher price
+        path-state? (or (some? max-places) (some? max-dig-s) (fn? pillar-s))
+        no-more? (fn [placed ds run placed' ds' run']
+                   (and (or (nil? max-places) (<= placed placed')) (or (nil? max-dig-s) (<= ds ds')) (or (not (fn? pillar-s)) (<= run run'))))
+        dry-at (js/Map.)
+        ;; a new label of cell key i in class c of at (wet-at: the cell; dry-at: its sig-key) for a way of s seconds, its water
+        ;; at level (nil: dry), the head under it for under seconds, the contested cells sig dug and its path state; nil when one
+        ;; the class holds is no worse on all, or, dry, one expanded is no worse on all but seconds (a cell expanded is not
+        ;; reopened). The labels the new one is no worse than are dropped
+        label! (fn [^js at c i s level under sig placed ds run]
+                 (let [^js ids (or (.get at c) #js [])
+                       wet? (some? level)
+                       over? (fn [id] (let [^js a (.get best id)]
+                                        (and (or (<= (aget a 0) s) (and (not wet?) (.has done id)))
+                                             (or (not wet?) (and (<= (aget a 8) level) (<= (aget a 9) under)))
+                                             (sub-sig? (aget a 10) sig) (no-more? (aget a 5) (aget a 2) (aget a 7) placed ds run))))
+                       under? (fn [id] (let [^js a (.get best id)]
+                                         (and (<= s (aget a 0))
+                                              (or (not wet?) (and (<= level (aget a 8)) (<= under (aget a 9))))
+                                              (sub-sig? sig (aget a 10)) (no-more? placed ds run (aget a 5) (aget a 2) (aget a 7)))))]
+                   (when-not (.some ids over?)
+                     (let [id (vswap! wet-n dec)
+                           kept (.filter ids #(or (not (under? %)) (do (.add dropped %) false)))]
+                       (.push kept id) (.set at c kept) (.set label-cell id i)
+                       id))))
         relax! (fn [ck ^js from-node ^js acc nx ny nz move stair? face-s]
                  (let [level (aget acc 4)
                        i (key nx ny nz)
@@ -418,11 +434,13 @@
                            ;; a walk onto a floor not seen pays the chance it is none as seconds
                            absent-s (if (and floor-absent-s unseen? (keyword-identical? :walk move) (unseen-cell? nx (dec ny) nz)) (floor-absent-s [nx (dec ny) nz] (- ny (nth (cell-of ck) 1))) 0)
                            nd (+ (aget from-node 0) (cw/step-price (aget acc 0) step-s stair-s stair? unseen-s) absent-s wet-s)
-                           sig (sig-of (aget from-node 10) (aget acc 3))]
-                       (when-let [nk (if (some? level)
-                                       (wet-label! i nd level (aget acc 5) sig)
-                                       (let [lk (sig-key i sig) ^js old (.get best lk)] (when (and (not (.has done lk)) (or (nil? old) (< nd (aget old 0)))) lk)))]
-                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0) (aget acc 4) (aget acc 5) sig])
+                           sig (sig-of (aget from-node 10) (aget acc 3))
+                           run (if (keyword-identical? :pillar move) (inc (if (keyword-identical? :pillar (aget from-node 4)) (aget from-node 7) 0)) 0)]
+                       (when-let [nk (cond
+                                       (some? level) (label! wet-at i i nd level (aget acc 5) sig placed ds run)
+                                       path-state? (label! dry-at (sig-key i sig) i nd nil 0 sig placed ds run)
+                                       :else (let [lk (sig-key i sig) ^js old (.get best lk)] (when (and (not (.has done lk)) (or (nil? old) (< nd (aget old 0)))) lk)))]
+                         (.set best nk #js [nd k ds ck move placed (let [dug (aget from-node 6) ks (aget acc 3)] (if (zero? (alength ks)) dug (dug-link ks dug))) run (aget acc 4) (aget acc 5) sig])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
                          ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
                          (heap-push! queue #js [(tie (+ nd (heuristic nx ny nz))) (if prior? (- nd) @tick) nk])
@@ -516,7 +534,7 @@
                     (if (zero? (alength bad))
                       (priced (route-to ck))
                       (do (.forEach bad #(.add contested %))
-                          (.clear best) (.clear done) (.clear wet-at) (.clear dropped) (.clear sig-labels) (.clear label-cell)
+                          (.clear best) (.clear done) (.clear wet-at) (.clear dry-at) (.clear dropped) (.clear sig-labels) (.clear label-cell)
                           (set! (.-length queue) 0) (vreset! tick 1) (aset incumbent 0 ##Inf) (aset incumbent 1 nil)
                           (.set best start-key start-node)
                           (heap-push! queue #js [(heuristic fx fy fz) 0 start-key])
