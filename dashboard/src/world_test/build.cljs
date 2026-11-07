@@ -4,7 +4,7 @@
 
 (def body-v8-flags
   "V8 flags of a body process; they only work on the command line (heap cap: RSS 335 -> ~255 MB). engine/package.json \"body\" keeps the one other copy."
-  ["--max-old-space-size=256" "--heap-growing-percent=100" "--max-semi-space-size=8"])
+  ["--max-old-space-size=256" "--heap-growing-percent=100" "--max-semi-space-size=8" "--no-sparkplug"])
 
 (defn parse-src
   "[hash commit] of a tools/engine-src-hash line (or an engine/out/body-release.src file), nil when blank."
