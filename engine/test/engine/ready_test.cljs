@@ -997,6 +997,15 @@
       (is (= :look (ffirst (run share true))) (str share ": a look that pays comes first")))
     (is (> (:wait-s (nth (first (run 0.49 false)) 2)) (:wait-s (nth (first (run 0.51 false)) 2))) "more cave left after dawn: a dearer wait")))
 
+(deftest a-walk-to-look-is-priced-with-the-way-a-dark-look-leaves
+  (let [c (assoc (ctx-of open-night) ::price/stay-s 3000)
+        status (fn [dark] (ready/priced c [:later "dark" {:reason :exposed :chance 0.001 :wait-ms 30000
+                                                           :look {:hp 0 :lethal-hp 0 :secs 20 :dark dark}}]))]
+    (is (= :later (first (status 1))) "a look sure to show it dark still owes the 30 s wait: waiting first is cheaper")
+    (is (< 30 (:wait-s (nth (status 1) 2)) 50))
+    (is (= :ok (first (status 0))) "a look sure to show it lit: 20 s, then the act is free")
+    (is (re-find #"judged once looked" (second (status 0))))))
+
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
 
@@ -1128,13 +1137,14 @@
 (deftest the-dig-jobs-price-an-unseen-place-no-higher-than-an-unburied-body-at-night
   (let [check (fn [safe args] (with-redefs [sh-sense/seen-cell? (constantly false)
                                             ready/roof-over? (constantly false)]
-                                (first (safe (assoc (for-iron (ctx-of open-night)) :args args)))))]
-    ;; the walk there to look (1.4 hp, 37 s) costs less than the wait for dawn (look-first)
-    (are [safe args] (= :ok (check safe args))
+                                (safe (assoc (for-iron (ctx-of open-night)) :args args))))]
+    ;; the walk there to look (1.4 hp, 37 s) plus the dawn wait at the chance the look shows it dark, open, not rock (~0.4):
+    ;; 219 s, less than the 475 s wait for dawn now
+    (are [safe args] (re-find #"the stay is judged once looked" (second (check safe args)))
       tunnel-job/safe? {:target [40 63 0]}
       mine/safe? {:at {:x 40 :y 63 :z 0} :block "iron_ore" :count 1 :torches false :tunnel-length 20}
       dig-for/safe? {:at {:x 40 :y 63 :z 0} :block "iron_ore" :count 1 :torches false :tunnel-length 20})
-    (is (= :ok (check tunnel-job/safe? {:target [6 63 0]})) "within the radius no mob spawns in: dug in the dark")))
+    (is (= :ok (first (check tunnel-job/safe? {:target [6 63 0]}))) "within the radius no mob spawns in: dug in the dark")))
 
 (defn kind-in-shelter [check world shelter]
   (let [c (assoc (ctx-of world) :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data shelter}]}}}))]

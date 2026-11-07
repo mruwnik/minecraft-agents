@@ -224,7 +224,7 @@
     (risk-s c (estimate-of c in))))
 
 (defn look-way
-  "{:hp :lethal-hp :secs} of walking to `goal` to look at it and, at the chance `dark` the look shows it too dark to stay,
+  "{:hp :lethal-hp :secs :dark} of walking to `goal` to look at it and, at the chance `dark` the look shows it too dark to stay,
   back the same way (cost/look-first of estimate's hp, and of the straight walk's seconds at cost/walk-speed), cached for
   the check."
   [c goal dark]
@@ -233,7 +233,7 @@
                              both (estimate c goal {:back? true})
                              secs (/ (u/dist (sh-sense/feet (:primitives c)) goal) cost/walk-speed)]
                          (assoc (into {} (for [k [:hp :lethal-hp]] [k (cost/look-first (k there) (- (k both) (k there)) dark)]))
-                                :secs (cost/look-first secs secs dark)))))
+                                :secs (cost/look-first secs secs dark) :dark dark))))
 
 (defn tour-leg-way
   "{:hp :lethal-hp :secs} one leg of a walk-and-look tour that began at `home` ({:x :y :z}) adds: from the feet to `to`,

@@ -126,10 +126,11 @@
   "The exposure s with :look, the one leg of the jobs.movement.walk-look child to the cell look-edge/far-side shows the far
   side of the region round `at` (the hall judged) from, and back, sure as the job works from here (walk-risk/look-way), while
   such a side is left that no walk-look has looked at yet (:walk-looked entries: from close by it stayed unseen, so another
-  walk shows nothing); priced runs it as the check's :look-first child, and the check after it offers the next leg."
-  [s c at]
+  walk shows nothing), at the chance `open` the side shows the hall open (:dark); priced runs it as the check's :look-first
+  child, and the check after it offers the next leg."
+  [s c at open]
   (if-let [{:keys [side to]} (next-leg c at #{} {:route-from (sh-sense/feet (:primitives c)) :route-to at})]
-    (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :child ['jobs.movement.walk-look {:side side :to to :at at}]))
+    (assoc-in s [2 :look] (assoc (walk-risk/look-way c to 1) :dark open :child ['jobs.movement.walk-look {:side side :to to :at at}]))
     s))
 
 (defn own-way
@@ -172,11 +173,11 @@
         (contract/look :exposed text :look-at (vec paid))))))
 
 (defn stay-after
-  "The {:hp :lethal-hp} of a stay of price/stay-s at spawn chance `chance` (price/stay-parts), as walk-risk/wait-way's act after a wait."
+  "The {:hp :hurt :lethal-hp} of a stay of price/stay-s at spawn chance `chance` (price/stay-parts), as walk-risk/wait-way's act after a wait."
   [c chance]
   (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))
         lethal (cost/lethal-hp {:chance dies :death death})]
-    {:hp (+ hurt lethal) :lethal-hp lethal}))
+    {:hp (+ hurt lethal) :hurt hurt :lethal-hp lethal}))
 
 (defn light-way
   "walk-risk/wait-way of waiting light-s where the body stands for light, then acting with `after` (stay-after)."
@@ -240,7 +241,7 @@
        (cond-> (contract/never :exposed (str "dark at " where ", and a mob can walk from dark floor farther than " sh-inside/spawn-free-radius " blocks off (a hall, or an open side of this room): mobs spawn there, waiting never lights it, a torch does")
                                :lowered-by #{:torch} :chance chance :at at)
          (#{:roofed :sky} (:hall @hall)) (as-> s (if (sh-sense/seen-cell? p goal)
-                                             (walk-look s c at)
+                                             (walk-look s c at (cost/hall-edge-chance @hall))
                                              (look-first s c goal (cost/hall-edge-chance @hall)))))))))
 
 (defn at-status
@@ -309,8 +310,10 @@
   hp there (price/stay-parts over price/stay-s) acted on now against waiting (act-price; s's :wait-ms is its wait for light).
   ok :priced while acting now is affordable and no affordable wait is cheaper; a cheaper wait, or the only affordable one,
   holds :later with both prices (a wait to heal keeps s's data); else s. An exposure resting on a place the body has not
-  seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, ok
-  :look-first while it is affordable and cheaper than the other ways and than the job's own answers to s (own-way); a way
+  seen (:look, look-first) has a third way: walk there to look, its hp priced (walk-risk/risk-s) plus its seconds, plus,
+  at the chance :dark the look shows it dark, the cheapest way after it (acting, waiting, the job's own answers, giving the
+  goal up) at the chance a dark place has (a lit one is acted on free); ok
+  :look-first while the walk is affordable and the look cheaper than the other ways and than the job's own answers to s (own-way); a way
   with a :child (walk-look) keeps the status those ways give, with the child as its :look-first call, run before the start,
   while it and the legs before it on its hall (walked-data :spent) cost less than the stay, which bounds the child as its :worth.
   A :never resting on such a guess whose walk to look costs more hp than the worth buys holds :later: the refusal is on
@@ -320,14 +323,18 @@
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
       s
       (let [secs (price/stay-s c)
-            {:keys [hurt dies death]} (price/stay-parts c chance secs)
-            lethal (cost/lethal-hp {:chance dies :death death})
-            hp (+ hurt lethal)
-            {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000)))
-                                                 (if (pos? (or left-chance 0)) (stay-after c left-chance) {:hp 0}))
-            look-s (some->> look-way (walk-risk/look-cost c) (#(when (look-edge/affords-walk? c % (ctx/worth c)) %)))
+            light-s (when (= :later kind) (some-> wait-ms (/ 1000)))
+            ways (fn [chance left]
+                   (let [{:keys [hp hurt lethal-hp]} (stay-after c chance)]
+                     (assoc (act-price c hurt lethal-hp light-s (if (pos? (or left 0)) (stay-after c left) {:hp 0})) :hp hp)))
+            {:keys [now-s now? best hp]} (ways chance left-chance)
             own-s (keep #(% (dissoc c ::own-ways ::own-stays) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))
+            dark (:dark look-way 1)
+            after (fn [] (let [{:keys [now-s now? best]} (ways (/ chance dark) (some-> left-chance (/ dark)))]
+                           (* dark (apply min (ctx/worth c) (cond-> own-s now? (conj now-s) best (conj (:s best)))))))
+            look-s (some->> look-way (walk-risk/look-cost c) (#(when (look-edge/affords-walk? c % (ctx/worth c)) %))
+                            (+ (if (pos? dark) (after) 0)))
             look (when (and look-s (every? #(< look-s %) own-s)) {:s look-s})
             toured (if-let [{:keys [at]} (second (:child look-way))]
                      (get (let [sp (:spent (walked-data c))] (when (map? sp) sp)) (hall-key at) 0)
@@ -345,7 +352,7 @@
                             best [(wait best) (:s best)]
                             :else [s nil])
             stay (if (and stay-s (own? stay-s)) s stay)
-            look-text (str "the walk to look costs " (price/round1 (:hp look-way)) " hp, " (some-> (:s look) price/round1) " s")]
+            look-text (str "the walk to look costs " (price/round1 (:hp look-way)) " hp, with the way after a dark look " (some-> (:s look) price/round1) " s")]
         (cond
           (and look-way (nil? look-s) (= :never (first stay)))
           (contract/status :later :exposed (str (second stay) "; the walk to look costs " (price/round1 (:hp look-way)) " hp, more than the goal's "
