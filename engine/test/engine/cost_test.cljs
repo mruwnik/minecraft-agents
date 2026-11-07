@@ -439,10 +439,12 @@
         "a layer cell is classed by its y alone, a build beside only counts above it")
     (is (= :apart (escape/guess-class -59 ["bedrock"])) "at the layer's top the bedrock below may be the layer's")
     (is (= [:placed :placed] (map #(escape/guess-class % ["bedrock"]) [-58 62])) "bedrock over the layer was placed: a build's floor or wall")
-    (is (apply > (map #(cost/guess-bad-chance % nil) [:layer-64 :layer-63 :layer-62 :layer-61 :layer-60 :placed])) "the rate falls with y through the layer")
+    (is (apply > (map #(cost/guess-bad-chance % nil) [:layer-64 :layer-63 :layer-62 :layer-61 :layer-60])) "the rate falls with y through the layer")
+    (is (< 0.15 (- (cost/guess-bad-chance :placed {:bad 6 :all 6}) (cost/guess-bad-chance :placed nil)))
+        "builds differ from one another: six bad looks beside one move a build's class far")
     (is (< (cost/guess-bad-chance :apart nil) 0.001) "a cell above the layer is nearly never")
     (is (> (cost/guess-bad-chance :apart {:bad 3 :all 3}) 0.005) "a few bad looks lift a rare class by orders")
-    (is (< (cost/guess-bad-chance :placed nil) 0.2) "beside a build (not bedrock) is no rock room")))
+    (is (< (cost/guess-bad-chance :placed nil) (cost/guess-bad-chance :layer-62 nil)) "beside a build (not bedrock) is no rock room")))
 
 (deftest a-goal-s-worth-budgets-the-tour-less-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
