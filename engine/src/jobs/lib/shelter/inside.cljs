@@ -193,11 +193,17 @@
       c
       (let [c #js {:dim (.-dim st) :map (js/Map.) :limit 256}] (.set kept-regions st c) c))))
 
+(defn- memory-of
+  "The perception memory of p; nil for a perception with light data only (no store to keep a region against, memory-age/epoch)."
+  [p]
+  (when-let [^js st (some-> (aget p "perception") :st)]
+    (when (.-nowFn st) st)))
+
 (defn- kept-region
   "The spawn-region kept for key k while the memory sections it read (and their ring) stay as they were, else nil: one quote
   after another prices the same floods."
   [p k]
-  (when-let [^js st (some-> (aget p "perception") :st)]
+  (when-let [^js st (memory-of p)]
     (when-let [region (.get (.-map (kept-regions-of st)) k)]
       (when (same-reads? st (.get region-reads region)) region))))
 
@@ -205,7 +211,7 @@
   "Keeps flooded region v (which carries the sections it read) under key k for kept-region, dropping the regions whose memory
   moved once the kept ones double."
   [p k v]
-  (when-let [^js st (some-> (aget p "perception") :st)]
+  (when-let [^js st (memory-of p)]
     (when-let [secs (::secs (meta v))]
       (let [^js c (kept-regions-of st) ^js m (.-map c)]
         (when-not (.has region-reads v)
