@@ -28,3 +28,11 @@
     (is (nil? (ways/next-way e [3 1 0])) "a stair that stopped short: the climb is searched again")
     (is (= :approach (:step (ways/next-way {:then [{:step :approach :pos [9 9 9] :from [3 4 0]}]} [5 5 5]))) "a walk starts anywhere")
     (is (nil? (ways/next-way {:step :pillar} [3 2 0])))))
+
+(deftest a-climb-s-stair-over-a-floor-it-guessed-is-dropped-once-that-floor-is-seen-to-be-none
+  (let [stair (second (ways/segments (constantly "stone") #{[2 0 0]} [0 0 0] route))
+        gone #(ways/floor-gone (constantly %1) %2 stair)]
+    (is (= [[2 0 0]] (:guessed stair)) "the floor under its first step was not seen")
+    (is (= [2 0 0] (gone "air" #{})) "seen open since: the stair would stop at once")
+    (is (nil? (gone "stone" #{})) "seen solid: the guess held")
+    (is (nil? (gone "air" #{[2 0 0]})) "still unseen")))
