@@ -1,7 +1,8 @@
 ;; A body whose only wall-in blocks are soft-reserved cobblestone (strength 0.5) with a pickaxe to dig them back out:
 ;; the retreat still seals the 1-wide lit tunnel against the zombie (NoAI, waits outside). Tunnel x 7..29 at z 16, zombie at x 9 (5 blocks off).
 {:defaults
- {:tags [:hostile :survival :retreat :reserve :underground]
+ {:body {:spawnpoint :far}
+  :tags [:hostile :survival :retreat :reserve :underground]
   :time :any
   :plot {:height 8}
   :register [{:trigger :hostile-near}]

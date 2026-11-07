@@ -11,7 +11,7 @@
   :mobs :keep
   :plot {:height 16}
   :register [{:trigger :hostile-near}]
-  :body {:effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :effects [["resistance" 600 4]]}
   :limit-s 70}
  :cases
  [{:name "buried-body-takes-its-own-stair-up"

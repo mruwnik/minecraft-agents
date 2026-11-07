@@ -9,7 +9,7 @@
            [:fill [16 -2 16] [16 -1 16] "cobblestone"]]
   :memory [{:kind :shelter :data {:pos #xyz [17 -2 16] :state :built :pocket true :door [#xyz [16 -2 16] #xyz [16 -1 16]]}
             :policy {:cap 10 :ttl 1200000}}]
-  :body {:at [17.5 -2 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :body {:spawnpoint :far :at [17.5 -2 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
   :limit-s 90}
  :cases
  [{:name "niche-left-by-day-is-walled-again"

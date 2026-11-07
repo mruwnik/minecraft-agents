@@ -6,7 +6,7 @@
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :night
-  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
  [;; a8fe9e86: every shelter block dearer than dirt is dug back by day, not just the valuable ones
   {:name "cobblestone-walls-are-taken-back-at-dawn"

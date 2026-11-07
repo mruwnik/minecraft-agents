@@ -2,7 +2,8 @@
 ;; (NoAI, so it stays). The cut job must not dig toward the zombie while it is in range (the dirt target lies beyond the
 ;; seal, and a dirt block in the wall leaves the tunnel open for the zombie); once the zombie is gone it resumes and finishes. Tunnel x 7..29 at z 16, target dirt in the south wall at x 12, zombie at x 9.
 {:defaults
- {:tags [:hostile :survival :retreat :underground]
+ {:body {:spawnpoint :far}
+  :tags [:hostile :survival :retreat :underground]
   :time :any
   :plot {:height 8}
   :register [{:trigger :hostile-near}]
