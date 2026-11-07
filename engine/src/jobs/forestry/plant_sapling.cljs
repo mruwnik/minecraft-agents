@@ -14,7 +14,7 @@
             [jobs.lib.forestry :as lib]
             [jobs.lib.shelter :as sh]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debt-near-body? debts forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species tree-free? cell-filled?]
+            [jobs.lib.trees :refer [debt-near-body? debts logs-per-tree forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species tree-free? cell-filled?]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -257,6 +257,8 @@
   (await (pace/steps! c #(step c))))
 
 (defn worth-of
-  "What a replant is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  "The loss replanting averts: the tree the debt's sapling grows, cost/tree-worth of trees/logs-per-tree logs; 0 with no debt."
   [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  (if-let [t (current-target c)]
+    (cost/tree-worth (:species t) (logs-per-tree))
+    0))

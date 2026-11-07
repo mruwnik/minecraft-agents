@@ -423,9 +423,9 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn tree-worth
-  "Seconds one grown tree of species is worth: the cost/goal-value of its logs (forestry/logs-per-tree)."
+  "Seconds one grown tree of species is worth: cost/tree-worth of forestry/logs-per-tree logs."
   [species]
-  (:value (cost/goal-value [{:name (str species "_log") :count (forestry/logs-per-tree)}])))
+  (cost/tree-worth species (forestry/logs-per-tree)))
 
 (defn planting-worth
   "Seconds planting a sapling of species is worth: its grown tree: an upper bound (no chance the sapling fails to

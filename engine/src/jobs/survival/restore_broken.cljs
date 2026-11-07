@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.blocks :as b]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
@@ -340,6 +341,6 @@
     (if (= :continue r) :continue (report! c))))
 
 (defn worth-of
-  "What a put-back is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  "The loss putting back averts: cost/left-cell-s each tidy entry owed."
   [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  (* (count (tidy/entries c)) cost/left-cell-s))

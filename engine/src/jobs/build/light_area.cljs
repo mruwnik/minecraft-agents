@@ -6,6 +6,9 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.cost.risk :as risk]
+            [jobs.lib.price :as price]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.need :as need]
@@ -198,6 +201,7 @@
     {:uses {:job-time [0 (work-s c) (* 20 (max 1 n))] :items {(torch/torch-item (:primitives c)) [0 n n]}}}))
 
 (defn worth-of
-  "What lighting the area is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  "The loss lighting averts: a job's work (cost.risk/work-s :work) where the body stands, at the spawn chance of its feet's
+  light (spawn-light/chance-at), its hurt and death (price/stay-risk-s)."
   [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  (price/stay-risk-s c (spawn-light/chance-at (:primitives c) (update-vals (u/self-pos c) js/Math.floor) false) (risk/work-s :work)))

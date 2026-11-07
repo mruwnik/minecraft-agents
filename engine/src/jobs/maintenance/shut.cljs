@@ -2,6 +2,7 @@
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
             [jobs.lib.shut-gates :as gates]
             [jobs.lib.shut-walked :as walked]))
@@ -97,6 +98,6 @@
 (defn quote-of [c] ((:quote (ops c)) c))
 
 (defn worth-of
-  "What a shut is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  "The loss shutting averts: each opening left open, at cost/open-gate-s a gate, cost/open-door-s a door."
   [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  (* (count ((:targets (ops c)) c [] [])) (if (gates? c) cost/open-gate-s cost/open-door-s)))

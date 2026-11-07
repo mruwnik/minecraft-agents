@@ -5,7 +5,6 @@
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
-            [engine.memory :as mem]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
@@ -14,6 +13,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
+            [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -491,10 +491,13 @@
                    (assoc :yields {:items {(str (:species t) "_log") [0 n n]}})))))
 
 (defn worth-of
-  "What finishing a part-cut tree is worth when its trigger asks: what felling one costs, the quote the engine gives a job
-  with no quote-of (contract/default-quote of this body's fell-tree reports) (owner question: a better price)."
+  "The loss finishing a part-cut tree averts: its logs left hanging, cost/tree-worth of the tree at :at, else the nearest
+  part-cut trunk (:part-cut?) or tree; 0 with none. Read as quote-of reads it, with no zone verdict (that warns)."
   [c]
-  (second (get-in (contract/default-quote (keep #(when (= 'jobs.forestry.fell-tree (get-in % [:data :job])) (get-in % [:data :report]))
-                                                (mem/entries (ctx/view c) :job-report))
-                                          (settings/get contract/settings ::contract/default-time-s))
-                  [:uses :job-time])))
+  (let [p (:primitives c)
+        {:keys [radius species at part-cut? leafless?]} (:args c)
+        radius (or radius default-radius)
+        t (cond at (tree-at p at)
+                part-cut? (first (part-cut/part-cut-trees p radius species))
+                :else (tree-near p radius species #{} leafless?))]
+    (if t (cost/tree-worth (:species t) (count (log/tree-logs c radius t))) 0)))

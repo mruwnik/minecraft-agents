@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -99,6 +100,6 @@
   (await (pace/steps! c #(step c))))
 
 (defn worth-of
-  "What getting off is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
-  [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  "The loss getting off averts: a body left riding (cost/riding-s)."
+  [_c]
+  cost/riding-s)

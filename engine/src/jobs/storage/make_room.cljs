@@ -469,6 +469,6 @@
     (await (pace/steps! c #(step! c run)))))
 
 (defn worth-of
-  "What making room is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  "The loss making room averts: cost/short-slot-s each slot short of :free."
   [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  (* (slots-short c) cost/short-slot-s))

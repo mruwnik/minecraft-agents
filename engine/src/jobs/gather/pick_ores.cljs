@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.price :as price]
@@ -84,6 +85,8 @@
   (await (pace/steps! c #(step c))))
 
 (defn worth-of
-  "What picking the ores is worth when a trigger asks for it: what doing it costs, its quote's mean (owner question: a better price)."
+  "The loss picking averts: the seen ores in reach left behind, the goal-value of what they drop."
   [c]
-  (second (get-in (quote-of c) [:uses :job-time])))
+  (let [opts (opts-of c)
+        drops (frequencies (map #(blocks/item-name {:block (:name %)}) (ore-pick/candidates c (assoc opts :skipped (:left opts)))))]
+    (:value (cost/goal-value (map (fn [[n k]] {:name n :count k}) drops)))))

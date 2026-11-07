@@ -15,10 +15,14 @@
             [jobs.forestry.maintain :as forest-maintain]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.farm :as cost-farm]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.crops :as crops]
             [jobs.lib.trees :as forestry]
             [jobs.lib.price :as price]
             [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.tidy :as tidy]
+            [jobs.forestry.plant-sapling :as plant-sapling]
+            [jobs.maintenance.shut :as shut]
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -253,3 +257,33 @@
     (is (pos? (* dies death)))
     (is (< (Math/abs (- (cost/risk-s 5 hurt (cost/lethal-hp {:chance dies :death death})) (bed-down/exposed-price c 0.01 600 at))) 1e-6)
         "the one risk-s formula: hurt at hp-cost, the death at hp-seconds")))
+
+(deftest a-reflex-is-worth-the-loss-it-averts-never-its-own-quote
+  (let [fake (tu/fake-on-floor {})
+        plain (fn [f] (f))
+        two-open (fn [f] (with-redefs [shut/ops (constantly {:targets (fn [& _] [{:cell [1 64 0]} {:cell [2 64 0]}])})] (f)))
+        owed (fn [f] (with-redefs [tidy/entries (constantly [{} {} {}])] (f)))
+        debt (fn [t] (fn [f] (with-redefs [plant-sapling/current-target (constantly t)] (f))))
+        full (vec (for [i (range 34)] (item (str "stone_" i) 1)))]
+    (doseq [[label expected job p args around]
+            [["rest: the hp lacked" (cost/hp-cost 8) 'jobs.survival.rest (tu/fake {:self {:health 12}}) {} plain]
+             ["leave-vehicle" cost/riding-s 'jobs.movement.leave-vehicle fake {} plain]
+             ["make-room: each slot short" (* 2 cost/short-slot-s) 'jobs.storage.make-room (tu/fake {:inventory full}) {:free 4} plain]
+             ["restore-broken: each cell owed" (* 3 cost/left-cell-s) 'jobs.survival.restore-broken fake {} owed]
+             ["shut: each door open" (* 2 cost/open-door-s) 'jobs.maintenance.shut fake {} two-open]
+             ["shut: each gate open" (* 2 cost/open-gate-s) 'jobs.maintenance.shut fake {:openings :gates} two-open]
+             ["plant-sapling: a grown tree" (cost/tree-worth "birch" (forestry/logs-per-tree)) 'jobs.forestry.plant-sapling fake {}
+              (debt {:species "birch" :pos {:x 9 :y 64 :z 0}})]
+             ["plant-sapling: no debt" 0 'jobs.forestry.plant-sapling fake {} (debt nil)]
+             ["fell-tree: the trunk's logs" (cost/tree-worth "oak" 4) 'jobs.forestry.fell-tree (tu/seeing-all (tu/fake-on-floor oak-world)) {:radius 16} plain]
+             ["pick-ores: the seen ores' drops" (:value (cost/goal-value [(item "raw_iron" 2)])) 'jobs.gather.pick-ores
+              (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [(item "iron_pickaxe" 1)]
+                                       :blocks (merge (tu/box -4 58 -4 4 63 4 "stone") {"2,63,0" "iron_ore" "-2,63,0" "deepslate_iron_ore"})}))
+              {} plain]]]
+      (around #(is (= expected (worth job p args)) label))))
+  (let [p (tu/fake-on-floor {:time 18000})
+        c (ctx-of p {} {})
+        chance (spawn-light/chance-at p (update-vals (u/self-pos c) js/Math.floor) false)]
+    (is (pos? chance))
+    (is (= (price/stay-risk-s c chance (risk/work-s :work)) (worth 'jobs.build.light-area p {:near 3}))
+        "light-area: a job's work in the dark where it stands")))
