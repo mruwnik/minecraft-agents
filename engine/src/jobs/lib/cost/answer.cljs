@@ -738,14 +738,31 @@
   [body mob-name at]
   (answer-price body (:fight (threat-answers body mob-name nil)) at))
 
+(defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
+
+(defn woken
+  "[body answers first-hit] of mob-name met beside body, caught at caught: its threat-answers; a body asleep (:asleep?)
+  answers only once a blow wakes it, so the mob's first blow lands first (first-hit, off its life), and a creeper, whose
+  fuse wakes no one, blasts it where it lies (:stand)."
+  [body mob-name caught]
+  (let [m (if (map? mob-name) mob-name {:name mob-name})]
+    (cond
+      (not (and (:asleep? body) (or (string? mob-name) (map? mob-name)))) [body (threat-answers body mob-name caught) 0]
+      (= "creeper" (:name m)) [(dissoc body :asleep?) {:stand (stand-answer {:equipment (:equipment body) :mobs [(assoc m :distance 0)] :seconds ##Inf})} 0]
+      :else (let [hit (blow (armour/armour-stats (:equipment body)) m)
+                  shield (or (:absorption body) 0)
+                  struck (assoc (dissoc body :asleep?) :absorption (max 0 (- shield hit)) :health (- (or (:health body) 20) (max 0 (- hit shield))))]
+              [struck (threat-answers struck mob-name caught) hit]))))
+
 (defn threat-parts
   "{:chance :death} of mob-name met beside body at `at`: the answer-death-chance of the answer decide takes of
-  threat-answers (a provoked-only mob counts threat/provoked-share) and what that death costs (decide's :death)."
+  woken's answers (a provoked-only mob counts threat/provoked-share) and what that death costs (decide's :death)."
   [body mob-name caught at]
-  (let [answers (threat-answers body mob-name caught)
-        {:keys [answer death]} (decide body answers at)
+  (let [[struck answers] (woken body mob-name caught)
+        {:keys [answer death]} (decide struck answers at)
         a (get answers answer)]
-    {:chance (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1) (answer-death-chance body a at death))
+    {:chance (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
+                (if (pos? (life struck)) (answer-death-chance struck a at death) 1))
      :death death}))
 
 (defn threat-chance
@@ -774,15 +791,15 @@
    (let [swim (/ (* (planner/swim-s (planner/depth-strider (:equipment body))) (inc wet)) planner/walk-floor)]
      (mapv (fn [{:keys [k n]}] (* (/ (inc k) (+ n 2)) (dec swim))) (settings/get settings ::unseen-water-lags)))))
 
-(defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
-
 (defn threat-hurt
-  "hp mob-name met beside body takes off it at `at`: the lived-damage of the answer decide takes of threat-answers (its
-  death is threat-chance's); a provoked-only mob threat/provoked-share of it."
+  "hp mob-name met beside body takes off it at `at`: the lived-damage of the answer decide takes of woken's answers, with
+  its first hit (its death is threat-chance's); a provoked-only mob threat/provoked-share of it."
   [body mob-name caught at]
-  (let [answers (threat-answers body mob-name caught)]
+  (let [[struck answers hit] (woken body mob-name caught)]
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
-       (lived-damage body (get answers (:answer (decide body answers at)))))))
+       (if (pos? (life struck))
+         (let [{:keys [dies lived]} (blows-outcome struck (get answers (:answer (decide struck answers at))))] (+ (* hit (- 1 dies)) lived))
+         0))))
 
 (defn group-parts
   "{:chance :death :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of

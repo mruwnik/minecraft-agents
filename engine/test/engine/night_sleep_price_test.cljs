@@ -44,7 +44,11 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-until eng #(seq (st/emitted seen :night.bed-left)) 60))
           (is (true? @asleep-at-hold) "alone, its sleep skips the night: it lay down and stayed")
-          (is (= [:shelter] (mapv :answer (st/emitted seen :night.bed-left))) "three more must sleep: lying in the open all night is dearer than sheltering")
+          (let [[left & more] (st/emitted seen :night.bed-left)]
+            (is (empty? more))
+            ;; awake in the open and sheltering are priced within a few seconds of each other: either is the way up
+            (is (contains? #{:shelter :exposed} (:answer left)))
+            (is (< (get-in left [:prices (:answer left)]) (get-in left [:prices :bed])) "three more must sleep: lying asleep in the open all night is dearer than staying up"))
           (is (false? @asleep-after-left) "out of the bed"))))))
 
 (deftest a-carried-bed-is-shut-in-before-it-is-lain-in-on-a-night-that-does-not-skip

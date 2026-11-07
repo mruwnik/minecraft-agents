@@ -70,14 +70,16 @@
 
 (defn stay-parts
   "{:hurt :dies :death} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take
-  (cost/spawns-hurt), dies the chance they kill the body and death what that costs (cost/route-death)."
-  [c chance seconds]
-  (let [body (threats/death-body c)
+  (cost/spawns-hurt), dies the chance they kill the body and death what that costs (cost/route-death); asleep? the body
+  lies asleep through them (cost.answer/woken)."
+  ([c chance seconds] (stay-parts c chance seconds false))
+  ([c chance seconds asleep?]
+  (let [body (cond-> (threats/death-body c) asleep? (assoc :asleep? true))
         at (u/self-pos c)
         spawns (* chance seconds)]
     (check-cache/keyed c ::stay [spawns body at]
                        (fn [] (let [{dies :chance death :death} (cost/route-death body {:spawns spawns :at at})]
-                                {:hurt (cost/spawns-hurt body spawns at) :dies dies :death death})))))
+                                {:hurt (cost/spawns-hurt body spawns at) :dies dies :death death}))))))
 
 (defn stay-hp
   "The hp staying `seconds` where mobs spawn at `chance` per second risks: stay-parts' hurt and its death in hp (cost/lethal-hp)."
@@ -87,10 +89,11 @@
 
 (defn stay-risk-s
   "Seconds staying `seconds` where mobs spawn at `chance` per second costs (cost/risk-s): the stay-parts hurt, with `extra-hurt` hp
-  besides, at the hp-cost of the health, and its death at hp-seconds."
-  ([c chance seconds] (stay-risk-s c chance seconds 0))
-  ([c chance seconds extra-hurt]
-   (let [{:keys [hurt dies death]} (stay-parts c chance seconds)]
+  besides, at the hp-cost of the health, and its death at hp-seconds; asleep? as stay-parts'."
+  ([c chance seconds] (stay-risk-s c chance seconds 0 false))
+  ([c chance seconds extra-hurt] (stay-risk-s c chance seconds extra-hurt false))
+  ([c chance seconds extra-hurt asleep?]
+   (let [{:keys [hurt dies death]} (stay-parts c chance seconds asleep?)]
      (cost/risk-s (.-health (.self (:primitives c))) (+ hurt extra-hurt) (cost/lethal-hp {:chance dies :death death})))))
 
 (defn with-stay

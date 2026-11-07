@@ -115,9 +115,9 @@
 
 (defn exposed-price
   "Seconds secs in the open at `at` cost (price/stay-risk-s): the hp the spawns at chance hurt (price/stay-parts) and the fight with
-  the hostiles known near `at` (price/way-fight-hp), and the death they risk."
-  [c chance secs at]
-  (price/stay-risk-s c chance secs (price/way-fight-hp c at)))
+  the hostiles known near `at` (price/way-fight-hp), and the death they risk; asleep? lain asleep through them."
+  ([c chance secs at] (exposed-price c chance secs at false))
+  ([c chance secs at asleep?] (price/stay-risk-s c chance secs (price/way-fight-hp c at) asleep?)))
 
 (defn open-price
   "exposed-price of secs in the open at the worst of cells, each at its night-chance."
@@ -259,7 +259,7 @@
                                                                                    (if asleep? 0 (- (cost/spawn-worth body at feet)))
                                                                                    (reduce + (for [[q refused?] [[(- 1 refuse) false] [refuse true]] :when (pos? q)]
                                                                                                (* q (+ (bed-lost refused?) (if refused? wait 0)
-                                                                                                       (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) (bed-open refused?) at))))))))
+                                                                                                       (if sheltered? 0 (exposed-price c (spawn-light/night-chance p at) (bed-open refused?) at (not refused?)))))))))
       sealed (assoc :sealed (+ lost (:seconds sealed) (exposed-price c chance (:seconds sealed) feet) (- (cost/spawn-worth body (:foot (:layout sealed)) feet))))
       (and niche (js/isFinite (:seconds niche))) (assoc :niche (dig niche))
       flee (assoc :flee (way-s (walk flee (flee-after flee here))))

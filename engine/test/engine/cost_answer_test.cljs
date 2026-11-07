@@ -124,6 +124,14 @@
         "one already beside the body swells and blows there")
     (is (< 0.04 (answer/threat-chance (body 20) "creeper" nil here) 0.12) "so standing beside it is a death; a bare body at full health walks off at about 0.07")))
 
+(deftest a-body-asleep-answers-a-mob-only-once-its-first-blow-wakes-it
+  (let [asleep (assoc (body 20) :asleep? true)
+        chance #(answer/threat-chance %1 %2 nil here)]
+    (is (= 1 (chance asleep "creeper")) "a creeper's fuse wakes no one: its blast beside the bed kills")
+    (is (< (chance (body 20) "zombie") (chance asleep "zombie")) "the zombie's first blow lands before any answer")
+    (is (< (answer/threat-hurt (body 20) "zombie" nil here) (answer/threat-hurt asleep "zombie" nil here)) "and its hp are paid")
+    (is (< (:chance (cost/spawn-kill (body 20) here)) (:chance (cost/spawn-kill asleep here))))))
+
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
   (is (< (death/blow-chance {:health 20} 4 2.5) 0.01) "a fight of 4 hp at full health hardly kills")
