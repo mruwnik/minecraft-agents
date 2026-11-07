@@ -1105,6 +1105,16 @@
     (perception/pass! (aget p "perception"))
     {:eng eng :p p :seen seen :clock clock}))
 
+(deftest a-walk-that-failed-under-the-same-memory-is-not-walked-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              env (failing-walks (setup-seeing {:self body :blocks {"12,64,0" "dirt"}}) walks)
+              e (:ending (await (tu/child-outcome (:eng env) job {:pos [12 64 0]} 6)))]
+          (is (= 1 @walks) "the second try would repeat the first: same cell, feet and memory")
+          (is (= {:reason :unreachable :why :no-path} (select-keys (:cause e) [:reason :why]))))))))
+
 (deftest with-no-block-carried-the-seal-fetches-one-from-a-seen-chest
   (async done
     (tu/run-async done

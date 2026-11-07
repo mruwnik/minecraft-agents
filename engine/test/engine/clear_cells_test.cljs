@@ -5,6 +5,8 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.memory :as mem]
+            [jobs.lib.ledger :as ledger]
             [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.blocks-dig-test :as bd]
@@ -487,3 +489,16 @@
           (is (= {} (:skipped result)))
           (is (<= (count (calls p "jumpPlace")) 6) "one pillar of at most six blocks for the room, not one per cell: a failed walk does not dig its own pillar away")
           (is (empty? left) "the pillar the dig children climbed is taken back when the job ends"))))))
+
+(deftest the-cleanup-ends-open-while-a-pillar-of-its-tree-stays-in-the-ledger
+  (let [clock (atom 1000000)
+        store (mem/open (tu/tmp-dir) {:now #(deref clock)})
+        c (fn [id] {:id id :root id :view #(mem/view store) :remember (fn [k d p] (mem/write! store k d p))})
+        place! (fn [id cell] (ledger/remember! (c id) (ledger/intend (ledger/open-entries (mem/view store)) {:cell cell :item "dirt" :before "air" :job id :purpose :pillar})))]
+    (is (not (clear-cells/open-scaffold? (c "j1"))) "nothing placed")
+    (place! "j1/dig" [0 64 0])
+    (place! "j2/dig" [5 64 0])
+    (is (clear-cells/open-scaffold? (c "j1")) "a child's pillar is the tree's")
+    (is (not (clear-cells/open-scaffold? (c "j3"))) "another tree's is not")
+    (mem/write! store ledger/held-kind {:cells #{[0 64 0]}} ledger/held-policy)
+    (is (not (clear-cells/open-scaffold? (c "j1"))) "a cell the cleanup holds is left to the scaffold-left trigger")))

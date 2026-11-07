@@ -394,11 +394,18 @@
   (let [pen-wall-fn (if (:open-pens? (:args c)) (constantly (constantly false)) #(own-pen/box-wall? c (cells (:args c))))]
     (await (pace/steps! c (fn ^:async s [] (await (step c pen-wall-fn)))))))
 
+(defn open-scaffold?
+  "Whether an entry of this call's tree is still open in the ledger and not held by a cleanup that keeps it."
+  [c]
+  (let [held (ledger/held-cells (ctx/view c))]
+    (boolean (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/entries c)))))
+
 (defn ^:async cleanup
   "However the run ends: the pillars its dig children climbed (own scaffold-ledger entries) are taken back. Done when none is open
-  (or the cleanup held it: the scaffold-left trigger takes it later)."
+  (or the cleanup held it: the scaffold-left trigger takes it later), else nothing-possible :cleanup-open."
   [c _]
-  (let [held (ledger/held-cells (ctx/view c))]
-    (when (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/entries c))
-      (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:of (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}})))))
-  (ctx/end c :done nil))
+  (when (open-scaffold? c)
+    (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:of (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}}))))
+  (if (open-scaffold? c)
+    (ctx/end c :nothing-possible :cleanup-open (result-of c))
+    (ctx/end c :done nil)))
