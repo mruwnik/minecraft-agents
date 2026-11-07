@@ -13,16 +13,36 @@
 
 (def ^:private max-kept "Sections whose light is kept per body, past which the kept ones are dropped." 1024)
 
+(def ^:private dark "The light of a section with no light source round it (read only)." (js/Uint8Array. 4096))
+
+(defonce ^:private emitting (js/WeakMap.))
+
+(defn- emits?
+  "Whether memory section sec (nil: none) holds a light source by table's emit, kept per section until it is written
+  again (its wrote)."
+  [^js table ^js sec]
+  (when sec
+    (let [^js hit (.get emitting sec)]
+      (if (and hit (== (.-wrote sec) (aget hit 0)))
+        (aget hit 1)
+        (let [^js emit (.-emit table)
+              e (.some (.-ids sec) #(and (pos? %) (pos? (aget emit (dec %)))))]
+          (.set emitting sec #js [(.-wrote sec) e])
+          e)))))
+
 (defn- section-light
   "Uint8Array(4096) by store/cell-index: the packed light (sky << 4 | block) of section cx sy cz from memory, by
-  light.mjs's relight over the 27 sections round it (its sectionLight)."
-  [^js table ^js store cx sy cz]
-  (let [ids #js [] bits #js []]
+  light.mjs's relight over the 27 sections round it (its sectionLight); block-only? floods no sky (sky 0)."
+  [^js table ^js store cx sy cz block-only?]
+  (let [secs #js [] ids #js [] bits #js []]
     (dotimes [b 3] (dotimes [c 3] (dotimes [a 3]
       (let [^js sec (.get store (store/section-key (+ cx a -1) (+ sy b -1) (+ cz c -1)))]
+        (.push secs sec)
         (.push ids (some-> sec .-ids))
-        (.push bits (some-> sec .-sky))))))
-    (.sectionLight table table ids bits)))
+        (.push bits (when-not block-only? (some-> sec .-sky)))))))
+    (if (and block-only? (not (.some secs #(emits? table %))))
+      dark
+      (.sectionLight table table ids bits))))
 
 (defn- neighbours-mask
   "The sections of the 27 round cx sy cz that are in memory, as bits, and the latest write among them."
@@ -37,29 +57,32 @@
 
 (defn light-fn
   "(fn [x y z]) the packed light (sky << 4 | block) the body's memory gives the cell (see the ns doc), -1 for a cell it
-  has not seen; nil without a perception's memory or a light table."
-  [p]
-  (when-let [^js st (some-> (aget p "perception") :st)]
-    (when-let [^js table (and (.-stores st) (store/light-table st))]
-      (let [dim (.-dim st)
-            ^js store (store/store-of st dim)
-            ^js by-dim (or (.get kept st) (let [m (js/Map.)] (.set kept st m) m))
-            ^js secs (or (.get by-dim dim) (let [m (js/Map.)] (.set by-dim dim m) m))]
-        (fn [x y z]
-          (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
-                key (store/section-key cx sy cz)
-                ^js sec (.get store key)
-                i (store/cell-index x y z)]
-            (if (or (nil? sec) (zero? (aget (.-ids sec) i)))
-              -1
-              (let [^js hit (.get secs key)
-                    writes (.-writes st)]
-                (if (and hit (== writes (.-at hit)))
-                  (aget (.-light hit) i)
-                  (let [^js now (neighbours-mask store cx sy cz)]
-                    (if (and hit (== (aget now 0) (.-mask hit)) (<= (aget now 1) (.-at hit)))
-                      (do (set! (.-at hit) writes) (aget (.-light hit) i))
-                      (let [light (section-light table store cx sy cz)]
-                        (when (>= (.-size secs) max-kept) (.clear secs))
-                        (.set secs key #js {:at writes :mask (aget now 0) :light light})
-                        (aget light i)))))))))))))
+  has not seen; nil without a perception's memory or a light table. block-only?: block light alone (sky 0), for a caller
+  whose sky cannot light (the night's): no sky flood, and none at all where no light source is remembered."
+  ([p] (light-fn p false))
+  ([p block-only?]
+   (when-let [^js st (some-> (aget p "perception") :st)]
+     (when-let [^js table (and (.-stores st) (store/light-table st))]
+       (let [dim (.-dim st)
+             ^js store (store/store-of st dim)
+             ^js by-dim (or (.get kept st) (let [m (js/Map.)] (.set kept st m) m))
+             k (if block-only? (str dim " block") dim)
+             ^js secs (or (.get by-dim k) (let [m (js/Map.)] (.set by-dim k m) m))]
+         (fn [x y z]
+           (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
+                 key (store/section-key cx sy cz)
+                 ^js sec (.get store key)
+                 i (store/cell-index x y z)]
+             (if (or (nil? sec) (zero? (aget (.-ids sec) i)))
+               -1
+               (let [^js hit (.get secs key)
+                     writes (.-writes st)]
+                 (if (and hit (== writes (.-at hit)))
+                   (aget (.-light hit) i)
+                   (let [^js now (neighbours-mask store cx sy cz)]
+                     (if (and hit (== (aget now 0) (.-mask hit)) (<= (aget now 1) (.-at hit)))
+                       (do (set! (.-at hit) writes) (aget (.-light hit) i))
+                       (let [light (section-light table store cx sy cz block-only?)]
+                         (when (>= (.-size secs) max-kept) (.clear secs))
+                         (.set secs key #js {:at writes :mask (aget now 0) :light light})
+                         (aget light i))))))))))))))

@@ -479,6 +479,27 @@
       (is (= 0 (bit-and (f 0 0 0) 15)) "behind an unseen cell")
       (is (= 13 (bit-and (f 3 0 0) 15)) "beside the torch's neighbour on the seen side: 14 less a cell"))))
 
+(deftest block-only-light-floods-no-sky-and-nothing-without-a-light-source
+  ;; a night's dark test needs no sky (it cannot light): open air seen at full sky floods nothing until a torch is remembered
+  (let [^js table @fake-raw/light-table
+        torch (first (filter #(and (== 14 (aget (.-emit table) %)) (zero? (aget (.-filter table) %))) (range (.-length (.-emit table)))))
+        floods (atom 0)
+        counted (js/Object.assign #js {} table #js {:sectionLight (fn [t ids bits] (swap! floods inc) (.sectionLight table t ids bits))})
+        sec #js {:ids (js/Uint16Array. 4096) :sky (doto (js/Uint8Array. 512) (.fill 255)) :wrote 1}
+        st #js {:stores (js/Map.) :dim "overworld" :writes 1 :lightTable counted}
+        light (fn [block-only?] ((seen-light/light-fn #js {:perception {:st st}} block-only?) 3 0 0))]
+    (.set (store/store-of st "overworld") (store/section-key 0 0 0) sec)
+    (.fill (.-ids sec) 1)
+    (is (= 0 (light true)) "block light only: none, and no sky")
+    (is (zero? @floods) "nothing flooded")
+    (is (= 15 (bit-shift-right (light false) 4)) "the sky light, flooded")
+    (reset! floods 0)
+    (aset (.-ids sec) (store/cell-index 2 0 0) (inc torch))
+    (set! (.-wrote sec) 2)
+    (set! (.-writes st) 2)
+    (is (= 13 (light true)) "beside the torch's cell: 14 less a cell")
+    (is (= 1 @floods))))
+
 (defn lit-yard
   "A body in a yard walled 3 high (x and z -5..5, feet y 64) by night, a shut door west, four torches lighting its inside
   12, ground blocks more, after looking round from where it stands: every 30 degrees, up, level and down. From the wall

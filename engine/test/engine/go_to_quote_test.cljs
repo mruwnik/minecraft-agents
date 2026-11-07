@@ -274,14 +274,14 @@
           (is (< (:length (:partial out)) 7))
           (is (= [0 64 1] (pos-of p))))))))
 
-(deftest a-far-goal-spends-one-round-of-search-and-is-quoted-as-an-estimate
+(deftest a-far-goal-spends-one-round-of-search-and-is-priced-from-where-it-got
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out quote]} (await (preview (floor 0 0 80 80) {:pos [400 64 40] :range 0}))]
           (is (false? (:found out)))
-          (is (= :searching (:reason out)) "the node budget of one round, not a clock, ends it")
-          (is (true? (:estimate quote)) "priced as a straight line until the search ends"))))))
+          (is (true? (:budget out)) "the node budget of one round, not a clock, ends it")
+          (is (nil? (:estimate quote)) "a price to go on with, not an estimate to wait on"))))))
 
 (deftest a-goal-no-seen-route-reaches-ends-the-quote-with-a-reason
   (async done

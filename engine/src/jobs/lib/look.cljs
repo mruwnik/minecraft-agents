@@ -624,13 +624,15 @@
 (defn remembered-light-fn
   "(fn [x y z]) the packed light (sky << 4 | block) of a cell the body has seen, as its memory gives it
   (seen-light/light-fn), but the live light of the cell it stands in, which it sees now; the raw world's own light where
-  the body has no light table. Ask it of seen cells only."
-  [p ^js raw]
-  (if-let [f (seen-light/light-fn p)]
-    (if-let [[ox oy oz] (feet-cell p)]
-      (fn [x y z] (if (and (== x ox) (== y oy) (== z oz)) (.lightAt raw x y z) (f x y z)))
-      f)
-    (fn [x y z] (.lightAt raw x y z))))
+  the body has no light table. Ask it of seen cells only. block-only?: the remembered block light alone, sky 0
+  (seen-light/light-fn's)."
+  ([p raw] (remembered-light-fn p raw false))
+  ([p ^js raw block-only?]
+   (if-let [f (seen-light/light-fn p block-only?)]
+     (if-let [[ox oy oz] (feet-cell p)]
+       (fn [x y z] (if (and (== x ox) (== y oy) (== z oz)) (let [v (.lightAt raw x y z)] (if (and block-only? (>= v 0)) (bit-and v 15) v)) (f x y z)))
+       f)
+     (fn [x y z] (.lightAt raw x y z)))))
 
 (defn known-light-at
   "The packed light (sky << 4 | block) the body knows at a cell (remembered-light-fn: its memory's for a seen cell, the live
@@ -937,7 +939,8 @@
      (when-let [raw (:raw per)]
        (let [^js st (:st per)
              subtract (sky-subtract raw)
-             light (remembered-light-fn p raw)
+             ;; a sky that cannot light (the night's) needs no sky flood: block light alone decides
+             light (remembered-light-fn p raw (not (lit-light? 0 15 subtract)))
              lit-chance (if (false? unseen-dark?) (constantly 1) (lit-chance-fn p nil))
              ^js sections (store/store-of st (.-dim st))
              chance (fn [x y z]
