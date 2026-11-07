@@ -103,7 +103,7 @@
   once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was).
 
   Impossible: :bad-args (:of is not :orphans, :all or an instance id). Condition: :no-zones (no zone list has been read, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
-  never seen). Quote: from the entries it would work on.")
+  never seen). Quote: from the entries it would work on. Worth at the root: worth-of; a walk takes the call's worth.")
 
 (a/defargs args
   {:of {:doc ":orphans: entries past their :until; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:orphans :all} a/name?) :default :orphans}
@@ -123,9 +123,9 @@
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (defn worth-s
-  "Seconds a scaffold block of `item` is worth (cost/item-value): what a walk to it, and its risk, may cost."
+  "Seconds a scaffold block of `item` is worth (cost/goal-value: what getting one back takes): what the lava near its walk may cost."
   [item]
-  (:value (cost/item-value [{:name item :count 1}])))
+  (:value (cost/goal-value [{:name item :count 1}])))
 
 (defn walk-range [] (settings/get settings ::walk-range))
 
@@ -250,6 +250,11 @@
   (let [view (ctx/view c)]
     (ledger/select (ledger/open-entries view) view (:of (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
 
+(defn worth-of
+  "Seconds a root cleanup is worth: cost/goal-value of the blocks offered, what taking them back saves."
+  [c]
+  (:value (cost/goal-value (map (fn [e] {:name (:item e) :count 1}) (offered-now c)))))
+
 (defn result-of
   "The result of the cleanup now, with the cells left open."
   [c open]
@@ -345,7 +350,7 @@
   "Walk one leg toward within 3 of cell, or hold it :danger (no walk is made: the reflex acts). A permanent verdict
   holds it :unreachable, an end out of reach or a go-to that gave up for a passing reason counts a failure; a leg that
   got nearer does not. A walk that did not end counts a failure, as the round goes on."
-  [c {:keys [cell item]}]
+  [c {:keys [cell]}]
   (cond
     (danger-ahead? c cell)
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :danger}) :again)
@@ -353,7 +358,7 @@
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
     :else
     (let [e (await (child/call-chase* c :walk {:pos cell :range (walk-range) :leg-s (leg-s)
-                                               :walk {:ways #{:walk} :worth (worth-s item) :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
+                                               :walk {:ways #{:walk} :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
         (:nearer (:data e)) nil

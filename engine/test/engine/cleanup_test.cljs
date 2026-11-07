@@ -4,6 +4,7 @@
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.cost :as cost]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.expr :as expr]
@@ -927,11 +928,11 @@
     {:status :done :arrived true} false false))
 
 (defn stub-go-to
-  "A go-to that records its args and the call's :ways in calls and ends with result."
+  "A go-to that records its args, the call's :ways and its worth in calls and ends with result."
   [calls result]
   {:target [] :ways #{:walk :clear-seal}
    :round (fn [c]
-            (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways])))
+            (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways]) {:worth (ctx/worth c)}))
             (if (= :stopped (:status result))
               (ctx/end c :nothing-possible {:reason (:reason result) :why (:why result)} (dissoc result :status :reason))
               (ctx/end c :done nil result)))})
@@ -955,6 +956,21 @@
         (let [{:keys [calls]} (await (walk-run {:status :stopped :arrived false :reason :unreachable :why :door-stuck}))]
           (is (seq calls))
           (is (every? #(= {:pos {:x 9 :y 64 :z 0} :range 3 :ways #{:walk}} (select-keys % [:pos :range :ways])) calls)))))))
+
+(deftest a-walk-is-worth-the-calls-goal-and-a-root-cleanup-the-blocks-it-takes-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async walk-worth [args job]
+                    (let [calls (atom [])
+                          {:keys [eng] :as s} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (pillar-blocks [[9 64 0]]) :entries [(entry [9 64 0])]
+                                                      :args args :jobs {'jobs.movement.go-to (stub-go-to calls {:status :done :arrived true})}})]
+                      (core/submit! eng job {})
+                      (await (ticks s eng 40))
+                      (:worth (first @calls))))]
+          (is (= 50 (await (run {:worth 50} '(recording-parent)))) "a child's walk is worth its caller's goal")
+          (is (= (:value (cost/goal-value [{:name "dirt" :count 1}])) (await (run {} '(jobs.access.cleanup {}))))
+              "a root cleanup is worth getting the block back"))))))
 
 (deftest a-permanent-go-to-failure-holds-the-cell-unreachable-after-one-walk
   (async done
