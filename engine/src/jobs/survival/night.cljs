@@ -67,7 +67,7 @@
   - roofed, buried or shut in a closed room: done {:night :roofed}.
   - in a sealed room only dark cells beyond the spawn-free radius spoil, with torches or coal held, once a night, when its quote (torches x place time, crafting short torches from coal) is no more than the cheapest wall, pit or pocket: jobs.build.light-area over the room's cells (night.light), then the pass chooses again.
   - else the cheapest of shelter-prices (bed-down/answers): jobs.survival.shut-in {:for :night, its :worth the next way's price less the shelter's, shut-worth} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; priced again while another site may be left, at most max-sites), a niche (pocket way, once; with no site left, out of the failed pit and a look round first), a flee, or exposed, the night left in the open here (a shut-in that quotes no way here is called first all the same: its ending marks the sites failed, so a flee is not priced to ground beside them): one shelter.exposed warn, a log-out stint, and the round ends nothing-possible :exposed; the trigger fires again after its cooldown and the night looks again (a bed or sleeper that turned up is taken then). A shut-in, niche or flee in flight is called again until it ends.
-  Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): a known bed, the home, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise. The walk's :worth is flee-worth (the next way's price less the shelter on arrival), so go-to's unseen-floor turn-back does not end it.
+  Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate whose walk go-to quotes cheapest (walk-pick/cheapest!): the home, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise. The walk's :worth is flee-worth (the next way's price less the shelter on arrival), so go-to's unseen-floor turn-back does not end it.
   Only sleep holds (declared, ctx/hold-still!, hold-ms per wait; night.hold cooks, eats or runs get-food first).
   Every child call carries its own :worth, never the night's open-gain: shut-in the shelter's or niche's shut-worth (the enclose wall-in of a breached room: enclose-worth), light-area the cost of the cheapest wall, pit or pocket less its own, get-food the hunger worth.
   An overdue body warns needs_bed once a day; a respawn bed seen gone is written :spawn-lost (warn spawn_lost once).
@@ -506,19 +506,20 @@
       (await (dig-in! c (:name (:pick pick)))))))
 
 (defn note-bed-far!
-  "Once a night, with no bed to use: say the nearest known bed or :home is too far, so the agent can carry a bed on long trips."
+  "Once a night, with no bed to use: say the nearest known bed or :home is too dear to walk to when it is a bed whose walk
+  the night refused (sh-beds/refused-lately?), so the agent can carry a bed on long trips."
   [c]
   (when-not (:bed-far-noted (ctx/mem c))
     (let [view (ctx/view c)
           here (u/self-pos c)]
       (when-let [pos (let [known (sort-by #(u/dist here %) (concat (sh-spawn/known-beds (:primitives c) view) (keep #(mem/place view %) [:home])))
                   nearest (first known)]
-              (when (and nearest (> (u/dist here nearest) (bed-down/radius c))) nearest))]
+              (when (and nearest (sh-beds/refused-lately? view nearest)) nearest))]
         (ctx/update-mem! c assoc :bed-far-noted true)
         (ctx/emit! c :night.bed-too-far :info
                    {:pos pos :distance (js/Math.round (u/dist here pos))
-                    :text (str "the bed or home at " (pr-str pos) " is " (js/Math.round (u/dist here pos))
-                               " blocks away, too far to walk to tonight; digging in here (carry a bed to sleep on long trips)")})))))
+                    :text (str "the walk to the bed at " (pr-str pos) ", " (js/Math.round (u/dist here pos))
+                               " blocks away, costs more tonight than sheltering here (carry a bed to sleep on long trips)")})))))
 
 (defn note-room-open!
   "Once a night, with a bed found open beside a roofed body: say the room is not shut in, so the roof alone does not end the night."
@@ -618,13 +619,12 @@
   when none is priced; no time limit, a far bed's walk is weighed against staying by bed-walk-safe?), if its walk bed-walk-safe? finds fine, unless a bed-down is already under way; :searching while a quote's search goes on; else nil."
   [c]
   (let [p (:primitives c)
-        radius (bed-down/radius c)
         permit? (bed-down/bed-permit c)
-        refused (filter #(sh-beds/walk-unsafe? p (ctx/view c) % ##-Inf) (sh-beds/beds-to-use p (ctx/view c) radius permit? ##Inf))
+        refused (filter #(sh-beds/walk-unsafe? p (ctx/view c) % ##-Inf) (sh-beds/beds-to-use p (ctx/view c) permit? ##Inf))
         worths (atom {})
         _ (doseq [bed refused] (swap! worths assoc bed (await (bed-worth c bed :bed))))
         worth #(get @worths %)
-        beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) radius permit? worth)) {:price (sense/fails-to c)}))
+        beds (await (sense/decide! c ::bed #(seq (sh-beds/beds-to-use p (ctx/view c) permit? worth)) {:price (sense/fails-to c)}))
         walk #(hash-map :pos % :range 2)
         placed (mem/place (ctx/view c) :bed)
         set-bed (when (= placed (first beds)) placed)

@@ -179,13 +179,13 @@
        (sh-sense/shut-in-room? p offered)))
 
 (defn far-bed?
-  "Whether the recorded :bed lies farther from the offered one than any bed is walked to (the urgent bed radius): the body moved on, and a bed it can never reach is no home."
-  [kind recorded offered]
-  (and (= :bed kind) (> (u/dist recorded offered) (sh-beds/urgent-bed-radius))))
+  "Whether the recorded :bed is one the last night would not walk to (sh-beds/refused-lately?): the body moved on, and a bed too dear to reach is no home."
+  [view kind recorded]
+  (and (= :bed kind) (sh-beds/refused-lately? view recorded)))
 
 (defn offer!
   "A job found a place of kind at pos (anything parse-pos reads) by itself. Record it when none is recorded, the
-  recorded one is gone (its block is loaded and not of that kind), (:bed) it lies farther than the urgent bed radius, or (:bed, :home) it lies in the open and the offered one in a
+  recorded one is gone (its block is loaded and not of that kind), (:bed) the last night refused its walk (far-bed?), or (:bed, :home) it lies in the open and the offered one in a
   closed roofed room; the memory layer emits one place.set (:auto true). A different live recorded
   place is kept, and one place.kept event says which and why. The same place changes nothing."
   [c kind pos]
@@ -195,7 +195,7 @@
       (nil? offered) nil
       (= offered recorded) nil
       (or (nil? recorded) (gone? kind (u/seen-name (:primitives c) recorded))
-          (far-bed? kind recorded offered)
+          (far-bed? (ctx/view c) kind recorded)
           (better-home? (:primitives c) kind recorded offered))
       (ctx/remember! c kind {:pos offered} mem/place-policy)
       :else

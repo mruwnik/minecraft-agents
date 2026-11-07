@@ -33,10 +33,6 @@
 (defn still-s [] (settings/get settings ::still-s))
 (defn hide-health [] (settings/get settings ::hide-health))
 
-(def displaced-policy
-  "One :displaced entry, half an hour: the night job may then walk back to a bed up to the urgent-bed-radius setting away."
-  {:cap 1 :ttl 1800000})
-
 (defn fire-spots [c] (shot/view-spots (:primitives c) (ctx/view c)))
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
@@ -346,8 +342,7 @@
           n (fled-notice origin (u/self-pos c) all why (far-flight))]
       (ctx/forget-where! c :flight (constantly true))
       (if n
-        (do (ctx/emit! c :hostile.fled :warn n)
-            (ctx/remember! c :displaced {:from origin} displaced-policy))
+        (ctx/emit! c :hostile.fled :warn n)
         (when origin (ctx/remember! c :flight {:from origin :at (u/self-pos c)} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
     (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :plugging :refused)
     (if (= :cannot-escape ended)

@@ -83,8 +83,12 @@
     (is (false? (holds? {:entries entries :blocks {"5,64,0" "red_bed"}})))
     (is (true? (holds? {:entries entries :blocks {"5,64,0" "air"}})))))
 
-(deftest an-overdue-body-with-a-far-respawn-bed-still-needs-one
-  (is (true? (holds? {:entries (conj slept-long-ago [:spawn-bed {:pos {:x 500 :y 64 :z 500}} 2])}))))
+(deftest an-overdue-body-needs-a-bed-when-the-last-night-would-not-walk-to-its-respawn-bed
+  (let [far-spawn (conj slept-long-ago [:spawn-bed {:pos {:x 500 :y 64 :z 500}} 2])]
+    (is (true? (holds? {:entries (conj far-spawn [:bed-walk-unsafe {:pos {:x 500 :y 64 :z 500} :state {}} 0.5])})))
+    (is (false? (holds? {:entries far-spawn})) "a far bed the night has not refused is still the bed")
+    (is (false? (holds? {:entries (conj far-spawn [:bed-walk-unsafe {:pos {:x 500 :y 64 :z 500} :state {}} 1.5])}))
+        "a refusal older than the last night: the night prices the walk again")))
 
 (deftest the-reason-it-fires-is-named
   (is (= {:why :unslept :days 4} (why {:entries slept-long-ago})))

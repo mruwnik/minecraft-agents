@@ -73,18 +73,6 @@
   (let [pos (:pos (:data (spawn-bed-live view)))]
     (when (and pos (not (seen-not-bed? p pos))) pos)))
 
-(defn standing-beds
-  "The known-beds within radius, nearest first (the :bed place's job retracts it on finding it gone; the live
-  :spawn-bed is set to a bed the body slept in or set the spawn at, whichever half the place key holds)."
-  [p view radius]
-  (let [me (u/self-pos {:primitives p})]
-    (filter #(<= (u/dist me %) radius) (known-beds p view))))
-
-(defn standing-bed
-  "The nearest of standing-beds, or nil."
-  [p view radius]
-  (first (standing-beds p view radius)))
-
 (defn spawn-state
   "What the body knows of its respawn point: {:bed pos} (the live :spawn-bed), {:lost pos :why w} (:why the :spawn-lost entry's,
   :reset, or :seen-gone), else nil."

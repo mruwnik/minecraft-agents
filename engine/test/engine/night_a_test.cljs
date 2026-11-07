@@ -1,5 +1,5 @@
 (ns engine.night-a-test
-  "The one night handler: the :night trigger and jobs.survival.night. A bed first (seen, remembered within the default-bed-radius setting
+  "The one night handler: the :night trigger and jobs.survival.night. A bed first (seen, remembered at any distance
   under any roof, or carried, also in the open), then a sleeper on the server (the action bar's sleep count, or a
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
@@ -32,19 +32,19 @@
 
 ;; ------------------------------------------------------------------ trigger
 (defn bed-for
-  "Whether the body in world has a bed to use (sh-beds/bed-to-use over its bed radius) after seed! wrote its memory."
+  "Whether the body in world has a bed to use (sh-beds/bed-to-use) after seed! wrote its memory."
   [world seed!]
   (let [{:keys [eng]} (st/setup {})
         p (tu/fake world)]
     (st/looked-round! eng p)
     (seed! eng)
     (let [view (mem/view (:store eng))]
-      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-radius view) (sh-beds/bed-permit p nil 0))))))
+      (boolean (sh-beds/bed-to-use p view (sh-beds/bed-permit p nil 0))))))
 
-(deftest a-remembered-bed-within-the-radius-is-one-to-use
+(deftest a-remembered-bed-at-any-distance-is-one-to-use
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed" "60,64,0" "red_bed"}}]
     (is (true? (bed-for world #(st/know-bed! % {:x 20 :y 64 :z 0}))) "20 blocks away")
-    (is (false? (bed-for world #(st/know-bed! % {:x 60 :y 64 :z 0}))) "beyond 48")
+    (is (true? (bed-for world #(st/know-bed! % {:x 500 :y 64 :z 500}))) "far: the night prices its walk")
     (is (false? (bed-for (assoc world :states {"20,64,0" {:occupied true}}) #(st/know-bed! % {:x 20 :y 64 :z 0})))
         "an occupied bed is not one to sleep in")
     (is (false? (bed-for world (fn [eng] (st/know-bed! eng {:x 20 :y 64 :z 0})
@@ -81,14 +81,11 @@
     (is (true? (permit? (ew/of-data {} {} []) 40)) "no villager near")
     (is (true? (permit? (ew/of-data own-plan {} []) 25)) "the body's own plan")))
 
-(deftest the-live-spawn-bed-is-used-when-the-remembered-bed-is-far
+(deftest the-live-spawn-bed-is-used-unless-seen-not-to-be-a-bed
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}
-        far {:x 500 :y 64 :z 500}
-        seed (fn [spawn] (fn [eng] (st/know-bed! eng far)
-                           (mem/write! (:store eng) :spawn-bed {:pos spawn} {:cap 1 :ttl :forever})))]
-    (is (true? (bed-for world (seed {:x 20 :y 64 :z 0}))) "the respawn bed is the one within reach")
-    (is (false? (bed-for (assoc-in world [:blocks "20,64,0"] "air") (seed {:x 20 :y 64 :z 0})))
-        "seen not to be a bed")))
+        seed (fn [eng] (mem/write! (:store eng) :spawn-bed {:pos {:x 20 :y 64 :z 0}} {:cap 1 :ttl :forever}))]
+    (is (true? (bed-for world seed)))
+    (is (false? (bed-for (assoc-in world [:blocks "20,64,0"] "air") seed)) "seen not to be a bed")))
 
 (deftest a-bed-set-as-the-bed-place-comes-before-a-nearer-old-spawn-bed
   (let [world {:time night :floor tu/walk-floor :blocks {"10,64,0" "red_bed" "30,64,0" "red_bed"}}
@@ -100,7 +97,7 @@
     (mem/write! (:store eng) :spawn-bed {:pos near} {:cap 1 :ttl :forever})
     (st/know-bed! eng set-bed)
     (let [view (mem/view (:store eng))]
-      (is (= [set-bed near] (take 2 (sh-beds/beds-to-use p view (sh-beds/bed-radius view) (constantly true))))))))
+      (is (= [set-bed near] (take 2 (sh-beds/beds-to-use p view (constantly true))))))))
 
 (deftest a-body-already-safe-at-night-does-not-hold
   (is (false? (holds? {:time night :blocks closed-hut} (fn [_]))) "shut in a high closed room, dark or not")
@@ -251,17 +248,6 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))
           (is (= :bed (:pick (first (st/emitted seen :night.answers)))) "the 20-block walk is priced below sheltering a night where it stands"))))))
-
-(deftest after-a-far-flight-the-night-takes-a-bed-beyond-the-usual-radius
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
-          (st/know-bed! eng {:x 100 :y 64 :z 0})
-          (write! eng :displaced {:from {:x 0 :y 64 :z 0}})
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (st/tick-n eng 4))
-          (is (empty? (st/emitted seen :night.bed-too-far)) "a bed 100 blocks away is walked to, not given up on"))))))
 
 (deftest a-bed-too-far-to-walk-to-is-said-once-before-the-body-digs-in
   (async done

@@ -72,7 +72,7 @@
 
 (defn bed-to-use [world]
   (let [{:keys [eng p]} (setup world)]
-    (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
+    (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))))
 
 (defn holds? [world]
   (let [{:keys [eng p]} (setup world)
@@ -119,7 +119,7 @@
   (let [{:keys [eng p]} (setup world)
         _ (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh-clock/ms-per-day)})
         view (assoc (mem/view (:store eng)) :now (+ 1000000 (* days sh-clock/ms-per-day)))]
-    (sh-beds/bed-to-use p view 128 (constantly true))))
+    (sh-beds/bed-to-use p view (constantly true))))
 
 (deftest a-buried-body-overdue-for-sleep-walks-to-its-bed
   (is (= far-bed (bed-to-use-after-days (lit-tunnel) 3))))
@@ -138,7 +138,7 @@
   (let [{:keys [eng p]} (setup world)
         _ (st/looked-round! eng p)
         _ (when slept (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh-clock/ms-per-day)}))]
-    (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
+    (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))))
 
 (def open-bed-world {:sees-all true :floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :blocks {"40,64,0" "red_bed" "8,64,0" "red_bed"}})
 
@@ -148,7 +148,7 @@
 (deftest a-bed-seen-farther-than-sixteen-blocks-is-a-candidate-beside-the-remembered-one
   (let [{:keys [eng p]} (setup (assoc open-bed-world :blocks {"30,64,0" "red_bed" "40,64,0" "red_bed"}))
         _ (st/looked-round! eng p)]
-    (is (= [{:x 40 :y 64 :z 0} {:x 30 :y 64 :z 0}] (sh-beds/beds-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+    (is (= [{:x 40 :y 64 :z 0} {:x 30 :y 64 :z 0}] (sh-beds/beds-to-use p (mem/view (:store eng)) (constantly true))))))
 
 (deftest a-body-woken-in-the-open-goes-back-to-a-bed-but-a-sheltered-one-stays
   (is (= {:x 8 :y 64 :z 0} (bed-after-looking open-bed-world true)) "slept tonight, still outside")
@@ -194,13 +194,13 @@
       (fn ^:async t []
         (let [{:keys [eng p raw clock]} (setup overdue-in-open-lit-tunnel)]
           (swap! clock + (* 4 sh-clock/ms-per-day))
-          (is (= far-bed (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "overdue: the far bed is the bed to use")
+          (is (= far-bed (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))) "overdue: the far bed is the bed to use")
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))
           (is (= [far-bed] (map :pos (st/entries eng :bed-walk-unsafe))) "the dark walk was priced unsafe")
           (is (empty? (st/calls raw "sleep")))
           (is (empty? (filter #(< 21 (:x (st/arg-pos %))) (st/calls raw "moveTo"))) "no walk out of the tunnel")
-          (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "nor does the night trigger hold for the bed meanwhile"))))))
+          (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))) "nor does the night trigger hold for the bed meanwhile"))))))
 
 (deftest a-set-bed-whose-quote-still-searches-is-not-called-unreachable
   (async done
@@ -264,9 +264,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; 120 blocks is the farthest remembered bed asked at all (the urgent radius); walk 14.6 s vs stay 13.0 s there, and the spawn rate scales both alike.
-        (let [bed {:x 120 :y 64 :z 0}
-              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"120,64,0" "red_bed"} :inventory [{:name "cobblestone" :count 32}]))]
+        (let [bed {:x 320 :y 64 :z 0}
+              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 330 5] :blocks {"320,64,0" "red_bed"} :inventory [{:name "cobblestone" :count 32}]))]
           (st/know-bed! eng bed)
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (core/submit! eng '(jobs.survival.night) {})
@@ -362,7 +361,7 @@
   (let [{:keys [eng p]} (setup (hut-night-world {"20,64,0" "red_bed"} {}))]
     (st/looked-round! eng p)
     (mem/write! (:store eng) :sleep-status {:sleeping 1 :needed 2} nil)
-    (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+    (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))))))
 
 (deftest a-body-buried-in-a-closed-hut-places-its-carried-bed
   (let [{:keys [eng p]} (setup (hut-night-world {} {:inventory [{:name "red_bed" :count 1}]}))
@@ -373,7 +372,7 @@
   (let [{:keys [eng p]} (setup (hut-night-world {"6,64,-1" "red_bed"} {}))
         _ (blind-above p)]
     (st/know-bed! eng {:x 6 :y 64 :z -1})
-    (is (= {:x 6 :y 64 :z -1} (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))))
+    (is (= {:x 6 :y 64 :z -1} (sh-beds/bed-to-use p (mem/view (:store eng)) (constantly true))))))
 
 (defn stale-until-looked
   "p whose memory of cell (a [x y z] vector) is air until the body looks: a bed set there since it last saw the cell."
@@ -473,7 +472,7 @@
     (is (nil? (reach-room/room* unseen-east {:x 13 :y 64 :z 13})) "walls never seen behind the body: no closed room")
     (is (contains? (:cells (reach-room/room* (seeing p seen-after-a-look) {:x 13 :y 64 :z 13})) [11 64 11])
         "a seen-free cell beside the feet over an unseen floor is a room cell, and the room goes on from it")
-    (is (= {:x 11 :y 64 :z 12} (sh-beds/bed-to-use unseen-east v 48 (constantly true))))
+    (is (= {:x 11 :y 64 :z 12} (sh-beds/bed-to-use unseen-east v (constantly true))))
     (is (true? (sh/night-holds? unseen-east v {} (constantly true))))))
 
 
@@ -498,12 +497,15 @@
   (is (false? (room-lib/closed-home? (home-p overhang-beside-gap))) "shutting the gap leaves the roof's open side")
   (is (true? (room-lib/closed-home? (home-p (assoc roofed-room "11,64,-1" "stone" "11,65,-1" "stone")))) "a shut room"))
 
-(deftest a-bed-too-far-to-walk-to-does-not-call-a-buried-miner-out-to-look
+(deftest a-bed-the-night-refused-to-walk-to-does-not-call-a-buried-miner-out-to-look
   (let [{:keys [eng p]} (setup (dissoc (lit-tunnel) :sees-all))
-        look? #(sh/unlooked-for-bed? p (mem/view (:store eng)))]
+        look? #(sh/unlooked-for-bed? p (mem/view (:store eng)))
+        far {:x 300 :y 64 :z 0}]
     (is (true? (look?)) "a bed in reach with unseen cells beside the feet: look first")
-    (st/know-bed! eng {:x 300 :y 64 :z 0})
-    (is (false? (look?)) "a bed beyond the bed radius is none to look for")))
+    (st/know-bed! eng far)
+    (is (true? (look?)) "a far bed too: the tunnel may reach it")
+    (mem/write! (:store eng) :bed-walk-unsafe {:pos far :state {}} sh-beds/walk-unsafe-policy)
+    (is (false? (look?)) "a bed whose walk the night refused is none to look for")))
 
 (def three-high-room
   "A stone room x 10..12, z 10..11, air y 64..66 under a roof at 67, a bed at 10..11 64 10 with a stone at 11 65 10 over its head."
@@ -537,7 +539,7 @@
   (let [{:keys [eng p clock]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
                                       :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
         view #(mem/view (:store eng))
-        use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
+        use-bed #(sh-beds/bed-to-use p (view) (constantly true))]
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
     (swap! clock + 1000)
     (is (nil? (use-bed)) "a moment later, nothing changed: still unsafe")
@@ -554,9 +556,9 @@
                                 :blocks {"40,64,0" "red_bed"} :inventory [{:name "red_bed" :count 1}]})
         view #(mem/view (:store eng))]
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 5 :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
-    (is (nil? (sh-beds/bed-to-use p (view) 128 (constantly true))) "no worth: the refusal holds")
-    (is (true? (sh-beds/bed-place-wanted? p (view) 128 (constantly true))) "so the carried bed goes down")
-    (is (= far-bed (sh-beds/bed-to-use p (view) 128 (constantly true) ##Inf)) "a call at a higher worth prices it again")))
+    (is (nil? (sh-beds/bed-to-use p (view) (constantly true))) "no worth: the refusal holds")
+    (is (true? (sh-beds/bed-place-wanted? p (view) (constantly true))) "so the carried bed goes down")
+    (is (= far-bed (sh-beds/bed-to-use p (view) (constantly true) ##Inf)) "a call at a higher worth prices it again")))
 
 (deftest a-bed-refused-on-price-does-not-call-the-night-trigger
   (let [{:keys [eng p]} (setup roof-over-open-sides)
@@ -570,7 +572,7 @@
   (let [{:keys [eng p raw]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
                                 :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
         view #(mem/view (:store eng))
-        use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
+        use-bed #(sh-beds/bed-to-use p (view) (constantly true))]
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (mem/view (:store eng)) far-bed)} sh-beds/walk-unsafe-policy)
     (is (nil? (use-bed)) "as priced: unsafe")
     (swap! (fake/state raw) assoc-in [:self :health] 6)
@@ -593,7 +595,7 @@
   (let [{:keys [eng p raw]} (setup {:floor [0 0 60 20] :self {:pos {:x 5 :y 64 :z 0}} :time st/night :sees-all true
                                     :blocks {"40,64,0" "red_bed"} :entities [{:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 0} :health 20}]})
         view #(mem/view (:store eng))
-        use-bed #(sh-beds/bed-to-use p (view) 128 (constantly true))]
+        use-bed #(sh-beds/bed-to-use p (view) (constantly true))]
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
     (is (nil? (use-bed)) "as priced: unsafe")
     (swap! (fake/state raw) update :light into (for [y [64 65]] [[5 y 0] [0 0]]))

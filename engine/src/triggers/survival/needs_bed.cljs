@@ -1,7 +1,7 @@
 (ns triggers.survival.needs-bed
   "The needs-bed trigger: by day, a body whose respawn bed is lost (reset, found gone, or seen not a bed) or overdue for sleep (sh-beds/max-days-awake in-game days since it last rested:
   sh-beds/rest-since, its sleep or respawn, else the first thing it remembers) with
-  no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep or string, planks), so
+  no bed carried and every remembered bed refused (none known, or the last night priced each walk too dear: sh-beds/refused-lately?) gets one (jobs.items.obtain: wool from sheep or string, planks), so
   the night job can put it down and sleep before phantoms come. A when-convenient errand: it holds only in the last
   :lead-ticks of the day (early on, the body's own work goes first), and its default job is a :priced obtain: each
   walk of its search is priced against what the bed is still worth times the chance a look there finds sheep. Not in the first light or with a hostile known near (jobs.lib.dawn),
@@ -26,13 +26,13 @@
 
 (defn why
   "Why a body by day needs a bed: {:why :spawn-lost :pos p} (sh-spawn/spawn-lost-pos), {:why :unslept :days d} (sh-beds/max-days-awake
-  passed and sh-spawn/standing-bed finds none within (sh-beds/urgent-bed-radius)), else nil."
+  passed and every one of sh-spawn/known-beds sh-beds/refused-lately?), else nil."
   [p view]
   (if-let [pos (sh-spawn/spawn-lost-pos p view)]
     {:why :spawn-lost :pos pos}
     (let [days (or (sh-beds/days-awake-in view) 0)]
       (when (and (>= days (sh-beds/max-days-awake))
-                 (nil? (sh-spawn/standing-bed p view (sh-beds/urgent-bed-radius))))
+                 (every? #(sh-beds/refused-lately? view %) (sh-spawn/known-beds p view)))
         {:why :unslept :days days}))))
 
 (def bed-wool "Wool of one colour the game's bed recipe takes." 3)

@@ -42,7 +42,7 @@
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
   Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with the default ways, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
-  The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within the jobs.lib.shelter.beds bed radius, the urgent radius once max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
+  The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered at any distance, its walk priced; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. Beds are priced against the other ways through the night (answers, cheapest): a bed not sheltered (sh-beds/bed-sheltered?: shut in a closed roofed room where no mob spawns) is slept in only when overdue for sleep or lying there is the cheapest; a carried bed goes down as the :answer says (else the cheapest): :bed lain in where it lies, :sealed its row walled and roofed first (seal-and-sleep!), and when another way is cheaper it is not put down. A sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open, and a carried bed not put down ends condition-failed :bed-open {:answer} too; a row left open ends nothing-possible :seal-failed.
   A sleep that ends :bed-unreachable yields :continue: the next round picks another bed or puts the carried one down (sleep wrote :bed-unreachable; when its walk was refused on the night's price it wrote nothing, and the bed goes into :bed-walk-unsafe instead, skipped while the world is as priced); for a bed named by :bed there is no other, so it ends nothing-possible :bed-unreachable. A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
   A bed item carried and no bed to use: put down beside the body (a body outside walks first into a :home that lies in a closed roofed room, and when that walk fails writes :home-walk-failed and ends condition-failed :bed-open, the night pricing the bed again, that home only while another walk is worth its price; roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day; a bed at the live respawn bed is not listed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
@@ -62,8 +62,6 @@
   "Whether the body may use a bed (sh-beds/bed-permit over the job's world)."
   [c]
   (sh-beds/bed-permit (:primitives c) (:world (:engine c)) (ctx/now c)))
-
-(defn radius [c] (sh-beds/bed-radius (ctx/view c)))
 
 (defn overdue? [c]
   (let [days (sh-beds/days-awake c)]
@@ -312,7 +310,7 @@
   "The :bed argument, else the bed sh-beds/bed-to-use picks."
   [c]
   (or (some-> (:bed (:args c)) places/parse-pos :pos)
-      (sh-beds/bed-to-use (:primitives c) (ctx/view c) (radius c) (bed-permit c) (ctx/worth c))))
+      (sh-beds/bed-to-use (:primitives c) (ctx/view c) (bed-permit c) (ctx/worth c))))
 
 (def defaults {:checks {:safe? '(not (threatened)) :fit? '(always)} :spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
@@ -513,7 +511,7 @@
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (or (some-> (:bed (:args c)) places/parse-pos :pos)
-                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c) (ctx/worth c)) {:price (sense/fails-to c)})))
+                (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-permit c) (ctx/worth c)) {:price (sense/fails-to c)})))
         answer (when (and (not bed) (not (:seal (ctx/mem c))) (sh-beds/place-wanted? c)) (await (carried-answer c)))]
     (cond
       (:seal (ctx/mem c)) (await (seal-and-sleep! c))

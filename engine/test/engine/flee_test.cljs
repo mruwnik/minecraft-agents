@@ -1494,8 +1494,7 @@
                           #(run-job! r1 'test.flight {})))]
           (is (= 0 n1) "the first flight alone is under far-flight")
           (is (= 1 (count (fled r2))) "the second adds up past it, measured from the chain's start")
-          (is (> (:distance (first (fled r2))) 25))
-          (is (seq (mem/entries (mem/view (:store (:eng r2))) :displaced)) "the night job is told the body was driven off"))))))
+          (is (> (:distance (first (fled r2))) 25)))))))
 
 (deftest a-far-flight-tells-the-agent-where-the-body-went-and-why
   (is (nil? (respond.state/fled-notice {:x 0 :y 64 :z 0} {:x -10 :y 64 :z 0} [{:mob "zombie" :id 7}] :far 16))

@@ -13,14 +13,12 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.seal :as seal]
             [jobs.lib.sense :as sense]
-            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.hold :as hold]
@@ -104,7 +102,6 @@
 (defn flee-args [{:keys [kind name pos]}]
   (case kind
     :roofed-place {:place name :range 0}
-    :bed {:pos pos :range 2}
     {:pos pos :range 0}))
 
 (defn ^:async flee-target
@@ -112,7 +109,7 @@
   cheapest!: every candidate within flee-radius is ranked by the least its straight walk takes and quoted best-first, as the flight itself
   will walk, until the best quoted is no dearer than the next bound; a site's own tests, ground-ok? and cave-needed, asked only when its turn comes; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost (seconds) and go-to's
   :route; :searching while a quote's search goes on, or, with survey?, while the body looks round first; nil when there is none (none with
-  the flee-radius setting 0 or after sites/max-flees). Candidates: the bed, the home, caves, ground."
+  the flee-radius setting 0 or after sites/max-flees). Candidates: the home, caves, ground (a bed is the night's bed way, priced there)."
   [c survey?]
   (let [m (ctx/mem c)
         p (:primitives c)
@@ -120,10 +117,8 @@
         tried (set (:flee-failed m))]
     (when (and (pos? flee-radius) (< (or (:flees m) 0) (sites/max-flees)))
       (let [here (sh-sense/feet p)
-            bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
-                  (when (< (bed-down/radius c) (u/dist here pos) (inc flee-radius)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c [:home] flee-radius))
-            cands (->> (concat bed places (sites p flee-radius))
+            cands (->> (concat places (sites p flee-radius))
                        (remove #(contains? tried (:pos %))))
             needed (atom {})
             ok? (fn [{:keys [kind pos] :as x}]

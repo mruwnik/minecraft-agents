@@ -339,14 +339,11 @@
           (is (= {:cap 1 :ttl :forever} (mem/policy (mem/view (:store eng)) :spawn-bed)))
           (is (= [] (emitted seen :spawn_not_set))))))))
 
-(deftest sleep-declines-in-the-day-and-beyond-the-bed-radius
-  (are [world bed]
-       (let [{:keys [eng]} (setup world)]
-         (know-bed! eng bed)
-         (core/submit! eng '(jobs.survival.sleep) {})
-         (nil? (core/tick! eng)))
-    {:time noon :blocks {"6,64,0" "red_bed"}} {:x 6 :y 64 :z 0}
-    {:time night :blocks {"60,64,0" "red_bed"}} {:x 60 :y 64 :z 0}))
+(deftest sleep-declines-in-the-day
+  (let [{:keys [eng]} (setup {:time noon :blocks {"6,64,0" "red_bed"}})]
+    (know-bed! eng {:x 6 :y 64 :z 0})
+    (core/submit! eng '(jobs.survival.sleep) {})
+    (is (nil? (core/tick! eng)))))
 
 (deftest sleep-takes-the-spawn-bed-at-any-distance
   (async done
@@ -1629,21 +1626,16 @@
         first-ask (ask)]
     (is (< (ask) (/ first-ask 5)) "the second ask reuses the room")))
 
-(def displaced-view {:now 0 :data {:entries {:displaced [{:t 0 :data {}}]}}})
-
-(deftest bed-radii-follow-settings
-  (are [overrides view radius]
-       (= radius (settings/with-settings overrides #(sh-beds/bed-radius view)))
-    {} {:now 0} 48
-    {:jobs.lib.shelter.beds/default-bed-radius 80} {:now 0} 80
-    {} displaced-view 128
-    {:jobs.lib.shelter.beds/urgent-bed-radius 200} displaced-view 200))
-
-(deftest sleep-takes-a-bed-beyond-the-default-radius-when-the-setting-allows
-  (let [{:keys [eng]} (setup {:time night :blocks {"60,64,0" "red_bed"}})]
-    (know-bed! eng {:x 60 :y 64 :z 0})
-    (core/submit! eng '(jobs.survival.sleep) {})
-    (is (some? (settings/with-settings {:jobs.lib.shelter.beds/default-bed-radius 80} #(core/tick! eng))))))
+(deftest sleep-takes-a-remembered-bed-at-any-distance
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:time night :blocks {"300,64,0" "red_bed"}})]
+          (know-bed! eng {:x 300 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.sleep) {})
+          (let [round (core/tick! eng)]
+            (is (some? round))
+            (await round)))))))
 
 (def tunnel-blocks
   "A 1-wide tunnel x 0..9 at y 64-65 in solid stone x -3..12, z -3..3, y 62..67; open-end? opens x 9 into a cave x 10..60."

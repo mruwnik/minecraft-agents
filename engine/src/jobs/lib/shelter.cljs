@@ -41,7 +41,8 @@
                       (contains? (:cells (reach-room/room p self)) [(:x cell) (:y cell) (:z cell)]))))))
 
 (defn unlooked-for-bed?
-  "Night, awake, not looked from here (looked-here?), and either a bed carried or remembered within bed-radius with a cell beside the feet
+  "Night, awake, not looked from here (looked-here?), and either a bed carried or remembered (sh-spawn/known-beds, at any distance: a closed room such as a tunnel may
+  reach it) and not refused lately (sh-beds/refused-lately?) with a cell beside the feet
   (floor, feet or head) never seen (the room checks, shut-in-hut? and walk-leaves-shelter?, would read the room smaller
   than it is), or the body shut in a hut with no sleep tonight and no :sleep-failed entry (a bed may stand where it has
   not looked, or have been set down since it saw the cell): look before deciding."
@@ -49,7 +50,7 @@
   (let [{:keys [x y z]} (sh-sense/feet p)]
     (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
                   (not (looked-here? p view))
-                  (or (and (or (some? (sh-beds/carried-bed p)) (some? (sh-spawn/standing-bed p view (sh-beds/bed-radius view))))
+                  (or (and (or (some? (sh-beds/carried-bed p)) (some #(not (sh-beds/refused-lately? view %)) (sh-spawn/known-beds p view)))
                            (look/unseen? p (for [dx [-1 0 1] dz [-1 0 1] dy [-1 0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
                       (and (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms))
                            (empty? (mem/entries view :sleep-failed))
@@ -149,9 +150,9 @@
      (and (sh-sense/night? p)
           (not (sh-sense/sleeping? p))
           (or (nil? (:ways args)) (contains? (:ways args) :bed))
-          (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
+          (or (some? (sh-beds/bed-to-use p view permit?))
               (unlooked-for-bed? p view)
-              (and (not buried) (not own) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
+              (and (not buried) (not own) (sh-beds/bed-place-wanted? p view permit?))
               (and (or (not buried) own) (sh-sleepers/log-out-for-sleepers? p view (or (:agents args) #{}))))))))
 
 (defn night-holds?

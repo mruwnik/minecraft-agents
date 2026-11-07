@@ -212,11 +212,10 @@
           (is (= [] (emitted seen :stopped)))
           (is (= 1 (count (entries eng :spawn-bed)))))))))
 
-(deftest set-spawn-skips-a-remembered-bed-beyond-the-bed-radius
-  (async done
-    (run-async done
-      (fn ^:async t []
-        (is (= :no-bed (await (wait-reason {:time noon :blocks {"90,64,0" "red_bed"}} far-bed))))))))
+(deftest set-spawn-uses-a-remembered-bed-at-any-distance
+  (let [{:keys [eng p]} (setup {:time noon :blocks {"90,64,0" "red_bed"}})]
+    (know-bed! eng far-bed)
+    (is (= far-bed (set-spawn/bed-of {:primitives p :args {} :view #(mem/view (:store eng))})))))
 
 (deftest set-spawn-says-why-it-waits
   (async done

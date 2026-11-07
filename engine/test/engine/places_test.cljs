@@ -10,6 +10,7 @@
             [jobs.lib.reach.room :as reach-room]
             [engine.memory :as mem]
             [jobs.lib.places :as places]
+            [jobs.lib.shelter.beds :as sh-beds]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]))
@@ -333,10 +334,12 @@
 (def bed-b {:x 20 :y 64 :z 0})
 
 (defn ^:async sleep-in
-  "Run the sleep job with :bed arg in a night world; the setup map plus :recorded (what :bed memory held)."
-  [{:keys [blocks recorded time arg] :or {time night arg bed-a}}]
+  "Run the sleep job with :bed arg in a night world; the setup map plus :recorded (what :bed memory held) and :refused (a bed
+  pos whose walk the night refused)."
+  [{:keys [blocks recorded refused time arg] :or {time night arg bed-a}}]
   (let [r (setup {:time time :blocks (merge {"6,64,0" "red_bed"} blocks)})]
     (when recorded (mem/write! (:store (:eng r)) :bed recorded mem/place-policy))
+    (when refused (mem/write! (:store (:eng r)) :bed-walk-unsafe {:pos refused :state {}} sh-beds/walk-unsafe-policy))
     (await (run-job (:eng r) (list 'jobs.survival.sleep {:bed arg})))
     r))
 
@@ -376,14 +379,17 @@
             (is (= bed-a (place eng :bed)) (pr-str recorded))
             (is (= [] (events-of seen :place.kept)))))))))
 
-(deftest sleeping-in-a-bed-replaces-a-recorded-bed-beyond-the-urgent-radius
+(deftest sleeping-in-a-bed-replaces-a-recorded-bed-the-last-night-would-not-walk-to
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [far {:x 12639 :y 71 :z -28}
-              {:keys [eng seen]} (await (sleep-in {:recorded {:pos far}}))]
+              {:keys [eng seen]} (await (sleep-in {:recorded {:pos far} :refused far}))]
           (is (= bed-a (place eng :bed)))
-          (is (= [] (events-of seen :place.kept))))))))
+          (is (= [] (events-of seen :place.kept))))
+        (let [far {:x 12639 :y 71 :z -28}
+              {:keys [eng]} (await (sleep-in {:recorded {:pos far}}))]
+          (is (= far (place eng :bed)) "a far bed the night did not refuse stays the body's bed"))))))
 
 (deftest a-bare-floor-patch-is-no-closed-room
   (is (nil? (reach-room/room (tu/fake {:floor [-5 -5 5 5]}) {:x 0 :y 64 :z 0}))

@@ -32,27 +32,14 @@
                    :doc "Blocks under its home (else bed) a roofed body counts as in the ground (in-ground?) though some sky light reaches it (a stair, a shaft)."}
    ::seen-bed-radius {:default 6 :spec (a/int-in 1 nil)
                       :doc "Blocks (square) within which a bed in the body's room counts as seen."}
-   ::default-bed-radius {:default 48 :spec (a/num-in 0 nil)
-                         :doc "Blocks within which a remembered bed may be used."}
-   ::urgent-bed-radius {:default 128 :spec (a/num-in 0 nil)
-                        :doc "The bed radius once the body is overdue for sleep or displaced."}
    ::max-days-awake {:default 3 :spec (a/num-in 0 nil)
-                     :doc "In-game days without sleep before finding a bed becomes urgent: a bed in the open is slept in and the urgent radius applies."}
+                     :doc "In-game days without sleep before finding a bed becomes urgent: a bed in the open is slept in."}
    ::courtesy-radius {:default 32 :spec (a/num-in 0 nil)
                       :doc "Blocks a body underground may walk to a bed to sleep beside another sleeping player."}})
 
 (defn seen-bed-radius [] (settings/get settings ::seen-bed-radius))
 
-(defn default-bed-radius [] (settings/get settings ::default-bed-radius))
-(defn urgent-bed-radius [] (settings/get settings ::urgent-bed-radius))
 (defn courtesy-radius [] (settings/get settings ::courtesy-radius))
-
-(defn bed-in-view
-  "The remembered bed position when it is within radius of the body, else nil."
-  [p view radius]
-  (let [pos (mem/place view :bed)]
-    (when (and pos (<= (u/dist (u/self-pos {:primitives p}) pos) radius))
-      pos)))
 
 (defn bed-occupied?
   "Whether the bed at pos is occupied as a player sees it: the bed block's occupied state, or another player lying within
@@ -160,15 +147,6 @@
   (when-let [t (rest-since view)]
     (/ (- (:now view) t) sh-clock/ms-per-day)))
 
-(defn bed-radius
-  "How far a remembered bed may be: the default-bed-radius setting, or the urgent one once the latest :slept entry is :max-days-awake
-  in-game days old (phantoms come), or while a :displaced entry stands (a far flight drove the body off its bed)."
-  [view]
-  (let [days (days-awake-in view)]
-    (if (or (and days (>= days (max-days-awake))) (seq (mem/entries view :displaced)))
-      (urgent-bed-radius)
-      (default-bed-radius))))
-
 (def kept-shelters
   "The shelters (walk-leaves-shelter?) a body does not leave at night for a bed: a bare roof is not one of them."
   #{:dug-in :room})
@@ -186,9 +164,9 @@
   {:cap 5 :ttl (quot sh-clock/ms-per-day 2)})
 
 (defn seen-bed-places
-  "The bed cells the body has seen (still beds) within radius, nearest first."
-  [p radius]
-  (map :pos (look/seen-blocks p {:names wood/bed-names :radius radius :live? true :max 8})))
+  "The bed cells the body has seen (still beds) within look/memory-radius, nearest first."
+  [p]
+  (map :pos (look/seen-blocks p {:names wood/bed-names :radius look/memory-radius :live? true :max 8})))
 
 (defn home-target
   "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."
@@ -224,6 +202,13 @@
    :spawn (spawn-light/night-chance p (sh-sense/feet p))
    :in-ground (in-ground? p view)})
 
+(defn refused-lately?
+  "Whether a night within the last in-game day refused the walk to the bed at pos (a :bed-walk-unsafe entry naming it,
+  whatever state it was priced in): the walk cost more than another way through the night."
+  [view pos]
+  (let [since (- (:now view) sh-clock/ms-per-day)]
+    (boolean (some #(and (>= (:t %) since) (= pos (:pos (:data %)))) (mem/entries view :bed-walk-unsafe)))))
+
 (defn walk-unsafe?
   "Whether a :bed-walk-unsafe entry of this night names the bed at pos and the world is as it priced the walk (walk-state).
   An entry that carries a :worth (a refusal on price) counts while worth does not exceed it, and always when no worth is
@@ -239,16 +224,16 @@
                     (mem/entries view :bed-walk-unsafe))))))
 
 (defn beds-to-use
-  "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place within radius (a bed set with
-  jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds, nearest first, and the live
-  :spawn-bed at any distance (go-to prices the walk; worth, when given (a number, or a fn of the bed pos), is the call's: a walk refused on price at no less is skipped, none skips every priced refusal), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
+  "The beds a body awake at night sleeps in: one it sees (seen-bed), then the :bed place (a bed set with
+  jobs.memory.set-place wins over a nearer old respawn bed), then the other remembered beds and the live :spawn-bed,
+  nearest first, at any distance (go-to prices the walk, a far one loses on price; worth, when given (a number, or a fn of the bed pos), is the call's: a walk refused on price at no less is skipped, none skips every priced refusal), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or whose :bed-walk-unsafe verdict still holds (walk-unsafe?), or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
   outside goes back to a bed), or while a :sleep-failed entry is unexpired. nil otherwise. Beds the body has seen
-  (perception's memory, within radius) count as well as the remembered one."
-  ([p view radius permit?] (beds-to-use p view radius permit? nil))
-  ([p view radius permit? worth]
+  (seen-bed-places) count as well as the remembered one."
+  ([p view permit?] (beds-to-use p view permit? nil))
+  ([p view permit? worth]
   (when (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
              (or (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms)) (not (sh-inside/safe-from-night? p)))
              (empty? (mem/entries view :sleep-failed)))
@@ -259,18 +244,18 @@
                              (not (walk-unsafe? p view pos worth))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (distinct (concat (some-> (seen-bed p ok?) vector)
-                        (let [standing (sh-spawn/standing-beds p view radius)
+                        (let [known (sh-spawn/known-beds p view)
                               placed (mem/place view :bed)]
-                          (when (and placed (some #{placed} standing) (ok? placed)) [placed]))
-                        (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
+                          (when (and placed (some #{placed} known) (ok? placed)) [placed]))
+                        (->> (concat (sh-spawn/known-beds p view) (seen-bed-places p))
                              distinct
                              (sort-by #(u/dist (u/self-pos {:primitives p}) %))
                              (filter ok?))))))))
 
 (defn bed-to-use
   "The first of beds-to-use: the bed seen, else the nearest by straight line (a caller that walks prices them with go-to: the night)."
-  ([p view radius permit?] (first (beds-to-use p view radius permit?)))
-  ([p view radius permit? worth] (first (beds-to-use p view radius permit? worth))))
+  ([p view permit?] (first (beds-to-use p view permit?)))
+  ([p view permit? worth] (first (beds-to-use p view permit? worth))))
 
 (defn sleep-walk-s
   "Seconds the quote of a sleep at bed (jobs.survival.sleep, bed-down) gives its walk: the straight distance at
@@ -335,13 +320,13 @@
 (defn bed-place-wanted?
   "Whether to put a carried bed down: night, awake, a bed item carried, no bed-to-use, no sleep tonight, and no
   :bed-place-failed or :sleep-failed entry. Roofed or in the open."
-  [p view radius permit?]
+  [p view permit?]
   (boolean (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
                 (some? (carried-bed p))
                 (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms))
                 (not-any? #(near-failed-place? p %) (mem/entries view :bed-place-failed))
                 (empty? (mem/entries view :sleep-failed))
-                (nil? (bed-to-use p view radius permit?)))))
+                (nil? (bed-to-use p view permit?)))))
 
 (defn place-wanted?
   "bed-place-wanted? for the body of c, unless the reserve register holds the carried bed (a plan's, or the agent's) for
@@ -349,7 +334,7 @@
   [c]
   (let [p (:primitives c)
         view (ctx/view c)]
-    (and (bed-place-wanted? p view (bed-radius view) (bed-permit p (:world (:engine c)) (ctx/now c)))
+    (and (bed-place-wanted? p view (bed-permit p (:world (:engine c)) (ctx/now c)))
          (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night))))))
 
 (defn standing-entries
@@ -372,11 +357,6 @@
   cleanup held lately, oldest first; nil when none."
   [p view]
   (seq (map :cell (standing-entries p view :doorway))))
-
-(defn bed
-  "The remembered bed position when it is within radius of the body, else nil."
-  [c radius]
-  (bed-in-view (:primitives c) (ctx/view c) radius))
 
 (defn days-awake
   "In-game days since the body last rested (days-awake-in), or nil when it remembers nothing."

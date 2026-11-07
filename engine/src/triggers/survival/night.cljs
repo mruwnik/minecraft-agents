@@ -2,7 +2,7 @@
   "The night trigger: the one night handler. While the body is awake it holds when any of these is so, the bed terms
   (the first four) at night by the clock (a bed takes a sleeper from dusk), the others only while the sky is dark (light, as
   the night job's own end):
-    a bed to sleep in (sh-beds/bed-to-use: seen, or the nearest remembered :bed or live :spawn-bed within the default-bed-radius setting under any roof; not occupied, nor (unless another player sleeps near) one whose
+    a bed to sleep in (sh-beds/bed-to-use: seen, or the nearest remembered :bed or live :spawn-bed at any distance under any roof; not occupied, nor (unless another player sleeps near) one whose
       walk would leave an underground, dug-in or closed-room shelter)
     a bed item carried and no bed to use (sh-beds/bed-place-wanted?)
     a look round first (sh/unlooked-for-bed?): a bed known or carried and cells beside the feet never seen, or a closed hut

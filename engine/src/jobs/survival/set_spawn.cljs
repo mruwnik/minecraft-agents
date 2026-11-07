@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -19,7 +20,7 @@
 (def doc
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.items.use walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".
-  Needs a bed: the :bed argument, else the remembered :bed within the default-bed-radius setting (forgotten when its block is seen to be gone), else the nearest bed the body has seen (memory, still a bed as last seen) within that radius.
+  Needs a bed: the :bed argument, else the remembered :bed at any distance (forgotten when its block is seen to be gone), else the nearest bed the body has seen (memory, still a bed as last seen).
   Conditions (at the start only): not night (at night the sleep job sets it), else it waits :night; a bed: with none the start check looks round first, then waits (:later); with none found it ends condition-failed :no-bed.
   Done at once (:already) when the :spawn-bed it writes is recorded at the bed. Done {:spawn pos} when the server set the point, or at once with :why :unchanged when the spawn is already
   known at that bed (jobs.lib.shelter.spawn/spawn-known?: :spawn-bed or :spawn-set near it, not reset since). A click that reached the bed
@@ -35,7 +36,7 @@
   "Whether the remembered :bed (no :bed arg) is loaded and no longer a bed."
   [c]
   (let [p (:primitives c)
-        pos (when-not (:bed (:args c)) (sh-beds/bed c (sh-beds/default-bed-radius)))]
+        pos (when-not (:bed (:args c)) (mem/place (ctx/view c) :bed))]
     (boolean (and pos (places/gone? :bed (u/seen-name p pos))))))
 
 (defn bed-of
@@ -43,8 +44,8 @@
   [c]
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
-    (or (when-not (remembered-gone? c) (sh-beds/bed c (sh-beds/default-bed-radius)))
-        (first (sh-beds/seen-bed-places (:primitives c) (sh-beds/default-bed-radius))))))
+    (or (when-not (remembered-gone? c) (mem/place (ctx/view c) :bed))
+        (first (sh-beds/seen-bed-places (:primitives c))))))
 
 (defn worth-of
   "Seconds a root call is worth: the respawn point at the bed, cost/spawn-worth (the walks back it shortens from deaths
@@ -84,8 +85,8 @@
 
 (defn ^:async round [c]
   (when (remembered-gone? c)
-    (sh-spawn/lose-spawn! c (sh-beds/bed c (sh-beds/default-bed-radius)) :missing)
-    (places/retract-if-missing! c :bed (sh-beds/bed c (sh-beds/default-bed-radius)) "missing"))
+    (sh-spawn/lose-spawn! c (mem/place (ctx/view c) :bed) :missing)
+    (places/retract-if-missing! c :bed (mem/place (ctx/view c) :bed) "missing"))
   (let [bed (bed-of c)]
     (cond
       (nil? bed) (ctx/end c :condition-failed :no-bed)
