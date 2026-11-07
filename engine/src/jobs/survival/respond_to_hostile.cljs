@@ -18,6 +18,7 @@
             [jobs.lib.cost.value :as value]
             [jobs.lib.foods :as foods]
             [jobs.lib.pace :as pace]
+            [jobs.lib.rooms :as room-lib]
             [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
@@ -383,6 +384,8 @@
         after (if (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries)) (.-health self) before)
         hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) before after (hit-window-ms))
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
+        ;; the flee price's searches and the first flight step's are one search
+        _ (room-lib/new-step! c)
         felt (walk-felt c)
         target (when-not (some combat/enderman? near) (first (hostile/fought near)))
         sealing (when-not (some #(or (combat/creeper? %) (combat/enderman? %)) near) (doors/sealing-doors c near))

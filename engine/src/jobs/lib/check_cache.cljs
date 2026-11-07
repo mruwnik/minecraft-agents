@@ -62,6 +62,17 @@
   [c k thunk]
   (reuse c k thunk (fn [now hit] (<= 0 (- now (:t hit)) (ttl-ms)))))
 
+(defn kept-value
+  "The value kept! for key k of this job while younger than ttl-ms, nil when none (or under fresh)."
+  [c k]
+  (let [hit (get @(entries-of c) [(:id c) (:slots c) k])]
+    (when (and hit (not (::fresh c)) (<= 0 (- (ctx/now c) (:t hit)) (ttl-ms))) (:v hit))))
+
+(defn keep!
+  "Keep v under key k of this job (kept-value): a search a call goes on with at the next."
+  [c k v]
+  (swap! (entries-of c) (fn [m] (store c m [(:id c) (:slots c) k] {:t (ctx/now c) :v v}))))
+
 (defn keyed
   "The value of (thunk) for the inputs of tag (the values the thunk reads, as gathered) of this job, whatever its age
   (never under fresh): the latest ::keep inputs of a tag are kept, with the settings they were read under."

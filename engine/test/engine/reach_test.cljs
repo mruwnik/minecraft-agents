@@ -373,3 +373,15 @@
         p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks doorway}) beyond)]
     (is (true? (reach-room/closes-in? p :fill [1 64 0])) "the doorway leads to ground not looked at")
     (is (false? (reach-room/closes-in? p :solid [1 64 0])) "an unseen wall: the body is already shut in")))
+
+(deftest a-flood-and-a-walk-search-stop-where-the-searchs-meter-runs-out
+  ;; Q141: the parts of one search share its budget; each is cut as it runs, takes off the cells it ran and is counted cut
+  (let [ground (fn [_ y _] (if (< y 64) :solid :open))
+        m (reach/meter 1 0 0.01 0.1)
+        [flood walk] (binding [reach/*search* m]
+                       [(reach-room/flood-visit (partial reach/forward ground) [0 64 0] reach-room/room-cells)
+                        (reach/search-steps (partial reach/forward ground) [0 64 0] [50 64 50])])]
+    (is (false? (:closed? flood)) "the open ground's flood is cut at the meter's 100 cells")
+    (is (= :budget walk) "nothing is left for the walk search")
+    (is (= [2 0] [@(:cuts m) (js/Math.round (* 1000 @(:left m)))]) "both counted cut, the meter spent")
+    (is (number? (reach/search-steps (partial reach/forward ground) [0 64 0] [50 64 50])) "with no meter bound it searches to its own budget")))

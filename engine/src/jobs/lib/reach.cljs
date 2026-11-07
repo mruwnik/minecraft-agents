@@ -15,6 +15,32 @@
   "Cells one search expands before it gives up and answers 'unknown'."
   1500)
 
+(def ^:dynamic *search*
+  "The search a flood or walk search is a part of (a flight step's, a quote's: one search, Q141), bound to a meter's
+  answer: each part stops where the meter runs out (a cut, counted) and takes the cells it ran off it; nil: no meter."
+  nil)
+
+(defn meter
+  "A meter of budget-s seconds of CPU of which spent-s are spent: a flood's cell costs read-s, a walk search's cell-s."
+  [budget-s spent-s read-s cell-s]
+  {:budget budget-s :left (volatile! (- budget-s spent-s)) :cuts (volatile! 0) :read-s read-s :cell-s cell-s})
+
+(defn metered-cap
+  "budget cells, at most those *search* has left at its price-k (:read-s or :cell-s) a cell."
+  [budget price-k]
+  (if-let [m *search*] (min budget (max 0 (js/Math.floor (/ @(:left m) (price-k m))))) budget))
+
+(defn charge!
+  "Take n cells at *search*'s price-k off it; cut?: the part stopped where the meter ran out."
+  [n price-k cut?]
+  (when-let [m *search*]
+    (vswap! (:left m) - (* n (price-k m)))
+    (when cut? (vswap! (:cuts m) inc))))
+
+(defn cuts "Parts of *search* cut so far (0 with none bound)." [] (if-let [m *search*] @(:cuts m) 0))
+
+(defn spent-s "Seconds of CPU *search* has spent (0 with none bound)." [] (if-let [m *search*] (- (:budget m) @(:left m)) 0))
+
 (def max-drop 3)
 
 (defn openable? [name]
@@ -306,12 +332,13 @@
 (defn search-steps
   "Best-first search from start [x y z] over (next-cells x y z) to a cell near target [x y z] (or one where (goal? x y z)
   holds): the steps of the walk it found (a number), :closed (every reachable cell expanded, no way) or :budget
-  (node-budget cells expanded). expanded!, when given, is called with the cells it expanded."
+  (node-budget cells expanded, fewer where *search* runs out). expanded!, when given, is called with the cells it expanded."
   ([next-cells start target] (search-steps next-cells start target nil))
   ([next-cells start target goal?] (search-steps next-cells start target goal? nil))
   ([next-cells [sx sy sz] [tx ty tz] goal? expanded!]
    (let [goal? (or goal? (fn [x y z] (near-cell? x y z tx ty tz)))
-         end (fn [n r] (when expanded! (expanded! n)) r)
+         cap (metered-cap node-budget :cell-s)
+         end (fn [n r] (when expanded! (expanded! n)) (charge! n :cell-s (and (= :budget r) (< cap node-budget))) r)
          key (keyer sx sz)
          seen (js/Set.)
          open #js []]
@@ -320,7 +347,7 @@
      (loop [n 0]
        (cond
          (zero? (.-length open)) (end n :closed)
-         (>= n node-budget) (end n :budget)
+         (>= n cap) (end n :budget)
          :else
          (let [top (heap-pop! open)
                g (aget top 1) x (aget top 2) y (aget top 3) z (aget top 4)]

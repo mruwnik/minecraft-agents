@@ -97,17 +97,20 @@
 (defn closed?
   "Whether cell pos holds a closed room (refuge-room?), kept in mem :refuge-rooms for the job; no closed room at all
   (reach-room/room nil) also in body memory (known-open?) for a while. :unseen, kept nowhere, when a cell of the room is not
-  seen yet (reach-room/unseen-room?): judged again at the next look. keep? false keeps nothing."
+  seen yet (reach-room/unseen-room?): judged again at the next look. :cut, kept nowhere, when a flood ran out of the
+  search's meter (reach/*search*). keep? false keeps nothing."
   ([c pos] (closed? c pos true))
   ([c pos keep?]
    (let [k (cell-key pos)
-         known (get (:refuge-rooms (ctx/mem c)) k)]
+         known (get (:refuge-rooms (ctx/mem c)) k)
+         n (reach/cuts)]
      (cond
        (some? known) known
        (known-open? c pos) false
-       :else (let [p (:primitives c) look (reach-room/look p pos) v (refuge-room? p pos look)]
+       :else (let [p (:primitives c) look (reach-room/look p pos) v (refuge-room? p pos look) unseen? (and (not v) (some? @(:unseen look)))]
                (cond
-                 (and (not v) (some? @(:unseen look))) :unseen
+                 (not= n (reach/cuts)) :cut
+                 unseen? :unseen
                  (not keep?) v
                  :else (do (ctx/update-mem! c assoc-in [:refuge-rooms k] v)
                            (when-not (or v (:room look)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
@@ -139,22 +142,15 @@
 
 (declare shut-by)
 
-(defn gap-known?
-  "Whether doorway-room at cell pos answers from what is kept: body memory :refuge-no-gap, or the room kept in mem
-  :refuge-gap-rooms while the world-key stays the same."
-  [c pos]
-  (let [k (cell-key pos)]
-    (boolean (or (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-no-gap))
-                 (= (world-key (:primitives c)) (:key (get (:refuge-gap-rooms (ctx/mem c)) k)))))))
-
 (defn gap-room
-  "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled (doorway-room), nil when none."
+  "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled (doorway-room), nil when none;
+  ::no-gap when no doorway shuts it."
   [c pos]
   (let [p (:primitives c)
         e (:cell (reach-room/unroofed-cell p pos nil true))
         d (when e (shut-by p pos e any?))]
-    (when-not d (mem/write! (:store (:engine c)) :refuge-no-gap {:cell (cell-key pos)} open-policy))
-    (when d
+    (if-not d
+      ::no-gap
       (let [head (update d :y inc)
             plug? #{[(:x d) (:y d) (:z d)] [(:x head) (:y head) (:z head)]}
             base (reach-room/shut-kind-at p)
@@ -172,16 +168,21 @@
   :doors [{:cell gap-feet :inside}], :gap [feet head] and :fill? (a block is carried to fill it; else the room stays open
   to one mob at a time); nil when it is none or a cell of it is unseen. A cell with no doorway that shuts it is kept in body
   memory :refuge-no-gap (open-policy) so a flight does not flood open ground again; the room in mem :refuge-gap-rooms
-  while the world-key stays the same (gap-known?)."
+  while the world-key stays the same. :cut, kept nowhere, when a flood ran out of the search's meter."
   [c pos]
   (let [k (cell-key pos)
         wk (world-key (:primitives c))
-        kept (get (:refuge-gap-rooms (ctx/mem c)) k)]
+        kept (get (:refuge-gap-rooms (ctx/mem c)) k)
+        n (reach/cuts)]
     (when-not (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-no-gap))
       (when-let [room (if (= wk (:key kept))
                         (:room kept)
-                        (let [r (gap-room c pos)] (ctx/update-mem! c assoc-in [:refuge-gap-rooms k] {:key wk :room r}) r))]
-        (assoc room :fill? (boolean (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build)))))))))))
+                        (let [r (gap-room c pos)]
+                          (cond
+                            (not= n (reach/cuts)) :cut
+                            (= ::no-gap r) (do (mem/write! (:store (:engine c)) :refuge-no-gap {:cell k} open-policy) nil)
+                            :else (do (ctx/update-mem! c assoc-in [:refuge-gap-rooms k] {:key wk :room r}) r))))]
+        (cond-> room (map? room) (assoc :fill? (boolean (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build))))))))))))
 
 (defn flood-s
   "Seconds of CPU one room flood to its cap costs: reach-room/room-cells cells read at cost/search-read-s. A fresh judgement
@@ -220,71 +221,84 @@
 
 (declare way-in race-won?)
 
+(defn search-meter
+  "A reach/meter of the one search a flight step's or a quote's searches make (cost/search-budget-s, Q141), spent-s spent."
+  [spent-s]
+  (reach/meter (cost/search-budget-s) spent-s (cost/search-read-s) (cost/search-cell-s)))
+
+(defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
+
+(defn spent! "Keep s as the flight step's searches' CPU." [c s] (ctx/update-mem! c assoc :search-s s))
+
+(defn new-step! "A new flight step: its searches start a fresh search-meter." [c] (spent! c 0))
+
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start, :home? and, when its walk search
-  was paid for, :way-in, way-in's answer): the home's (home {:x :y :z} or nil) and those behind the doors the body has
+  ran, :way-in, way-in's answer): the home's (home {:x :y :z} or nil) and those behind the doors the body has
   seen (starts), nearest cell first (the home on a tie); and {:dropped [{:at [x y z] :own? :why}]}, the cells that are
   none: :run-failed (a run to it failed this flight), :not-closed, :unseen (a cell of the room not seen yet), or
-  :unjudged (a door side not judged this step: its side-s does not pay, cost/refuge-search-pays?, against threats' lead
-  at its door, lead-s straight, or fire, and the run it saves over a room with a run on, or the step's CPU is at
-  cost/search-budget-s). The home (always judged: once a flight, its answer is kept) and sides judged before or kept (side-s none) come first, then the rest nearest first; each closed room found gets its walk search (way-s) as verdicts prices it. :spent-s the CPU the step's searches ran: flood-s a fresh judgement, the home's doorway-room unless gap-known? (judge-s), each walk search's cells at cost/search-cell-s. A home with a bare doorway
-  gap counts as a room (doorway-room: its :gap; :fill? when a block is carried to fill it). keep? false: the
-  judgements are kept nowhere (closed?), so the flee price surveys what the flight's step then surveys. Defaults: no
-  threats, no fire, keep? true."
+  :unjudged (not judged this step: a door side whose side-s does not pay, cost/refuge-search-pays?, against threats'
+  lead at its door, lead-s straight, or fire, and the run it saves over a room with a run on; or a flood cut by the
+  meter). Its floods and walk searches run under one search-meter from spent-s (default 0): each stops where it runs
+  out, :spent-s what they all ran. The home (judged whatever its price) and sides judged before or kept (side-s none)
+  come first, then the rest nearest first; each closed room found gets its walk search (way-s) as verdicts prices it. A
+  home with a bare doorway gap counts as a room (doorway-room: its :gap; :fill? when a block is carried to fill it).
+  keep? false: the judgements are kept nowhere (closed?). Defaults: no threats, no fire, keep? true."
   ([c home] (survey c home {}))
-  ([c home {:keys [threats fire keep?] :or {keep? true}}]
-   (let [p (:primitives c)
-         me (u/self-pos c)
-         failed (:refuges-failed (ctx/mem c) #{})
-         here (here-s p threats)
-         spent (volatile! 0)
-         best (volatile! ##Inf)
-         found (volatile! [])
-         known (fn [pos] (get (:refuge-rooms (ctx/mem c)) (cell-key pos)))
-         free? (fn [{:keys [pos home?]}] (or home? (some? (known pos)) (known-open? c pos) (zero? (side-s p pos))))
-         judge (fn [{:keys [pos home? door]}]
-                 (let [k (known pos)
-                       at (mid (or door pos))
-                       cost (side-s p pos)]
-                   (cond
-                     (some? k) (when-not k :not-closed)
-                     (known-open? c pos) :not-closed
-                     (or home? (zero? cost)
-                         (cost/refuge-search-pays? @spent cost here (lead-s p [at] threats (u/dist me at)) (cost/run-saved-s (u/dist me at) @best (food p)) fire))
-                     (let [v (closed? c pos keep?)]
-                       (when (pos? cost) (vswap! spent + (flood-s)))
-                       (case v true nil :unseen :unseen :not-closed))
-                     :else :unjudged)))
-         with-way (fn [{:keys [home?] :as r}]
-                    (let [doors (map (comp mid :cell) (:doors r))
-                          blocks (reduce min ##Inf (map #(u/dist me %) doors))
-                          cost (* (count (:doors r)) (way-s))]
-                      (if-not (or home? (cost/refuge-search-pays? @spent cost here (lead-s p doors threats blocks) (cost/run-saved-s blocks @best (food p)) fire))
-                        r
-                        (let [w (way-in p r #(vswap! spent + (* % (cost/search-cell-s))))]
-                          (when (and w (race-won? p r w threats)) (vswap! best min (:steps w)))
-                          (assoc r :way-in w)))))
-         room-of (fn [{:keys [pos home? gap-room]}]
-                   (when-not (some #(contains? (:cells %) (mapv pos [:x :y :z])) @found)
-                     (when-let [r (some-> (or gap-room (reach-room/room p pos)) (assoc :start pos :home? home?))]
-                       (let [r (with-way r)] (vswap! found conj r) r))))
-         judged (->> (starts p home)
-                     (map-indexed vector)
-                     (sort-by (fn [[i s]] [(if (free? s) 0 1) i]))
-                     (mapv (fn [[i {:keys [pos home?] :as s}]]
-                             (let [why (if (failed (cell-key pos)) :run-failed (judge s))
-                                   gap-room (when (and home? (#{:not-closed :unseen} why)) (when-not (gap-known? c pos) (vswap! spent + (judge-s))) (doorway-room c pos))
-                                   s (cond-> (assoc s :why (if gap-room nil why)) gap-room (assoc :gap-room gap-room))]
-                               [i (cond-> s (nil? (:why s)) (assoc :room (room-of s)))])))
-                     (sort-by first)
-                     (mapv second))]
-     {:spent-s @spent
-      :dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
-      :rooms (->> judged
-                  (keep :room)
-                  ;; the home's room keeps its :home? start over its door side's
-                  (sort-by (fn [{:keys [cells home?]}] [(apply min ##Inf (map (fn [[x y z]] (u/dist me (mid {:x x :y y :z z}))) cells)) (if home? 0 1)]))
-                  vec)})))
+  ([c home {:keys [threats fire keep? spent-s] :or {keep? true spent-s 0}}]
+   (binding [reach/*search* (search-meter spent-s)]
+     (let [p (:primitives c)
+           me (u/self-pos c)
+           failed (:refuges-failed (ctx/mem c) #{})
+           here (here-s p threats)
+           best (volatile! ##Inf)
+           found (volatile! [])
+           known (fn [pos] (get (:refuge-rooms (ctx/mem c)) (cell-key pos)))
+           free? (fn [{:keys [pos home?]}] (or home? (some? (known pos)) (known-open? c pos) (zero? (side-s p pos))))
+           judge (fn [{:keys [pos home? door]}]
+                   (let [k (known pos)
+                         at (mid (or door pos))
+                         cost (side-s p pos)]
+                     (cond
+                       (some? k) (when-not k :not-closed)
+                       (known-open? c pos) :not-closed
+                       (or home? (zero? cost)
+                           (cost/refuge-search-pays? (reach/spent-s) cost here (lead-s p [at] threats (u/dist me at)) (cost/run-saved-s (u/dist me at) @best (food p)) fire))
+                       (case (closed? c pos keep?) true nil :unseen :unseen :cut :unjudged :not-closed)
+                       :else :unjudged)))
+           with-way (fn [{:keys [home?] :as r}]
+                      (let [doors (map (comp mid :cell) (:doors r))
+                            blocks (reduce min ##Inf (map #(u/dist me %) doors))
+                            cost (* (count (:doors r)) (way-s))
+                            n (reach/cuts)]
+                        (if-not (or home? (cost/refuge-search-pays? (reach/spent-s) cost here (lead-s p doors threats blocks) (cost/run-saved-s blocks @best (food p)) fire))
+                          r
+                          (let [w (way-in p r)]
+                            (when (and w (race-won? p r w threats)) (vswap! best min (:steps w)))
+                            ;; a search the meter cut that found no way leaves the room for verdicts to price again
+                            (cond-> r (or w (= n (reach/cuts))) (assoc :way-in w))))))
+           room-of (fn [{:keys [pos home? gap-room]}]
+                     (when-not (some #(contains? (:cells %) (mapv pos [:x :y :z])) @found)
+                       (when-let [r (some-> (or gap-room (reach-room/room p pos)) (assoc :start pos :home? home?))]
+                         (let [r (with-way r)] (vswap! found conj r) r))))
+           judged (->> (starts p home)
+                       (map-indexed vector)
+                       (sort-by (fn [[i s]] [(if (free? s) 0 1) i]))
+                       (mapv (fn [[i {:keys [pos home?] :as s}]]
+                               (let [why (if (failed (cell-key pos)) :run-failed (judge s))
+                                     gap (when (and home? (#{:not-closed :unseen} why)) (doorway-room c pos))
+                                     why (cond (= :cut gap) :unjudged gap nil :else why)
+                                     s (cond-> (assoc s :why why) (map? gap) (assoc :gap-room gap))]
+                                 [i (cond-> s (nil? why) (assoc :room (room-of s)))])))
+                       (sort-by first)
+                       (mapv second))]
+       {:spent-s (reach/spent-s)
+        :dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
+        :rooms (->> judged
+                    (keep :room)
+                    ;; the home's room keeps its :home? start over its door side's
+                    (sort-by (fn [{:keys [cells home?]}] [(apply min ##Inf (map (fn [[x y z]] (u/dist me (mid {:x x :y y :z z}))) cells)) (if home? 0 1)]))
+                    vec)}))))
 
 (defn reaches-first?
   "Whether the body walks steps blocks before any melee threat (ranged ones shoot, they do not race), each at its own
@@ -388,14 +402,14 @@
 
 (defn way-in
   "The door of room the body walks to in fewest steps over the blocks it has seen (jobs.lib.reach.room/walk-steps to the room
-  cell inside it): {:cell :inside :steps}, nil when it finds no walk to any. expanded!, when given, is called with the cells
-  each door's search expanded."
-  ([p room] (way-in p room nil))
-  ([p room expanded!]
-   (->> (:doors room)
-        (keep (fn [d] (when-let [n (reach-room/walk-steps p (sh-sense/feet p) (:inside d) expanded!)] (assoc d :steps n))))
-        (sort-by :steps)
-        first)))
+  cell inside it): {:cell :inside :steps}, nil when it finds none. Its searches run under reach/*search*, a fresh
+  search-meter when none is bound: those the meter cut leave the best of the rest."
+  [p room]
+  (binding [reach/*search* (or reach/*search* (search-meter 0))]
+    (->> (:doors room)
+         (keep (fn [d] (when-let [n (reach-room/walk-steps p (sh-sense/feet p) (:inside d))] (assoc d :steps n))))
+         (sort-by :steps)
+         first)))
 
 (defn race-won?
   "Whether the body, at its own speed (food), walks way-in's steps before any melee threat gets to a door of room:
@@ -404,38 +418,43 @@
   (reaches-first? p steps (map :cell (:doors room)) threats))
 
 (defn verdicts
-  "What the flight makes of each of rooms (rooms, nearest first): [{:room r :inside? true}] alone for the room the body
-  is in, else per room {:room r :way w} with :why it is not run to: :no-run (way? false: no run may be looked for now),
-  :creeper (one chases: it would follow to the door and blow the door, chest and bed), :unpriced (way-in's way-s a door
-  does not pay, cost/refuge-search-pays?, spent-s of the step's CPU already spent, against threats' lead at its doors, lead-s straight, or fire,
-  and the run it saves over the room a run is on to in fewest steps; the home's is always searched, and a room
-  survey already searched, :way-in, costs nothing), :no-way (way-in finds none) or :race-lost (a melee chaser gets to a
-  door first: race-won?); no :why: a run there is on."
+  "What the flight makes of each of rooms (rooms, nearest first), {:verdicts [...] :spent-s}: [{:room r :inside? true}]
+  alone for the room the body is in, else per room {:room r :way w} with :why it is not run to: :no-run (way? false: no
+  run may be looked for now), :creeper (one chases: it would follow to the door and blow the door, chest and bed),
+  :unpriced (way-in's way-s a door does not pay, cost/refuge-search-pays?, against threats' lead at its doors, lead-s
+  straight, or fire, and the run it saves over the room a run is on to in fewest steps; or the meter cut its search
+  before it found a way; the home's runs whatever its price, and a room survey already searched, :way-in, costs nothing), :no-way
+  (way-in finds none) or :race-lost (a melee chaser gets to a door first: race-won?); no :why: a run there is on. Its
+  walk searches run under one search-meter from spent-s, :spent-s what they all ran."
   ([p rooms threats way?] (verdicts p rooms threats way? 0 nil))
   ([p rooms threats way? spent-s fire]
-   (if-let [r (some #(when (inside? p %) %) rooms)]
-     [{:room r :inside? true}]
+   (binding [reach/*search* (search-meter spent-s)]
      (let [creeper? (some combat/creeper? threats)
            me (u/pos-of (.-pos (.self p)))
-           here (here-s p threats)]
-       (loop [[r & more] rooms spent spent-s best ##Inf out []]
-         (if-not r
-           out
-           (let [cost (* (count (:doors r)) (way-s))
-                 doors (map (comp mid :cell) (:doors r))
-                 blocks (reduce min ##Inf (map #(u/dist me %) doors))]
-             (cond
-               (not way?) (recur more spent best (conj out {:room r :why :no-run}))
-               creeper? (recur more spent best (conj out {:room r :why :creeper}))
-               (not (or (:home? r) (contains? r :way-in) (cost/refuge-search-pays? spent cost here (lead-s p doors threats blocks) (cost/run-saved-s blocks best (food p)) fire))) (recur more spent best (conj out {:room r :why :unpriced}))
-               :else (let [ran (volatile! 0)
-                           w (if (contains? r :way-in) (:way-in r) (way-in p r #(vswap! ran + (* % (cost/search-cell-s)))))
-                           won? (and w (race-won? p r w threats))]
-                       (recur more (+ spent @ran) (if won? (min best (:steps w)) best)
-                              (conj out (cond
-                                          (nil? w) {:room r :why :no-way}
-                                          won? {:room r :way w}
-                                          :else {:room r :way w :why :race-lost}))))))))))))
+           here (here-s p threats)
+           in (some #(when (inside? p %) %) rooms)
+           vs (if in
+                [{:room in :inside? true}]
+                (loop [[r & more] rooms best ##Inf out []]
+                  (if-not r
+                    out
+                    (let [cost (* (count (:doors r)) (way-s))
+                          doors (map (comp mid :cell) (:doors r))
+                          blocks (reduce min ##Inf (map #(u/dist me %) doors))]
+                      (cond
+                        (not way?) (recur more best (conj out {:room r :why :no-run}))
+                        creeper? (recur more best (conj out {:room r :why :creeper}))
+                        (not (or (:home? r) (contains? r :way-in) (cost/refuge-search-pays? (reach/spent-s) cost here (lead-s p doors threats blocks) (cost/run-saved-s blocks best (food p)) fire))) (recur more best (conj out {:room r :why :unpriced}))
+                        :else (let [n (reach/cuts)
+                                    w (if (contains? r :way-in) (:way-in r) (way-in p r))
+                                    won? (and w (race-won? p r w threats))]
+                                (recur more (if won? (min best (:steps w)) best)
+                                       (conj out (cond
+                                                   (and (nil? w) (not= n (reach/cuts))) {:room r :why :unpriced}
+                                                   (nil? w) {:room r :why :no-way}
+                                                   won? {:room r :way w}
+                                                   :else {:room r :way w :why :race-lost})))))))))]
+       {:verdicts vs :spent-s (reach/spent-s)}))))
 
 (defn pick
   "Where the flight goes among verdicts: the room the body is in, else the one a run is on to in fewest steps, the home

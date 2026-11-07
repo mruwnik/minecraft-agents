@@ -16,6 +16,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [engine.flee-home-test :as fh]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.enter-room :as enter-room]
@@ -248,23 +249,24 @@
 
 (defn ^:async pick-over
   "pick-seen over closed rooms behind starts, the body at the origin, route-cost from price (door -> seconds), called again
-  with the state it leaves until it is done: {:pick :quoted [door...] :calls [[door...] per call]}."
-  [starts price]
+  with the state it leaves until it is done: {:pick :quoted [door...] :calls [[door...] per call]}. candidate (default
+  every start a closed room, no flood) stands for candidate?."
+  [starts price & [candidate]]
   (let [quoted (atom [])
         state (atom {})
         [ss cand self route mid mem] [enter-room/seen-starts enter-room/candidate? jobs.lib.util/self-pos room-lib/route-cost room-lib/mid ctx/mem]]
     (set! enter-room/seen-starts (fn [_] starts))
-    (set! enter-room/candidate? (fn [_ _ _] true))
+    (set! enter-room/candidate? (or candidate (fn [_ _ _] true)))
     (set! jobs.lib.util/self-pos (fn [_] {:x 0 :y 0 :z 0}))
     (set! room-lib/mid identity)
     (set! ctx/mem (fn [_] @state))
     (set! room-lib/route-cost (fn ^:async f [_ args] (swap! quoted conj (:pos args)) (price (:pos args))))
     (try (loop [calls []]
            (let [before (count @quoted)
-                 {:keys [pick done?] :as r} (await (enter-room/pick-seen {:primitives #js {}}))
+                 {:keys [pick done?] :as r} (await (enter-room/pick-seen {:primitives #js {}} (:pick-state @state)))
                  calls (conj calls (subvec @quoted before))]
              (reset! state {:pick-state (:state r)})
-             (if (or done? (> (count calls) (count starts)))
+             (if (or done? (> (count calls) (* 2 (count starts))))
                {:pick pick :quoted @quoted :calls calls}
                (recur calls))))
          (finally (set! enter-room/seen-starts ss) (set! enter-room/candidate? cand) (set! jobs.lib.util/self-pos self)
@@ -297,6 +299,19 @@
           (is (> (+ (* 2 (room-lib/judge-s)) (room-lib/way-s)) (cost/search-budget-s)) "a door's floods and quote are over the search budget")
           (is (every? #(<= (count %) 1) calls) (str "so a call quotes one door and the next goes on from the state it left, none twice: " calls)))))))
 
+(deftest a-call-that-floods-leaves-its-quote-to-the-next
+  ;; a call's floods are one search and a quote one of its own: never both in a call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[near far] (map room-at [1 40])
+              floods (atom [])
+              flooding (fn [_ {:keys [door]} _] (swap! floods conj door) (reach/charge! 10 :read-s false) true)
+              {:keys [pick quoted calls]} (await (pick-over [near far] {(:door near) 90 (:door far) 4} flooding))]
+          (is (= {:pos (:pos far)} pick))
+          (is (= [(:door near) (:door far)] quoted))
+          (is (= [[] [(:door near)] [] [(:door far)]] calls) (str "each door's floods in one call, its quote in the next: " calls)))))))
+
 (deftest a-doors-unseen-check-floods-nothing-its-judgement-did-not
   ;; candidate?'s unseen check rides on the floods side-s prices (reach-room/look, kept per body), none of its own
   (let [{:keys [p]} (fh/setup (assoc (fh/hut {:x -13.5 :y 64 :z 10.5} (merge door-states fh/lone-door-states) [] fh/lone-doors)
@@ -310,3 +325,20 @@
         again (try (enter-room/candidate? p side true) (finally (set! reach-room/flood-cells flood)))]
     (is kept? "the side's judgement is kept: side-s prices it at none")
     (is (= 0 @floods) (str "so asking again floods nothing: " @floods " floods, candidate " again))))
+
+(deftest a-quotes-pick-not-done-goes-on-at-the-next-quote
+  ;; a quote's pick is a search a call goes on with: the next quote takes up the state the last one left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fh/setup (assoc (fh/hut {:x -13.5 :y 64 :z 10.5} (merge door-states fh/lone-door-states) [] fh/lone-doors) :home false))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              kept (atom [])
+              [picks? pick] [enter-room/picks-seen? enter-room/pick-seen]]
+          (set! enter-room/picks-seen? (constantly true))
+          (set! enter-room/pick-seen (fn ^:async ps [_ state] (swap! kept conj state) {:pick nil :done? false :state {:n (inc (:n state 0))}}))
+          (try (await (enter-room/quote-of c))
+               (await (enter-room/quote-of c))
+               (finally (set! enter-room/picks-seen? picks?) (set! enter-room/pick-seen pick)))
+          (is (= [nil {:n 1}] @kept) (str "the second quote goes on from the first's state: " @kept)))))))

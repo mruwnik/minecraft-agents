@@ -57,11 +57,13 @@
 
 (defn survey
   "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead or the shooters' fire, fire-on,
-  pricing its door sides judged afresh); nil with a creeper of threats within blast reach (blast). keep? as
-  room-lib/survey's: the flee price (caught-chance!) keeps nothing, so it surveys what the flight's step then does."
+  pricing its door sides judged afresh), its searches part of the step's one (room-lib/step-spent-s); nil with a creeper
+  of threats within blast reach (blast). keep? as room-lib/survey's: the flee price (caught-chance!) keeps nothing."
   [c threats keep?]
   (when (empty? (blast (:primitives c) threats))
-    (room-lib/survey c (home-pos c) {:threats threats :keep? keep? :fire (fire-on c threats)})))
+    (let [r (room-lib/survey c (home-pos c) {:threats threats :keep? keep? :fire (fire-on c threats) :spent-s (room-lib/step-spent-s c)})]
+      (room-lib/spent! c (:spent-s r))
+      r)))
 
 (def glance-turns
   "Degrees from the way away a flight turns to look before it chooses: the view cone (about 100 degrees wide) then

@@ -546,9 +546,10 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
               zombie [(seen-zombie -13.5 13.5)]
-              judged (fn [margin] (settings/with-settings no-ceiling
-                                    #(with-redefs [cost-danger/race-margin-s (constantly margin)]
-                                       (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false))))))))
+              judged (fn [margin] (rooms/new-step! c)
+                       (settings/with-settings no-ceiling
+                         #(with-redefs [cost-danger/race-margin-s (constantly margin)]
+                            (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false))))))))
               [with-margin without] [(judged (margin)) (judged 0)]]
           (is (pos? with-margin) (str "a zombie 3 blocks off leaves lead for a flood: " with-margin))
           (is (< with-margin without) (str "the race margin's share of the lead buys none: " [with-margin without])))))))
@@ -565,7 +566,7 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
               p (:primitives eng)
-              unjudged-at (fn [threats] (settings/with-settings no-ceiling #(mapv :at (filter (comp #{:unjudged} :why) (:dropped (cover/survey c threats false))))))
+              unjudged-at (fn [threats] (rooms/new-step! c) (settings/with-settings no-ceiling #(mapv :at (filter (comp #{:unjudged} :why) (:dropped (cover/survey c threats false))))))
               far [(seen-zombie -13.5 40.5)]
               pressed [(seen-zombie -13.5 9)]
               sides (* 2 7)]
@@ -575,8 +576,8 @@
           (is (= sides (count (unjudged-at pressed))) "so none is"))))))
 
 (deftest a-steps-searches-stop-at-the-search-budget-whatever-the-threat
-  ;; Q141: a step's searches together are one search of about cost/search-budget-s: none starts once the step has run it.
-  ;; Each fresh judgement counts one flood to the cap (flood-s).
+  ;; Q141: a step's searches together are one search of cost/search-budget-s: the flood running when it runs out is cut
+  ;; there (its side unjudged), none after it starts. Each side judged floods open ground to the cap (flood-s)
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -587,13 +588,20 @@
               flood (rooms/flood-s)
               budget (cost/search-budget-s)
               judged (fn [threats fire]
+                       (rooms/new-step! c)
                        (let [r (with-redefs [cover/fire-on (constantly fire)] (cover/survey c threats false))]
-                         [(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped r)))) (:spent-s r)]))]
+                         [(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped r))))
+                          (<= (- budget (cost/search-read-s)) (:spent-s r) budget)
+                          (= (:spent-s r) (rooms/step-spent-s c))]))]
           (is (< (* 2 flood) budget (* 7 flood)) "the budget fits more than one flood, fewer than the sides")
-          (are [threats fire] (= [(js/Math.ceil (/ budget flood)) (* flood (js/Math.ceil (/ budget flood)))] (judged threats fire))
+          (are [threats fire] (= [(js/Math.floor (/ budget flood)) true true] (judged threats fire))
             [(seen-zombie -13.5 40.5)] nil
             [] nil
-            [#js {:name "skeleton" :visible true :pos #js {:x -13.5 :y 64 :z 20.5}}] {:exposed? true}))))))
+            [#js {:name "skeleton" :visible true :pos #js {:x -13.5 :y 64 :z 20.5}}] {:exposed? true})
+          (rooms/new-step! c)
+          (cover/survey c [] false)
+          (is (= [] (filter (comp #{:not-closed :unseen} :why) (:dropped (cover/survey c [] false))))
+              "a second survey in the step judges nothing more: the step's searches are one"))))))
 
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
   (async done
@@ -631,6 +639,7 @@
               _ (.setOwner (:primitives eng) "tx")
               skeleton [#js {:name "skeleton" :visible true :pos #js {:x 5.5 :y 64 :z 14.5}}]
               judged (fn [chance]
+                       (rooms/new-step! c)
                        (with-redefs [cost/threat-parts (fn [& _] {:chance chance :death 1})]
                          (- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c skeleton false)))))))
               counts (mapv judged [0 0.5 1])]
@@ -638,7 +647,7 @@
           (is (pos? (first counts)) (str "door sides judged: " counts))
           (is (apply = counts) (str "alike at every hit chance: " counts)))))))
 
-(deftest the-homes-judgements-count-in-the-steps-cpu-and-its-doorway-room-is-judged-once
+(deftest the-homes-judgements-run-within-the-steps-search-and-its-doorway-room-is-judged-once
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -648,15 +657,38 @@
               counts (atom {})
               restore (counting! counts :unroofed #(identity reach-room/unroofed-cell) #(set! reach-room/unroofed-cell %))
               threats [(seen-zombie 5.5 20.5)]
-              [a first-floods b] (try (let [a (rooms/survey c home {:threats threats}) n (:unroofed @counts)]
-                                        [a n (rooms/survey c home {:threats threats})])
-                                      (finally (restore)))
+              budget (cost/search-budget-s)
+              [spent kept a first-floods b] (try (let [spent (rooms/survey c home {:threats threats :spent-s budget})
+                                                       kept (select-keys (ctx/mem c) [:refuge-rooms :refuge-gap-rooms])
+                                                       a (rooms/survey c home {:threats threats}) n (:unroofed @counts)]
+                                                   [spent kept a n (rooms/survey c home {:threats threats})])
+                                                 (finally (restore)))
               gap? (fn [r] (some :gap (:rooms r)))]
-          (is (and (gap? a) (gap? b)) "the doorless home is a room both steps")
-          (is (< (js/Math.abs (- (:spent-s a) (:spent-s b) (rooms/flood-s) (rooms/judge-s))) 1e-9)
-              (str "the first step pays the home's flood and its doorway room, the next neither: " [(:spent-s a) (:spent-s b)]))
+          (is (= [{:at [5 64 0] :own? true :why :unjudged}] (:dropped spent)) "a step whose search is spent judges not even the home")
+          (is (= {} kept) "and keeps nothing of it")
+          (is (and (gap? a) (gap? b)) "the doorless home is a room at the next steps")
+          (is (< (:spent-s b) (:spent-s a) budget) (str "the first pays the home's flood and its doorway room, the next neither: " [(:spent-s a) (:spent-s b)]))
           (is (pos? first-floods))
           (is (= first-floods (:unroofed @counts)) (str "the doorway room's floods are not run again: " first-floods " " @counts)))))))
+
+(deftest a-room-whose-walk-search-the-step-cannot-pay-is-unpriced-not-wayless
+  ;; the meter cuts a walk search as it runs: a room it found no way to then is priced again at a later step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              threats [(seen-zombie 5.5 30.5)]
+              rooms (mapv #(dissoc % :way-in) (:rooms (rooms/survey c home {:threats threats})))
+              budget (cost/search-budget-s)
+              late (rooms/verdicts p rooms threats true (- budget (* 3 (cost/search-cell-s))) nil)
+              fresh (rooms/verdicts p rooms threats true 0 nil)]
+          (is (= [true] (mapv :home? rooms)) "the home")
+          (is (= [:unpriced] (mapv :why (:verdicts late))) "three cells left of the step's search: the home's walk search is cut")
+          (is (<= (:spent-s late) budget) (str (:spent-s late)))
+          (is (= [nil] (mapv :why (:verdicts fresh))) "a step with its search to spend runs home")
+          (is (< 0 (:spent-s fresh) budget) (str (:spent-s fresh))))))))
 
 (deftest an-open-home-is-flooded-once-across-flights
   (async done
@@ -762,7 +794,7 @@
               _ (.setOwner (:primitives eng) "t8")
               threats [(seen-zombie 40.5 6.5)]
               [survey verdicts] (settings/with-settings no-ceiling
-                                  #(let [s (rooms/survey c nil {:threats threats})] [s (rooms/verdicts p (:rooms s) threats true (:spent-s s) nil)]))
+                                  #(let [s (rooms/survey c nil {:threats threats})] [s (:verdicts (rooms/verdicts p (:rooms s) threats true (:spent-s s) nil))]))
               hut-of (fn [r] (some #(when (contains? (:cells r) [(+ 5 %) 64 0]) %) dxs))]
           (is (= dxs (mapv (comp hut-of :room) verdicts)) (str "all four rooms, nearest first: " (mapv :start (:rooms survey))))
           (is (= [:no-way :no-way :no-way nil] (mapv :why verdicts)) (str (mapv :why verdicts)))

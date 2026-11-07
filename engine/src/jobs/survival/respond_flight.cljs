@@ -150,7 +150,9 @@
         glanced? (boolean (and survey0 (not-any? combat/creeper? threats) (await (room-lib/glance-in! c survey0 threats))))
         survey (if glanced? (cover/survey c threats true) survey0)
         rooms (:rooms survey)
-        verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (+ (:spent-s survey) (if glanced? (:spent-s survey0) 0)) (cover/fire-on c threats)))
+        verdicts (when survey (let [v (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (room-lib/step-spent-s c) (cover/fire-on c threats))]
+                                (room-lib/spent! c (:spent-s v))
+                                (:verdicts v)))
         {:keys [room way inside?]} (room-lib/pick verdicts)
         gap-way (when (and inside? (:fill? room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
         _ (when (and glanced? room inside?) (say-once! c room))
@@ -233,6 +235,6 @@
                 (not (ctx/alive? c)) :continue
                 clear? (ctx/end c :done nil {:fled [] :ended :none})
                 (not= :ok (first (ctx/can-run c))) :continue
-                :else (do (await (pace/pace! c)) (recur)))))]
+                :else (do (await (pace/pace! c)) (room-lib/new-step! c) (recur)))))]
     (when (contract/ending? r) (forget-flight! c))
     r))

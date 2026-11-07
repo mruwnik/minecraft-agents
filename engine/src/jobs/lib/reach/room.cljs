@@ -6,7 +6,7 @@
             [jobs.lib.cost.look :as glance]
             [jobs.lib.memory-age :as memory-age]
             [engine.perception.rays :as rays]
-            [jobs.lib.reach :refer [openable? open-prop? tall-block kind-of keyer passable? seen-standable? standing-cell
+            [jobs.lib.reach :as reach :refer [openable? open-prop? tall-block kind-of keyer passable? seen-standable? standing-cell
                                     forward backward search-steps world-kinds]]
             [jobs.lib.util :as u]))
 
@@ -25,19 +25,22 @@
 
 (defn flood-visit
   "Breadth-first over (next-cells x y z) from start [x y z], expanding at most budget cells: {:cells #js [[x y z]..] in
-  visiting order, :closed? whether every reachable cell was expanded within budget}. An abort? (cell #js [x y z]) that is
-  true for a cell about to be expanded ends the flood there, not closed."
+  visiting order, :closed? whether every reachable cell was expanded within budget}, fewer where reach/*search* runs out
+  (its cells charged). An abort? (cell #js [x y z]) that is true for a cell about to be expanded ends the flood there,
+  not closed."
   ([next-cells start budget] (flood-visit next-cells start budget nil))
   ([next-cells [sx sy sz] budget abort?]
   (let [key (keyer sx sz)
         seen (js/Set.)
-        queue #js [#js [sx sy sz]]]
+        queue #js [#js [sx sy sz]]
+        cap (reach/metered-cap budget :read-s)
+        end (fn [closed? cut?] (reach/charge! (min (.-size seen) cap) :read-s cut?) {:cells queue :closed? closed?})]
     (.add seen (key sx sy sz))
     (loop [head 0]
       (cond
-        (== head (.-length queue)) {:cells queue :closed? true}
-        (>= (.-size seen) budget) {:cells queue :closed? false}
-        (and abort? (abort? (aget queue head))) {:cells queue :closed? false}
+        (== head (.-length queue)) (end true false)
+        (>= (.-size seen) cap) (end false (< cap budget))
+        (and abort? (abort? (aget queue head))) (end false false)
         :else (let [c (aget queue head)
                     nexts (next-cells (aget c 0) (aget c 1) (aget c 2))]
                 (dotimes [i (.-length nexts)]
@@ -433,7 +436,7 @@
 
 (defn kept-with
   "(f kind-at put!) for the key `ck`, kept in the body's perception store while the world and its memory stay the same (the same shared kind-at serves every cell); put! (key value) keeps a further answer for another key of the
-  same steady key (a no-op unkept). Not kept without a perception."
+  same steady key (a no-op unkept). Not kept without a perception, nor when a flood or search of f was cut (reach/cuts)."
   [p ck f]
   (let [per (aget p "perception") k (some-> per steady-key)]
     (if-not k
@@ -443,10 +446,12 @@
           (set! (.-roomKey st) k)
           (set! (.-roomMemo st) (js/Map.))
           (set! (.-roomKind st) (room-kind-at p (shut-kind-at p))))
-        (let [^js m (.-roomMemo st)]
+        (let [^js m (.-roomMemo st)
+              n (reach/cuts)
+              whole? #(= n (reach/cuts))]
           (if (.has m ck)
             (.get m ck)
-            (let [v (f (.-roomKind st) (fn [k v] (.set m k v)))] (.set m ck v) v)))))))
+            (let [v (f (.-roomKind st) (fn [k v] (when (whole?) (.set m k v))))] (when (whole?) (.set m ck v)) v)))))))
 
 (defn kept?
   "Whether an answer for the key `ck` is kept (kept-with) under the world and memory as they are now."
