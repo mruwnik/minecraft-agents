@@ -272,13 +272,18 @@
   "{option answer} of the cornered options open to the body against hostiles: :fight, the covers (cornered-covers),
   with a back-off step to take (back-off-search!'s :target; nil: none or tried), :back-off the walk away
   (hostile/cornered-answers) caught as its search says (:caught), and with swim? (afloat, a drowned near) :swim-out the
-  swim to dry land and walk on (hostile/flee-answer, caught at the prior: no search runs from the shore); home?: the
-  body is in its home room."
-  [c hostiles home? back-off swim?]
-  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))]
+  swim to dry land and walk on (hostile/flee-answer, caught at the prior: no search runs from the shore); with enderman?
+  (an angry one near) :water and :roof not yet tried, the holds left (hold!) where hostiles but the enderman reach the
+  body (cost/hold-answer); home?: the body is in its home room."
+  [c hostiles home? back-off swim? enderman?]
+  (let [a (hostile/cornered-answers c hostiles (cornered-covers c hostiles home?) (some? (:target back-off)) (:caught back-off))
+        p (:primitives c)
+        hold (fn [] (cost/hold-answer {:equipment (cost/equipment-of (.-equipment (.self p))) :mobs (mapv #(hostile/mob-near p %) hostiles)
+                                       :seconds (/ (* (max 0 (- (settings/get settings ::hold-cap) (:holds (ctx/mem c) 0))) (flight/wait-ms)) 1000)}))]
     (cond-> (dissoc a :flee)
       (contains? a :flee) (assoc :back-off (:flee a))
-      swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil)))))
+      swim? (assoc :swim-out (hostile/flee-answer c hostiles (:fight a) nil nil))
+      enderman? (into (for [o [:water :roof] :when (not (flight/tried? c o))] [o (hold)])))))
 
 (defn glance-reach [] (settings/get settings ::glance-reach))
 

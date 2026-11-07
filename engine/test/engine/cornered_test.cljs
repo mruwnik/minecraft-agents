@@ -1425,6 +1425,22 @@
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
 
+(deftest a-body-with-an-enderman-and-a-zombie-near-walls-itself-in-rather-than-hold-under-a-roof
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:inventory [{:name "dirt" :count 16}]
+                                           :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
+                                           :entities [(enderman -1.5 64 0.5) (zombie 0.5 64 -1.5)]})]
+          (.override (.-world p) "place"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (let [{:keys [prices order]} (first (filter #(= :retreat.cornered (:kind %)) @seen))]
+            (is (< (:plug prices) (:roof prices)) "the zombie would hit it under the roof for the whole hold")
+            (is (= :plug (first order))))
+          (is (pos? (count (calls p "place")))))))))
+
 (deftest a-body-with-an-enderman-near-looks-round-for-a-roof-it-has-not-seen
   (async done
     (tu/run-async done
@@ -1500,7 +1516,8 @@
   (is (= [:water :roof :plug :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds")
   (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true}))))
-  (is (= [:plug :plug-dig :fight] (choose/escape-order {:enderman? true :melee? true})) "a roof or water keeps off the enderman only: a zombie beside the body hits it there")
+  (is (= [:roof :plug :water :plug-dig :fight] (choose/by-price (choose/escape-order {:enderman? true}) {:water 90 :roof 10 :plug 20 :plug-dig 99}))
+      "the holds from an enderman take their places by price")
   (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (choose/escape-order {:swim? true})))
   (is (= [:fight] (choose/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
   (is (= :back-off (first (choose/escape-order {:swim? true :creeper? true}))))

@@ -104,6 +104,20 @@
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :after [[:body-near [5.5 0 16.5] 2.5]]
    :limit-s 45}
+  ;; card 1010b994/147461bc: under a 2-high roof, an angry enderman 5 off and a zombie beside the body: the roof keeps off the
+  ;; enderman only, so its hold is priced over the zombie's blows and the walls (or the fight) come first. Should-fail: a
+  ;; roof hold while the zombie hits.
+  {:name "provoked-enderman-and-zombie-beside-under-a-roof-no-roof-hold"
+   :blocks [[:fill [13 2 13] [19 2 19] "stone"]]
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :act [[:summon "enderman" [21.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
+         [:summon "zombie" [17.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:no-event {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} :for-s 30}
+            {:no-event {:source :body :kind :died} :for-s 40}]
+   :limit-s 50}
   ;; card 4e2615d0: an angry enderman that never leaves (speed 0) must not hold the body in water for ever: after hold-cap holds the flight moves on to the next options (roof, seal, or none left)
   {:name "staying-enderman-ends-the-water-hold-and-the-flight-ends"
    :settings {:jobs.survival.respond.options/hold-cap 2}

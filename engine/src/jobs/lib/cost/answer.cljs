@@ -618,6 +618,12 @@
     (cond-> (-> (blows-over stats others seconds) (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max % (map blast-hp blasts))) (assoc :seconds 0))
       (seq blasts) (assoc :blasts blasts))))
 
+(defn hold-answer
+  "The answer of holding for seconds in a spot no enderman reaches (water, under a 2-high roof) among mobs [flee-mob's]
+  wearing equipment: stand-answer of the rest, which reach it there, and the seconds the body's."
+  [{:keys [mobs seconds] :as hold}]
+  (assoc (stand-answer (assoc hold :mobs (remove #(= "enderman" (:name %)) mobs))) :seconds seconds))
+
 (defn stand-loss
   "Seconds doing nothing about mobs [flee-mob's, :weight as blows-over's] for seconds costs body (answer-price's) wearing
   equipment at `at`: the price of their stand-answer, the hp they take and the death they risk. 0 when none can hit. The

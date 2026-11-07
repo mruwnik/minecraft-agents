@@ -216,7 +216,8 @@
         back-off (when (and (seq chasers) (not (flight/tried? c :back-off)) (outrun? c hostiles))
                    (await (back-off-search! c chasers)))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
-        weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim?))
+        enderman? (angry-enderman? c hostiles)
+        weighed (hostile/weigh c weighed-mobs (cornered-answers c weighed-mobs home? back-off swim? enderman?))
         win? (and (not blind?) (seq hostiles) (not-any? combat/creeper? hostiles) (not-any? combat/enderman? hostiles) (= :fight (:answer weighed)))
         prices (:prices weighed)
         pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
@@ -228,8 +229,7 @@
                           (boolean (some #(and (combat/ranged? %) (hostile/point-blank? c %)) hostiles)))
         order (by-price (escape-order {:win? win?
                              :creeper? (boolean (some combat/creeper? hostiles))
-                             :enderman? (angry-enderman? c hostiles)
-                             :melee? (boolean (or (seq (hitters c hostiles)) (seq (arriving c hostiles))))
+                             :enderman? enderman?
                              :flyer? (boolean (some combat/flyer? hostiles))
                              :ranged? (boolean (or fire? (and threat (combat/ranged? threat))))
                              :climber? (boolean (some combat/climber? hostiles))

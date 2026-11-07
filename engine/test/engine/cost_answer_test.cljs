@@ -360,6 +360,15 @@
     (is (< (js/Math.abs (- (price {:k 0 :n 1000}) alone)) 0.1) "it never waits: the cover alone")
     (is (< (price {:k 99 :n 100}) (+ alone (cost/answer-price (body 20) fight here))) "hiding again and again is bounded by the fight it may end in")))
 
+(deftest a-hold-from-an-enderman-is-priced-by-the-mobs-that-still-reach-the-body
+  (let [ender (mob "enderman" 2)
+        decide (fn [mobs] (:answer (cost/decide (body 20) {:roof (cost/hold-answer {:mobs mobs :seconds 60})
+                                                          :walls (cost/cover-answer {:mobs mobs :then [(cost/fight-answer (fight nil ender))]} {:open-s 2 :seconds 50})}
+                                                here)))]
+    (is (= 60 (cost/answer-price (body 20) (cost/hold-answer {:mobs [ender] :seconds 60}) here)) "the enderman cannot reach it: only the hold's time")
+    (is (= :roof (decide [ender])))
+    (is (= :walls (decide [ender (mob "zombie" 1)])) "a zombie beside the body hits it under the roof for the whole hold")))
+
 (deftest a-threats-cover-is-priced-as-respond-prices-it
   (let [cover {:open-s 2 :seconds 50}
         zombie (mob "zombie" 0 35)]
