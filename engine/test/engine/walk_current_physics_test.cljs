@@ -5,7 +5,8 @@
             [engine.path.executor :as ex]
             [engine.path.planner.current :as current]
             [engine.stairs-physics-test :as sp]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.world :as wworld]))
 
 (def max-ticks 1200)
 
@@ -89,3 +90,10 @@
                   n (js/Math.hypot (aget f 0) (aget f 2))
                   [px pz] (pull-by-physics slope x z)]]
       (is (> (+ (* px (/ (aget f 0) n)) (* pz (/ (aget f 2) n))) 0.999) (str [x z] " " (vec f) " vs " [px pz])))))
+
+(deftest a-body-with-no-path-world-asks-for-one-once-per-epoch
+  (let [calls (atom 0)]
+    (with-redefs [wworld/path-world (fn ([_] (swap! calls inc) nil) ([_ _] (swap! calls inc) nil))]
+      (let [flow-at (walk/live-flow-at {:primitives #js {}})]
+        (dotimes [_ 5] (flow-at 0 64 0))))
+    (is (= 1 @calls))))

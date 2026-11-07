@@ -291,10 +291,9 @@
         cache (volatile! nil)]
     (fn [x y z]
       (let [e (when epoch (epoch))
-            {:keys [at f]} @cache
-            fresh (and f (= at e))
-            {:keys [f]} (if fresh @cache (vreset! cache {:at e :f (some-> (wworld/path-world p) flow-fn)}))]
-        (when f (f x y z))))))
+            held (or (and @cache (= (:at @cache) e) @cache)
+                     (vreset! cache {:at e :f (some-> (wworld/path-world p) flow-fn)}))]
+        (when-let [f (:f held)] (f x y z))))))
 
 (defn decide-tick
   "One tick of a walk, pure: [state' out] for the pose, out {:done map} or {:controls :yaw :pitch} (with :warn, a gate
