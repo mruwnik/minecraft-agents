@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.build.kept :refer [kept?]]
@@ -39,7 +40,7 @@
   is :least, cells) or had nothing to dig; with none dug and cells skipped, condition-failed for :zone, :footprint and
   :cannot, else nothing-possible (:unreachable, :hazard, :refused), the cause the one skip reason or :nothing-dug when
   mixed. Already done when every cell is loaded and air, fluid or kept; done? counts the cells dug this call and the
-  cells left. With :only, blocks not ending in one of its names stay (a tree-clearing keeps the ground).")
+  cells left. The pillars its dig children climbed are taken back when it ends. With :only, blocks not ending in one of its names stay (a tree-clearing keeps the ground).")
 
 (a/defargs args
   {:area {:doc "the cells to clear: a box {:min :max} (corners inclusive, any order, each [x y z] or {:x :y :z}) or {:cells [[x y z] ...]}; at most 400 cells"
@@ -392,3 +393,12 @@
   [c]
   (let [pen-wall-fn (if (:open-pens? (:args c)) (constantly (constantly false)) #(own-pen/box-wall? c (cells (:args c))))]
     (await (pace/steps! c (fn ^:async s [] (await (step c pen-wall-fn)))))))
+
+(defn ^:async cleanup
+  "However the run ends: the pillars its dig children climbed (own scaffold-ledger entries) are taken back. Done when none is open
+  (or the cleanup held it: the scaffold-left trigger takes it later)."
+  [c _]
+  (let [held (ledger/held-cells (ctx/view c))]
+    (when (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/entries c))
+      (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:of (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}})))))
+  (ctx/end c :done nil))

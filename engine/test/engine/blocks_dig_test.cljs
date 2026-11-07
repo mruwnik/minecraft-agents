@@ -667,9 +667,9 @@
         (let [ways-of (fn ^:async ways-of* [args]
                         (let [seen (atom [])
                               env (setup {:self body :blocks {"12,64,0" "dirt"}})
-                              _ (when (:seal args)
-                                  (ledger/write! (:store (:eng env)) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose (if (= :pillar (:seal args)) :pillar :shelter) :state :placed}]))
-                              args (dissoc args :seal)
+                              _ (when (:purpose args)
+                                  (ledger/write! (:store (:eng env)) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose (:purpose args) :state :placed}]))
+                              args (dissoc args :purpose)
                               go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
                               stub (fn ^:async spy [c] (swap! seen conj (:ways (:args c))) (ctx/end c :done nil {:arrived false :why :no-path}))
                               env (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))]
@@ -677,9 +677,9 @@
                           (first @seen)))]
           (is (contains? (await (ways-of {})) :clear-seal) "by default a walk may dig its own seal")
           (is (= #{:walk} (await (ways-of {:clear-seal false}))) "a seal cleanup's own dig starts no cleanup of its own")
-          (is (= #{:walk} (await (ways-of {:clear-seal false :seal true}))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
-          (is (contains? (await (ways-of {:seal true})) :dig-out) "any other dig beside its seal may leave the shaft")
-          (is (= #{:walk :clear-seal} (await (ways-of {:seal :pillar}))) "a pillar the body climbed is no seal: no dig-out of the floor under it, no pillar again"))))))
+          (is (= #{:walk} (await (ways-of {:clear-seal false :purpose :shelter}))) "nor does its walk escalate by the seal beside it (dig-out, pillar)")
+          (is (contains? (await (ways-of {:purpose :shelter})) :dig-out) "any other dig beside its seal may leave the shaft")
+          (is (= #{:walk :clear-seal} (await (ways-of {:purpose :pillar}))) "a pillar the body climbed is no seal: no dig-out of the floor under it, no pillar again"))))))
 
 (deftest the-walk-never-carries-the-calls-leave-to-dig-in-zones
   (async done

@@ -678,7 +678,7 @@
       (fn ^:async t []
         (let [tunnel (merge (apply dissoc (box -8 62 -2 8 67 2 "stone") (for [x (range -6 7) y [64 65]] (str x "," y ",0")))
                             (into {} (for [x [-2 2] y [64 65]] [(str x "," y ",0") "cobblestone"])))
-              own (for [x [-2 2] y [64 65]] {:cell [x y 0] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed})
+              own (for [x [-2 2] y [64 65]] {:cell [x y 0] :item "cobblestone" :before "air" :job "j0" :purpose :shelter :state :placed})
               {:keys [eng p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks tunnel :inventory [{:name "stone_pickaxe" :count 1}]})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [6 64 0] :range 1})))]

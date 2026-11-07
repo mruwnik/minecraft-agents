@@ -468,3 +468,22 @@
 (deftest accept-takes-a-list-or-a-set
   (are [accept] (nil? (expr/problem registry/jobs (list 'jobs.blocks.clear-cells {:area {:cells [[0 64 0]]} :accept accept})))
     [] #{} [:fluid-adjacent] #{:falling-block}))
+
+(defn rock-room
+  "A block of stone round a corridor (x 8, z 3..8, y 64-65), with the ground at y 63."
+  []
+  (into {} (for [x (range 3 14) y (range 63 72) z (range 3 14)
+                 :when (not (and (= x 8) (<= 3 z 8) (<= 64 y 65)))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest a-room-in-rock-above-a-corridor-is-cleared-by-one-pillar-that-is-taken-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks (rock-room) :self {:pos [8.5 64 3.5]}
+                                      :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 20}]})
+              result (await (child-outcome eng job {:area {:min {:x 5 :y 66 :z 5} :max {:x 11 :y 68 :z 11}}} 400))
+              left (for [x (range 3 14) y (range 63 72) z (range 3 14) :when (= "cobblestone" (block-at p {:x x :y y :z z}))] [x y z])]
+          (is (= {} (:skipped result)))
+          (is (<= (count (calls p "jumpPlace")) 6) "one pillar of at most six blocks for the room, not one per cell: a failed walk does not dig its own pillar away")
+          (is (empty? left) "the pillar the dig children climbed is taken back when the job ends"))))))

@@ -20,6 +20,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.shelter.keep :refer [shelter-purposes]]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.threats :as threats]
@@ -83,7 +84,6 @@
                        (filterv #(held (:cell %)) (ledger/entries c)))))
     :again))
 
-(def seal-purposes "Ledger purposes of the blocks that shut a body in for the night." #{:shelter :retreat-plug})
 
 (defn seals
   "The open, unheld :shelter and :retreat-plug ledger entries within jobs.lib.ledger/seal-clear-radius of the feet while the body is enclosed, a cell it has not seen a wall (a
@@ -93,15 +93,15 @@
     (when (escape/enclosed? p nil :solid)
       (let [{:keys [x y z]} (sh-sense/feet p)
             held (ledger/held-cells (ctx/view c))]
-        (seq (remove (some-fn (comp held :cell) (complement (comp seal-purposes :purpose)))
+        (seq (remove (some-fn (comp held :cell) (complement (comp shelter-purposes :purpose)))
                      (ledger/near-of (ledger/entries c) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius})))))))
 
 (defn opened-cells
-  "The cells a way out may open: the shelter's own blocks near the feet (seal-purposes) and every side and the top of
+  "The cells a way out may open: the shelter's own blocks near the feet (shelter-purposes) and every side and the top of
   the body's two cells, as [x y z]."
   [c]
   (let [{:keys [x y z]} (sh-sense/feet (:primitives c))
-        own (keep #(when (seal-purposes (:purpose %)) (:cell %))
+        own (keep #(when (shelter-purposes (:purpose %)) (:cell %))
                   (ledger/near-of (ledger/entries c) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius}))]
     (concat (map vec own)
             [[x (+ y 2) z]]
@@ -203,7 +203,7 @@
       :again
       (and sealed (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c)))
       (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
-                               {:of :all :purpose seal-purposes :near {:pos (u/self-pos c) :radius ledger/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
+                               {:of :all :purpose shelter-purposes :near {:pos (u/self-pos c) :radius ledger/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
         (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil :solid))
           (ctx/end c :nothing-possible :seal-kept {:text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"})
           :again))
