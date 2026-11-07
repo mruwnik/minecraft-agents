@@ -6,7 +6,7 @@
 ;; Pit cases: bare level pit. The zombie stands 3 off on the stone top (farther off its line of sight over the lip misses the body);
 ;; the glass case has a zombie seen through glass with no walkable way to the pit: the body stays.
 ;; Pillar cases: open ground, 20 dirt, one NoAI zombie 7 blocks off. They test what follows a pillar, so the pillar is
-;; pinned the priced choice: ::pillar-mob-fails 0 of 30 (3%) is a pin, not a count (at the measured counts flee is cheaper here). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
+;; pinned the priced choice: ::pillar-mob-fails 0 of 30 and wall-in ::mob-fails 30 of 30 are pins, not counts (walls and pillar price within 6% here). Tunnel cases: the cornered-retreat stone mass (x 2..30, z 10..22, y 0..4), 1x2 tunnel along z 16 from x 5.
 {:defaults
  {:tags [:hostile :survival :cornered :refuge]
   :time :any
@@ -17,7 +17,8 @@
   :limit-s 120}
  :cases
  [{:name "creeper-at-the-pillar-body-leaves-before-a-hit"
-   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
+   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}
+              :jobs.survival.wall-in/mob-fails {:reached {:k 30 :n 30} :clear {:k 30 :n 30}}}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
@@ -26,7 +27,8 @@
             {:event {:source :job :kind :retreat.hide-breached :message [:contains "creeper"]} :within-s 70}]}
   {:name "creeper-at-the-pillar-setting-off-body-stays"
    :settings {:jobs.survival.hide-out/leave-for-breakers false
-              :jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
+              :jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}
+              :jobs.survival.wall-in/mob-fails {:reached {:k 30 :n 30} :clear {:k 30 :n 30}}}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
@@ -36,7 +38,8 @@
    :after [[:body-near [16.5 3 16.5] 1.5]]
    :limit-s 80}
   {:name "zombie-at-the-pillar-foot-keeps-the-hide-past-60-s"
-   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}}
+   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 0 :n 30} :clear {:k 0 :n 30}}
+              :jobs.survival.wall-in/mob-fails {:reached {:k 30 :n 30} :clear {:k 30 :n 30}}}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]
