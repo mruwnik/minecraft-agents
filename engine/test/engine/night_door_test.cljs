@@ -116,7 +116,7 @@
                   w2 (await (night/look-priced c true))]
               (is (= [0 0] [w w2]))
               (is (= [[:night.look-priced {:worth 0 :prices {:bed -305 :exposed 0}}]] @emitted) "emitted once, while the worth is unchanged")
-              (is (not (look-edge/pays? {} w [[20 64 0]])) "a side to look at is not bought when staying costs nothing"))))))))
+              (is (not (pos? (look-edge/saving {:primitives (tu/fake {})} w [[20 64 0]]))) "a side to look at is not bought when staying costs nothing"))))))))
 
 (defn seeing-setup
   "st/setup over a body that has seen only what its sight passes showed (perception over the fake), as live."

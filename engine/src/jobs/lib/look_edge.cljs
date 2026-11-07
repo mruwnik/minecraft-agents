@@ -156,17 +156,33 @@
   [c s worth]
   (cost/affords? (+ s (:edge-spent (ctx/mem c) 0)) worth))
 
-(defn pays?
-  "Whether looking at the pending `cells` is bought from `worth`: the region is a shelter only if every one of them proves
-  closed (cost/closed-chance of that many unseen), a saving of worth at that chance, against looking at all of them at the
-  seconds each has taken on the clock so far (:edge-t0), look-s before the first. Many unseen cells, or cells no look from
-  here shows (they stay unseen and each costs its seconds), are never bought."
+(defn tour-s
+  "Seconds of walking, at the least, before looks have shown every one of `cells` ([x y z]): straight lines at
+  cost/walk-speed from the eye to within look/near-of of the farthest cell's centre and of another's, whichever comes
+  first (a lower bound read in one pass over the cells)."
+  [p cells]
+  (let [r (or (look/near-of p) 4)
+        {:keys [x y z]} (sh-sense/feet p)
+        eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}
+        pts (map (fn [[cx cy cz]] {:x (+ cx 0.5) :y (+ cy 0.5) :z (+ cz 0.5)}) cells)
+        far (when (seq pts) (apply max-key #(u/dist eye %) pts))
+        to-far (some->> far (u/dist eye))
+        blocks (reduce (fn [m b] (max m (- (+ (min to-far (u/dist eye b)) (u/dist far b)) (* 3 r))))
+                       (if far (- to-far r) 0) pts)]
+    (/ (max 0 blocks) cost/walk-speed)))
+
+(defn saving
+  "Seconds looking at the pending `cells` saves on the average, from `worth`: the region is a shelter only if every one of
+  them proves closed (cost/closed-chance of that many unseen), a saving of worth at that chance, less looking at all of
+  them at the seconds each has taken on the clock so far (:edge-t0), look-s before the first, and the least walk that
+  shows them all (tour-s). Many unseen cells, or cells no look from here shows (they stay unseen and each costs its
+  seconds), or ends of a region far apart, are never bought."
   [c worth cells]
   (let [{:keys [edge-looked edge-t0]} (ctx/mem c)
         n (count edge-looked)
         each-s (if (and edge-t0 (pos? n)) (/ (- (clock/now) edge-t0) 1000 n) (cost/look-s 1))
         k (count cells)]
-    (> (* worth (cost/closed-chance 0 k)) (* k each-s))))
+    (- (* worth (cost/closed-chance 0 k)) (* k each-s) (tour-s (:primitives c) cells))))
 
 (defn walk-price
   "Seconds the walk to look at cell `to` and back costs (walk-risk/look-cost), nil when it is not bought: its hp more than
