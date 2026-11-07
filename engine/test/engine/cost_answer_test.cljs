@@ -378,9 +378,7 @@
         fight (cost/fight-answer (fight nil ender))
         price #(cost/answer-price (body 20) (cost/hold-answer (merge {:mobs [ender] :seconds 60} %)) here)]
     (is (< 60 (price {:walk-s 8})) "the seconds of the walk, and the enderman's blows on the way")
-    (is (< 60 (price {:then [fight]})) "the enderman may still be angry when the hold ends: the fight follows by the stay chance")
-    (is (< (price {:then [fight (cost/cover-answer {:mobs [ender] :then [fight]} {:open-s 2 :seconds 50})]}) (price {:then [fight]}))
-        "after the cap the cheapest remaining answer follows, not the fight alone")))
+    (is (< 60 (price {:then [fight]})) "the enderman may still be angry when the hold ends: the fight follows by the stay chance")))
 
 (deftest a-threats-cover-is-priced-as-respond-prices-it
   (let [cover {:open-s 2 :seconds 50}

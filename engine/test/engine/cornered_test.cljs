@@ -1442,6 +1442,24 @@
               far (await (roof-price 6))]
           (is (< near far) "the walk to the roof is in its price"))))))
 
+(deftest an-enderman-hold-is-priced-with-the-cheapest-answer-that-follows-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prices (fn ^:async ps [inventory]
+                       (let [{:keys [eng seen]} (setup {:inventory inventory
+                                                        :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
+                                                        :entities [(enderman -1.5 64 0.5)]})]
+                         (core/submit! eng retreat {})
+                         (await (settings/with-settings {:jobs.survival.respond.options/hold-cap 600}
+                                  (fn ^:async tick [] (await (core/tick! eng)))))
+                         (-> (filter #(= :retreat.cornered (:kind %)) @seen) first :prices)))
+              with-blocks (await (prices [{:name "dirt" :count 16}]))
+              without (await (prices []))]
+          (is (contains? with-blocks :pillar) "the pillar is among an enderman's answers")
+          (is (contains? with-blocks :plug))
+          (is (< (:roof with-blocks) (:roof without)) "a long hold repeats dearer than the plug that may follow it: the hold is priced with the plug, below its price with the fight alone"))))))
+
 (deftest a-body-with-an-enderman-and-a-zombie-near-walls-itself-in-rather-than-hold-under-a-roof
   (async done
     (tu/run-async done
