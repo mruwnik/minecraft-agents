@@ -260,6 +260,21 @@
           (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
           (is (empty? (st/calls raw "sleep"))))))))
 
+(deftest a-body-that-can-wall-in-stays-rather-than-walk-to-a-mid-distance-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; 120 blocks is the farthest remembered bed asked at all (the urgent radius); walk 14.6 s vs stay 13.0 s there, and the spawn rate scales both alike.
+        (let [bed {:x 120 :y 64 :z 0}
+              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"120,64,0" "red_bed"} :inventory [{:name "cobblestone" :count 32}]))]
+          (st/know-bed! eng bed)
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (= #{bed} (set (map :pos (st/entries eng :bed-walk-unsafe)))) "the walk's dark costs more than walling in here")
+          (is (empty? (st/calls raw "sleep")))
+          (is (seq (st/calls raw "place")) "it walls in instead"))))))
+
 (deftest a-body-on-dark-open-ground-with-no-way-to-shelter-walks-to-a-near-bed
   (async done
     (tu/run-async done

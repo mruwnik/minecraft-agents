@@ -479,6 +479,15 @@
     (is (< (js/Math.abs (- (- (price-at 100) (price-at 0)) (- gravel-s stone-s))) 1e-6) "an unseen cell over the gravel is gravel at the chance, else the stone guess")
     (is (not= (price-at 100) (price-at 0)))))
 
+(deftest a-seen-loose-cell-over-an-unseen-gap-is-certain-and-the-run-above-reads-its-height
+  (let [column {[0 64 0] "gravel" [0 66 0] "gravel" [0 63 0] "stone"}
+        counts {:h1 {:loose 1 :other 1} :h2 {:loose 1 :other 1} :h3 {:loose 1 :other 3} :h4 {:loose 1 :other 3} :h5 {:loose 1 :other 3}}]
+    (with-redefs [escape/block-at-of (constantly #(get column %))
+                  escape/unseen-of (constantly #(nil? (get column %)))]
+      (settings/with-settings {:jobs.lib.cost.value/loose-over-loose-counts counts}
+        #(is (= [[[0 65 0] 0.5 "gravel"] [[0 66 0] 1 "gravel"] [[0 67 0] 0.25 "gravel"]]
+                (vec (take 3 (escape-way/loose-run nil [0 64 0])))))))))
+
 (def open-ground
   "Air x -1..12, y 64..80, z -2..2 over a stone floor at y 63."
   (merge (box -1 64 -2 12 80 2 "air") (box -1 63 -2 12 63 2 "stone")))
