@@ -196,19 +196,31 @@
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance)))))
 
+(defn ^:async glance-home!
+  "The price r of a flight when it has no refuge (:refuge-s) and some chance of being caught, priced again after the look
+  into a building dropped :unseen (room-lib/glance-in!, as flight-step!; never with a creeper chasing), taken only where
+  the price leaves something to spare (a chance of being caught, no refuge yet) and its seconds (door walk, click, looks)
+  are won against every melee chaser's reach (glance-in!'s race). The survey is part of the step's one search (survey).
+  r when no look is taken."
+  [c specs r]
+  (let [chance (:chance r)
+        threats (when (and chance (pos? chance) (not (:refuge-s r))) (:on (flight/look c (flight/resume-flight (ctx/mem c) (ctx/now c)))))
+        s (and (seq threats) (not-any? combat/creeper? threats) (survey c threats false))]
+    (if (and s (await (room-lib/glance-in! c s threats)))
+      (do (ctx/update-mem! c dissoc :caught-chance)
+          (await (caught-chance-once! c specs)))
+      r)))
+
 (defn ^:async caught-chance!
-  "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!), its
-  look into a building dropped :unseen (room-lib/glance-in!, as flight-step!; never with a creeper chasing) and one
+  "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!), a
+  look into an unseen building where it pays (glance-home!) and one
   look at the cells its flight would look at first (:look): a way that may be there is priced after the glance the flight
   takes anyway, not before it. One pass: the price asked again after the look is
   the answer, whatever it still wants to look at (cells past the glance memory would cycle for ever)."
   ([c] (await (caught-chance! c nil)))
   ([c specs]
    (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
-   (let [threats (:on (flight/look c (flight/resume-flight (ctx/mem c) (ctx/now c))))]
-     (when-let [s (and (seq threats) (not-any? combat/creeper? threats) (survey c threats false))]
-       (await (room-lib/glance-in! c s threats))))
-   (let [r (await (caught-chance-once! c specs))]
+   (let [r (await (glance-home! c specs (await (caught-chance-once! c specs))))]
      (if-let [cells (:look r)]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
            (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
