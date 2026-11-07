@@ -270,20 +270,18 @@
       later? (contract/later :plan-trouble trouble :why trouble)
       :else (contract/never :plan-trouble trouble :why trouble))))
 
-(def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
-
 (defn mend-worth
   "Seconds a pass is worth: cost/animal-worth of the animals its herd, breed
   (one pair, one calf) and cull steps would add or kill, the goal-value of the wool its shear and of the drops its collect
   would take, what the herd would lose through the fence gaps its mend would close (cost/gap-loss) and the goal-value of
   the produce its deposit would store (none without a :chest)."
   [{:keys [mob target chest]} {:keys [adults babies drops shearable gaps stored-items]}]
-  (let [animals (+ (max 0 (- (min 2 target) adults))
-                   (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
-                   (max 0 (- adults (max 2 (- target babies)))))
+  (let [heads (+ (max 0 (- (min 2 target) adults))
+                 (if (and (>= adults 2) (< (+ adults babies) target)) 1 0)
+                 (max 0 (- adults (max 2 (- target babies)))))
         items (cond-> (into (mapv (fn [n] {:name n :count 1}) drops) (when chest stored-items))
-                (= "sheep" mob) (conj {:name "white_wool" :count (* shear-wool shearable)}))]
-    (+ (* animals (cost/animal-worth mob)) (cost/gap-loss mob (+ adults babies) (count gaps)) (:value (cost/goal-value items)))))
+                (= "sheep" mob) (conj {:name "white_wool" :count (* animals/shear-wool shearable)}))]
+    (+ (* heads (cost/animal-worth mob)) (cost/gap-loss mob (+ adults babies) (count gaps)) (:value (cost/goal-value items)))))
 
 (defn worth-of [c] (mend-worth (:args c) (facts c)))
 

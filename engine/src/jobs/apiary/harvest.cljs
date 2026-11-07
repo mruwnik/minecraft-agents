@@ -253,6 +253,14 @@
       (look/surveyed? c :near) (contract/later reason (str "harvest waits: " (name reason)))
       :else (contract/look reason (str "harvest waits: " (name reason))))))
 
+(defn worth-of
+  "Seconds a root harvest is worth: one ripe hive's yield (apiary/yield-worth of the tool carried, else of wanted-tool)
+  for each hive it would work, :max at most."
+  [c]
+  (let [{:keys [with max]} (:args c)
+        todo (count (:todo (classify c (hives c (apiary/center-of c) true))))]
+    (* (min (or max todo) todo) (apiary/yield-worth (or (tool-for with (u/inventory (:primitives c))) (wanted-tool with))))))
+
 (defn done?
   "Later with the hives harvested and the ripe hives still to work: the run ends itself with the reason it stopped for."
   [c]

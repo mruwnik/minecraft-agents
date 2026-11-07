@@ -305,6 +305,12 @@
       (look/surveyed? c :near) (contract/later reason (str "guard waits: " (name reason)))
       :else (contract/look reason (str "guard waits: " (name reason))))))
 
+(defn worth-of
+  "Seconds a root guard is worth: one hive's shears yield (apiary/yield-worth) for each fire it would work, as the
+  apiary pass prices a guard."
+  [c]
+  (* (count (:todo (survey c (apiary/center-of c) true))) (apiary/yield-worth (apiary/tool-item :shears))))
+
 (defn done?
   "Ok before any work, after a look round, when fires stand in the area and none needs work; later with the fires
   worked and the fires still to work: the run ends itself with the reason it stopped for."

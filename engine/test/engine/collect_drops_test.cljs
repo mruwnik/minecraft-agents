@@ -967,8 +967,8 @@
         (let [column (into {} (for [y (range 64 70)] [(str "3," y ",0") "cobblestone"]))
               {:keys [eng p]} (bd/setup {:self body :inventory [{:name "cobblestone" :count 16}] :blocks column})]
           (drop! p [3 70 0] "diamond")
-          (let [result (await (tu/child-outcome eng job {:radius 10 :near {:x 3 :y 70 :z 0} :dig true :worth 50} 120))]
-            (is (= 1 (:collected result)))
+          (let [result (await (tu/child-outcome eng job {:radius 10 :near {:x 3 :y 70 :z 0} :dig true} 120))]
+            (is (= 1 (:collected result)) "no worth given and the drop out of sight from below: an order, not worth 0")
             (is (= 1 (bd/carried p "diamond")))))))))
 
 (deftest walk-cell-follows-the-niche-shape-not-the-feet-height

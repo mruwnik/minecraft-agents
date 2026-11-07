@@ -98,7 +98,7 @@
                                       :data {:collected 0 :left [{:pos {:x 2 :y 64 :z 0} :reason :unreachable}]}}
                                      (await (orig-call c slot job-name args))))
                         child/pause! (fn ^:async pause [c s why] (swap! pauses inc) (await (orig-pause c s why)))]
-            (let [result (await (child-outcome eng job {} 60))]
+            (let [result (await (child-outcome eng job {:worth 1000} 60))]
               (is (= 1 @pauses) "an unreachable comb is waited for like a comb not heard yet")
               (is (= [{} {:near {:x 2 :y 64 :z 0} :search 2}] @searches) "only the second look walks round the hive, as far as a popped drop flies")
               (is (= 3 (:collected result)))
@@ -140,7 +140,7 @@
                                        (if (= 1 (swap! pauses inc))
                                          :continue
                                          (await (orig c s why))))]
-            (let [result (await (child-outcome eng job {} 60))]
+            (let [result (await (child-outcome eng job {:worth 1000} 60))]
               (is (= 2 @pauses) "the round after a cut pause goes back to the pause, not to a fresh look")
               (is (= 3 (:collected result))))))))))
 

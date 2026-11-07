@@ -6,6 +6,7 @@
             [jobs.lib.child :as child]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
@@ -89,6 +90,11 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
+
+(defn worth-of
+  "Seconds a root compost is worth: the cost/goal-value of the :times bone meal it takes."
+  [c]
+  (:value (cost/goal-value [{:name "bone_meal" :count (:times (:args c) 1)}])))
 
 (defn done?
   "Ok once :times bone meal is taken; else later with the bone meal taken and the rest of :times."

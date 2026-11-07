@@ -149,6 +149,19 @@
       (apply contract/ok :given (str "give: " n " given") data)
       (apply contract/later :giving (str "give: " n " given") data)))))
 
+(defn worth-of
+  "Seconds a root give is worth: the cost/goal-value of what it hands over, :count of the item (else all of it carried);
+  to a villager its :count (else 1) of the food it tosses (gv/food), with none carried the least worth of the foods it
+  would fetch."
+  [c]
+  (let [{:keys [item count]} (:args c)
+        villager? (villager-to? c)
+        names (if villager? (if-let [f (gv/food c)] [f] (if item [item] gv/foods)) (when item [item]))
+        n (or count (if villager? (gv/want-count c) (u/carried-count (:primitives c) item)))]
+    (if (and (seq names) (pos? n))
+      (apply min (map #(:value (cost/goal-value [{:name % :count n}])) names))
+      0)))
+
 (defn quote-of [c]
   (if (villager-to? c)
     (gv/quote-of c)

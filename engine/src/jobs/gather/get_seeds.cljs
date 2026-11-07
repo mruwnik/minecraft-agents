@@ -10,6 +10,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
@@ -183,6 +184,12 @@
   "How many more are carried than when the first round began."
   [c]
   (max 0 (- (carried c) (:had (ctx/mem c) (carried c)))))
+
+(defn worth-of
+  "Seconds a root gather is worth: the cost/goal-value of the items still to carry up to :count."
+  [c]
+  (let [n (- (:count (:args c)) (carried c))]
+    (:value (cost/goal-value (when (pos? n) [{:name (:item (:args c)) :count n}])))))
 
 (defn done?
   "The :count is carried (already at the start, or after the first round) and no child is under way (a collect

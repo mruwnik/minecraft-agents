@@ -195,14 +195,13 @@
   (let [p (:primitives c)]
     (filterv #(look/unseen? p [%]) (map #(update-vals % js/Math.floor) (apiary/watched-cells c)))))
 
-(def hive-yield "What one ripe hive gives a harvest with each tool: the game's 3 honeycomb to shears, a honey bottle to a bottle." {"shears" {:name "honeycomb" :count 3} "glass_bottle" {:name "honey_bottle" :count 1}})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its four steps." :spec (a/num-in 0 nil)}})
 
 (defn worth-of
   "Seconds a root pass is worth, each step only while it would run: harvest the cost/goal-value of what it takes from the
-  hives it would work (hive-yield of the tool carried, else of the first :with allows); guard one hive's yield for
+  hives it would work (apiary/hive-yield of the tool carried, else of the first :with allows); guard one hive's yield for
   each open fire smoking a ripe hive (harvest waits on it); breed one hive's yield (one more bee fills a hive); deposit the goal-value of the
   produce carried above :carry. A part of the area never seen adds one hive's yield at the ripe share the hives seen give
   (cost/field-share, as farm tend prices unseen cells)."
@@ -211,7 +210,7 @@
         f (facts c)
         runs? #(:call (decide % args f))
         tool (or (:tool f) (apiary/tool-item (if (= :bottle (:with args)) :bottle :shears)))
-        yield (:value (cost/goal-value [(hive-yield tool)]))
+        yield (apiary/yield-worth tool)
         carried (u/inventory (:primitives c))
         stored (keep (fn [n] (let [over (- (reduce + 0 (map :count (filter #(= n (:name %)) carried))) (get (:carry args) n 0))]
                                (when (pos? over) {:name n :count over})))

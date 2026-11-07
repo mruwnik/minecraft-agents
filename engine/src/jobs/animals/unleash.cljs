@@ -8,6 +8,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
@@ -119,6 +120,13 @@
   [c]
   (let [{:keys [animal]} (:args c)]
     (filterv #(and (animals/leashed? %) (or (nil? animal) (= animal (animals/key-of %)))) (animals-in-radius c))))
+
+(defn worth-of
+  "Seconds a root unleash is worth: the cost/goal-value of the leads it takes back, one per animal on a lead
+  (on-a-lead); the zone rules are not read (no decline warned before the call runs)."
+  [c]
+  (let [n (count (on-a-lead c))]
+    (:value (cost/goal-value (when (pos? n) [{:name "lead" :count n}])))))
 
 (defn candidates
   "The animals on this body's lead or tied to a knot, not freed or given up on, nearest first."

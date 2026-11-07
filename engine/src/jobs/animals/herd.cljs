@@ -7,6 +7,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [jobs.lib.animals :as animals]
+            [jobs.lib.cost :as cost]
             [engine.ctx :as ctx]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]
@@ -174,14 +175,21 @@
   "Starts with a :mob and a box deep enough (bad-args), and a pen seen at the start that will do (pen-refusal)."
   (cond/and bad-args pen-refusal))
 
+(defn inside "The adults of :mob in the box." [c] (count (filter #(animals/in-box? (pen-box c) (u/pos-of (.-pos %))) (adults c))))
+
+(defn worth-of
+  "Seconds a root herd is worth: cost/animal-worth of :mob for each adult the box still lacks of :target."
+  [c]
+  (let [{:keys [mob target]} (:args c)]
+    (if (and mob (pen-box c)) (* (max 0 (- target (inside c))) (cost/animal-worth mob)) 0)))
+
 (defn done?
   "Ok when the box holds :target adults before the run touched the gate, or once the run has wrapped up (in between, the
   run ends itself, outside with the gate shut); the animals brought, and those still missing."
   [c]
-  (let [box (pen-box c)
-        target (:target (:args c))
+  (let [target (:target (:args c))
         m (ctx/mem c)
-        inside (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (adults c)))
+        inside (inside c)
         data [:units :animals :done (count (:brought m)) :left (max 0 (- target inside))
               :result {:reason :brought :inside inside :target target}]]
     (if (and (or (:finished m) (and (nil? (:gate m)) (empty? (:led m)))) (>= inside target))

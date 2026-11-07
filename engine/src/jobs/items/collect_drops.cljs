@@ -270,14 +270,20 @@
 
 (defn worth-of
   "Seconds a root collect is worth: getting again the drops in sight round the anchor (cost/goal-value), and with :search
-  the :least-items (else :items) not in sight (cost/find-worth of the :least count less those seen)."
+  the :least-items (else :items) not in sight (cost/find-worth of the :least count less those seen). With none in sight
+  (the drops show only after a look or a walk) the :least of those named, else, named none, ##Inf: an order to pick up
+  what lies there."
   [c]
   (let [{:keys [least-items items search least near]} (:args c)
         seen (map #(js->clj (.-item %) :keywordize-keys true) (candidates c (or near (u/self-pos c))))
         names (seq (or least-items items))
-        missing (- (if (number? least) least 1) (reduce + 0 (map #(or (:count %) 1) (filter #(some #{(:name %)} names) seen))))]
-    (+ (:value (cost/goal-value seen))
-       (if (and search names (pos? missing)) (cost/find-worth nil names (u/self-pos c) missing) 0))))
+        least (if (number? least) least 1)
+        missing (- least (reduce + 0 (map #(or (:count %) 1) (filter #(some #{(:name %)} names) seen))))]
+    (cond
+      (seq seen) (+ (:value (cost/goal-value seen))
+                    (if (and search names (pos? missing)) (cost/find-worth nil names (u/self-pos c) missing) 0))
+      names (cost/find-worth nil names (u/self-pos c) least)
+      :else ##Inf)))
 
 (defn drop-walk-ways
   "go-to ways of a walk to a drop: pillar always, :stair (a way that digs) only with :dig."

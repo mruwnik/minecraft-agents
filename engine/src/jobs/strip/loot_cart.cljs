@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.checks :as checks]
@@ -56,6 +57,12 @@
     (->> found
          (filter #(if id (= id (:id %)) (<= (u/dist anchor (:pos %)) radius)))
          (sort-by #(u/dist anchor (:pos %))))))
+
+(defn worth-of
+  "Seconds a root loot is worth: the cost/goal-value of the cart item it takes (what the cart holds is not seen before
+  it is opened)."
+  [_c]
+  (:value (cost/goal-value [{:name "chest_minecart" :count 1}])))
 
 (defn gained
   "{name n} the withdraw child moved out of the cart; the drops collected afterwards are only counted (:dropped)."

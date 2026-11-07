@@ -7,6 +7,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
             [jobs.lib.util :as u]
             [jobs.lib.vehicle :as vehicle]
             [jobs.movement.boat-launch :as launch]))
@@ -55,6 +56,11 @@
     (contract/ok :boat "a boat in sight")))
 
 (def can-start? no-boat)
+
+(defn worth-of
+  "Seconds a root recovery is worth: the cost/goal-value of the boat's item (pick-boat; none in sight: nothing)."
+  [c]
+  (:value (cost/goal-value (when-let [b (pick-boat c)] [{:name (:name b) :count 1}]))))
 
 (defn carried [c item]
   (reduce + (for [s (u/inventory (:primitives c)) :when (= item (:name s))] (:count s 1))))

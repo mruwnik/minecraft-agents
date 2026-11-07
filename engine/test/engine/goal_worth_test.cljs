@@ -5,10 +5,12 @@
             [engine.apiary-maintain-test :as am]
             [engine.farm-tidy-test :as ft]
             [engine.harvest-test :as ht]
+            [engine.herd-test :as herd]
             [engine.library-test :as lt]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.lib.animals :as animals]
             [jobs.farm.maintain :as farm-maintain]
             [jobs.farm.tend :as tend]
             [jobs.forestry.maintain :as forest-maintain]
@@ -96,6 +98,32 @@
     (is (< (harvest seen {:replant false}) (harvest seen {})) "replanting adds the sown cells")
     (is (priced? (harvest (tu/fake-on-floor ht/wheat-world) {})) "nothing seen yet: one cell at the measured prior, a look first")
     (is (< (harvest (tu/fake-on-floor ht/wheat-world) {}) (harvest seen {})) "less than nine ripe wheat")))
+
+(deftest jobs-that-pick-up-their-own-drops-are-worth-what-they-gain-not-inf
+  (let [gv #(:value (cost/goal-value %))
+        seen #(tu/seeing-all (tu/fake-on-floor %))
+        sheep (fn [id x] {:id id :uuid (str "u" id) :name "sheep" :kind "passive" :pos {:x x :y 64 :z 0}})
+        cow (fn [id x more] (merge {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}} more))]
+    (is (= (gv [(item "white_wool" (* 2 animals/shear-wool))]) (worth 'jobs.animals.shear (seen {:entities [(sheep 1 3) (sheep 2 4)]}) {:radius 16})))
+    (is (= (gv [(item "white_wool" animals/shear-wool)]) (worth 'jobs.animals.shear (seen {:entities [(sheep 1 3) (sheep 2 4)]}) {:radius 16 :count 1})) "at most :count")
+    (is (= (gv [(item "bone_meal" 2)]) (worth 'jobs.farm.compost (tu/fake {}) {:times 2})))
+    (is (= (gv [(item "wheat_seeds" 5)]) (worth 'jobs.gather.get-seeds (tu/fake {:inventory [(item "wheat_seeds" 3)]}) {:item "wheat_seeds" :count 8})) "the seeds still wanted")
+    (is (= (gv [(item "bread" 3)]) (worth 'jobs.items.give (tu/fake {:inventory [(item "bread" 3)]}) {:to "Alex" :item "bread"})) "no :count: all of it carried")
+    (is (priced? (worth 'jobs.items.give (tu/fake {}) {:to "11111111-2222-3333-4444-555555555555" :count 2})) "a villager's food not carried: what it fetches")
+    (is (= (gv [(item "oak_boat" 1)]) (worth 'jobs.movement.boat-recover (seen {:entities [{:id 7 :name "oak_boat" :kind "other" :pos {:x 3 :y 64 :z 0.5}}]}) {})))
+    (is (= (gv [(item "chest_minecart" 1)]) (worth 'jobs.strip.loot-cart (tu/fake {}) {})))
+    (is (= (gv [(item "lead" 2)]) (worth 'jobs.animals.unleash (seen {:entities [(cow 1 3 {:leashed true :leashedToMe true}) (cow 2 4 {:leashed true :leashedToMe true}) (cow 3 5 {})]}) {:radius 8}))
+        "a lead back per animal on one")
+    (is (= (* 2 (cost/animal-worth "cow")) (worth 'jobs.animals.herd (tu/seeing-all (tu/fake (herd/world {:entities [(herd/cow 1 13 3)]}))) {:mob "cow" :box herd/box :target 3 :radius 24}))
+        "a herd: the adults the pen lacks")))
+
+(deftest apiary-harvest-and-guard-are-worth-a-hive-yield-each-as-the-apiary-pass-prices-them
+  (let [yield (:value (cost/goal-value [(item "honeycomb" 3)]))
+        carpeted (tu/seeing-all (tu/fake-on-floor (assoc-in (am/world {:inventory (am/inv "shears" 1)}) [:blocks "2,65,0"] "white_carpet")))
+        open (tu/seeing-all (tu/fake-on-floor (am/world {:inventory (am/inv "shears" 1 "white_carpet" 1)})))]
+    (is (= yield (worth 'jobs.apiary.harvest carpeted {:box am/box :with :either :max 8})) "one ripe hive")
+    (is (= yield (worth 'jobs.apiary.guard open {:box am/box})) "one open fire")
+    (is (zero? (worth 'jobs.apiary.guard carpeted {:box am/box})) "a carpeted fire needs no guard")))
 
 (def field {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 64 :z 4}})
 

@@ -9,6 +9,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
@@ -140,6 +141,14 @@
                         (not (true? (.-sheared %)))
                         (not (contains? skip (animals/key-of %)))))
          (animals/allowed c :shear.declined "shear" :harvest))))
+
+(defn worth-of
+  "Seconds a root shearing is worth: the cost/goal-value of what the adult unsheared animals in radius (at most :count)
+  give (animals/shear-items); the zone rules are not read (no decline warned before the call runs)."
+  [c]
+  (let [n (:count (:args c))
+        names (->> (shearable-in-radius c) (remove #(or (true? (.-baby %)) (true? (.-sheared %)))) (map #(.-name %)))]
+    (:value (cost/goal-value (animals/shear-items (cond->> names n (take n)))))))
 
 (defn done?
   "Ok before any work when adult sheep stand in radius and all are sheared; later with the sheep shorn and those still

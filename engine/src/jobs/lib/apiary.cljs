@@ -3,6 +3,7 @@
   the fires that stand under the hives."
   (:require [jobs.lib.block-sets :as bs]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.game-facts :as facts]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -232,6 +233,13 @@
                  :bottle [:bottle]
                  [:shears :bottle])]
     (some #(when (carried? (tool-item %)) (tool-item %)) wanted)))
+
+(def hive-yield "What one ripe hive gives a harvest with each tool: the game's 3 honeycomb to shears, a honey bottle to a bottle." {"shears" {:name "honeycomb" :count 3} "glass_bottle" {:name "honey_bottle" :count 1}})
+
+(defn yield-worth
+  "Seconds one ripe hive's harvest with tool (an item name) is worth: the cost/goal-value of its hive-yield."
+  [tool]
+  (:value (cost/goal-value [(hive-yield tool)])))
 
 (defn classify
   "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."

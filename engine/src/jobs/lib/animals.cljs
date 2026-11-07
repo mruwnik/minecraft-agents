@@ -269,3 +269,12 @@
       (->> (look/seen-objs (:primitives c) {:radius (+ (settings/get settings ::knot-margin) (:radius (:args c))) :max 64})
            (filter #(and (= holder (.-id %)) (= knot-name (.-name %))))
            first))))
+
+(def shear-wool "Wool a shorn sheep drops, the game's 1 to 3: 2 on average." 2)
+(def shear-mushrooms "Mushrooms a shorn mooshroom drops (the game's 5)." 5)
+
+(defn shear-items
+  "The items shearing the animals named names gives on average: wool for a sheep, red mushrooms for a mooshroom."
+  [names]
+  (keep (fn [[n k]] (case n "sheep" {:name "white_wool" :count (* shear-wool k)} "mooshroom" {:name "red_mushroom" :count (* shear-mushrooms k)} nil))
+        (frequencies names)))
