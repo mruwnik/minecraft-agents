@@ -180,6 +180,31 @@
           (is (not (hs/door-open? raw)) "the door shut behind it")
           (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge built outside"))))))
 
+(deftest a-look-into-the-unseen-home-is-an-answer-taken-only-where-its-price-pays
+  ;; card a54e3b40: no gate; the look's worth is the chance the room is closed times what the run in saves over the best
+  ;; answer without it, against its own seconds (the walk to the door and the looks, the zombie nearer by them)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [run (fn ^:async run [closed-chance]
+                    (let [world (-> (hut {:x 5.5 :y 64 :z 5.5} hs/door-states [(zombie 5.5 12.5 nil)])
+                                    (assoc :inventory [{:name "cobblestone" :count 16}])
+                                    (assoc-in [:self :health] 4))
+                          {:keys [eng seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)
+                          chance cost/closed-chance]
+                      (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
+                      (when closed-chance (set! cost/closed-chance closed-chance))
+                      (try (core/submit! eng '(jobs.survival.respond-to-hostile) {})
+                           (await (tu/run-until-empty eng 1))
+                           (finally (set! cost/closed-chance chance)))
+                      [(first (filter #(= :hostile.look-in (:kind %)) @seen)) (first (filter #(= :hostile.decided (:kind %)) @seen))]))
+              [look] (await (run nil))
+              [never decided] (await (run (constantly 0)))]
+          (is (< (:cost look) (:value look)) (str "the look pays: " (select-keys look [:value :cost :closed :prices])))
+          (is (< (get-in look [:prices :look-in]) (get-in look [:prices :pillar])) "and is the cheapest answer")
+          (is (nil? never) "a room that cannot be closed is worth no look")
+          (is (= :pillar (:cover decided)) (str "so the pillar it beats otherwise is taken: " (:prices decided))))))))
+
 (deftest the-door-a-glance-opens-is-recorded-with-an-expiry
   ;; the glance clicked the door by hand and wrote no :opened entry: a cut flight left it open and unrecorded
   (async done

@@ -103,11 +103,12 @@
         mobs))
 
 (defn look-answer
-  "The answer of looks looks against mobs [answer/flee-mob's] wearing equipment, then the cheapest of each outcome's
-  answers for body at `at`: outcomes [[chance answers-of]], the chances summing to 1, answers-of a fn of the mobs
-  (approached by the look's seconds) to {key answer-or-nil}. nil when an outcome has no answer open."
-  [body {:keys [equipment mobs looks outcomes]} at]
-  (let [seconds (look-s looks)
+  "The answer of looks looks (or of a look of seconds, a walk to look from included) against mobs [answer/flee-mob's]
+  wearing equipment, then the cheapest of each outcome's answers for body at `at`: outcomes [[chance answers-of]], the
+  chances summing to 1, answers-of a fn of the mobs (approached by the look's seconds) to {key answer-or-nil}. nil when
+  an outcome has no answer open."
+  [body {:keys [equipment mobs looks seconds outcomes]} at]
+  (let [seconds (or seconds (look-s looks))
         look (answer/build-answer {:equipment equipment :mobs mobs :seconds seconds})
         moved (approached mobs seconds)
         then (map (fn [[chance answers-of]]

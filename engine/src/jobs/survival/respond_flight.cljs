@@ -155,7 +155,8 @@
                                 (:verdicts v)))
         {:keys [room way inside?]} (room-lib/pick verdicts)
         gap-way (when (and inside? (:fill? room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
-        _ (when (and glanced? room inside?) (say-once! c room))
+        ;; a glance, this step's or respond's priced look, that took the body inside ran it home
+        _ (when (and room inside? (or glanced? (seq (:door-glanced (ctx/mem c))))) (say-once! c room))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))

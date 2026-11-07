@@ -28,6 +28,7 @@
             [jobs.survival.respond.state :as state]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.dig-pit :as dig-pit]
+            [jobs.survival.hide-out :as hide-out]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -316,6 +317,26 @@
       (when answer
         (assoc (cost/look-value body now answer (u/self-pos c)) :answer answer :room room :closed closed)))))
 
+(defn building-look-answer
+  "{:answer :value :cost :look}: of caught's :looks (cover/building-looks: through a door into a building dropped unseen,
+  the home's or another's), the one whose value is most over its cost, as an answer (cost/look-answer over its seconds,
+  the walk to the door and the looks, the mobs nearer by them): the room is closed by its :closed chance, then the
+  flight is the run in from the door (hostile/flee-answer at its :refuge-s), else the answers now (now-of);
+  cost/look-value against now. nil when there is no such look."
+  [c near now now-of caught fight felt]
+  (let [p (:primitives c)
+        body (assoc (hostile/body-of c) :meet (mapv #(.-name %) near))
+        equipment (cost/equipment-of (.-equipment (.self p)))
+        mobs (mapv #(hostile/mob-near p %) near)
+        priced (fn [{:keys [seconds closed refuge-s] :as h}]
+                 (let [refuge {:chance 0 :refuge-s refuge-s :hide-s (hide-out/quiet-s)}]
+                   (when-let [answer (cost/look-answer body {:equipment equipment :mobs mobs :seconds seconds
+                                                             :outcomes [[closed #(assoc (now-of %) :flee (hostile/flee-answer c near fight felt refuge %))]
+                                                                        [(- 1 closed) now-of]]}
+                                                       (u/self-pos c))]
+                     (assoc (cost/look-value body now answer (u/self-pos c)) :answer answer :look h))))]
+    (some->> (keep priced (:looks caught)) seq (apply max-key #(- (:value %) (:cost %))))))
+
 (defn walk-felt
   "hp a second of the mob blows felt since the flight began (hostile/incoming), nil while not fleeing: a walk is priced at
   the blows it fails to leave, not at the fight's before it (they would flip the choice back)."
@@ -338,7 +359,7 @@
             at (u/self-pos c)
             options (for [[k price] (:prices weighed)
                           :let [known (get (:answers weighed) k)]
-                          :when (and known (not= :look k))
+                          :when (and known (not (#{:look :look-in} k)))
                           item items
                           :let [worth (food-cost/precious-worth body item false known at (:death weighed))]]
                       {:answer k :item item :worth worth
@@ -402,17 +423,30 @@
         now (merge covers {:fight fight :flee walk})
         now-of (fn [mobs] (merge (cover-answers equipment mobs then fight specs) {:fight fight :flee (when walk (hostile/flee-answer c near fight felt caught mobs))}))
         look (when (seq covers) (look-answer c near now now-of sealing then))
-        weighed (some-> (hostile/weigh c near (cond-> now look (assoc :look (:answer look)))) (assoc :way-scan (:way-scan caught) :refuge-s (:refuge-s caught) :way (:chance caught)) (eating-answer c))
+        look-in (building-look-answer c near now now-of caught fight felt)
+        weighed (some-> (hostile/weigh c near (cond-> now look (assoc :look (:answer look)) look-in (assoc :look-in (:answer look-in))))
+                        (assoc :way-scan (:way-scan caught) :refuge-s (:refuge-s caught) :way (:chance caught)) (eating-answer c))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (or stay? (= :fight (:answer weighed))) :fight :flee)
         cover (when (and (not stay?) (contains? covers (:answer weighed))) (:answer weighed))
         creeper (first (get-in weighed [:answers :fight :creepers]))]
-    (if (and (= :look (:answer weighed)) (not stay?))
+    (cond
+      (and (= :look-in (:answer weighed)) (not stay?))
+      (let [{:keys [value] price :cost :as h} look-in]
+        (ctx/emit! c :hostile.look-in :info {:prices (update-vals (:prices weighed) js/Math.round) :value (js/Math.round value) :cost (/ (js/Math.round (* 10 price)) 10)
+                                             :closed (:closed (:look h)) :door (mapv (:d (:at (:look h))) [:x :y :z])
+                                             :text (str "a building's inside is unseen: a look through its door first (closed by chance " (.toFixed (:closed (:look h)) 2)
+                                                        ", worth " (js/Math.round value) " s, costs " (.toFixed price 1) " s)")})
+        (ctx/update-mem! c dissoc :caught-chance)
+        (await (room-lib/glance-through! c (:at (:look h))))
+        :continue)
+      (and (= :look (:answer weighed)) (not stay?))
       (do (ctx/emit! c :hostile.look-first :info {:prices (update-vals (:prices weighed) js/Math.round) :value (:value look) :cost (:cost look)
                                                  :closed (:closed look) :sides (:sides (:room look))
                                                  :text (str "a side of the room is unseen: a look first (closed by chance " (.toFixed (:closed look) 2)
                                                             ", worth " (js/Math.round (:value look)) " s, costs " (.toFixed (:cost look) 1) " s)")})
           (await (doors/look-into-room! c (:room look))))
+      :else
       (do (await (eat-precious! c weighed))
           (await (respond-with! c near weighed decision cover creeper stay?))))))
 

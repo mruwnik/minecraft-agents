@@ -10,6 +10,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
@@ -164,10 +165,28 @@
   (let [hs (homes c rooms blast?)]
     (assoc (await (respond.goal/judge! c threats hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c))) :homes hs)))
 
+(defn building-looks
+  "[{:at :seconds :closed :refuge-s}]: the looks through a door into a building survey s dropped :unseen, the home's or
+  another's (room-lib/door-glances), each what it may show: the chance the room beyond the door side is closed
+  (cost/closed-chance of its boundary's seen and unseen cells, reach-room/boundary) and then the run from the door into it
+  at a flight's pace; its seconds room-lib/glance-s. Part of the step's one search. respond prices each against the
+  answers without it."
+  [c s]
+  (let [p (:primitives c)
+        m (room-lib/step-meter c)
+        pace (cost/flee-pace (room-lib/food p))
+        r (binding [reach/*search* m]
+            (vec (for [g (room-lib/door-glances c s)
+                       :let [{:keys [seen unseen]} (reach-room/boundary p (:pos g))]]
+                   {:at g :seconds (room-lib/glance-s c g) :closed (cost/closed-chance seen (count unseen))
+                    :refuge-s (/ (u/dist (room-lib/mid (:d g)) (room-lib/mid (:pos g))) pace)})))]
+    (room-lib/spent-meter! c m)
+    r))
+
 (defn ^:async caught-chance-once!
   "{:chance :seconds :cornered?} of the flight's next step from where the body stands (flee-search/caught-chance), for
   the fight-or-flee weighing, from what that step judges by: its chasers (flight/look over the memory flee! resumes,
-  flight/resume-flight), their cover-fn and blast, its rooms (survey, kept nowhere), its stair up (way-up: a seen way,
+  flight/resume-flight), their cover-fn and blast, its rooms (survey, kept nowhere; with no refuge, :looks, building-looks'), its stair up (way-up: a seen way,
   flee-search/way-up-chance, no search), else its search (respond.goal/judge! over homes), choose options
   (respond.goal/choose-opts) and cells looked at (memory :glanced), no glance taken; :way-scan the way counts it priced
   with (wworld/way-scan, for jobs.lib.walk.way-log). Kept (memory :caught-chance) for a
@@ -189,38 +208,26 @@
                      (search/way-up-chance counts)
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
                            blast? (seq (blast p threats))
-                           rooms (:rooms (survey c threats false))
-                           judged (await (respond.goal/judge! c threats (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))]
-                       (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (respond.goal/closed-home judged)) glanced)))
+                           s (survey c threats false)
+                           rooms (:rooms s)
+                           ;; before the flee search: the step's one search, its home floods first
+                           looks (when (and s (not-any? combat/creeper? threats)) (building-looks c s))
+                           judged (await (respond.goal/judge! c threats (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))
+                           r (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (respond.goal/closed-home judged)) glanced)]
+                       (cond-> r (and (seq looks) (not (:refuge-s r))) (assoc :looks looks))))
             chance (cond-> chance (and chance scan) (assoc :way-scan scan) (:refuge-s chance) (assoc :hide-s (hide-out/quiet-s)))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
         chance)))))
 
-(defn ^:async glance-home!
-  "The price r of a flight when it has no refuge (:refuge-s) and some chance of being caught, priced again after the look
-  into a building dropped :unseen (room-lib/glance-in!, as flight-step!; never with a creeper chasing), taken only where
-  the price leaves something to spare (a chance of being caught, no refuge yet) and its seconds (door walk, click, looks)
-  are won against every melee chaser's reach (glance-in!'s race). The survey is part of the step's one search (survey).
-  r when no look is taken."
-  [c specs r]
-  (let [chance (:chance r)
-        threats (when (and chance (pos? chance) (not (:refuge-s r))) (:on (flight/look c (flight/resume-flight (ctx/mem c) (ctx/now c)))))
-        s (and (seq threats) (not-any? combat/creeper? threats) (survey c threats false))]
-    (if (and s (await (room-lib/glance-in! c s threats)))
-      (do (ctx/update-mem! c dissoc :caught-chance)
-          (await (caught-chance-once! c specs)))
-      r)))
-
 (defn ^:async caught-chance!
-  "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!), a
-  look into an unseen building where it pays (glance-home!) and one
+  "caught-chance-once!, after the glance along the way away the flight's step takes first (glance-away!, as judge!), and one
   look at the cells its flight would look at first (:look): a way that may be there is priced after the glance the flight
   takes anyway, not before it. One pass: the price asked again after the look is
   the answer, whatever it still wants to look at (cells past the glance memory would cycle for ever)."
   ([c] (await (caught-chance! c nil)))
   ([c specs]
    (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
-   (let [r (await (glance-home! c specs (await (caught-chance-once! c specs))))]
+   (let [r (await (caught-chance-once! c specs))]
      (if-let [cells (:look r)]
        (do (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
            (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))

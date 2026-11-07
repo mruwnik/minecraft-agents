@@ -341,6 +341,44 @@
   (+ (u/dist me (mid d)) 2
      (* (cost/flee-pace food) (cost/look-s (inc (* 2 looks))))))
 
+(defn door-glances
+  "The door sides survey dropped :unseen (a cell beside a seen door or gate), and the :unseen home's door sides (a side or
+  the cell beyond its door one of the home room's unseen sides) a step's search left :unjudged, not looked into this
+  flight (memory :door-glanced): each {:k :pos :d :looks} (door-cell d, looks its unseen sides). Its floods run under
+  reach/*search*."
+  [c survey]
+  (let [p (:primitives c)
+        glanced (:door-glanced (ctx/mem c) #{})
+        home-sides (when-let [h (first (filter #(and (:own? %) (= :unseen (:why %))) (:dropped survey)))]
+                     (set (reach-room/unseen-sides p (let [[x y z] (:at h)] {:x x :y y :z z}))))
+        home-door? (fn [{:keys [x y z]} d]
+                     (some #(contains? home-sides %) [[x y z] [(- (* 2 (:x d)) x) y (- (* 2 (:z d)) z)]]))]
+    (for [{[x y z] :at why :why} (:dropped survey)
+          :let [k (cell-key {:x x :y y :z z})
+                pos {:x x :y y :z z}
+                d (door-cell p pos)]
+          :when (and d (not (glanced k)) (or (= :unseen why) (and (= :unjudged why) (home-door? pos d))))]
+      {:k k :pos pos :d d :looks (count (reach-room/unseen-sides p pos))})))
+
+(defn glance-at
+  "The door side of door-glances the flight looks in at: the first within door-glance-radius whose
+  glance-steps a melee threat does not reach the door first in (reaches-first?); nil when none."
+  [c survey threats]
+  (let [p (:primitives c)
+        me (u/self-pos c)]
+    (first (filter (fn [{:keys [pos d looks]}]
+                     (and (<= (u/dist me pos) door-glance-radius)
+                          (reaches-first? p (glance-steps me d (food p) looks) [d] threats)))
+                   (door-glances c survey)))))
+
+(defn glance-s
+  "Seconds a glance at door side g (door-glances') takes the body: its glance-steps at a flight's pace."
+  [c {:keys [d looks]}]
+  (let [food (food (:primitives c))]
+    (/ (glance-steps (u/self-pos c) d food looks) (cost/flee-pace food))))
+
+(declare glance-through!)
+
 (defn ^:async glance-in!
   "Once a flight per building: when survey dropped a door side (a cell beside a seen door or gate; a home cell with
   none is looked into from its door sides) only for :unseen cells, or left it :unjudged as a door side of the :unseen home, and the body is within door-glance-radius of it,
@@ -349,23 +387,18 @@
   spot as it had unseen sides when the glance was raced (glance-steps); cells a door gap shows only at a graze stay unseen, so
   the body then steps to the far side of the door and looks again (sight passes; the time is part of the flight). The door's :opened entry
   expires, so a cut flight's door is shut by the door-left trigger. Not when a melee threat reaches the door first (reaches-first?).
-  True when it looked: the caller surveys again."
+  The door side is glance-at's (glance-through! takes a given one). True when it looked: the caller surveys again."
   [c survey threats]
+  (let [m (step-meter c)
+        at (binding [reach/*search* m] (glance-at c survey threats))]
+    (spent-meter! c m)
+    (await (glance-through! c at))))
+
+(defn ^:async glance-through!
+  "glance-in!'s look through door side at (a door-glances entry; nothing with nil): true when it looked."
+  [c at]
   (let [p (:primitives c)
-        me (u/self-pos c)
-        glanced (:door-glanced (ctx/mem c) #{})
-        home-sides (when-let [h (first (filter #(and (:own? %) (= :unseen (:why %))) (:dropped survey)))]
-                     (set (reach-room/unseen-sides p (let [[x y z] (:at h)] {:x x :y y :z z}))))
-        home-door? (fn [{:keys [x y z]} d]
-                     (some #(contains? home-sides %) [[x y z] [(- (* 2 (:x d)) x) y (- (* 2 (:z d)) z)]]))
-        at (first (for [{[x y z] :at why :why} (:dropped survey)
-                        :let [k (cell-key {:x x :y y :z z})
-                              pos {:x x :y y :z z}
-                              d (door-cell p pos)
-                              looks (when d (count (reach-room/unseen-sides p pos)))]
-                        :when (and d (or (= :unseen why) (and (= :unjudged why) (home-door? pos d))) (not (glanced k)) (<= (u/dist me pos) door-glance-radius)
-                              (reaches-first? p (glance-steps me d (food p) looks) [d] threats))]
-                    {:k k :pos pos :d d :looks looks}))]
+        me (u/self-pos c)]
     (when at
       (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at))
       (let [d (:d at)
