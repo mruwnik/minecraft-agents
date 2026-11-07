@@ -498,3 +498,26 @@
                     :when (not (and (number? bare) (number? risen) (< (js/Math.abs (- bare risen)) 1e-9)))]
                 [from goal prior? bare risen])))))
 
+
+(defn own-cut-floors
+  "The floors route's walks step onto that its own earlier steps dug."
+  [route]
+  (first (reduce (fn [[out dug] {:keys [to move dig]}]
+                   [(cond-> out (and (= :walk move) (dug (update to 1 dec))) (conj (update to 1 dec))) (into dug dig)])
+                 [[] #{}] (:steps route))))
+
+(deftest a-cheaper-way-to-a-cell-that-dug-a-floor-a-route-needs-on-hides-no-cheaper-route
+  ;; the cheapest way to a cell found first had dug a floor the cheapest route on stands on, and each bound found a
+  ;; dearer one (prior 54.9 s, plain 58.3 s) than the way through these feet cells
+  (let [seen (into {} (concat (for [x (range -2 9) z [3]] [[x 4 z] "air"])
+                              (for [x [6] y (range -2 4) z (range 0 4)] [[x y z] "air"])
+                              (for [x (range -3 3) y [0 1] z [-4]] [[x y z] "air"])))
+        rho #(memoize (steps-to-seen seen %))
+        opts (merge (unseen-opts seen (rho 3) (rho 1) 1000) {:max-fall 3 :margin 3 :stair-s 3 :range 1 :near [6 2 2]})
+        feet [[1 -6 0] [2 -6 0] [3 -6 0] [4 -5 0] [5 -4 0] [6 -3 0] [6 -2 1] [7 -1 1] [8 0 1] [8 1 2] [7 2 2]]
+        way (first (dr/route-within (world seen) [0 -6 0] [6 2 2] {:steps (map #(hash-map :to %) feet)} opts))
+        answers (for [bound [{:prior-h? false} {:prior-h? true} {:prior-h? true :back-h? true}]]
+                  (first ((dr/search (world seen) [0 -6 0] [6 2 2] (merge opts bound)) 100000)))]
+    (is (= [] (own-cut-floors way)) "the way through those cells stands on no floor it dug")
+    (is (= [] (remove #(< (js/Math.abs (- (:seconds %) (:seconds way))) 1e-9) answers)) (str "each bound finds its price, " (:seconds way) " s"))
+    (is (= [[] [] []] (map own-cut-floors answers)))))
