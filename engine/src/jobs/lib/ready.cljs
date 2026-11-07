@@ -173,29 +173,51 @@
       (when-let [paid (seq (:pay (sense/round-plan c cells (stay-look-price c chance))))]
         (contract/look :exposed text :look-at (vec paid))))))
 
+(defn stay-after
+  "The {:hp :lethal-hp} of a stay of price/stay-s at spawn chance `chance` (price/stay-parts), as walk-risk/wait-way's act after a wait."
+  [c chance]
+  (let [{:keys [hurt dies death]} (price/stay-parts c chance (price/stay-s c))
+        lethal (cost/lethal-hp {:chance dies :death death})]
+    {:hp (+ hurt lethal) :lethal-hp lethal}))
+
+(defn light-way
+  "walk-risk/wait-way of waiting light-s where the body stands for light, then acting with `after` (stay-after)."
+  [c light-s after]
+  (let [health (.-health (.self (:primitives c)))]
+    (walk-risk/wait-way c :light light-s (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) health after)))
+
 (defn unseen-status
-  "The exposure of the unseen place `to` no look from here shows, priced as unseen at its chance (Q16): spawn-light/chance-at's
-  guess of its light. Dark that dawn lifts (chance-at with caves-free?: dark only the sky lights) waits for dawn
-  (::light-patience-s) while it is the larger part of the chance, the rest judged by day; other dark looks first at the unseen walls of
-  the room round the body (room-look) and at the unseen cells beside its air (air-look), else is :never lowered by a torch;
-  priced prices either for the stay, the :never also as the walk there to look (look-first)."
-  [c to]
-  (let [p (:primitives c)
-        chance (spawn-light/chance-at p to false)
-        lifted (spawn-light/chance-at p to true)
-        left (- chance lifted)
-        light-in (or (sh-sense/sky-in p) ##Inf)
-        patience (settings/get settings ::light-patience-s)
-        where (str "unseen " (place-text to) ", which no look from here shows")]
-    (cond
-      (not (pos? chance)) (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit, or rock"))
-      (< lifted left) (or (room-look c (str "dark at " where ", walls of the room round the body not all seen") nil chance)
-                         (air-look c (str "dark at " where ", the air round the body not seen sealed") chance)
-                         (-> (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-share p to false 0))) "% dark even by full day, so dawn does not light it") :lowered-by #{:torch} :chance chance)
-                             (look-first c to (spawn-light/dark-share p to false))))
-      (<= light-in patience) (contract/later :exposed (str "dark at " where ": guessed open ground, dark until light") :lowered-by #{:light} :chance chance
-                                             :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
-      :else (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance))))
+  "The exposure of the unseen place `to` (`why`: why no look is taken, default none from here shows it), priced as unseen at its
+  chance (Q16): spawn-light/chance-at's guess of its light. While dawn lifts any of it (chance-at with caves-free?: dark only
+  the sky lights) and comes within ::light-patience-s, it waits for dawn :later with :left-chance, the rest (the cave part)
+  that the stay after dawn risks, else it is :never lowered by a torch; either is first a look at the unseen walls of the
+  room round the body (room-look) or the unseen cells beside its air (air-look) while that look is cheaper than the stay,
+  the wait and the job's own answers (stay-look-price); priced prices the stay, the wait and the walk there to look (look-first)."
+  ([c to] (unseen-status c to "which no look from here shows"))
+  ([c to why]
+   (let [p (:primitives c)
+         chance (spawn-light/chance-at p to false)
+         lifted (spawn-light/chance-at p to true)
+         left (max 0 (- chance lifted))
+         light-in (or (sh-sense/sky-in p) ##Inf)
+         patience (settings/get settings ::light-patience-s)
+         dawn? (and (pos? lifted) (<= light-in patience))
+         wait-s (when dawn? (:s (walk-risk/cheapest-affordable c [(light-way c light-in (stay-after c left))])))
+         looks (cond-> c wait-s (update ::own-stays (fnil conj []) (constantly wait-s)))
+         where (str "unseen " (place-text to) ", " why)]
+     (if-not (pos? chance)
+       (contract/ok :unexposed (str "no spawn risk at " where ": guessed lit, or rock"))
+       (or (room-look looks (str "dark at " where ", walls of the room round the body not all seen") nil chance)
+           (air-look looks (str "dark at " where ", the air round the body not seen sealed") chance)
+           (-> (cond
+                 dawn? (contract/later :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (/ lifted chance))) "% of its dark open to the sky, dark until light")
+                                       :lowered-by #{:light} :chance chance :left-chance left
+                                       :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
+                 (pos? lifted) (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits")
+                                               :lowered-by #{:torch} :chance chance)
+                 :else (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-share p to false 0))) "% dark even by full day, so dawn does not light it")
+                                       :lowered-by #{:torch} :chance chance))
+               (look-first c to (spawn-light/dark-share p to false))))))))
 
 (defn dark-status
   "The exposure of the dark place `to` no wait lights: go-to's spawn chance (spawn-light/chance-at) of the cell the body would
@@ -259,7 +281,7 @@
        (contains? lowered-by :look)
        (if-let [paid (seq (:pay (sense/round-plan c look-at (stay-look-price c chance))))]
          (contract/look :exposed (str "light at " where " not seen") :look-at (vec paid))
-         (unseen-status c to))
+         (unseen-status c to "which no look from here pays for"))
        (and @wait-s (<= @wait-s patience))
        (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
        @wait-s
@@ -268,23 +290,25 @@
 
 (defn act-price
   "{:now-s :now? :best} of acting now, risking hurt hp and lethal (its death in hp), against waiting where the body stands
-  first, by cost alone whatever the worth: until light (light-s, nil: no wait lights it), the act then risking nothing, and
+  first, by cost alone whatever the worth: until light (light-s, nil: no wait lights it), the act then risking light-after
+  ({:hp :lethal-hp}, default nothing), and
   until healed to full while the body can heal, the same risk then at full health. A wait costs its seconds, staying put
   over them (walk-risk/stay-estimate) and the act after it (cost/risk-s). now? while the hp are within what the call's worth
   (ctx/worth) buys (walk-risk/buys-hp); best the cheapest wait {:wait :secs :s} whose hp and seconds the worth affords."
-  [c hurt lethal light-s]
-  (let [health (.-health (.self (:primitives c)))
-        worth (ctx/worth c)
-        hp (+ hurt lethal)
-        per-hp (cost-health/heal-s-per-hp)
-        stay-in (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0)
-        heal-s (when (and (not (price/cannot-heal? c)) (pos? per-hp) (< health 20)) (* per-hp (- 20 health)))
-        ways (cond-> []
-               light-s (conj (walk-risk/wait-way c :light light-s stay-in health {:hp 0}))
-               heal-s (conj (walk-risk/wait-way c :heal heal-s stay-in 20 {:hp hp :lethal-hp lethal})))]
-    {:now-s (cost/risk-s health hurt lethal)
-     :now? (<= hp (walk-risk/buys-hp health (.-food (.self (:primitives c))) worth))
-     :best (walk-risk/cheapest-affordable c ways)}))
+  ([c hurt lethal light-s] (act-price c hurt lethal light-s {:hp 0}))
+  ([c hurt lethal light-s light-after]
+   (let [health (.-health (.self (:primitives c)))
+         worth (ctx/worth c)
+         hp (+ hurt lethal)
+         per-hp (cost-health/heal-s-per-hp)
+         stay-in (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0)
+         heal-s (when (and (not (price/cannot-heal? c)) (pos? per-hp) (< health 20)) (* per-hp (- 20 health)))
+         ways (cond-> []
+                light-s (conj (light-way c light-s light-after))
+                heal-s (conj (walk-risk/wait-way c :heal heal-s stay-in 20 {:hp hp :lethal-hp lethal})))]
+     {:now-s (cost/risk-s health hurt lethal)
+      :now? (<= hp (walk-risk/buys-hp health (.-food (.self (:primitives c))) worth))
+      :best (walk-risk/cheapest-affordable c ways)})))
 
 (defn priced
   "The status s of a place check, priced where it is :later or :never on exposure alone (:exposed with a :chance): the stay's
@@ -297,14 +321,15 @@
   A :never resting on such a guess whose walk to look costs more hp than the worth buys holds :later: the refusal is on
   price, not impossible. An own answer cheaper than the way taken leaves s to the job."
   [c s]
-  (let [[kind _ {:keys [reason chance wait-ms] look-way :look :as data}] s]
+  (let [[kind _ {:keys [reason chance wait-ms left-chance] look-way :look :as data}] s]
     (if-not (and (contains? #{:later :never} kind) (= :exposed reason) (number? chance))
       s
       (let [secs (price/stay-s c)
             {:keys [hurt dies death]} (price/stay-parts c chance secs)
             lethal (cost/lethal-hp {:chance dies :death death})
             hp (+ hurt lethal)
-            {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000))))
+            {:keys [now-s now? best]} (act-price c hurt lethal (when (= :later kind) (some-> wait-ms (/ 1000)))
+                                                 (if (pos? (or left-chance 0)) (stay-after c left-chance) {:hp 0}))
             look-s (some->> look-way (walk-risk/look-cost c) (#(when (look-edge/affords-walk? c % (ctx/worth c)) %)))
             own-s (keep #(% (dissoc c ::own-ways ::own-stays) s) (::own-ways c))
             own? (fn [than] (some #(< % than) own-s))

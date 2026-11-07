@@ -937,10 +937,17 @@
                                     lib-look/look-shows? (constantly true)]
                         (kind (ready/safe-at (constantly {:x x :y y :z 0})) open-night)))
     15 62
-    6 52))
+    6 52)
+  (is (re-find #"which no look from here pays for" (second (with-redefs [sh-sense/seen-cell? (constantly false)
+                                                                      sh-sense/solid-at? (constantly false)
+                                                                      lib-look/look-shows? (constantly true)
+                                                                      sense/round-plan (fn ([_ cells] {:pay cells}) ([_ _ _] {:pay nil}))]
+                                                          (ready/at-status (ctx-of open-night) {:x 15 :y 62 :z 0}))))
+      "a look from here would show it, but no round pays for it: priced as unseen, saying so"))
 
 (deftest an-unseen-cell-no-look-from-here-shows-is-priced-as-unseen
-  (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
+  ;; a stay dawn's light shortens the risk of: over ctx-of's 1e6 s even the cave part kills, so waiting would buy nothing
+  (let [s ((ready/safe-at (constantly outside)) (assoc (ctx-of open-night) ::price/stay-s 3000))]
     (is (= :later (first s)) "open ground under the night sky")
     (is (= #{:light} (:lowered-by (nth s 2))) "dawn lifts it")
     (is (re-find #"no look from here shows" (second s))))
@@ -953,6 +960,28 @@
     (is (= [:later :exposed] (cave worthless open-cave lib-look/unseen-lit-chance)) "a goal worth nothing buys no walk to look: refused on price, not impossible on a guess")
     (is (= [:later :exposed] (cave worthless lib-look/unseen-solid-at-fn (fn ([_ _] 0) ([_ _ _] 0))))
         "dark even by day at the measured rock prior: the small chance it is a cave is still priced, and a goal worth nothing does not take it")))
+
+;; Dawn 30 s off halves a 3000 s stay's risk for a little wait. Would fail on old code: at a 49% share lifted by dawn it
+;; never offered the wait (and priced the act after it at 0 hp); at 51% it never weighed the room's look.
+(deftest an-unseen-cell-weighs-the-dawn-wait-the-look-and-acting-now-by-price-whatever-share-dawn-lifts
+  (let [run (fn [share pays?]
+              (let [delta (atom nil)
+                    c (assoc (ctx-of open-night) ::price/stay-s 3000)]
+                (with-redefs [spawn-light/chance-at (let [f (fn [caves-free?] (if caves-free? (* share 0.001) 0.001))]
+                                                    (fn ([_ _ cf] (f cf)) ([_ _ cf _] (f cf)) ([_ _ cf _ _] (f cf)) ([_ _ cf _ _ _] (f cf))))
+                              sh-sense/seen-cell? (constantly true)
+                              sh-sense/sky-in (constantly 30)
+                              look-edge/pending (fn ([_] [[16 64 0]]) ([_ _] [[16 64 0]]))
+                              sense/round-plan (fn ([_ cells] {:pay cells}) ([_ cells {d :delta}] (reset! delta d) {:pay (when pays? cells)}))]
+                  [(ready/priced c (ready/unseen-status c outside)) @delta])))]
+    (doseq [share [0.49 0.51]]
+      (let [[[kind _ {:keys [now-s wait-s left-chance]}] delta] (run share false)]
+        (is (= :later kind) (str share ": no look pays, dawn is the cheapest way"))
+        (is (< wait-s now-s) (str share))
+        (is (< (js/Math.abs (- left-chance (* (- 1 share) 0.001))) 1e-12) (str share ": the stay after dawn keeps the cave part"))
+        (is (< (js/Math.abs (- delta wait-s)) 1e-6) (str share ": the look is weighed against the wait")))
+      (is (= :look (ffirst (run share true))) (str share ": a look that pays comes first")))
+    (is (> (:wait-s (nth (first (run 0.49 false)) 2)) (:wait-s (nth (first (run 0.51 false)) 2))) "more cave left after dawn: a dearer wait")))
 
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
@@ -1086,7 +1115,8 @@
   (let [check (fn [safe args] (with-redefs [sh-sense/seen-cell? (constantly false)
                                             ready/roof-over? (constantly false)]
                                 (first (safe (assoc (for-iron (ctx-of open-night)) :args args)))))]
-    (are [safe args] (= :later (check safe args))
+    ;; the walk there to look (1.4 hp, 37 s) costs less than the wait for dawn (look-first)
+    (are [safe args] (= :ok (check safe args))
       tunnel-job/safe? {:target [40 63 0]}
       mine/safe? {:at {:x 40 :y 63 :z 0} :block "iron_ore" :count 1 :torches false :tunnel-length 20}
       dig-for/safe? {:at {:x 40 :y 63 :z 0} :block "iron_ore" :count 1 :torches false :tunnel-length 20})
