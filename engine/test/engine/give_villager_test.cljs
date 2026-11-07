@@ -10,6 +10,7 @@
             [engine.perception :as perception]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.lib.child :as child]
             [jobs.lib.give-villager :as feed]))
 
 (def job 'jobs.items.give)
@@ -316,3 +317,31 @@
     12.75 true
     14.5 false
     12.5 false))
+
+(defn ^:async walks-with
+  "feed/walk! n times to pos, each leg ending as (leg i); the results."
+  [n pos leg]
+  (let [m (atom {}) i (atom 0)]
+    (with-redefs [ctx/mem (fn [_] @m)
+                  ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
+                  child/call-chase* (fn [& _] (leg (swap! i inc)))
+                  ctx/worth (fn [_] ##Inf)
+                  feed/stop! (fn [_ reason] [:stop reason])]
+      (loop [k 0 out []]
+        (if (= k n) out (recur (inc k) (conj out (await (feed/walk! {} pos 0)))))))))
+
+(deftest legs-that-get-nearer-are-not-counted-against-the-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= (repeat 12 :again) (await (walks-with 12 {:x 3 :y 64 :z 0} (fn [_] {:kind :done :data {:nearer true}}))))
+            "the old cap of 8 walks since the last toss ended a long chase unreachable")))))
+
+(deftest a-stand-that-failed-is-not-walked-to-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [legs (atom 0)
+              out (await (walks-with 2 {:x 3 :y 64 :z 0} (fn [_] (swap! legs inc) {:kind :nothing-possible :data {}})))]
+          (is (= [:again [:stop :unreachable]] out))
+          (is (= 1 @legs) "the second walk to the same stand had nothing changed"))))))

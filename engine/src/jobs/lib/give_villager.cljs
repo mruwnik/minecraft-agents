@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
@@ -24,7 +25,6 @@
    ::crowd-s {:default 30 :doc "Seconds to wait for other villagers to move off before the call stops :crowded." :spec (a/int-in 0 nil)}
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
    ::max-refused {:default 3 :doc "Tosses in a row that are refused or not collected before the call stops :not-taken." :spec (a/int-in 0 nil)}
-   ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds one feeding may take." :spec (a/int-in 1 nil)}
    ::watch-s {:default 4 :doc "Seconds the toss primitive watches for who collects the drop (the pickup receipt)." :spec (a/int-in 0 nil)}
    ::settle-reach {:default 4 :doc "Blocks from the toss spot within which a restart settles a toss cut before its receipt; farther, it walks back there first." :spec (a/int-in 0 nil)}})
@@ -37,7 +37,6 @@
 (defn crowd-s [] (settings/get settings ::crowd-s))
 (defn leg-s [] (settings/get settings ::leg-s))
 (defn max-refused [] (settings/get settings ::max-refused))
-(defn max-walks [] (settings/get settings ::max-walks))
 (defn watch-s [] (settings/get settings ::watch-s))
 (defn settle-reach [] (settings/get settings ::settle-reach))
 (def job 'jobs.items.give)
@@ -202,25 +201,29 @@
   (if (>= (:crowded-ms (ctx/mem c) 0) (* 1000 (crowd-s)))
     (stop! c :crowded)
     (let [r (await (child/pause! c 0.5 (crowd-why e os)))]
-      (ctx/update-mem! c dissoc :walks) ; it got within reach
+      (ctx/update-mem! c dissoc :failed-stands) ; it got within reach
       (when (= :done (:kind r)) (ctx/update-mem! c update :crowded-ms (fnil + 0) 500))
       (if (= :continue r) :continue :again))))
 
 (defn ^:async walk!
-  "One go-to leg to within range of pos. A leg or arrival resets the blocked count, anything else counts (the third in a
-  row ends unreachable); the legs since the last toss are bounded by max-walks. :again, :continue or :done."
+  "One go-to leg to within range of pos. A leg or arrival resets the blocked count and the failed stands; any other
+  ending books pos as failed: the sides turn round with the blocked count, so another
+  stand is tried while another walk is worth its price (cost/try-again? :walk); a stand that failed is not walked to
+  again (:unreachable). :again, :continue or :done."
   [c pos range]
-  (let [r (await (child/call-chase* c :walk {:pos pos :range range :leg-s (leg-s)
-                                             :walk {:doors :shut :ways #{:walk :clear-seal}}}))]
-    (if (= :continue r)
-      :continue
-      (let [res (:data r)
-            ok? (or (:arrived res) (:nearer res))
-            _ (ctx/update-mem! c #(-> % (assoc :blocked (if ok? 0 (inc (:blocked % 0)))) (update :walks (fnil inc 0))))
-            m (ctx/mem c)]
-        (if (or (>= (:blocked m 0) 3) (>= (:walks m 0) (max-walks)))
-          (stop! c :unreachable)
-          :again)))))
+  (if (contains? (:failed-stands (ctx/mem c)) pos)
+    (stop! c :unreachable)
+    (let [r (await (child/call-chase* c :walk {:pos pos :range range :leg-s (leg-s)
+                                               :walk {:doors :shut :ways #{:walk :clear-seal}}}))]
+      (if (= :continue r)
+        :continue
+        (let [res (:data r)
+              ok? (or (:arrived res) (:nearer res))]
+          (ctx/update-mem! c #(-> % (assoc :blocked (if ok? 0 (inc (:blocked % 0))))
+                                  (update :failed-stands (fn [s] (if ok? #{} (conj (or s #{}) pos))))))
+          (if (or ok? (cost/try-again? c :walk {:fails (count (:failed-stands (ctx/mem c)))}))
+            :again
+            (stop! c :unreachable)))))))
 
 (defn lying
   "The drops of item near at (the toss spot), nearest first, with only the body's share counted: skip maps the id of a
@@ -267,7 +270,7 @@
         got (min n (get by (.-uuid e) 0))
         {:keys [at skip]} (:tossing (ctx/mem c))]
     (ctx/update-mem! c #(-> %
-                            (dissoc :tossing :walks :crowded-ms)
+                            (dissoc :tossing :failed-stands :crowded-ms)
                             (assoc :item item)
                             (update :fed (fnil + 0) got)
                             (assoc :refused (if (pos? got) 0 (inc (:refused % 0))))
@@ -302,7 +305,7 @@
   [c {:keys [item at skip t] :as intent}]
   (let [got (took intent (held c item) (eaten c item t) (lying c item at skip))]
     (ctx/update-mem! c #(-> %
-                            (dissoc :tossing :walks)
+                            (dissoc :tossing :failed-stands)
                             (assoc :item item)
                             (update :fed (fnil + 0) got)
                             (assoc :refused (if (pos? got) 0 (inc (:refused % 0))))
