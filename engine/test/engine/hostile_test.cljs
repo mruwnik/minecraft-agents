@@ -903,7 +903,7 @@
           (await (core/tick! eng))
           (is (> (:z (first-move eng)) 1) "mobs on three sides: it leaves through the one open side, not away from the nearest"))))))
 
-(deftest retreat-ignores-a-home-beyond-the-home-range
+(deftest retreat-is-not-bent-by-a-home-2000-blocks-away
   (async done
     (tu/run-async done
       (fn ^:async t []

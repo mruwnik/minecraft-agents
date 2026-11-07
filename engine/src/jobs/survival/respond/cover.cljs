@@ -24,21 +24,19 @@
             [jobs.survival.respond.cornered :as pick]))
 
 (a/defargs settings
-  {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
-   ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut and the places its recent walks began are a way out of a flight." :spec (a/num-in 0 nil)}})
-(defn home-range [] (settings/get settings ::home-range))
+  {::way-reach {:default 14 :doc "Blocks within which the stairs the body cut and the places its recent walks began are a way out of a flight." :spec (a/num-in 0 nil)}})
 (defn way-reach [] (settings/get settings ::way-reach))
 
 (defn home-pos
-  "The position of the latest :bed or :home entry within home-range blocks of the body, or nil."
+  "The position of the latest :bed or :home entry at any distance, or nil: the flight's search prices the run to it
+  (flee-search, its own node cap), and survey ranks it among the rooms by distance."
   [c]
-  (let [pos (->> [(ctx/latest c :bed) (ctx/latest c :home)]
-                 (remove nil?)
-                 (sort-by :t >)
-                 first
-                 :data
-                 :pos)]
-    (when (and pos (<= (u/dist pos (u/self-pos c)) (home-range))) pos)))
+  (->> [(ctx/latest c :bed) (ctx/latest c :home)]
+       (remove nil?)
+       (sort-by :t >)
+       first
+       :data
+       :pos))
 
 (defn blast
   "The creepers among threats within blast reach (flight/blaster?)."

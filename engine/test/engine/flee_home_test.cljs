@@ -21,6 +21,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond-flight :as retreat]
+            [jobs.survival.respond.cover :as cover]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond-choose :as choose]
             [jobs.lib.util :as u]
@@ -598,3 +599,29 @@
           (core/submit! eng '(test.flight) {})
           (await (tu/run-until-empty eng 6))
           (is (zero? @looks) "a creeper behind is not led to a door for a look"))))))
+
+(defn shifted
+  "The cell-keyed map m moved dx blocks along x."
+  [m dx]
+  (into {} (map (fn [[k v]] (let [[x y z] (.split k ",")] [(str (+ dx (js/parseInt x)) "," y "," z) v]))) m))
+
+(deftest a-room-nearer-than-the-home-is-the-first-the-flight-races-for
+  ;; the home is ranked by its distance like any room: home first would put a far home before a room by the body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [near-hut (shifted (merge hs/walls hs/roof hs/door hut-floor) -20)
+              {:keys [eng]} (setup (hut {:x -14.5 :y 64 :z 6.5} (merge hs/door-states (shifted hs/door-states -20)) [] near-hut))
+              c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "t8")
+              rooms (:rooms (rooms/survey c (cover/home-pos c)))]
+          (is (= [false true] (mapv :home? rooms)) (str "the room 7 blocks off, then the home 20 off: " (mapv :start rooms))))))))
+
+(deftest a-home-past-64-blocks-is-still-the-flights-home
+  ;; its run is priced by the flight's search like a near one's, not cut by a range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states []) :home {:x 105 :y 64 :z 0}))
+              c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})]
+          (is (= {:x 105 :y 64 :z 0} (cover/home-pos c))))))))

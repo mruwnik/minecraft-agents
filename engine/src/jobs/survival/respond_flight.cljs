@@ -11,7 +11,7 @@
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
   2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
      with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
-     or takes the cornered options): the latest :bed or :home within respond.cover/home-range (64), or a room behind a wooden door or
+     or takes the cornered options): the latest :bed or :home at any distance, or a room behind a wooden door or
      gate the body has seen (respond.cover/survey, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach.room/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
