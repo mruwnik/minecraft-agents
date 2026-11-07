@@ -500,7 +500,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [runs (loop [ws [1200 1800 8400] out []]
+        (let [runs (loop [ws [1200 1800] out []]
                      (if (empty? ws)
                        out
                        (recur (rest ws) (conj out (await (refill-run! (first ws)))))))]
