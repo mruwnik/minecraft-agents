@@ -621,12 +621,13 @@
 
 (deftest an-open-platform-over-unseen-floor-tries-the-unseen-sides-and-ends-on-them-with-or-without-a-cap
   ;; a look is the way to learn a floor, so the sides are tried whether the budget or a cap refuses the 13 drop; the
-  ;; floors felt for turn out not there. Uncapped it ends on them (:unseen-floors), never :needs-health at full health.
+  ;; floors felt for turn out not there. Uncapped, once every side is felt absent the only way left is the drop, refused for its hp
+  ;; cost (:damage-budget, no floor is unseen any more), never :needs-health at full health.
   ;; Capped, it never takes the drop (no hurt): it digs a stair down the platform's face to the ore and mines it.
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[settings status got ore why] [[{} :stopped 0 "iron_ore" :unseen-floors] [{:jobs.lib.walk.world/max-damage 0} :completed 1 "air" nil]]]
+        (doseq [[settings status got ore why] [[{} :stopped 0 "iron_ore" :damage-budget] [{:jobs.lib.walk.world/max-damage 0} :completed 1 "air" nil]]]
           (let [s (await (drop-to-ore 77 false settings))
                 e (done-event s)
                 learned (mapcat :learned (events-of s :replan))]
