@@ -405,7 +405,9 @@
             (is (empty? more))
             (is (= :exposed (:reason s)) "a night with no shelter is no success")
             (is (every? #{:roof-failed :failed-steps :no-floor} (mapv :reason (:sites s))) "every site tried failed in dig-in's own steps, whichever the cap kept")
-          (is (= (inc (sites/max-sites)) (count (:sites s))) "max-sites sites tried, then exposed"))
+          (let [ended (filterv #(and (= :child_ended (:kind %)) (= :shut-in (:slot %)) (= :stopped (:status %))) @seen)]
+            (is (= (sites/max-sites) (count ended)) "max-sites shut-in calls, counted from their endings (:sites is capped)")
+            (is (every? #(seq (get-in % [:ending :data :stops])) ended) "each failed in dig-in's own steps")))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest exposed-why-names-the-site-reasons
