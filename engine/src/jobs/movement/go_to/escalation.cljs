@@ -256,14 +256,15 @@
 (defn way-total
   "Seconds way e from feet takes the body to goal, one sum for a stair, a pillar and a dig leg: the way's own price
   (escape-way/way-s for a stair or pillar, with its climb left; price for a leg) and the walk on from its end to goal
-  along the straight line, a seen solid cell of that line and of the one over it dug (cost/dig-cost) as the walk goes; no dangers.
-  A climb (climb-route/climb-way) is its whole route's :route-s."
+  along the straight line, a solid cell of that line and of the one over it dug (cost/dig-cost) as the walk goes, an unseen one
+  at the chance it is solid (escape/dig-share-fn); no dangers. A climb (climb-route/climb-way) is its whole route's :route-s."
   [p feet goal e may-dig?]
   (let [walk-s (escape-way/rest-s-fn p goal)
         block-at (escape/block-at-of p)
-        unseen? (escape/unseen-of p)
+        share (escape/dig-share-fn p)
+        dig-s (fn [cell] (let [n (block-at cell)] (if (dig-route/open? n) 0 (* (share cell) (or (cost/dig-cost n) 0)))))
         rest-s (fn [cell] (+ (walk-s cell)
-                             (transduce (comp (mapcat #(vector % (escape/up % 1))) (remove unseen?) (map block-at) (remove dig-route/open?) (map #(or (cost/dig-cost %) 0))) + 0
+                             (transduce (comp (mapcat #(vector % (escape/up % 1))) (map dig-s)) + 0
                                         (take escape-way/read-line-cells (escape/line-cells cell goal)))))]
     (cond
       (:route-s e) (:route-s e)
@@ -277,12 +278,13 @@
 
 (defn or-climb
   "Way w, or the climb k when it reaches the goal for no more seconds (total, way-total): k when w is none, w when k is
-  nil or w cannot be priced (a walk, a search going on)."
-  [w k total]
+  nil or w cannot be priced (a walk, a search going on). While k's search goes on it is waited for (k) till the body has
+  stood waited-s seconds, w's price: past that no climb found saves anything."
+  [w k total waited-s]
   (cond (nil? k) w
         (= :none (:step w)) k
         (not (#{:dig-route :stair :pillar} (:step w))) w
-        (= :searching (:step k)) k
+        (= :searching (:step k)) (if (< waited-s (total w)) k w)
         (<= (total k) (total w)) k
         :else w))
 
@@ -345,7 +347,8 @@
                              w
                              (or-climb w (climb-route/climb-way (:primitives c) feet goal may-dig?
                                                                 (cond-> o (#{:dig-route :stair :pillar} (:step w)) (update :bound-s #(min (or % ##Inf) (total w)))))
-                                       total)))))
+                                       total
+                                       (if-let [since (:since (:route-search (ctx/mem c)))] (search-bound/stood-s c since) 0))))))
         choose-by (cond into? #(goal-way c feet goal %1 %2)
                      ;; a goal too far for one dig route, no stair or pillar out (a plateau top): a dig off the land's edge
                      dig-in? (priced #(let [d (dig-toward c feet goal %1 %2)]
