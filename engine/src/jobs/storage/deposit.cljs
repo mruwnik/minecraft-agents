@@ -53,7 +53,7 @@
   :no-chest-item, no free cell beside (or none left to try), or :make-chests? false, nothing-possible :all-chests-full; a chest that cannot be placed after 3 tries nothing-possible :no-chest-spot. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no work of the body near) stay carried, even when named in :items; one
   goods.found notice (:attention :notice) names item, count and the pick-up place.
-  A weapon named in :items and put in is remembered (:weapon-stowed, 10 min): the needs-weapon reflex leaves a deliberate put-away alone meanwhile.
+  A weapon named in :items is remembered (:weapon-stowed, 10 min) before it goes in, so no reflex sees the swordless body first: the needs-weapon reflex leaves a deliberate put-away alone meanwhile.
   Each transfer emits info deposit.put (chest, item, count).
   Stock: what the chest holds after each transfer is booked in body memory :fetch/stock (jobs.lib.stock), so observe chests shows it.")
 
@@ -260,7 +260,9 @@
           (= :unreachable w) (give-up! c :unreachable)
           w w
           :else
-        (let [r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
+        (let [_ (when (and items (some #(.includes (:name (:stack pick)) %) combat/default-weapons))
+                  (ctx/remember! c :weapon-stowed {:item (:name (:stack pick))} stowed-policy))
+              r (await (ctx/act c :transfer (clj->js {:pos chest :direction "deposit"
                                                          :item (:name (:stack pick)) :count (:count pick)})))
                 _ (when (.-items r) (stock/note-stock! c chest (.-items r)))]
             (if (= "ok" (.-status r))
@@ -270,8 +272,6 @@
                     (ctx/emit! c :deposit.put :info
                                {:chest (storage/cell-of chest) :item (:name (:stack pick)) :count (.-moved r)
                                 :text (str "put " (.-moved r) " " (:name (:stack pick)) " in the chest at " (pr-str (storage/cell-of chest)))})
-                    (when (and items (some #(.includes (:name (:stack pick)) %) combat/default-weapons))
-                      (ctx/remember! c :weapon-stowed {:item (:name (:stack pick))} stowed-policy))
                     (u/progress! c)
                     :again)
                 (if group? (mark-full! c chest) (give-up! c :nothing-moved)))
