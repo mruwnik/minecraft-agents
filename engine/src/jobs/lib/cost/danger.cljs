@@ -196,26 +196,26 @@
   ([body-s arrive-s margin-s] (< (+ body-s margin-s) arrive-s)))
 
 (defn reach-first?
-  "Whether a body with food food (body-speed), body-dist blocks from a refuge, gets there race-margin-s before every
+  "Whether a body with food food (flee-pace), body-dist blocks from a refuge, gets there race-margin-s before every
   chaser, each (mob-dists) that many blocks from it at ::chase-speed, or its own chase-speed when that is more
   (mob-names, in the order of mob-dists). True with no chaser."
   ([body-dist mob-dists food] (reach-first? body-dist mob-dists food (repeat nil)))
   ([body-dist mob-dists food mob-names]
-   (let [body-s (/ body-dist (body-speed food))
+   (let [body-s (/ body-dist (flee-pace food))
          floor (settings/get settings ::chase-speed)]
      (every? true? (map #(wins-race? body-s (/ %1 (max floor (chase-speed %2)))) mob-dists mob-names)))))
 
 (defn lead-s
-  "Seconds a chaser arrive-s from a place leaves a body blocks from it running at its own pace (body-speed food)."
+  "Seconds a chaser arrive-s from a place leaves a body blocks from it running at a flight's pace (flee-pace food)."
   [arrive-s blocks food]
-  (- arrive-s (/ blocks (body-speed food))))
+  (- arrive-s (/ blocks (flee-pace food))))
 
 (defn run-saved-s
-  "Seconds of run a refuge blocks from the body could save over one whose way in is best-steps long, at its own pace
-  (body-speed food): ##Inf with none. Steps of a walk against a straight line: no walk is shorter, so it never
+  "Seconds of run a refuge blocks from the body could save over one whose way in is best-steps long, at a flight's pace
+  (flee-pace food): ##Inf with none. Steps of a walk against a straight line: no walk is shorter, so it never
   understates the saving."
   [blocks best-steps food]
-  (if (infinite? best-steps) ##Inf (/ (- best-steps blocks) (body-speed food))))
+  (if (infinite? best-steps) ##Inf (/ (- best-steps blocks) (flee-pace food))))
 
 (defn search-budget-s [] (settings/get settings ::search-budget-s))
 

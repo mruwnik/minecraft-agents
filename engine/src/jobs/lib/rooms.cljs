@@ -185,10 +185,10 @@
         (cond-> room (map? room) (assoc :fill? (boolean (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build))))))))))))
 
 (defn flood-s
-  "Seconds of CPU one room flood to its cap costs: reach-room/room-cells cells read at cost/search-read-s. A fresh judgement
+  "Seconds of CPU one room flood to its cap costs: reach-room/room-cells cells read at cost/room-read-s. A fresh judgement
   runs one (an open side's; a closed room's two run over its cells, mostly far under the cap)."
   []
-  (* reach-room/room-cells (cost/search-read-s)))
+  (* reach-room/room-cells (cost/room-read-s)))
 
 (defn judge-s
   "Seconds of CPU a door side judged afresh may cost: its room's flood and closed-past-sight?'s (flood-s each)."
@@ -202,9 +202,9 @@
   (if (and (reach-room/kept? p (refuge-key pos)) (reach-room/kept? p (reach-room/look-key pos))) 0 (judge-s)))
 
 (defn way-s
-  "Seconds of CPU a walk search to a room's door (way-in) may cost: reach/node-budget cells at cost/search-cell-s."
+  "Seconds of CPU a walk search to a room's door (way-in) may cost: reach/node-budget cells at cost/walk-cell-s."
   []
-  (* reach/node-budget (cost/search-cell-s)))
+  (* reach/node-budget (cost/walk-cell-s)))
 
 (defn arrival-s
   "Seconds the first melee threat of threats (ranged ones shoot, they do not race: reaches-first?) takes to within its
@@ -224,7 +224,7 @@
 (defn search-meter
   "A reach/meter of the one search a flight step's or a quote's searches make (cost/search-budget-s, Q141), spent-s spent."
   [spent-s]
-  (reach/meter (cost/search-budget-s) spent-s (cost/search-read-s) (cost/search-cell-s)))
+  (reach/meter (cost/search-budget-s) spent-s (cost/room-read-s) (cost/walk-cell-s)))
 
 (defn step-spent-s "Seconds of CPU the flight step's searches have run (job memory :search-s, new-step! clears it)." [c] (:search-s (ctx/mem c) 0))
 
@@ -302,7 +302,7 @@
 
 (defn reaches-first?
   "Whether the body walks steps blocks before any melee threat (ranged ones shoot, they do not race), each at its own
-  speed, gets to the nearest of cells (straight line): cost/reach-first?."
+  speed (the body's a flight's pace), gets to the nearest of cells (straight line): cost/reach-first?."
   [p steps cells threats]
   (let [racers (remove combat/ranged? threats)]
     (cost/reach-first? steps
@@ -325,11 +325,11 @@
 (defn glance-steps
   "Blocks the body's time at door cell d from me weighs in the glance's race: the walk to the door, the two blocks through
   it and back to the spot, and the seconds of the click and of a look at each of the room's looks unseen sides (cells)
-  from each of the two spots, at the body's own pace (food). A shut that waits on an animal is not counted: it comes
+  from each of the two spots, at a flight's pace (cost/flee-pace food). A shut that waits on an animal is not counted: it comes
   after the chaser's reach is settled."
   [me d food looks]
   (+ (u/dist me (mid d)) 2
-     (* (cost/body-speed food) (cost/look-s (inc (* 2 looks))))))
+     (* (cost/flee-pace food) (cost/look-s (inc (* 2 looks))))))
 
 (defn ^:async glance-in!
   "Once a flight per building: when survey dropped a door side (a cell beside a seen door or gate; a home cell with

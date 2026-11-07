@@ -210,6 +210,10 @@
                          :doc "Measured CPU of route searches, [seconds cells] (search-cell-s is their quotient): dig-route's priced-search to its end over four scenes read through a fake body's primitives as a cut reads the world, 2026-10-30 (0.37 s over 3676 cells = 0.10 ms a cell; the same scenes read bare run 0.03 to 0.07 ms, mine-a's glass cut 0.103). Recount: run engine.search-recount-test, add the seconds and cells of its RECOUNT :pooled-search line to these."}
    ::search-reads-timed {:default [1.59 34428] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
                          :doc "Measured CPU of dig-route searches by the cells they read, [seconds cells] (search-read-s is their quotient; the search's own price, as a cell expanded reads 3 to 9 as the scene goes): engine.search-recount-test's RECOUNT :pooled-reads line, two runs 2026-11-07 at load ~17 (0.046 ms a cell; go-to-sensed's plateau search reads at 0.045 to 0.07 ms, where its 0.1 to 0.5 ms a cell expanded is 1 to 5 times the scenes'). Recount: add that line's seconds and cells to these."}
+   ::walk-cells-timed {:default [5.984 42000] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                       :doc "Measured CPU of the refuge walk search (reach-room/walk-steps to a goal with no way, reach/node-budget cells), [seconds cells] (walk-cell-s is their quotient): two runs 2026-11-07 at load ~13 over a slab and a pillared slab (0.135 and 0.150 ms a cell; 0.18 to 0.29 at load 29). Recount: engine.search-recount-test's RECOUNT :pooled-walk line, add its seconds and cells to these."}
+   ::room-cells-timed {:default [2.053 34846] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                       :doc "Measured CPU of a refuge room flood (reach-room/room-flood: an open slab, a pillared slab, a walled room), [seconds cells] (room-read-s is their quotient): two runs 2026-11-07 at load ~13 (0.045 and 0.073 ms a cell pooled; 0.035 open, 0.08 to 0.11 a closed room). Recount: engine.search-recount-test's RECOUNT :pooled-room line, add its seconds and cells to these."}
    ::flood-cells-timed {:default [0.52 30720] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
                         :doc "Measured CPU of go-to's room floods (nearest-stand), [seconds cells] (flood-cell-s is their quotient): 30 floods of 1024 cells over a flat slab, 2026-10-30 (0.52 s = 0.017 ms a cell). Recount: engine.search-recount-test's RECOUNT :flood line."}
    ::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
@@ -309,5 +313,9 @@
 (defn search-cell-s "Seconds of CPU one cell of a route search costs (::search-cells-timed)." [] (timed-cell-s ::search-cells-timed))
 
 (defn search-read-s "Seconds of CPU one cell a dig-route search reads costs (::search-reads-timed)." [] (timed-cell-s ::search-reads-timed))
+
+(defn walk-cell-s "Seconds of CPU one cell of a refuge walk search expands costs (::walk-cells-timed)." [] (timed-cell-s ::walk-cells-timed))
+
+(defn room-read-s "Seconds of CPU one cell of a refuge room flood reads costs (::room-cells-timed)." [] (timed-cell-s ::room-cells-timed))
 
 (defn flood-cell-s "Seconds of CPU one cell of go-to's room flood costs (::flood-cells-timed)." [] (timed-cell-s ::flood-cells-timed))

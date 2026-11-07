@@ -88,15 +88,16 @@
 
 (defn walk-targets [eng] (mapv #(select-keys % [:x :z]) (tu/walked-to eng)))
 
-(deftest the-race-to-a-refuge-is-won-with-a-margin-at-the-bodys-own-speed
+(deftest the-race-to-a-refuge-is-won-with-a-margin-at-a-flights-measured-pace
   (are [body-dist mob-dists food first?] (= first? (cost/reach-first? body-dist mob-dists food))
-    2 [3] 20 true
+    2 [4] 20 true
     6.5 [13] 20 true
     8 [3] 20 false
     8 [] 20 true
     5 [3 30] 20 false
-    10 [8] 20 true
-    10 [8] 6 false))
+    10 [8] 20 false
+    10 [13] 20 true
+    10 [13] 6 false))
 
 (deftest cornered-at-home-the-body-never-digs-its-own-hut
   (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:home? true}))))
@@ -215,7 +216,7 @@
 (deftest a-chaser-that-loses-to-the-walk-alone-but-not-to-the-looks-at-the-door-gets-no-glance
   (let [me {:x 5.5 :y 64 :z 5.5} d {:x 5 :y 64 :z 2}
         walk (u/dist me (rooms/mid d))
-        mob-dist 4.5]
+        mob-dist 5.5]
     (is (cost/reach-first? walk [mob-dist] 20 [\"zombie\"]) "the walk to the door alone is won")
     (is (not (cost/reach-first? (rooms/glance-steps me d 20 4) [mob-dist] 20 [\"zombie\"])) "the click, the walk through and the looks make it lost")))
 
@@ -332,7 +333,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world (fn [food] (assoc-in (hut {:x 5.5 :y 64 :z 13.5} hs/door-states [(zombie 11.5 8.5 nil)]) [:self :food] food))]
+        (let [world (fn [food] (assoc-in (hut {:x 5.5 :y 64 :z 13.5} hs/door-states [(zombie 11.5 14.5 nil)]) [:self :food] food))]
           (is (ran-home? (:seen (await (first-step (world 20))))) "fed, it sprints home")
           (is (not (ran-home? (:seen (await (first-step (world 6)))))) "hungry, it walks and loses"))))))
 
@@ -594,9 +595,9 @@
                        (rooms/new-step! c)
                        (let [r (with-redefs [cover/fire-on (constantly fire)] (cover/survey c threats false))]
                          [(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped r))))
-                          (<= (- budget (cost/search-read-s)) (:spent-s r) budget)
+                          (<= (- budget (cost/room-read-s)) (:spent-s r) budget)
                           (= (:spent-s r) (rooms/step-spent-s c))]))]
-          (is (< (* 2 flood) budget (* 7 flood)) "the budget fits more than one flood, fewer than the sides")
+          (is (< flood budget (* 7 flood)) "the budget fits a flood, fewer than the sides")
           (are [threats fire] (= [(js/Math.floor (/ budget flood)) true true] (judged threats fire))
             [(seen-zombie -13.5 40.5)] nil
             [] nil
@@ -685,7 +686,7 @@
               threats [(seen-zombie 5.5 30.5)]
               rooms (mapv #(dissoc % :way-in) (:rooms (rooms/survey c home {:threats threats})))
               budget (cost/search-budget-s)
-              late (rooms/verdicts p rooms threats true (- budget (* 3 (cost/search-cell-s))) nil)
+              late (rooms/verdicts p rooms threats true (- budget (* 3 (cost/walk-cell-s))) nil)
               fresh (rooms/verdicts p rooms threats true 0 nil)]
           (is (= [true] (mapv :home? rooms)) "the home")
           (is (= [:unpriced] (mapv :why (:verdicts late))) "three cells left of the step's search: the home's walk search is cut")

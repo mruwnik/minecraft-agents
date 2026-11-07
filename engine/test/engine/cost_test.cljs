@@ -11,6 +11,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.caught :as caught]
+            [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.risk :as risk]
@@ -287,10 +288,17 @@
       "a fed body's 3.72 b/s steps of 1.02 s with 0.23 s stops make 3.04 b/s: it barely outruns a mob at the 3 b/s ::chase-speed default"))
 
 (deftest the-race-to-a-refuge-counts-each-chaser-at-its-own-speed
-  (are [names expected] (= expected (cost/reach-first? 5 [5] 20 names))
+  (are [names expected] (= expected (cost/reach-first? 5 [7] 20 names))
     ["zombie"] true
     ["spider"] false
     ["baby"] false))
+
+(deftest a-run-to-a-refuge-is-timed-at-a-flights-measured-pace-stops-included
+  (let [pace (cost/flee-pace 20)]
+    (is (< pace (cost/body-speed 20)) "the flight's pace is under a sprint")
+    (is (= (- 10 (/ 12 pace)) (cost/lead-s 10 12 20)))
+    (is (= (/ 6 pace) (cost/run-saved-s 4 10 20)))
+    (is (not (cost/reach-first? 10 [(* 3 (+ (/ 10 (cost/body-speed 20)) (danger/race-margin-s) 0.1))] 20)) "a run that wins at sprint speed is lost at the flight's")))
 
 (deftest a-chaser-is-within-its-blow-of-a-flight-only-while-it-wins-the-race-there
   (let [route (mapv (fn [x] {:x x :y 64 :z 0 :t (/ x 3)}) (range 11))
