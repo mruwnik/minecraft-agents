@@ -118,20 +118,26 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [prices (fn ^:async a [fight]
-                       (let [real price/way-fight-hp]
+        (let [stays (atom [])
+              prices (fn ^:async a [fight]
+                       (let [real price/way-fight-hp
+                             parts price/stay-parts]
                          (set! price/way-fight-hp (fn [_ _] fight))
+                         (set! price/stay-parts (fn [c chance secs] (let [r (parts c chance secs)] (swap! stays conj [chance secs (:hurt r)]) r)))
                          (try
                            (let [[_ seen] (await (flee-with (fn [_] {:uses {:job-time [0 7 0]}})))]
                              (:prices (first (st/emitted seen :night.answers))))
-                           (finally (set! price/way-fight-hp real)))))
+                           (finally (set! price/way-fight-hp real) (set! price/stay-parts parts)))))
               calm (await (prices 0))
               hurt (await (prices 2))
               more #(- (% hurt) (% calm))]
           (is (pos? (more :exposed)) (pr-str calm hurt))
-          (is (<= (- (cost/hp-cost 20 2) 0.1) (more :flee) (+ (more :exposed) 0.1))
-              "the fight adds its hp once at the target: at least its bare hp-cost, no more than here, where more hurt is already counted (hp-cost rises with the hurt)")
-          (is (< (more :flee) (cost/hp-cost 20 4)) "not twice"))))))
+          (let [here (ffirst @stays)
+                ;; the flight's own stay is the shortest one priced at the target's chance, not the body's
+                ht (->> @stays (remove #(= here (first %))) (filter #(pos? (second %))) (sort-by second) first last)]
+            (is (some? ht) (pr-str @stays))
+            (is (< (js/Math.abs (- (more :flee) (- (cost/hp-cost 20 (+ ht 2)) (cost/hp-cost 20 ht)))) 0.15)
+                "the fight adds its hp once, on top of the target's own hurt")))))))
 
 (deftest a-flee-search-still-going-walks-nowhere-until-it-answers
   (async done
