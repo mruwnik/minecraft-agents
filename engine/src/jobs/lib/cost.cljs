@@ -149,7 +149,7 @@
 (def arrival-s danger/arrival-s)
 (def lead-s danger/lead-s)
 (def run-saved-s danger/run-saved-s)
-(def search-budget-s danger/search-budget-s)
+(defn search-budget-s [] (danger/search-budget-s))
 (def under-ceiling? danger/under-ceiling?)
 (def search-pays? danger/search-pays?)
 (def refuge-search-pays? danger/refuge-search-pays?)
