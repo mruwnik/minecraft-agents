@@ -49,6 +49,7 @@
             [jobs.blocks.place :as place]
             [jobs.lib.look :as lib-look]
             [jobs.lib.price :as price]
+            [jobs.lib.threats :as threats]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.spawn-light :as spawn-light]
@@ -1428,13 +1429,17 @@
 
 
 (deftest a-ten-second-stay-at-a-spawn-chance-of-0-005-risks-about-3-hp-for-a-bare-body
-  ;; 0.05 mobs expected: each hurts ~4.45 hp and kills at ~0.343 (a walk away meets its mob again only at the measured chance), so the death (the 5000-block walk from world spawn, 1510 s at 10 s an hp) is 0.0171 x 151 hp
+  ;; 0.05 mobs expected, each hurting and killing as one spawned beside the body (spawns-hurt, spawn-kill); the death the
+  ;; 5000-block walk from world spawn, 1510 s at 10 s an hp
   (let [c (ctx-of open-night)
+        body (threats/death-body c)
+        at (u/self-pos c)
         {:keys [hurt dies death]} (price/stay-parts c 0.005 10)]
-    (is (< 0.2 hurt 0.25))
-    (is (< 0.0165 dies 0.0178))
+    (is (= hurt (* 0.05 (cost/spawns-hurt body 1 at))) "the hurt grows with the mobs expected")
+    (is (= dies (- 1 (js/Math.exp (- (* 0.05 (:chance (cost/spawn-kill body at))))))) "each kills at its own chance, a Poisson count")
     (is (= 1510 (js/Math.round death)))
-    (is (< 2.7 (price/stay-hp c 0.005 10) 2.9))))
+    (is (= (price/stay-hp c 0.005 10) (+ hurt (/ (* dies death) (cost/hp-seconds)))) "the death in hp at an hp's seconds")
+    (is (< 2.5 (price/stay-hp c 0.005 10) 3.2) "about 3 hp: a fifth of an hp of hurt, the rest the death")))
 
 (defn trip-ctx
   "A ctx at the origin carrying bread loaves, its job's trip the figure (::figure, trip-fed's quote), with a booked chest of 64 bread at chest (nil:
