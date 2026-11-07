@@ -165,13 +165,14 @@
           "looked from the end: the far wall is not walked back to"))))
 
 (deftest a-side-inside-the-rock-gets-no-leg
-  ;; The 1-wide tunnel's shell is seen but for one ceiling cell and the head-high wall beside it: the flood steps up into
-  ;; that wall cell and on over the unseen rock (standing on the seen shell), whose sides no walk shows.
+  ;; The 1-wide tunnel's shell is seen but for one ceiling cell and the head-high wall beside it: a flood that stepped up
+  ;; into that wall cell went on over the unseen rock (standing on the seen shell), whose sides no walk shows.
   (let [air? (fn [x y z] (and (zero? z) (<= 0 x 19) (#{64 65} y)))
         blocks (into {} (for [x (range -3 23) y (range 61 71) z (range -3 4) :when (not (air? x y z))] [(str x "," y "," z) "stone"]))
         missed #{[14 66 0] [14 65 1]}
         p (seen-within blocks {:x 10.5 :y 64 :z 0.5} air? (atom (for [x (range 0 20)] [(+ x 0.5) 65.6 0.5])) missed)
         at {:x 10 :y 64 :z 0}]
     (with-redefs [look/near-of (constantly 4)]
-      (is (seq (remove missed (reach-room/unseen-sides p at))) "premise: the flood's sides reach into the rock")
+      (is (empty? (remove missed (reach-room/unseen-sides p at))) "from the seen tunnel the flood steps onto no unseen cell: no side in the rock")
+      (is (every? (:edge (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) 10 64 0)) missed) "it stops at the two missed cells")
       (is (nil? (look-edge/far-side p at at missed)) "the two missed cells looked at: no side left a walk shows"))))
