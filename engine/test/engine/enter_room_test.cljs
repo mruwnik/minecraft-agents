@@ -224,9 +224,9 @@
 (deftest the-pick-is-made-again-whenever-the-doors-seen-change
   (let [room (fn [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
         [a b c] (map room [1 2 3])
-        picks? (fn [cands picked-doors]
+        picks? (fn [starts picked-doors]
                  (with-redefs [enter-room/target-of (fn [_] {:pos (:pos a)})
-                               enter-room/candidates (fn [_] cands)
+                               enter-room/seen-starts (fn [_] starts)
                                ctx/mem (fn [_] {:picked-doors picked-doors})]
                    (enter-room/picks-seen? {:args {}})))]
     (is (true? (picks? [a b] nil)) "two doors seen, nothing picked yet")
@@ -234,14 +234,42 @@
     (is (true? (picks? [a b c] #{(:door a) (:door b)})) "a newly seen door is priced too")
     (is (false? (picks? [a] nil)) "one door: nothing to choose")))
 
+(defn ^:async pick-over
+  "pick-seen over closed rooms behind starts, the body at the origin, route-cost from price (door -> seconds): {:pick
+  :quoted [door...]}."
+  [starts price]
+  (let [quoted (atom [])
+        [ss cand self route mid] [enter-room/seen-starts enter-room/candidate? jobs.lib.util/self-pos room-lib/route-cost room-lib/mid]]
+    (set! enter-room/seen-starts (fn [_] starts))
+    (set! enter-room/candidate? (fn [_ _ _] true))
+    (set! jobs.lib.util/self-pos (fn [_] {:x 0 :y 0 :z 0}))
+    (set! room-lib/mid identity)
+    (set! room-lib/route-cost (fn ^:async f [_ args] (swap! quoted conj (:pos args)) (price (:pos args))))
+    (try {:pick (await (enter-room/pick-seen {})) :quoted @quoted}
+         (finally (set! enter-room/seen-starts ss) (set! enter-room/candidate? cand) (set! jobs.lib.util/self-pos self)
+                  (set! room-lib/route-cost route) (set! room-lib/mid mid)))))
+
+(defn room-at [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
+
 (deftest the-room-whose-route-is-cheapest-is-picked-whatever-the-door-order
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [room (fn [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
-              [near far] (map room [1 40])
-              price {(:door near) 90 (:door far) 4}]
-          (with-redefs [enter-room/candidates (fn [_] [near far])
-                        room-lib/mid identity
-                        room-lib/route-cost (fn ^:async f [_ args] (get price (:pos args)))]
-            (is (= {:pos (:pos far)} (await (enter-room/pick-seen {}))) "the far door by line, the cheap dig, wins")))))))
+        (let [[near far] (map room-at [1 40])
+              price {(:door near) 90 (:door far) 4}
+              {:keys [pick]} (await (pick-over [near far] price))]
+          (is (= {:pos (:pos far)} pick) "the far door by line, the cheap dig, wins"))))))
+
+(deftest among-twenty-seen-huts-only-the-near-doors-a-route-could-still-beat-are-quoted
+  ;; a quote is a go-to search: none for a door whose straight walk already costs more than the best route less the CPU
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [huts (map #(room-at (* 2 %)) (range 1 21))
+              doors (map :door huts)
+              ;; the nearest is behind a wall: the walk round it is long, the rest are walked straight
+              price (fn [{:keys [x] :as d}] (if (= d (first doors)) 30 (* 0.3 x)))
+              {:keys [pick quoted]} (await (pick-over huts price))]
+          (is (= (:pos (second huts)) (:pos pick)) "the cheapest route of those quoted, the second hut")
+          (is (< 1 (count quoted) 20) (str "quoted only while a nearer route could still win: " (count quoted)))
+          (is (= (take (count quoted) doors) quoted) "nearest first"))))))

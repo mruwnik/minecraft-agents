@@ -186,6 +186,12 @@
 
 (defn here-s "The chasers' lead at the body (lead-s where it stands)." [p threats] (lead-s p [(u/pos-of (.-pos (.self p)))] threats 0))
 
+(defn cpu-pays?
+  "Whether a search of cost-s seconds of CPU, spent-s spent before it, ends within budget-s: what the body has to stand
+  still for, or what the search may save."
+  [spent-s cost-s budget-s]
+  (< (+ spent-s cost-s) budget-s))
+
 (defn pays?
   "Whether a search of cost-s seconds of CPU pays, spent-s already spent this step: the CPU is lead the body stands
   still for, so it must end within the chasers' lead at the body (here-s), within the lead a refuge has at its door
@@ -198,7 +204,7 @@
   [spent-s cost-s here-s lead-s save-s fire]
   (and (pos? save-s)
        (cond
-         (not (infinite? here-s)) (< (+ spent-s cost-s) (min here-s lead-s save-s))
+         (not (infinite? here-s)) (cpu-pays? spent-s cost-s (min here-s lead-s save-s))
          (nil? fire) true
          :else (let [{:keys [risk exposed?]} fire]
                  (and exposed? (< (risk (+ spent-s cost-s)) (risk (min save-s (cost/exposure-s)))))))))

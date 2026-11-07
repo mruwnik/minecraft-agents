@@ -9,6 +9,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
@@ -86,40 +87,54 @@
   [c]
   (map :pos (seen-starts c)))
 
-(defn candidates
-  "The seen starts that may be a closed room to enter, door order: the known closed rooms, else (their inside not seen yet
-  counts: the walk shows it) the unseen ones. The open ground outside a door reads unseen too, so the unseen ones count only
-  when no door side is a known closed room."
-  [c]
-  (let [p (:primitives c)
-        starts (seen-starts c)]
-    (or (seq (filter #(room-lib/refuge-room? p (:pos %)) starts))
-        (seq (filter #(reach-room/unseen-room? p (:pos %)) starts)))))
+(defn candidate?
+  "Whether the room behind start {:pos} may be a closed room to enter: a known closed room (refuge-room?), or with unseen?
+  one whose inside is not seen yet (the walk shows it; the open ground outside a door reads unseen too)."
+  [p {:keys [pos]} unseen?]
+  (or (room-lib/refuge-room? p pos) (and unseen? (reach-room/unseen-room? p pos))))
 
 (defn nearest-seen
-  "{:pos} of the closed room to enter among the candidates: the room picked by pick-seen (in the call's memory, or :room-pick
-  of c for a quote) while it is a candidate, else the first candidate (the nearest door by straight line, only until
-  pick-seen has priced them), nil when none. Read-only (a quote runs this), so nothing is cached."
+  "{:pos} of the closed room to enter: the room picked by pick-seen (in the call's memory, or :room-pick of c for a quote)
+  while it is still a candidate? of the doors seen, else the first seen start that is a known closed room, else the first
+  whose inside is unseen (the nearest door by straight line, only until pick-seen has priced them), nil when none.
+  Read-only (a quote runs this), so nothing is cached."
   [c]
-  (let [cands (candidates c)
+  (let [p (:primitives c)
+        starts (seen-starts c)
         picked (or (:room-pick c) (:picked (ctx/mem c)))]
-    (some->> (or (some #(when (= picked (:pos %)) %) cands) (first cands))
+    (some->> (or (some #(when (and (= picked (:pos %)) (candidate? p % true)) %) starts)
+                 (some #(when (candidate? p % false) %) starts)
+                 (some #(when (candidate? p % true) %) starts))
              :pos
              (hash-map :pos))))
 
 (defn ^:async pick-seen
-  "The {:pos} of the candidate room whose door go-to quotes the cheapest route to, with the ways the entering walk has
-  (digging through glass or a wall included, so a door two blocks off behind glass can beat one far round), nil when no
-  candidate has a route."
+  "The {:pos} of the room whose door go-to quotes the cheapest route to, with the ways the entering walk has (digging
+  through glass or a wall included, so a door two blocks off behind glass can beat one far round): a known closed room
+  (candidate?), else one whose inside is unseen; nil when none has a route. Doors nearest first: a door's floods of its
+  sides (room-lib/judge-s each) and its quote (room-lib/way-s) are paid only while they could save more than they cost
+  (room-lib/cpu-pays?) over the cheapest closed room quoted, no route to the door quicker than its straight line at
+  cost/least-block-s a block (horizontal)."
   [c]
-  (let [cands (candidates c)
-        doors (distinct (map :door cands))
-        costs (loop [ds doors out []]
-                (if-let [d (first ds)]
-                  (recur (rest ds) (conj out [d (await (room-lib/route-cost c {:pos (room-lib/mid d) :range 0.7}))]))
-                  out))
-        [door] (first (sort-by second (filter second costs)))]
-    (some->> cands (filter #(= door (:door %))) first :pos (hash-map :pos))))
+  (let [p (:primitives c)
+        me (u/self-pos c)
+        doors (->> (seen-starts c) (partition-by :door))]
+    (loop [[sides & more] doors spent 0 best ##Inf picks {}]
+      (if-not sides
+        (some->> (or (:closed picks) (:unseen picks)) first (hash-map :pos))
+        (let [d (:door (first sides))
+              lb (* cost/least-block-s (max 0 (- (u/flat-dist me (room-lib/mid d)) 0.7)))
+              cost (+ (* (count sides) (room-lib/judge-s)) (room-lib/way-s))]
+          (if-not (room-lib/cpu-pays? spent cost (- best lb))
+            (recur more spent best picks)
+            (let [closed (some #(when (candidate? p % false) %) sides)
+                  start (or closed (when-not (:closed picks) (some #(when (candidate? p % true) %) sides)))
+                  route (when start (await (room-lib/route-cost c {:pos (room-lib/mid d) :range 0.7})))
+                  k (if closed :closed :unseen)
+                  picks (if (and route (< route (second (get picks k [nil ##Inf])))) (assoc picks k [(:pos start) route]) picks)]
+              (recur more (+ spent cost) (if (and closed route) (min best route) best) picks))))))))
+
+(defn seen-doors "The doors seen behind which a room may be entered (seen-starts)." [c] (set (map :door (seen-starts c))))
 
 (defn unclosable?
   "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
@@ -150,7 +165,7 @@
   (a pick is made again whenever the doors seen change, so a newly seen cheaper door is priced)."
   [c]
   (let [t (target-of c)
-        doors (set (map :door (candidates c)))]
+        doors (seen-doors c)]
     (boolean (and t (nil? (:name t)) (not (:at (:args c)))
                   (next doors)
                   (not= doors (:picked-doors (ctx/mem c)))))))
@@ -235,7 +250,7 @@
       :else (contract/ok :room "a room to enter"))))
 
 (defn ^:async quote-of [c0]
-  (let [c (cond-> c0 (picks-seen? c0) (assoc :room-pick (:pos (await (check-cache/cached c0 [::pick (set (map :door (candidates c0))) (mapv js/Math.floor (map (sh-sense/feet (:primitives c0)) [:x :y :z]))] #(pick-seen c0))))))
+  (let [c (cond-> c0 (picks-seen? c0) (assoc :room-pick (:pos (await (check-cache/cached c0 [::pick (seen-doors c0) (mapv js/Math.floor (map (sh-sense/feet (:primitives c0)) [:x :y :z]))] #(pick-seen c0))))))
         p (:primitives c)
         t (target-of c)
         job-time (settings/get settings ::job-time-s)
@@ -368,7 +383,7 @@
   [c]
   (note-sides! c)
   (when (picks-seen? c)
-    (let [doors (set (map :door (candidates c)))]
+    (let [doors (seen-doors c)]
       (ctx/update-mem! c assoc :picked (:pos (await (pick-seen c))) :picked-doors doors)))
   (when (here? c (target-of c))
     (when-let [roof (sh/unseen-roof-cell (:primitives c))]
