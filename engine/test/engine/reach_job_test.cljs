@@ -13,6 +13,7 @@
             [engine.sense-test :as st]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.movement.go-to.escalate-choose :as choose]
             [engine.go-to-escalate-support :refer [setup recording-parent tick-out! run-job! feet events-of]]))
 
@@ -170,6 +171,16 @@
           (is (pos? (st/looks p)))
           (is (some remembered? (for [x (range 2 6) z (range 2 6) [sx sz] [[1 1] [1 -1] [-1 1] [-1 -1]]] [(* sx x) 63 (* sz z)]))
               "a floor cell off every heading, in view of a look"))))))
+
+(deftest a-dig-look-takes-a-sight-pass-so-memory-holds-the-floor-in-view
+  ;; a look that only turned the head left memory with the cell and its 6 neighbours
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (st/seeing {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -8 63 -8 8 63 8 "stone")})
+              remembered? (fn [[x y z]] (not (.-unknown (.seenBlockAt p #js {:x x :y y :z z}))))]
+          (await (dig-look/look-at! (st/stub-ctx p) [4 63 0]))
+          (is (remembered? [6 63 3]) "a floor cell two off the cell looked at, in view"))))))
 
 (deftest a-free-body-bridges-a-gap-the-planner-cannot-cross
   (async done

@@ -281,9 +281,9 @@
                                                    (fn [{:keys [p]}]
                                                      (.override (.-world p) "dig" (fn [token args impl] (swap! digs conj (js->clj args)) (impl token args))))))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          ;; the far rim cells are unseen from the pit, so the climb route plans them as digs after the pillar; once up, the body sees them open
+          ;; the look at the rim shows the pit's wall seen, so the step the two blocks leave short is the one rim cell dug
           (is (= :pillar (first (steps seen))))
-          (is (empty? @digs) "no cell is dug on the way out"))))))
+          (is (= [{"pos" {"x" 1, "y" 63, "z" 0}}] @digs) "only the rim cell at the top of the pit wall is dug"))))))
 
 (def deep-pit
   "A 5-deep 1x1 pit (feet at y 61) in dirt x -2..2, y 60..65; stone ground east of it (x 3..14) topped at the rim."
@@ -298,8 +298,8 @@
                                                     :inventory [{:name "dirt" :count 5}]}
                                                    {:pos [10 66 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          ;; the search's cheapest climb route (24.7 s), its five blocks enough
-          (is (= [:pillar :dig-route :dig-route :approach :pillar :dig-route] (steps seen)) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))
+          ;; the search's cheapest climb route over the rim the look saw, its five blocks enough
+          (is (= [:pillar :approach :dig-route] (steps seen)) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))
 
 (defn ^:async run-step-off
   "Run step-off! from the origin cell over the sensed-only world spec as a child of a parent job; [its result, world calls]."

@@ -21,9 +21,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::passes {:default 3 :spec (a/int-in 1 nil)
-             :doc "Most sight passes a look takes while its cell stays unknown: a floor seen edge-on shows in some passes only."}
-   ::max-looked {:default 512 :spec (a/int-in 1 nil)
+  {::max-looked {:default 512 :spec (a/int-in 1 nil)
                  :doc "Most cells a job remembers looking at from one cell; past it decide! looks no more there."}})
 
 (defn walk-s
@@ -85,7 +83,6 @@
   ([c rest-s] (fn [_ reads] (fail-price c reads rest-s))))
 
 (defn max-looked [] (settings/get settings ::max-looked))
-(defn passes [] (settings/get settings ::passes))
 
 (defn negative?
   "The default retry?: the decision found nothing (nil or false)."
@@ -129,16 +126,7 @@
 
 (defn unknown? [p [x y z]] (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
 
-(defn ^:async look-at!
-  "Turn to cell's centre (or the point aim [x y z]) and take a whole sight pass at search effort, again while the cell
-  is still unknown, at most (passes)."
-  [c cell & [aim]]
-  (let [[ax ay az] (or aim (mapv + cell [0.5 0.5 0.5]))]
-    (await (ctx/act c :look (clj->js {:pos {:x ax :y ay :z az}})))
-    (loop [n 0]
-      (when (< n (passes))
-        (look/see! c (look/search-effort) :look-at)
-        (when (unknown? (:primitives c) cell) (recur (inc n)))))))
+(def look-at! look/look-at!)
 
 (defn ^:async look-at-unknown!
   "look-at! each of cells that is still unknown when its turn comes (a look's sight pass shows its neighbours too), at

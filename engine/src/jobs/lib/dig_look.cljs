@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.look :as look]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
@@ -28,11 +29,10 @@
   (true? (some-> (u/sensed p {:x x :y y :z z}) .-unknown)))
 
 (defn ^:async look-at!
-  "Turn the head to cell's centre, so perception glances it and its 6 neighbours; nothing for primitives that do not
-  sense (they read blockAt)."
-  [c [x y z]]
+  "look/look-at! at cell, so memory takes the sight pass; nothing for primitives that do not sense (they read blockAt)."
+  [c cell]
   (when (some? (.-sensedAt (:primitives c)))
-    (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
+    (await (look/look-at! c cell))))
 
 (def neighbours rules/neighbour-deltas)
 

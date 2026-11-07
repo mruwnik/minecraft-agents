@@ -31,6 +31,8 @@
                     :doc "How hard a look around or a sight pass after a look looks, 0-1 (perception's effort): a glance."}
    ::search-effort {:default 1 :spec (a/num-in 0 1)
                     :doc "The effort of a look around that searches for something (find-spot, find-seen!, searches)."}
+   ::passes {:default 3 :spec (a/int-in 1 nil)
+             :doc "Most sight passes a look takes while its cell stays unknown: a floor seen edge-on shows in some passes only."}
    ::toss-reach {:default 10 :spec (a/num-in 0 nil) :doc "Blocks within which an item entity counts as the body's toss."}})
 
 (defn glance-ahead [] (settings/get settings ::glance-ahead))
@@ -39,6 +41,7 @@
 (defn toss-reach [] (settings/get settings ::toss-reach))
 (defn glance-effort [] (settings/get settings ::glance-effort))
 (defn search-effort [] (settings/get settings ::search-effort))
+(defn passes [] (settings/get settings ::passes))
 
 (def headings {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]})
 (def heading-short {"n" "north" "s" "south" "e" "east" "w" "west"})
@@ -170,6 +173,18 @@
        (perception/look-for! per (assoc want :effort effort :why why))
        (perception/pass! per {:effort effort :reuse? true :why why}))
      (sample-entities! (:primitives c)))))
+
+(defn ^:async look-at!
+  "Turn to cell's centre (or the point aim [x y z]) and take a whole sight pass at search effort, again while the cell
+  is still unknown, at most (passes)."
+  [c cell & [aim]]
+  (let [[ax ay az] (or aim (mapv + cell [0.5 0.5 0.5]))
+        [x y z] cell]
+    (await (ctx/act c :look (clj->js {:pos {:x ax :y ay :z az}})))
+    (loop [n 0]
+      (when (< n (passes))
+        (see! c (search-effort) :look-at)
+        (when (true? (some-> (u/sensed (:primitives c) {:x x :y y :z z}) .-unknown)) (recur (inc n)))))))
 
 (defn ^:async glance-until!
   "glance!, testing (f) after each look and stopping at the first truthy one, returned (nil when none): entities are
