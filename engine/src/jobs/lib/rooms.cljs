@@ -319,7 +319,7 @@
 
 (defn ^:async glance-in!
   "Once a flight per building: when survey dropped a door side (a cell beside a seen door or gate; a home cell with
-  none is looked into from its door sides) only for :unseen cells and the body is within door-glance-radius of it,
+  none is looked into from its door sides) only for :unseen cells, or left it :unjudged while the home is :unseen and the body is within door-glance-radius of it,
   open a shut door with a click (shut again after the looks), step into the doorway (a go-to child; a wall of a 1-wide door shows a wedge from
   outside) and look at the nearest unseen cell beside its room, again for each still unseen, at most as many looks at each
   spot as it had unseen sides when the glance was raced (glance-steps); cells a door gap shows only at a graze stay unseen, so
@@ -330,12 +330,13 @@
   (let [p (:primitives c)
         me (u/self-pos c)
         glanced (:door-glanced (ctx/mem c) #{})
+        home-unseen? (some #(and (:own? %) (= :unseen (:why %))) (:dropped survey))
         at (first (for [{[x y z] :at why :why} (:dropped survey)
                         :let [k (cell-key {:x x :y y :z z})
                               pos {:x x :y y :z z}
                               d (door-cell p pos)
                               looks (when d (count (reach-room/unseen-sides p pos)))]
-                        :when (and (= :unseen why) d (not (glanced k)) (<= (u/dist me pos) door-glance-radius)
+                        :when (and (or (= :unseen why) (and home-unseen? (= :unjudged why))) d (not (glanced k)) (<= (u/dist me pos) door-glance-radius)
                               (reaches-first? p (glance-steps me d (food p) looks) [d] threats))]
                     {:k k :pos pos :d d :looks looks}))]
     (when at
