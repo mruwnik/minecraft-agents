@@ -8,6 +8,8 @@
             [engine.settings :as settings]
             [engine.event-api :as event-api]
             [engine.fake :as fake]
+            [engine.frontier-test :as ft]
+            [engine.perception.store :as store]
             [engine.test-util :as tu]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.util :as u]
@@ -690,6 +692,36 @@
     (with-redefs [dig-route/route (fn [_ _ _ opts] (reset! asked opts) {:problem :no-route})]
       (job-ns/drop-route {:max-fall 3} nil nil (constantly nil) (constantly true) [0 64 0] [4 55 0]))
     (is (= [[1 64 0] [2 61 0] [3 58 0] [4 55 0]] (:seed @asked)))))
+
+(defn tier-over-price
+  "The cells round frontier-test's cave and under its floor whose tier in prices' :unseen-digs (by seen-cells, low or any
+  by height) is over the dig price drop-route asks of them: [cell tier price] each."
+  [w prices]
+  (let [{:keys [low-y low any]} (:unseen-digs prices)
+        seen-cells (:seen-cells prices)]
+    (for [[x y z :as cell] (concat (ft/unseen-cells w) (for [x (range -3 6) y (range 50 60) z (range -3 4)] [x y z]))
+          :let [sc (seen-cells x y z)]
+          :when (pos? sc)
+          :let [tier (nth (if (<= y low-y) low any) (dec (min sc (count low))))
+                price ((:dig-s prices) blocks/hidden-guess cell)]
+          :when (> tier (+ price 1e-12))]
+      [cell tier price])))
+
+(deftest an-unseen-cells-tier-is-no-dearer-than-its-dig-as-drop-route-prices-it
+  (with-redefs [jobs.lib.stair-memory/plugs-of (constantly #{})]
+    (let [p (tu/fake-on-floor {:blocks (assoc ft/cave "3,65,0" "air")})
+          w (ft/seeing p)
+          seen-name (fn [[x y z]] (u/seen-name w {:x x :y y :z z}))
+          prices (job-ns/dig-prices {:primitives w} seen-name (constantly 0))]
+      (is (:unseen-digs prices))
+      (is (empty? (tier-over-price w prices)))
+      ;; a look after the search began (look-pit! before a resumed slice) sees a cave under the floor: a frontier beside
+      ;; cells the search's boxes still count far from the seen
+      (let [per (aget w "perception") ^js st (:st per)]
+        (doseq [[x y z] [[1 56 0] [1 55 0]]]
+          (fake/remove-block! p {:x x :y y :z z})
+          (store/record! st (store/store-of st (.-dim st)) x y z (.stateAt (:raw per) x y z) 1000000)))
+      (is (empty? (tier-over-price w prices)) "priced as the memory the search began with"))))
 
 (deftest the-job-is-a-contract-job-naming-what-it-collects
   (let [{:keys [eng]} (bd/setup {:self body})

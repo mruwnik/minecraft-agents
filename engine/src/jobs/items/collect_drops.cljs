@@ -19,7 +19,6 @@
             [jobs.lib.stair-memory :as smem]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
-            [jobs.lib.tools :as tools]
             [jobs.lib.loose :as loose]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -377,12 +376,15 @@
 
 (defn dig-prices
   "dig-route's prices for a dig to a drop: go-to's (body-prices, the body's plugs priced as floods), less yield, by dig share,
-  an unseen cell's dig at least the rock's at its least share (look/unseen-dig-tiers) in the search's bound."
+  an unseen cell's dig at least the rock's at its least share (look/unseen-dig-tiers) in the search's bound. An unseen
+  cell's frontier is taken at least half its :seen-cells off, as the memory stood when the search's boxes were read: a
+  look between slices of a kept search (look-pit!) prices no cell under its tier."
   [c seen-name yield]
   (let [p (:primitives c)
-        rock-s (let [d (/ (tools/clear-ms p blocks/hidden-guess) 1000)] (when (js/isFinite d) (max 0 (- d (yield blocks/hidden-guess nil)))))
-        tiers (some->> rock-s (look/unseen-dig-tiers p))]
-    (cond-> (dig-route/by-share (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %)) {:plugs (smem/plugs-of c)}) yield) (escape/dig-share-fn p))
+        prices (dig-route/less-yield (dig-route/body-prices p #(nil? (seen-name %)) {:plugs (smem/plugs-of c)}) yield)
+        seen-cells (:seen-cells prices)
+        tiers (some->> ((:dig-s prices) blocks/hidden-guess nil) (look/unseen-dig-tiers p))]
+    (cond-> (dig-route/by-share prices (escape/dig-share-fn p (escape/unseen-of p) (when seen-cells (fn [[x y z]] (js/Math.ceil (/ (seen-cells x y z) 2))))))
       tiers (assoc :unseen-digs tiers :unseen-dig-s (first (:any tiers))))))
 
 (defn ^:async dig-to!

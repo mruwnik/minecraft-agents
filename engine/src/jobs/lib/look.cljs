@@ -566,20 +566,26 @@
         ([cell-y d lit?] (base-rates/unseen-solid y (- cell-y y) d lit? q))
         ([cell-y d lit? beside-solid?] (base-rates/unseen-solid y (- cell-y y) d lit? q beside-solid?))))))
 
+(defn unseen-solid-beyond-fn
+  "unseen-solid-at-fn with each cell's frontier taken at least (least-d cell) off (nil: as it is)."
+  [p least-d]
+  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit? & [adj]] (base-rates/unseen-solid y 0 d lit? nil adj)))
+        value (or (frontier-value-fn p) (constantly nil))
+        feet-lit (delay (feet-lit? p))
+        d-of (fn [cell v] (cond-> (or (some-> v (bit-shift-right 1)) 1) least-d (max (least-d cell))))]
+    (fn
+      ([cell] (let [[_ y _] cell v (value cell) d (d-of cell v)]
+                (solid-at y d (frontier-lit? feet-lit v d))))
+      ([[_ y _ :as cell] beside-solid?]
+       (let [v (value cell) d (d-of cell v)]
+         (solid-at y d (frontier-lit? feet-lit v d) beside-solid?))))))
+
 (defn unseen-solid-at-fn
   "(fn [[x y z]]) the chance an unseen cell is solid: unseen-solid-fn at its height and frontier-value-fn's distance (1, the likeliest
   open, without a memory), at its own height as the feet's, in the dark, without a perception. Given beside-solid? (a
   second argument) the cell is asked as beside a seen solid cell or not, else pooled."
   [p]
-  (let [solid-at (or (unseen-solid-fn p) (fn [y d lit? & [adj]] (base-rates/unseen-solid y 0 d lit? nil adj)))
-        value (or (frontier-value-fn p) (constantly nil))
-        feet-lit (delay (feet-lit? p))]
-    (fn
-      ([cell] (let [[_ y _] cell v (value cell) d (or (some-> v (bit-shift-right 1)) 1)]
-                (solid-at y d (frontier-lit? feet-lit v d))))
-      ([[_ y _ :as cell] beside-solid?]
-       (let [v (value cell) d (or (some-> v (bit-shift-right 1)) 1)]
-         (solid-at y d (frontier-lit? feet-lit v d) beside-solid?))))))
+  (unseen-solid-beyond-fn p nil))
 
 (defn unseen-dig-tiers
   "dig-route's :unseen-digs for the body of primitives p when an unseen cell's dig costs rock-s at the chance
