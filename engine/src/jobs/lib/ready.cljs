@@ -34,9 +34,7 @@
             [jobs.lib.walk-risk :as walk-risk]))
 
 (a/defargs settings
-  {::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
-                       :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
-   ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
+  {::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
                          :doc "Blocks under the feet from which an unseen place with a seen roof over it counts as underground: no look asks for it and waiting for dawn does not light it."}
    ::crowd-radius {:default 16 :spec (a/num-in 0 nil)
                    :doc "Blocks within which the real dangers the body knows of all count in the fight a long stay meets (outmatched): beyond the hostile-near radius they still come."}})
@@ -189,7 +187,7 @@
 (defn unseen-status
   "The exposure of the unseen place `to` (`why`: why no look is taken, default none from here shows it), priced as unseen at its
   chance (Q16): spawn-light/chance-at's guess of its light. While dawn lifts any of it (chance-at with caves-free?: dark only
-  the sky lights) and comes within ::light-patience-s, it waits for dawn :later with :left-chance, the rest (the cave part)
+  the sky lights) and light-in says the sky lights it, it waits for dawn :later with :left-chance, the rest (the cave part)
   that the stay after dawn risks, else it is :never lowered by a torch; either is first a look at the unseen walls of the
   room round the body (room-look) or the unseen cells beside its air (air-look) while that look is cheaper than the stay,
   the wait and the job's own answers (stay-look-price); priced prices the stay, the wait and the walk there to look (look-first)."
@@ -200,8 +198,7 @@
          lifted (spawn-light/chance-at p to true)
          left (max 0 (- chance lifted))
          light-in (or (sh-sense/sky-in p) ##Inf)
-         patience (settings/get settings ::light-patience-s)
-         dawn? (and (pos? lifted) (<= light-in patience))
+         dawn? (and (pos? lifted) (< light-in ##Inf))
          wait-s (when dawn? (:s (walk-risk/cheapest-affordable c [(light-way c light-in (stay-after c left))])))
          looks (cond-> c wait-s (update ::own-stays (fnil conj []) (constantly wait-s)))
          where (str "unseen " (place-text to) ", " why)]
@@ -213,7 +210,7 @@
                  dawn? (contract/later :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (/ lifted chance))) "% of its dark open to the sky, dark until light")
                                        :lowered-by #{:light} :chance chance :left-chance left
                                        :recheck-after-ms (* 1000 light-in) :wait-ms (* 1000 light-in))
-                 (pos? lifted) (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits")
+                 (pos? lifted) (contract/never :exposed (str "dark at " where ": the sky does not light it within a day")
                                                :lowered-by #{:torch} :chance chance)
                  :else (contract/never :exposed (str "dark at " where ": guessed " (js/Math.round (* 100 (spawn-light/dark-share p to false 0))) "% dark even by full day, so dawn does not light it")
                                        :lowered-by #{:torch} :chance chance))
@@ -249,14 +246,13 @@
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is 0,
   else by what lowers it. Waiting is for dawn only where it lifts the darkness, as go-to's walk-risk/wait-lowers? has it (the sky
-  of a way out of the shelter, spawn-light/exposure's :light, or spawn-light/dawn-lowers?), and the light comes within ::light-patience-s; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's.
+  of a way out of the shelter, spawn-light/exposure's :light, or spawn-light/dawn-lowers?), and light-in says it comes; other darkness is dark-status's. Unseen light no look from here would show is unseen-status's.
   `goal` (default `to`) is where the job goes, when its place is judged at the feet."
   ([c to] (at-status c to to))
   ([c to goal]
    (let [p (:primitives c)
          shelter (:data (ctx/latest c :shelter))
          {:keys [chance lowered-by look-at light-in]} (spawn-light/exposure p to shelter)
-         patience (settings/get settings ::light-patience-s)
          where (place-text to)
          room (delay (when-not (u/within? (sh-sense/feet p) to 1)
                        (room-look c (str "walls of the room round the body not all seen; at " where)
@@ -282,10 +278,8 @@
        (if-let [paid (seq (:pay (sense/round-plan c look-at (stay-look-price c chance))))]
          (contract/look :exposed (str "light at " where " not seen") :look-at (vec paid))
          (unseen-status c to "which no look from here pays for"))
-       (and @wait-s (<= @wait-s patience))
-       (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
        @wait-s
-       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round @wait-s) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
+       (contract/later :exposed (str "dark at " where " until light") :lowered-by #{:light} :chance chance :recheck-after-ms (* 1000 @wait-s) :wait-ms (* 1000 @wait-s))
        :else (dark-status c to goal)))))
 
 (defn act-price

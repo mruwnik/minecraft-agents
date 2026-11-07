@@ -185,17 +185,16 @@
     (is (= :ok (first (status 2))))
     (is (= :later (first (status 1e6))))))
 
-(deftest safe-at-waits-for-light-only-within-the-light-patience
+(deftest safe-at-waits-for-light-the-sky-brings-and-not-for-light-it-never-brings
   (let [check (ready/safe-at (constantly outside))
-        status (fn [patience] (settings/with-settings {:jobs.lib.ready/light-patience-s patience} #(lit 0 15 (fn [] (check (for-a-log (ctx-of open-night)))))))]
-    (is (= :later (first (status 100000))))
-    (is (= :never (first (status 10))) "light further off than the patience is not waited for")
-    (is (re-find #"s away" (second (status 10))))))
+        status (fn [light-in] (with-redefs [sh-sense/light-in light-in] (lit 0 15 #(check (for-a-log (ctx-of open-night))))))]
+    (is (= :later (first (status (constantly 1199)))) "the whole night is waited for")
+    (is (= :never (first (status (constantly nil)))) "no light within a day (a storm that lasts) is not waited for")))
 
 (deftest a-call-that-must-arrive-takes-any-stay-no-wait-beats
-  (let [[kind text] (settings/with-settings {:jobs.lib.ready/light-patience-s 10}
-                           #(lit 0 15 (fn [] ((ready/safe-at (constantly outside)) (ctx-of open-night)))))]
-    (is (= :ok kind) "##Inf (a means job at the root), light beyond the patience: the dark stay is no reason to refuse")
+  (let [[kind text] (with-redefs [sh-sense/light-in (constantly nil)]
+                      (lit 0 15 (fn [] ((ready/safe-at (constantly outside)) (ctx-of open-night)))))]
+    (is (= :ok kind) "##Inf (a means job at the root), no light within a day: the dark stay is no reason to refuse")
     (is (< 20 (js/Number (second (re-find #"cost (\d+) hp" text)))) "a stay that costs more hp than the body has")))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
