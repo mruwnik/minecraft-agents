@@ -20,14 +20,14 @@
   (into {[0 5 6] "air"} (for [x (range -1 2) y (range 4 7) z (range 5 8) :when (not= [x y z] [0 5 6])] [[x y z] "obsidian"])))
 
 (defn to-end
-  "Run a search to its end in slices of 500 cells, or until limit-s seconds pass: {:cells :s :ended?}."
+  "Run a search to its end in slices of 500 cells, or until limit-s seconds pass: {:cells :reads :s :ended?}."
   [run limit-s]
   (let [t0 (now)]
-    (loop [cells 0]
-      (let [[a e] (run 500) cells (+ cells e) s (/ (- (now) t0) 1000)]
-        (cond a {:cells cells :s s :ended? true :answer a}
-              (> s limit-s) {:cells cells :s s :ended? false}
-              :else (recur cells))))))
+    (loop [cells 0 reads 0]
+      (let [[a e _ rd] (run 500) cells (+ cells e) reads (+ reads rd) s (/ (- (now) t0) 1000)]
+        (cond a {:cells cells :reads reads :s s :ended? true :answer a}
+              (> s limit-s) {:cells cells :reads reads :s s :ended? false}
+              :else (recur cells reads))))))
 
 (def dear (fn [n _] (if (= "obsidian" n) 50 1)))
 
@@ -59,10 +59,11 @@
 
 (deftest recount-prints-the-search-and-flood-prices
   (let [rows (doall (for [[k mk] scenes] [k (to-end (mk) 20)]))
-        pooled (reduce (fn [a [_ r]] (-> a (update :cells + (:cells r)) (update :s + (:s r)))) {:cells 0 :s 0} rows)
+        pooled (reduce (fn [a [_ r]] (-> a (update :cells + (:cells r)) (update :reads + (:reads r)) (update :s + (:s r)))) {:cells 0 :reads 0 :s 0} rows)
         flood (flood-scene 30)]
     (doseq [[k r] rows] (line k r))
     (line :pooled-search pooled)
+    (line :pooled-reads (assoc pooled :cells (:reads pooled)))
     (line :flood flood)
-    (println (str "RECOUNT search-cell-s " (/ (:s pooled) (:cells pooled)) " flood-cell-s " (/ (:s flood) (:cells flood))))
+    (println (str "RECOUNT search-cell-s " (/ (:s pooled) (:cells pooled)) " search-read-s " (/ (:s pooled) (:reads pooled)) " flood-cell-s " (/ (:s flood) (:cells flood))))
     (is (every? (comp :ended? second) rows))))

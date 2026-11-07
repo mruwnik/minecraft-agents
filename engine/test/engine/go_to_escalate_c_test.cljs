@@ -1632,7 +1632,7 @@
           (choose/forget-routes! (choose/route-owner c)))))))
 
 (defn ^:async priced-search-run!
-  "run-job! with every dig-route search counted: {:out :seen :searched-s (nodes expanded at each search's :node-s) :max-ss
+  "run-job! with every dig-route search counted: {:out :seen :searched-s (cells read at each search's :read-s) :max-ss
   (each search's bound, in order) :start-s (the bound of a search from the start to the goal before the run: the
   straight dig)}."
   [spec args]
@@ -1644,8 +1644,8 @@
                              (swap! max-ss conj (:max-s opts))
                              (let [run (search block-at from goal opts)]
                                (fn [n & [m]]
-                                 (let [[_ used :as r] (run n m)]
-                                   (swap! spent + (* used (:node-s opts)))
+                                 (let [[_ _ _ read :as r] (run n m)]
+                                   (swap! spent + (* read (:read-s opts)))
                                    r)))))
     (try (let [_ (choose/route-answer (:p (setup spec)) from (:pos args) (constantly true) (constantly false) false false {})
                start-s (first @max-ss)
@@ -1699,9 +1699,9 @@
   (merge (box -3 63 -3 3 63 3 "stone") (box -30 79 -30 30 79 30 "stone")))
 
 (defn straight-dig
-  "route-answer's route when the straight dig is the answer (a :node-s that prices every search past it) and what the body-prices say of the fall."
+  "route-answer's route when the straight dig is the answer (a :read-s that prices every search past it) and what the body-prices say of the fall."
   [p goal floors-unseen-ok? route-opts]
-  (choose/route-answer p [0 80 0] goal (constantly true) (constantly false) floors-unseen-ok? false (merge {:node-s 1 :worth-s ##Inf} route-opts)))
+  (choose/route-answer p [0 80 0] goal (constantly true) (constantly false) floors-unseen-ok? false (merge {:read-s 1 :worth-s ##Inf} route-opts)))
 
 (deftest the-straight-dig-over-a-drop-is-priced-at-the-falls-hp-cost
   (let [p (tu/fake {:blocks drop-world :self {:pos {:x 0.5 :y 80 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})

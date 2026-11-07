@@ -189,11 +189,14 @@
   (let [shell (into {} (for [x (range -1 2) y (range 4 7) z (range 5 8) :when (not= [x y z] [0 5 6])] [[x y z] "obsidian"]))
         w (world (assoc shell [0 5 6] "air"))
         opts {:dig-s (fn [n _] (if (= "obsidian" n) 50 1)) :step-s 0.3 :max-s 1000}
-        to-end (fn [run] (loop [cells 0] (let [[a e] (run 500)] (if a [a (+ cells e)] (recur (+ cells e))))))
+        to-end (fn [run] (loop [cells 0 reads 0] (let [[a e _ rd] (run 500)] (if a [a (+ cells e) (+ reads rd)] (recur (+ cells e) (+ reads rd))))))
         [exact exact-cells] (to-end (dr/search w [0 10 0] [0 5 6] opts))
         _ (.clear dr/kept)
-        [priced priced-cells] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
-    (is (<= (:seconds priced) (+ (:seconds exact) (* (cost/search-cell-s) priced-cells)))
+        [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
+    ;; the back search and each expansion's neighbours are read too: the CPU goes by the cells read
+    (is (= (:searched-s priced) (* (cost/search-read-s) reads)) "its CPU priced by the cells it read")
+    (is (< priced-cells reads) "more than it expanded")
+    (is (<= (:seconds priced) (+ (:seconds exact) (:searched-s priced)))
         (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))
     (is (< (* 2 priced-cells) exact-cells) "for less than half the cells")
     (doseq [i (range 20)] (dr/route-resumed [:t 2 i] w [0 10 0] [0 5 6] (assoc opts :max-nodes 1)))

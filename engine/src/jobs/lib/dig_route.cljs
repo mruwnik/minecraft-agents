@@ -127,10 +127,10 @@
                     [[nil 0] []] cells))))
 
 (defn search
-  "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded]: answer route's
-  once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded.
+  "route's search begun: a fn of n (and a :max-s that lowers the search's, as the caller's bound falls) that runs it on for at most n more cells expanded, [answer expanded stale? read]: answer route's
+  once the search has ended (the same each run after), nil while it goes on; expanded and read the cells this run expanded and first read; stale? (fn []) whether a cell read reads otherwise now.
   Plain numbers throughout (a cell is a key, its reads are cached by key): a climb expands about 10k cells."
-  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees node-s back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood lava-s searched-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
+  [block-at from goal {:keys [dig-s step-s stair-s place-s pillar-s fall-s max-places unseen? unseen-step-s ways max-dig-s max-s margin near sees back-h? full? prior-h? seen-steps seen-cells unseen-dig-s guess floor-absent-s flood lava-s searched-s read-s] r :range :or {dig-s (constantly 1) step-s 0 ways #{} unseen-dig-s 0 guess (constantly nil) searched-s 0} :as opts}]
   (let [[fx _ fz] from
         prior? (boolean (and prior-h? unseen? unseen-step-s seen-steps seen-cells))
         ;; under prior-h the search reads the memory its bound was made from: a cell seen since (outside every box
@@ -246,7 +246,8 @@
         ;; seconds to open cell x y z (0 when open), nil when no step opens it
         open-s (fn [x y z] (let [^js k (at x y z) d (.-cost k)] (cond (nil? d) nil (zero? d) 0 :else (dig-at (.-name k) x y z))))
         ;; lava above or beside cell x y z: the dig seals each such face as it opens the cell (priced by :lava-s; with none, the cell is not dug)
-        lava-faces (fn [x y z] (count (filter #(= "lava" (.-name ^js (at (+ x (% 0)) (+ y (% 1)) (+ z (% 2))))) [[0 1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])))
+        lava? (fn [x y z] (if (= "lava" (.-name ^js (at x y z))) 1 0))
+        lava-faces (fn [x y z] (+ (lava? x (inc y) z) (lava? (inc x) y z) (lava? (dec x) y z) (lava? x y (inc z)) (lava? x y (dec z))))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys flood-level
         ;; under-water-s] (flood-dig); false when it may not be
         open-cell! (fn [^js acc x y z]
@@ -256,13 +257,15 @@
                          (zero? (.-cost ^js (at x y z))) true
                          (.-falling ^js (at x (inc y) z)) false
                          (.has way-keys (key x y z)) false
-                         (and (nil? lava-s) (pos? (lava-faces x y z))) false
-                         :else (let [l (when flood (level-at x y z))
-                                     s (+ s (if (and lava-s (pos? (lava-faces x y z))) (lava-s (lava-faces x y z)) 0))
-                                     s (if-let [[w level under] (when (or l (some? (aget acc 4))) (flood-dig flood (aget acc 4) (aget acc 5) y (.-name ^js (at x y z)) l))]
-                                         (do (aset acc 4 level) (aset acc 5 under) (+ s w))
-                                         s)]
-                                 (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))
+                         :else (let [lf (lava-faces x y z)]
+                                 (if (and (nil? lava-s) (pos? lf))
+                                   false
+                                   (let [l (when flood (level-at x y z))
+                                         s (+ s (if (pos? lf) (lava-s lf) 0))
+                                         s (if-let [[w level under] (when (or l (some? (aget acc 4))) (flood-dig flood (aget acc 4) (aget acc 5) y (.-name ^js (at x y z)) l))]
+                                             (do (aset acc 4 level) (aset acc 5 under) (+ s w))
+                                             s)]
+                                     (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))))
         ;; key (a wet label: its id) -> #js [seconds digs dig-seconds prev-key move blocks-placed dug pillar-run flood-level under-water-s] of the
         ;; cheapest way found to the cell (the flood its digs let in: flood-dig, flood-walk), dug its
         ;; steps' dug cells as a chain #js [keys parent lx hx ly hy lz hz] (nil: none), each link the box of its own and every
@@ -382,12 +385,14 @@
                                            (= :pillar move) (assoc :place m))))
                                      path (rest path) (rest ks))]
                      {:dig (vec (distinct (mapcat :dig steps))) :steps steps :seconds (aget (.get best ck) 0)}))
-        ;; with node-s, the search's CPU is a cost of the route it finds: it goes on only while what is left to find may
+        ;; with read-s, the search's CPU is a cost of the route it finds: it goes on only while what is left to find may
         ;; still save more than the search has spent (a ski rental's rule: at worst twice the best), against the route in
-        ;; hand (its cheapest end reached) or max-s; :searched-s, what earlier searches of the same question spent, counts too
-        spent-s (fn [] (+ searched-s (if node-s (* node-s (.-size done)) 0)))
+        ;; hand (its cheapest end reached) or max-s; :searched-s, what earlier searches of the same question spent, counts too.
+        ;; Counted by the cells read, not expanded: the back search, the dig prices and the neighbours read are most of the
+        ;; work and come per cell read, while a cell expanded reads 3 to 9 of them as the scene goes
+        spent-s (fn [] (+ searched-s (if read-s (* read-s (.-size read)) 0)))
         max-s (volatile! (or max-s ##Inf))
-        priced (fn [r] (cond-> r node-s (assoc :searched-s (spent-s))))
+        priced (fn [r] (cond-> r read-s (assoc :searched-s (spent-s))))
         bound-s (fn [] (min @max-s (aget incumbent 0)))
         ended (fn [] (if (<= (aget incumbent 0) @max-s) (priced (route-to (aget incumbent 1))) {:problem :dearer}))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
@@ -460,6 +465,7 @@
       ([n max-s']
        (when max-s' (vswap! max-s min max-s'))
        (let [start (.-size done)
+             reads (.-size read)
              limit (+ start n)
              ;; whether a cell read in an earlier slice reads otherwise now
              stale? (fn [] (let [out (volatile! false)]
@@ -485,7 +491,7 @@
                          (>= (.-size done) limit) (do (heap-push! queue top) nil)
                          :else (do (.add done ck) (expand! ck) (recur)))))))]
          (vreset! answer a)
-         [a (- (.-size done) start) stale?])))))
+         [a (- (.-size done) start) stale? (- (.-size read) reads)])))))
 
 (defn body-prices
   "route's prices for the body of primitives p, as go-to prices its walks: a step's walk-cost, a fall's hp (fall-damage at
@@ -554,12 +560,12 @@
   floor of :ways (the floors of the body's own stairs), on which nothing is placed either. Bounds, each only when
   given: :max-dig-s seconds of digging, :max-s seconds of the whole route, :max-places blocks laid or jump-placed (the blocks carried),
   :margin cells round the two ends; :range r (> 0) also ends it on any feet cell within r of :near (default goal) that :sees (fn [x y z], when given) passes;
-  :node-s seconds of CPU a cell expanded (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
+  :read-s seconds of CPU a cell read (priced-search), :searched-s seconds earlier searches of the question spent (counted as this one's), :back-h? the back search's bound in the heuristic, :prior-h? with
   :seen-steps and :seen-cells (fns [x y z], each within 1 of a neighbour's: the fewest steps from the cell to one whose step
   is seen, the fewest cells across, up or down to one whose block is seen) the unseen steps and digs a way must take priced
   in the bound (:unseen-dig-s the least a dig of an unseen cell costs, default 0; a cell seen since the search began read
   as never seen, by :guess, a fn [cell] of block-at's name for a cell never seen, default nil), :full? (fn []) true when the heap holds no more.
-  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :node-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
+  {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
   :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
   {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
@@ -578,10 +584,10 @@
     (> (.-used_heap_size h) (* (.-heap_size_limit h) (settings/get settings ::heap-full)))))
 
 (defn priced-search
-  "search with its CPU priced (cost/search-cell-s), the back search's bound in its heuristic (:back-h?), the unseen steps a
+  "search with its CPU priced (cost/search-read-s), the back search's bound in its heuristic (:back-h?), the unseen steps a
   way must take priced in it (:prior-h?, with :seen-steps and :seen-cells), grown only while the heap has room (heap-full?). A fn of n as search's."
   [block-at from goal opts]
-  (search block-at from goal (assoc opts :node-s (cost/search-cell-s) :back-h? true :prior-h? true :full? heap-full?)))
+  (search block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?)))
 
 (defn route-resumed
   "route, but a search that spends its nodes (:max-nodes) is kept under key and

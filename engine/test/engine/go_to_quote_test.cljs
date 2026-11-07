@@ -115,10 +115,12 @@
               "go-to's own time is the dig route's, not the too-expensive refusal"))))))
 
 (deftest an-unfinished-dig-quote-prices-the-dig-of-the-rest
+  ;; obsidian on the straight dig: the search may still find a cheaper way, so one cell of it is no end (a search whose
+  ;; bound already meets the straight dig ends on its CPU, the straight dig the route)
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [shut-in (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1")
+        (let [shut-in (merge (dissoc (merge (floor -1 -1 11 3) (box -1 64 0 1 66 2 "stone")) "0,64,1" "0,65,1") {"1,64,1" "obsidian" "1,65,1" "obsidian"})
               {:keys [quote]} (await (preview shut-in {:pos [10 64 1] :range 0 :settings {:jobs.lib.dig-route/max-nodes 1}}))
               {:keys [reason rest-dig-s near]} (:route quote)
               [least mean] (get-in quote [:uses :job-time])]

@@ -367,7 +367,7 @@
   "The kept run of an ended search: answer a, nothing else (a closure made inside sliced-answer's swap! would share its
   context, and with it the search fn)."
   [a]
-  (fn [& _] [a 0 (constantly false)]))
+  (fn [& _] [a 0 (constantly false) 0]))
 
 (defn route-epoch
   "What a dig-route search's answer rests on: the body's memory (sense/known-memory), all it reads; without a perception
@@ -458,7 +458,7 @@
   floors-unseen-ok? (a pocket's floor shows only from inside it) or it is the goal's own: read as rock, each walk onto one under a cell seen open
   priced at the chance it is none (cost/floor-absent-chance of the step's kind) times the fall it adds past the step's own (cost/unseen-fall-s less its :fall-s), in the search and the straight dig. Other route-opts go to the search (:place-s,
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
-  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:node-s). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
+  The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
   within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. A route is dug again till
   it holds: each guess on it is dug at its dig's price over the chance it is diggable (1 - its class's risk, route-opts
@@ -510,7 +510,7 @@
                            (if (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a))) (absent-s rise) 0)))
         ;; the straight dig is a way to the same goal: down: y, then x, then z at the goal's height; otherwise x, z, then y: each cell a walked step (and the unseen step's toll)
         ;; plus its dig, and the digs and steps inside water it lets in (dig-route/flood-s). A route dearer is no cheaper than it, so the
-        ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of expanding its feet and head cells (:node-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
+        ;; search may stop there (1e-9 over: the same route's seconds summed in the search's order), and the CPU of reading its feet and head cells (:read-s each). A leg through a cell never dug (bedrock), one the search refused or a step onto no seen floor is no way: no bound but the worth
         straight (fn [refused] (let [leg (fn [a b] (let [d (if (< a b) 1 -1)] (range (+ a d) (+ b d) d)))
                          up (max (:step-s prices) (:stair-s prices))
                          down? (< gy fy)
@@ -568,7 +568,7 @@
                                                       :when (and (or (not (climb? cell)) (and down? (pos? (get down-steps i 0)))) (true? (some-> (sensed x (dec y) z) .-unknown)))]
                                                   ;; a landing's rise: the open cells fallen through before it and its own
                                                   (floor-absent-s [x (dec y) z] (if (and down? (= x fx) (= z fz)) (- -1 (count (take-while zero? (rseq (subvec down-steps 0 i))))) 0))))
-                                    (* (:node-s route-opts 0) 2 (count cells)))
+                                    (* (:read-s route-opts 0) 2 (count cells)))
                         :dig dig})))
         straight-s (fn [refused] (or (:seconds (straight refused)) ##Inf))
         ;; a route dearer than worth-s is none: no search goes on past it
@@ -648,7 +648,7 @@
   (a way that may cut the body's own builds: searched apart), :guess-risk ({class chance} that a guess of the class fails) and :worth-s (a route costing more is none), its :range, :near and :see and the floors under its :stands
   (the body's own stairs) as :ways."
   [{:keys [stands slice spent own-s own-cut range near see guess-risk worth-s bound-s closed? max-damage plugs]}]
-  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :node-s (cost/search-cell-s) :max-damage max-damage}
+  (cond-> {:ways (into #{} (map (fn [[x y z]] [x (dec y) z])) stands) :bound-s bound-s :read-s (cost/search-read-s) :max-damage max-damage}
     closed? (assoc :max-fall 1)
     plugs (assoc :plugs plugs) slice (assoc :slice slice) (seq spent) (assoc :spent spent) own-s (assoc :own-s own-s) own-cut (assoc :own-cut true)
     (and range near) (assoc :range range :near near) see (assoc :see see)
@@ -966,7 +966,7 @@
           owner (:route-owner (ctx/mem c))
           quote-id (str (:id c) "/quote")
           slice (route-slice (or owner quote-id))
-          opts (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :node-s (cost/search-cell-s))
+          opts (assoc (merge (way-opts c feet (fetch-tool? c) slice) (range-opts c (zipmap [:x :y :z] goal))) :read-s (cost/search-read-s))
           e (dig-way p feet goal (may-dig-fn c) opts)]
       (keep-routes! slice)
       (when-not owner (forget-routes! quote-id))
