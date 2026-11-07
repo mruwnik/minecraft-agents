@@ -14,7 +14,7 @@
            [:fill [10 4 10] [21 5 21] "stone"]
            [:fill [11 4 11] [20 5 20] "air"]
            [:fill [11 0 11] [20 3 20] "water"]]
-  :body {:at [15.5 2 15.5] :settle-s 1}
+  :body {:spawnpoint :far :at [15.5 2 15.5] :settle-s 1}
   :limit-s 100}
  :cases
  [{:name "walled-stops-no-land-1"

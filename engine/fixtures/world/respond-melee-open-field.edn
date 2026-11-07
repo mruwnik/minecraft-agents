@@ -7,7 +7,7 @@
   :plot {:length 48 :width 48 :height 8 :floor "grass_block"}
   :register [{:trigger :hostile-near}]
   :blocks [[:fill [27 0 18] [34 2 30] "dirt"]]
-  :body {:at [24.5 0 24.5] :effects [["resistance" 600 3]]}
+  :body {:spawnpoint :far :at [24.5 0 24.5] :effects [["resistance" 600 3]]}
   :limit-s 60}
  :cases
  [{:name "armed-body-fights-a-zombie-beside-it"

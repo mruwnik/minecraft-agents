@@ -13,7 +13,7 @@
   :mobs :keep
   :plot {:height 16}
   :register [{:trigger :hostile-near}]
-  :body {:at [16.5 0 16.5] :effects [["resistance" 900 4]]}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :effects [["resistance" 900 4]]}
   :limit-s 120}
  :cases
  [{:name "creeper-at-the-pillar-body-leaves-before-a-hit"

@@ -15,7 +15,7 @@
            [:fill [4 3 16] [30 5 16] "air"]
            [:fill [18 3 6] [18 5 16] "air"]
            [:fill [12 3 0] [76 5 5] "air"]]
-  :body {:at [12.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [12.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "flight-turns-off-a-dead-end-corridor"

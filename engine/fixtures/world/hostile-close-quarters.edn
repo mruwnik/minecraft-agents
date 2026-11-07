@@ -10,7 +10,7 @@
   :time :any
   :mobs :keep
   :register [{:trigger :hostile-near}]
-  :body {:at [16.5 0 16.5]}
+  :body {:spawnpoint :far :at [16.5 0 16.5]}
   :limit-s 70}
  :cases
  [{:name "fist-body-at-food-6-fights-the-spider-it-cannot-outrun"

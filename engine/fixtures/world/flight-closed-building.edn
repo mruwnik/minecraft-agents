@@ -14,7 +14,7 @@
            [:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
            [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]
            [:set [13 1 13] "torch"] [:set [19 1 13] "torch"] [:set [13 1 19] "torch"] [:set [19 1 19] "torch"]]
-  :body {:at [16.5 0 25.5] :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [16.5 0 25.5] :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "runs-into-a-foreign-closed-building-and-shuts-the-door"

@@ -15,7 +15,7 @@
            [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]
            [:set [14 0 14] "red_bed[facing=south,part=foot]"]
            [:set [14 0 15] "red_bed[facing=south,part=head]"]]
-  :body {:at [15.5 0 20.5] :yaw 180 :settle-s 3 :inventory [["cobblestone" 16]]}
+  :body {:spawnpoint :far :at [15.5 0 20.5] :yaw 180 :settle-s 3 :inventory [["cobblestone" 16]]}
   :register [{:trigger :hostile-near}]
   :settings {:jobs.survival.respond.options/pillar-mob-fails {:beside {:k 4 :n 4} :clear {:k 4 :n 8}}}
   :memory [{:kind :home :data {:pos #xyz [14 0 14]} :policy {:cap 1 :ttl :forever}}]

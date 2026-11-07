@@ -1,7 +1,8 @@
 ;; Card da20dfa8: a 4-HP body on flat lit ground runs from a creeper walking up from the front in legs that keep covering ground (it walks: food 0 cannot sprint).
 ;; Plot 96 long: stone x 0..95, z 0..31, y 0..2 (platform feet y 3); glowstones every 8 blocks light it (surface time is :any).
 {:defaults
- {:tags [:hostile :survival :flee :creeper]
+ {:body {:spawnpoint :far}
+  :tags [:hostile :survival :flee :creeper]
   :time :any
   :mobs :keep
   :plot {:length 96 :width 32}

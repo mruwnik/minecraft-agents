@@ -9,7 +9,7 @@
   :mobs :keep
   :register [{:trigger :suffocating}
              {:trigger :hostile-near}]
-  :body {:at [16.5 0 16.5]}
+  :body {:spawnpoint :far :at [16.5 0 16.5]}
   :limit-s 70}
  :cases
   ;; The gate holds only while the zombie is within 8: the flight soon passes 8 and burning rightly fires then, so the window is short.

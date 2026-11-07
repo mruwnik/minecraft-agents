@@ -12,7 +12,7 @@
   :time :any
   :plot {:height 8}
   :blocks [[:fill [8 -1 8] [24 6 24] "stone" :hollow]]
-  :body {:at [12.5 0 12.5] :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [12.5 0 12.5] :effects [["resistance" 600 4]]}
   :limit-s 30}
  :cases
  [{:name "zombie-heard-behind-wall-turns"

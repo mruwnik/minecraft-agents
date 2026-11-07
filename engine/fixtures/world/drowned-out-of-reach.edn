@@ -20,7 +20,7 @@
            [:fill [4 1 10] [14 8 22] "water"]
            [:set [3 9 10] "torch"] [:set [3 9 14] "torch"] [:set [3 9 18] "torch"] [:set [3 9 22] "torch"]
            [:set [15 9 12] "torch"] [:set [15 9 20] "torch"]]
-  :body {:at [7.5 8 16.5]}
+  :body {:spawnpoint :far :at [7.5 8 16.5]}
   :limit-s 90}
  :cases
  [{:name "hurt-body-afloat-over-a-deep-drowned-swims-out"

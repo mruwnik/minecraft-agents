@@ -8,7 +8,7 @@
   :plot {:height 16}
   :register [{:trigger :hostile-near}]
   :blocks [[:fill [9 0 15] [17 1 15] "stone"] [:fill [9 0 17] [17 1 17] "stone"] [:fill [9 0 16] [9 1 16] "stone"]]
-  :body {:at [10.5 0 16.5] :inventory [["wooden_axe" 1] ["dirt" 20]]}
+  :body {:spawnpoint :far :at [10.5 0 16.5] :inventory [["wooden_axe" 1] ["dirt" 20]]}
   :limit-s 70}
  :cases
  [{:name "four-zombies-it-cannot-beat-are-pillared-from"

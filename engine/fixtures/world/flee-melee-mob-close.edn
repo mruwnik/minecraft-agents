@@ -12,7 +12,7 @@
   :time :any
   :register [{:trigger :hostile-near}]
   :plot {:light :lit :length 64}
-  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "bare-body-walks-from-a-zombie-two-blocks-off"

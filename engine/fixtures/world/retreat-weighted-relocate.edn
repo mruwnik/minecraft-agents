@@ -10,7 +10,7 @@
 {:defaults
  {:tags [:night :survival :retreat] :time :night
   :plot {:height 12}
-  :body {:at [16.5 0 16.5] :settle-s 3}}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :settle-s 3}}
  :cases
  [{:name "flee-two-zombies-east-west"
    :time :any

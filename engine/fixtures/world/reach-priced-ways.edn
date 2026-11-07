@@ -6,7 +6,8 @@
 ;; Mine: the same mass hollowed into a dark room 25 x 25, 3 high, wider than a room; the body on its floor, the goal on top 16 up: a stair up is cut and the top reached.
 ;; Sealed: a 1x2 pocket in the same mass under a goal pocket 12 up on a bedrock lid over the whole plot: no climb reaches it, and go-to stops (should-fail) instead of searching or digging on.
 {:defaults
- {:tags [:movement :go-to :access]
+ {:body {:spawnpoint :far}
+  :tags [:movement :go-to :access]
   :time :any
   :plot {:height 12}
   :limit-s 200}

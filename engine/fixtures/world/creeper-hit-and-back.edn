@@ -8,7 +8,7 @@
   :mobs :keep
   :register [{:trigger :hostile-near}]
   :blocks [[:fill [4 0 4] [28 4 28] "stone" :hollow] [:fill [5 0 5] [27 3 27] "air"] [:fill [5 4 5] [27 4 27] "glowstone"]]
-  :body {:at [16.5 0 16.5]}
+  :body {:spawnpoint :far :at [16.5 0 16.5]}
   :limit-s 60}
  :cases
  [{:name "sword-body-fights-a-lone-creeper-hit-and-back-and-keeps-its-health"

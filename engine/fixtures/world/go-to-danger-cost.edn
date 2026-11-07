@@ -10,7 +10,7 @@
  {:tags [:movement :hostile :planner]
   :mobs :keep
   :plot {:height 12 :length 80 :width 48}
-  :body {:at [2.5 0 24.5] :effects [["resistance" 900 4]]}
+  :body {:spawnpoint :far :at [2.5 0 24.5] :effects [["resistance" 900 4]]}
   :limit-s 120}
  :cases
  [{:name "unarmed-skirts-zombie"

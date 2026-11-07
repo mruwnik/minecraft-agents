@@ -5,7 +5,7 @@
  {:tags [:movement :hostile]
   :time :any
   :plot {:light :dark :height 6}
-  :body {:at [24.5 0 16.5]}
+  :body {:spawnpoint :far :at [24.5 0 16.5]}
   :limit-s 40}
  :cases
  [{:name "exclusive-go-to-stops-with-a-zombie-at-the-heels"

@@ -3,7 +3,8 @@
 ;; no land is inside the shrunk bounds (settings search-radius 16, swim-range 40; the walls are 28+ away): swim legs, then (a step cell is left, no pillar block carried) the reflex ends stopped :no_blocks, the body stays within
 ;; 40 blocks of its start and never drowns (health stays above 0: the case lasts the limit). Plot 100 x 64, the basin water 3 deep (y 0..3).
 {:defaults
- {:tags [:survival :water] :time :any
+ {:body {:spawnpoint :far}
+  :tags [:survival :water] :time :any
   :plot {:height 10 :length 100 :width 64}
   :blocks [[:fill [0 0 0] [49 3 63] "stone"]
            [:fill [50 0 0] [99 3 63] "stone"]

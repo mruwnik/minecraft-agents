@@ -4,7 +4,8 @@
 ;; The plot is 96 long so the body has room to run: stone block x 0..95, z 0..31, y 0..2 (platform feet y 3); a pond x 58..62, z 14..18 one deep
 ;; (y 2) in the platform top, the body at its middle. Glowstones every 8 blocks light the plot (surface time is :any).
 {:defaults
- {:tags [:hostile :survival :flee :water :creeper]
+ {:body {:spawnpoint :far}
+  :tags [:hostile :survival :flee :water :creeper]
   :time :any
   :mobs :keep
   :plot {:length 96 :width 32}

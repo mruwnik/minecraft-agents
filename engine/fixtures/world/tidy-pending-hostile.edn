@@ -10,7 +10,7 @@
   :plot {:height 12}
   :blocks [[:fill [10 0 6] [10 1 6] "cobblestone"] [:set [10 0 6] "air"]]
   :memory [{:kind :tidy :data {:cell #at [10 0 6] :action :dig :was "cobblestone" :now "air" :tries 0 :plan "other"}}]
-  :body {:at [4.5 0 4.5] :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [4.5 0 4.5] :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
   :limit-s 90}
  :cases
  [{:name "walled-in-zombie-tidy-restores"

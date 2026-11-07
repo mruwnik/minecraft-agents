@@ -9,7 +9,7 @@
   :plot {:height 12}
   :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]
            [:set [16 0 4] "torch"] [:set [16 0 28] "torch"] [:set [4 0 16] "torch"] [:set [28 0 16] "torch"]]
-  :body {:at [16.5 0 16.5] :settle-s 3}}
+  :body {:spawnpoint :far :at [16.5 0 16.5] :settle-s 3}}
  :cases
  [{:name "flee-ignores-a-gone-creeper"
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}

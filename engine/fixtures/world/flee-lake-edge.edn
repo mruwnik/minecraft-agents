@@ -13,7 +13,7 @@
   :blocks [[:fill [2 0 0] [30 2 63] "stone"]
            [:fill [2 0 24] [9 2 40] "air"]
            [:fill [2 0 24] [9 1 40] "water"]]
-  :body {:at [14.5 3 32.5] :yaw 90 :effects [["resistance" 600 4]]}
+  :body {:spawnpoint :far :at [14.5 3 32.5] :yaw 90 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "flight-does-not-step-down-into-the-lake"
