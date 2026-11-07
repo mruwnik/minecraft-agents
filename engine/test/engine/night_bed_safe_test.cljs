@@ -287,6 +287,28 @@
           (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out all night costs more than the walk's dark")
           (is (= [bed] (mapv st/arg-pos (st/calls raw "sleep")))))))))
 
+(deftest a-far-bed-whose-quote-spent-its-node-budget-is-walked-to
+  ;; night-b06-shelter live: over dark unseen ground the quote's search ran out of nodes near the hut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed {:x 96 :y 64 :z 0}
+              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"96,64,0" "red_bed"}))
+              quote-once! pick/quote-once!
+              cut (fn [{:keys [route] :as q}]
+                    (assoc q :route {:found false :reason :partial :budget true :near 2
+                                     :partial (select-keys route [:seconds :dark-seconds :waypoints :length])}))]
+          (st/know-bed! eng bed)
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (set! pick/quote-once! (fn ^:async q [c args]
+                                   (let [q (await (quote-once! c args))]
+                                     (if (and (= bed (:pos args)) (get-in q [:route :found])) (cut q) q))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (try (await (st/tick-n eng 12))
+               (finally (set! pick/quote-once! quote-once!)))
+          (is (empty? (st/entries eng :bed-walk-unsafe)) "no whole way known yet is not no way: the walk is priced, not refused")
+          (is (= [bed] (mapv st/arg-pos (st/calls raw "sleep")))))))))
+
 (def dusk
   "Night by the clock (a bed takes a sleeper), the sky not dark yet."
   12550)

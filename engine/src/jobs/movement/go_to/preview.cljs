@@ -6,7 +6,7 @@
   - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
     opened or dug, and :risk its walk risk (jobs.lib.walk-risk/estimate of the plan, the one danger figure a caller weighs). :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
-    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:reason
+    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:budget true on a partial whose search spent its node budget; :reason
     as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -79,7 +79,8 @@
                  back {:found false :reason :unseen-floors :near here :turn-back-s (:cost back) :worth-s (:worth back) :p-absent (:p back) :cells (:cells back)}
                  (and (nil? no) (= "found" status)) (let [dark (dark-cells (:primitives c) steps unknown)]
                                                       (cond-> (assoc (route steps path) :found true) dark (assoc :dark dark)))
-                 (nil? no) {:found false :reason :partial :near here :partial (route steps path)}
+                 (nil? no) (cond-> {:found false :reason :partial :near here :partial (route steps path)}
+                             (= "budget" (some-> r .-reason)) (assoc :budget true))
                  :else (assoc (dissoc no :replans :status) :found false :near here))]
     (if-not unknown
       result

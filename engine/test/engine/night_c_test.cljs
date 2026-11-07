@@ -685,7 +685,10 @@
 (deftest a-partial-quote-over-unseen-floors-is-a-walk-priced-by-the-quotes-mean
   (let [q {:uses {:job-time [30 120 ##Inf]} :route {:found false :reason :partial :unseen-floors true :near 96}}]
     (is (= {:found true :seconds 120} (select-keys (night/budget-priced {:primitives (tu/fake {})} q) [:found :seconds])))
-    (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route dissoc :unseen-floors)))))))
+    (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route dissoc :unseen-floors)))) "a partial over seen ground only that the search exhausted: no way")
+    (is (true? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route #(-> % (dissoc :unseen-floors) (assoc :budget true)))))) "a partial cut by the node budget: not known yet, not none")
+    (is (true? (:found (night/budget-priced {:primitives (tu/fake {})} (assoc-in q [:route :reason] :budget)))) "the dig search's :budget over a walk on unseen floors: still that walk")
+    (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route #(-> % (dissoc :unseen-floors) (assoc :reason :budget)))))) "the dig search's :budget alone: no walk known")))
 
 (deftest a-walks-worth-is-what-the-next-way-costs-more-than-the-answer-and-is-finite
   (let [prices {:bed 30 :shelter 100 :log-out 70 :exposed 400}]

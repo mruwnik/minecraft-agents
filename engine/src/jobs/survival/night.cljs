@@ -567,13 +567,15 @@
      :stay (price/stay-risk-s c here (if (pos? shelter-s) shelter-s secs) (price/way-fight-hp c (u/self-pos c)))}))
 
 (defn budget-priced
-  "The quoted route of q. A partial one over floors the body never saw (:unseen-floors, a search that spent go-to's node budget or
-  reached the loaded edge: no whole way known yet, not none) counts as a found walk priced by the quote's mean time, its unseen
-  ground dark (at least what the planner said of the part it priced), as the quote prices it."
+  "The quoted route of q. A partial walk no whole way is known for yet, not none (its search spent go-to's node budget,
+  :budget, or went over floors the body never saw, :unseen-floors, to the loaded edge), its reason :partial or the dig
+  search's :budget, counts as a found walk priced by the quote's mean time, all of it dark (at least what the planner said
+  of the part it priced). A dig search's :budget alone is no walk: its mean leaves out what bridging the rest costs."
   [c q]
   (let [r (:route q)
+        reason (some-> (:reason r) keyword)
         secs (second (get-in q [:uses :job-time]))]
-    (if (and (= :partial (some-> (:reason r) keyword)) (:unseen-floors r))
+    (if (and (#{:partial :budget} reason) (or (:unseen-floors r) (:budget r)))
       (assoc r :found true :seconds secs
              :dark-seconds (max (or (get-in r [:partial :dark-seconds]) 0) (* secs (cost/dark-factor (wworld/kit-of c)))))
       r)))

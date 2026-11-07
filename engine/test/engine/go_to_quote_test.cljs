@@ -271,7 +271,8 @@
                     (let [route (get-in (await (quote-reply eng {:pos [100 64 1] :range 0})) [:quote :route])]
                       (if (and (= :searching (:reason route)) (< n 12)) (recur (inc n)) route)))]
           (is (false? (:found out)))
-          (is (not= :searching (:reason out)) "a quote's search holds at most the node budget, not the planner's 200000"))))))
+          (is (not= :searching (:reason out)) "a quote's search holds at most the node budget, not the planner's 200000")
+          (is (true? (:budget out)) "its partial says the budget cut it: not known yet, not none"))))))
 
 (defn pond
   "Land at y 63 from x 0 to 20 and z -10 to 10, with a pond of water over x 5-15 and z -8 to 8 (stone beneath at y 61)."
