@@ -440,6 +440,8 @@
                   pen/check (fn [opts] (swap! checks inc) (check opts))]
       (let [wall? (own-pen/wall-fn {:primitives p} (concat field [[1 61 1]]))]
         (is (true? (wall? [3 63 1])) "the pit the open ground drops into is still a pen")
+        (is (true? (wall? [1 60 1])) "the floor under it too: a dig down through it lets the herd out under the wall")
+        (is (false? (wall? [1 59 1])) "but not the ground below that")
         (is (= 1 @checks) "only the pit start is checked: the field starts reach more than a pen holds")))))
 
 (deftest clear-cells-never-digs-a-block-outside-its-list-to-reach-a-cell

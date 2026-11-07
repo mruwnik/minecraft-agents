@@ -60,15 +60,18 @@
 
 (defn walls-fn
   "A fn of a cell [x y z]: whether it is the wall of one of pens (stocked-pens): beside a cell of a pen's inside or
-  above it, up to ::wall-height above its highest inside cell."
+  above it, up to ::wall-height above its highest inside cell, or the floor under an inside column (a way dug down
+  through it leaves the herd a way out under the wall)."
   [pens]
   (let [walls (map (fn [{:keys [inside]}]
-                     {:columns (into #{} (map (fn [[x _ z]] [x z])) inside) :floor (apply min (map second inside)) :ceiling (+ (apply max (map second inside)) (settings/get settings ::wall-height))})
+                     {:columns (into #{} (map (fn [[x _ z]] [x z])) inside) :floor (apply min (map second inside)) :ceiling (+ (apply max (map second inside)) (settings/get settings ::wall-height))
+                      :under (into #{} (map (fn [[x y z]] [x (dec y) z])) inside)})
                    pens)]
     (fn [[x y z]]
-      (boolean (some (fn [{:keys [columns floor ceiling]}]
-                       (and (<= floor y ceiling)
-                            (some (fn [dx] (some (fn [dz] (contains? columns [(+ x dx) (+ z dz)])) [-1 0 1])) [-1 0 1])))
+      (boolean (some (fn [{:keys [columns floor ceiling under]}]
+                       (or (contains? under [x y z])
+                           (and (<= floor y ceiling)
+                                (some (fn [dx] (some (fn [dz] (contains? columns [(+ x dx) (+ z dz)])) [-1 0 1])) [-1 0 1]))))
                      walls)))))
 
 (defn wall-fn
