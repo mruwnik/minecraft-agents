@@ -398,6 +398,24 @@
           (is (false? (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {})))
               "night no longer holds on the taken bed"))))))
 
+(deftest a-night-reflex-whose-sleep-failed-fires-again-only-once-the-failed-entry-has-expired
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
+              fired #(count (filterv (fn [e] (= [:reflex :fired :night] [(:source e) (:kind e) (:reflex e)])) @seen))
+              tick-for (fn ^:async tf [ms] (dotimes [_ (quot ms 1000)] (swap! clock + 1000) (await (core/tick! eng))))]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (set! (.-sleep p) (fn [& _] (js/Promise.resolve #js {:status "occupied"})))
+          (core/register-reflex! eng {:trigger :night})
+          (await (tick-for 20000))
+          (is (= 1 (fired)) "fired, the sleep failed")
+          (is (= 1 (count (st/entries eng :sleep-failed))))
+          (await (tick-for (- (:ttl sh-beds/sleep-failed-policy) 30000)))
+          (is (= 1 (fired)) "no refire after the 10 s cooldown while the failed entry stands")
+          (await (tick-for 40000))
+          (is (= 2 (fired)) "a priced retry once the entry has expired"))))))
+
 ;; a one-wide tunnel (x 0..20, z 0, y 64..65) through stone: roofed, but no room
 
 (def tunnel
