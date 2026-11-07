@@ -812,6 +812,25 @@
                         job-ns/drop-route (fn [& _] {:problem :dearer})]
             (is (= {:reason :past-worth :worth-s 7} (await (job-ns/dig-to! c item))))))))))
 
+(deftest a-second-dig-call-with-the-same-spent-box-starts-from-what-the-first-spent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :view (fn [] {:now 0})}
+              item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}
+              worths (atom []) box (atom 0) calls (atom 0)]
+          (with-redefs [job-ns/look-pit! (fn [_ _ _] nil)
+                        dig-look/look-at! (fn [_ _] nil)
+                        u/seen-name (fn [_ _] nil)
+                        job-ns/item-worth (fn [_ _] 100)
+                        job-ns/drop-route (fn [_ worth & _] (swap! worths conj worth) (if (= 1 (swap! calls inc)) {:dig [[1 70 0]] :searched-s 5} {:dig []}))
+                        job-ns/dig-cells! (fn [_ _] (if (= 1 @calls) {:out :unreachable :cell [1 70 0] :n 1} :dug))]
+            (await (job-ns/dig-to! c item box))
+            (let [first-spent @box]
+              (is (>= first-spent 5))
+              (await (job-ns/dig-to! c item box))
+              (is (= (- 100 first-spent) (last @worths)) "the second call's worth is less what the first spent"))))))))
+
 (deftest an-unseen-first-cell-books-the-failed-attempt-so-a-retry-is-not-free
   (async done
     (tu/run-async done

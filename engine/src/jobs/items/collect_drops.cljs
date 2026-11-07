@@ -388,11 +388,13 @@
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
   never seen) is planned again from where the body now stands, at most ::replans times; when every route costs more than the
-  drop is worth, it is left {:reason :past-worth :worth-s the drop's worth less what earlier digs and route searches cost}. :dug when every cell is open now,
+  drop is worth, it is left {:reason :past-worth :worth-s the drop's worth less what earlier digs and route searches cost, those of an earlier call too when spent-box (an atom) is passed again}. :dug when every cell is open now,
   :continue while a dig waits on the world, else why not: :no-route (no way), that map, :too-big (the heap was full) or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
-  [c item]
+  ([c item] (dig-to! c item (atom 0)))
+  ([c item spent-box]
   (let [p (:primitives c)]
-    (loop [pass 0 spent 0]
+    (loop [pass 0 spent @spent-box]
+      (reset! spent-box spent)
       (let [from (u/cell-vec (u/self-pos c))
             _ (await (look-pit! c from (item-cell item)))
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
@@ -422,7 +424,7 @@
                 (if l
                   (if (= :continue l) :continue (do (await (look-pit! c from (item-cell item))) (recur pass (+ spent (booked)))))
                   :unseen))
-              :else (:out d))))))))
+              :else (:out d)))))))))
 
 (defn moved-item
   "item as seen now when it lies in another cell than the one it was judged in (a drop slides while the body digs to it), else nil."
@@ -684,7 +686,8 @@
         walk (when (and (not why) (not hole?) (or (deep? c item) (far? c item) (and (not (high? c item)) (gap-on-way? c item))))
                (await (walk-down! c item)))
         dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))
-        dug (when dig? (await (dig-to! c item)))
+        spent-box (atom 0)
+        dug (when dig? (await (dig-to! c item spent-box)))
         dig-why (when-not (#{nil :dug :continue} dug) dug)
         walk (if (= :dug dug) (await (walk-down! c item)) walk)
         why (if (= :dug dug) nil why)
@@ -702,7 +705,7 @@
         walked-up (when up? (await (walk-down! c item)))
         up (if (= :unreachable walked-up) (or (await (pillar-to! c item)) walked-up) walked-up)
         near-walk (when (and stuck? (not up?) (nil? walk)) (await (walk-down! c item)))
-        dug2 (when (and stuck? (not up?) (not= :arrived near-walk) (:dig (:args c))) (await (dig-to! c item)))
+        dug2 (when (and stuck? (not up?) (not= :arrived near-walk) (:dig (:args c))) (await (dig-to! c item spent-box)))
         dig2-why (when-not (#{nil :dug :continue} dug2) dug2)
         walk2 (when (= :dug dug2) (await (walk-down! c item)))
         r2 (when (or (= :arrived up) (= :arrived near-walk) (and (= :dug dug2) (not= :continue walk2))) (await (collect!)))
