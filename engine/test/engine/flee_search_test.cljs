@@ -848,7 +848,8 @@
           (set! wworld/shut-cell-fn (fn [p kit]
                                       (let [f (shut-cell p kit)]
                                         (fn [x y z] (swap! asks conj [x y z]) (reset! pricing? true) (try (f x y z) (finally (reset! pricing? false)))))))
-          (set! look/remembered-light-fn (fn [p raw] (when @pricing? (swap! lights inc)) (light-fn p raw)))
+          (set! look/remembered-light-fn (fn ([p raw] (when @pricing? (swap! lights inc)) (light-fn p raw))
+                                          ([p raw block-only?] (when @pricing? (swap! lights inc)) (light-fn p raw block-only?))))
           (try (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos {:x -6.5 :y 64 :z 0.5}}] [] {}))
                (finally (set! u/seen-block seen-block) (set! wworld/shut-cell-fn shut-cell) (set! look/remembered-light-fn light-fn)))
           (is (< 20 (count (set @asks))) "the ring routes priced unseen cells")
