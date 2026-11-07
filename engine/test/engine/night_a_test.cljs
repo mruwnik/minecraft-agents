@@ -222,12 +222,12 @@
           (is (empty? (st/calls p "place")) "not dug in"))))))
 
 (deftest the-night-shelters-where-it-stands-rather-than-walk-to-an-open-bed-its-sleep-does-not-end-the-night-in
-  ;; at one meet in 200 s: at the measured rate (0.0012) the 20-block walk and a night in the open is the cheapest (bed 58.6 s, shelter 490.5 s)
+  ;; at one meet in 100 s a night asleep in the open costs more than digging in (bed 819.9 s, shelter 526.5 s); at 200 s a full-health sleeper survives a creeper and the bed is the cheaper (445.3 / 503.4)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (await
-         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 200}}
+         (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k 0 :n-s 100}}
            (fn ^:async inner []
              (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/wall-stack :players ["Alex" "Bo" "Cy"]})]
                ((status! 0 5) eng)
