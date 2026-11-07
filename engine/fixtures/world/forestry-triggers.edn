@@ -119,13 +119,15 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
    :after [[:block [16 6 16] "oak_log"]]
    :limit-s 40}
+  ;; The only tree is a column it gave up on: no tree is left to fell, so fell-tree waits :no-tree (a later start, never ends) and digs nothing.
   {:name "fell-tree-part-cut-leaves-a-column-it-gave-up-on-lately"
    :register []
    :memory [{:kind :forestry/tree-unreachable :data {:column #at [16 16]} :policy {:cap 20 :ttl 600000}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 24})]]
-   :expect [{:event {:source :job :kind #{:stopped :completed}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tree}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind #{:stopped :completed}} :of-job true :for-s 20 :until {:source :job :kind :waiting :data {:reason :no-tree}}}]
    :after [[:block [16 6 16] "oak_log"] [:block [16 1 16] "oak_log"]]
    :limit-s 70}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
