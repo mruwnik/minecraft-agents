@@ -144,7 +144,7 @@ export const parseListed = (text) => {
 export const noCasesSelected = (units, listed) => listed !== null && !units.length
 export const unitsWithCases = (units, listed) => (listed ? units.filter((u) => listed.has(u)) : units)
 // ---- night batches
-const NIGHT_BUDGET_S = 330 // a night is 13000-22000: 8000 ticks from 14000 are 400 s at 20 TPS, less the set-up of each body
+const NIGHT_BUDGET_S = 330 // the runner resets a night at 20000: 6000 ticks from 14000 are 300 s at 20 TPS, less the set-up of each body
 const NIGHT_DEFAULT_S = 90 // for a case with no recorded duration
 export const parseNightClasses = (text) => text.split('\n').map((l) => l.trim().split(/\s+/)).filter((w) => w[0]).map(([id, cls]) => ({ id, cls }))
 export const durationsById = (texts) => {
