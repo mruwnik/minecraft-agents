@@ -382,6 +382,20 @@
             (is (= waits? (= :dark (:reason (await (waiting-after env (list job {:pos at}) 3))))) [time purpose])
             (is (= (not waits?) (= "air" (block-at p at))) [time purpose])))))))
 
+(deftest a-dig-waiting-for-the-dark-to-lift-goes-on-when-the-day-comes-not-at-its-estimate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock] :as env} (setup {:self body :blocks {"2,64,0" "dirt"} :time 14000})]
+          (tu/with-light-data p)
+          (ledger/write! (:store eng) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose :shelter :state :placed}])
+          (is (= :dark (:reason (await (waiting-after env (list job {:pos at}) 3)))))
+          (swap! (fake/state p) assoc :time 1000)
+          (dotimes [_ 4]
+            (swap! clock + 700)
+            (await (core/tick! eng)))
+          (is (= "air" (block-at p at))))))))
+
 (deftest on-fluid-fail-ends-at-once-with-a-hint-instead-of-waiting
   (async done
     (tu/run-async done
