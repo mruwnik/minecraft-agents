@@ -524,7 +524,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [cow-hunt (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 20))
+        ;; the cow's cell seen lit: at 0.5 hp any spawn chance is more than the body may risk (price/allowed keeps 1 hp)
+        (let [cow-hunt (await (tu/with-looks-showing #(scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 20)))
               zombie-hunt (await (scenario {:item "rotten_flesh" :count 1} {:inventory h/sword :self {:health 0.5} :entities [(zombie 1 3)]} 10))]
           (is (= #{1} (set (attacked cow-hunt))) "the cow is the way to the food that heals")
           (is (empty? (attacked zombie-hunt)) "nothing hostile attacked at 0.5 hp")
