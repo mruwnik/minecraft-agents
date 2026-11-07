@@ -448,6 +448,12 @@
             (.get m ck)
             (let [v (f (.-roomKind st) (fn [k v] (.set m k v)))] (.set m ck v) v)))))))
 
+(defn kept?
+  "Whether an answer for the key `ck` is kept (kept-with) under the world and memory as they are now."
+  [p ck]
+  (let [per (aget p "perception") k (some-> per steady-key)]
+    (boolean (and k (= k (.-roomKey ^js (:st per))) (.has ^js (.-roomMemo ^js (:st per)) ck)))))
+
 (defn kept
   "(f kind-at) for the key `ck`, kept as kept-with does."
   [p ck f]
@@ -463,11 +469,13 @@
   [p {:keys [x y z] :as pos}]
   (kept p (str x "|" y "|" z) (fn [_] (room-with p pos (partial kept-flood p)))))
 
+(defn look-key [{:keys [x y z]}] (str "look|" x "|" y "|" z))
+
 (defn look
   "{:room (room*'s answer) :unseen (a delay of unseen-room's)} of the cell pos from one flood a start, kept per body as
   room is: a judge that asks both floods once."
   [p {:keys [x y z] :as pos}]
-  (kept p (str "look|" x "|" y "|" z)
+  (kept p (look-key pos)
         (fn [kind-at]
           (let [in-door? (some-> (u/seen-block p pos) .-name openable?)
                 starts (if in-door? (mapv (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])
@@ -540,11 +548,12 @@
 
 (defn walk-steps
   "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the
-  body has seen, wooden doors opened (body-kind-of); nil when none is found."
-  [p from to]
-  (let [kind-at (fn [x y z] (body-kind-of (u/seen-block p {:x x :y y :z z})))
-        r (search-steps (partial forward kind-at) (mapv from [:x :y :z]) (mapv to [:x :y :z]))]
-    (when (number? r) r)))
+  body has seen, wooden doors opened (body-kind-of); nil when none is found. expanded! as search-steps'."
+  ([p from to] (walk-steps p from to nil))
+  ([p from to expanded!]
+   (let [kind-at (fn [x y z] (body-kind-of (u/seen-block p {:x x :y y :z z})))
+         r (search-steps (partial forward kind-at) (mapv from [:x :y :z]) (mapv to [:x :y :z]) nil expanded!)]
+     (when (number? r) r))))
 
 (defn closed-room?
   "Whether a walker in cell pos {:x :y :z} could reach fewer than room-cells cells with every door, gate and trapdoor

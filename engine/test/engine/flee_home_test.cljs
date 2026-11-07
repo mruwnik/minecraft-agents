@@ -33,6 +33,8 @@
 
 (def home {:x 5 :y 64 :z 0})
 
+(def no-ceiling "Settings that lift the search budget, for a test of what the prices alone cut." {::cost-danger/search-budget-s 1000})
+
 (def open-door
   {"5,64,2" {:open true :half "lower" :facing "south"} "5,65,2" {:open true :half "upper" :facing "south"}})
 
@@ -533,6 +535,7 @@
 (deftest a-steps-fresh-floods-are-as-many-as-the-chasers-lead-pays-for
   ;; the lead, not a count, bounds a step's floods: a far chaser leaves time for every door side, one at the body for none.
   ;; The body stands among the lone doors, nearer them than the hut: no room won early saves the farther sides.
+  ;; The search budget (cost/search-budget-s) is lifted: the lead alone is priced here.
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -541,15 +544,35 @@
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
               p (:primitives eng)
-              unjudged-at (fn [threats] (mapv :at (filter (comp #{:unjudged} :why) (:dropped (cover/survey c threats false)))))
+              unjudged-at (fn [threats] (settings/with-settings no-ceiling #(mapv :at (filter (comp #{:unjudged} :why) (:dropped (cover/survey c threats false))))))
               far [(seen-zombie -13.5 40.5)]
               pressed [(seen-zombie -13.5 9)]
               sides (* 2 7)]
           (is (> (- (rooms/here-s p far) (margin)) (* sides (rooms/judge-s))) "the far chaser's lead pays for every side")
-          (is (= [[5 64 3]] (unjudged-at far))
-              "so every door side is judged in the one step but the hut's outside, which saves no run over the hut its inside won")
+          (is (= [] (unjudged-at far)) "so every door side is judged in the one step")
           (is (< (- (rooms/here-s p pressed) (margin)) (rooms/judge-s)) "one at the body leaves no lead for a flood")
           (is (= sides (count (unjudged-at pressed))) "so none is"))))))
+
+(deftest a-steps-searches-stop-at-the-search-budget-whatever-the-threat
+  ;; Q141: a step's searches together are one search of about cost/search-budget-s: none starts once the step has run it.
+  ;; Each fresh judgement counts one flood to the cap (flood-s).
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x -13.5 :y 64 :z 10.5} (merge hs/door-states lone-door-states) [] lone-doors)
+                                          :home false))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              flood (rooms/flood-s)
+              budget (cost/search-budget-s)
+              judged (fn [threats fire]
+                       (let [r (with-redefs [cover/fire-on (constantly fire)] (cover/survey c threats false))]
+                         [(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped r)))) (:spent-s r)]))]
+          (is (< (* 2 flood) budget (* 7 flood)) "the budget fits more than one flood, fewer than the sides")
+          (are [threats fire] (= [(js/Math.ceil (/ budget flood)) (* flood (js/Math.ceil (/ budget flood)))] (judged threats fire))
+            [(seen-zombie -13.5 40.5)] nil
+            [] nil
+            [#js {:name "skeleton" :visible true :pos #js {:x -13.5 :y 64 :z 20.5}}] {:risk identity :exposed? true}))))))
 
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
   (async done
@@ -607,7 +630,7 @@
                                       (finally (restore)))
               gap? (fn [r] (some :gap (:rooms r)))]
           (is (and (gap? a) (gap? b)) "the doorless home is a room both steps")
-          (is (< (js/Math.abs (- (:spent-s a) (:spent-s b) (* 2 (rooms/judge-s)))) 1e-9)
+          (is (< (js/Math.abs (- (:spent-s a) (:spent-s b) (rooms/flood-s) (rooms/judge-s))) 1e-9)
               (str "the first step pays the home's flood and its doorway room, the next neither: " [(:spent-s a) (:spent-s b)]))
           (is (pos? first-floods))
           (is (= first-floods (:unroofed @counts)) (str "the doorway room's floods are not run again: " first-floods " " @counts)))))))
@@ -697,11 +720,12 @@
               {:keys [eng]} (setup (hut {:x -14.5 :y 64 :z 6.5} (merge hs/door-states (shifted hs/door-states -20)) [] near-hut))
               c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
               _ (.setOwner (:primitives eng) "t8")
-              rooms (:rooms (rooms/survey c (cover/home-pos c)))]
+              rooms (:rooms (settings/with-settings no-ceiling #(rooms/survey c (cover/home-pos c))))]
           (is (= [false true] (mapv :home? rooms)) (str "the room 7 blocks off, then the home 20 off: " (mapv :start rooms))))))))
 
 (deftest a-fourth-room-the-run-wins-is-found-past-three-nearer-ones
-  ;; rooms are cut by their price, not by a count: three nearer huts whose doors are walled off leave the fourth
+  ;; rooms are cut by their price, not by a count: three nearer huts whose doors are walled off leave the fourth (the
+  ;; search budget lifted: here the price alone is the cut)
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -714,8 +738,8 @@
               c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
               _ (.setOwner (:primitives eng) "t8")
               threats [(seen-zombie 40.5 6.5)]
-              survey (rooms/survey c nil {:threats threats})
-              verdicts (rooms/verdicts p (:rooms survey) threats true (:spent-s survey) nil)
+              [survey verdicts] (settings/with-settings no-ceiling
+                                  #(let [s (rooms/survey c nil {:threats threats})] [s (rooms/verdicts p (:rooms s) threats true (:spent-s s) nil)]))
               hut-of (fn [r] (some #(when (contains? (:cells r) [(+ 5 %) 64 0]) %) dxs))]
           (is (= dxs (mapv (comp hut-of :room) verdicts)) (str "all four rooms, nearest first: " (mapv :start (:rooms survey))))
           (is (= [:no-way :no-way :no-way nil] (mapv :why verdicts)) (str (mapv :why verdicts)))

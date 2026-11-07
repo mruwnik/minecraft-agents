@@ -87,6 +87,8 @@
   [c]
   (map :pos (seen-starts c)))
 
+(defn seen-doors "The doors seen behind which a room may be entered (seen-starts)." [c] (set (map :door (seen-starts c))))
+
 (defn candidate?
   "Whether the room behind start {:pos} may be a closed room to enter: a known closed room (refuge-room?), or with unseen?
   one whose inside is not seen yet (the walk shows it; the open ground outside a door reads unseen too)."
@@ -109,32 +111,39 @@
              (hash-map :pos))))
 
 (defn ^:async pick-seen
-  "The {:pos} of the room whose door go-to quotes the cheapest route to, with the ways the entering walk has (digging
-  through glass or a wall included, so a door two blocks off behind glass can beat one far round): a known closed room
-  (candidate?), else one whose inside is unseen; nil when none has a route. Doors nearest first: a door's floods of its
-  sides (room-lib/judge-s each) and its quote (room-lib/way-s) are paid only while they could save more than they cost
+  "{:pick {:pos} :done? :state}: the room whose door go-to quotes the cheapest route to, with the ways the entering walk has
+  (digging through glass or a wall included, so a door two blocks off behind glass can beat one far round): a known closed
+  room (candidate?), else one whose inside is unseen; :pick nil when none has a route. Doors nearest first: a door's floods of
+  its sides (room-lib/side-s each) and its quote (room-lib/way-s) are paid only while they could save more than they cost
   (cost/search-pays?) over the cheapest closed room quoted, no route to the door quicker than its straight line at
-  cost/least-block-s a block (horizontal)."
+  cost/least-block-s a block (horizontal). A call's searches stop at cost/search-budget-s: :done? false, and :state (kept in
+  mem :pick-state by the step) carries the doors priced and the picks on to the next call while the doors seen stay the same."
   [c]
   (let [p (:primitives c)
         me (u/self-pos c)
-        doors (->> (seen-starts c) (partition-by :door))]
-    (loop [[sides & more] doors spent 0 best ##Inf picks {}]
+        seen (seen-doors c)
+        kept (:pick-state (ctx/mem c))
+        {:keys [priced best picks]} (if (= seen (:doors kept)) kept {:priced #{} :best ##Inf :picks {}})
+        doors (->> (seen-starts c) (partition-by :door) (remove #(priced (:door (first %)))))
+        answer (fn [done? priced best picks]
+                 {:pick (some->> (or (:closed picks) (:unseen picks)) first (hash-map :pos)) :done? done?
+                  :state {:doors seen :priced priced :best best :picks picks}})]
+    (loop [[sides & more] doors spent 0 best best picks picks priced priced]
       (if-not sides
-        (some->> (or (:closed picks) (:unseen picks)) first (hash-map :pos))
+        (answer true priced best picks)
         (let [d (:door (first sides))
               lb (* cost/least-block-s (max 0 (- (u/flat-dist me (room-lib/mid d)) 0.7)))
-              cost (+ (* (count sides) (room-lib/judge-s)) (room-lib/way-s))]
-          (if-not (cost/search-pays? spent cost (- best lb))
-            (recur more spent best picks)
+              cost (+ (reduce + (map #(room-lib/side-s p (:pos %)) sides)) (room-lib/way-s))]
+          (cond
+            (not (cost/under-ceiling? spent)) (answer false priced best picks)
+            (not (cost/search-pays? spent cost (- best lb))) (recur more spent best picks (conj priced d))
+            :else
             (let [closed (some #(when (candidate? p % false) %) sides)
                   start (or closed (when-not (:closed picks) (some #(when (candidate? p % true) %) sides)))
                   route (when start (await (room-lib/route-cost c {:pos (room-lib/mid d) :range 0.7})))
                   k (if closed :closed :unseen)
                   picks (if (and route (< route (second (get picks k [nil ##Inf])))) (assoc picks k [(:pos start) route]) picks)]
-              (recur more (+ spent cost) (if (and closed route) (min best route) best) picks))))))))
-
-(defn seen-doors "The doors seen behind which a room may be entered (seen-starts)." [c] (set (map :door (seen-starts c))))
+              (recur more (+ spent cost) (if (and closed route) (min best route) best) picks (conj priced d)))))))))
 
 (defn unclosable?
   "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
@@ -161,8 +170,8 @@
       :else (nearest-seen c))))
 
 (defn picks-seen?
-  "Whether the target is the nearest room seen (no :at, no :place, no usable home), of several doors, and no pick of it stands
-  (a pick is made again whenever the doors seen change, so a newly seen cheaper door is priced)."
+  "Whether the target is the nearest room seen (no :at, no :place, no usable home), of several doors, and no finished pick of it stands
+  (pick-seen goes on while it is not done; a pick is made again whenever the doors seen change, so a newly seen cheaper door is priced)."
   [c]
   (let [t (target-of c)
         doors (seen-doors c)]
@@ -250,7 +259,7 @@
       :else (contract/ok :room "a room to enter"))))
 
 (defn ^:async quote-of [c0]
-  (let [c (cond-> c0 (picks-seen? c0) (assoc :room-pick (:pos (await (check-cache/cached c0 [::pick (seen-doors c0) (mapv js/Math.floor (map (sh-sense/feet (:primitives c0)) [:x :y :z]))] #(pick-seen c0))))))
+  (let [c (cond-> c0 (picks-seen? c0) (assoc :room-pick (:pos (:pick (await (check-cache/cached c0 [::pick (seen-doors c0) (mapv js/Math.floor (map (sh-sense/feet (:primitives c0)) [:x :y :z]))] #(pick-seen c0)))))))
         p (:primitives c)
         t (target-of c)
         job-time (settings/get settings ::job-time-s)
@@ -378,13 +387,17 @@
                                          (:roof (ctx/mem c)) (assoc :roof (:roof (ctx/mem c)))))
       :else (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c)))))))
 
-(defn ^:async step!
-  "One step of the entering (judge): the walk, a door, the doorway or the roof, the end."
+(defn ^:async pick!
+  "One call of pick-seen, its pick and state kept in mem (:picked, :pick-state; :picked-doors once done): whether it is done."
   [c]
-  (note-sides! c)
-  (when (picks-seen? c)
-    (let [doors (seen-doors c)]
-      (ctx/update-mem! c assoc :picked (:pos (await (pick-seen c))) :picked-doors doors)))
+  (let [doors (seen-doors c)
+        {:keys [pick done? state]} (await (pick-seen c))]
+    (ctx/update-mem! c assoc :picked (:pos pick) :pick-state state :picked-doors (when done? doors))
+    done?))
+
+(defn ^:async act!
+  "The step once the room is picked."
+  [c]
   (when (here? c (target-of c))
     (when-let [roof (sh/unseen-roof-cell (:primitives c))]
       (when-not (= roof (:roof-looked (ctx/mem c)))
@@ -393,5 +406,14 @@
   (if (and (here? c (target-of c)) (not (look/surveyed? c :cell)) (reach-room/unseen-room? (:primitives c) (sh-sense/feet (:primitives c))))
     (await (look/look-around! c))
     (await (step-judged! c))))
+
+(defn ^:async step!
+  "One step of the entering (judge): a slice of the pick of the room seen (pick!, the next step goes on with it), the
+  walk, a door, the doorway or the roof, the end."
+  [c]
+  (note-sides! c)
+  (if (and (picks-seen? c) (not (await (pick! c))))
+    :again
+    (await (act! c))))
 
 (defn ^:async round [c] (await (pace/steps! c (fn ^:async enter-step [] (await (step! c))))))

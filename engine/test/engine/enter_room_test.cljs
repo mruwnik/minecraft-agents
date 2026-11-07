@@ -14,6 +14,7 @@
             [engine.shelter-support :as st]
             [jobs.lib.walk-risk :as risk]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.enter-room :as enter-room]
             [engine.test-util :as tu]))
@@ -235,19 +236,28 @@
     (is (false? (picks? [a] nil)) "one door: nothing to choose")))
 
 (defn ^:async pick-over
-  "pick-seen over closed rooms behind starts, the body at the origin, route-cost from price (door -> seconds): {:pick
-  :quoted [door...]}."
+  "pick-seen over closed rooms behind starts, the body at the origin, route-cost from price (door -> seconds), called again
+  with the state it leaves until it is done: {:pick :quoted [door...] :calls [[door...] per call]}."
   [starts price]
   (let [quoted (atom [])
-        [ss cand self route mid] [enter-room/seen-starts enter-room/candidate? jobs.lib.util/self-pos room-lib/route-cost room-lib/mid]]
+        state (atom {})
+        [ss cand self route mid mem] [enter-room/seen-starts enter-room/candidate? jobs.lib.util/self-pos room-lib/route-cost room-lib/mid ctx/mem]]
     (set! enter-room/seen-starts (fn [_] starts))
     (set! enter-room/candidate? (fn [_ _ _] true))
     (set! jobs.lib.util/self-pos (fn [_] {:x 0 :y 0 :z 0}))
     (set! room-lib/mid identity)
+    (set! ctx/mem (fn [_] @state))
     (set! room-lib/route-cost (fn ^:async f [_ args] (swap! quoted conj (:pos args)) (price (:pos args))))
-    (try {:pick (await (enter-room/pick-seen {})) :quoted @quoted}
+    (try (loop [calls []]
+           (let [before (count @quoted)
+                 {:keys [pick done?] :as r} (await (enter-room/pick-seen {:primitives #js {}}))
+                 calls (conj calls (subvec @quoted before))]
+             (reset! state {:pick-state (:state r)})
+             (if (or done? (> (count calls) (count starts)))
+               {:pick pick :quoted @quoted :calls calls}
+               (recur calls))))
          (finally (set! enter-room/seen-starts ss) (set! enter-room/candidate? cand) (set! jobs.lib.util/self-pos self)
-                  (set! room-lib/route-cost route) (set! room-lib/mid mid)))))
+                  (set! room-lib/route-cost route) (set! room-lib/mid mid) (set! ctx/mem mem)))))
 
 (defn room-at [n] {:pos {:x n :y 0 :z 0} :door {:x n :y 0 :z 1}})
 
@@ -269,7 +279,9 @@
               doors (map :door huts)
               ;; the nearest is behind a wall: the walk round it is long, the rest are walked straight
               price (fn [{:keys [x] :as d}] (if (= d (first doors)) 30 (* 0.3 x)))
-              {:keys [pick quoted]} (await (pick-over huts price))]
+              {:keys [pick quoted calls]} (await (pick-over huts price))]
           (is (= (:pos (second huts)) (:pos pick)) "the cheapest route of those quoted, the second hut")
           (is (< 1 (count quoted) 20) (str "quoted only while a nearer route could still win: " (count quoted)))
-          (is (= (take (count quoted) doors) quoted) "nearest first"))))))
+          (is (= (take (count quoted) doors) quoted) "nearest first")
+          (is (> (+ (* 2 (room-lib/judge-s)) (room-lib/way-s)) (cost/search-budget-s)) "a door's floods and quote are over the search budget")
+          (is (every? #(<= (count %) 1) calls) (str "so a call quotes one door and the next goes on from the state it left, none twice: " calls)))))))

@@ -306,10 +306,12 @@
 (defn search-steps
   "Best-first search from start [x y z] over (next-cells x y z) to a cell near target [x y z] (or one where (goal? x y z)
   holds): the steps of the walk it found (a number), :closed (every reachable cell expanded, no way) or :budget
-  (node-budget cells expanded)."
+  (node-budget cells expanded). expanded!, when given, is called with the cells it expanded."
   ([next-cells start target] (search-steps next-cells start target nil))
-  ([next-cells [sx sy sz] [tx ty tz] goal?]
+  ([next-cells start target goal?] (search-steps next-cells start target goal? nil))
+  ([next-cells [sx sy sz] [tx ty tz] goal? expanded!]
    (let [goal? (or goal? (fn [x y z] (near-cell? x y z tx ty tz)))
+         end (fn [n r] (when expanded! (expanded! n)) r)
          key (keyer sx sz)
          seen (js/Set.)
          open #js []]
@@ -317,13 +319,13 @@
      (heap-push! open #js [(heuristic sx sy sz tx ty tz) 0 sx sy sz])
      (loop [n 0]
        (cond
-         (zero? (.-length open)) :closed
-         (>= n node-budget) :budget
+         (zero? (.-length open)) (end n :closed)
+         (>= n node-budget) (end n :budget)
          :else
          (let [top (heap-pop! open)
                g (aget top 1) x (aget top 2) y (aget top 3) z (aget top 4)]
            (if (goal? x y z)
-             g
+             (end n g)
              (let [nexts (next-cells x y z)
                    g' (inc g)]
                (dotimes [i (.-length nexts)]

@@ -46,6 +46,7 @@
                     :doc "Blocks a second the gap between a fleeing body and each mob kind it saw as two flee steps in a row started grew, by :sprint (food over ::sprint-food) or :walk, as {kind {:sprint {:blocks :s}}}: over the seconds between the starts (closing-rate). None counted yet: the trial logs before 2026-10-28 hold no gaps (retreat.step-speed :chasers). Recount: tools/event-counts.mjs closing-rate (:setting)."
                     :spec (a/map-of a/name? (a/map-of #{:sprint :walk} (a/map-with {:blocks (a/pred "a number" a/finite?) :s (a/num-in 0 nil)})))}
    ::closing-prior-s {:default 5 :doc "Seconds of flight the prior closing rate (flee-pace less chase-speed) counts as against ::closing-rates' (closing-rate): a weak prior." :spec (a/num-in 0 nil)}
+   ::search-budget-s {:default 0.1 :doc "Seconds of CPU one search may take, one flight step's or one quote's searches together (the owner's search budget, Q141): searches stop at it." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
    ::melee-reach {:default 1.4 :doc "Blocks from the body within which a melee mob's blow lands, vanilla's for a zombie (catches?)." :spec (a/num-in 0 nil)}})
 
@@ -213,11 +214,19 @@
   [blocks best-steps food]
   (if (infinite? best-steps) ##Inf (/ (- best-steps blocks) (body-speed food))))
 
+(defn search-budget-s [] (settings/get settings ::search-budget-s))
+
+(defn under-ceiling?
+  "Whether a search may start with spent-s seconds of CPU spent before it by the same search: under ::search-budget-s, at
+  which searches stop (the first always starts)."
+  [spent-s]
+  (< spent-s (search-budget-s)))
+
 (defn search-pays?
-  "Whether a search of cost-s seconds of CPU, spent-s spent before it, ends within budget-s: what the body has to stand
-  still for, or what the search may save."
+  "Whether a search of cost-s seconds of CPU, spent-s spent before it, starts under ::search-budget-s (under-ceiling?) and
+  ends within budget-s: what the body has to stand still for, or what the search may save."
   [spent-s cost-s budget-s]
-  (< (+ spent-s cost-s) budget-s))
+  (and (under-ceiling? spent-s) (< (+ spent-s cost-s) budget-s)))
 
 (defn refuge-search-pays?
   "Whether a search for a refuge of cost-s seconds of CPU pays, spent-s already spent this step. The CPU is lead the
@@ -227,15 +236,15 @@
   (fire {:risk :exposed?}: the risk of seconds in it, respond.goal/fire-price's, and whether the body stands in it),
   which pays while it risks less than the fire a refuge spares, that of the run it saves capped by a flight's time to
   cover (exposure-s, what fire-price charges an end left uncovered); out of the fire it spares none. With neither,
-  every search pays but one that saves nothing."
+  every search pays but one that saves nothing. None starts at ::search-budget-s (under-ceiling?)."
   [spent-s cost-s here-s lead-s save-s fire]
   (let [margin (settings/get settings ::race-margin-s)]
     (and (pos? save-s)
          (cond
            (not (infinite? here-s)) (search-pays? spent-s cost-s (min (- here-s margin) (- lead-s margin) save-s))
-           (nil? fire) true
+           (nil? fire) (search-pays? spent-s cost-s ##Inf)
            :else (let [{:keys [risk exposed?]} fire]
-                   (and exposed? (< (risk (+ spent-s cost-s)) (risk (min save-s (exposure-s))))))))))
+                   (and exposed? (under-ceiling? spent-s) (< (risk (+ spent-s cost-s)) (risk (min save-s (exposure-s))))))))))
 
 (defn closing-rate
   "Blocks a second a flight by a body with food food opens the gap to a chasing mob-name: ::closing-rates' measured gap
