@@ -158,25 +158,37 @@
                           (or (not= :gap why) (not-any? #(dig-look/unknown? p %) (side-cells cell))))))
                  (:leaks final))))
 
+(defn barrier-name? [n]
+  (boolean (and n (or (str/ends-with? n "_fence") (str/ends-with? n "_wall")))))
+
 (def orthogonal-dirs [[1 0] [-1 0] [0 1] [0 -1]])
 
 (defn gate-opens-outside?
   "Whether an open gate of the final read (no box) is a proven way out: with the open gates shut the fill closes round the
   start, and through them it reaches seen ground outside a wall on another side of that pen, so the gate opens onto
-  the ground round the pen, not into a part of it walled off by a divider."
+  the ground round the pen, not into a part of it walled off by a divider; and the ground it reaches has no seen
+  barrier of its own, else the gate may open into a fenced paddock whose unseen cells close."
   [p {:keys [at box max-cells]} final]
   (let [gates (keep (fn [{:keys [pos why]}] (when (= :open-gate why) [(:x pos) (:y pos) (:z pos)])) (:leaks final))]
     (boolean
      (when (and (seq gates) (not box))
        (let [opts {:block-at (pen-read/block-at-fn p (volatile! #{})) :at at :max-cells max-cells :blocks (pen-world/store)}
              shut (:fill (pen/analyse (assoc opts :sealed (set gates))))
-             open (:fill (pen/analyse (assoc opts :sealed #{})))
+             open-run (pen/analyse (assoc opts :sealed #{}))
+             open (:fill open-run)
              col (fn [[x _ z]] [x z])
              inner (set (map col (:order shut)))
              walked (set (map col (:order open)))
              step (fn [[x z] [dx dz] n] [(+ x (* n dx)) (+ z (* n dz))])
              gate-dirs (set (for [g (map col gates) d orthogonal-dirs :when (inner (step g d -1))] d))]
          (and (seq inner) (not (:truncated? shut))
+              (not-any? (fn [[x y z]]
+                          (some (fn [[dx dz]]
+                                  (let [n [(+ x dx) (+ z dz)]]
+                                    (and (not (walked n)) (barrier-name? (some-> (u/sensed p {:x (first n) :y y :z (second n)}) .-name))
+                                         (not-any? inner (for [dx [-1 0 1] dz [-1 0 1]] (step n [dx dz] 1))))))
+                                orthogonal-dirs))
+                        (remove (comp inner col) (:order open)))
               (some (fn [b]
                       (some (fn [d]
                               (let [wall (step b d -1)]
@@ -244,9 +256,6 @@
   "[x y z] the unloaded leaks are listed nearest to: the pen's spot, else the body."
   [c]
   (u/cell-vec (or (work-place/spot c) (u/self-pos c))))
-
-(defn barrier-name? [n]
-  (boolean (and n (or (str/ends-with? n "_fence") (str/ends-with? n "_wall")))))
 
 (defn fence-near
   "The name of the nearest fence or wall seen within 3 cells of [x y z], else the first one carried, else nil."

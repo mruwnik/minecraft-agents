@@ -415,6 +415,19 @@
             (await (core/tick! (:eng s))))
           (is (true? (:closed? (ending-event @(:seen s)))) (pr-str (ending-event @(:seen s)))))))))
 
+(deftest an-open-gate-into-a-fenced-paddock-is-no-leak
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [paddock (into {} (for [x (range -10 31) z (range -10 31) :when (or (#{-10 30} x) (#{-10 30} z))] [(str x ",64," z) "oak_fence"]))
+              w (assoc (world {} {"2,64,-1" {:open true}}) :blocks (merge plain fence-ring paddock {"2,64,-1" "oak_fence_gate"}) :floor [-60 -60 65 65])
+              s (h/setup-seeing (assoc w :yaw 180 :rand (constantly 0.5)) nil)]
+          (core/submit! (:eng s) (list job {:ways #{:check} :at [2 64 2]}) {})
+          (dotimes [_ 40]
+            (swap! (:clock s) + 700)
+            (await (core/tick! (:eng s))))
+          (is (true? (:closed? (ending-event @(:seen s)))) (pr-str (ending-event @(:seen s)))))))))
+
 (deftest a-leak-in-view-is-answered-without-a-look-round
   (async done
     (tu/run-async done
