@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.expiry :as expiry]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.look :as look]
             [jobs.lib.rooms :as room-lib]
@@ -17,6 +18,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.walk-pick :as pick]
+            [jobs.lib.walk.search :as wsearch]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
@@ -106,17 +108,25 @@
 
 (defonce ^:private rejections (js/WeakMap.))
 
-(defn- rejected
-  "The atom of the candidates flee-target's search picked and passed over (a site's own test failed, or go-to priced no
-  walk), kept per body while sites-key holds, so a search cut short by its time goes on without them."
+(defn- rejections-of
+  "The atom of the sites flee-target's searches picked and passed over (a site's own test failed, or go-to priced no
+  walk) of the body p: {[kind pos] {:memory :until}}, each counting while what the body remembers (sense/known-memory)
+  holds, for wsearch/search-max-age-ms (the land it read may have changed)."
   [p]
-  (let [k (sites-key p look/memory-radius)
-        hit (.get rejections p)]
-    (if (and k (= k (:k hit)))
-      (:rejected hit)
-      (let [a (atom #{})]
-        (when k (.set rejections p {:k k :rejected a}))
-        a))))
+  (or (.get rejections p) (let [a (atom {})] (.set rejections p a) a)))
+
+(defn rejected?
+  "Whether flee-target's search passed over site {:kind :pos} and that still counts (rejections-of)."
+  [c {:keys [kind pos]}]
+  (let [p (:primitives c)
+        r (get @(rejections-of p) [kind pos])]
+    (boolean (and r (= (:memory r) (sense/known-memory p)) (expiry/current? (ctx/now c) r)))))
+
+(defn reject!
+  "Pass over site {:kind :pos} in flee-target's searches while what the body remembers holds, for wsearch/search-max-age-ms."
+  [c {:keys [kind pos]}]
+  (let [p (:primitives c)]
+    (swap! (rejections-of p) assoc [kind pos] (expiry/stamp {:memory (sense/known-memory p)} (ctx/now c) wsearch/search-max-age-ms))))
 
 (defn cave-needed
   "The wall cells dig-in's :enclose still has to fill to wall in the cave cell f (an unseen cell counts open), when they
@@ -139,12 +149,12 @@
 (defn ^:async flee-target
   "The place not yet tried tonight, somewhere safer than here (see the doc), the body walks to soonest by one search over
   them all, then priced by go-to's quote of that walk alone (jobs.lib.walk-pick/searched!; a site's own tests, ground-ok?
-  and cave-needed, asked of the pick alone, a pick that fails them or that go-to prices no walk to is passed over and the
-  search goes on without it; quotes shared with the pass, pick/quote-once!), as the candidate with its :distance, :cost
-  (seconds) and go-to's :route; :searching while the search or the quote goes on, or, with survey?, while the body looks
-  round first; nil when there is none (none after sites/max-flees). Candidates: the home at any distance (quoted on its
-  own, the cheaper of it and the searched pick taken), caves and ground seen within look/memory-radius (a bed is the
-  night's bed way, priced there)."
+  and cave-needed, asked of the pick alone, a pick that fails them or that go-to prices no walk to is passed over
+  (reject!) and the search goes on without it; quotes shared with the pass, pick/quote-once!), as the candidate with its
+  :distance, :cost (seconds) and go-to's :route; :searching while the search or the quote goes on, or, with survey?,
+  while the body looks round first; nil when there is none (none after sites/max-flees). Candidates: the home at any
+  distance (quoted on its own, the cheaper of it and the searched pick taken), caves and ground seen within look/memory-radius (a bed is the night's
+  bed way, priced there)."
   [c survey?]
   (let [m (ctx/mem c)
         p (:primitives c)
@@ -164,7 +174,8 @@
             ;; the home at any distance is quoted on its own: past a search's nodes go-to still plans the long walk
             home (when (seq places) (await (pick/cheapest! c places {:target target :walk walk :quote pick/quote-once!})))
             site (await (pick/searched! c (filter #(site-open? c %) (untried (sites p look/memory-radius)))
-                                        {:target target :walk walk :ok? ok? :quote pick/quote-once! :rejected (rejected p)}))
+                                        {:target target :walk walk :ok? ok? :quote pick/quote-once!
+                                         :rejected? #(rejected? c %) :reject! #(reject! c %)}))
             best (if (some #{:searching} [home site]) :searching (first (sort-by :price (filter map? [home site]))))]
         (cond
           (map? best) (let [{:keys [kind pos] :as t} (:pick best)]

@@ -34,6 +34,7 @@
             [jobs.survival.night :as night]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.sites :as sites]
+            [jobs.lib.walk.search :as wsearch]
             [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home with-walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
 (deftest without-the-flee-way-the-night-holds-exposed
@@ -184,6 +185,25 @@
               (is (seq @per-call))
               (is (every? #(<= % 1) @per-call) (str "of 507 sites, each pick quotes one: " (pr-str @per-call))))
             (finally (set! flee/flee-target real))))))))
+
+(deftest a-passed-over-flee-site-stays-so-while-memory-holds-not-past-its-time
+  (let [now (atom 0)
+        memory (atom 1)
+        known sense/known-memory
+        c {:primitives (tu/fake {}) :view (fn [] {:data mem/empty-data :now @now})}
+        site {:kind :ground :pos {:x 3 :y 64 :z 0}}]
+    (set! sense/known-memory (fn [_] @memory))
+    (try
+      (flee/reject! c site)
+      (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [1 64 0])
+      (is (flee/rejected? c site) "the body moved: the site's own test does not rest on where it stands")
+      (is (not (flee/rejected? c (assoc site :kind :cave))))
+      (reset! now wsearch/search-max-age-ms)
+      (is (not (flee/rejected? c site)) "past its time it is tried again")
+      (flee/reject! c site)
+      (swap! memory inc)
+      (is (not (flee/rejected? c site)) "what the body remembers changed")
+      (finally (set! sense/known-memory known)))))
 
 (deftest flee-ground-sites-skip-powder-snow-and-keep-other-seen-ground
   (let [p (tu/fake {})

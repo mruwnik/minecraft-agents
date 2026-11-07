@@ -218,28 +218,28 @@
   "{:pick x :price seconds :quote q} of the one of xs the body walks to soonest by one search over all their targets
   (targets/nearest! :all, go-to's world over what the body has seen: dangers and darkness priced), then go-to's quote of
   that walk alone (Q141: one search ranks them, not a quote each). target (fn [x]) {:pos :range}, walk (fn [x]) the go-to
-  args; ok? (fn [x]), asked of the pick alone, and a quote with no finite price put the pick into rejected (an atom of a
-  set the caller keeps across calls) and search again without it. :searching while the search or the quote goes on, or
+  args; ok? (fn [x]), asked of the pick alone, or a quote with no finite price reject! the pick (fn [x]) and the search
+  runs again without it; rejected? (fn [x]) leaves out the ones rejected before. :searching while the search or the quote goes on, or
   once this call has spent wsearch/round-ms; nil when no target is reached. price (fn [x s]), default s, adds to a walk's
   seconds s what x costs besides; quote as best!."
-  [c xs {:keys [target walk ok? quote price rejected] :or {price (fn [_ s] s)}}]
+  [c xs {:keys [target walk ok? quote price rejected? reject!] :or {price (fn [_ s] s)}}]
   (let [t0 (clock/now)
         goal (fn [x] (let [{:keys [pos range]} (target x)] (assoc (update-vals (select-keys pos [:x :y :z]) js/Math.floor) :range (or range 0))))]
     (loop []
-      (let [left (vec (remove @rejected xs))
+      (let [left (vec (remove rejected? xs))
             goals (mapv goal left)
             unknown (wworld/with-seeds (wworld/unknown-spec c) nil (-> (mapv (juxt :x :y :z) goals) (into (ledger/stair-stands c)) (into (ledger/tunnel-stands c))))
             a (when (seq left) (await (targets/nearest! c goals 0 {:tag ::searched :all true :unknown unknown})))
             x (when (= :found (:status a)) (nth left (:index a)))
-            reject! #(do (swap! rejected conj x) (if (< (- (clock/now) t0) wsearch/round-ms) :again :searching))
+            pass-over! #(do (reject! x) (if (< (- (clock/now) t0) wsearch/round-ms) :again :searching))
             r (cond
                 (= :searching (:status a)) :searching
                 (nil? x) nil
-                (and ok? (not (ok? x))) (reject!)
+                (and ok? (not (ok? x))) (pass-over!)
                 :else (let [q (await ((or quote quote!) c (walk x)))
                             s (when-not (:estimate q) (price x (quoted-s c q)))]
                         (cond
                           (nil? s) :searching
                           (js/isFinite s) {:pick x :price s :quote q}
-                          :else (reject!))))]
+                          :else (pass-over!))))]
         (if (= :again r) (recur) r)))))
