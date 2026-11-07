@@ -551,9 +551,15 @@
         rock (fn [open] (fn [[_ y _ :as c]] (cond (open c) "air" (< y 30) "stone" :else "air")))
         own #{[0 10 0] [0 11 0]}
         seen (dr/route (rock (conj own [2 12 0])) [0 10 0] [4 14 0] opts)
-        never (dr/route (rock own) [0 10 0] [4 14 0] opts)]
+        never (dr/route (rock own) [0 10 0] [4 14 0] opts)
+        ;; priced unseen: the cell seen open since is counted unseen, as one never seen is
+        tolled (assoc opts :unseen-step-s 2)
+        seen-u (dr/route (rock (conj own [2 12 0])) [0 10 0] [4 14 0] (assoc tolled :unseen? (constantly false)))
+        never-u (dr/route (rock own) [0 10 0] [4 14 0] (assoc tolled :unseen? #(= [2 12 0] %)))]
     (is (seq (:dig never)))
-    (is (= (select-keys never [:seconds :dig]) (select-keys seen [:seconds :dig])))))
+    (is (= (select-keys never [:seconds :dig]) (select-keys seen [:seconds :dig])))
+    (is (> (:seconds never-u) (:seconds never)) "the never-seen cell's toll is paid on the way")
+    (is (= (select-keys never-u [:seconds :dig]) (select-keys seen-u [:seconds :dig])))))
 
 (deftest unseen-digs-priced-by-their-distance-from-the-seen-find-the-plain-search-s-price-through-fewer-cells
   ;; rock below y 10 never seen, a dig there the dearer the farther from the seen plane (as the measured solid chance is)

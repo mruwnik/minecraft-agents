@@ -259,9 +259,8 @@
       (fn ^:async t []
         (let [[out st shown] (await (pit-escape 0))]
           (is (= {:arrived true} out) shown)
-          ;; the stair may turn inside the pit's dirt: with no block to pillar, a stair first
-          (is (= :stair (first st)) (str st))
-          (is (not-any? #{:pillar} st) "with no block to pillar"))))))
+          ;; with no block to pillar, the climb turns inside the pit's dirt
+          (is (= [:stair :stair :approach :dig-route] st)))))))
 
 (deftest go-to-pillars-then-stairs-out-of-a-pit-with-one-block
   (async done
