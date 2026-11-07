@@ -229,7 +229,7 @@
         armed? (some? (combat/best-weapon (:primitives c) weapons))
         weighed-mobs (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)
         chasers (respond.goal/chasers c)
-        back-off (when (and (seq chasers) (not (flight/tried? c :back-off)) (outrun? c hostiles))
+        back-off (when (rc/back-off-open? c chasers hostiles)
                    (if-let [near (:near (meta ends))] (back-off-of c near) (await (back-off-search! c chasers))))
         swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
         enderman? (angry-enderman? c hostiles)

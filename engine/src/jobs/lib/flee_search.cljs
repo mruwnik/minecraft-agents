@@ -29,6 +29,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as lreach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.edges :as edges]
             [jobs.lib.walk.plan :as wplan]
@@ -142,6 +143,29 @@
     (cond-> (assoc r :seen-n i)
       (< i (count cells)) (assoc :unseen (unseen (nth cells i))))))
 
+(defn seen-shut?
+  "Whether what the body has seen shows ring end t's way shut past where route r stops (its :end, every cell of it seen):
+  a flood from there over seen cells, never back nearer the body at from than that end, meets no cell unseen, none as
+  far off as t and none off t's heading by more than half the turn between headings (::bearings): a seen dead end."
+  [p from t {:keys [end unseen]}]
+  (and (nil? unseen)
+       (let [{fx :x fz :z} from
+             off (fn [x z] [(- (+ x 0.5) fx) (- (+ z 0.5) fz)])
+             far (fn [x z] (let [[dx dz] (off x z)] (js/Math.hypot dx dz)))
+             bearing (fn [x z] (let [[dx dz] (off x z)] (js/Math.atan2 dz dx)))
+             d0 (far (:x end) (:z end))
+             reach (far (:x t) (:z t))
+             a0 (bearing (:x end) (:z end))
+             half (/ js/Math.PI (settings/get settings ::bearings))
+             kinds (lreach/world-kinds p lreach/kind-of :ground)
+             kind-at (fn [x y z] (if (< (far x z) d0) :solid (kinds x y z)))
+             way-on? (fn [c]
+                       (let [x (aget c 0) y (aget c 1) z (aget c 2) a (- (bearing x z) a0)]
+                         (or (some #(nil? (u/seen-block p {:x x :y % :z z})) [y (inc y)])
+                             (>= (far x z) reach)
+                             (> (js/Math.abs (js/Math.atan2 (js/Math.sin a) (js/Math.cos a))) half))))]
+         (:closed? (reach-room/flood-visit #(lreach/forward kind-at %1 %2 %3) [(:x end) (:y end) (:z end)] ##Inf way-on?)))))
+
 (defn ^:async plan-to!
   "The planner's result for query over pw, its search within max-nodes nodes, in slices with yields between them; the
   landings it asked about are kept in landing-memo (wworld/landing-seen's)."
@@ -221,7 +245,7 @@
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :cut? :end :s :priced :price :cells :seen-n :unseen :counts :trapped}] (:open? found, or a ring end whose
-  partial route ends where the chasers have given the body up: given-up?; :cut? a partial one whose nodes the meter, not its cap, ran out), the ones the planner found no way nearer to, and the ring ends
+  partial route ends where the chasers have given the body up: given-up?; :cut? a partial one whose nodes the meter, not its cap, ran out, but a ring end seen shut past it, seen-shut?), the ones the planner found no way nearer to, and the ring ends
   left when ::ring-nodes ran out (named ones have their own node cap), left out; its meta {:nodes :planned :unrouted :plan-ms :cut?} the nodes
   expanded, the targets planned and why the ones with no route had none (the planner's reason: count), plan-ms the
   milliseconds in its plans, :cut? when the search's meter (opts :meter, a jobs.lib.reach/meter: the flight step's one
@@ -284,7 +308,8 @@
                   r (some->> (routed res slow) (seen-split p))]
             (recur more (if r
                           (conj out (assoc r :target t
-                                             :cut? (and (not (:found? r)) (< cap most) (= "budget" (.-reason res)))
+                                             :cut? (and (not (:found? r)) (< cap most) (= "budget" (.-reason res))
+                                                        (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                              :price (+ (:priced r)
                                                        (let [spawns (spawn-light/spawns-over p (:cells r) share)]
@@ -717,12 +742,12 @@
   (not (cost/wins-race? (/ (u/dist from (cost/centred pos)) (cost/flee-pace food)) (arrive-at chasers (cost/centred pos)))))
 
 (defn safe-why
-  "Why the walk to a named target is no safe run, its scored end e: :unjudged (the meter ran out on its plan, :cut?: not
-  known this step), :no-way (no route there, or only part of one), :past-hostile (a chaser catches the route),
-  :hostile-nearer (one gets there first: cost/wins-race? lost); nil when safe."
+  "Why the walk to a named target is no safe run, its scored end e: :past-hostile (a chaser catches the route, or the
+  part the meter planned of it), :unjudged (the meter ran out on its plan, :cut?: not known this step), :no-way (no
+  route there, or only part of one), :hostile-nearer (one gets there first: cost/wins-race? lost); nil when safe."
   [e]
   (cond
+    (and (:caught? e) (or (:found? e) (:cut? e))) :past-hostile
     (:cut? e) :unjudged
     (not (:found? e)) :no-way
-    (:caught? e) :past-hostile
     (not (cost/wins-race? (:s e) (:arrive e))) :hostile-nearer))

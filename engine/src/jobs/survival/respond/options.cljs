@@ -342,6 +342,12 @@
 
 (defn back-off-reach [] (settings/get settings ::back-off-reach))
 
+(defn back-off-open?
+  "Whether a cornered step weighs a back-off from chasers ({:name :pos}) among hostiles: one is left to back off from,
+  the back-off was not tried this flight and every close-range one is outrun (outrun?)."
+  [c chasers hostiles]
+  (boolean (and (seq chasers) (not (flight/tried? c :back-off)) (outrun? c hostiles))))
+
 (defn back-off-of
   "The back-off step of near, the scored ends of a flee search's ring ::back-off-reach off (flee-search/search!'s :near,
   or its ends when that ring is its only one): {:target :caught}, target the best scored end that gains on the chasers
@@ -371,12 +377,12 @@
 
 (defn ^:async back-off!
   "Step back to target (back-off-of's): :again, nil when the walk is blocked or a chaser hit the body on it (the option is tried then:
-  a chaser that keeps up is not outrun, and the next step prices the covers and the fight instead). Memory :backed-off:
-  the next step's search plans a back-off's ring first (respond.cover/judge!)."
+  a chaser that keeps up is not outrun, and the next step prices the covers and the fight instead). A step that moved
+  leaves memory :backed-off for the next step's search (respond.cover/judge!)."
   [c target]
   (let [health0 (.-health (.self (:primitives c)))
         moved? (await (step! c :back-off target 0))]
-    (ctx/update-mem! c assoc :backed-off true)
+    (when moved? (ctx/update-mem! c assoc :backed-off true))
     (if (and moved? (>= (.-health (.self (:primitives c))) health0))
       :again
       (do (flight/tried! c :back-off) (if moved? :again nil)))))

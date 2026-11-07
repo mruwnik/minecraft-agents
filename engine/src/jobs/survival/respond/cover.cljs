@@ -159,13 +159,17 @@
 
 (defn ^:async judge!
   "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
-  (glance-away!), the homes kept as :homes; after a back-off (memory :backed-off) its search plans the ring of the next
-  one first (respond.options/back-off-reach): a body pressed so close backs off again, and that ring's plans come
-  before the meter runs out on the far ring."
+  (glance-away!), the homes kept as :homes. Right after a back-off (memory :backed-off, taken here: one step) and while a
+  cornered step would still weigh one (respond.options/back-off-open?), its search plans the back-off's ring
+  (respond.options/back-off-reach) first: a body pressed so close backs off again, and the ring's plans come before the
+  meter runs out on the far ring. Elsewhere the far ring comes first and a cornered step searches the back-off itself."
   [c threats covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
-  (let [hs (homes c rooms blast?)]
-    (assoc (await (respond.goal/judge! c threats hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c) (when (:backed-off (ctx/mem c)) (cornered/back-off-reach)))) :homes hs)))
+  (let [hs (homes c rooms blast?)
+        near (when (and (:backed-off (ctx/mem c)) (cornered/back-off-open? c (respond.goal/chasers c) (cornered/near-hostiles c)))
+               (cornered/back-off-reach))]
+    (ctx/update-mem! c dissoc :backed-off)
+    (assoc (await (respond.goal/judge! c threats hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c) near)) :homes hs)))
 
 (defn building-looks
   "[{:at :seconds :closed :refuge-s}]: the looks through a door into a building survey s dropped :unseen, the home's or

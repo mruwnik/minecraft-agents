@@ -488,6 +488,31 @@
             (await (run-job! s 'backer {}))
             (is (= want @out) (str "go-to " label))))))))
 
+(defn judger
+  "A job that judges two flight steps (cover/judge!), the first after a back-off (backed-off?) that failed or not
+  (tried?), and keeps whether each one's search planned the back-off's near ring."
+  [out backed-off? tried?]
+  {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+   :round (fn ^:async judger-round [c]
+            (when backed-off? (ctx/update-mem! c assoc :backed-off true))
+            (when tried? (respond.state/tried! c :back-off))
+            (let [near? (fn ^:async near? [] (contains? (meta (:ends (await (cover/judge! c (respond.state/look! c) nil nil nil)))) :near))
+                  first-step (await (near?))]
+              (reset! out [first-step (await (near?))])
+              (ctx/end c :done nil)))})
+
+(deftest a-step-plans-the-back-off-ring-only-right-after-a-back-off-that-is-still-open
+  ;; 90f4fe31: the flag a back-off left planned the near ring on every later step, the back-off tried or not; planned
+  ;; on every step, it starved the far ring of the step's one meter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[backed-off? tried? want] [[true false [true false]] [true true [false false]] [false false [false false]]]]
+          (let [out (atom nil)
+                s (setup {:entities [(zombie 7 2 {})]})]
+            (await (run-job! (assoc-in s [:eng :jobs 'judger] (judger out backed-off? tried?)) 'judger {}))
+            (is (= want @out) (str "backed off: " backed-off? ", tried: " tried?))))))))
+
 (defn fighter
   "A job that runs a fight whose attack child declines, after a sweep already counted and with the earlier call's per-mob hits as the prior; keeps the memory's sweeps."
   [out before]
@@ -1057,10 +1082,14 @@
               s (assoc-in s [:eng :jobs 'pricer]
                           {:round (fn ^:async r [c]
                                     (look/see! c)
+                                    ;; each asked at a step of its own: one step's meter (Q141) would leave the last none
+                                    (rooms/new-step! c)
                                     (swap! prices conj (await (cover/caught-chance! c)))
                                     (ctx/update-mem! c assoc :dead [7])
+                                    (rooms/new-step! c)
                                     (swap! prices conj (await (cover/caught-chance! c)))
                                     (ctx/update-mem! c dissoc :caught-chance)
+                                    (rooms/new-step! c)
                                     (swap! prices conj (await (cover/caught-chance! c)))
                                     (ctx/end c :done nil))})]
           (await (run-job! s 'pricer {}))
@@ -1223,6 +1252,7 @@
                           [nil (run-end goal 4 9 :found? false :cut? true) {}]
                           [:home-safer (run-end goal 4 9 :found? false :cut? true) {:home {:x 10 :y 64 :z 0}}]
                           [:hostile-nearer (run-end goal 4 9 :found? false :cut? true) {:beaten? true}]
+                          [:past-hostile (run-end goal 4 9 :found? false :cut? true :caught? true) {}]
                           [:home-safer (run-end goal 4 9) {:home {:x 10 :y 64 :z 0}}]
                           [nil (run-end goal 4 9) {:home {:x -14 :y 64 :z 3}}]]]
       (is (= why (respond.goal/verdict goal e opts)) (pr-str e opts)))))
@@ -1245,6 +1275,7 @@
     (is (= :no-way (respond.goal/home-why [] home)))
     (is (= :unjudged (respond.goal/home-why [(run-end home 2 6 :found? false :cut? true)] home)) "a plan the meter cut is not known")
     (is (= :unjudged (respond.goal/home-why (with-meta [] {:cut? true}) home)) "nor one it left unplanned")
+    (is (= :past-hostile (respond.goal/home-why [(run-end home 2 6 :found? false :cut? true :caught? true)] home)) "a chaser on the part planned")
     (is (nil? (respond.goal/home-why [] nil)) "no home: nothing to explain")))
 
 (defn choice [seen] (first (events-of seen :retreat.choice)))

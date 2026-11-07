@@ -245,6 +245,41 @@
               (is (< (:x (:step e)) x) (str "at " x " the step turns back toward the branch: " (pr-str (select-keys e [:end :step :score :unseen]))))
               (is (neg? (:z (:end e))) (pr-str (:end e))))))))))
 
+;; a field round the body (x -12..0) with a seen way east at z 0: a dead-end alcove to x 4, or a corridor on past the
+;; ring (x 30)
+(def alcove (carve rock [[-12 -6 0 6] [1 0 4 0]]))
+(def corridor (carve rock [[-12 -6 0 6] [1 0 30 0]]))
+
+(deftest a-way-seen-shut-past-its-end-is-told-from-one-that-goes-on
+  (let [from {:x 0.5 :y 64 :z 0.5}
+        east {:x 12 :z 0}
+        shut? (fn [blocks end] (search/seen-shut? (tu/fake {:blocks blocks :self {:pos from}}) from east {:end end}))]
+    (is (true? (shut? alcove {:x 2 :y 64 :z 0})) "the alcove's back wall is seen: no way on past x 4")
+    (is (false? (shut? corridor {:x 2 :y 64 :z 0})) "the corridor runs on as far as the ring")
+    (is (true? (shut? (carve rock [[-12 -6 0 6] [1 0 9 0]]) {:x 2 :y 64 :z 0})) "a corridor shut short of the ring is a dead end too")
+    (is (false? (search/seen-shut? (seeing-only (tu/fake {:blocks corridor :self {:pos from}}) (fn [[x _]] (<= x 3))) from east {:end {:x 2 :y 64 :z 0}}))
+        "past x 3 unseen: the way may go on")
+    (is (false? (shut? alcove {:x -3 :y 64 :z 0})) "in the open field the way spreads off the heading")
+    (is (not (search/seen-shut? (tu/fake {:blocks alcove :self {:pos from}}) from east {:end {:x 2 :y 64 :z 0} :unseen [3 64 0]}))
+        "a route that runs into cells unseen is not seen shut")))
+
+(deftest a-ring-way-the-meter-cut-in-a-seen-dead-end-is-a-pocket-not-a-way-unjudged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [east-end (fn ^:async ee [blocks]
+                         (let [ends (await (search/search! (ctx-of (tu/fake {:blocks blocks :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+                                                           [{:name "zombie" :mob "zombie" :pos {:x -6.5 :y 64 :z 0.5}}] []
+                                                           {:meter (rooms/search-meter (- (cost/search-budget-s) (* 20 (cost/search-cell-ceiling-s))))}))]
+                           (first (filter #(pos? (:x (:end %))) ends))))
+              orig clock/now
+              ;; the meter takes the nodes' price, not the wall clock's: the cut falls on the same node every run
+              _ (set! clock/now (constantly 0))
+              [shut on] (try [(await (east-end alcove)) (await (east-end corridor))] (finally (set! clock/now orig)))]
+          (is (= [false false] [(:found? shut) (:found? on)]) "set up: the meter cut both plans short")
+          (is (not (:cut? shut)) (str "the alcove is seen shut past the route's end: a pocket " (pr-str (select-keys shut [:end :cut? :seen-n]))))
+          (is (:cut? on) (str "the corridor goes on: not known this step " (pr-str (select-keys on [:end :cut?])))))))))
+
 (defn way
   "A priced end along cells [[x z] ...] from the body at [0 0], a second a cell, its first seen-n seen: the rest unseen,
   trapped 100 at a dead end there (nothing seen near: way-on-chance 0.5)."
