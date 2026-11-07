@@ -691,8 +691,10 @@
 (deftest escape-choose-prices-the-unseen-roof-over-a-pit-by-the-chance-it-is-solid
   (let [p (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8}]}) 1.5)
         at (fn [chance f] (with-redefs [look/unseen-solid-at-fn (fn [_] (constantly chance))] (f)))
-        pillar-s #(escape-way/price p [0 58 0] {:step :pillar :height 6})]
-    (is (< (at 0 pillar-s) (at 0.5 pillar-s)))))
+        pillar-s #(escape-way/price p [0 58 0] {:step :pillar :height 6})
+        armed (tu/seeing-within (tu/fake {:self {:pos {:x 0.5 :y 58 :z 0.5}} :blocks unseen-shaft :inventory [{:name "dirt" :count 8} {:name "iron_pickaxe" :count 1}]}) 1.5)]
+    (is (< (at 0 pillar-s) (at 0.5 pillar-s)))
+    (is (= :pillar (at 1 #(:step (escape-way/choose armed [0 58 0] [6 64 0])))) "a roof sure to be there is cut quickly with a pickaxe: the pillar stays cheaper than a stair through the side")))
 
 (deftest go-to-escalates-out-of-a-shaft-whose-surrounding-rock-it-cannot-see
   ;; the planner proves the start sealed (:start-enclosed) though the room flood reads the unseen walls as open: it escalates

@@ -13,6 +13,7 @@
             [jobs.lib.per-body :as per-body]
             [jobs.lib.reach :as reach]
             [jobs.lib.seen-sections :as seen-sections]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
 
@@ -541,8 +542,8 @@
 
 (defn body-prices
   "route's prices for the body of primitives p, as go-to prices its walks: a step's walk-cost, a fall's hp (fall-damage at
-  hp-cost, at most the falls it survives), a block's dig-cost (nil: never dug; a nameless cell
-  has none) with what the dig destroys (cost/destroyed-fn over opts :sensed, (fn [cell]) a sensed block, default the
+  hp-cost, at most the falls it survives), a block's dig at the quickest carried tool or the bare hand (tools/clear-ms, or opts
+  :clear-ms (fn [name] ms); nil: never dug (cost/dig-cost nil, or no tool breaks it); a nameless cell has none) with what the dig destroys (cost/destroyed-fn over opts :sensed, (fn [cell]) a sensed block, default the
   body's; a cell (opts :own-s cell) prices over 0, the body's own build, at that instead), as :flood (route's) the level
   of seen water that flows into a cell dug (rules/fluid-neighbours, beside or above; for a cell in opts :plugs also a
   neighbour not seen, as water), the water let in (cost/flood-dig-s,
@@ -550,14 +551,15 @@
   stair-cost, a step whose cell is (unseen? cell) at the unseen walk's price (wworld/unseen-share), :seen-steps (falls
   of at most the longest that costs no hp) and :seen-cells by the sections the body remembers (seen-sections/steps-fn)."
   ([p unseen?] (body-prices p unseen? {}))
-  ([p unseen? {:keys [sensed own-s max-damage plugs]}]
+  ([p unseen? {:keys [sensed own-s max-damage plugs clear-ms]}]
    (let [self (.self p)
          ;; the body as the prices are made: a search kept over later ticks prices its whole way at one health
          health (.-health self)
          equipment (cost/equipment-of (.-equipment self))
          max-fall (cost/drop-limit equipment (wworld/self-body p) (wworld/walk-settings {:args (when max-damage {:max-damage max-damage})}))
          fall-s (fn [blocks] (cost/hp-cost health (cost/fall-damage equipment blocks)))
-         dig-cost (memoize cost/dig-cost)
+         clear-ms (or clear-ms #(tools/clear-ms p %))
+         dig-cost (memoize (fn [name] (when (cost/dig-cost name) (let [s (/ (clear-ms name) 1000)] (when (js/isFinite s) s)))))
          sensed (or sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z})))
          destroyed (cost/destroyed-fn sensed)
          cut-s (fn [name cell] (let [own (if own-s (own-s cell) 0)] (if (pos? own) own (destroyed name cell false))))
@@ -587,7 +589,7 @@
 (defn by-share
   "prices with each cell's dig priced at (share cell) of its price (escape/dig-share-fn: an unseen cell is dug only at the chance it is solid)."
   [prices share]
-  (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (* s (share cell)))))))
+  (update prices :dig-s (fn [dig-s] (fn [name cell] (when-let [s (dig-s name cell)] (let [k (share cell)] (if (zero? k) 0 (* s k))))))))
 
 (defn less-yield
   "prices with each seen block's dig priced less what its drop is worth to the caller (yield-s name cell -> seconds), never

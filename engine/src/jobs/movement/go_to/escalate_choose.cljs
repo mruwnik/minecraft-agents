@@ -490,7 +490,7 @@
 
 (defn route-answer
   "The dig-route answer {:dig :steps} of the cheapest way from feet cell from into goal (jobs.lib.dig-route priced by
-  jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig-cost (an unseen one's at the chance it is solid, escape/dig-share-fn), a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
+  jobs.lib.cost: a step's walk-cost, a fall's hp (fall-damage at hp-cost, the falls the body survives), a block's dig at the quickest tool carried (tools/clear-ms; with fetch? a wooden pickaxe's when quicker; an unseen one's at the chance it is solid, escape/dig-share-fn), a stair's step at least its stair-cost, a step's unseen cells at the unseen walk's price
   (wworld/unseen-share), what each dig destroys (dig-route/body-prices: cost/destroyed-fn; a cell of the body's own builds at route-opts :own-s, own-builds/own-cut-fn), never a floor of the body's own stairs (route-opts :ways)), every cell to dig escape/diggable?
   and may-dig? (a dig beside seen water priced as its flood: body-prices); :searching while route-opts :slice's search goes on; nil when there is none, when route-opts :spent
   holds [from goal] (a search search-bound dropped), or when its digging takes the
@@ -529,7 +529,12 @@
                          (let [a (when-not (or floors-unseen-ok? (and (== x gx) (== (inc y) gy) (== z gz))) (sensed x (inc y) z))]
                            (when-not (and a (not (true? (.-unknown a))) (dig-route/open? (.-name a)))
                              access/hidden-guess)))))
-        base (dig-route/body-prices p (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown))) {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s :max-damage max-damage :plugs plugs})
+        unseen? (fn [[x y z]] (true? (some-> (sensed x y z) .-unknown)))
+        ;; with fetch? a dig is searched at the pickaxe a fetch brings; the fetch itself is priced once a route is found (route-s)
+        clear-ms (if fetch? #(min (tools/clear-ms p %) (js/Number (.clearTime p % "wooden_pickaxe"))) #(tools/clear-ms p %))
+        base (cond-> (dig-route/body-prices p unseen? {:sensed (fn [[x y z]] (sensed x y z)) :own-s own-s :max-damage max-damage :plugs plugs :clear-ms clear-ms})
+               ;; the body's own blocks are dug out however long it takes: their dig is not held to the worth (route-s)
+               own? (update :dig-s (fn [dig-s] (fn [name cell] (cond-> (dig-s name cell) (own? cell name) (some-> (- (/ (clear-ms name) 1000))))))))
         risk (fn [[x y z :as cell]]
                (cond (not (true? (some-> (sensed x y z) .-unknown))) 0
                      :else (get guess-risk (guess-class (fn [[x y z]] (sensed x y z)) cell) 0)))
@@ -630,7 +635,7 @@
         search (fn [refused spent]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s (select-keys fall [:equipment :carried]) spent] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (route-epoch p)
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(dig-route/search seen-floor from goal (assoc (opts refused m spent) :full? dig-route/heap-full?)) m (route-epoch p)
                                          {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent) :max-s nil :read-s nil :searched-s 0 :back-h? false)) :max-drop max-fall})
                            (dig-route/route seen-floor from goal (opts refused m spent)))]
                    a))
@@ -918,6 +923,8 @@
     :approach (>= (second goal) (second from))
     false))
 
+(defn no-dig "A route search's :dig-s that digs no cell." [_ _] nil)
+
 (defn rim-leads-in?
   "Whether escape-way/choose's rim pillar e from cell from leaves the body on a wall's top (a wall h high, e's height h - 1,
   then a step onto the rim: the side toward goal when it is that high, as escape/rim-pillar measures it, else the first
@@ -927,7 +934,8 @@
         unseen? (escape/unseen-of p)
         d (some #(when (= (inc height) (escape/rim-height block-at unseen? from %)) %)
                 (distinct (cond->> escape/cardinals (escape/heading from goal) (cons (escape/heading from goal)))))
-        walk (when d (route-cells p (escape/up (escape/ahead from d 1) (inc height)) goal (constantly false) (:own? opts) false false (search-opts opts)))]
+        ;; searched with no dig at all: a dig route found and refused cell by cell would be searched again for each
+        walk (when d (route-cells p (escape/up (escape/ahead from d 1) (inc height)) goal (constantly false) (:own? opts) false false (assoc (search-opts opts) :dig-s no-dig)))]
     (if (= :searching walk) walk (= [] walk))))
 
 (defn goal-way

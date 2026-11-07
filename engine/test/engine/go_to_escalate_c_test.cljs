@@ -450,20 +450,30 @@
   "Solid stone x -1..12, y 60..80, z -2..2 with the body's cell [0 64 0] and the cell over it open."
   (dissoc (box -1 60 -2 12 80 2 "stone") "0,64,0" "0,65,0"))
 
-(deftest a-stair-is-priced-as-the-climb-route-prices-it
-  (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
-        route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
-    (is (= [:walk] (distinct (map :move (:steps route)))))
-    (is (= 3 (count (:steps route))))
-    (is (< 0 (:seconds route)))
-    (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))))
+(deftest a-stair-is-priced-as-the-climb-route-prices-it-with-the-tool-carried
+  (are [inv] (let [p (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv})
+                   route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
+               (and (= [:walk] (distinct (map :move (:steps route))))
+                    (= 3 (count (:steps route)))
+                    (< 0 (:seconds route))
+                    (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3}))))
+    []
+    [{:name "stone_pickaxe" :count 1}]
+    [{:name "iron_pickaxe" :count 1}]))
+
+(deftest a-route-searched-for-a-pickaxe-fetch-digs-at-the-fetched-pickaxes-price
+  (let [route-s (fn [inv fetch] (:seconds (choose/route-answer (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv})
+                                                               [0 64 0] [3 67 0] (constantly true) (constantly false) false fetch {})))
+        wooden (route-s [{:name "wooden_pickaxe" :count 1}] false)]
+    (is (= wooden (route-s [] (delay 1))) "the fetch's own price is not the route's")
+    (is (< wooden (route-s [] false)) "bare-handed the same cuts cost more")))
 
 (def open-stair-mass
   "stone-mass with the cells of a 3-step stair east from [0 64 0] already open."
   (apply dissoc stone-mass (map #(str (clojure.string/join "," %)) (escape/stair-cuts [0 64 0] [1 0] 3))))
 
 (deftest a-stair-through-open-cells-is-priced-as-the-climb-route-prices-it
-  (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
+  (let [p (tu/fake {:blocks open-stair-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]})
         route (choose/route-answer p [0 64 0] [3 67 0] (constantly true) (constantly false) false false {})]
     (is (= 3 (count (:steps route))))
     (is (= (:seconds route) (escape-way/price p [0 64 0] {:step :stair :heading :east :steps 3})))
@@ -484,7 +494,7 @@
     (is (< (escape-way/price seen [0 64 0] step) (escape-way/new-stair-step-s seen)) "seen cells cost less")))
 
 (deftest an-unseen-stair-and-pillar-are-priced-as-the-climb-route-prices-them
-  (let [inv [{:name "stone_pickaxe" :count 1}]
+  (let [inv [{:name "iron_pickaxe" :count 1}]
         body #(tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory inv}) %)
         p (body 4.2)
         unseen-s (cost/unseen-route-s (wworld/unseen-share p) (constantly :ground) [{:x 0 :y 0 :z 0}])
@@ -501,7 +511,7 @@
       2.9 1)))
 
 (deftest a-climb-dearer-as-rock-than-its-bound-is-found-at-the-chance-its-cells-are-solid
-  (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}]}) 2)
+  (let [p (tu/seeing-within (tu/fake {:blocks stone-mass :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]}) 2)
         climb #(climb-route/climb-way p [0 64 0] [3 67 0] (constantly true) {:skip #{} :bound-s %})
         rock-s (at-chance 1 #(:route-s (climb nil)))
         share-s (:route-s (climb nil))
@@ -668,8 +678,9 @@
                                               {:pos [10 60 2] :range 1 :tolls loop-tolls}))]
           (is (= {:arrived true} @out))
           (let [steps (map :step (events-of seen :go-to.escalated))]
-            (is (some #{:stair} steps) "a climb of stairs, not the loop")
-            (is (every? #{:approach :stair} steps))
+            ;; the dig route is searched at the pickaxe's prices, as the stair is: it may cut a cheaper way up than a stair
+            (is (some #{:stair :dig-route} steps) "a way dug up, not the loop")
+            (is (every? #{:approach :stair :dig-route} steps))
             (is (<= (count (filter #{:approach} steps)) 1) "the approach walk is not repeated")))))))
 
 (deftest go-to-walks-the-long-loop-when-escalating-is-off-or-the-goal-is-near
@@ -1612,10 +1623,11 @@
   (let [p (tu/fake {:blocks {"1,64,0" "oak_planks" "2,64,0" "stone" "3,63,0" "farmland" "3,64,0" "wheat"}
                     :ages {"3,64,0" 3}})
         dig-s (:dig-s (dig-route/body-prices p (constantly false) {:own-s #(if (= [2 64 0] %) 5 0)}))
+        hand-s #(/ (tools/clear-ms p %) 1000)
         planks [{:cell [1 64 0]}]]
-    (is (= (+ (cost/dig-cost "oak_planks") (cost/put-back-s "oak_planks")) (dig-s "oak_planks" [1 64 0])))
-    (is (= (+ (cost/dig-cost "stone") 5) (dig-s "stone" [2 64 0])))
-    (is (= (+ (cost/dig-cost "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0]))
+    (is (= (+ (hand-s "oak_planks") (cost/put-back-s "oak_planks")) (dig-s "oak_planks" [1 64 0])))
+    (is (= (+ (hand-s "stone") 5) (dig-s "stone" [2 64 0])))
+    (is (= (+ (hand-s "farmland") (cost/destroyed-s "farmland" "wheat" 3 false)) (dig-s "farmland" [3 63 0]))
         "a route cutting farmland under a standing crop pays the crop with the farmland")
     (let [farm (escape-way/price p [3 65 0] {:step :dig-route :cells [{:cell [3 63 0]}]})
           shaft (escape-way/price p [3 65 0] {:step :dig-route :cells [{:cell [3 64 0]} {:cell [3 63 0]}]})]

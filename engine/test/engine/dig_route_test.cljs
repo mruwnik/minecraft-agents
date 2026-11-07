@@ -252,7 +252,8 @@
   (let [prices (dr/by-share {:dig-s (fn [name _] (when (= "stone" name) 10))} #(if (= [0 0 0] %) 0.25 1))]
     (is (= 2.5 ((:dig-s prices) "stone" [0 0 0])))
     (is (= 10 ((:dig-s prices) "stone" [1 0 0])))
-    (is (nil? ((:dig-s prices) "bedrock" [0 0 0])) "a cell never dug stays so")))
+    (is (nil? ((:dig-s prices) "bedrock" [0 0 0])) "a cell never dug stays so")
+    (is (zero? ((:dig-s (dr/by-share {:dig-s (constantly ##Inf)} (constantly 0))) "stone" [0 0 0])) "a cell sure to be open costs nothing, however dear its dig")))
 
 (defn to-end
   "Run a search on in slices of 500 cells until it answers or has expanded 100000: [answer cells reads]."

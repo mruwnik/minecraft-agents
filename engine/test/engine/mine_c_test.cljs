@@ -647,13 +647,14 @@
 (deftest a-drops-worth-is-its-replacement-cost-and-a-goal-ore-dug-on-the-way-is-an-extra-item
   (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"} :view (fn [] {:now 0})}
         goal (:value (cost/goal-value [{:name "raw_iron" :count 1}]))
-        dig (cost/dig-cost "iron_ore")
+        pick-s #(/ (tools/clear-ms (:primitives c) %) 1000)
+        dig (pick-s "iron_ore")
         dig-s (fn [c] ((:dig-s (drops/cut-prices c)) "iron_ore" [0 64 0]))]
     (is (= (* 3 goal) (drops/worth c 3)) "a lost drop is worth what getting it again costs")
     (is (= (max (drops/min-dig-s) (- dig goal)) (dig-s c)) "a goal ore the cut digs through yields one more item: its dig less one worth")
     (is (= dig (dig-s (assoc c ::drops/counted #{[0 64 0]}))) "a cell of the target's own cluster is in max-s already: no second deduction")
-    (is (= (max (drops/min-dig-s) (cost/dig-cost "stone")) (drops/unseen-dig-s c)) "a cell never seen is cut as rock, at rock's dig")
-    (is (= (max (drops/min-dig-s) (- (cost/dig-cost "stone") (drops/worth c 1))) (drops/unseen-dig-s (assoc c :args {:item "cobblestone"})))
+    (is (= (max (drops/min-dig-s) (pick-s "stone")) (drops/unseen-dig-s c)) "a cell never seen is cut as rock, at rock's dig with the pickaxe carried")
+    (is (= (max (drops/min-dig-s) (- (pick-s "stone") (drops/worth c 1))) (drops/unseen-dig-s (assoc c :args {:item "cobblestone"})))
         "less one item when the call mines rock")))
 
 (deftest a-cut-whose-cells-fill-again-pays-each-dig-out-of-the-drops-worth
@@ -705,7 +706,8 @@
                                                            :when (and (dig-route/open? n) (not (dig-route/open? (was cell)))
                                                                       (<= lx x hx) (<= ly y hy) (<= lz z hz))]
                                                        cell))]
-                  (await (drops/cut-via c steps [2 64 0] 50)))
+                  ;; the drop's worth holds the plan: two obsidian cells by an iron pickaxe take over a minute
+                  (await (drops/cut-via c steps [2 64 0] 200)))
                 (mapv second @dug)))
         replans-of (fn ^:async f [after-first-dig init] (reset! told nil) (await (run after-first-dig init)) @told)]
     (async done

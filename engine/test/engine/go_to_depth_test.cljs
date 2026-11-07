@@ -5,6 +5,7 @@
             [jobs.lib.aim :as aim]
             [jobs.lib.cost :as cost]
             [jobs.lib.dig-route :as dig-route]
+            [jobs.lib.escape.way :as escape-way]
             [jobs.lib.util :as u]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
@@ -816,6 +817,12 @@
         climb-s #(:route-s (climb-route/climb-way p [1 60 0] [5 63 0] (constantly true) {:skip #{}}))]
     (is (< (at 0 leg-s) (at 1 leg-s)) "the leg's walk on digs the rock it guesses")
     (is (< (at 0 climb-s) (at 1 climb-s)) "the climb digs it at the same chance")))
+
+(deftest a-legs-walk-on-to-the-goal-digs-at-the-tool-carried
+  (let [leg {:step :dig-route :cells [{:cell [2 60 0]} {:cell [2 61 0]}]}
+        walk-on-s (fn [inv] (let [p (:p (gt/setup {:blocks guess-rock :self {:pos {:x 0.5 :y 60 :z 0.5}} :light [0 15] :seen [[-1 59 -1 2 62 1] [4 62 -1 6 65 1]] :inventory inv}))]
+                              (- (esc/way-total p [1 60 0] [5 63 0] leg (constantly true)) (escape-way/price p [1 60 0] leg))))]
+    (is (< (walk-on-s [{:name "iron_pickaxe" :count 1}]) (walk-on-s [])) "the rock past the leg is cut quicker with a pickaxe than by hand")))
 
 (deftest a-climb-is-taken-over-a-way-when-it-costs-no-more
   (let [total {:leg 10 :climb 8 :dear 12 :tie 10}

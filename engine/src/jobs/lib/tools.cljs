@@ -174,6 +174,11 @@
 
 (def dig-kinds ["pickaxe" "axe" "shovel" "hoe" "shears"])
 
+(defn carried-dig-tools
+  "The sorted names of the digging tools (dig-kinds) carried: what clear-ms reads besides the hand."
+  [p]
+  (into (sorted-set) (filter (fn [n] (some #(kind/of-kind? n %) dig-kinds))) (map :name (u/inventory p))))
+
 (defn hand-better?
   "Whether the body should dig block bare-handed: a digging tool of another kind is held and none of the block's kind
   is carried (soil and leaves by hand, never wearing a pickaxe out on them)."

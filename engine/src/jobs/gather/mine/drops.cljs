@@ -20,6 +20,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
             [jobs.lib.seen-sections :as seen-sections]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]))
 
@@ -93,10 +94,10 @@
   (cost/dig-cost "dirt"))
 
 (defn unseen-dig-s
-  "The least a cut (cut-prices) pays to dig a cell never seen, which it reads as blocks/hidden-guess: that dig, less one
-  item when the call mines it, at least min-dig-s."
+  "The least a cut (cut-prices) pays to dig a cell never seen, which it reads as blocks/hidden-guess: that dig with the
+  tool carried (tools/clear-ms, as cut-prices), less one item when the call mines it, at least min-dig-s."
   [c]
-  (max (min-dig-s) (- (or (cost/dig-cost blocks/hidden-guess) 0) (if (contains? (kinds (:args c)) blocks/hidden-guess) (worth c 1) 0))))
+  (max (min-dig-s) (- (/ (tools/clear-ms (:primitives c) blocks/hidden-guess) 1000) (if (contains? (kinds (:args c)) blocks/hidden-guess) (worth c 1) 0))))
 
 (defn cut-prices
   "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less one item's worth:
