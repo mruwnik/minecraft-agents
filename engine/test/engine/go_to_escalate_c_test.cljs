@@ -1492,9 +1492,15 @@
                (let [slice (choose/route-slice (str "leg-over-void-" fallback-s))
                      leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice slice})]
                  (with-redefs [ctx/mem (constantly {:route-search {:fallback-s fallback-s}}) ctx/left (constantly {}) cost/search-read-s (constantly 0.001)]
-                   (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))]
-    (is (nil? (ends 60)) "the fallback price is not reached: the cut ends the search, no leg")
-    (is (= {:step :none :why :past-worth} (ends 1)) "the boxed searches spent the fallback price")))
+                   (let [r (first (remove #{{:step :searching}} (take 300 (repeatedly leg))))
+                         ;; the answers of the widest box's searches (its :margin in the question's route-opts), the last searched
+                         asked @(:asked slice)
+                         widest (apply max -1 (map #(:margin (% 3) 0) (keys asked)))]
+                     {:r r :widest (set (map #(select-keys % [:problem :cut :boxed]) (for [[k a] asked :when (= widest (:margin (k 3) 0))] a)))}))))
+        cut (ends 60)]
+    (is (nil? (:r cut)) "no leg")
+    (is (= #{{:problem :too-big :cut :answer-s}} (:widest cut)) "every search of the widest box was cut at answer-s: not boxed (covers?), not a full heap, not no ends")
+    (is (= {:step :none :why :past-worth} (:r (ends 1))) "the boxed searches spent the fallback price")))
 
 ;; card 29cd6b4d: lava 5 long on the line and 15 wide holds both leg ends (3 and 6 on): each is moved to the stand nearest
 ;; it with no lava beside, and the leg is dug there

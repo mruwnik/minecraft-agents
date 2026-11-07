@@ -12,7 +12,7 @@
     each (jobs.lib.escape.way/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
     through a wall toward the goal, the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, tried first for a shut-in body (a leg of it toward a goal farther than one: dig-toward), none dearer than the call's worth, nor than a stair or pillar from the feet, and with neither of those a leg of it (escalate-choose/dig-leg); for a shut-in body with no stair, pillar or door out, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
-    followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot). Each emits go-to.escalated {:step :why :n}. Once
+    followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot). Each emits go-to.escalated {:step :why :n}, with :weighed [{:step :s}..] when it chose by price between a stair or pillar and a dig (:bound for a dig search that found none under it). Once
     through, it puts back what a dig route or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
@@ -344,13 +344,15 @@
                           (if-not (or none? (#{:stair :pillar} (:step e)))
                             e
                             (let [price #(escape-way/price p feet % (:own-s o))
+                                  bound (min (or (:bound-s o) ##Inf) (price e))
                                   d (if none?
                                       (dig-leg c feet goal may-dig? o)
-                                      (dig-way p feet goal may-dig? (update o :bound-s #(min (or % ##Inf) (price e)))))]
-                              (cond (nil? d) e
+                                      (dig-way p feet goal may-dig? (assoc o :bound-s bound)))
+                                  weighed #(assoc % :weighed [{:step (:step e) :s (price e)} (if d {:step :dig-route :s (price d)} {:step :dig-route :bound bound})])]
+                              (cond (nil? d) (cond-> e (not none?) weighed)
                                     (or none? (= :searching (:step d))) d
-                                    (< (price d) (price e)) d
-                                    :else e)))))
+                                    (< (price d) (price e)) (weighed d)
+                                    :else (weighed e))))))
         ;; a shut-in body's dig leg and its climb are weighed by their whole ways, the climb searched no further than the leg costs
         priced (fn [f] (fn [may-dig? o]
                          (let [w (f may-dig? o)
@@ -372,9 +374,12 @@
                                     (if (and d (= :none (:step w))) d w)))))
                      ;; its route searches are shared through the slice's answers: choose runs again per zone rule below
                      rock-dig? (priced #(let [l (dig-leg c feet goal %1 %2)
-                                      e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))]
+                                      e (when (= :dig-route (:step l)) (escape-way/choose (:primitives c) feet goal %1 %2))
+                                      total (fn [w] (way-total (:primitives c) feet goal w %1))
+                                      weighed (fn [w] (assoc w :weighed [{:step (:step e) :s (total e)} {:step :dig-route :s (total l)}]))]
                                   (cond
-                                    (beats-leg? e l (fn [w] (way-total (:primitives c) feet goal w %1))) e
+                                    (beats-leg? e l total) (weighed e)
+                                    (#{:stair :pillar} (:step e)) (weighed l)
                                     (= :past-worth (:why l))
                                     (let [e (escape-way/choose (:primitives c) feet goal %1 %2)]
                                       (if (or (and (= :approach (:step e)) (past-from? (:pos e))) (= :none (:step e))) l e))
@@ -438,10 +443,11 @@
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       @hold (reprice/end c @hold)
       :else
-      (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
-                                               :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})
+      (do (ctx/emit! c :go-to.escalated :info (cond-> {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
+                                                       :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))}
+                                                (:weighed e) (assoc :weighed (:weighed e))))
           (ctx/update-mem! c #(-> (merge (dissoc % :escalate-failed :route-search) counted)
-                                  (assoc :escalations (inc (:escalations % 0)) :escalation (assoc e :guesses (guesses e)) :escalation-from feet
+                                  (assoc :escalations (inc (:escalations % 0)) :escalation (assoc (dissoc e :weighed) :guesses (guesses e)) :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
 

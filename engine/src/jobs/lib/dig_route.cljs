@@ -719,7 +719,7 @@
                          (> (+ (aget top 0) (spent-s)) (bound-s)) (or (ended) (recur))
                          ;; past answer-s the route in hand answers, or the one the caller holds (:dearer); with none, the search outgrew its bound
                          (and read-s (>= (metered-s) answer-s))
-                         (if (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s))) (or (ended) (recur)) (priced {:problem :too-big}))
+                         (if (or held-s (and (some? (aget incumbent 1)) (<= (aget incumbent 0) @max-s))) (or (ended) (recur)) (priced {:problem :too-big :cut :answer-s}))
                          (or (.has done ck) (.has dropped ck)) (recur)
                          (end-key? ck) (or (checked ck) (recur))
                          ;; the popped cell goes back: the next run expands it first
@@ -975,7 +975,7 @@
   through cells at other heights is priced in both bounds as a stair's step or a pillar block, and a cell read open at one is read as never seen, by :guess), :full? (fn []) true when the heap holds no more.
   {:dig [cell ..] :steps [{:to feet :move :walk|:laid|:pillar :dig [cell ..] :place cell} ..] :seconds the route's price :searched-s, with :read-s, the search's CPU seconds, :searched-s given included}, {:problem :no-route} (:boxed true when the
   :margin box kept it from a cell, with :searched-s the CPU seconds the search spent, :searched-s given included),
-  {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? or past answer-s with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
+  {:problem :dearer} when every route costs more than :max-s, {:problem :too-big} when :full? or (:cut :answer-s) past answer-s with no route in hand, or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
   [block-at from goal opts]
   (or (first (((if (:seed opts) seeded-search search) block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))
 

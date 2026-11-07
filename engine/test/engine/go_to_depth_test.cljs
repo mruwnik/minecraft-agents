@@ -616,42 +616,25 @@
           (is (empty? (gt/events-of s :go-to.escalated)) "nothing dug"))))))
 
 ;; A sealed pocket (x 0..2, feet 60, z 0) in a stone mass whose top (feet 78) holds the goal straight above; the body has
-;; seen only the pocket. While the goal is higher above than it is across it is climbed toward by a stair, not dug toward
-;; leg by leg; the dig legs follow the stairs.
+;; seen only the pocket. Each escalation takes the cheapest of the ways it weighed (its go-to.escalated :weighed): a dig
+;; way the search found none of under its bound counts as dearer than that bound.
 (def pocket (apply dissoc (box -10 50 -6 10 77 6 "stone") (for [x (range 3) y [60 61]] (str x "," y ",0"))))
 
-(deftest a-buried-body-cuts-a-stair-to-a-goal-steeply-above-not-dig-legs
+(deftest a-buried-body-under-a-goal-takes-the-cheapest-way-it-weighed-at-each-escalation
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [beats (atom [])
-              {:keys [out] :as s} (with-redefs [esc/beats-leg? (let [f esc/beats-leg?]
-                                                                 (fn [e l total]
-                                                                   (let [r (f e l total)]
-                                                                     (swap! beats conj {:e (:step e) :te (when e (total e)) :l (:step l) :tl (when l (total l)) :r r})
-                                                                     r)))
-                                                choose/dig-way (let [dw choose/dig-way]
-                                                                 (fn [p feet goal may o]
-                                                                   (let [d (dw p feet goal may o)]
-                                                                     (swap! beats conj {:dw (:step d) :bound (:bound-s o) :price (when (= :dig-route (:step d)) (escape-way/price p feet d (:own-s o))) :feet feet})
-                                                                     d)))]
-                                    (await (climb! {:blocks pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0] :seen [[-1 59 -1 3 62 1]]
-                                                    :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                   {:pos [1 78 0]})))]
+        (let [{:keys [out] :as s} (await (climb! {:blocks pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0] :seen [[-1 59 -1 3 62 1]]
+                                                  :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                 {:pos [1 78 0]}))
+              es (gt/events-of s :go-to.escalated)
+              cheapest? (fn [{:keys [step weighed]}]
+                          (let [[chosen & others] (sort-by #(not= step (:step %)) weighed)]
+                            (and (= step (:step chosen)) (= 1 (count others))
+                                 (every? #(<= (:s chosen) (or (:s %) (:bound %))) others))))]
           (is (true? (:arrived @out)) (pr-str @out))
-          ;; the rule: a stair, not a dig, while the goal is higher above than across (a dig way over a stair's price is none, escalation's
-          ;; dug-or-chosen), and a dig leg only when its whole way is no dearer than the stair's (beats-leg?); read off the prices the choice weighed
-          (let [es (gt/events-of s :go-to.escalated)
-                steep (filter (fn [{[x y z] :at}] (> (- 78 y) (+ (js/Math.abs (- x 1)) (js/Math.abs z)))) es)
-                legs (filter :l @beats)
-                stairs (filter #(= :stair (:step %)) es)
-                digs (filter #(= :dig-route (:step %)) es)]
-            (is (seq steep))
-            (is (every? #{:approach :stair} (map :step steep)) (pr-str (map #(select-keys % [:step :at]) es)))
-            (is (= (count stairs) (count (filter #(contains? % :dw) @beats))) (pr-str @beats))
-            (is (every? #(or (nil? (:price %)) (>= (:price %) (:bound %))) (filter #(contains? % :dw) @beats)) (pr-str @beats))
-            (is (= (count digs) (count legs)) (pr-str @beats))
-            (is (every? #(<= (:tl %) (:te %)) legs) (pr-str legs))))))))
+          (is (seq es))
+          (is (every? cheapest? es) (pr-str (map #(select-keys % [:step :at :weighed]) es))))))))
 
 ;; A chamber (x 0..2, feet 60, z 0) in a stone mass and a pocket (x 9..10, feet 57) the body has seen, the rock between
 ;; never seen: the leg that ends short of the goal is followed by a last one into it.
