@@ -210,8 +210,12 @@
     (perception/pass! per)
     (is (flee/rejected? c site) "the body moved: the site's own test does not rest on where it stands")
     (is (not (flee/rejected? c (assoc site :kind :cave))))
-    (see! [500 63 0])
-    (is (flee/rejected? c site) "the body saw new land far from the site: its rejection holds")
+    (let [st (:st (aget w "perception"))
+          far-stamp #(store/section-stamp st (.-dim st) 0 4 2)]
+      (let [before (far-stamp)]
+        (see! [0 64 40])
+        (is (> (far-stamp) before) "the far cell was written, in a section outside the site's 7"))
+      (is (flee/rejected? c site) "the body saw new land far from the site: its rejection holds"))
     (see! [2 65 4])
     (is (not (flee/rejected? c site)) "a block seen near the site changed what it remembers there")
     (flee/reject! c site)
