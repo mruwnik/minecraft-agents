@@ -206,11 +206,22 @@
   [next-case]
   (not (and next-case (= :keep (body-start-plan next-case false)))))
 
-(defn respawn-cell
-  "The block the game respawns the body in: :spawnpoint, else the start, floored (/spawnpoint takes only integers; a
-  fractional one is refused and the body would respawn at the world spawn)."
+(def far-spawn-rise
+  "How far above the start the :spawnpoint :far pad stands: a body away from home (the death price reads the straight distance from the respawn point)."
+  100)
+
+(defn far-spawn?
+  "Whether the case asks for a far respawn point (:spawnpoint :far)."
   [c]
-  (some->> (or (get-in c [:body :spawnpoint]) (get-in c [:body :at])) (mapv #(js/Math.floor %))))
+  (= :far (get-in c [:body :spawnpoint])))
+
+(defn respawn-cell
+  "The block the game respawns the body in: :spawnpoint (:far: far-spawn-rise above the start), else the start, floored
+  (/spawnpoint takes only integers; a fractional one is refused and the body would respawn at the world spawn)."
+  [c]
+  (let [{:keys [spawnpoint at]} (:body c)
+        p (if (= :far spawnpoint) (some-> at (update 1 + far-spawn-rise)) (or spawnpoint at))]
+    (some->> p (mapv #(js/Math.floor %)))))
 
 (defn memory-entries
   "A case's :memory entries, and for a night case (unless it names log-out or keeps memory) two entries for the other
@@ -937,14 +948,26 @@
   "Slots /clear is not trusted with: a helmet left by an earlier case changes go-to's air plan."
   ["armor.head" "armor.chest" "armor.legs" "armor.feet" "weapon.offhand"])
 
+(defn far-pad-commands
+  "Fills for the :spawnpoint :far pad: a 3x3 stone floor under the respawn cell with air over it (two cells), or the same
+  area as air when clearing. The plot is the only thing below it, so nothing else lies there."
+  [origin c clear?]
+  (when (far-spawn? c)
+    (let [[x y z] (abs-pos origin (respawn-cell c))
+          fill (fn [y0 y1 b] (str "fill " (dec x) " " y0 " " (dec z) " " (inc x) " " y1 " " (inc z) " " b))]
+      (if clear?
+        [(fill (dec y) (inc y) "minecraft:air")]
+        [(fill (dec y) (dec y) "minecraft:stone") (fill y (inc y) "minecraft:air")]))))
+
 (defn body-commands
   "Put the body at its start (facing :yaw, 0 = south, 180 = north; :pitch, 0 level, positive down), still a spectator
   (ensure-at-start! makes it survival once it stands there), healed and fed, its inventory and effects as the case says. Its respawn point is respawn-cell (the world spawn is
   far from every plot, which would price each death as a huge walk back)."
   [origin body c]
   (let [{:keys [at yaw pitch inventory effects]} (:body c)]
-    (-> [(str "clear " body)
-         (str "effect clear " body)]
+    (-> (vec (far-pad-commands origin c false))
+        (into [(str "clear " body)
+               (str "effect clear " body)])
         (into (for [slot worn-slots] (str "item replace entity " body " " slot " with minecraft:air")))
         (into [(str "tp " body " " (xyz-str (abs-pos origin at)) " " (or yaw 0) " " (or pitch 0))
                (str "effect give " body " minecraft:instant_health 1 10 true")
@@ -1001,6 +1024,7 @@
   [grid origin body c]
   (let [{:keys [height floor]} (:plot c)]
     (-> [(kill-command grid origin height)]
+        (into (far-pad-commands origin c true))
         (into (if (:underground? grid) (solid-commands grid origin height) (clear-commands grid origin height floor)))
         (into [(str "clear " body)
                (str "effect clear " body)

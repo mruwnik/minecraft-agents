@@ -414,6 +414,16 @@
     (is (some #{"spawnpoint ProbeFixture 20001 150 20002"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :spawnpoint] [1 0 2])))
         "a case's own :spawnpoint wins")
+    (let [far (assoc-in glass [:body :spawnpoint] :far)
+          cmds (f/body-commands origin "ProbeFixture" far)]
+      (is (some #{"spawnpoint ProbeFixture 20016 250 20016"} cmds) "a :far spawn point is 100 above the start")
+      (is (= ["fill 20015 249 20015 20017 249 20017 minecraft:stone" "fill 20015 250 20015 20017 251 20017 minecraft:air"]
+             (take 2 cmds))
+          "a 3x3 stone pad under it with two air cells over, built before the point is set")
+      (is (some #{"fill 20015 249 20015 20017 251 20017 minecraft:air"}
+                (f/cleanup-commands (f/case-grid far) origin "ProbeFixture" far))
+          "cleanup removes the pad")
+      (is (not-any? #(re-find #"minecraft:stone" %) (f/body-commands origin "ProbeFixture" glass)) "no pad without :far"))
     (is (some #{"tp ProbeFixture 20016.5 150 20016.5 180 0"}
               (f/body-commands origin "ProbeFixture" (assoc-in glass [:body :yaw] 180)))
         "a case may turn the body (yaw, degrees: 0 south, 180 north) so it can see what lies behind the default view")
