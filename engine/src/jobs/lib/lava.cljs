@@ -54,32 +54,32 @@
 
 (def peek-steps "Steps over seen standable cells a peek stance may be from the body." 12)
 
-(defn connected-by-seen?
-  "Whether the body can walk from feet to goal (cells {:x :y :z}) over seen standable cells (one up, down to three
+(defn seen-walk-reach
+  "The cells {:x :y :z} the body can walk to from feet over seen standable cells ((standable? cell): one up, down to three
   down) in at most peek-steps steps. A peek is a glance: a stance past unseen or unclimbable ground is no stance, since
   the walk there would roam the land to find a way."
-  [p feet goal]
-  (let [cell (fn [{:keys [x y z]}] {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)})
-        start (cell feet)
-        end (cell goal)
+  [standable? feet]
+  (let [start (update-vals (select-keys feet [:x :y :z]) js/Math.floor)
         next-cells (fn [{:keys [x y z]}]
                      (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [1 0 -1 -2 -3]
                            :let [n {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                           :when (reach/seen-standable? p n)]
+                           :when (standable? n)]
                        n))]
     (loop [frontier [start] seen #{start} steps 0]
-      (cond
-        (contains? seen end) true
-        (or (empty? frontier) (>= steps peek-steps)) false
-        :else (let [nxt (into [] (comp (mapcat next-cells) (remove seen) (distinct)) frontier)]
-                (recur nxt (into seen nxt) (inc steps)))))))
+      (if (or (empty? frontier) (>= steps peek-steps))
+        seen
+        (let [nxt (into [] (comp (mapcat next-cells) (remove seen) (distinct)) frontier)]
+          (recur nxt (into seen nxt) (inc steps)))))))
 
 (defn peek-stance
   "The cell to stand on to see the neighbours of the dug cell still unseen, or nil when the body sees as many from where
   it stands: of the cells within step-off reach of the column over the dug cell, the first with the most clear lines
-  from its eye to the faces on the dug cell. Only seen standable cells count: an unseen cell inside the rock is no stance."
+  from its eye to the faces on the dug cell. Only seen standable cells the body walks to (seen-walk-reach) count: an
+  unseen cell inside the rock is no stance. Each cell's standing is read once."
   [p feet ok? cell unknown-ds]
   (let [kind-at (aim/seen-kind-at p)
+        standable? (memoize #(reach/seen-standable? p %))
+        reach (delay (seen-walk-reach standable? feet))
         targets (map (fn [d] (face-aim (add cell d) d)) unknown-ds)
         clear-count (fn [[ex ey ez]] (count (filter #(reach/ray-clear? kind-at [ex ey ez] %) targets)))
         here (clear-count [(:x feet) (+ (:y feet) 1.62) (:z feet)])
@@ -87,8 +87,8 @@
                     (mapcat #(step-off/candidates p {:x (first cell) :y (+ (second cell) %) :z (nth cell 2)}
                                                   {:avoid #{cell} :ok? ok?}))
                     distinct
-                    (filter #(reach/seen-standable? p %))
-                    (filter #(connected-by-seen? p feet %)))
+                    (filter standable?)
+                    (filter #(contains? @reach %)))
         scored (map (fn [{:keys [x y z] :as st}] [(clear-count [(+ x 0.5) (+ y 1.62) (+ z 0.5)]) st]) stands)
         best (when (seq scored) (apply max (map first scored)))]
     (when (and best (> best here))

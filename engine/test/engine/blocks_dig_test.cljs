@@ -18,6 +18,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.lava :as lava]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.loose :as loose]
             [jobs.lib.ledger :as ledger]
@@ -1349,8 +1350,12 @@
                         [(str x "," y "," z) "stone"]))
         p (tu/fake {:self {:pos {:x 3.5 :y 62 :z 1.5}} :blocks mass})
         far {:x 3.5 :y 62 :z 1.5}
-        stance (lava/peek-stance p far (constantly true) [0 59 0] [[0 0 1]])]
+        asked (atom [])
+        standable? reach/seen-standable?
+        stance (with-redefs [reach/seen-standable? (fn [p cell] (swap! asked conj cell) (standable? p cell))]
+                 (lava/peek-stance p far (constantly true) [0 59 0] [[0 0 1]]))]
     (is (and (zero? (:x stance)) (neg? (:z stance))) "over the column on the side away from the wall, where the line runs down the shaft")
+    (is (= (distinct @asked) @asked) "each cell's standing read once: one walk from the feet serves every stance")
     (is (nil? (lava/peek-stance p {:x 0.5 :y 62 :z -0.5} (constantly true) [0 59 0] [[0 0 1]])) "none better than where the body already sees")))
 
 (deftest a-peek-stance-on-top-of-rock-the-body-cannot-climb-is-no-stance
