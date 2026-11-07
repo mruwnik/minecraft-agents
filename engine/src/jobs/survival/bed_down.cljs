@@ -117,7 +117,7 @@
   "Seconds secs in the open at `at` cost (price/stay-risk-s): the hp the spawns at chance hurt (price/stay-parts) and the fight with
   the hostiles known near `at` (price/way-fight-hp), and the death they risk; asleep? lain asleep through them."
   ([c chance secs at] (exposed-price c chance secs at false))
-  ([c chance secs at asleep?] (price/stay-risk-s c chance secs (price/way-fight-hp c at) asleep?)))
+  ([c chance secs at asleep?] (price/stay-risk-s (cond-> c asleep? (assoc ::price/asleep? true)) chance secs (price/way-fight-hp c at))))
 
 (defn open-price
   "exposed-price of secs in the open at the worst of cells, each at its night-chance."
