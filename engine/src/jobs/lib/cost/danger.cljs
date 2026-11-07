@@ -5,7 +5,8 @@
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
   after armour, at most the body's health, plus the death it can cause: the chance its fight kills the body (fight-death-chance, not
-  for a provoked-only mob, which is never fought; a mob with :angry false adds none) times the :death-s the caller prices a death at;
+  for a provoked-only mob, which is never fought; a mob with :angry false adds none) times the :death-s the caller prices a death at,
+  the hurt then only by the chance the body lives (:hurt);
   weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
   outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
@@ -82,7 +83,7 @@
     (death/blow-chance {:health (if (number? health) health 20)} (* weight damage) blow)))
 
 (defn route-danger
-  "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]}, in hp, of walking route ([{:x :y :z}] cells)
+  "{:danger total :hurt :mobs [{:name :pos :distance :weight :threat :hurt :danger} ...]}, in hp, of walking route ([{:x :y :z}] cells)
   past mobs (cljs maps {:name :pos} or JS entities) for a body wearing equipment. Lists only mobs that add danger, the
   worst first. version: the minecraft-data version; reach-of: a fn of a mob {:name :pos} to its reach (a fn of a cell x y
   z, its weight 0-1, nil outside: jobs.lib.threat-field). Options: :overrides, :weapon (the item held or to hold,
@@ -108,10 +109,11 @@
                      :when (and (pos? weight) (pos? threat))
                      :let [hurt (min (if (number? health) health 20) (* weight (threat/mob-hurt stats kind (exposure-s) threat-fn)))
                            dies (if (contains? threat/provoked-only (:name m)) 0 (fight-death-chance equipment weapon health kind d (* weight (if (pos? base) (/ threat base) 1))))]]
-                 {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat
-                  :danger (+ hurt (/ (* dies death-s) (health/hp-seconds)))}))
+                 (let [lived (if (pos? death-s) (* (- 1 dies) hurt) hurt)]
+                   {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat :hurt lived
+                    :danger (+ lived (/ (* dies death-s) (health/hp-seconds)))})))
         rows (vec (sort-by :danger > rows))]
-    {:danger (reduce + 0 (map :danger rows)) :mobs rows}))
+    {:danger (reduce + 0 (map :danger rows)) :hurt (reduce + 0 (map :hurt rows)) :mobs rows}))
 
 
 ;; ---------------------------------------------------------------- the planner's danger rate

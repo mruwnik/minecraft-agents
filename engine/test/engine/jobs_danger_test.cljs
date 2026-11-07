@@ -35,6 +35,11 @@
 
 (defn death-s "Seconds a death on the route costs a body whose bed is where the route starts." [] (d/death-cost {:respawn body} (nth route 15)))
 
+(defn far-death-s
+  "Seconds a death on the route costs a body whose bed is far off: a dear death. Near the bed a lost fight costs less than
+  the hurt of one lived through (Q139), so dangers order by their fights only where a death is dear."
+  [] (d/death-cost {:respawn {:x 5000 :y 64 :z 0}} (nth route 15)))
+
 (defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach-of p) route mobs equipment :death-s (death-s) opts))
 
 (defn danger [p mobs & opts] (:danger (apply route-danger p route mobs naked opts)))
@@ -50,14 +55,15 @@
 
 (deftest closer-along-its-way-is-worse-and-a-way-past-its-follow-range-is-nothing
   (let [p (world)]
-    (is (> (danger p [(mob 1 "zombie" 15 1)]) (danger p [(mob 1 "zombie" 15 8)]) (danger p [(mob 1 "zombie" 15 19)]) 0)
+    (is (> (danger p [(mob 1 "zombie" 15 1)] :death-s (far-death-s)) (danger p [(mob 1 "zombie" 15 8)] :death-s (far-death-s))
+           (danger p [(mob 1 "zombie" 15 19)] :death-s (far-death-s)) 0)
         "19 blocks off is 19 steps of its way: still within its follow range (35)")
     (is (= 0 (danger p [(mob 1 "vindicator" 15 19)])) "a vindicator follows 12")))
 
 (deftest a-drowned-holding-a-trident-is-worse-than-one-with-bare-hands
   (let [p (world :blocks (into {} (for [x (range 13 18) z (range -2 4) y [63 64]] [(str x "," y "," z) "water"])))
         drowned (mob 1 "drowned" 15 1)]
-    (is (> (danger p [(assoc drowned :held "trident")]) (danger p [drowned]) 0))))
+    (is (> (danger p [(assoc drowned :held "trident")] :death-s (far-death-s)) (danger p [drowned] :death-s (far-death-s)) 0))))
 
 (deftest a-walled-off-skeleton-is-no-danger-and-an-open-one-is
   (is (= 0 (danger (world :blocks skeleton-wall) [(mob 1 "skeleton" 15 8)])))
@@ -83,13 +89,13 @@
 (deftest overrides-set-a-mob-s-threat
   (let [p (world)]
     (is (= 0 (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 0})))
-    (is (> (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 100}) (danger p [(mob 1 "zombie" 15 2)])))
+    (is (> (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 100} :death-s (far-death-s)) (danger p [(mob 1 "zombie" 15 2)] :death-s (far-death-s))))
     (is (= (* 2 (threat-of p "zombie")) (threat-of p "zombie" :overrides {"zombie" {:times 2}})))))
 
 (deftest armour-lowers-the-danger
   (let [p (world)]
-    (are [m] (< (:danger (route-danger p route [m] iron-armour))
-                (:danger (route-danger p route [m] naked)))
+    (are [m] (< (:danger (route-danger p route [m] iron-armour :death-s (far-death-s)))
+                (:danger (route-danger p route [m] naked :death-s (far-death-s))))
       (mob 1 "zombie" 15 2)
       (mob 1 "creeper" 15 2)
       (mob 1 "skeleton" 15 8))))
@@ -120,7 +126,7 @@
 
 (defn armed-danger
   ([m weapon health] (armed-danger m weapon health naked))
-  ([m weapon health equipment] (:danger (route-danger (world) route [m] equipment :weapon weapon :health health))))
+  ([m weapon health equipment] (:danger (route-danger (world) route [m] equipment :weapon weapon :health health :death-s (far-death-s)))))
 
 (deftest an-unarmed-body-facing-a-skeleton-is-priced-far-above-an-armed-one
   (let [skeleton (mob 2 "skeleton" 15 0)
@@ -131,7 +137,7 @@
 
 (deftest a-danger-is-at-most-the-hurt-and-one-death
   (let [spider (mob 1 "spider" 15 0)
-        hp-death (/ (death-s) (d/per-danger))]
+        hp-death (/ (far-death-s) (d/per-danger))]
     (is (<= (armed-danger spider nil 20) (+ 20 hp-death)) "a fist fight with a spider costs the health and a death, not a multiple of it")
     (is (<= (armed-danger spider nil 6) (+ 6 hp-death)))))
 

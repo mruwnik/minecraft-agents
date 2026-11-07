@@ -1241,14 +1241,16 @@
       (assoc "0,66,0" "glass")))
 
 (deftest opening-a-cap-costs-the-hurt-of-the-hostile-that-would-come-through
-  (let [price (fn [health entities]
-                (let [p (tu/seeing-all (tu/fake {:self {:health health} :entities entities :blocks sealed-pocket :inventory [{:name "stone_sword" :count 1}]}))
+  (let [price (fn [health entities & {:keys [inventory] :or {inventory [{:name "stone_sword" :count 1}]}}]
+                (let [p (tu/seeing-all (tu/fake {:self {:health health} :entities entities :blocks sealed-pocket :inventory inventory}))
                       c {:primitives p :view (fn [] {:now 0 :data {}}) :root "breathe" :slots [] :args {}}]
                   (:price (dig-leave/opening-price c [[0 66 0] [0 67 0]]))))
         zombie [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0.5 :y 67 :z 0.5} :health 20}]]
     (is (zero? (price 20 [])) "no hostile known: the opening costs nothing")
     (is (pos? (price 20 zombie)) "a zombie over the cap hurts the body once it is open")
-    (is (> (price 6 zombie) (price 20 zombie)) "a weaker armed body pays more: the death it risks")))
+    (is (> (price 6 zombie) (price 20 zombie)) "a weaker armed body pays more: the death it risks")
+    (is (>= (price 6 zombie :inventory []) (price 20 zombie :inventory []))
+        "a bare body dies near surely at either health: the hurt counts only where it lives, so more health never costs more")))
 
 (deftest an-own-build-cap-is-too-dear-when-opening-it-costs-more-than-the-drowning-it-averts
   (is (nil? (judge-of {})) "no other way, no hostile: dug")

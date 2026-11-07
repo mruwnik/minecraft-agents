@@ -667,7 +667,7 @@
      0)))
 
 (defn opening-price
-  "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :danger of the way),
+  "Seconds a way out costs body (death-body keys and :health): the hurt hp it expects (route-danger's :hurt of the way),
   at most its health, at hp-cost, and the death it risks (route-death-cost of route {:cells :threats
   :spawns} at `at`)."
   [body hurt route at]
