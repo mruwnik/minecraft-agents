@@ -5,6 +5,7 @@
             [engine.fake :as fake]
             [engine.library-test :as lt]
             [engine.test-util :as tu]
+            [engine.registry :as registry]
             [jobs.movement.boat-recover :as br]))
 
 (def pond
@@ -114,3 +115,18 @@
     (is (= target (broken {:blocks pond} {:target target})) "out of sight: its drop is collected")
     (is (nil? (broken {:blocks pond :entities [(boat-at 9 1.5)]} {:target target})) "still afloat: hit again")
     (is (nil? (broken {:blocks pond} {})) "never began: gone")))
+
+(deftest a-failed-walk-to-an-unmoved-boat-is-not-walked-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              p (doto (tu/seeing-all (tu/fake {:entities [(boat-at 9 10.5)]})) (.setOwner "t"))
+              c {:primitives p :args {:id 9} :root "j1" :slots [] :token "t"
+                 :view (fn [] {:data {:entries {}} :now 0}) :remember (fn [& _]) :emit (fn [& _]) :result (fn [_])
+                 :engine {:jobs registry/jobs}
+                 :call (fn [_ _ _] (swap! walks inc)
+                         (js/Promise.resolve {:kind :nothing-possible :cause :unreachable :data {:reason :blocked}}))}
+              r (await (br/round c))]
+          (is (= [:nothing-possible :unreachable] [(:kind r) (:cause r)]) (pr-str r))
+          (is (= 1 @walks) "go-to's failure is its answer: a second walk had nothing changed"))))))
