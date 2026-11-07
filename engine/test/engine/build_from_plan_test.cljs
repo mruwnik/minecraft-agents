@@ -2062,7 +2062,7 @@
           (is (seq @rows))
           (is (every? #(< (:strength %) 1) @rows) (pr-str @rows)))))))
 
-(deftest the-torch-fetch-of-a-plank-build-leaves-the-logs-reserved
+(deftest the-torch-fetch-of-a-plank-build-leaves-its-planks-reserved
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -2076,9 +2076,9 @@
           (try
             (await (child-outcome eng job {:plan "wall" :explore false} 20))
             (finally (set! ctx/call orig)))
-          (is (some #(= ["torch" {"oak_log" 1}] %) @held) (pr-str @held)))))))
+          (is (some #(= ["torch" {"oak_planks" 2}] %) @held) (pr-str @held)))))))
 
-(deftest the-torch-fetch-of-a-door-build-leaves-the-logs-of-the-door-and-of-a-table-reserved
+(deftest the-torch-fetch-of-a-door-build-leaves-the-door-material-reserved
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -2092,7 +2092,23 @@
           (try
             (await (child-outcome eng job {:plan "gate" :explore false} 20))
             (finally (set! ctx/call orig)))
-          (is (some #(= ["torch" {"oak_log" 3}] %) @held) (pr-str @held)))))))
+          (is (some #(= ["torch" {"oak_planks" 6 "crafting_table" 1}] %) @held) (pr-str @held)))))))
+
+(deftest the-fetch-of-a-cell-item-may-craft-it-from-the-carried-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              held (atom [])
+              plan {:id "wall" :parts [{:id "wall" :cells [[3 64 3] [4 64 3]] :want "oak_planks"}]}
+              {:keys [eng]} (start {:inventory [{:name "oak_log" :count 1}]} {"wall" plan})]
+          (set! ctx/call (fn [c slot j args]
+                           (when (= 'jobs.items.obtain j) (swap! held conj [(:item args) (reserve/held c :craft)]))
+                           (orig c slot j args)))
+          (try
+            (await (child-outcome eng job {:plan "wall"} 20))
+            (finally (set! ctx/call orig)))
+          (is (some #(= ["oak_planks" {}] %) @held) (pr-str @held)))))))
 
 (deftest a-fetch-due-waits-for-a-glance-at-the-unseen-cells-the-body-carries-the-items-for
   (async done

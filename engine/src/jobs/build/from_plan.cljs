@@ -371,16 +371,18 @@
 (defn hold-carried!
   "The carried units the plan's missing cells still need, reserved for the call's life, so a craft or smelt for another
   need (a furnace for a torch) does not spend them, nor the night its bed: the cell's own item, and the carried items
-  a craft chain would turn into the rest (logs for planks). Each at the strength that prices a spent unit at
+  a craft chain would turn into the rest (logs for planks), but not those of the item being fetched now: that
+  fetch's craft is what they are kept for. Each at the strength that prices a spent unit at
   getting it back (reserve/replace-strength). The entries follow what is still missing."
   [c cells]
   (let [need (frequencies (keep :item (missing cells)))
+        fetching (let [w (plan/problem c)] (when (= :need (:reason w)) (:item w)))
         carried (storage/carried-totals (u/inventory (:primitives c)))
         version (game/version-of (:primitives c))
         opts (assoc (sources/source-opts) :table? (crafting-table/at-hand? (:primitives c) nil))
         held (reduce (fn [m [item n]]
                        (let [have (min n (get carried item 0))
-                             crafted (when (< have n) (:uses (recipes/plan version (storage/usable-totals (u/inventory (:primitives c))) item (- n have) opts)))]
+                             crafted (when (and (< have n) (not= item fetching)) (:uses (recipes/plan version (storage/usable-totals (u/inventory (:primitives c))) item (- n have) opts)))]
                          (merge-with + m {item have} crafted)))
                      {} (sort need))
         wanted (for [[item n] (sort held) :let [k (min n (get carried item 0))] :when (pos? k)]
