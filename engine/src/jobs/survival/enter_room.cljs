@@ -75,7 +75,7 @@
 
 (defn seen-starts
   "The rooms behind the doors the body has seen as {:pos :door}, nearest door first, none that a zone refuses at either side
-  of a door (starts reads at most the jobs.lib.rooms max-doors doors)."
+  of a door."
   [c]
   (let [starts (room-lib/starts (:primitives c) nil)
         refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))]

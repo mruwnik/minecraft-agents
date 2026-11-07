@@ -46,17 +46,15 @@
   (filterv #(flight/blaster? p %) threats))
 
 (defn survey
-  "The closed rooms a flight step races for (room-lib/survey from home-pos): up to room-lib/judge-per-step door sides
-  judged afresh, none with a melee threat within cover-gap; nil with a creeper of threats within blast reach (blast).
-  keep? as room-lib/survey's: the flee price (caught-chance!) keeps nothing, so it surveys what the flight's step then does."
+  "The closed rooms a flight step races for (room-lib/survey from home-pos, threats' lead pricing its door sides judged
+  afresh; none with a melee threat within cover-gap); nil with a creeper of threats within blast reach (blast). keep?
+  as room-lib/survey's: the flee price (caught-chance!) keeps nothing, so it surveys what the flight's step then does."
   [c threats keep?]
   (let [p (:primitives c)]
     (when (empty? (blast p threats))
       (room-lib/survey c (home-pos c)
-                       (if (some #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)
-                         0
-                         (room-lib/judge-per-step))
-                       keep?))))
+                       {:threats threats :keep? keep?
+                        :fresh? (not-any? #(and (not (combat/ranged? %)) (<= (danger-q/mob-distance p %) (cornered/cover-gap))) threats)}))))
 
 (def glance-turns
   "Degrees from the way away a flight turns to look before it chooses: the view cone (about 100 degrees wide) then

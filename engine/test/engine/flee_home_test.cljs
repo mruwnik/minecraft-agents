@@ -197,7 +197,7 @@
         walk (u/dist me (rooms/mid d))
         mob-dist 4.5]
     (is (cost/reach-first? walk [mob-dist] 20 [\"zombie\"]) "the walk to the door alone is won")
-    (is (not (cost/reach-first? (rooms/glance-steps me d 20) [mob-dist] 20 [\"zombie\"])) "the click, the walk through and the looks make it lost")))
+    (is (not (cost/reach-first? (rooms/glance-steps me d 20 4) [mob-dist] 20 [\"zombie\"])) "the click, the walk through and the looks make it lost")))
 
 (deftest a-creeper-is-never-led-to-the-hut
   (async done
@@ -456,25 +456,34 @@
   (into {} (for [i (range 6) :let [x (- -6 (* 3 i))] half ["lower" "upper"]]
              [(str x "," (if (= half "lower") 64 65) ",6") {:open false :half half :facing "south"}])))
 
-(deftest the-room-search-per-flight-step-stays-bounded
+(deftest the-room-search-per-flight-step-stays-within-the-chasers-lead
+  ;; each step's fresh floods are CPU the body stands still for: priced against the lead, nearest first, the rest later
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [counts (atom {})
+              priced (atom [])
+              survey rooms/survey
               restores [(counting! counts :closed-room #(identity rooms/flood-refuge?) #(set! rooms/flood-refuge? %))
-                        (counting! counts :room #(identity reach-room/room) #(set! reach-room/room %))
                         (counting! counts :walk-steps #(identity reach-room/walk-steps) #(set! reach-room/walk-steps %))
                         (counting! counts :steps #(identity retreat/flight-step!) #(set! retreat/flight-step! %))]
+              wrapped (fn [c home opts]
+                        (let [r (survey c home opts)]
+                          (swap! priced conj [(:spent-s r) (rooms/here-s (:primitives c) (:threats opts))])
+                          r))
+              _ (aset wrapped "cljs$core$IFn$_invoke$arity$3" wrapped)
+              _ (set! rooms/survey wrapped)
               {:keys [p]} (try (await (flee! (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states)
                                                          [(zombie 5.5 13.5 0.4)] lone-doors)
                                                     :home false :perceive true)))
-                               (finally (doseq [r restores] (r))))
-              {:keys [closed-room room walk-steps steps]} @counts]
+                               (finally (set! rooms/survey survey) (doseq [r restores] (r))))
+              {:keys [closed-room walk-steps steps]} @counts]
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (pos? steps))
-          (is (<= closed-room (* 2 (rooms/max-doors))) (str "each door side flooded once a flight: " @counts))
-          (is (<= room (+ closed-room (* steps (inc (rooms/max-rooms))))) (str "rooms rebuilt per step: " @counts))
-          (is (<= walk-steps (* steps (rooms/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
+          (is (seq @priced))
+          (is (every? (fn [[spent lead]] (< spent lead)) @priced) (str "each survey's CPU within the chasers' lead at the body: " @priced))
+          (is (<= closed-room (* 2 7)) (str "each of the 7 doors' sides flooded once a flight: " @counts))
+          (is (<= walk-steps (count @priced)) (str "one walk search a survey to the one closed room's door: " @counts)))))))
 
 (defn reading!
   "Count p's cell reads (sensedAt) in reads."
@@ -515,6 +524,8 @@
                         (set! choose/escape-order order)))
           (is (= true (first @homes)) (str @homes)))))))
 
+(defn seen-zombie [x z] #js {:name "zombie" :visible true :pos #js {:x x :y 64 :z z}})
+
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
   (async done
     (tu/run-async done
@@ -523,12 +534,21 @@
                                           :home false))
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
-              unjudged #(count (filter (comp #{:unjudged} :why) (:dropped (rooms/survey c nil %))))
-              dry [(unjudged 0) (do (rooms/survey c nil 2 false) (unjudged 0))]
-              counts [(unjudged 0) (unjudged 2) (unjudged 2)]]
+              far [(seen-zombie 40.5 6.5)]
+              ;; at the hut's door: no race to the hut is won
+              pressed [(seen-zombie 5.5 3.5)]
+              lead (rooms/here-s (:primitives eng) pressed)
+              ;; two fresh judgements fit the pressed body's lead
+              survey (fn [threats keep?] (with-redefs [rooms/judge-s (constantly (/ lead 2.5))] (rooms/survey c nil {:threats threats :keep? keep?})))
+              unjudged #(count (filter (comp #{:unjudged} :why) (:dropped %)))
+              lone #(count (filter (fn [{[x] :at why :why}] (and (neg? x) (= :unjudged why))) (:dropped %)))
+              dry [(unjudged (survey pressed false)) (unjudged (survey pressed false))]
+              steps [(survey pressed true) (survey pressed true) (survey pressed true)]
+              counts (mapv unjudged steps)]
           (is (apply = dry) (str "a survey that keeps nothing (the flee price's) leaves the next step the same door sides to judge: " dry))
-          (is (pos? (first counts)) (str "none judged at first: " counts))
-          (is (apply > counts) (str "each later step judges more: " counts)))))))
+          (is (pos? (last counts)) (str "the pressed lead does not pay for every side at once: " counts))
+          (is (apply > counts) (str "each later step judges more: " counts))
+          (is (= (lone (last steps)) (lone (survey far true))) "with the hut's race won, a lone door farther than its walk saves nothing"))))))
 
 (deftest an-open-home-is-flooded-once-across-flights
   (async done
@@ -618,17 +638,26 @@
               rooms (:rooms (rooms/survey c (cover/home-pos c)))]
           (is (= [false true] (mapv :home? rooms)) (str "the room 7 blocks off, then the home 20 off: " (mapv :start rooms))))))))
 
-(deftest a-home-with-more-rooms-nearer-than-max-rooms-is-still-surveyed
-  ;; the count bounds the rooms by the door, never the home: it is priced like any room
+(deftest a-fourth-room-the-run-wins-is-found-past-three-nearer-ones
+  ;; rooms are cut by their price, not by a count: three nearer huts whose doors are walled off leave the fourth
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [near-hut (shifted (merge hs/walls hs/roof hs/door hut-floor) -20)
-              {:keys [eng]} (setup (hut {:x -14.5 :y 64 :z 6.5} (merge hs/door-states (shifted hs/door-states -20)) [] near-hut))
+        (let [dxs [0 -8 -16 -24]
+              huts (apply merge (for [dx dxs] (shifted (merge hs/walls hs/roof hs/door hut-floor) dx)))
+              walled (apply merge (for [dx (butlast dxs)] (shifted {"5,64,3" "cobblestone" "5,65,3" "cobblestone"} dx)))
+              {:keys [eng p]} (setup (assoc (hut {:x 8.5 :y 64 :z 6.5} (apply merge (for [dx dxs] (shifted hs/door-states dx))) []
+                                                 (merge huts walled))
+                                            :home false))
               c (core/make-ctx eng {:root "j8" :slots [] :chain ["j8"] :token "t8" :args {} :round 1})
               _ (.setOwner (:primitives eng) "t8")
-              rooms (:rooms (settings/with-settings {:jobs.lib.rooms/max-rooms 1} #(rooms/survey c (cover/home-pos c))))]
-          (is (= [false true] (mapv :home? rooms)) (str "the room by the door, then the home past the count: " (mapv :start rooms))))))))
+              threats [(seen-zombie 40.5 6.5)]
+              survey (rooms/survey c nil {:threats threats})
+              verdicts (rooms/verdicts p (:rooms survey) threats true (:spent-s survey))
+              hut-of (fn [r] (some #(when (contains? (:cells r) [(+ 5 %) 64 0]) %) dxs))]
+          (is (= dxs (mapv (comp hut-of :room) verdicts)) (str "all four rooms, nearest first: " (mapv :start (:rooms survey))))
+          (is (= [:no-way :no-way :no-way nil] (mapv :why verdicts)) (str (mapv :why verdicts)))
+          (is (= -24 (hut-of (:room (rooms/pick verdicts)))) "the run is to the fourth"))))))
 
 (deftest a-home-past-64-blocks-is-still-the-flights-home
   ;; its run is priced by the flight's search like a near one's, not cut by a range
