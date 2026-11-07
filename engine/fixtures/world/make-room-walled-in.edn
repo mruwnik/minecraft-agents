@@ -12,14 +12,14 @@
  :cases
  [;; should succeed: the walls are no one's zone, the chest walk digs out and the junk goes in the chest
   {:name "walled-in-digs-out-to-the-chest"
-   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :make-room.tossed} :for-s 5 :until {:source :job :kind :completed}}]
    :limit-s 180}
   ;; should fail: the walls stand in another's zone, nothing is dug and nothing is put away
   {:name "walled-in-inside-another-s-zone-stays-put"
    :zones [{:name "cell" :min [14 0 14] :max [18 3 18] :owner "Other"}]
-   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :act [[:job (jobs.storage.make-room {:worth 1200 :free 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-to-go}} :within-s 150 :of-job true}]
    :after [[:item "poppy" 1]]
    :limit-s 180}]}

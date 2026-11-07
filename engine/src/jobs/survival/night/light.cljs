@@ -45,7 +45,7 @@
 (defn ^:async worth
   "Once a night: the body stands in a sealed room whose only fault is a dark spawnable cell beyond the spawn-free radius, holds
   torches or coal, and lighting quotes no more than the cheapest wall, pit or pocket; then the light call's :worth, what the wall,
-  pit or pocket costs more (with none possible here, the root default worth); else nil."
+  pit or pocket costs more (with none possible here, the night's own worth); else nil."
   [c]
   (let [p (:primitives c)]
     (when (and (not (:light-tried (ctx/mem c)))
@@ -54,7 +54,7 @@
       (let [light (await (light-cost c (:cells (reach-room/room p (sh-sense/feet p)))))]
         (when (< light ##Inf)
           (let [ways (await (way-cost c))]
-            (when (<= light ways) (if (js/isFinite ways) (- ways light) (ctx/default-worth)))))))))
+            (when (<= light ways) (if (js/isFinite ways) (- ways light) (ctx/worth c)))))))))
 
 (defn ^:async light!
   "jobs.build.light-area over the room's cells with worth (worth), called again while it goes on; once it ends, :light-tried, whatever

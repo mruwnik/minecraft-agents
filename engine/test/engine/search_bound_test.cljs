@@ -33,8 +33,7 @@
 
 (deftest with-no-way-but-a-dig-route-a-search-is-worth-what-the-goal-is
   (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]
-    (is (= 40 (sb/fallback-s (assoc (ctx-at 0) :worth (constantly 40)) [0 64 0] [20 64 0] (constantly true) {})))
-    (is (= ##Inf (sb/fallback-s (ctx-at 0) [0 64 0] [20 64 0] (constantly true) {})) "arrive: the search goes on")))
+    (is (= 40 (sb/fallback-s (assoc (ctx-at 0) :worth (constantly 40)) [0 64 0] [20 64 0] (constantly true) {})))))
 
 (deftest at-arrive-worth-the-time-the-chain-has-left-bounds-the-fallback-and-the-dig-budget
   (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :none}))]

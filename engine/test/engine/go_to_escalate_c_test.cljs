@@ -1783,7 +1783,7 @@
 
 (deftest a-dig-quote-of-no-running-call-keeps-no-search
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
     (.setOwner (:primitives eng) "tx")
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
       (fn []
@@ -1793,13 +1793,13 @@
 
 (deftest a-dig-quote-bounded-by-the-walk-on-ends-nil-when-every-dig-costs-more
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
     (.setOwner (:primitives eng) "tx")
     (is (nil? (choose/dig-price c [38 64 0] 0.1)) "dearer than walking on: priced and dropped, not :budget")))
 
 (deftest a-dig-quote-cheaper-than-walking-on-is-found-under-the-bound
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
         _ (.setOwner (:primitives eng) "tx")
         dug (choose/dig-price c [4 64 0] nil)]
     (is (number? dug) "the dig is found with no bound")
@@ -1808,14 +1808,14 @@
 
 (deftest a-dig-quote-of-no-running-call-that-ended-keeps-no-search
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 6 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
     (.setOwner (:primitives eng) "tx")
     (is (not= :budget (choose/dig-price c [4 64 0] nil)) "the search ended within its slice")
     (is (empty? @choose/kept-routes) "an ended quote's answer is not kept under the job's quote key")))
 
 (deftest a-dig-quote-of-a-running-call-goes-on-searching
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 40 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})]
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})]
     (.setOwner (:primitives eng) "tx")
     (ctx/update-mem! c assoc :route-owner "j9")
     (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
@@ -1826,7 +1826,7 @@
 
 (deftest a-dig-quote-searches-with-the-opts-the-escalation-digs-with
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 12 70 2 "stone")})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
         seen (atom nil)
         real choose/dig-way]
     (.setOwner (:primitives eng) "tx")
@@ -1844,7 +1844,7 @@
 ;; dropped the failed escalation from memory, the next round asks the same search, which goes on rather than begins again
 (deftest a-choice-after-a-failed-escalation-keeps-its-search-over-rounds
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 14 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
         feet [0 64 0]
         goal [10 64 0]
         starts (atom 0)
@@ -1872,7 +1872,7 @@
 ;; the search reads the body's memory only: a world change it has not seen leaves its ended route standing
 (deftest an-ended-route-holds-while-the-memory-does-though-the-world-changes
   (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 14 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}] :light [15 15] :seen :all})
-        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:worth tu/order-worth} :round 1})
         p (:primitives c)
         starts (atom 0)
         choice (fn []

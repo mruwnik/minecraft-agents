@@ -24,11 +24,12 @@
   {:blocks blocks :inventory inventory :drops {:obsidian "obsidian"} :self {:pos [0.5 64 0.5]}})
 
 (defn ^:async obtain
-  "obtain obsidian; the caller's stated :worth (an agent through ./bin) unless args say otherwise."
+  "obtain obsidian; the caller's stated :worth (an agent through ./bin) unless args say otherwise (no :worth: the obtain's
+  own worth-of, as a root order of it prices it)."
   ([w] (obtain w {:worth 300}))
   ([w args]
    (let [{:keys [eng p]} (lt/setup w)
-         res (await (tu/child-outcome eng 'jobs.items.obtain (merge {:item "obsidian" :count 1} args) 300))]
+         res (await (tu/child-outcome eng 'jobs.items.obtain (second (tu/order eng (list 'jobs.items.obtain (merge {:item "obsidian" :count 1} args)))) 300))]
      {:res res :p p})))
 
 (defn carried [p name] (reduce + (map #(.-count %) (filter #(= name (.-name %)) (array-seq (.-inventory (.self p)))))))

@@ -12,8 +12,8 @@
 
 (def scenario-text
   "{:register [{:trigger :hungry}]
-    :queue [(jobs.movement.go-to {:pos {:x 30 :y 64 :z 0} :checks {:safe? (not (threatened))}})
-            (jobs.time.wait-for-light)]}")
+    :queue [(jobs.movement.go-to {:worth 1200 :pos {:x 30 :y 64 :z 0} :checks {:safe? (not (threatened))}})
+            (jobs.time.wait-for-light {:worth 1200})]}")
 
 (defn setup [world]
   (let [clock (atom 1000000)

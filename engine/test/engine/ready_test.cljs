@@ -99,13 +99,15 @@
             [jobs.lib.world-files :as world-files]))
 
 
+(def hand-worth "ctx-of's :worth: a hand order's (tu/order-worth)." (constantly tu/order-worth))
+
 (defn ctx-of
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job), staying at its place long enough that no exposure is affordable (jobs.lib.price)."
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
     (game/select! p)
     {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})
-     :worth (constantly tu/order-worth)}))
+     :worth hand-worth}))
 
 (defn remembering-ctx
   "ctx-of world over a real perception that has looked all round, so the blocks of world are in the body's memory (a threat field reads memory only)."
@@ -546,10 +548,6 @@
     (are [args expected] (= expected (first (ready/threatened (worthless (with-entry (merge at-origin {:entities [far] :blocks behind}) args)))))
       {} :ok
       {:visible-only false} :later)))
-
-(deftest a-heard-price-with-no-engine-behind-the-ctx-reads-the-worth-as-infinite
-  (let [c (dissoc (assoc (with-entry (merge at-origin {:entities []}) {}) ::price/stay-s 30) :worth)]
-    (is (= :ok (first (ready/heard-price c))) "no :worth fn on the ctx: no throw, nothing heard is dearer than ##Inf")))
 
 (deftest threatened-prices-a-mob-only-heard-and-waits-on-no-reflex
   (let [wall (tu/box 2 64 -3 3 66 3 "stone")
@@ -1596,7 +1594,7 @@
         data (reduce (fn [d [pos n]] (mem/add-entry d :fetch/stock {:t 0 :data {:pos pos :items {"bread" n}}} {:cap 64 :ttl :forever}))
                      mem/empty-data chests)]
     {:primitives (tu/fake {:inventory [{:name "bread" :count bread}]}) :view (fn [] {:data data :now 1000})
-     ::figure figure}))
+     :worth hand-worth ::figure figure}))
 
 (def trip-fed (ready/trip-fed ready/ok (constantly {:x 40 :y 64 :z 0}) (fn [c] {:uses {:job-time (::figure c)}})))
 
@@ -1620,7 +1618,7 @@
 
 (deftest a-fetch-that-comes-back-short-stops-the-call-only-when-going-on-costs-more
   (let [c (trip-ctx 2 [0 1800 ##Inf] [3 64 0])]
-    (is (true? (:go-on? (fetch-args c))) "the default worth: running out on the 2 loaves is cheaper than stopping")
+    (is (true? (:go-on? (fetch-args c))) "a hand order's worth: running out on the 2 loaves is cheaper than stopping")
     (is (false? (:go-on? (fetch-args (assoc c :worth (constantly 1) :quote-call {:worth 1})))) "worth 1 s: stopping is cheaper")))
 
 (deftest a-trip-fetches-only-the-home-food-get-food-takes

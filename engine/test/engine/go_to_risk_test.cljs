@@ -58,9 +58,9 @@
   (constantly 400))
 
 (defn finite-worth
-  "c, with a worth of 400 s unless the test set one."
+  "c, with a worth of 400 s unless the test set one (ready-test/ctx-of's hand-order worth is not one)."
   [c]
-  (if (:worth c) c (assoc c :worth worth-400)))
+  (if (and (:worth c) (not (identical? ready-test/hand-worth (:worth c)))) c (assoc c :worth worth-400)))
 
 (defn planned-status "risk/status of the walk to goal planned straight, on a call worth 400 s unless c says one." [c goal] (risk/status (finite-worth c) goal (straight-plan c goal)))
 

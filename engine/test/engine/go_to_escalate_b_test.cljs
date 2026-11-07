@@ -499,7 +499,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup (merge in-pit {:blocks (merge pit (box 1 61 0 1 64 0 "stone"))}))
-              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [10 64 0] :range 1} :round 1})
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos [10 64 0] :range 1 :worth tu/order-worth} :round 1})
               detour {:status :no-path :reason :detour :route 25 :blocks 14 :straight 5 :allowed 18}]
           (.setOwner (:primitives eng) "tx")
           (ctx/update-mem! c assoc :detour-tried true :fruitless 1 :escalations 1 :give-up {:tries 0 :status :detour :result detour}

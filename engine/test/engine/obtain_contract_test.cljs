@@ -414,7 +414,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [none (await (torch-status (f/start (f/bare []) []) 1000))]
-          (is (= :ok (first none)) "no way known, however much it is worth: it starts, its round looks around, the source checks then say what is lacking"))
+          (is (= [:later :not-worth ##Inf] [(first none) (:reason (nth none 2)) (:price (nth none 2))]) "no way, however much it is worth"))
         (is (= :ok (first (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) 100))))
             "a craft from carried coal costs its steps")
         (is (= [:later :not-worth] (let [[kind _ data] (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) -5))] [kind (:reason data)]))

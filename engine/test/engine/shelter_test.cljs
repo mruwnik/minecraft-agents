@@ -541,7 +541,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:time night :blocks {"6,64,0" "red_bed"}})
-              eng (update eng :triggers assoc :sleeper {:name :sleeper :job '(jobs.survival.sleep) :args {}
+              eng (update eng :triggers assoc :sleeper {:name :sleeper :job '(jobs.survival.sleep {:worth 1200}) :args {}
                                                         :persistence :cooldown :cooldown-s 10 :when (constantly true)})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (with-redefs [sh-beds/bed-free? (fn [& _] false)]

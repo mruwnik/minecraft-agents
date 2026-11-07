@@ -85,8 +85,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (nil? (await (gathered-under 1))) "a lone wheat is not worth growing a field for a 1 s call")
-        (is (= (quote jobs.farm.grow) (await (gathered-under 100000))) "a dear call: grown")
-        (is (= (quote jobs.farm.grow) (await (gathered-under ##Inf))) "no limit: grown")))))
+        (is (= (quote jobs.farm.grow) (await (gathered-under 100000))) "a dear call: grown")))))
 
 (defn young-or-ripe [age] {:blocks {"3,63,0" "farmland" "3,64,0" "wheat"} :ages {"3,64,0" age}})
 

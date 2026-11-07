@@ -24,7 +24,7 @@
   (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :low-health :dawn :dusk-home :hungry :stuck-underground :needs-bed :needs-weapon :door-left
           :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :mounted :part-cut-tree :replant-owed :dark-work :ore-seen :loose-items]
          (loaded-ids {})
-         (loaded-ids '{:queue [(jobs.movement.look-around)]}))))
+         (loaded-ids '{:queue [(jobs.movement.look-around {:worth 1200})]}))))
 
 (deftest every-default-trigger-is-in-the-default-register
   (is (= (set (keys triggers/all)) (set (loaded-ids {})))))

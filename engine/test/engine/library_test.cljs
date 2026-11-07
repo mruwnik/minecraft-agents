@@ -671,7 +671,7 @@
    :now now-ms})
 
 (def look-timer-45
-  '{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45)) :job (jobs.movement.look-around)})
+  '{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 45)) :job (jobs.movement.look-around {:worth 1200})})
 
 (def with-conditions (trigger-api/with-conditions triggers/all trigger-api/compile-condition))
 
