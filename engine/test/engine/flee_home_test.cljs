@@ -494,26 +494,6 @@
   (let [f (.-sensedAt p)]
     (aset p "sensedAt" (fn [pos] (swap! reads inc) (.call f p pos)))))
 
-(deftest a-chaser-at-the-body-gets-a-first-step-that-floods-no-room
-  ;; its lead at the body is under the race margin: any flood would cost the race
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [counts (atom {})
-              per-step (atom [])
-              step retreat/flight-step!
-              restores [(counting! counts :closed-room #(identity rooms/refuge-room?) #(set! rooms/refuge-room? %))
-                        (counting! counts :room #(identity reach-room/room) #(set! reach-room/room %))]
-              world (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [(zombie 5.5 8 0.4)] lone-doors)
-                           :home false)
-              {:keys [eng]} (setup world)
-              _ (set! retreat/flight-step! (fn [c] (let [before @counts] (.then (step c) (fn [r] (swap! per-step conj (merge-with - @counts before)) r)))))]
-          (core/submit! eng '(test.flight) {})
-          (try (await (tu/run-until-empty eng 2))
-               (finally (set! retreat/flight-step! step) (doseq [r restores] (r))))
-          (is (seq @per-step))
-          (is (= {} (first @per-step)) (str "room judgements made by the first step, none: " @per-step)))))))
-
 (deftest a-body-in-its-home-room-hit-on-the-run-is-cornered-inside
   (async done
     (tu/run-async done
@@ -531,6 +511,24 @@
 (defn seen-zombie [x z] #js {:name "zombie" :visible true :pos #js {:x x :y 64 :z z}})
 
 (defn margin [] (settings/get cost-danger/settings ::cost-danger/race-margin-s))
+
+(deftest a-chaser-3-blocks-off-leaves-lead-for-a-few-floods-less-the-race-margin
+  ;; no distance gate: its lead at the body, less the race margin a race to a refuge is won by, prices the step's floods
+  ;; (the search budget lifted: the lead alone is priced here). The body stands among the lone doors: no room is won
+  ;; that the farther sides could not beat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x -13.5 :y 64 :z 10.5} (merge hs/door-states lone-door-states) [] lone-doors)
+                                          :home false))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              zombie [(seen-zombie -13.5 13.5)]
+              judged (fn [margin] (settings/with-settings (assoc no-ceiling ::cost-danger/race-margin-s margin)
+                                    #(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped (cover/survey c zombie false)))))))
+              [with-margin without] [(judged (margin)) (judged 0)]]
+          (is (pos? with-margin) (str "a zombie 3 blocks off leaves lead for a flood: " with-margin))
+          (is (< with-margin without) (str "the race margin's share of the lead buys none: " [with-margin without])))))))
 
 (deftest a-steps-fresh-floods-are-as-many-as-the-chasers-lead-pays-for
   ;; the lead, not a count, bounds a step's floods: a far chaser leaves time for every door side, one at the body for none.
