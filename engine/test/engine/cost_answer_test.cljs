@@ -119,7 +119,10 @@
     (is (some? (:stand answers)) "no fight, no cover: standing is still priced")
     (is (seq (:blasts (:stand answers))) "its price is the creeper's blast")
     (is (= :stand (:answer (cost/decide (body 20) (into {} (filter val) answers) here))) "decide picks it")
-    (is (nil? (:stand (cost/cornered-answers {:mobs [(mob "zombie" 8)] :fight nil :covers {}}))) "only a creeper's blast is stood")))
+    (is (nil? (:stand (cost/cornered-answers {:mobs [(mob "zombie" 8)] :fight nil :covers {}}))) "only a creeper's blast is stood")
+    (is (= (answer/blast-hurt (armour/armour-stats nil) 0) (:hit (:stand (cost/cornered-answers {:mobs [(mob "creeper" 0)] :fight nil :covers {}}))))
+        "one already beside the body swells and blows there")
+    (is (< 0.04 (answer/threat-chance (body 20) "creeper" nil here) 0.12) "so standing beside it is a death; a bare body at full health walks off at about 0.07")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))

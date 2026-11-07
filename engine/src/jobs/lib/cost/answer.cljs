@@ -573,13 +573,13 @@
 
 (defn stand-answer
   "The answer of doing nothing about mobs [flee-mob's] for seconds wearing equipment: blows-over of all but a creeper, and
-  the blast of each creeper that gets to its swell start within them. It takes none of the body's seconds."
+  the blast of each creeper that gets to its swell start within them, at its distance when already nearer (it swells where it stands). It takes none of the body's seconds."
   [{:keys [equipment mobs seconds]}]
   (let [stats (armour/armour-stats equipment)
         {creepers true others false} (group-by #(= "creeper" (:name %)) mobs)
         blasts (vec (for [{:keys [name distance speed] :as m} creepers
                           :when (<= (/ (max 0 (- (or distance 0) swell-start)) (or speed (danger/chase-speed name))) seconds)]
-                      (chance-blast (blow stats m) (:weight m 1))))]
+                      (chance-blast (blast-hurt stats (min (or distance 0) swell-start)) (:weight m 1))))]
     (cond-> (-> (blows-over stats others seconds) (update :damage + (reduce + 0 (map blast-mean blasts))) (update :hit #(reduce max % (map blast-hp blasts))) (assoc :seconds 0))
       (seq blasts) (assoc :blasts blasts))))
 
