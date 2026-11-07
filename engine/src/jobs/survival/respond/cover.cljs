@@ -276,7 +276,8 @@
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
   judged's search (judge!; a :retreat.search debug event lists them): the best score less marks (a step or end in a ranged chaser's line of fire, a safe home's credit), a pocket only in a closed cave; with none, or when its step is into a cell the body has not seen
-  (flee-search/into-unseen?), after a look at the routes' first unseen cells (look-ahead!), the same over the search run again (nothing left to look at: the step as it was); nil when cornered
+  (flee-search/into-unseen?), after a look at the routes' first unseen cells (look-ahead!; not when the search was cut,
+  flee-search/cut?), the same over the search run again (nothing left to look at: the step as it was); nil when cornered
   or the search was cut before an end was chosen. Left out: ends under rock below the flight's floor
   (flight/floor; not out of the line of fire, nor on stairs the body cut), ends go-to refused, routes near a :hazard,
   wet ends while a dry one is left (none with a drowned among threats); then ends toward a hostile not chasing
@@ -291,7 +292,8 @@
            from (u/self-pos c)
            opts-for #(respond.goal/choose-opts c threats covered? (respond.goal/closed-home %))
            first-pick (search/choose (:ends judged) (opts-for judged))
-           again (when (or (nil? first-pick) (search/into-unseen? first-pick))
+           ;; a search its meter cut has more to plan at the next step's: no look stands in for that
+           again (when (and (not (search/cut? (:ends judged))) (or (nil? first-pick) (search/into-unseen? first-pick)))
                    (await (look-ahead! c threats covered? judged first-pick)))
            e (if again
                (search/choose (:ends again) (opts-for again))

@@ -960,8 +960,7 @@
           (is (zero? (nth @costs 2)) "a route all behind the wall")
           (is (pos? (nth @costs 3)) "covered first step and end, exposed in the middle: the seconds in fire are priced"))))))
 
-(deftest a-cut-flee-search-with-no-end-chosen-takes-the-cornered-step
-  ;; it held one step for the next step's search, unpriced: the same search again (a cut one is never kept)
+(deftest a-cut-flee-search-with-no-end-chosen-holds-once-then-takes-the-cornered-step
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -970,13 +969,17 @@
               s (setup {:ms-per-call 0})
               s (assoc-in s [:eng :jobs 'cutter]
                           {:round (fn ^:async r [c]
-                                    (let [covered? (cover/cover-fn (:primitives c) [] (respond.state/fire-spots c))]
+                                    (let [covered? (cover/cover-fn (:primitives c) [] (respond.state/fire-spots c))
+                                          stuck (fn [why] (js/Promise.resolve [:stuck why]))]
                                       (with-redefs [step/eat-on-the-run! (fn [& _] (js/Promise.resolve nil))
                                                     cover/flight-target! (fn ([_ _] (js/Promise.resolve nil)) ([_ _ _ _] (js/Promise.resolve nil)))]
-                                        (reset! out (await (step/walk-away! c [] cut covered? (fn [why] (js/Promise.resolve [:stuck why])))))))
+                                        (reset! out [(await (step/walk-away! c [] cut covered? stuck))
+                                                     (await (step/walk-away! c [] cut covered? stuck))])))
                                     (ctx/end c :done nil))})]
           (await (run-job! s 'cutter {}))
-          (is (= :stuck (first @out)) (str "no hold: the cornered step " (pr-str @out))))))))
+          (is (= :again (first @out)) "the first cut holds for the next step's search")
+          (is (= :stuck (first (second @out))) (str "cut again with nothing chosen: the cornered step " (pr-str @out)))
+          (is (= 1 (count (filter #(= :retreat.search-cut (:kind %)) @(:seen s)))) "said once"))))))
 
 (deftest a-look-ahead-under-fire-is-taken-only-when-what-it-may-spare-is-worth-its-seconds-there
   ;; the flight looked up to 5 times before each pick into the unseen, unpriced, though standing in a shooter's line
