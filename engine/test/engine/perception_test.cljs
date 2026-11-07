@@ -374,6 +374,13 @@
     (perception/touch! per [100 64 0])
     (is (= [[0 64 0]] (mapv :pos (perception/seen-blocks per {:names ["gold_block"] :radius 100000}))))))
 
+(deftest seen-blocks-follows-a-section-written-after-a-read
+  (let [{:keys [per]} (rig {"0,64,0" "gold_block" "1,64,0" "stone"})]
+    (perception/touch! per [0 64 0])
+    (is (empty? (perception/seen-blocks per {:names ["stone"]})))
+    (perception/touch! per [1 64 0])
+    (is (= [[1 64 0]] (mapv :pos (perception/seen-blocks per {:names ["stone"]}))))))
+
 (deftest seen-blocks-reports-each-cells-own-age
   (let [clock (atom 0)
         {:keys [per]} (rig {"0,64,1" "gold_block" "1,64,1" "gold_block"} {:now #(deref clock)})]

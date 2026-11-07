@@ -218,6 +218,18 @@
     {:unknown true :pos pos}))
 
 
+(defn section-state-ids
+  "The distinct state ids (each plus 1) section sec holds, as a JS Set kept while the section is not written."
+  [^js sec]
+  (let [stamp (or (.-wrote sec) 0)]
+    (if (and (some? (.-idSet sec)) (== stamp (.-idSetAt sec)))
+      (.-idSet sec)
+      (let [^js ids (.-ids sec) out (js/Set.)]
+        (dotimes [i 4096] (let [v (aget ids i)] (when (pos? v) (.add out v))))
+        (set! (.-idSet sec) out)
+        (set! (.-idSetAt sec) stamp)
+        out))))
+
 (defn seen-blocks
   "Remembered blocks within radius (at most max-seen-radius) of the body's feet, nearest first:
   [{:name :pos :distance :age-ms}]. names (a coll) or match (name -> truthy) filters; max caps the list."
@@ -243,7 +255,10 @@
                   (fn [^js sec]
                     (let [bx (* 16 (.-cx sec)) by (* 16 (.-sy sec)) bz (* 16 (.-cz sec))
                           ^js ids (.-ids sec)]
-                      (when (<= (js/Math.hypot (- (+ bx 8) fx) (- (+ by 8) fy) (- (+ bz 8) fz)) (+ radius 14))
+                      (when (and (<= (js/Math.hypot (- (+ bx 8) fx) (- (+ by 8) fy) (- (+ bz 8) fz)) (+ radius 14))
+                                 (let [has? (volatile! false)]
+                                   (.forEach (section-state-ids sec) (fn [v] (when (and (not @has?) (ok? (dec v))) (vreset! has? true))))
+                                   @has?))
                         (dotimes [i 4096]
                           (let [v (aget ids i)]
                             (when (pos? v)
