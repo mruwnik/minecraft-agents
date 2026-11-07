@@ -493,7 +493,7 @@
                              (swap! landed inc)
                              (swap! st #(-> % (fake/put-block [2 64 0] "gravel") (assoc-in [:self :pos] [2.5 65 (+ z 0)]))))
                            r))))
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel} :worth 100000}) {})
           (await (run-ticks s 3000))
           (is (= 35 @landed))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
