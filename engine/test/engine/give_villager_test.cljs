@@ -325,7 +325,7 @@
     (with-redefs [ctx/mem (fn [_] @m)
                   ctx/update-mem! (fn [_ f & args] (apply swap! m f args))
                   child/call-chase* (fn [& _] (leg (swap! i inc)))
-                  ctx/worth (fn [_] ##Inf)
+                  ctx/worth (fn [_] (ctx/default-worth))
                   feed/stop! (fn [_ reason] [:stop reason])]
       (loop [k 0 out []]
         (if (= k n) out (recur (inc k) (conj out (await (feed/walk! {} pos 0)))))))))
