@@ -550,6 +550,23 @@
           (is (apply > counts) (str "each later step judges more: " counts))
           (is (= (lone (last steps)) (lone (survey far true))) "with the hut's race won, a lone door farther than its walk saves nothing"))))))
 
+(deftest a-crowd-of-doors-under-a-skeletons-fire-is-judged-within-the-time-to-cover
+  ;; nothing races a shooter, but each second the body stands searching is a second in its fire
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} (merge hs/door-states lone-door-states) [] lone-doors)
+                                          :home false))
+              c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+              _ (.setOwner (:primitives eng) "tx")
+              skeleton [#js {:name "skeleton" :visible true :pos #js {:x 5.5 :y 64 :z 14.5}}]
+              cover (cost/exposure-s)
+              r (with-redefs [rooms/judge-s (constantly (/ cover 2.5))] (cover/survey c skeleton false))
+              unjudged (count (filter (comp #{:unjudged} :why) (:dropped r)))]
+          (is (:exposed? (cover/fire-on c skeleton)) "the body stands in the skeleton's line of fire")
+          (is (< (:spent-s r) cover) (str "the step's CPU within the time to cover: " (:spent-s r)))
+          (is (pos? unjudged) (str "the doors past it wait for a later step: " (:dropped r))))))))
+
 (deftest an-open-home-is-flooded-once-across-flights
   (async done
     (tu/run-async done
@@ -653,7 +670,7 @@
               _ (.setOwner (:primitives eng) "t8")
               threats [(seen-zombie 40.5 6.5)]
               survey (rooms/survey c nil {:threats threats})
-              verdicts (rooms/verdicts p (:rooms survey) threats true (:spent-s survey))
+              verdicts (rooms/verdicts p (:rooms survey) threats true (:spent-s survey) nil)
               hut-of (fn [r] (some #(when (contains? (:cells r) [(+ 5 %) 64 0]) %) dxs))]
           (is (= dxs (mapv (comp hut-of :room) verdicts)) (str "all four rooms, nearest first: " (mapv :start (:rooms survey))))
           (is (= [:no-way :no-way :no-way nil] (mapv :why verdicts)) (str (mapv :why verdicts)))

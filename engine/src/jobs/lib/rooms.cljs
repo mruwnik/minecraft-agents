@@ -190,11 +190,18 @@
   "Whether a search of cost-s seconds of CPU pays, spent-s already spent this step: the CPU is lead the body stands
   still for, so it must end within the chasers' lead at the body (here-s), within the lead a refuge has at its door
   (lead-s) and within the run it could save over the room with a run on in fewest steps (save-s: those steps less the
-  blocks to it, at the body's pace; ##Inf with none). With no melee threat (here-s ##Inf) nothing races and every
-  search pays but one that saves nothing."
-  [spent-s cost-s here-s lead-s save-s]
+  blocks to it, at the body's pace; ##Inf with none). With no melee threat (here-s ##Inf) nothing races: the CPU is time
+  in the shooters' fire (fire, {:risk :exposed?}: fire-price's :risk of seconds in it, and whether the body stands in
+  it), which pays while it risks less than the fire a refuge spares, that of the run it saves capped by a flight's time
+  to cover (cost/exposure-s, what fire-price charges an end left uncovered); out of the fire it spares none. With
+  neither, every search pays but one that saves nothing."
+  [spent-s cost-s here-s lead-s save-s fire]
   (and (pos? save-s)
-       (or (infinite? here-s) (< (+ spent-s cost-s) (min here-s lead-s save-s)))))
+       (cond
+         (not (infinite? here-s)) (< (+ spent-s cost-s) (min here-s lead-s save-s))
+         (nil? fire) true
+         :else (let [{:keys [risk exposed?]} fire]
+                 (and exposed? (< (risk (+ spent-s cost-s)) (risk (min save-s (cost/exposure-s)))))))))
 
 (defn save-s
   "Seconds of run a refuge blocks from the body could save over a won one best-steps away (pays?): ##Inf with none."
@@ -209,13 +216,13 @@
   seen (starts), nearest cell first (the home on a tie); and {:dropped [{:at [x y z] :own? :why}]}, the cells that are
   none: :run-failed (a run to it failed this flight), :not-closed, :unseen (a cell of the room not seen yet), or
   :unjudged (a door side not judged this step: fresh? false, or its judge-s does not pay, pays?, against threats' lead
-  at its door, lead-s straight, and the run it saves over a room with a run on, save-s). The home and the sides
+  at its door, lead-s straight, or fire, and the run it saves over a room with a run on, save-s). The home and the sides
   judged before cost nothing and come first; each closed room found gets its walk search (way-s) as verdicts prices it. :spent-s the CPU the step's searches may have cost. A home with a bare doorway
   gap counts as a room (doorway-room: its :gap; :fill? when a block is carried to fill it). keep? false: the
   judgements are kept nowhere (closed?), so the flee price surveys what the flight's step then surveys. Defaults: no
-  threats, keep? and fresh? true."
+  threats, no fire, keep? and fresh? true."
   ([c home] (survey c home {}))
-  ([c home {:keys [threats keep? fresh?] :or {keep? true fresh? true}}]
+  ([c home {:keys [threats fire keep? fresh?] :or {keep? true fresh? true}}]
    (let [p (:primitives c)
          me (u/self-pos c)
          failed (:refuges-failed (ctx/mem c) #{})
@@ -233,7 +240,7 @@
                      (and (not home?) (known-open? c pos)) :not-closed
                      home? (case (closed? c pos keep?) true nil :unseen :unseen :not-closed)
                      (not fresh?) :unjudged
-                     (pays? @spent (judge-s) here (lead-s p [at] threats (u/dist me at)) (save-s p (u/dist me at) @best))
+                     (pays? @spent (judge-s) here (lead-s p [at] threats (u/dist me at)) (save-s p (u/dist me at) @best) fire)
                      (do (vswap! spent + (judge-s))
                          (case (closed? c pos keep?) true nil :unseen :unseen :not-closed))
                      :else :unjudged)))
@@ -241,7 +248,7 @@
                     (let [doors (map (comp mid :cell) (:doors r))
                           blocks (reduce min ##Inf (map #(u/dist me %) doors))
                           cost (* (count (:doors r)) (way-s))]
-                      (if-not (or home? (pays? @spent cost here (lead-s p doors threats blocks) (save-s p blocks @best)))
+                      (if-not (or home? (pays? @spent cost here (lead-s p doors threats blocks) (save-s p blocks @best) fire))
                         r
                         (let [w (way-in p r)]
                           (vswap! spent + cost)
@@ -387,12 +394,12 @@
   "What the flight makes of each of rooms (rooms, nearest first): [{:room r :inside? true}] alone for the room the body
   is in, else per room {:room r :way w} with :why it is not run to: :no-run (way? false: no run may be looked for now),
   :creeper (one chases: it would follow to the door and blow the door, chest and bed), :unpriced (way-in's way-s a door
-  does not pay, pays?, spent-s of the step's CPU already spent, against threats' lead at its doors, lead-s straight,
+  does not pay, pays?, spent-s of the step's CPU already spent, against threats' lead at its doors, lead-s straight, or fire,
   and the run it saves over the room a run is on to in fewest steps, save-s; the home's is always searched, and a room
   survey already searched, :way-in, costs nothing), :no-way (way-in finds none) or :race-lost (a melee chaser gets to a
   door first: race-won?); no :why: a run there is on."
-  ([p rooms threats way?] (verdicts p rooms threats way? 0))
-  ([p rooms threats way? spent-s]
+  ([p rooms threats way?] (verdicts p rooms threats way? 0 nil))
+  ([p rooms threats way? spent-s fire]
    (if-let [r (some #(when (inside? p %) %) rooms)]
      [{:room r :inside? true}]
      (let [creeper? (some combat/creeper? threats)
@@ -407,7 +414,7 @@
              (cond
                (not way?) (recur more spent best (conj out {:room r :why :no-run}))
                creeper? (recur more spent best (conj out {:room r :why :creeper}))
-               (not (or (:home? r) (contains? r :way-in) (pays? spent cost here (lead-s p doors threats blocks) (save-s p blocks best)))) (recur more spent best (conj out {:room r :why :unpriced}))
+               (not (or (:home? r) (contains? r :way-in) (pays? spent cost here (lead-s p doors threats blocks) (save-s p blocks best) fire))) (recur more spent best (conj out {:room r :why :unpriced}))
                :else (let [w (if (contains? r :way-in) (:way-in r) (way-in p r))
                            won? (and w (race-won? p r w threats))]
                        (recur more (if (contains? r :way-in) spent (+ spent cost)) (if won? (min best (:steps w)) best)

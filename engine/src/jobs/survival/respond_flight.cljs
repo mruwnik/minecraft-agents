@@ -150,7 +150,7 @@
         glanced? (boolean (and survey0 (not-any? combat/creeper? threats) (await (room-lib/glance-in! c survey0 threats))))
         survey (if glanced? (cover/survey c threats true) survey0)
         rooms (:rooms survey)
-        verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (+ (:spent-s survey) (if glanced? (:spent-s survey0) 0))))
+        verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?)) (+ (:spent-s survey) (if glanced? (:spent-s survey0) 0)) (cover/fire-on c threats)))
         {:keys [room way inside?]} (room-lib/pick verdicts)
         gap-way (when (and inside? (:fill? room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
         _ (when (and glanced? room inside?) (say-once! c room))
