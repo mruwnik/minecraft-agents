@@ -1140,8 +1140,19 @@
         ground (tu/box -6 63 -6 6 63 6 "stone")
         wall (tu/box 2 64 -1 2 66 1 "oak_planks")
         creeper [{:id 8 :name "creeper" :kind "hostile" :pos {:x 4 :y 64 :z 4}}]]
-    (is (zero? (hostile-loss/blast-s (world ground []))) "a crater in natural stone costs nothing")
-    (is (< 0 (hostile-loss/blast-s (world (merge ground wall) []))) "a planks wall beside the body is put back")
+    (is (zero? (hostile-loss/blast-s (world ground []) {})) "a crater in natural stone costs nothing")
+    (is (< 0 (hostile-loss/blast-s (world (merge ground wall) []) {})) "a planks wall beside the body is put back")
+    (is (< 0 (hostile-loss/blast-s (world (merge ground {"2,64,0" "dirt"}) []) {:data {:entries {:escalation-placed [{:data {:cell [2 64 0] :block "dirt"} :t 0}]}} :now 0}))
+        "a dirt block go-to put back is the body's own build: put back, though dirt is natural terrain")
+    (is (zero? (hostile-loss/blast-s (world (merge ground {"2,64,0" "dirt"}) []) {})) "the same block unremembered is natural")
+    (let [w (world (merge ground wall) []) reads (atom 0) real u/sensed
+          read-count (fn [view] (reset! reads 0)
+                       (with-redefs [u/sensed (fn [& a] (swap! reads inc) (apply real a))] (hostile-loss/blast-s w view))
+                       @reads)]
+      (is (pos? (read-count {})) "the first read of the cells about the body")
+      (is (zero? (read-count {})) "the same cell, the same world and placed blocks: kept, no cell read again")
+      (is (pos? (read-count {:data {:entries {:escalation-placed [{:data {:cell [9 64 9] :block "dirt"} :t 0}]}} :now 0}))
+          "a newly placed block: read again"))
     (is (not (contains? (hostile-loss/body-at (world (merge ground wall) []) {}) :blast-s)) "no creeper known: no blast to price")
     (is (pos? (:blast-s (hostile-loss/body-at (world (merge ground wall) creeper) {}))) "a creeper near: the answers pay it")))
 

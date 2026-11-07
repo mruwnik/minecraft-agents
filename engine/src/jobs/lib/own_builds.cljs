@@ -52,18 +52,10 @@
   {:cap 100 :ttl (* 6 60 60 1000)})
 
 (defn own-placed-fn
-  "(own? cell block): go-to itself placed block at cell (a put-back), or the body's scaffold ledger holds it there
-  (a pillar, a plug: its own temporary block; an :intent entry counts when the cell holds the intended item, as
-  jobs.lib.ledger/decide reads it), so it is not someone's build."
+  "ledger/own-placed of c's memory, after the ledger's keep-alive!."
   [c]
-  (let [put-back (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))
-        entries (into {} (map (juxt :cell identity)) (ledger/entries c))]
-    (fn [cell block]
-      (or (contains? put-back [(vec cell) block])
-          (when-let [e (get entries (vec cell))]
-            (case (:state e)
-              :intent (= :placed (ledger/decide e (constantly block)))
-              (and (#{:placed :removing} (:state e)) (= block (:item e)))))))))
+  (ledger/entries c)
+  (ledger/own-placed (ctx/view c)))
 
 (defn own-dig-fn
   "(own? cell block) of a call that digs: own-placed-fn's, the body's own builds too when it may cut them (own-cut?)."

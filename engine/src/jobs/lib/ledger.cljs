@@ -246,6 +246,20 @@
   [c]
   (when (= (:id c) (:root c)) (release! c)))
 
+(defn own-placed
+  "(own? cell block) of a body-memory view: go-to itself placed block at cell (a put-back), or the body's scaffold ledger
+  holds it there (a pillar, a plug: its own temporary block; an :intent entry counts when the cell holds the intended
+  item, as jobs.lib.decide reads it), so it is not someone's build."
+  [view]
+  (let [put-back (set (map (comp (juxt :cell :block) :data) (mem/entries view :escalation-placed)))
+        entries (into {} (map (juxt :cell identity)) (open-entries view))]
+    (fn [cell block]
+      (or (contains? put-back [(vec cell) block])
+          (when-let [e (get entries (vec cell))]
+            (case (:state e)
+              :intent (= :placed (decide e (constantly block)))
+              (and (#{:placed :removing} (:state e)) (= block (:item e)))))))))
+
 (defn keep-alive!
   "Stamp the entries of c's root that run out within half the ttl anew (expiry/stamp): a root still running keeps the
   scaffold its tree uses past the ttl, which is only the backstop for a cleanup that never ran."

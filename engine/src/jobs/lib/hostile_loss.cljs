@@ -4,6 +4,7 @@
   comparison."
   (:require [engine.args :as a]
             [engine.game :as game]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
@@ -12,6 +13,8 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.threat-field :as threat-field]
             [jobs.lib.game-facts :as game-facts]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shot :as shot]
@@ -43,11 +46,8 @@
               (boolean (and (death-spot/bare-headed? e) (death-spot/burns-by-day? p (.-name e) at)))))
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 
-(defn blast-s
-  "Seconds a creeper's blast at the body's feet costs what is about it (cost/blast-env-s): each sensed cell within
-  cost/blast-reach at what destroying it costs (cost/destroyed-fn: a build, a chest, farmland and crops; natural terrain
-  nothing) and its blast resistance."
-  [p]
+(defn blast-s*
+  [p own?]
   (let [{:keys [x y z]} (u/pos-of (.-pos (.self p)))
         [fx fy fz] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
         sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z}))
@@ -61,9 +61,27 @@
            :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]
                  b (sensed cell)
                  n (when (and b (not (true? (.-unknown b)))) (.-name b))
-                 worth (if n (destroyed n cell false) 0)]
+                 worth (if n (destroyed n cell (own? cell n)) 0)]
            :when (pos? worth)]
        [d (or (some-> (aget blocks n) .-resistance) 0) worth]))))
+
+(def blast-memo (atom nil))
+
+(defn blast-s
+  "Seconds a creeper's blast at the body's feet costs what is about it (cost/blast-env-s): each sensed cell within
+  cost/blast-reach at what destroying it costs (cost/destroyed-fn: a block the body placed itself (ledger/own-placed
+  of its memory view) or one that looks built, a chest, farmland and crops; natural terrain nothing) and its blast
+  resistance. Kept while the body stays in its cell and neither the world it knows nor its placed blocks change."
+  [p view]
+  (let [self (u/pos-of (.-pos (.self p)))
+        key [(threat-field/world-epoch p) (mapv #(js/Math.floor %) [(:x self) (:y self) (:z self)])
+             (count (mem/entries view :escalation-placed)) (hash (ledger/open-entries view))]
+        hit @blast-memo]
+    (if (and (some? (first key)) (identical? p (:p hit)) (= key (:key hit)))
+      (:value hit)
+      (let [v (blast-s* p (ledger/own-placed view))]
+        (reset! blast-memo {:p p :key key :value v})
+        v))))
 
 (defn body-at
   "What the answers' prices read of the body of p (memory view): health, absorption, food, what a death costs it
@@ -72,7 +90,7 @@
   (let [self (.self p)]
     (cond-> (assoc (cost/death-body p view)
                    :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))
-      (some #(= "creeper" (.-name %)) (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (assoc :blast-s (blast-s p)))))
+      (some #(= "creeper" (.-name %)) (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (assoc :blast-s (blast-s p view)))))
 
 (defn mobs-of
   "Hostiles hs (JS entities) of p as the answers take them (mob-near) and, while no shooter of hs is seen, one of each kind
