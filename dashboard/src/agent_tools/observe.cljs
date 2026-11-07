@@ -13,7 +13,7 @@
             ["node:timers/promises" :as timers]
             [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-chat? stale-notice? signature idle-before-watch? stale-death? stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.missed :refer [missed!]]
-            [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
+            [agent-tools.observe.lock :refer [acquire! checkpoint! displaced? observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
             [shadow.cljs.modern :refer [js-await]]))
 
@@ -383,12 +383,12 @@
 
 (def failure-reasons
   (merge http/transport-reasons
-         {"ABORT_ERR" :cancelled "EOBSERVERBUSY" :observer-busy "EOBSERVERLIMIT" :observer-limit
+         {"ABORT_ERR" :cancelled "EOBSERVERBUSY" :observer-busy "EOBSERVERDISPLACED" :displaced "EOBSERVERLIMIT" :observer-limit
           "EATTENTIONLIMIT" :attention-limit "EOBSERVEUNAVAILABLE" :observe-unavailable}))
 
 (defn failure-text [request error]
   (str "{:ok false :reason " (data/write-edn (get failure-reasons (code-of error) :transport-error))
-       (when (= "EOBSERVERBUSY" (code-of error)) (str " :detail " (data/write-edn (.-message error))))
+       (when (#{"EOBSERVERBUSY" "EOBSERVERDISPLACED"} (code-of error)) (str " :detail " (data/write-edn (.-message error))))
        " :body " (js/JSON.stringify (:agent request)) "}\n"))
 
 (defn line [text] (if (str/ends-with? text "\n") text (str text "\n")))
@@ -410,12 +410,17 @@
                     (.removeListener js/process "SIGTERM" cancel))))))
 
 (defn wait!
-  "Run the wait with SIGINT and SIGTERM cancelling it; the exit code."
+  "Run the wait with SIGINT and SIGTERM cancelling it; the exit code. A SIGTERM from a newer wait on the same
+  observer (it marked the lock first) rejects with EOBSERVERDISPLACED instead of ABORT_ERR."
   [request {:keys [get! output]}]
   (let [controller (js/AbortController.)
-        cancel #(.abort controller)]
+        displaced (atom false)
+        lock (.join path (bodies/worlds-dir (:state request)) (:world request) "observers" (:agent request)
+                    (str (:observer (:wait-options request)) ".lock"))
+        cancel #(.abort controller)
+        on-term #(do (reset! displaced (displaced? lock)) (cancel))]
     (.once js/process "SIGINT" cancel)
-    (.once js/process "SIGTERM" cancel)
+    (.once js/process "SIGTERM" on-term)
     (-> (vitals/read! (:socket-path request) get!)
         (.then (fn [before]
                  (wait-observe request get! (.-signal controller)
@@ -423,9 +428,13 @@
                                  (.then (vitals/read! (:socket-path request) get!)
                                         (fn [after] (output (str (data/write-edn (assoc result :vitals (vitals/view before after (:seen after)))) "\n"))))))))
         (.then (fn [_] 0))
+        (.catch (fn [error]
+                  (throw (if (and @displaced (= "ABORT_ERR" (code-of error)))
+                           (coded "EOBSERVERDISPLACED" "ended by a newer wait on the same observer; give each waiter its own --observer NAME to keep both")
+                           error))))
         (.finally (fn []
                     (.removeListener js/process "SIGINT" cancel)
-                    (.removeListener js/process "SIGTERM" cancel))))))
+                    (.removeListener js/process "SIGTERM" on-term))))))
 
 (defn print-outcome!
   "Print a job's projected outcome (agent-tools.job-results/project); a promise of the exit code."

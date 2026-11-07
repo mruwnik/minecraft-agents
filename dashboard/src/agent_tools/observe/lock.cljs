@@ -93,11 +93,17 @@
         recorded (try (.readFileSync fs (.join path lock "start") "utf8") (catch :default _ nil))]
     (when (and pid (js/Number.isInteger pid) (pos? pid) (not= pid (.-pid js/process))
                recorded (= recorded (process-start-time pid)))
+      (try (.writeFileSync fs (.join path lock "displaced") "" #js {:mode private-file-mode}) (catch :default _ nil))
       (try (.kill js/process pid "SIGTERM") (catch :default _ nil))
       (loop [waited 0]
         (cond (lock-owner-gone? lock) true
               (>= waited takeover-wait-ms) false
               :else (do (pause! 25) (recur (+ waited 25))))))))
+
+(defn displaced?
+  "True when a newer waiter marked this lock before ending its holder (take-over-owner!)."
+  [lock]
+  (.existsSync fs (.join path lock "displaced")))
 
 (defn acquire!
   "Take the observer's lock directory; the function that gives it back. A live process holding it is ended first

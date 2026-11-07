@@ -1044,6 +1044,21 @@
           (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")) "the newest waiter holds the lock")
           (release))))))
 
+(deftest taking-over-a-live-owner-marks-its-lock-displaced-before-ending-it
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")
+            pid (js/Number (str/trim (child-process/execSync "sleep 60 >/dev/null 2>&1 & echo $!" #js {:encoding "utf8"})))]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") (str pid))
+        (.writeFileSync fs (.join path lock "start") (observe-lock/process-start-time pid))
+        (is (false? (observe-lock/displaced? lock)))
+        (observe-lock/take-over-owner! lock)
+        (is (true? (observe-lock/displaced? lock)))))))
+
+(deftest a-displaced-wait-is-reported-as-displaced-not-cancelled
+  (is (= :displaced (get observe/failure-reasons "EOBSERVERDISPLACED"))))
+
 (defn kill-failing [code] (fn [_] (throw (doto (js/Error. "kill") (aset "code" code)))))
 
 (deftest a-process-owned-by-another-user-counts-as-alive
