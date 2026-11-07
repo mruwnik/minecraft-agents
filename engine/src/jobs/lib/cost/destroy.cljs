@@ -108,7 +108,8 @@
   (fn [n [x y z :as cell] own?]
     (let [own? (or own? (and (rules/tree-wood? n) (placed-log? sensed cell))
                      (and (some? n) (re-find soil n) (placed-roof? sensed cell)))
-          above (sensed [x (inc y) z])
+          ;; the block over it counts only under farmland (destroyed-s): a read a cell is dear
+          above (when (= "farmland" n) (sensed [x (inc y) z]))
           over (when (and above (not (true? (.-unknown above)))) (.-name above))
           crop (cond (contains? crops/ripe-age n) (sensed cell) (contains? crops/ripe-age over) above)]
       (destroyed-s n over (some-> crop .-age) own?))))

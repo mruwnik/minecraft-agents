@@ -251,9 +251,9 @@
     (is (nil? ((:dig-s prices) "bedrock" [0 0 0])) "a cell never dug stays so")))
 
 (defn to-end
-  "Run a search on in slices of 500 cells until it answers or has expanded 100000: [answer cells]."
+  "Run a search on in slices of 500 cells until it answers or has expanded 100000: [answer cells reads]."
   [run]
-  (loop [cells 0] (let [[a e] (run 500) cells (+ cells e)] (if (or a (> cells 100000)) [a cells] (recur cells)))))
+  (loop [cells 0 reads 0] (let [[a e _ r] (run 500) cells (+ cells e) reads (+ reads r)] (if (or a (> cells 100000)) [a cells reads] (recur cells reads)))))
 
 (defn unseen-opts
   "Prices over rock below y 10 never seen but for the cells of seen (a fn of a cell; never seen taken for stone): seen-steps the fewest steps to a cell
@@ -275,7 +275,7 @@
         ;; every way over the land's top to the far corner bounds alike: summed in other orders, some bounds came out a bit lower
         [diag diag-cells] (to-end (dr/priced-search (world {}) [0 10 0] [150 4 150] (unseen-opts {} none none 600)))
         ;; a fall past 3 costs hp, so one through rock is dug 3 at most
-        [falls falls-cells] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (assoc (unseen-opts {} none none 400) :max-fall 16 :fall-s (fn [dy] (if (> dy 3) (* 2 (- dy 3)) 0)))))]
+        [falls falls-cells falls-reads] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (assoc (unseen-opts {} none none 400) :max-fall 16 :fall-s (fn [dy] (if (> dy 3) (* 2 (- dy 3)) 0)))))]
     (is (= {:problem :dearer} far))
     (is (< far-cells 100) (str "a goal 300 blocks off through unseen rock is dearer than 208 s at once (" far-cells " cells)"))
     (is (< (:seconds wall) 90) "the way over a glass plane 600 wide is found")
@@ -285,7 +285,9 @@
     (is (< (:seconds diag) 400))
     (is (< diag-cells 1000) (str "a goal 150 off on each axis (" diag-cells " cells)"))
     (is (< (:seconds falls) 130))
-    (is (< falls-cells 5000) (str "a goal 70 blocks down, falls past 3 priced (" falls-cells " cells)"))))
+    (is (< falls-cells 5000) (str "a goal 70 blocks down, falls past 3 priced (" falls-cells " cells)"))
+    ;; the back search's bound to the start prices the unseen cells a way down to them opens: without, 22831 cells read
+    (is (< falls-reads 16000) (str falls-reads " cells read"))))
 
 (defn same-price?
   "Whether search prices each [from goal opts] of rows the same with the unseen-priced bound, bounded by that price (a
@@ -389,6 +391,19 @@
         [n1 d1] (reads 2048)]
     (is (= n0 n1) "cells 1024 apart in y are different cells: no read is a cache hit for another")
     (is (= (map (fn [[x y z]] [x (- y 2048) z]) d1) d0))))
+
+(deftest a-route-past-512-blocks-from-the-start-names-its-cells-as-a-near-one-does
+  ;; a cell's key is a small integer within 512 of the start, another packing past it: the wall's cells (the way over it
+  ;; digs one more) and the steps past the seam read back as the cells they are
+  (let [wall (fn [x dx] (into {} (map #(vector % "stone")) [[x 10 0] [x 11 0] [x 12 0] [(- x dx) 12 0]]))
+        opts {:dig-s (constantly 0.1) :step-s 1 :max-nodes 100000}
+        r (dr/route (world (wall 550 1)) [0 10 0] [600 10 0] opts)
+        back (dr/route (world (wall -600 -1)) [0 10 0] [-700 10 0] opts)]
+    (is (= [[550 11 0] [550 10 0]] (:dig r)))
+    (is (= (map #(vector % 10 0) (range 1 601)) (map :to (:steps r))))
+    (is (< (js/Math.abs (- 600.2 (:seconds r))) 1e-9))
+    (is (= [[-600 11 0] [-600 10 0]] (:dig back)))
+    (is (= [-700 10 0] (:to (peek (:steps back)))))))
 
 (deftest the-back-search-does-not-climb-open-air-above-the-start
   (let [top (atom 0)

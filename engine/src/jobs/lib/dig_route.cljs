@@ -145,18 +145,24 @@
         [gx gy gz] goal
         r (when (and r (pos? r)) r)
         [ax ay az] (or near goal)
-        ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
-        key (fn [x y z] (+ (* (+ (* (+ (- x fx) 131072) 262144) (+ (- z fz) 131072)) 65536) y 32768))
+        fy (from 1)
+        ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there): within 512 of the start a
+        ;; small integer (V8 hashes it without a boxed double), else 2^30 on from a wider packing
+        key (fn [x y z] (let [dx (- x fx) dy (- y fy) dz (- z fz)]
+                          (if (and (< -513 dx 512) (< -513 dy 512) (< -513 dz 512))
+                            (bit-or (bit-shift-left (+ dx 512) 20) (bit-shift-left (+ dz 512) 10) (+ dy 512))
+                            (+ 1073741824 (* (+ (* (+ dx 131072) 262144) (+ dz 131072)) 65536) y 32768))))
         ;; a way that let water in is a label of its own, a negative id (wet-cell: its cell's key): a dearer dry way to a cell
         ;; is not lost to a flooded one, nor a flooded one to another unless that is no dearer, its water no higher and its
         ;; head under no longer (wet-label!)
         wet-cell (js/Map.)
-        cell-of (fn [k] (let [k (if (neg? k) (.get wet-cell k) k)
-                              y (- (mod k 65536) 32768)
-                              r (/ (- k y 32768) 65536)
-                              z (+ (- (mod r 262144) 131072) fz)
-                              x (+ (- (js/Math.floor (/ r 262144)) 131072) fx)]
-                          [x y z]))
+        cell-of (fn [k] (let [k (if (neg? k) (.get wet-cell k) k)]
+                          (if (< k 1073741824)
+                            [(+ (- (bit-shift-right k 20) 512) fx) (+ (- (bit-and k 1023) 512) fy) (+ (- (bit-and (bit-shift-right k 10) 1023) 512) fz)]
+                            (let [k (- k 1073741824)
+                                  y (- (mod k 65536) 32768)
+                                  r (/ (- k y 32768) 65536)]
+                              [(+ (- (js/Math.floor (/ r 262144)) 131072) fx) y (+ (- (mod r 262144) 131072) fz)]))))
         ;; what a name is to the search, once a name (open? and floor-ok? each run regexes), and so once a cell
         kinds (js/Map.)
         kind-of (fn [n] (or (.get kinds n)
@@ -177,7 +183,7 @@
                                  (let [l (when (or (.has plug-keys i) (fluid? x (inc y) z) (fluid? (inc x) y z) (fluid? (dec x) y z) (fluid? x y (inc z)) (fluid? x y (dec z)))
                                            ((:level flood) [x y z]))]
                                    (.set levels i l) l))))
-        dig-at (fn [n x y z] (let [i (key x y z)] (if (.has priced i) (.get priced i) (let [s (dig-s n [x y z])] (.set priced i s) s))))
+        dig-at (fn [n x y z] (let [i (key x y z) s (.get priced i)] (if (undefined? s) (let [s (dig-s n [x y z])] (.set priced i s) s) s)))
         unseen-cell? (let [m (js/Map.)] (fn [x y z] (let [i (key x y z) u (.get m i)] (if (some? u) u (let [u (or (unboxed? x y z) (boolean (unseen? [x y z])))] (.set m i u) u)))))
         ;; a step whose feet, head or floor is unseen, as cost/unseen-route-s prices one
         unseen-at (fn [x y z] (if (and unseen? (or (unseen-cell? x y z) (unseen-cell? x (inc y) z) (unseen-cell? x (dec y) z))) unseen-step-s 0))
@@ -259,24 +265,36 @@
         ;; lava above or beside cell x y z: the dig seals each such face as it opens the cell (priced by :lava-s; with none, the cell is not dug)
         lava? (fn [x y z] (if (= "lava" (.-name ^js (at x y z))) 1 0))
         lava-faces (fn [x y z] (+ (lava? x (inc y) z) (lava? (inc x) y z) (lava? (dec x) y z) (lava? x y (inc z)) (lava? x y (dec z))))
+        ;; what opening cell x y z is, once a cell: false when it may not be, true when open, else #js [seconds (lava's seal
+        ;; in) flood-level name key]
+        opened (js/Map.)
+        open-of (fn [x y z]
+                  (let [i (key x y z) v (.get opened i)]
+                    (if (undefined? v)
+                      (let [s (open-s x y z)
+                            v (cond
+                                (nil? s) false
+                                (zero? (.-cost ^js (at x y z))) true
+                                (.-falling ^js (at x (inc y) z)) false
+                                (.has way-keys i) false
+                                :else (let [lf (lava-faces x y z)]
+                                        (if (and (nil? lava-s) (pos? lf))
+                                          false
+                                          #js [(+ s (if (pos? lf) (lava-s lf) 0)) (when flood (level-at x y z)) (.-name ^js (at x y z)) i])))]
+                        (.set opened i v)
+                        v)
+                      v)))
         ;; the cost of opening cell x y z for a step, accumulated in acc #js [seconds digs dig-seconds dug-keys flood-level
         ;; under-water-s] (flood-dig); false when it may not be
         open-cell! (fn [^js acc x y z]
-                     (let [s (open-s x y z)]
-                       (cond
-                         (nil? s) false
-                         (zero? (.-cost ^js (at x y z))) true
-                         (.-falling ^js (at x (inc y) z)) false
-                         (.has way-keys (key x y z)) false
-                         :else (let [lf (lava-faces x y z)]
-                                 (if (and (nil? lava-s) (pos? lf))
-                                   false
-                                   (let [l (when flood (level-at x y z))
-                                         s (+ s (if (pos? lf) (lava-s lf) 0))
-                                         s (if-let [[w level under] (when (or l (some? (aget acc 4))) (flood-dig flood (aget acc 4) (aget acc 5) y (.-name ^js (at x y z)) l))]
-                                             (do (aset acc 4 level) (aset acc 5 under) (+ s w))
-                                             s)]
-                                     (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (key x y z)) true))))))
+                     (let [v (open-of x y z)]
+                       (if (boolean? v)
+                         v
+                         (let [l (aget v 1)
+                               s (if-let [[w level under] (when (or l (some? (aget acc 4))) (flood-dig flood (aget acc 4) (aget acc 5) y (aget v 2) l))]
+                                   (do (aset acc 4 level) (aset acc 5 under) (+ (aget v 0) w))
+                                   (aget v 0))]
+                           (aset acc 0 (+ (aget acc 0) s)) (aset acc 1 (+ (aget acc 1) 1)) (aset acc 2 (+ (aget acc 2) s)) (.push ^js (aget acc 3) (aget v 3)) true))))
         ;; key (a wet label: its id) -> #js [seconds digs dig-seconds prev-key move blocks-placed dug pillar-run flood-level under-water-s] of the
         ;; cheapest way found to the cell (the flood its digs let in: flood-dig, flood-walk), dug its
         ;; steps' dug cells as a chain #js [keys parent lx hx ly hy lz hz] (nil: none), each link the box of its own and every
@@ -413,7 +431,13 @@
         ;; pillar the unseen toll of the cell entered too, falls and refusals left out, a step across or up only from a cell over a floor. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
         back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
         stands? (fn [x y z] (and (some? (back-s x y z)) (some? (back-s x (inc y) z)) (or (inside? x y z) (do (vreset! back-boxed true) false))))
-        to-start (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y (from 1)))))
+        ;; under prior-h also the unseen cells a way from the start opens, each at least unseen-dig-s: a step into a cell whose
+        ;; seen-cells passes the start's by 2 or more opens one (its feet; a pillar its head)
+        to-start (let [walk (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y fy))))
+                       s0 (when prior? (inc (seen-cells fx fy fz)))]
+                   (if prior?
+                     (fn [x y z] (max (walk x y z) (+ (* step-s (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz)))) (* unseen-dig-s (max 0 (- (seen-cells x y z) s0))))))
+                     walk))
         back-best (js/Map.) back-done (js/Set.) back-queue #js []
         back-tick (volatile! 0)
         ;; the end cells of a range search, nearest the start first: one enters the back search only once its bound is the
