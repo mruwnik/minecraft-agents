@@ -47,7 +47,10 @@ export const isolateFresh = (engineDir, lock, copy = isolateLocked, rebuild = (l
 // The namespaces a shard's `--test=a,b` asks for: its copy loads only these (and what they require), not the whole bundle.
 export const testNss = (cmd) => {
   const arg = cmd.find((a) => a.startsWith('--test='))
-  return arg ? arg.slice(7).split(',').map((x) => x.split('/')[0]).filter(Boolean) : null
+  if (!arg) return null
+  const nss = arg.slice(7).split(',').map((x) => x.split('/')[0]).filter(Boolean)
+  if (!nss.length) throw new Error('test-shard-exec: --test= names no namespace (an empty selection would load nothing)')
+  return nss
 }
 
 const main = () => {
@@ -57,7 +60,8 @@ const main = () => {
   }
   const [engineDir, ...cmd] = process.argv.slice(2)
   const lock = process.env.MC_TEST_BUNDLE_LOCK
-  const nss = testNss(cmd)
+  let nss
+  try { nss = testNss(cmd) } catch (e) { console.error(e.message); return process.exit(1) }
   const iso = lock ? isolateFresh(engineDir, lock, (e, l) => isolateLocked(e, l, process.pid, spawnSync, nss)) : isolateOrExplain(engineDir, process.pid, isolate, console.error, nss)
   if (!iso) return process.exit(1)
   let child = null

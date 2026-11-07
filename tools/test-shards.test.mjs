@@ -280,6 +280,7 @@ test('test-shard-exec: a shard copy is narrowed to the namespaces of its --test=
   const { isolateOrExplain, testNss } = await import('./test-shard-exec.mjs')
   assert.deepEqual(testNss(['node', 'x.cjs', '--test=engine.a-test,engine.b-test/some-deftest']), ['engine.a-test', 'engine.b-test'])
   assert.equal(testNss(['node', 'x.cjs']), null)
+  assert.throws(() => testNss(['node', 'x.cjs', '--test=']), /names no namespace/)
   const got = []
   isolateOrExplain('/e', 1, (...a) => { got.push(a); return { runDir: '/r' } }, () => {}, ['engine.a-test'])
   assert.deepEqual(got, [['/e', 1, undefined, ['engine.a-test']]])
