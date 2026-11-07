@@ -6,7 +6,7 @@
   :plot {:light :sky :length 48 :width 32 :height 10 :floor "dirt"}
   :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:fill [8 1 15] [8 2 19] "glass"]
            [:set [8 1 17] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [8 2 17] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
-           [:set [30 -1 22] "lava"]]
+           [:fill [29 -1 21] [31 -1 23] "lava"]]
   :body {:at [5.5 1 17.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]]
          :inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
   :limit-s 60}
