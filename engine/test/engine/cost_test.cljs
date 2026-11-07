@@ -477,16 +477,17 @@
         sword (cost/dark-factor {:weapon "iron_sword" :equipment nil :at {:x 0 :y 64 :z 0}})
         armed-armoured (cost/dark-factor {:weapon "iron_sword" :equipment iron-set :at {:x 0 :y 64 :z 0}})]
     (is (zero? floor) "the bare factor is the flat floor")
-    (is (= unarmed (* (cost/spawn-rate 64) (+ (* (cost/spawns-hurt bare 1 nil) (cost/hp-seconds)) (cost/route-death-cost bare {:spawns 1} nil))))
-        "an unarmed body pays the hurt of the spawn mix and the death it risks, at a near respawn")
-    (is (> unarmed armed-armoured floor) "at a near respawn a bare body pays more than an armed, armoured one, never below the floor")
-    (is (> sword floor) "a sword alone still pays the hurt of the spawns it fights")))
+    (is (= unarmed (* (cost/spawn-rate 64) (cost/spawn-price bare nil)))
+        "an unarmed body pays the price of the answer it takes to each mob of the spawn mix, at a near respawn")
+    (is (>= unarmed sword armed-armoured floor)
+        "at a near respawn a weapon or armour never adds to the dark: a sword body has every answer a bare one has")
+    (is (> unarmed armed-armoured) "an armed, armoured body pays less than a bare one")))
 
 (deftest a-kit-s-dark-factor-is-worked-out-once-while-the-settings-stay
   (let [kit {:weapon "stone_sword" :equipment nil :health 13}
         asked (atom 0)
-        hurt answer/spawns-hurt]
-    (with-redefs [answer/spawns-hurt (fn [& args] (swap! asked inc) (apply hurt args))]
+        price answer/spawn-price]
+    (with-redefs [answer/spawn-price (fn [& args] (swap! asked inc) (apply price args))]
       (let [once (cost/dark-factor kit)]
         (is (= once (cost/dark-factor kit)))
         (is (= 1 @asked) "the second costed world reads the kept factor")

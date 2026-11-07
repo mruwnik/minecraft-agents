@@ -9,7 +9,7 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
-    answer   fight-answer, followed, small (an answer's small blows, the ones its :shape is the width of), flee-answer, swim-reach (the blocks of a swim flee-answer prices),build-answer, refuge-answer (a run into a known refuge as a cover), stand-loss (what doing nothing about mobs costs: the loss a reflex averts; stand-answer its answer), cover-answer, cover-answers, cornered-answers, answer-price, meet-death (a death beside a near respawn meets the mobs again), decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; route-death, death-chance, route-death-cost, route-parts (the death chance and hurt of a route's threats, each pair met in one answer by the chance the second comes while the first is answered), threat-hurt, spawn-kill, threat-parts, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; spawns-chance that of mobs spawned beside the body (spawn-kill one's, with what its death costs), spawns-hurt their hurt (spawn-hurt one's, spawned-hurt of a known one's), lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (chance-blast one that comes by chance, blast-hp, blast-mean); counted-chance, floor-absent-chance, guess-bad-chance, floor-dead-end-chance, hall-chance, hall-edge-chance, spot-plantable-chance, retry-chance: a counted share over its prior (jobs.lib.cost.value), craft-step-s: the seconds of a craft step with its timeouts; try-again?: whether another try of a call is worth its price.
+    answer   fight-answer, followed, small (an answer's small blows, the ones its :shape is the width of), flee-answer, swim-reach (the blocks of a swim flee-answer prices),build-answer, refuge-answer (a run into a known refuge as a cover), stand-loss (what doing nothing about mobs costs: the loss a reflex averts; stand-answer its answer), cover-answer, cover-answers, cornered-answers, answer-price, meet-death (a death beside a near respawn meets the mobs again), decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; route-death, death-chance, route-death-cost, route-parts (the death chance and hurt of a route's threats, each pair met in one answer by the chance the second comes while the first is answered), threat-hurt, spawn-kill, threat-parts, spawns-chance, spawns-hurt, lethal-hp: the one chance of dying (threat-hurt one mob met; water-factors the planner's price of a second in water, a drowned met there, unseen-water-factors a phantom floor's by the seen water near it; spawns-chance that of mobs spawned beside the body (spawn-kill one's, with what its death costs), spawns-hurt their hurt (spawn-hurt one's, spawned-hurt of a known one's), spawn-price one's price by the answer taken, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (chance-blast one that comes by chance, blast-hp, blast-mean); counted-chance, floor-absent-chance, guess-bad-chance, floor-dead-end-chance, hall-chance, hall-edge-chance, spot-plantable-chance, retry-chance: a counted share over its prior (jobs.lib.cost.value), craft-step-s: the seconds of a craft step with its timeouts; try-again?: whether another try of a call is worth its price.
     danger   route-danger: the danger of a walk past mobs; danger-opts, threat-factor-cap: go-to's
              planner danger factors and cap; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; reach-s: the seconds it is within its blow of a timed route; arrival-s: a chaser's seconds to a point (over its way when given); lead-s, run-saved-s: the lead a chaser leaves a body at a place, the run a nearer refuge saves; search-budget-s, under-ceiling?: the CPU one search may take (Q141), whether a part of it may still start; search-pays?, refuge-search-pays?: whether a search's CPU fits a budget too, a refuge search's the chasers' lead, the run it saves or the shooters' fire; body-speed; flee-walk-speed, flee-stop-s: a flight's measured pace, its steps and the stops between them (jobs.lib.cost.danger).
     mob-toll answered-together ({:stance :price :near} of mobs met together), threat-factor (its meet rate x that price): go-to's planner dangers, a mob priced by the answer the reflex would take to it (answer/decide) (jobs.lib.cost.mob-toll).
@@ -239,15 +239,12 @@
 
 (defn dark-factor
   "The planner's extra cost of a dark cell as a share of its own seconds (options.dark.factor): value/dark-factor, the
-  floor; with a kit {:weapon :equipment :health :food :at} the hurt of a mob spawned beside it (spawns-hurt, at hp-seconds)
-  and the death it risks (answer/route-death-cost of one spawn), times spawn-rate at the kit's :at height (the feet's
-  16-block floor), on top: a bare body pays more than an armed, armoured one at the same respawn (by-kit)."
+  floor; with a kit {:weapon :equipment :health :food :at} the price of a mob spawned beside it (answer/spawn-price: the
+  answer the body takes, its time, hurt and death) times spawn-rate at the kit's :at height (the feet's 16-block floor), on
+  top: a weapon or armour never adds to it (by-kit)."
   ([] (value/dark-factor))
   ([kit] (by-kit ::dark-factor
-                 #(+ (value/dark-factor)
-                     (* (value/spawn-rate (get-in % [:at :y]))
-                        (+ (* (answer/spawns-hurt % 1 nil) (health/hp-seconds))
-                           (answer/route-death-cost % {:spawns 1} nil))))
+                 #(+ (value/dark-factor) (* (value/spawn-rate (get-in % [:at :y])) (answer/spawn-price % nil)))
                  kit)))
 
 (defn unseen-cell-share
@@ -544,6 +541,7 @@
 (def spawn-hurt answer/spawn-hurt)
 (def spawned-hurt answer/spawned-hurt)
 (def spawns-hurt answer/spawns-hurt)
+(def spawn-price answer/spawn-price)
 (def lethal-hp answer/lethal-hp)
 (def threat-hurt answer/threat-hurt)
 (defn water-factors "answer/water-factors, by-kit." [kit] (by-kit ::water-factors answer/water-factors kit))

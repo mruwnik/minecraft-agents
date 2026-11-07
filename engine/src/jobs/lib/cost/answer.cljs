@@ -1061,6 +1061,16 @@
   [body spawns at]
   (if (zero? spawns) 0 (spawned-hurt body spawns (spawn-hurt body at))))
 
+(defn spawn-price
+  "Seconds one mob spawned beside body costs at `at`: over threat/spawn-weights, the price (time, hurt and death) of the
+  answer decide takes of its threat-answers; a provoked-only mob threat/provoked-share of it."
+  [body at]
+  (/ (reduce + (map (fn [[mob w]]
+                      (let [{:keys [answer prices]} (decide body (threat-answers body mob nil) at)]
+                        (* w (if (contains? threat/provoked-only mob) (threat/provoked-share) 1) (get prices answer))))
+                    threat/spawn-weights))
+     (reduce + (vals threat/spawn-weights))))
+
 (defn either
   "{:chance :death} of dying of any of parts {:chance :death}, met apart: the chance one of them kills, and what that
   death costs, each part's by its chance (0 with none)."

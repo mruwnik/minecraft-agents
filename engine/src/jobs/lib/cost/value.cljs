@@ -60,7 +60,7 @@
    ::per-climb {:default 2 :spec (a/num-in 0 nil)
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0 :spec (a/num-in 0 nil)
-               :doc "Floor of one block walked in the dark, on top of per-block; the hp the spawned mobs would cost the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
+               :doc "Floor of one block walked in the dark, on top of per-block; the price of the mobs that spawn to the kit (jobs.lib.cost/dark-factor) comes on top, so a bare body pays a dark block most and an armed one less."}
    ::spawn-chance-per-s {:default {:k 120 :n-s 114942 :below {40 {:k 41 :n-s 18773}}}
                          :spec (a/pred "a map {:k n :n-s s} counts, :below an optional map of height to such counts"
                                        (fn [m] (let [ok? #(and (map? %) (number? (:k %)) (<= 0 (:k %)) (number? (:n-s %)) (<= 0.1 (:n-s %)))]
@@ -452,7 +452,7 @@
 
 (defn dark-factor
   "The floor of the planner's extra cost of a dark cell as a share of its own seconds: per-dark over per-block
-  (jobs.lib.cost/dark-factor adds a kit's spawn hurt)."
+  (jobs.lib.cost/dark-factor adds a kit's spawn price)."
   [] (/ (per-dark) (per-block)))
 (defn per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." [] (health/hp-seconds))
 (defn own-place-blocks [] (settings/get settings ::own-place-blocks))
