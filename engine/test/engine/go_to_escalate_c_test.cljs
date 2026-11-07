@@ -13,6 +13,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.perception.rays :as rays]
             [engine.perception.store :as store]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -1564,12 +1565,46 @@
       (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
         (fn []
           (let [first-round (choice)
-                _ (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c) (threat-field/world-epoch (:primitives c))))))
+                _ (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c) (choose/route-epoch (:primitives c))))))
                 last-round (choice)]
             (is (= [30 :searching] first-round))
             (is (= [30 :dig-route] last-round) "the kept search's answer, under the same bound")
             (is (= 1 @starts) "one search, gone on over the rounds")
             (choose/forget-routes! (choose/route-owner c))))))))
+
+;; the search reads the body's memory only: a world change it has not seen leaves its ended route standing
+(deftest an-ended-route-holds-while-the-memory-does-though-the-world-changes
+  (let [{:keys [eng]} (gt/setup {:blocks (box -2 60 -2 14 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}] :light [15 15] :seen :all})
+        c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
+        p (:primitives c)
+        starts (atom 0)
+        search dig-route/search
+        choice (fn []
+                 (let [slice (choose/route-slice (choose/route-owner c))
+                       o (choose/way-opts c [0 64 0] false slice)
+                       e (choose/dig-way p [0 64 0] [10 64 0] (constantly true) o)]
+                   (choose/keep-routes! slice)
+                   (:step e)))
+        ended (fn [] (doall (take-while true? (repeatedly 300 #(choose/routes-searching! (choose/route-owner c) (choose/route-epoch p))))))]
+    (.setOwner p "tx")
+    (with-redefs [dig-route/search (fn [& args] (swap! starts inc) (apply search args))]
+      (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
+        (fn []
+          (is (= :searching (choice)))
+          (ended)
+          (is (= :dig-route (choice)))
+          (let [world (threat-field/world-epoch p)
+                memory (choose/route-epoch p)]
+            (fake/set-block! p [40 64 40] "dirt")
+            (is (not= world (threat-field/world-epoch p)) "the world changed")
+            (is (= memory (choose/route-epoch p)) "out of the body's sight")
+            (is (= :dig-route (choice)))
+            (is (= 1 @starts) "the ended route answers: nothing the search reads changed"))
+          (fake/remove-block! p [5 66 0])
+          (rays/touch! (aget p "perception") [5 66 0])
+          (choice)
+          (is (= 2 @starts) "the memory changed: searched again")
+          (choose/forget-routes! (choose/route-owner c)))))))
 
 (defn ^:async priced-search-run!
   "run-job! with every dig-route search counted: {:out :seen :searched-s (nodes expanded at each search's :node-s) :max-ss

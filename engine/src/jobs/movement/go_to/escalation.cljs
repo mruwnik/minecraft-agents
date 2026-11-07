@@ -37,7 +37,6 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.step-off :as step-off]
-            [jobs.lib.threat-field :as threat-field]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -52,7 +51,7 @@
             [jobs.movement.go-to.route-ways :as route-ways]
             [jobs.movement.go-to.escalate-choose :refer [way-opts guess-risk call-budget-s dig-left-s range-opts cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? pickaxe-fetch route-tool gap-fill
                                                          goal-way dig-leg dig-toward dig-way drop-fill out-of-sight? refused-drop? drop-stranded? frontier-way gap-dig gap-walled? goal-lava? leg-ends goal-walled? own-stair route-cells night-refusal? shelter-exit? skips sprint-only?
-                                                         route-owner route-slice routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
+                                                         route-owner route-slice route-epoch routes-searching! searching? searching-ends keep-routes! forget-routes! search-opts way-guesses past-worth?]]
             [jobs.lib.own-builds :refer [may-dig-fn own-cut-fn own-dig-fn own-fn own-placed-fn with-own-pen]]
             [jobs.lib.stair-memory :as stair-mem]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag note-holes! own-holes planned-cells]]
@@ -422,7 +421,7 @@
       (search-bound/spent? c (ctx/mem c))
       (do (search-spent! c (end/feet-cell c))
           (await (choose-escalation! c pos failed)))
-      (routes-searching! (route-owner c) (threat-field/world-epoch (:primitives c))) (do (ctx/hold-still! c :searching) (ctx/update-mem! c assoc :escalate-now true) :again)
+      (routes-searching! (route-owner c) (route-epoch (:primitives c))) (do (ctx/hold-still! c :searching) (ctx/update-mem! c assoc :escalate-now true) :again)
       :else (await (choose-escalation! c pos failed)))))
 
 (defn dive-refused!

@@ -259,7 +259,16 @@
       (fn ^:async t []
         (let [[out st shown] (await (pit-escape 0))]
           (is (= {:arrived true} out) shown)
-          (is (= :stair (first st)) "with no block to pillar"))))))
+          (is (= [:stair :dig-route] st) "with no block to pillar"))))))
+
+(deftest go-to-pillars-then-stairs-out-of-a-pit-with-one-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[out st shown] (await (pit-escape 1))]
+          (is (= {:arrived true} out) shown)
+          ;; the search's cheapest climb route (22.0 s): the one block pillared, a stair the rest
+          (is (= [:pillar :stair :dig-route] st)))))))
 
 (deftest go-to-pillars-out-of-a-pit-whose-rim-it-sees-with-the-blocks-for-all-but-the-step
   (async done
@@ -289,8 +298,8 @@
                                                     :inventory [{:name "dirt" :count 5}]}
                                                    {:pos [10 66 0] :range 1}))]
           (is (= {:arrived true} out) (pr-str (last seen)))
-          ;; the climb route's cheapest way pillars up part way and steps up the rest beside, its five blocks enough
-          (is (= :pillar (first (steps seen))) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))
+          ;; the search's cheapest climb route (24.7 s), its five blocks enough
+          (is (= [:pillar :dig-route :dig-route :approach :pillar :dig-route] (steps seen)) (pr-str (filter #(= :go-to.escalated (:kind %)) seen))))))))
 
 (defn ^:async run-step-off
   "Run step-off! from the origin cell over the sensed-only world spec as a child of a parent job; [its result, world calls]."
