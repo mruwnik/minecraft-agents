@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [engine.event-api :as event-api]
@@ -27,6 +28,21 @@
 (def body {:pos {:x 0 :y 64 :z 0}})
 
 (defn drop! [p pos item] (swap! (fake/state p) fake/spawn pos item 1))
+
+(defn ^:async first-walk-worth
+  "The worth (ctx/worth) of the first go-to collect-drops calls with args, put down at :x 4 and 5 (when drop is given)
+  over a stub go-to that does not arrive: as the child of a recording parent when args carry a :worth, else at the root."
+  [drop args]
+  (let [{:keys [eng p]} (bd/setup {:self body})
+        worths (atom [])
+        go-to {:target [] :ways #{:walk :pillar :clear-seal :stair :dig-route :dig-out}
+               :round (fn [c] (swap! worths conj (ctx/worth c)) (ctx/end c :done nil {:arrived false}))}
+        eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.movement.go-to go-to))]
+    (when drop (drop! p [4 64 0] drop) (drop! p [5 64 0] drop))
+    (if (:worth args)
+      (await (tu/child-outcome eng job args 10))
+      (do (core/submit! eng (list job args) {}) (await (tu/run-until-empty eng 10))))
+    (first @worths)))
 
 (defn seen-from-above!
   "Mark every item seen: the step lips hide a drop low down the slope from the body standing at its top."
@@ -117,7 +133,7 @@
         (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"0,62,0" "stone" "1,63,0" "lava"}})]
           (aset p "sensedAt" (fn [pos] (if (= [1 63 0] [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
           (drop! p [0 63 0] "dirt")
-          (let [result (await (tu/with-looks-showing #(tu/child-outcome eng job {:radius 6 :holes [[0 63 0]]} 20)))]
+          (let [result (await (tu/with-looks-showing #(tu/child-outcome eng job {:radius 6 :holes [[0 63 0]] :worth 50} 20)))]
             (is (= 0 (:collected result)))
             (is (= [:unseen-cell] (mapv :reason (bd/left-drops seen))))
             (is (seq (filter #(= :sense.looked (:kind %)) @seen)) "it looked before it left the drop")
@@ -247,19 +263,14 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
-(deftest a-search-walk-may-risk-only-what-the-missing-items-are-worth
+(deftest a-search-walk-takes-the-calls-worth-and-a-root-search-the-missing-items
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (bd/setup {:self body})
-              walks (atom [])
-              record (let [f (fn [_ _ _ args] (swap! walks conj args) (js/Promise.resolve :continue))]
-                       (aset f "cljs$core$IFn$_invoke$arity$4" f)
-                       f)]
-          (with-redefs [child/run!* record]
-            (await (tu/child-outcome eng job {:radius 6 :items ["cobblestone"] :least-items ["cobblestone"] :near {:x 4 :y 64 :z 0} :search 3 :least 1} 10)))
-          (is (= (cost/find-worth nil ["cobblestone"] (:pos body) 1) (:worth (first @walks)))
-              "the search walk is bounded by the drop's worth, not left unpriced"))))))
+        (let [args {:radius 6 :items ["cobblestone"] :least-items ["cobblestone"] :near {:x 4 :y 64 :z 0} :search 3 :least 1}]
+          (is (= 50 (await (first-walk-worth nil (assoc args :worth 50)))) "a child's search is worth its caller's goal")
+          (is (= (cost/find-worth nil ["cobblestone"] (:pos body) 1) (await (first-walk-worth nil args)))
+              "a root search is worth the missing drop"))))))
 
 (deftest a-search-walks-to-cells-whose-floor-it-has-not-seen
   (async done
@@ -357,33 +368,13 @@
           (is (= [:done 1] ((juxt :status :collected) result)))
           (is (= 1 @walks) "no second search walk once the log came in"))))))
 
-(deftest a-walk-to-drops-may-risk-what-the-drops-in-sight-are-worth
+(deftest a-walk-to-drops-takes-the-calls-worth-and-a-root-walk-the-drops-in-sight
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body})
-              walks (atom [])
-              record (let [f (fn [_ _ _ args] (swap! walks conj args) (js/Promise.resolve :continue))]
-                       (aset f "cljs$core$IFn$_invoke$arity$4" f)
-                       f)]
-          (drop! p [4 64 0] "diamond")
-          (drop! p [5 64 0] "diamond")
-          (with-redefs [child/run!* record]
-            (await (tu/child-outcome eng job {:radius 6 :items ["diamond"]} 10)))
-          (is (= (cost/find-worth nil ["diamond"] (:pos body) 2) (:worth (first @walks)))
-              "a drop in sight needs no finding: the walk is worth the drops")
-          (is (< 0 (cost/tour-worth 2 (cost/tour-worth 0 (:worth (first @walks))))) "a tour of two blocks stays worth it"))))))
-
-(deftest a-walk-to-a-drop-that-is-not-a-candidate-may-risk-its-own-worth
-  ;; the target is not among the wanted drops in sight: the walk to it is still worth the target, never 0 ("only if free")
-  (let [p (tu/fake {:self body})
-        _ (drop! p [4 64 0] "diamond")
-        _ (drop! p [5 64 0] "dirt")
-        c {:primitives p :args {:radius 6 :items ["dirt"]} :slots [] :view (fn [] {:now 0 :data {}})}
-        [diamond dirt] (map (fn [n] (first (filter #(= n (.. % -item -name)) (look/seen-items p {:radius 10})))) ["diamond" "dirt"])
-        worth (fn [[{:keys [name count]}]] (cost/find-worth nil [name] (:pos body) count))]
-    (is (= (worth [{:name "dirt" :count 1}]) (job-ns/drops-worth c dirt)) "a candidate target: the drops in sight")
-    (is (= (+ (worth [{:name "dirt" :count 1}]) (worth [{:name "diamond" :count 1}])) (job-ns/drops-worth c diamond)))))
+        (is (= 50 (await (first-walk-worth "diamond" {:radius 6 :items ["diamond"] :worth 50}))) "a child's walk is worth its caller's goal")
+        (is (= (:value (cost/goal-value [{:name "diamond" :count 2}])) (await (first-walk-worth "diamond" {:radius 6 :items ["diamond"]})))
+            "a root walk is worth getting the drops in sight again")))))
 
 (deftest ids-not-in-sight-are-left-unseen
   (async done
@@ -976,7 +967,7 @@
         (let [column (into {} (for [y (range 64 70)] [(str "3," y ",0") "cobblestone"]))
               {:keys [eng p]} (bd/setup {:self body :inventory [{:name "cobblestone" :count 16}] :blocks column})]
           (drop! p [3 70 0] "diamond")
-          (let [result (await (tu/child-outcome eng job {:radius 10 :near {:x 3 :y 70 :z 0} :dig true} 120))]
+          (let [result (await (tu/child-outcome eng job {:radius 10 :near {:x 3 :y 70 :z 0} :dig true :worth 50} 120))]
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "diamond")))))))))
 

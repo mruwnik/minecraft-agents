@@ -33,7 +33,7 @@
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
   An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, ways walk, stair and pillar, which prices
-  falls and dangers against the worth of the drops in sight, :worth); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}, or {:reason :risky :risk :allowed} when go-to declined the walk for its route risk (also in the stop's :left). A nearer one whose
+  falls and dangers against the call's worth; at the root worth-of); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}, or {:reason :risky :risk :allowed} when go-to declined the walk for its route risk (also in the stop's :left). A nearer one whose
   straight way crosses a drop (a shaft between) is walked to the same way. A body whose centre overhangs a drop first steps onto
   the block holding it up; failing that the drop is left {:reason :unsafe-floor}.
   A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
@@ -268,12 +268,16 @@
   (let [{:keys [name count]} (js->clj (.-item item) :keywordize-keys true)]
     (cost/find-worth nil [name] (u/self-pos c) (or count 1))))
 
-(defn drops-worth
-  "Seconds the drops in sight round the anchor are worth (item-worth), the target item among them though it
-  is not a candidate (out of sight, skipped): what a walk to it may risk."
-  [c item]
-  (let [cands (candidates c (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c)))]
-    (reduce + 0 (map #(item-worth c %) (if (some #(= (.-id %) (.-id item)) cands) cands (cons item cands))))))
+(defn worth-of
+  "Seconds a root collect is worth: getting again the drops in sight round the anchor (cost/goal-value), and with :search
+  the :least-items (else :items) not in sight (cost/find-worth of the :least count less those seen)."
+  [c]
+  (let [{:keys [least-items items search least near]} (:args c)
+        seen (map #(js->clj (.-item %) :keywordize-keys true) (candidates c (or near (u/self-pos c))))
+        names (seq (or least-items items))
+        missing (- (if (number? least) least 1) (reduce + 0 (map #(or (:count %) 1) (filter #(some #{(:name %)} names) seen))))]
+    (+ (:value (cost/goal-value seen))
+       (if (and search names (pos? missing)) (cost/find-worth nil names (u/self-pos c) missing) 0))))
 
 (defn drop-walk-ways
   "go-to ways of a walk to a drop: pillar always, :stair (a way that digs) only with :dig."
@@ -294,7 +298,7 @@
   "Walk within a block of item, lower or higher than the feet, with go-to's drop-walk-ways (a drop in a pit or
   on a column top; go-to prices each): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable (go-to's :risky cause kept in the job memory as :walk-fail, see walk-fail)."
   [c item]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (walk-cell c item) :range 1 :ways (drop-walk-ways c) :worth (drops-worth c item)}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (walk-cell c item) :range 1 :ways (drop-walk-ways c)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
@@ -522,16 +526,6 @@
   (cond-> #{:walk :clear-seal}
     (:dig (:args c)) (into [:dig-route :stair :dig-out])))
 
-(defn search-worth
-  "Seconds the drops a search still looks for are worth (cost/find-worth of the :least-items, else the :items, for the count
-  still missing), so go-to prices the walk's risk against them; nil when the search names no item (the caller's worth stands)."
-  [c]
-  (let [{:keys [least-items items]} (:args c)
-        names (seq (or least-items items))
-        missing (- (least c) (wanted-count c))]
-    (when names
-      (cost/find-worth nil names (u/self-pos c) (if (js/isFinite missing) (max 1 missing) 1)))))
-
 (defn ^:async search-step!
   "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
   :continue while go-to waits on the world, :waited after search-waits calls in a row did, :walked after a cell, nil when none is left.
@@ -546,10 +540,8 @@
                     (seed! (vec (take 1 (sort-by #(u/dist (u/cell-pos (u/cell-vec anchor)) %) (search-cells c anchor))))))
                 :else (:search-queue m))]
     (when-let [cell (first queue)]
-      (let [worth (search-worth c)
-            r (await (child/run!* c :search 'jobs.movement.go-to
-                                  (cond-> {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)}
-                                    worth (assoc :worth worth))))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to
+                                  {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)}))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited
