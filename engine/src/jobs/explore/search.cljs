@@ -1,5 +1,6 @@
 (ns jobs.explore.search
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.explore.rings :as rings]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.ready :as ready]
@@ -473,18 +474,25 @@
   [c]
   (boolean (and (:patch (:args c)) (:center (:args c)))))
 
-(defn candidates [c m]
-  (let [{:keys [pattern heading]} (:args c)
-        max-distance (distance-limit c)
-        spacing (leg-spacing)
-        [ox _ oz] (:origin m)
-        [x _ z] (here c)]
-    (if (or (= :outward (keyword pattern)) (and heading (not pattern)))
-      (let [heading (keyword (or heading :north))
-            [dx dz] (headings heading)]
-        (mapcat (fn [k] (outward-points [(+ x (* dx spacing k)) (+ z (* dz spacing k))] heading spacing))
-                (range (inc (js/Math.ceil (/ max-distance spacing))))))
-      (sort-by #(xz-dist [x z] %) (spiral-points [ox oz] spacing max-distance)))))
+(defn outward? [c]
+  (let [{:keys [pattern heading]} (:args c)]
+    (or (= :outward (keyword pattern)) (and heading (not pattern)))))
+
+(defn candidates
+  "The leg points [x z], lazily: :outward ahead of the body first, else the spiral's nearest the body first
+  (rings/nearest-points; with side only those in that wedge from the body)."
+  ([c m] (candidates c m nil))
+  ([c m side]
+   (let [max-distance (distance-limit c)
+         spacing (leg-spacing)
+         [ox _ oz] (:origin m)
+         [x _ z] (here c)]
+     (if (outward? c)
+       (let [heading (keyword (or (:heading (:args c)) :north))
+             [dx dz] (headings heading)]
+         (mapcat (fn [k] (outward-points [(+ x (* dx spacing k)) (+ z (* dz spacing k))] heading spacing))
+                 (range (inc (js/Math.ceil (/ max-distance spacing))))))
+       (rings/nearest-points [ox oz] [x z] spacing max-distance side)))))
 
 (defn leg-tries
   "How many walks toward the XZ point [x z] were started and not followed by a look there (:leg-tried notes within the leg spacing's third)."
@@ -635,9 +643,13 @@
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (set (:tried m))
         covering (searched-notes c m ns)
-        columns (->> (candidates c m)
-                     (remove #(or (tried %) (= % [ox oz]) (> (xz-dist % origin) (distance-limit c))
+        open (partial remove #(or (tried %) (= % [ox oz]) (> (xz-dist % origin) (distance-limit c))
                                   (some (fn [n] (notes/covers? n % names)) covering)))
+        ;; the spiral's come nearest first, so a side's first is its nearest: never the whole disc
+        columns (->> (if (outward? c)
+                       (open (candidates c m))
+                       (mapcat (fn [side] (take 1 (filter #(= side (side-of [(- (% 0) ox) 0 (- (% 1) oz)])) (open (candidates c m side)))))
+                               [[:x 1] [:x -1] [:z 1] [:z -1]]))
                      (map (fn [pt] {:leg [(pt 0) y (pt 1)] :column pt})))
         feet (sh-sense/feet p)
         outs (->> (some->> (reach-room/room p feet) (sh-inside/way-out-cells p))

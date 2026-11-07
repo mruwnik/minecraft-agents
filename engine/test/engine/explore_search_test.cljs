@@ -24,6 +24,7 @@
             [jobs.lib.cost.value :as value]
             [plan.shape :as shape]
             [jobs.explore.search :as search]
+            [jobs.explore.rings :as rings]
             [engine.contract :as contract]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -505,12 +506,32 @@
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
     (is (= (count (search/spiral-points [0 0] 16 64)) (count order)))))
 
+(defn hypots
+  "[value, js/Math.hypot calls] of (f): every leg point the search makes is measured, so the calls count its work."
+  [f]
+  (let [n (atom 0) h js/Math.hypot]
+    (set! js/Math.hypot (fn [& xs] (swap! n inc) (apply h xs)))
+    (try [(f) @n] (finally (set! js/Math.hypot h)))))
+
 (deftest a-priced-search-plans-legs-past-the-max-distance-setting
-  (let [c {:args {:pattern :spiral :worth 1e4} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
-        far (fn [c] (apply max (map #(js/Math.hypot (% 0) (% 1)) (search/candidates c {:origin [0 0 0]}))))]
-    (is (> (far c) 96) "a finite worth pays for legs beyond the setting")
-    (is (<= (far (assoc-in c [:args :worth] ##Inf)) 96) "unpriced, the setting limits the legs")
-    (is (<= (far (assoc-in c [:args :within] 40)) 40) ":within still caps a priced search")))
+  (let [c {:args {:pattern :spiral :worth 1e7} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
+        dist #(js/Math.hypot (% 0) (% 1))
+        far (fn [c] (hypots #(first (filter (fn [pt] (> (dist pt) 96)) (search/candidates c {:origin [0 0 0]})))))
+        [leg work] (far c)]
+    (is (> (dist leg) 96) "a finite worth pays for legs beyond the setting")
+    (is (= work (second (far (assoc-in c [:args :worth] 1e4)))) "the first leg past the setting costs no more work at a larger worth: the disc it pays for is never built")
+    (is (<= (apply max (map dist (search/candidates (assoc-in c [:args :worth] ##Inf) {:origin [0 0 0]}))) 96) "unpriced, the setting limits the legs")
+    (is (<= (apply max (map dist (search/candidates (assoc-in c [:args :within] 40) {:origin [0 0 0]}))) 40) ":within still caps a priced search")))
+
+(deftest the-spiral-legs-come-in-distance-order-and-a-side-gives-its-nearest
+  (doseq [[origin at r] [[[0 0] [0 0] 100] [[0.5 -3.7] [42 7] 130] [[100 100] [300 -20] 260] [[-5 9] [-70 40] 64]]]
+    (let [all (search/spiral-points origin 16 r)]
+      (is (= (sort-by #(search/xz-dist at %) all) (rings/nearest-points origin at 16 r)))
+      (doseq [side [[:x 1] [:x -1] [:z 1] [:z -1]]
+              :let [in? #(= side (search/side-of [(- (% 0) (at 0)) 0 (- (% 1) (at 1))]))]]
+        (is (= (first (filter in? (sort-by #(search/xz-dist at %) all)))
+               (first (filter in? (rings/nearest-points origin at 16 r side))))
+            (str origin at side))))))
 
 (deftest ground-another-body-searched-for-these-targets-is-skipped
   (async done
