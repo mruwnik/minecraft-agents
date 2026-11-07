@@ -1482,14 +1482,19 @@
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (is (= [9 64 0] (:cell (last (:cells (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))) "its last cut is the pit's head cell"))))
 
-;; the goal hangs over open air with no block carried: no box holds a way to it, and each wider one cuts the search off
-;; again; the widening stops with no leg once the searches (their CPU slowed tenfold) have spent the 100 ms a search may (dig-route/answer-s), before what the way without a dig route costs
-(deftest a-dig-leg-widening-round-an-end-no-box-reaches-stops-by-price
+;; the goal hangs over open air with no block carried: no box holds a way to it, and each wider one cuts the search off again.
+;; The widening ends with no leg when a search spends the 100 ms it may (dig-route/answer-s) before its bound, or :past-worth
+;; once the boxed searches have spent the way without a dig route (memory :route-search :fallback-s); only that price differs here
+(deftest a-dig-leg-widening-round-an-end-no-box-reaches-ends-at-the-cut-or-the-fallback-price
   (let [p (tu/fake {:blocks (box -2 50 -14 7 80 14 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
         c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
-        leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-void")})]
-    (with-redefs [ctx/mem (constantly {:route-search {:fallback-s 60}}) ctx/left (constantly {}) cost/search-read-s (constantly 0.001)]
-      (is (= [nil] (take 1 (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
+        ends (fn [fallback-s]
+               (let [slice (choose/route-slice (str "leg-over-void-" fallback-s))
+                     leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice slice})]
+                 (with-redefs [ctx/mem (constantly {:route-search {:fallback-s fallback-s}}) ctx/left (constantly {}) cost/search-read-s (constantly 0.001)]
+                   (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))]
+    (is (nil? (ends 60)) "the fallback price is not reached: the cut ends the search, no leg")
+    (is (= {:step :none :why :past-worth} (ends 1)) "the boxed searches spent the fallback price")))
 
 ;; card 29cd6b4d: lava 5 long on the line and 15 wide holds both leg ends (3 and 6 on): each is moved to the stand nearest
 ;; it with no lava beside, and the leg is dug there
