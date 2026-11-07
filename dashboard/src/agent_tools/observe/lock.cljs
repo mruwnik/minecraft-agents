@@ -93,12 +93,16 @@
         recorded (try (.readFileSync fs (.join path lock "start") "utf8") (catch :default _ nil))]
     (when (and pid (js/Number.isInteger pid) (pos? pid) (not= pid (.-pid js/process))
                recorded (= recorded (process-start-time pid)))
-      (try (.writeFileSync fs (.join path lock "displaced") "" #js {:mode private-file-mode}) (catch :default _ nil))
-      (try (.kill js/process pid "SIGTERM") (catch :default _ nil))
-      (loop [waited 0]
-        (cond (lock-owner-gone? lock) true
-              (>= waited takeover-wait-ms) false
-              :else (do (pause! 25) (recur (+ waited 25))))))))
+      (let [mark (.join path lock "displaced")
+            freed? (and (try (.writeFileSync fs mark "" #js {:mode private-file-mode}) true (catch :default _ false))
+                        (try (.kill js/process pid "SIGTERM") true (catch :default _ false))
+                        (loop [waited 0]
+                          (cond (lock-owner-gone? lock) true
+                                (>= waited takeover-wait-ms) false
+                                :else (do (pause! 25) (recur (+ waited 25))))))]
+        ;; a holder that stays alive keeps its lock, so a later plain SIGTERM of it is a cancel
+        (when-not freed? (.rmSync fs mark #js {:force true}))
+        freed?))))
 
 (defn displaced?
   "True when a newer waiter marked this lock before ending its holder (take-over-owner!)."

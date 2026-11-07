@@ -1059,6 +1059,39 @@
 (deftest a-displaced-wait-is-reported-as-displaced-not-cancelled
   (is (= :displaced (get observe/failure-reasons "EOBSERVERDISPLACED"))))
 
+(deftest a-takeover-that-fails-to-end-the-holder-removes-the-mark
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")
+            pid (js/Number (str/trim (child-process/execSync "(trap '' TERM; exec sleep 60) >/dev/null 2>&1 & echo $!" #js {:encoding "utf8"})))]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") (str pid))
+        (.writeFileSync fs (.join path lock "start") (observe-lock/process-start-time pid))
+        (try (is (false? (observe-lock/take-over-owner! lock)))
+             (is (false? (observe-lock/displaced? lock)) "a holder that lived keeps an unmarked lock")
+             (finally (.kill js/process pid "SIGKILL")))))))
+
+(defn sigterm-wait
+  "Run observe/wait! on the fixture, send this process a SIGTERM once its lock exists (after writing the displaced
+  mark when `mark?`); a promise of the code the wait rejected with."
+  [f mark?]
+  (let [lock (.join path (:dir f) "worlds" "w" "observers" "Probe" "agent.lock")
+        waiting (observe/wait! (:req f) {:get! (:get! f) :output (fn [_] (js/Promise.resolve nil))})]
+    (js/setTimeout (fn []
+                     (when mark? (.writeFileSync fs (.join path lock "displaced") ""))
+                     (.kill js/process (.-pid js/process) "SIGTERM"))
+                   300)
+    (-> waiting (.then (fn [_] nil)) (.catch (fn [error] (.-code error))))))
+
+(deftest sigterm-of-a-marked-wait-is-displaced-and-of-an-unmarked-one-cancelled
+  (with-fixture ["5s"]
+    (fn [f]
+      (-> (sigterm-wait f true)
+          (.then (fn [code]
+                   (is (= "EOBSERVERDISPLACED" code))
+                   (sigterm-wait f false)))
+          (.then (fn [code] (is (= "ABORT_ERR" code))))))))
+
 (defn kill-failing [code] (fn [_] (throw (doto (js/Error. "kill") (aset "code" code)))))
 
 (deftest a-process-owned-by-another-user-counts-as-alive
