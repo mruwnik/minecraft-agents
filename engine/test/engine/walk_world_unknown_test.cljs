@@ -176,6 +176,21 @@
     (is (false? (rock? known [[40 60 -9]] [42 58 -11])) "2 from a seed")
     (is (identical? rock/all-rock (rock/rock-section (memory-of []) (rock/open-ids) 3 0 4 0 [])) "nothing seen near: all rock")))
 
+(deftest a-kept-memory-guess-is-rebuilt-only-when-a-section-it-reads-is-written
+  (let [cells (atom [[5 70 5]])
+        stamp (atom 0)
+        cache (js/Map.)
+        guess (fn [seeds] ((rock/rock-at {:k 3 :known (fn [cx sy cz] ((memory-of @cells) cx sy cz)) :seeds seeds
+                                          :cache cache :stamp (fn [cx sy cz] (if (and (zero? cx) (== 4 sy) (zero? cz)) @stamp 0))})
+                           9 70 5))]
+    (is (true? (guess [])) "past 3 of the seen open cell")
+    (is (false? (guess [[9 70 5]])) "a seed spares it over the kept memory guess")
+    (is (true? (guess [])) "the seed is no part of the kept guess")
+    (reset! cells [[5 70 5] [9 70 5]])
+    (is (true? (guess [])) "same stamp: the kept guess stands")
+    (swap! stamp inc)
+    (is (false? (guess [])) "a write to the section: rebuilt")))
+
 (deftest an-unseen-cell-is-no-rock-at-a-height-the-prior-spares
   (let [known (memory-of [[5 66 5]])
         rock? (fn [spare? [x y z]]

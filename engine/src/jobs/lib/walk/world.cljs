@@ -85,6 +85,19 @@
       (fn [cx sy cz]
         (some-> ^js (.get sections (store/section-key cx sy cz)) .-ids)))))
 
+(defonce ^:private rock-caches (js/WeakMap.))
+
+(defn- rock-memory
+  "The rock guess's inputs over the body's memory: :known (memory-sections), :stamp (store/section-stamp) and :cache (kept
+  per section store, so a search after another rebuilds only the sections written since)."
+  [p]
+  (when-let [per (aget p "perception")]
+    (let [^js st (:st per)
+          sections (store/store-of st (.-dim st))]
+      {:known (memory-sections p)
+       :stamp (fn [cx sy cz] (store/section-stamp st (.-dim st) cx sy cz))
+       :cache (or (.get rock-caches sections) (let [c (js/Map.)] (.set rock-caches sections c) c))})))
+
 (defn memory-epoch-fn
   "(fn []) memory-age/epoch of the body's memory, which moves whenever a cell is seen or changed or a remembered cell's
   change chance moves a level (a masked view kept for a while re-reads memory only then)."
@@ -191,7 +204,7 @@
   (if-not unknown
     :raw
     (let [rock (when-let [known (and (rock-guess? p unknown) (memory-sections p))]
-                 (rock/rock-at {:k (rock-beyond) :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p)}))
+                 (rock/rock-at (assoc (rock-memory p) :k (rock-beyond) :seeds (rock-seeds p unknown) :spare? (spare-fn p))))
           ^js blocked (.-blocked unknown)
           blocked (when (and blocked (pos? (.-size blocked))) blocked)]
       (if (or rock blocked)
@@ -261,8 +274,8 @@
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
-             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
-                                                                    :k k :known (memory-sections p) :seeds (rock-seeds p unknown) :spare? (spare-fn p)})))
+             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) (assoc (rock-memory p) :mask (.-id mask) :stone (if (.-rockEdge unknown) unloaded-id stone) :edge (true? (.-rockEdge unknown))
+                                                                    :k k :seeds (rock-seeds p unknown) :spare? (spare-fn p)))))
            pw))))))
 
 (defn unknown-of

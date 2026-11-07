@@ -89,7 +89,7 @@
 (.fill all-rock 1)
 
 (defn- rock-section*
-  [known ^js open k cx sy cz seeds]
+  [known ^js open k cx sy cz]
   (let [n (+ 16 (* 2 k))
         nn (* n n)
         seed (js/Uint8Array. (* n nn))
@@ -108,11 +108,6 @@
                       (aset seed (+ row lx) 1)
                       (vreset! any? true)))
                   (recur (inc lx)))))))))
-    (doseq [[x y z] seeds
-            :let [px (- x x0) py (- y y0) pz (- z z0)]
-            :when (and (< -1 px n) (< -1 py n) (< -1 pz n))]
-      (aset seed (+ (* py nn) (* pz n) px) 1)
-      (vreset! any? true))
     (if-not @any?
       (or (shaft! known all-rock cx sy cz) all-rock)
       (let [b (js/Uint8Array. (* n nn))
@@ -128,20 +123,64 @@
                 (aset out (bit-or cells lx) (- 1 (aget b (+ row lx))))))))
         (or (shaft! known out cx sy cz) out)))))
 
+(defn- clear-seeds
+  "out (a 4096-cell section array) with the cells within k (Chebyshev) of a seed set 0: out itself when no seed is near,
+  else a copy."
+  [^js out k cx sy cz seeds]
+  (let [near (filterv (fn [[x y z]] (and (<= (abs (- x (* cx 16) 8)) (+ k 8)) (<= (abs (- y (* sy 16) 8)) (+ k 8)) (<= (abs (- z (* cz 16) 8)) (+ k 8))))
+                      seeds)]
+    (if (empty? near)
+      out
+      (let [res (js/Uint8Array. out)
+            lo #(max 0 (- % k)) hi #(min 15 (+ % k))]
+        (doseq [[x y z] near
+                :let [lx (- x (* cx 16)) ly (- y (* sy 16)) lz (- z (* cz 16))]
+                y (range (lo ly) (inc (hi ly))) z (range (lo lz) (inc (hi lz)))]
+          (.fill res 0 (+ (bit-shift-left y 8) (bit-shift-left z 4) (lo lx))
+                 (+ (bit-shift-left y 8) (bit-shift-left z 4) (hi lx) 1)))
+        res))))
+
 (defn rock-section
   "The section (cx sy cz, sy the world's section y) as a 4096-cell Uint8Array (store/cell-index), 1 where an unseen cell
   is guessed rock: more than k blocks from every remembered open cell (known: (fn [cx sy cz]) the memory's ids + 1, or
-  nil; open: open-ids) and every one of seeds ([x y z] cells), and with spare? not at a height it spares (spare-heights!)."
+  nil; open: open-ids) and every one of seeds ([x y z] cells), and with spare? not at a height it spares (spare-heights!).
+  memory-rock: the section's guess from the memory alone, when the caller keeps it."
   ([known open k cx sy cz seeds] (rock-section known open k cx sy cz seeds nil))
-  ([known ^js open k cx sy cz seeds spare?]
-   (let [out (rock-section* known open k cx sy cz seeds)]
+  ([known open k cx sy cz seeds spare?] (rock-section known open k cx sy cz seeds spare? (rock-section* known open k cx sy cz)))
+  ([_known _open k cx sy cz seeds spare? memory-rock]
+   (let [out (clear-seeds memory-rock k cx sy cz seeds)]
      (if spare? (spare-heights! out sy spare?) out))))
 
+(defn- stamps
+  "The stamps (stamp: (fn [cx sy cz]), store/section-stamp) of every section the memory-only guess of cx sy cz reads."
+  [stamp cx sy cz]
+  (let [a (array)]
+    (doseq [dy [-1 0 1] dz [-1 0 1] dx [-1 0 1]] (.push a (stamp (+ cx dx) (+ sy dy) (+ cz dz))))
+    (doseq [d (range 2 (inc shaft-sections))] (.push a (stamp cx (- sy d) cz)))
+    a))
+
+(defn- memory-rock
+  "The guess of section cx sy cz from the memory alone (no seeds), kept in cache (a js/Map, section-key -> #js [k stamps
+  rock]) while k and the stamps of the sections it reads stand; without cache or stamp built anew."
+  [cache stamp known open k cx sy cz]
+  (if-not (and cache stamp)
+    (rock-section* known open k cx sy cz)
+    (let [key (store/section-key cx sy cz)
+          now (stamps stamp cx sy cz)
+          ^js e (.get cache key)]
+      (if (and e (== k (aget e 0)) (.every ^js (aget e 1) (fn [v i] (== v (aget now i)))))
+        (aget e 2)
+        (let [r (rock-section* known open k cx sy cz)]
+          (.set cache key #js [k now r])
+          r)))))
+
 (defn rock-at
-  "(fn [x y z]) true where an unseen cell is guessed rock (rock-section, built once a section)."
-  [{:keys [k known seeds spare?]}]
+  "(fn [x y z]) true where an unseen cell is guessed rock (rock-section, built once a section). With cache (a js/Map kept
+  across calls over one memory) and stamp, a section's memory-only guess is kept while the sections it reads are
+  unwritten."
+  [{:keys [k known seeds spare? cache stamp]}]
   (let [open (open-ids)
-        cache (js/Map.)
+        local (js/Map.)
         last-key (volatile! nil)
         last-rock (volatile! nil)]
     (fn [x y z]
@@ -149,8 +188,10 @@
             key (store/section-key cx sy cz)
             ^js r (if (== key @last-key)
                     @last-rock
-                    (let [r (or (.get cache key)
-                                (let [r (rock-section known open k cx sy cz seeds spare?)] (.set cache key r) r))]
+                    (let [r (or (.get local key)
+                                (let [r (rock-section known open k cx sy cz seeds spare?
+                                                      (memory-rock cache stamp known open k cx sy cz))]
+                                  (.set local key r) r))]
                       (vreset! last-key key)
                       (vreset! last-rock r)))]
         (== 1 (aget r (store/cell-index x y z)))))))
