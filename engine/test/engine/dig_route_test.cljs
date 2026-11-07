@@ -118,6 +118,11 @@
     (is (= [:pillar :pillar] (map :move (:steps r))))
     (is (contains? @calls [2 0 9 0]) "the second block of the run is priced as the second")))
 
+;; open air over a stone floor: each block of the run is placed on the one before it, the only face it has
+(deftest a-pillar-in-open-air-builds-each-block-on-the-last
+  (let [r (dr/route (fn [[_ y _]] (if (< y 10) "stone" "air")) [0 10 0] [0 13 0] {:pillar-s 0.5 :step-s 0.2 :margin 2})]
+    (is (= [:pillar :pillar :pillar] (map :move (:steps r))) (pr-str r))))
+
 (defn walls
   "block-at over bedrock with the given cells air."
   [open]
@@ -224,7 +229,7 @@
         _ (.clear dr/kept)
         [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
     ;; the back search and each expansion's neighbours are read too: here the CPU goes by the cells read
-    (is (= (:searched-s priced) (max (* (cost/search-read-s) reads) (* (cost/search-cell-s) priced-cells))) "its CPU priced by the cells it read or expanded")
+    (is (< (js/Math.abs (- (:searched-s priced) (max (* (cost/search-read-s) reads) (* (cost/search-cell-s) priced-cells)))) 1e-12) "its CPU priced by the cells it read or expanded (summed over the seeded stages)")
     (is (< priced-cells reads) "more than it expanded")
     (is (<= (:seconds priced) (+ (:seconds exact) (:searched-s priced)))
         (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))

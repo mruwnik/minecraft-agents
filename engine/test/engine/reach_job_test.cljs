@@ -102,7 +102,8 @@
           (await (tick-out! eng 2000))
           (is (true? (:arrived @out)) (pr-str @out (feet p) (keep #(when (re-find #"^(go-to|reach)\." (name (:kind %))) [(:kind %) (:at %) (:text %)]) @seen)))
           (is (not-any? #(#{:undercuts-way :unbreakable} (:reason %)) (events-of seen :go-to.escalation-stopped)))
-          (is (some #(= :climb-on (:why %)) (events-of seen :go-to.escalated)) "one route, its ways run back to back"))))))
+          ;; with 24 blocks it pillars up through the 13 ceiling cells from where it stands (the ways run back to back: go-to-depth-test)
+          (is (not-any? #(= :approach (:step %)) (events-of seen :go-to.escalated)) "one climb from where it stands, no walk to a wall first"))))))
 
 (deftest a-climb-whose-guessed-rock-keeps-showing-open-ends-once-its-replans-are-spent
   ;; a body shut in a pocket in stone under a goal 12 across and 3 up; shafts of air along the way, floor to the goal's

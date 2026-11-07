@@ -430,6 +430,7 @@
                          (aset l 6 (min z (aget l 6))) (aset l 7 (max z (aget l 7)))))
                      l))
         best (js/Map.) done (js/Set.) queue #js [] expanded (volatile! 0)
+        tick (volatile! 1)
         answer (volatile! nil)
         goal-key (key gx gy gz)
         end-key? (fn [k] (or (== (if (neg? k) (.get label-cell k) k) goal-key) (and r (end? k))))
@@ -500,8 +501,9 @@
                                        :else (let [^js old (.get best i)] (when (and (not (.has done i)) (or (nil? old) (< nd (aget old 0)))) i)))]
                          (.set best nk #js [nd k ck move placed (let [dug (aget from-node 5) ks (aget acc 2)] (if (zero? (alength ks)) dug (dug-link ks dug))) run (aget acc 3) (aget acc 4) sig (aget acc 5)])
                          (when (and (< nd (aget incumbent 0)) (end-key? nk)) (aset incumbent 0 nd) (aset incumbent 1 nk))
-                         ;; among equal bounds the farthest along first: the cells between two ends bound alike (Manhattan steps, the back bound's frontier)
-                         (heap-push! queue #js [(tie (+ nd (heuristic nx ny nz))) (- nd) nk]))))))
+                         ;; among equal bounds the farthest along first: under prior-h a straight way's cells all bound alike
+                         (heap-push! queue #js [(tie (+ nd (heuristic nx ny nz))) (if prior? (- nd) @tick) nk])
+                         (vswap! tick inc))))))
         ;; whether a step of the way to the cell of key k opened cell x y z: a floor the route itself digs away is none (a
         ;; stair that turns back over its own cut)
         ;; a link's box holds every cell before it: a cell outside it is dug by none of them
@@ -530,7 +532,9 @@
                                    (relax! ck node acc nx ny nz move
                                            (boolean (and stair-s (> ny my) (not= :pillar move) (or (= :laid move) (pos? (aget acc 1)))))
                                            face-s))))]
-                    (when-let [pf (and pillar-s (or (nil? only-keys) (.has only-keys (key mx (inc my) mz))) (placeable mx my mz))]
+                    ;; a pillar's next block goes on the one the way placed under the feet (a pillar's, a laid floor): the world reads it open
+                    (when-let [pf (and pillar-s (or (nil? only-keys) (.has only-keys (key mx (inc my) mz)))
+                                       (if (let [mv (aget node 3)] (or (keyword-identical? :pillar mv) (keyword-identical? :laid mv))) :seen (placeable mx my mz)))]
                       (try! mx (inc my) mz :pillar (pillar-at node mx my mz) true 0 1 (= :unseen pf)))
                     (loop [i 0]
                       (when (< i 8)
@@ -598,7 +602,7 @@
                       (priced (route-to ck))
                       (do (.forEach bad #(.add contested %))
                           (.clear best) (.clear done) (.clear wet-at) (.clear dry-at) (.clear dropped) (.clear label-cell)
-                          (set! (.-length queue) 0) (aset incumbent 0 ##Inf) (aset incumbent 1 nil)
+                          (set! (.-length queue) 0) (vreset! tick 1) (aset incumbent 0 ##Inf) (aset incumbent 1 nil)
                           (.set best start-key start-node)
                           (heap-push! queue #js [(heuristic fx fy fz) 0 start-key])
                           nil))))

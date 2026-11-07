@@ -753,9 +753,9 @@
                   [whole legs] ((juxt filter remove) #(= goal (:to %)) @searches)]
               ;; a search with no price bound is one the call's worth does not end: kept within a slice
               (is (every? #(or (:bound %) (<= (:cells %) slice)) @searches) (pr-str @searches))
-              ;; the whole way is searched once (its lane, band, then everywhere), under the call's price, and holds no route
-              ;; at the 100 ms cut (701 cells measured, where the proof it went on with read 56k)
-              (is (= :too-big (:problem (last whole))) (pr-str whole))
+              ;; the whole way is searched once (its lane, band, then everywhere), under the call's price, and holds no route cheaper
+              ;; than the straight dig at the 100 ms cut, which is past the worth (701 cells measured, where the proof it went on with read 56k)
+              (is (= :dearer (:problem (last whole))) (pr-str whole))
               (is (<= (* (cost/search-cell-s) (reduce + (map :cells whole))) dig-route/answer-s) (pr-str whole))
               (is (seq legs))
               (is (every? #(<= (apply max (map (fn [a b] (js/Math.abs (- a b))) (:from %) (:to %))) ec/leg-blocks) legs) (pr-str legs))
