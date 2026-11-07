@@ -343,8 +343,12 @@
             look (when (and look-s (every? #(< (+ look-s toured) %) own-s)) {:s look-s})
             look? (fn [than] (and look (or (nil? than) (< (+ (:s look) toured) than))))
             wait (fn [{:keys [wait] :as w}]
-                   (if (= :light wait)
+                   (cond
+                     (and (= :light wait) (zero? (:secs w)))
+                     (contract/ok :priced (str "exposed, but the light is here: " (price/round1 secs) " s there cost " (price/round1 (:hp w)) " hp, " (price/round1 (:s w)) " s"))
+                     (= :light wait)
                      (update s 2 assoc :now-s now-s :wait-s (:s w))
+                     :else
                      (contract/status :later :exposed (str "exposed: " (price/round1 secs) " s there cost " (price/round1 hp) " hp, " (price/round1 now-s)
                                                            " s now; healing " (price/round1 (:secs w)) " s first costs " (price/round1 (:s w)) " s")
                                       (assoc data :wait :heal :now-s now-s :wait-s (:s w) :recheck-after-ms walk-risk/recheck-ms))))

@@ -1010,6 +1010,12 @@
     (is (= :ok (first (status 0))) "a look sure to show it lit: 20 s, then the act is free")
     (is (re-find #"judged once looked" (second (status 0))))))
 
+(deftest a-dawn-wait-of-no-seconds-is-acted-on-not-held-for-ever
+  (let [c (assoc (ctx-of open-night) ::price/stay-s 3000)
+        s (ready/priced c [:later "dark" {:reason :exposed :chance 0.001 :left-chance 0.0001 :wait-ms 0 :recheck-after-ms 0}])]
+    (is (= [:ok :priced] [(first s) (:reason (nth s 2))])
+        "light is already here: a wait of 0 s is the act; :later with nothing to wait for never lets the job run")))
+
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
 
