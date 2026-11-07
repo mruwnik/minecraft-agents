@@ -9,7 +9,7 @@
 //  Per-test timings: engine/out/test-timings.jsonl (one {"var","ms"} line per test, {"peak-rss-kb"} per shard); the K slowest are printed.
 //  Refuses a hand run (needs run_tests' LIVE_TESTS_NONCE).
 //  Parts started together share one compile: the first builds under engine/out/test-bundle.lock and stamps the source hash (engine/out/test-full.stamp), the others skip it; shard copies hold the lock shared. A run in which no test ran fails.
-//  Isolation: each shard (tools/test-shard-exec.mjs) copies out/test.cjs and out/test/cljs-runtime to ~/.cache/mc-test-run/mc-test-run-<its pid>/out (disk, not tmpfs) once it holds its slot, runs that copy and removes it, so waiting shards hold no disk (a full copy is 336 MB); per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
+//  Isolation: each shard (tools/test-shard-exec.mjs) copies out/test.cjs and out/test/cljs-runtime to ~/.cache/mc-test-run/mc-test-run-<its pid>/out (disk, not tmpfs) once it holds its slot, runs that copy and removes it, so waiting shards hold no disk; the copy is narrowed to the part's namespaces (and the test namespaces they require) as a targeted run's is (narrowBundle), so a part starts at about 400 MB heap, not 900 MB; per-shard files carry the pid; a failing shard's output is kept in ~/.cache/mc-test-run/mc-test-run-<pid>-shard-<i>.log (path printed).
 import fs from 'node:fs'
 import crypto from 'node:crypto'
 import path from 'node:path'

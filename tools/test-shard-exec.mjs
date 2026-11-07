@@ -7,8 +7,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { isolate, cleanupOnExit, killTree, RUN_ROOT } from './test-run.mjs'
 
-export const isolateOrExplain = (engineDir, tag, iso = isolate, err = console.error) => {
-  try { return iso(engineDir, tag) } catch (e) {
+export const isolateOrExplain = (engineDir, tag, iso = isolate, err = console.error, nss = null) => {
+  try { return iso(engineDir, tag, undefined, nss) } catch (e) {
     err(`test-shard-exec: cannot copy the test bundle (${e.code ?? e.message}${e.code === 'ENOSPC' ? ': disk full, free space under ~/.cache/mc-test-run and /home' : ''})`)
     return null
   }
@@ -24,8 +24,8 @@ export const bundleStale = (engineDir) => {
 
 // Copy while holding the bundle lock shared, so a compile (exclusive) never rewrites the bundle mid-copy.
 const STALE_RC = 3
-export const isolateLocked = (engineDir, lock, tag = process.pid, run = spawnSync) => {
-  const r = run('flock', ['-s', lock, process.execPath, new URL(import.meta.url).pathname, '--isolate', engineDir, String(tag)], { stdio: 'inherit' })
+export const isolateLocked = (engineDir, lock, tag = process.pid, run = spawnSync, nss = null) => {
+  const r = run('flock', ['-s', lock, process.execPath, new URL(import.meta.url).pathname, '--isolate', engineDir, String(tag), ...(nss ? [nss.join(',')] : [])], { stdio: 'inherit' })
   if (r.status === STALE_RC) return 'stale'
   if (r.status !== 0) return null
   const runDir = path.join(RUN_ROOT, `mc-test-run-${tag}`)
@@ -44,14 +44,21 @@ export const isolateFresh = (engineDir, lock, copy = isolateLocked, rebuild = (l
   return null
 }
 
+// The namespaces a shard's `--test=a,b` asks for: its copy loads only these (and what they require), not the whole bundle.
+export const testNss = (cmd) => {
+  const arg = cmd.find((a) => a.startsWith('--test='))
+  return arg ? arg.slice(7).split(',').map((x) => x.split('/')[0]).filter(Boolean) : null
+}
+
 const main = () => {
   if (process.argv[2] === '--isolate') {
     if (bundleStale(process.argv[3])) return process.exit(STALE_RC)
-    return process.exit(isolateOrExplain(process.argv[3], process.argv[4]) ? 0 : 1)
+    return process.exit(isolateOrExplain(process.argv[3], process.argv[4], isolate, console.error, process.argv[5]?.split(',')) ? 0 : 1)
   }
   const [engineDir, ...cmd] = process.argv.slice(2)
   const lock = process.env.MC_TEST_BUNDLE_LOCK
-  const iso = lock ? isolateFresh(engineDir, lock) : isolateOrExplain(engineDir, process.pid)
+  const nss = testNss(cmd)
+  const iso = lock ? isolateFresh(engineDir, lock, (e, l) => isolateLocked(e, l, process.pid, spawnSync, nss)) : isolateOrExplain(engineDir, process.pid, isolate, console.error, nss)
   if (!iso) return process.exit(1)
   let child = null
   cleanupOnExit(process, iso.cleanup, (sig) => child && killTree(child.pid, sig))

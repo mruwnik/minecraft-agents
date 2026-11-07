@@ -276,6 +276,15 @@ test('test-shard-exec: a full disk names its cause', async () => {
   assert.match(lines[0], /ENOSPC: disk full/)
 })
 
+test('test-shard-exec: a shard copy is narrowed to the namespaces of its --test= (half the heap of the whole bundle)', async () => {
+  const { isolateOrExplain, testNss } = await import('./test-shard-exec.mjs')
+  assert.deepEqual(testNss(['node', 'x.cjs', '--test=engine.a-test,engine.b-test/some-deftest']), ['engine.a-test', 'engine.b-test'])
+  assert.equal(testNss(['node', 'x.cjs']), null)
+  const got = []
+  isolateOrExplain('/e', 1, (...a) => { got.push(a); return { runDir: '/r' } }, () => {}, ['engine.a-test'])
+  assert.deepEqual(got, [['/e', 1, undefined, ['engine.a-test']]])
+})
+
 test('ensureBundle: a fresh stamp skips the compile; changed sources or a failed compile do not', () => {
   const d = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'shards-stamp-'))
   try {
