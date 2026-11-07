@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.night-support :refer [night noon sleep-count!]]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
@@ -92,10 +93,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [price (fn ^:async b [k]
-                      (let [{:keys [eng seen]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :light {} :light-default [15 0]})]
-                        (core/submit! eng (list 'jobs.survival.night {:settings {:jobs.lib.cost.value/spawn-chance-per-s {:k k :n-s 1000}}}) {})
-                        (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
-                        (:prices (first (st/emitted seen :night.answers)))))
+                      (await
+                       (settings/with-settings {:jobs.lib.cost.value/spawn-chance-per-s {:k k :n-s 1000}}
+                         (fn ^:async inner []
+                           (let [{:keys [eng seen]} (st/setup {:time night :blocks st/floor :inventory bed-and-dirt :light {} :light-default [15 0]})]
+                             (core/submit! eng (list 'jobs.survival.night {}) {})
+                             (await (tick-until eng #(seq (st/emitted seen :night.answers)) 20))
+                             (:prices (first (st/emitted seen :night.answers))))))))
               low (await (price 1))
               high (await (price 40))]
           (is (< (:bed low) (:bed high)))

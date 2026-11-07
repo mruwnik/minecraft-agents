@@ -617,7 +617,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:unloaded ring-1-cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 20}}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :within 20}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for the chunks")
           (is (= [] (walks s)))
@@ -632,7 +632,7 @@
       (fn ^:async t []
         (let [cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [300 0] 16 23))
               s (setup {:unloaded cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :settings {:jobs.explore.search/max-distance 20}}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :within 20}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (seq (walks s)) "a walk started")
           (is (every? #(> (:x %) 200) (walks s)) "toward the centre"))))))
@@ -643,7 +643,7 @@
       (fn ^:async t []
         (let [cells (into ["0,63,0"] (map (fn [[x z]] (str x ",63," z))) (search/spiral-points [0 0] 16 100))
               s (setup {:unloaded cells} 28)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 100}}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :within 100}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 8 700))
           (is (not (finished? s)) "still waiting for its own chunks")
           (is (= [] (walks s))))))))
@@ -1041,7 +1041,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {} 0)]
-          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 40 :jobs.lib.cost.find/leg-spacing 4}}) {})
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :within 40 :settings {:jobs.lib.cost.find/leg-spacing 4}}) {})
           (await (run-until-done s 400))
           (let [e (not-found-of s)]
             (is (<= (get-in e [:coverage :scans]) 2) "a step that only goes on choosing points does not look again")

@@ -27,7 +27,7 @@
 ;; -- case from live-ProbeView-survey
 ;; ;; explore live: look round once for natural things (survey)
 ;; {:register []
-;;  :queue [(jobs.explore.search {:target ["oak_log" "birch_log" "spruce_log" "acacia_log" "dark_oak_log" "jungle_log" "cherry_log" "mangrove_log" "coal_ore" "iron_ore" "copper_ore" "pumpkin" "cactus" "sugar_cane" "water" "sand" "short_grass" "snow" "stone" "grass_block"] :count 100 :max-legs 0})]}
+;;  :queue [(jobs.explore.search {:target ["oak_log" "birch_log" "spruce_log" "acacia_log" "dark_oak_log" "jungle_log" "cherry_log" "mangrove_log" "coal_ore" "iron_ore" "copper_ore" "pumpkin" "cactus" "sugar_cane" "water" "sand" "short_grass" "snow" "stone" "grass_block"] :count 100})]}
 ;; -- case from live-view-2
 ;; ;; View test: no reflexes, the body looks once then waits 10 minutes, so tp sets its facing.
 ;; {:register []

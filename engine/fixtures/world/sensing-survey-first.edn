@@ -107,7 +107,7 @@
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [8 0 2] "emerald_block"]]
    :body {:at [8.5 0 28.5] :yaw 0}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :scan-radius 8 :use-notes false
-                                     :settings {:jobs.explore.search/max-distance 32 :jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 130}})]]
+                                     :within 32 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:why :stuck}} :for-s 140 :of-job true :until {:source :job :kind :completed}}]
    :limit-s 150}
@@ -116,7 +116,7 @@
    :blocks [[:fill [18 0 0] [19 7 31] "bedrock"] [:set [26 0 16] "emerald_block"]]
    :body {:at [8.5 0 16.5] :yaw 0}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :spiral :scan-radius 6 :use-notes false
-                                     :settings {:jobs.explore.search/max-distance 20 :jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 130}})]]
+                                     :within 20 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 130}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 150 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 160}
@@ -156,7 +156,7 @@
             [:set [9 0 9] "torch"] [:fill [16 1 12] [16 2 12] "glass"] [:set [40 0 28] "emerald_block"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:time-set 22000] [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
-                                     :use-notes false :settings {:jobs.explore.search/max-distance 60 :jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 45}})]
+                                     :use-notes false :within 60 :settings {:jobs.lib.cost.find/leg-spacing 8} :spend {:job-time 45}})]
          [:wait-s 70] ; the job time (45 s of work) does not run while waiting
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}
@@ -174,7 +174,7 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"] [:set [15 0 9] "torch"] [:set [9 0 15] "torch"] [:set [15 0 15] "torch"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:time-set 22000] [:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
-                                     :use-notes false :settings {:jobs.explore.search/max-distance 60} :spend {:job-time 45}})]
+                                     :use-notes false :within 60 :spend {:job-time 45}})]
          [:wait-s 70]
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 60 :of-job true}
@@ -190,7 +190,7 @@
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"] [:set [9 0 9] "torch"]]
    :body {:at [12.5 0 12.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8
-                                     :use-notes false :settings {:jobs.explore.search/max-distance 60} :spend {:job-time 45}})]
+                                     :use-notes false :within 60 :spend {:job-time 45}})]
          [:wait-s 60]]
    :expect [{:event {:source :action :kind :started :data {:name "dig"}} :within-s 90}
             {:no-event {:source :job :kind :stopped :data {:why :no-way-out}} :for-s 60 :of-job true}]

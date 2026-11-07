@@ -60,7 +60,7 @@
             [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [21.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.explore.search {:target "cow" :takeable true :use-notes false :scan-radius 16
-                                     :settings {:jobs.explore.search/max-distance 20} :spend {:job-time 60}})]]
+                                     :within 20 :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :completed :data {:reason :found}} :for-s 30 :until {:source :job :kind :stopped}}]}
   {:name "search-counts-a-free-cow-beside-a-fenced-pen"
@@ -68,5 +68,5 @@
             [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.explore.search {:target "cow" :takeable true :use-notes false :scan-radius 16
-                                     :settings {:jobs.explore.search/max-distance 20} :spend {:job-time 60}})]]
+                                     :within 20 :spend {:job-time 60}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 80 :of-job true}]}]}
