@@ -274,6 +274,26 @@
           (is (not= :searching (:reason out)) "a quote's search holds at most the node budget, not the planner's 200000")
           (is (true? (:budget out)) "its partial says the budget cut it: not known yet, not none"))))))
 
+(deftest a-goal-walled-in-by-seen-blocks-is-no-budget-cut
+  ;; the yard is too big for the goal flood to prove it shut: the search runs out of nodes at the wall beside the goal,
+  ;; which go-to reads as walled in (result :budget, budget-near), not as land still to search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              wall (fn [x0 z0 x1 z1] (box x0 64 z0 x1 66 z1 "stone"))
+              yard (merge (wall 20 -40 100 -40) (wall 20 40 100 40) (wall 20 -40 20 40) (wall 100 -40 100 40))
+              p (tu/fake {:blocks (merge (floor -60 -60 110 60) yard) :self {:pos {:x 0 :y 64 :z 1}}})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now #(deref clock)})})
+              out (await (settings/with-settings {:jobs.lib.walk.world/unknown-max-nodes 2000}
+                           (fn ^:async run []
+                             (loop [n 1]
+                               (let [route (get-in (await (quote-reply eng {:pos [24 64 1] :range 0})) [:quote :route])]
+                                 (if (and (= :searching (:reason route)) (< n 12)) (recur (inc n)) route))))))]
+          (is (= :partial (:reason out)))
+          (is (nil? (:budget out)) "a night that reads :budget as a walk not known yet would walk to a bed in there"))))))
+
 (defn pond
   "Land at y 63 from x 0 to 20 and z -10 to 10, with a pond of water over x 5-15 and z -8 to 8 (stone beneath at y 61)."
   []

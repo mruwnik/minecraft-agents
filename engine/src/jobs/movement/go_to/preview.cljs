@@ -6,7 +6,7 @@
   - Its quote (./bin/quote) is a dry run: one plan from where the body stands with the call's args, nothing walked,
     opened or dug, and :risk its walk risk (jobs.lib.walk-risk/estimate of the plan, the one danger figure a caller weighs). :uses :job-time [s s 3s] from the planner's seconds (partial or no route: no most; none and no way that
     changes the world: ##Inf), :health the planned damage, :moves-to the goal cell, and :route {:found :length :seconds
-    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:budget true on a partial whose search spent its node budget; :reason
+    :summary :steps :moves :doors :waypoints :damage :drown :nodes :dark :dark-seconds} (:dark: feet cells seen dark, or unseen and guessed dark; :dark-seconds the planner's extra seconds for them), or {:found false :reason :near :partial} (:budget true on a partial whose search spent its node budget ending farther than the budget-near setting from the goal, as the walk plans it: nearer, the goal is walled in, go-to's :budget; :reason
     as :why, :bad-pos and other refusals, :searching while the quote's budgeted search has not ended); with :unknown :unseen-floors and :dark-best."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -14,6 +14,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.toll-cells :as tc]
+            [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.plan :as wplan]
@@ -22,7 +23,7 @@
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
-            [jobs.movement.go-to.tuning :refer [quote-most-factor]]
+            [jobs.movement.go-to.tuning :refer [budget-near quote-most-factor]]
             [jobs.movement.go-to.turn-back :as turn-back]))
 
 (defn waypoints
@@ -80,7 +81,7 @@
                  (and (nil? no) (= "found" status)) (let [dark (dark-cells (:primitives c) steps unknown)]
                                                       (cond-> (assoc (route steps path) :found true) dark (assoc :dark dark)))
                  (nil? no) (cond-> {:found false :reason :partial :near here :partial (route steps path)}
-                             (= "budget" (some-> r .-reason)) (assoc :budget true))
+                             (and (= "budget" (some-> r .-reason)) (> (u/dist (peek steps) to) (budget-near))) (assoc :budget true))
                  :else (assoc (dissoc no :replans :status) :found false :near here))]
     (if-not unknown
       result
@@ -107,7 +108,7 @@
       (nil? (wworld/path-world (:primitives c))) {:found false :reason :unsupported :text "the body cannot sense the world for path planning"}
       :else
       (let [doors (or doors :shut)
-            policy (cond-> (assoc (wworld/body-policy c) :max-nodes (wworld/unknown-max-nodes))
+            policy (cond-> (assoc (wworld/body-policy (assoc c :budget-near (budget-near))) :max-nodes (wworld/unknown-max-nodes))
                      (not= :never doors) (update :moves conj :open))
             spec (when unknown (torch/round-unknown (assoc c :unknown (wworld/with-seeds (wworld/unknown-spec c) [(:x pos) (:y pos) (:z pos)] nil))))
             plan (await (near/plan! c [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
