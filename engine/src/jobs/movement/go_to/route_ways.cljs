@@ -15,7 +15,8 @@
 
 (defn segments
   "The ways, in order, of a route's steps (jobs.lib.dig-route :steps) from feet cell from, each with :from, the feet it
-  starts at: {:step :pillar :height :roof} (:roof its cells dug overhead), {:step :stair :heading :steps},
+  starts at: {:step :pillar :height :roof} (:roof its cells dug overhead), {:step :stair :heading :steps :guessed} (:guessed
+  its floors not seen, read as rock),
   {:step :dig-route :cells} then a walk on to its end, {:step :approach :pos}; walks in a row are one, and none ends
   the route (go-to's own walk takes it on to the goal). Without stairs? a step up is dug as a dig route's."
   ([block-at unseen? from steps] (segments block-at unseen? from steps true))
@@ -28,7 +29,8 @@
                     digs (mapcat :dig run-steps)]
                 (case (first kind)
                   :pillar [{:step :pillar :height (count run) :roof (count digs) :from start}]
-                  :stair [{:step :stair :heading (second kind) :steps (count run) :from start}]
+                  :stair [(let [guessed (filterv unseen? (map #(escape/add (:to %) [0 -1 0]) run-steps))]
+                            (cond-> {:step :stair :heading (second kind) :steps (count run) :from start} (seq guessed) (assoc :guessed guessed)))]
                   :dig [{:step :dig-route :cells (mapv (fn [c] {:cell c :block (block-at c) :guess (unseen? c)}) digs) :from start}
                         {:step :approach :pos end :from start}]
                   :walk [{:step :approach :pos end :from start}])))]
@@ -46,3 +48,8 @@
   (when-let [nxt (first (:then e))]
     (when (or (= :approach (:step nxt)) (= (:from nxt) feet))
       (assoc nxt :then (vec (rest (:then e)))))))
+
+(defn floor-gone
+  "A floor stair way e guessed (:guessed) that is now seen to be no floor (a shaft's air, water), else nil."
+  [block-at unseen? e]
+  (first (filter #(and (not (unseen? %)) (some? (block-at %)) (not (escape/solid? (block-at %)))) (:guessed e))))

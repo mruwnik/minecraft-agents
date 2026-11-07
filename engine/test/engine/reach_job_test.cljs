@@ -272,7 +272,8 @@
 
 (deftest a-stair-stopped-over-a-shaft-it-guessed-as-rock-is-not-chosen-again
   ;; the pocket of the test above with shafts of air (x 5, 7, 9, y 64..68 bar 66) the climb's stairs rise over, read as rock
-  ;; till the body is near: each stair that meets one stops :no-floor, and the next way is chosen on what it showed
+  ;; till the body is near: a stair that meets one stops :no-floor, and the next way is chosen on what it showed; a
+  ;; climb's next stair over a shaft the body sees by then is not started
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -290,4 +291,6 @@
             (is (true? (:arrived @out)) (pr-str @out))
             (is (seq stops) "the stairs met the shafts")
             (is (apply distinct? (map :cell stops)) (pr-str (map (juxt :at :cell) stops)))
-            (is (not-any? #(= [:stair (:at %)] ((juxt :step :at) (after %))) stops) "no stair again from where one stopped")))))))
+            (is (not-any? #(= [:stair (:at %)] ((juxt :step :at) (after %))) stops) "no stair again from where one stopped")
+            (is (seq (events-of seen :go-to.climb-replanned)) "a planned stair over a floor seen to be none is chosen again, not started")
+            (is (< (count stops) 3) "not one stop per shaft")))))))

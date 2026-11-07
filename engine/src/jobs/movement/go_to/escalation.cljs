@@ -505,7 +505,7 @@
 
 (defn escalated!
   "The child made a way (or part of one, done false): start a climb's next way at once when it made all of it
-  (route-ways/next-way), walk on after its last, else walk again from a fresh count, or escalate again at once after an
+  (route-ways/next-way; a stair whose guessed floor is now seen to be none, route-ways/floor-gone, chooses the ways again at once), walk on after its last, else walk again from a fresh count, or escalate again at once after an
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
   it (restore-next!); a cut of the body's own builds (:own-cut) at once, done or stopped in a dead end (what
@@ -516,8 +516,12 @@
   (let [feet (end/feet-cell c)
         e (:escalation (ctx/mem c))
         nxt (when done? (route-ways/next-way e feet))
+        ;; a stair planned over a floor it guessed, now seen to be none, would stop at once: the ways are chosen again
+        gone (some->> nxt (route-ways/floor-gone (escape/block-at-of (:primitives c)) (escape/unseen-of (:primitives c))))
+        nxt (when-not gone nxt)
         ;; a climb's last way ends where its walk to the goal begins
-        again? (and (not nxt) (not (and done? (contains? e :then))) (not (:past-hole e)) (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos)))))
+        again? (or (some? gone)
+                   (and (not nxt) (not (and done? (contains? e :then))) (not (:past-hole e)) (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))))
         target (some-> e :pos vec)
         to-goal #(u/dist (zipmap [:x :y :z] %) pos)
         nearer? (and (= :approach step) target (some-> (:escalation-from (ctx/mem c)) to-goal dec (> (to-goal target))))]
@@ -531,6 +535,8 @@
                           ;; a cut of its own build (a pen open to the animals): put back at once, the walk on not waited for
                           (and (:own-cut e) (or (not= :dig-route step) (not done?))) (assoc :restore-now true)
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true)))
+    (when gone
+      (ctx/emit! c :go-to.climb-replanned :info {:at feet :floor gone :text "the climb's next stair rests on a floor now seen to be none: choosing the way again"}))
     (when nxt
       (ctx/emit! c :go-to.escalated :info {:step (:step nxt) :why :climb-on :at feet :text (str "climbing on: " (name (:step nxt)))})))
   :again)
