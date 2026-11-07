@@ -192,7 +192,7 @@
   [p doors unseen]
   (if (not= :never doors)
     (reach-room/enclosed? p unseen)
-    (reach-room/shut-in? p (reach/world-kinds p reach/kind-of unseen))))
+    (reach-room/kept-at-pos p "shut-in" unseen #(reach-room/shut-in? p (reach/world-kinds p reach/kind-of unseen)))))
 
 (defn walk-enclosed?
   "enclosed? for a go-to with args (its :doors and :unknown; spec its mask spec, nil: a fresh one), over the world its

@@ -773,6 +773,25 @@
       (reset! clock due)
       (is (not (identical? a (kept))) "its first level: judged again"))))
 
+(deftest an-enclosure-answer-is-kept-until-the-world-changes-or-the-body-moves
+  (let [pit (into {"0,66,0" "stone"} (for [x [-1 0 1] z [-1 0 1] :when (not= 0 x z) y [64 65]] [(str x "," y "," z) "stone"]))
+        p (tu/blind (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :floor [-30 -30 30 30] :blocks pit}))
+        per (perception/create (fake-raw/create p) {})
+        w (perception/wrap p per)
+        floods (atom 0)
+        flood reach-room/enclosed-over]
+    (with-redefs [reach-room/enclosed-over (fn [& args] (swap! floods inc) (apply flood args))]
+      (perception/pass! per)
+      (is (true? (reach-room/enclosed? w :raw)))
+      (is (true? (reach-room/enclosed? w :raw)))
+      (is (= 1 @floods) "asked again with nothing changed: no new flood")
+      (fake/set-block! p [1 64 0] "air")
+      (fake/set-block! p [1 65 0] "air")
+      (is (false? (reach-room/enclosed? w :raw)) "a way dug out: judged again")
+      (swap! (fake/state p) assoc-in [:self :pos] [5.5 64 0.5])
+      (is (false? (reach-room/enclosed? w :raw)))
+      (is (= 3 @floods) "the body moved: judged again"))))
+
 (deftest a-room-answer-is-kept-until-memory-or-the-world-changes
   (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "gold_block"})
         w (perception/wrap p per)

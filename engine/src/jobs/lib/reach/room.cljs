@@ -115,15 +115,28 @@
               budget)
     false))
 
+(declare kept)
+
+(defn kept-at-pos
+  "(f) kept as kept does for the key ck and the body's position, when unseen (a reach/world-kinds policy) is a keyword:
+  a policy fn is made anew each call, so its answer is not kept."
+  [p ck unseen f]
+  (if-let [pos (and (keyword? unseen) (some-> (.self p) .-pos))]
+    (kept p (str ck "|" unseen "|" (.-x pos) "," (.-y pos) "," (.-z pos)) (fn [_] (f)))
+    (f)))
+
 (defn enclosed?
   "Whether the body is shut in: it can walk to fewer than room-cells cells (one step up, up to three down, water swum,
   wooden doors opened). A pit or sealed room is; open ground or a hut with a door is not. A body in the free part of a
-  shut door's cell cannot step across the panel. False with no body position.
+  shut door's cell cannot step across the panel. False with no body position. Kept (kept-at-pos): a go-to's checks ask it
+  several times a round.
   unseen: how a cell the body has not seen reads (reach/world-kinds). solid: a set of cells [x y z] treated as solid
   blocks (what if they were filled)."
   ([p unseen] (enclosed? p unseen #{}))
   ([p unseen solid] (enclosed? p unseen solid room-cells))
-  ([p unseen solid budget] (enclosed-over p solid (world-kinds p body-kind-of unseen) budget)))
+  ([p unseen solid budget]
+   (kept-at-pos p (str "enclosed|" (pr-str (sort solid)) "|" budget) unseen
+                #(enclosed-over p solid (world-kinds p body-kind-of unseen) budget))))
 
 (defn dry-shut-in?
   "Whether the body is shut in when water is a wall: a dry pocket whose only way on is a swim. unseen as enclosed?."
