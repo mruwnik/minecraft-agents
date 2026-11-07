@@ -288,6 +288,17 @@
         (<= (total k) (total w)) k
         :else w))
 
+(defn surface-spot
+  "The top water cell of the column a body's head is under water in, open over it, not yet approached: no way out made
+  under water digs at its wet pace while the air runs out, one made from the surface digs breathing."
+  [c [x y z]]
+  (let [block-at (escape/block-at-of (:primitives c))
+        water? #(= "water" (block-at [x % z]))
+        top (when (water? (inc y)) (last (take-while water? (iterate inc (inc y)))))
+        spot (when top [x top z])]
+    (when (and spot (some-> (block-at [x (inc top) z]) dig-route/open?) (not (contains? (:approached (ctx/mem c)) spot)))
+      spot)))
+
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
@@ -389,7 +400,8 @@
                     (vec at)))
         chosen e
         spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice))
-                                              (let [s (escape-way/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))]
+                                              (let [s (or (escape-way/way-spot (:primitives c) feet goal spare opts (or (:approached (ctx/mem c)) #{}))
+                                                          (surface-spot c feet))]
                                                 (when-not (and s (= :past-worth (:why e)) (past-from? s)) s))))
         ;; a way through the body's own builds, priced against the one that spares them (own-way)
         priced-own (delay (when (and (or (seq (access/own-plans c)) (access/in-own-area? c (zipmap [:x :y :z] feet))) (own-may-beat? (:primitives c) feet e))

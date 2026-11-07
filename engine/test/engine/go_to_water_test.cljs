@@ -388,7 +388,8 @@
 ;; on its floor by the west side, the goal on the plain 8 blocks past the wall, no worth given (arrival). Standing still
 ;; is priced past the call's budget at once (as beside a hostile), so the dig-route search to the goal is dropped
 ;; (search-spent): a stair west from the floor would cut water (the stair job stops :fluid-in-cut), so it is no way, and
-;; the body (a stone pickaxe in hand: bare-handed the stone is priced at hand speed and the walk gives up past worth) digs out leg by leg instead of giving up past worth.
+;; the body digs out leg by leg instead of giving up past worth: with a stone pickaxe from the floor, bare-handed (a dig
+;; under water at hand pace drowns it) from the surface, where it breathes.
 (def walled-pond
   (merge (box -12 56 -8 12 63 8 "stone") (box -1 64 -5 10 65 5 "stone") (box 0 64 -4 9 65 4 "air") (box 0 60 -4 9 63 4 "water")))
 
@@ -396,13 +397,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stood search-bound/stood-s
-              _ (set! search-bound/stood-s (constantly ##Inf))
-              {:keys [out p]} (await (settings/with-settings {:jobs.lib.dig-route/max-nodes 30}
-                                       #(es/run-job! {:self {:pos [0.5 60 0.5]} :blocks walled-pond :inventory [{:name "stone_pickaxe" :count 1}]} 'jobs.movement.go-to {:pos [-8 64 0]} nil true)))]
-          (set! search-bound/stood-s stood)
-          (is (true? (:arrived @out)) (pr-str (select-keys @out [:reason :escalation :text])))
-          (is (> -6 (first (gt/at p))) (pr-str (gt/at p))))))))
+        (doseq [inventory [[{:name "stone_pickaxe" :count 1}] []]]
+          (let [stood search-bound/stood-s
+                _ (set! search-bound/stood-s (constantly ##Inf))
+                {:keys [out p]} (await (settings/with-settings {:jobs.lib.dig-route/max-nodes 30}
+                                         #(es/run-job! {:self {:pos [0.5 60 0.5]} :blocks walled-pond :inventory inventory} 'jobs.movement.go-to {:pos [-8 64 0]} nil true)))]
+            (set! search-bound/stood-s stood)
+            (is (true? (:arrived @out)) (pr-str inventory (select-keys @out [:reason :escalation :text :worth-s])))
+            (is (> -6 (first (gt/at p))) (pr-str inventory (gt/at p)))))))))
 
 (deftest a-goal-in-kelp-at-the-surface-is-swum-to
   (async done
