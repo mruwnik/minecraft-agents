@@ -52,7 +52,7 @@
         p (perception/wrap raw (perception/create (fake-raw/create raw) (assoc sight :now #(deref clock))))
         out (atom :not-done)
         ;; at the root's worth: the job's own worth-of for args, as when an agent submits it
-        parent {:worth-of (fn [c] (if-let [f (:worth-of (get registry/jobs job))] (f (assoc c :args args)) ##Inf))
+        parent {:worth-of (fn [c] (if-let [f (:worth-of (get registry/jobs job))] (f (assoc c :args args))))
                 :round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
                            (when-not (= :continue e)

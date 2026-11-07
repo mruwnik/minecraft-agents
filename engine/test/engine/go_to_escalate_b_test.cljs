@@ -709,13 +709,13 @@
   (into {} (for [[x z] [[2 0] [4 0] [3 -1] [3 1]] y [64 65 66]] [(str x "," y "," z) "bedrock"])))
 
 (deftest a-drop-needs-a-way-out-only-where-it-lands-in-a-pit
-  (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+  (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
                                                     [8 64 0] [2 67 0] [3 64 0] false))]
     (is (true? (priced? {})) "open ground: escape-way/choose has no wall to dig, which is no trap")
     (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
 
 (deftest a-drop-of-a-plan-that-stops-short-of-the-goal-is-not-deeper-than-the-speculative-cap-whatever-the-goal-is-worth
-  (let [priced? (fn [spec?] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :floor [-10 -10 10 10] :blocks {}}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+  (let [priced? (fn [spec?] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :floor [-10 -10 10 10] :blocks {}}) :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
                                                     [20 64 0] [8 64 0] [9 56 0] false spec?))]
     (is (true? (priced? false)) "a plan that reaches the goal takes an 8-block drop")
     (is (false? (priced? true)) "a plan that stops short of it does not")))

@@ -29,7 +29,7 @@
   [p]
   (let [m (atom {})
         events (atom [])]
-    {:primitives p :worth (constantly ##Inf) :root "j1" :slots [] :mem m :events events
+    {:primitives p :root "j1" :slots [] :mem m :events events
      :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data @m}]}}})
      :act (fn [k args] (.call (aget p (name k)) p "t1" args))
      :update-mem (fn [f args] (apply swap! m f args))
@@ -138,11 +138,11 @@
                       (with-redefs [clock/now (constantly 0) look/makes-out-fn shows?]
                         (await (sense/decide! c ::rock seen {:price (sense/fails-to c)})))
                       [(looks p) p]))
-              [inf p] (await (run ##Inf look/makes-out-fn))
+              [high p] (await (run 1200 look/makes-out-fn))
               walk (sense/read-walk-s (stub-ctx p) {:cells cells})
               [few] (await (run (+ walk 2.5) in-sight))
               [none] (await (run walk in-sight))]
-          (is (< 0 inf 5) "at ##Inf it looks only behind the near-face cells the sight pass missed: they may be open")
+          (is (< 0 high 5) "worth a game day it looks only behind the near-face cells the sight pass missed: they may be open")
           (is (not-any? #(look/look-shows? p %) cells) "the 312 cells behind the near face, seen now")
           (is (< 0 few 10) "worth 2.5 s over the walk to the nearest: a few looks of the 312")
           (is (zero? none) "worth no more than the walk to the nearest: no look"))))))

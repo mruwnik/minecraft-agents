@@ -357,7 +357,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[worth looks?] [[##Inf true] [0 false]]]
+        (doseq [[worth looks?] [[1200 true] [0 false]]]
           (let [{:keys [p] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
                 _ (tu/seeing-after-look p)
                 e (with-redefs [ctx/worth (constantly worth)] (await (ending-of w job {:plan "pen" :ways #{:carried :patch}} 100)))]

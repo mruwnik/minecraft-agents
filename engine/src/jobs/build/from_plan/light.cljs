@@ -42,9 +42,9 @@
   (when wait-s (fn [n _] (cost/light-wait-worth wait-s n))))
 
 (defn night-worth
-  "A worth-of for fetch-due?: for a cell never lit at night, the night left (night-s) plus the torches' price by day (need/item-price at :sky 0), since they are needed after dawn too (nil night-s: nil, any price)."
+  "A worth-of for fetch-due?: for a cell never lit at night, the night left (night-s) plus the torches' price by day (need/item-price at :sky 0, none when it has no way), since they are needed after dawn too (nil night-s: nil, any price)."
   [c night-s]
-  (when night-s (fn [n o] (+ night-s (need/item-price c "torch" n o 0)))))
+  (when night-s (fn [n o] (let [day (need/item-price c "torch" n o 0)] (+ night-s (if (js/isFinite day) day 0))))))
 
 (defn fetch-due?
   "Whether the torches short over the owed cells (torches-short) are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting:

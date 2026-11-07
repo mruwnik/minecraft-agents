@@ -1,6 +1,5 @@
 (ns engine.goal-worth-test
-  "Goal jobs price their own goal at the root (their registry worth-of): what the goal yields, not ##Inf (arrive), and
-  ##Inf only while a step would run that no price covers."
+  "Goal jobs price their own goal at the root (their registry worth-of): what the goal yields, never ##Inf."
   (:require [cljs.test :refer [deftest is]]
             [engine.apiary-maintain-test :as am]
             [engine.farm-tidy-test :as ft]

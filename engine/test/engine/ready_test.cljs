@@ -103,7 +103,7 @@
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
     (game/select! p)
-    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}))
+    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})}))
 
 (defn remembering-ctx
   "ctx-of world over a real perception that has looked all round, so the blocks of world are in the body's memory (a threat field reads memory only)."
@@ -119,10 +119,10 @@
 (defn worthless "ctx c of a goal worth nothing: it affords no risk." [c] (assoc c :worth (constantly 0)))
 
 (defn under
-  "ctx c checked at the worth the engine gives a root call of job with args: its worth-of, else ##Inf."
+  "ctx c checked at the worth the engine gives a root call of job with args (engine.core.ending/root-worth)."
   [c job args]
-  (let [f (:worth-of (get registry/jobs job))]
-    (assoc c :worth (constantly (if f (f (assoc c :args args)) ##Inf)))))
+  (let [d (get registry/jobs job)]
+    (assoc c :worth (constantly (ending/root-worth (assoc c :args args) d)))))
 
 (defn for-a-log "ctx c checked for a root obtain of one oak log." [c] (under c 'jobs.items.obtain {:item "oak_log" :count 1}))
 
@@ -200,11 +200,10 @@
     (is (= :later (first (status (constantly 1199)))) "the whole night is waited for")
     (is (= :never (first (status (constantly nil)))) "no light within a day (a storm that lasts) is not waited for")))
 
-(deftest a-call-that-must-arrive-takes-any-stay-no-wait-beats
+(deftest a-root-call-at-the-default-worth-refuses-a-dark-stay-no-wait-beats-that-costs-more-than-it-is-worth
   (let [[kind text] (with-redefs [sh-sense/light-in (constantly nil)]
                       (lit 0 15 (fn [] ((ready/safe-at (constantly outside)) (ctx-of open-night)))))]
-    (is (= :ok kind) "##Inf (a means job at the root), no light within a day: the dark stay is no reason to refuse")
-    (is (< 20 (js/Number (second (re-find #"cost ([\d.]+) hp" text)))) (str "a stay that costs more hp than the body has: " text))))
+    (is (= :never kind) (str "a means job at the root, no light within a day: a stay of ctx-of's 1e6 s is past a game day's worth: " text))))
 
 (deftest safe-at-a-sheltered-place-is-ok-and-a-walk-out-of-the-hut-is-not
   (are [world to expected] (= expected (showing #(kind (ready/safe-at (constantly to)) world)))
@@ -1037,7 +1036,7 @@
     (is (= :later (first s)) "open ground under the night sky")
     (is (= #{:light} (:lowered-by (nth s 2))) "dawn lifts it")
     (is (re-find #"no look from here shows" (second s))))
-  (is (= :ok (kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))) "lit by day")
+  (is (= :ok (first ((ready/safe-at (constantly outside)) (assoc (ctx-of (assoc open-night :time st/noon)) ::price/stay-s 60)))) "lit by day")
   (let [cave (fn [f solid-at lit] (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/solid-at? (constantly false)
                                                 lib-look/unseen-solid-at-fn solid-at lib-look/unseen-lit-chance lit]
                                     ((juxt first #(:reason (nth % 2))) ((::ready/exposure (meta (ready/safe-at (constantly {:x 15 :y 40 :z 0})))) (f (ctx-of open-night))))))
@@ -1200,9 +1199,8 @@
            (str j " waits when its work would cost more than the body may risk"))))))
 
 (deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night
-  (are [world expected] (= expected (kind (ready/safe-at-by-night (constantly outside)) world))
-    (assoc open-night :time st/noon) :ok
-    night-hut :later))
+  (is (= :ok (first ((ready/safe-at-by-night (constantly outside)) (assoc (ctx-of (assoc open-night :time st/noon)) ::price/stay-s 60)))))
+  (is (= :later (kind (ready/safe-at-by-night (constantly outside)) night-hut))))
 
 (deftest safe-at-by-night-judges-the-goal-of-a-buried-body
   (are [goal expected] (= expected (kind (ready/safe-at-by-night (constantly goal)) tunnel))
@@ -1616,7 +1614,7 @@
 
 (deftest a-fetch-that-comes-back-short-stops-the-call-only-when-going-on-costs-more
   (let [c (trip-ctx 2 [0 1800 ##Inf] [3 64 0])]
-    (is (true? (:go-on? (fetch-args c))) "worth ##Inf: running out on the 2 loaves is cheaper than stopping")
+    (is (true? (:go-on? (fetch-args c))) "the default worth: running out on the 2 loaves is cheaper than stopping")
     (is (false? (:go-on? (fetch-args (assoc c :worth (constantly 1) :quote-call {:worth 1})))) "worth 1 s: stopping is cheaper")))
 
 (deftest a-trip-fetches-only-the-home-food-get-food-takes

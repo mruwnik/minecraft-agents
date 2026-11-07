@@ -1018,7 +1018,7 @@
     (is (not (choose/past-worth? 10 guesses risk 32)))
     (is (choose/past-worth? 41 guesses {:placed 0 :apart 0} 38.8) "no look has failed: a stair dearer than the worth is still none")
     (is (not (choose/past-worth? 10 guesses {:placed 0 :apart 0} 10)))
-    (is (choose/past-worth? 10 guesses {:placed 1 :apart 0} ##Inf) "a guess sure to fail: past any worth, arrival too")))
+    (is (choose/past-worth? 10 guesses {:placed 1 :apart 0} 1e9) "a guess sure to fail: past any worth")))
 
 (deftest the-guesses-a-stair-reached-count-as-looks-the-cell-it-could-not-dig-a-bad-one
   (let [{:keys [eng]} (gt/setup {:blocks {}})
@@ -1424,7 +1424,7 @@
 
 (deftest a-dig-leg-whose-search-spends-its-slice-goes-on-in-the-next
   (let [p (tu/fake {:blocks (box -2 60 -2 20 70 2 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         slice (atom nil)
         leg #(let [s (choose/route-slice "leg-resume")] (reset! slice s) (choose/dig-leg c [0 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice s}))]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
@@ -1438,7 +1438,7 @@
 ;; line reaches them; the leg goes round it, searched in slices over later rounds like the first pass
 (deftest a-dig-leg-goes-round-a-slab-wider-than-its-margin-across-the-line-over-several-slices
   (let [p (tu/fake {:blocks (merge (box -2 60 -4 20 70 4 "stone") (box 4 60 -1 5 70 1 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         leg #(choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-slab")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (settings/with-settings {:jobs.lib.dig-route/max-nodes 5}
@@ -1449,7 +1449,7 @@
 ;; a slab 21 wide across the line: the box of the leg's own length round its ends is cut off by it, a wider one reaches round
 (deftest a-dig-leg-widens-its-box-round-a-slab-wider-than-its-length
   (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") (box 4 50 -10 5 80 10 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         leg #(choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-wide-slab")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (let [e (first (remove #{{:step :searching}} (take 300 (repeatedly leg))))]
@@ -1460,7 +1460,7 @@
 (deftest a-dig-leg-to-a-goal-sealed-in-bedrock-ends-with-no-leg
   (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") (box 9 63 -1 11 66 1 "bedrock") {"10,64,0" "air" "10,65,0" "air"})
                     :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         leg #(choose/dig-leg c [6 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-sealed")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (is (= [nil] (take 1 (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
@@ -1468,7 +1468,7 @@
 ;; the leg's far end hangs over a seen pit one block deep: the leg ends in the pit under it
 (deftest a-dig-leg-end-over-a-pit-ends-in-the-pit
   (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") {"9,63,0" "air"}) :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         leg #(choose/dig-leg c [3 64 0] [12 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-pit")})]
     (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
       (is (= [9 64 0] (:cell (last (:cells (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))) "its last cut is the pit's head cell"))))
@@ -1477,7 +1477,7 @@
 ;; again; the widening stops once the searches (their CPU slowed tenfold) have spent what the way without a dig route costs
 (deftest a-dig-leg-widening-round-an-end-no-box-reaches-stops-by-price
   (let [p (tu/fake {:blocks (box -2 50 -14 7 80 14 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         leg #(choose/dig-leg c [3 64 0] [9 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-over-void")})]
     (with-redefs [ctx/mem (constantly {:route-search {:fallback-s 60}}) ctx/left (constantly {}) cost/search-read-s (constantly 0.001)]
       (is (= {:step :none :why :past-worth} (first (remove #{{:step :searching}} (take 300 (repeatedly leg)))))))))
@@ -1506,10 +1506,9 @@
     (is (not-any? #(= "bedrock" (:block %)) (:cells r)))))
 
 ;; card ee78bde4: an end's stand search reads cells at the price of a route search's nodes against what the leg is worth, whatever
-;; the rock round the end: with the worth at 20 cells' time not one ring (27 cells) is read, where the geometric reach alone read hundreds of thousands;
-;; at ##Inf worth the straight dig to the goal bounds it
+;; the rock round the end: with the worth at 20 cells' time not one ring (27 cells) is read, where the geometric reach alone read hundreds of thousands
 (deftest a-dig-leg-end-in-rock-with-no-stand-reads-cells-only-as-far-as-the-leg-is-worth
-  (doseq [[worth cap] [[(* 20 (cost/search-read-s)) 100] [##Inf (* 4 (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes))]]]
+  (doseq [[worth cap] [[(* 20 (cost/search-read-s)) 100]]]
     (let [p (tu/fake {:blocks (box -2 50 -15 50 80 15 "bedrock") :inventory [{:name "stone_pickaxe" :count 1}]})
           reads (atom 0)
           real-block-at (escape/block-at-of p)
@@ -1518,7 +1517,7 @@
         (choose/dig-leg c [2 64 0] [44 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-end-scan-priced")}))
       (is (<= @reads cap) (str "the ends are looked at, no more rings than the route slice's nodes buy, worth " worth)))))
 
-;; card e252d55b: the goal floats in seen air with no fallback way and no bound but ##Inf; the body remembers only the
+;; card e252d55b: the goal floats in seen air with no fallback way and no bound but the root's default worth; the body remembers only the
 ;; cells round it. Once a box holds them and what a step reads past them, a wider one adds only guessed rock: no leg
 (deftest a-dig-leg-widening-at-no-price-ends-once-its-box-s-faces-are-unremembered-though-the-body-remembers-far-away
   (let [f (tu/fake {:blocks (box 0 60 -3 5 68 3 "stone") :inventory [{:name "stone_pickaxe" :count 1}]})
@@ -1532,7 +1531,7 @@
         _ (store/record! st (store/store-of st (.-dim st)) 1000 64 0 (.stateAt raw 1000 64 0) 1000000)
         p (perception/wrap f per)
         _ (tu/set-sensed! p (fn [pos] (if (in? (mapv #(js/Math.floor (aget pos %)) ["x" "y" "z"])) (.blockAt f pos) #js {:unknown true :pos pos})))
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly ##Inf)}
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth ctx/default-worth}
         margins (atom [])
         route-cells choose/route-cells
         leg #(choose/dig-leg c [2 64 0] [7 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-widens-past-memory")})]

@@ -34,8 +34,7 @@
   (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n))
 
 (defn search-worth
-  "Seconds a search for the call's need may spend: the call's worth (ctx/worth), within the job time it has left (the
-  bound of a call that arrives, ##Inf), less what a mine for it already spent without a find (::spent, gather/way-left)."
+  "Seconds a search for the call's need may spend: the call's worth (ctx/worth), within the job time it has left, less what a mine for it already spent without a find (::spent, gather/way-left)."
   [c]
   (- (min (ctx/worth c) (get-in (ctx/left c) [:spend :job-time] ##Inf)) (::spent c 0)))
 

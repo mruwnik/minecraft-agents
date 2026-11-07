@@ -546,10 +546,10 @@
           (reset! wsearch/searches {}))))))
 
 (defn ^:async one-budgeted-call
-  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts (:worth the call's, else ##Inf): its plan."
+  "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts (:worth the call's, else the root default): its plan."
   [blocks pos goal budget opts]
   (let [p (tu/fake (merge {:blocks blocks :self {:pos pos}} (:world opts)))
-        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly (:worth opts ##Inf))}]
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly (or (:worth opts) (ctx/default-worth)))}]
     (reset! wsearch/searches {})
     (try (await (tu/with-expansion-budget 16 #(walk/plan-walk! c (.pathWorld p) goal 0 (walk/default-weight) (assoc (dissoc opts :worth :world) :budget budget))))
          (finally (reset! wsearch/searches {})))))

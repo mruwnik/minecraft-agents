@@ -57,8 +57,7 @@
        :cells (vec (take 6 (map :cell floors)))})))
 
 (defn exceeded
-  "The turn-back (turn-back) of steps when its cost is more than its worth, else nil. Not cost/affords?: the cost is
-  bounded by its worth and ##Inf at an arrive worth, which must still walk on."
+  "The turn-back (turn-back) of steps when its cost is more than its worth, else nil."
   [c steps]
   (when-let [{:keys [cost worth] :as t} (turn-back c steps)]
     (when (> cost worth) t)))

@@ -365,7 +365,7 @@
         m (atom {})]
     (with-redefs [ctx/mem (fn [_] @m) ctx/update-mem! (fn [_ f & a] (apply swap! m f a))
                   ways/escalating? (constantly true) air/surface! (fn [& _] (js/Promise.resolve nil))
-                  ctx/worth (constantly (if worth-it? ##Inf 0))
+                  ctx/worth (constantly (if worth-it? (ctx/default-worth) 0))
                   near/walk-round! (fn [_ cell & _more] (swap! walked conj cell) (js/Promise.resolve nil))]
       (await (walk/land-to-judge! {:primitives p} {:x 6.5 :y 63 :z 0.5} {:reason "goal-unloaded"} {})))
     @walked))

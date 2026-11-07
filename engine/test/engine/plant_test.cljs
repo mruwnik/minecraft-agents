@@ -378,7 +378,7 @@
     (await (run-until-empty eng 6))
     (distinct (map :reason (events-of seen :waiting)))))
 
-;; the plan's cells are in the open: a night walk to them waits for dawn at the job's own worth (a root call at ##Inf takes any stay)
+;; the plan's cells are in the open: a night walk to them waits for dawn at the job's own worth
 (deftest a-plan-across-open-ground-at-night-waits-for-dawn
   (async done
     (tu/run-async done

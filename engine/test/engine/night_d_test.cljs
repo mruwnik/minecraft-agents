@@ -112,7 +112,7 @@
           (is (seq (filter #(= :flee (first %)) log)))
           (is (= [7] (mapv :cost (st/emitted seen :shelter.fled))) "the quote's price is reported")
           (is (every? #(or (:place %) (:pos %)) calls) "each candidate is quoted as the flight would walk it")
-          (is (every? #(= ##Inf (:worth %)) calls) "the flight's worth is derived from the quote, so the quote is not refused on the night's worth"))))))
+          (is (and (seq calls) (every? #(= (ctx/default-worth) (:worth %)) calls)) "each candidate is quoted at the root default worth: the flight's own worth is derived from the quote"))))))
 
 (deftest a-flee-prices-the-fight-at-its-target-once
   (async done
@@ -334,7 +334,7 @@
                               (let [at-worth (fn [w] (assoc c :worth (constantly w)))]
                                 (await (pick/kept-quote! (at-worth 50) args))
                                 (await (pick/kept-quote! (at-worth 50) args))
-                                (await (pick/kept-quote! (at-worth ##Inf) args))
+                                (await (pick/kept-quote! (at-worth 900) args))
                                 (ctx/end c :done nil))))
               eng (assoc eng :jobs (assoc registry/jobs 'worth-probe probe))]
           (tu/seeing-all p)
@@ -343,7 +343,7 @@
             (core/submit! eng '(worth-probe) {})
             (await (tu/run-until-empty eng 20))
             (finally (set! pick/quote! quote!)))
-          (is (= 2 (count @asked)) "worth 50 twice: one ask; worth ##Inf: another"))))))
+          (is (= 2 (count @asked)) "worth 50 twice: one ask; worth 900: another"))))))
 
 (deftest a-later-pass-asks-no-quote-of-a-flee-walk-while-the-body-and-its-world-hold
   ;; card 68e09bb4: each pass of a night asked go-to again for every flee site's walk, though nothing had changed
@@ -558,7 +558,7 @@
                         (some-> (:price @opts) (apply [nil reads]) :delta)))]
           (is (= 12 (await (delta 12 [{:niche 50 :stay 30} nil]))) "a dig-in quoted: a place spares it")
           (is (= 30 (await (delta ##Inf [{:niche 50 :stay 30} nil]))) "none quoted: the cheapest other way, not ##Inf")
-          (is (= ##Inf (await (delta ##Inf [{} nil]))) "no way priced at all: only sight bounds the looks")
+          (is (= (ctx/default-worth) (await (delta ##Inf [{} nil]))) "no way priced at all: the night's own worth bounds the looks")
           (is (nil? (await (delta ##Inf :searching))) "the other ways still searching: no look this pass"))))))
 
 (deftest the-other-ways-a-place-spares-are-priced-once-a-dig-in-and-not-when-no-look-follows

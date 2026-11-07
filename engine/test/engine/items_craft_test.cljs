@@ -363,13 +363,13 @@
           (is (= [:craft-failed 1] [cheap-end cheap]) "a rejection can be passing: one that costs more than it is worth to repeat is not")
           (is (> dear cheap) "a dear goal tries again"))))))
 
-(deftest a-craft-at-an-endless-worth-that-keeps-failing-ends-on-its-time-spend
+(deftest a-craft-at-a-high-worth-that-keeps-failing-ends-on-its-time-spend
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
-              result (await (child-outcome eng job {:item "bread" :worth ##Inf} 400))]
+              result (await (child-outcome eng job {:item "bread" :worth 1e6} 400))]
           (is (= :job-time (:reason result)) (pr-str result))
           (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
 
@@ -933,5 +933,5 @@
   (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}}) :args {:item "wooden_pickaxe" :count 1})
         own (craft/goal-worth (assoc c :worth (constantly 0)))]
     (is (pos? own) "the item's own worth bounds a call worth less")
-    (is (= ##Inf (craft/goal-worth c)) "a craft ordered at the root, worth any price: its sticks are crafted in the dark too")
+    (is (= (ctx/default-worth) (craft/goal-worth c)) "a craft ordered at the root with no worth: the default, more than the item's own")
     (is (= (+ own 100) (craft/goal-worth (assoc c :worth (constantly (+ own 100))))))))

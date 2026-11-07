@@ -11,7 +11,7 @@
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
   Seen lava within jobs.lib.lava-risk/radius of a cell the way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Walked now while that costs less than waiting for dawn or healing first (status: ways chosen by cost alone), within the hurt and the price the call's worth buys (bought?: price/allowed, the death in seconds; no hp bound for a goal worth arrival, ##Inf)."
+  Walked now while that costs less than waiting for dawn or healing first (status: ways chosen by cost alone), within the hurt and the price the call's worth buys (bought?: price/allowed, the death in seconds)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -334,10 +334,9 @@
     {:wait kind :secs secs :health healed :hp (:hp after) :lethal-hp (:lethal-hp after 0) :s (+ secs (risk-s c stay) (risk-s c after 0 healed))}))
 
 (defn buys-hp
-  "The hp of hurt a walk may cost at health and food on a call worth `worth`: price/allowed-hp, but without end for a goal worth
-  arrival (##Inf), which no hp refuses; only a cheaper way (a wait) is chosen over walking it."
+  "The hp of hurt a walk may cost at health and food on a call worth `worth`: price/allowed-hp."
   [health food worth]
-  (if (infinite? worth) ##Inf (price/allowed-hp health food worth true)))
+  (price/allowed-hp health food worth true))
 
 (defn hurt "hp an estimate's :hp takes off a body that lives: less its death's share (:lethal-hp)." [est] (- (:hp est 0) (:lethal-hp est 0)))
 

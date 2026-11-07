@@ -51,7 +51,7 @@
   For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground), as is one whose ground lies more than ::surface-dip (8) below the feet (a pit, ravine or cave mouth): they live on the open surface.
 
   Legs are cost/leg-spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
-  leg is never tried twice and never goes beyond distance-limit (XZ) of the origin: :within and cost/search-radius of a finite worth, else the max-distance setting and :within. It is skipped (:skipped)
+  leg is never tried twice and never goes beyond distance-limit (XZ) of the origin: :within and cost/search-radius of the worth. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
   radius (for farm animals only a note younger than ::animal-searched-ttl-s: they wander); with :use-notes false only a note this job made counts.
 
@@ -61,7 +61,7 @@
   counted as legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
   yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. The next walk after
-  such failures in a row (a step that arrives with its column still unseen breaks no row: it showed nothing new) is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck (never at the default worth ##Inf: only :spend and distance stop it); until a leg arrives, a leg within 60 degrees of the way one failed from where the
+  such failures in a row (a step that arrives with its column still unseen breaks no row: it showed nothing new) is tried while cost/try-again? :walk says it is worth its price, else the search ends :stuck; until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
@@ -74,7 +74,7 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, none walked, and the body shut in a closed room with no column left to dig out toward), :no-way-up (animals that live at the surface, the body under rock and no stair up), :stuck (another walk after the failed ones in a row is not worth its price, cost/try-again? :walk) or :price (at a finite :worth or call's worth, the next walk costs more than it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
+  - :nothing-possible :distance (no leg left), :no-way-out (no leg left, none walked, and the body shut in a closed room with no column left to dig out toward), :no-way-up (animals that live at the surface, the body under rock and no stair up), :stuck (another walk after the failed ones in a row is not worth its price, cost/try-again? :walk) or :price (the next walk costs more than it times the chance a look there finds one, cost/look-leg-chance: farm animals' falls with the ground searched round there in vain, ore's is that of the rock seen; 1 for other blocks).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -104,7 +104,7 @@
    :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
    :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}
    :within {:doc "blocks (XZ) from the origin a leg may go and a noted or remembered target counts at most, a caller's own scope (a site, a pen's radius); nil: the max-distance setting" :spec (a/num-in 1 nil) :default nil}
-   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.walk-pick/quoted-s of go-to's quote, the body as it is now) is weighed against it; the search ends :price at the first that costs more. nil: the call's worth (##Inf at the root)" :spec (a/num-in 0 nil) :default nil}})
+   :worth {:doc "seconds the find is worth: before each walk its price (jobs.lib.walk-pick/quoted-s of go-to's quote, the body as it is now) is weighed against it; the search ends :price at the first that costs more. nil: the call's worth" :spec (a/num-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
@@ -130,14 +130,9 @@
 (defn leg-spacing [] (cost/leg-spacing))
 
 (defn worth-of
-  "Seconds the find is worth: the :worth arg, else the call's (##Inf at the root, where no walk is priced)."
+  "Seconds the find is worth: the :worth arg, else the call's."
   [c]
   (or (:worth (:args c)) (ctx/worth c)))
-
-(defn priced-worth
-  "worth-of when finite, else nil: at ##Inf no walk is priced."
-  [c]
-  (let [w (worth-of c)] (when-not (infinite? w) w)))
 
 (defn note-reach
   "How far (XZ) from the origin a noted or remembered target counts: the ::max-distance setting, at most :within."
@@ -145,11 +140,9 @@
   (min (settings/get settings ::max-distance) (or (:within (:args c)) ##Inf)))
 
 (defn distance-limit
-  "How far (XZ) from the origin legs go: with a finite worth, :within at most the cost/search-radius it pays for; without one, note-reach."
+  "How far (XZ) from the origin legs go: :within at most the cost/search-radius worth-of pays for."
   [c]
-  (if-let [w (priced-worth c)]
-    (min (or (:within (:args c)) ##Inf) (js/Math.ceil (cost/search-radius w (leg-spacing))))
-    (note-reach c)))
+  (min (or (:within (:args c)) ##Inf) (js/Math.ceil (cost/search-radius (worth-of c) (leg-spacing)))))
 (defn time-s [] (settings/get settings ::job-time-s))
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn rise [] (settings/get settings ::rise))
@@ -600,14 +593,13 @@
      (and (not dig?) (< (u/failures c) 2)) (assoc :ways #{:walk :clear-seal}))))
 
 (defn ^:async price-leg!
-  "At a finite worth-of, the price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
-  and the hp its plan risks, its walk risk): nil when it is affordable (or the worth is ##Inf,
-  or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
+  "The price of a walk toward leg before it starts (jobs.lib.walk-pick/quoted-s of go-to's quote: its time
+  and the hp its plan risks, its walk risk): nil when it is affordable (or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
   next call), else the :price ending: the price is more than the worth times the chance a look round
   there finds one (cost/look-leg-chance: over every live searched note, :use-notes false too, or for ore the rock seen
   round the body; 1 for logs and other blocks, and for a walk to a noted target, sure?)."
   [c leg sure? step?]
-  (when-let [worth (priced-worth c)]
+  (let [worth (worth-of c)]
     (let [p (:primitives c)
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg (:dig-out? (ctx/mem c)) step?)))
@@ -776,9 +768,9 @@
 
 (defn climb-price!
   "A stair up not yet begun that costs more than worth-of ends the search :price (a sealed
-  work site is not tunnelled out of for a comfort errand); nil when affordable, begun or the worth is ##Inf."
+  work site is not tunnelled out of for a comfort errand); nil when affordable or begun."
   [c]
-  (when-let [worth (priced-worth c)]
+  (let [worth (worth-of c)]
     (when-not (:on (:surface (ctx/mem c)))
       (let [price (surface-up/climb-s c)]
         (when (cost/leg-stops? price 1 worth)

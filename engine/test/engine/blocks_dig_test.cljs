@@ -500,7 +500,7 @@
           (is (= [:unreachable [3 65 0] (js/Math.round price)] [(:reason r) (:cell (:roof-kept r)) (:price (:roof-kept r))]) (pr-str r))
           (is (empty? (calls p "dig"))))))))
 
-;; the same room and slab, a root call (worth ##Inf) and no other way: the roof is dug through
+;; the same room and slab, a root call at the default worth and no other way: the roof is dug through
 (deftest a-roof-with-no-other-way-is-dug-through-at-the-roots-worth
   (async done
     (tu/run-async done

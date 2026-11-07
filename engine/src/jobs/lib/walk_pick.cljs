@@ -56,8 +56,7 @@
       :else (+ mean (risk-s c q)))))
 
 (defn ^:async quote!
-  "go-to's quote of the walk args (a go-to call's args), at the worth they name, else the calling job's: a walk with the same args then judges by the same worth.
-  A caller that picks the walk's worth from the quote names :worth ##Inf."
+  "go-to's quote of the walk args (a go-to call's args), at the worth they name, else the calling job's: a walk with the same args then judges by the same worth."
   [c args]
   (await (ctx/quote c 'jobs.movement.go-to args)))
 

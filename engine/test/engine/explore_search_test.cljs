@@ -512,9 +512,9 @@
           (is (not= :price (:why (not-found-of state)))))))))
 
 (deftest the-spiral-legs-nearest-the-body-come-first
-  (let [c {:args {:pattern :spiral :worth ##Inf} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :worth 1e7 :within 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}
-        order (settings/with-settings {:jobs.explore.search/max-distance 64} #(search/candidates c m))]
+        order (search/candidates c m)]
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
     (is (= (count (search/spiral-points [0 0] 16 64)) (count order)))))
 
@@ -532,7 +532,6 @@
         [leg work] (far c)]
     (is (> (dist leg) 96) "a finite worth pays for legs beyond the setting")
     (is (= work (second (far (assoc-in c [:args :worth] 1e4)))) "the first leg past the setting costs no more work at a larger worth: the disc it pays for is never built")
-    (is (<= (apply max (map dist (search/candidates (assoc-in c [:args :worth] ##Inf) {:origin [0 0 0]}))) 96) "unpriced, the setting limits the legs")
     (is (<= (apply max (map dist (search/candidates (assoc-in c [:args :within] 40) {:origin [0 0 0]}))) 40) ":within still caps a priced search")))
 
 (deftest the-spiral-legs-come-in-distance-order-and-a-side-gives-its-nearest
@@ -1062,8 +1061,8 @@
         counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
-        c {:args {:pattern :spiral :worth ##Inf} :primitives counting}
-        r (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 128}
+        c {:args {:pattern :spiral :worth 1e7 :within 128} :primitives counting}
+        r (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4}
             #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
     (is (:more r))
@@ -1118,7 +1117,7 @@
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
         choose (fn [use-notes? ns]
                  (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth ##Inf} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
+                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth 1e7 :within 8} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
     (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
     (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
     (is (nil? (:leg (choose false [(note 150)]))) "a note this job made still covers")))
@@ -1127,7 +1126,7 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
                              (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                               #(search/choose-leg {:args {:pattern :spiral :worth ##Inf} :primitives p} {:origin [0 64 0]} names []))))]
+                               #(search/choose-leg {:args {:pattern :spiral :worth 1e7 :within 8} :primitives p} {:origin [0 64 0]} names []))))]
     (is (nil? (:leg (choose ["cow" "pig"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))
@@ -1135,7 +1134,7 @@
 (deftest a-leg-for-farm-animals-never-stands-in-a-pit-below-the-feet-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (tu/box -36 45 -36 36 45 36 "grass_block") :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
         choose (fn [names] (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                             #(search/choose-leg {:args {:pattern :spiral :worth ##Inf} :primitives p} {:origin [0 64 0]} names [])))]
+                             #(search/choose-leg {:args {:pattern :spiral :worth 1e7 :within 8} :primitives p} {:origin [0 64 0]} names [])))]
     (is (nil? (:leg (choose ["chicken"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["chicken"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))

@@ -47,11 +47,11 @@
          (done))))))
 
 ;; a body within range of its work where a zombie killed it seconds ago, in the dark: the stay in its field is priced
-;; (threats/stay-danger, as go-to prices a goal's) against the goal's worth before :there; ctx/worth of a root call is arrival (##Inf), a zero stay costs nothing
+;; (threats/stay-danger, as go-to prices a goal's) against the goal's worth before :there; a zero stay costs nothing
 (deftest a-stay-in-range-by-a-recent-killer-is-blocked-only-when-it-costs-more-than-the-goal-is-worth
   (async done
     ((fn ^:async t []
-       (doseq [[opts answer why] [[{:stay-s 600 :worth 1} :blocked :goal-dangerous] [{:stay-s 600} :there nil] [{:stay-s 0 :worth 1} :there nil]]]
+       (doseq [[opts answer why] [[{:stay-s 600 :worth 1} :blocked :goal-dangerous] [{:stay-s 600 :worth 2000} :there nil] [{:stay-s 0 :worth 1} :there nil]]]
          (let [{:keys [eng clock p]} (e/setup {:blocks (floor -2 -3 12 3) :light-default [0 0]})
                out (atom :not-done)
                walk (atom :unset)

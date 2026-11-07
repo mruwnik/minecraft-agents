@@ -146,7 +146,7 @@
   (let [c {:primitives (tu/fake {})}
         far {:pos {:x 3000 :y 64 :z 0}}]
     (is (= :not-worth (:reason (pick/not-worth c far (fn [] 1)))))
-    (is (nil? (pick/not-worth c far (fn [] ##Inf))) "an endless worth affords any finite walk")))
+    (is (nil? (pick/not-worth c far (fn [] 1e6))) "a worth over the walk's price affords it")))
 
 (deftest a-quote-carries-the-walks-args-as-they-are
   ;; a quote that adds a worth the walk lacks could find a route the walk then refuses at the job's worth

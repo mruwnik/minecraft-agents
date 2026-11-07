@@ -238,8 +238,7 @@
     {:item "crafting_table" :count 1}))
 
 (defn goal-worth
-  "The worth of the fetches for ingredients: what the rest of :count of :item is to the body (cost/find-worth), or the call's own when more
-  (a craft ordered at the root is worth any price); a fetch dearer than it is declined."
+  "The worth of the fetches for ingredients: what the rest of :count of :item is to the body (cost/find-worth), or the call's own when more; a fetch dearer than it is declined."
   [c]
   (let [item (:item (:args c))]
     (max (ctx/worth c) (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) [item] (u/self-pos c) (max 1 (left c (storage/usable-carried (u/inventory (:primitives c)) item)))))))

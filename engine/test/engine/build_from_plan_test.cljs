@@ -685,7 +685,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[worth looks?] [[##Inf true] [0 false]]]
+        (doseq [[worth looks?] [[1200 true] [0 false]]]
           (let [[seen sink] (tu/legacy-capture-sink)
                 p (tu/seeing-after-look (tu/fake-on-floor {:inventory []}))
                 eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
@@ -2472,6 +2472,10 @@
      (lit-check (dark-wait 300) false true not-worth {} worths)
      (lit-check no-light false true not-worth {} worths)
      (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; no night left to wait out, any price"))))
+
+(deftest a-night-torch-fetch-with-no-way-by-day-is-worth-the-night-left
+  (with-redefs [need/item-price (constantly ##Inf)]
+    (is (= 300 ((fp-light/night-worth {} 300) 2 {})) "a day price with no way adds nothing: the fetch's worth stays a number")))
 
 (deftest a-dark-build-whose-torches-were-not-got-is-judged-again-not-built-through
   (let [cell {:pos [1 64 1] :item "oak_planks"}

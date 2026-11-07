@@ -330,14 +330,14 @@
 
 (defn setup
   "An engine over the fake world and world data (zones, default none; nil: never read; plans); a recording parent runs
-  the job as its child and keeps its result in :out, at the spec's :worth (default ##Inf, arrive)."
+  the job as its child and keeps its result in :out, at the spec's :worth (default the root default)."
   [spec args prep]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:self {:pos {:x 0 :y 65 :z 0}} :inventory pick} (dissoc spec :zones :plans :wrap-rounds :raw :worth)))
         out (atom :not-done)
         w (world/of-data (:plans spec {}) {} (get spec :zones []))
-        parent {:worth-of (constantly (:worth spec ##Inf))
+        parent {:worth-of (constantly (:worth spec))
                 :round (fn ^:async recording-round [c]
                          (let [r (await (ctx/call c :kid job (if (satisfies? IDeref args) @args args)))]
                            (if (= :continue r)
@@ -1507,7 +1507,7 @@
           (is (nil? (waiting s))))))))
 
 (defn ^:async night-stair!
-  ([args] (night-stair! args ##Inf))
+  ([args] (night-stair! args nil))
   ([args worth] (await (stair! {:blocks ground :time 13000 :worth worth} args (fn [p] (tu/seeing-all p) (sky/with-sky p))))))
 
 (deftest a-stair-down-from-open-ground-at-night-digs-in
@@ -1549,7 +1549,7 @@
     (with-redefs [judge/unmet (constantly nil) judge/next-cut (constantly [[1 65 0] [1 64 0]]) judge/fetch? (constantly false)
                   dig-look/unknown? (constantly true) sense/unknown? (constantly true) ore-pick/face-names (constantly ["air"])
                   tools/needs-tool-to-clear? (constantly true)]
-      (is (= [:look :unseen] (tu/kind-reason (stair/not-lacking (c ##Inf)))))
+      (is (= [:look :unseen] (tu/kind-reason (stair/not-lacking (c 1200)))))
       (is (= [:later :unseen] (tu/kind-reason (stair/not-lacking (c 0)))) "a call worth nothing pays no look: no price, no look"))))
 
 (deftest a-stair-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise

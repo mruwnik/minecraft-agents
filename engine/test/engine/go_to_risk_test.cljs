@@ -54,15 +54,15 @@
     (plan-of (for [i (range 1 (inc n))] {:x (js/Math.round (+ x (* i (/ (- (:x goal) x) n)))) :y y :z (js/Math.round (+ z (* i (/ (- (:z goal) z) n))))}))))
 
 (def worth-400
-  "A call worth a finite 400 s, as a job's goal is: a goal worth arrival (##Inf, a plain go-to) is refused no walk by its hp."
+  "A call worth 400 s, as a job's goal is."
   (constantly 400))
 
 (defn finite-worth
   "c, with a worth of 400 s unless the test set one."
   [c]
-  (if (infinite? (ctx/worth c)) (assoc c :worth worth-400) c))
+  (if (:worth c) c (assoc c :worth worth-400)))
 
-(defn planned-status "risk/status of the walk to goal planned straight, on a call worth a finite 400 s unless c says one." [c goal] (risk/status (finite-worth c) goal (straight-plan c goal)))
+(defn planned-status "risk/status of the walk to goal planned straight, on a call worth 400 s unless c says one." [c goal] (risk/status (finite-worth c) goal (straight-plan c goal)))
 
 (deftest seen-lava-by-the-way-adds-hp-scaled-by-closeness-and-lava-far-from-it-adds-none
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
@@ -443,11 +443,11 @@
     (reset! hurt [{:t 35999000 :data {:health 15 :attacker {:id 7 :name "zombie"}}}])
     (is (contains? #{:later :never} (first (:risk (check plan false)))) "its blow asks again, and the price holds the walk")))
 
-(deftest a-walk-past-the-zombie-at-the-pillar-s-foot-is-priced-ok-at-a-goal-worth-arrival
+(deftest a-walk-past-the-zombie-at-the-pillar-s-foot-is-priced-ok-at-a-roots-default-worth
   (let [c (ready-test/ctx-of {:time st/noon :blocks (tu/box 0 64 0 0 65 0 "stone") :self {:pos {:x 0 :y 66 :z 0} :health 20 :food 20}
                               :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}]})
         s (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells))]
-    (is (infinite? (ctx/worth c)) "a plain go-to is worth arrival")
+    (is (= (ctx/default-worth) (ctx/worth c)) "a plain go-to is worth the root default")
     (is (= :ok (first s)) (pr-str s))))
 
 (def pool-world {:time st/noon :blocks (tu/box -2 64 -2 2 66 2 "water")})
@@ -482,6 +482,16 @@
 
 (defn prefix-estimate-of [c in] (prefix-estimate c (:goal in) in))
 
+(deftest no-worth-buys-a-safe-prefix-past-the-bodys-health
+  ;; the walk on, caves free, costs 25 hp, past all but 1 of 20: neither a root's default worth nor 400 s buys it
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+        goal {:x 30 :y 64 :z 0}
+        prefix {:status "partial" :steps (vec (take 10 straight-cells))}
+        estimate (fn [c goal & [{:keys [caves-free?]} :as opts]] (cond-> (apply prefix-estimate c goal opts) caves-free? (assoc :hp 25)))]
+    (with-redefs [risk/estimate estimate risk/estimate-of prefix-estimate-of]
+      (is (nil? (reprice/safe-prefix c goal prefix)))
+      (is (nil? (reprice/safe-prefix (assoc c :worth worth-400) goal prefix))))))
+
 (deftest a-plan-let-through-as-a-safe-prefix-has-every-re-plan-after-it-priced
   (let [m (atom {})
         c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)) :worth worth-400)
@@ -498,16 +508,6 @@
       (let [check (reprice/check c goal nil)]
         (is (nil? (check (plan-of (take 10 straight-cells)) true)) "a found plan within the affordable")
         (is (nil? (check (plan-of straight-cells) false)) "is not priced again without a hostile new")))))
-
-(deftest a-goal-worth-arrival-lets-a-safe-prefix-through-at-any-hp
-  ;; the walk on, caves free, costs 25 hp, past all but 1 of 20: a plain go-to (##Inf) buys it, a worth of 400 does not
-  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
-        goal {:x 30 :y 64 :z 0}
-        prefix {:status "partial" :steps (vec (take 10 straight-cells))}
-        estimate (fn [c goal & [{:keys [caves-free?]} :as opts]] (cond-> (apply prefix-estimate c goal opts) caves-free? (assoc :hp 25)))]
-    (with-redefs [risk/estimate estimate risk/estimate-of prefix-estimate-of]
-      (is (identical? prefix (reprice/safe-prefix c goal prefix)))
-      (is (nil? (reprice/safe-prefix (assoc c :worth worth-400) goal prefix))))))
 
 (deftest the-stay-a-risky-walk-is-weighed-against-is-priced-anew-when-what-it-reads-changes
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5}}})
@@ -715,7 +715,7 @@
                                            (with-death {:x 80 :y 64 :z 5} "skeleton" 120000)
                                            (assoc :worth (constantly worth)))]
                                  (in-lit-cave #(first (planned-status c far-goal)))))]
-    (is (= :ok (status-for ##Inf)) "a goal worth arrival: all but 1 hp, and no wait lowers a death spot's price")
+    (is (= :ok (status-for (ctx/default-worth))) "a root's default worth: all but 1 hp, and no wait lowers a death spot's price")
     (is (= :never (status-for 5)) "a goal worth little buys little risk")
     (is (= :ok (status-for 400)))))
 
@@ -728,7 +728,6 @@
     (is (= (/ 5 (cost/hp-seconds)) (allowed fed 5 [])) "a goal worth little buys little: its seconds of hp at an hp's price")
     (is (= (allowed fed 5 []) (allowed starving 5 [])) "a body that cannot heal is no freer with a worthless goal")
     (is (= 9 (allowed fed 100000 [])) "a goal worth a lot: all but 1")
-    (is (= 9 (allowed fed ##Inf [])) "arrive: all but 1; walking now or waiting is a choice of ways (walk-risk/status)")
     (is (zero? (allowed fed 0 [])) "a goal worth nothing buys no risk")))
 
 (deftest a-worth-buys-hp-at-the-price-a-walk-plans-them-at
@@ -952,7 +951,7 @@
                         (let [c (assoc c :worth (constantly worth))
                               [k _ {:keys [reason]}] (planned-status c far-goal)]
                           [k reason])))]
-    (is (= [:ok :acceptable] (status-with 15 ##Inf)) "go-to must arrive: no wait makes it cheaper")
+    (is (= [:ok :acceptable] (status-with 15 (ctx/default-worth))) "a root's default worth: no wait makes it cheaper")
     (is (= [:ok :cheaper-than-staying] (status-with 0 5)) "a goal worth little, but staying in the dark hall costs its spawns for ever")
     (is (= [:never :risky] (status-with 15 5)) "a goal worth little, a lit spot free to stay at")))
 

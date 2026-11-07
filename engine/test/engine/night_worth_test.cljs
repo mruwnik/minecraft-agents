@@ -16,7 +16,7 @@
   (let [orig night/shelter-prices
         left (atom results)]
     (set! night/shelter-prices (fn [_] (let [r (first @left)] (swap! left rest) (js/Promise.resolve r))))
-    (try (await (f {}))
+    (try (await (f {:quote-call {:worth 50}}))
          (finally (set! night/shelter-prices orig)))))
 
 (deftest answer-worth-is-what-the-other-answers-cost-more-than-the-answer-priced-afresh
@@ -26,7 +26,7 @@
         (let [priced (fn [niche flee] [{:niche niche :flee flee} nil])
               ws (await (with-prices [(priced 4 10) (priced 4 20) :searching]
                           (fn ^:async f [c] [(await (night/answer-worth c :niche)) (await (night/answer-worth c :niche)) (await (night/answer-worth c :niche))])))]
-          (is (= [6 16 ##Inf] ws) "a fresh price each call, ##Inf only while the flee search goes on"))))))
+          (is (= [6 16 50] ws) "a fresh price each call, the night's own worth while the flee search goes on"))))))
 
 (deftest enclose-worth-is-at-least-the-shelter-price-and-waits-for-the-search
   (async done

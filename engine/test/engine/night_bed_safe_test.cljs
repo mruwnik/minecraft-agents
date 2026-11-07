@@ -4,6 +4,7 @@
   hold for it and the night job does not walk there."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
@@ -224,7 +225,7 @@
           (try (await (core/tick! eng))
                (finally (set! pick/quote! quote!)))
           (is (= [0] @unsafe-when-answered) "no route yet is not no route: the bed is not written off while the search goes on")
-          (is (some (comp #{##Inf} :worth) @asked) (str "the walk-to-bed quote is asked at endless worth: " (pr-str @asked))))))))
+          (is (some #(= (ctx/default-worth) (:worth %)) @asked) (str "the walk-to-bed quote is asked at the root default worth, not ##Inf: " (pr-str @asked))))))))
 
 (def on-open-ground
   "The body on the open floor at night, the far bed 35 blocks off over the same dark ground, no hostile known (overdue: a bed in
@@ -583,7 +584,7 @@
     (mem/write! (:store eng) :bed-walk-unsafe {:pos far-bed :worth 5 :state (sh-beds/walk-state p (view) far-bed)} sh-beds/walk-unsafe-policy)
     (is (nil? (sh-beds/bed-to-use p (view) (constantly true))) "no worth: the refusal holds")
     (is (true? (sh-beds/bed-place-wanted? p (view) (constantly true))) "so the carried bed goes down")
-    (is (= far-bed (sh-beds/bed-to-use p (view) (constantly true) ##Inf)) "a call at a higher worth prices it again")))
+    (is (= far-bed (sh-beds/bed-to-use p (view) (constantly true) 1200)) "a call at a higher worth prices it again")))
 
 (deftest a-bed-refused-on-price-does-not-call-the-night-trigger
   (let [{:keys [eng p]} (setup roof-over-open-sides)

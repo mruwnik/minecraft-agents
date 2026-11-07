@@ -191,7 +191,7 @@
                     :cave (some? (get (swap! needed #(if (contains? % pos) % (assoc % pos (cave-needed c pos)))) pos))
                     true))
             target (fn [{:keys [kind pos]}] {:pos pos :range (:range (flee-args {:kind kind}))})
-            walk #(assoc (flee-args %) :floor cost-health/spend-down :worth ##Inf)
+            walk #(assoc (flee-args %) :floor cost-health/spend-down :worth (ctx/default-worth))
             t0 (clock/now)
             site (await (pick/searched! c (filter #(site-open? c %) (untried (sites p look/memory-radius)))
                                         {:target target :walk walk :ok? ok? :quote pick/quote-once! :state (search-state c p)

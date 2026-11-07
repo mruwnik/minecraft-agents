@@ -215,7 +215,7 @@
               {:keys [eng seen]} (await (night-at-home world {:x 15 :y 64 :z -5} {:worth 0} {:unseen true :home? false}))]
           (await (tu/run-until-empty eng 80))
           (is (contains? (:prices (first (st/emitted seen :night.answers))) :home)
-              "the walk is quoted to rank, at no worth of its own: the call's worth 0 must not turn it back at the unseen floor"))))))
+              "the walk is quoted to rank at the root default worth: the call's worth 0 must not turn it back at the unseen floor"))))))
 
 (deftest a-hut-not-seen-inside-is-dug-in-against-when-the-walk-and-its-chance-of-being-open-cost-more-than-digging-in
   (async done

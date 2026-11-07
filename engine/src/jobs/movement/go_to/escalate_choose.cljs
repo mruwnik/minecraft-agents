@@ -102,7 +102,7 @@
 
 (defn night-leave-bought?
   "Whether the call's worth buys the walk to its goal from here (walk-risk/bought?), leaving the shelter at a dark sky included
-  (walk-risk/estimate prices the way out by its light; ##Inf worth: arrive, no hp refuses)."
+  (walk-risk/estimate prices the way out by its light)."
   [c]
   (let [target (goal-aim/target c)
         self (.self (:primitives c))]
@@ -786,8 +786,7 @@
                        deadline (conj (/ (- deadline (ctx/now c)) 1000))))))
 
 (defn call-budget-s
-  "Seconds the go-to call c may spend on a way: what the goal is worth (ctx/worth) within the time its chain has left. At
-  ##Inf worth the chain's time is the only price that binds."
+  "Seconds the go-to call c may spend on a way: what the goal is worth (ctx/worth) within the time its chain has left."
   [c]
   (min (ctx/worth c) (time-left-s c)))
 
@@ -813,7 +812,7 @@
   nil when none does; {:step :searching} while opts :slice's search goes on; {:step :none :why :dig-budget} when this leg would dig
   longer than the call has left (dig-left-s); {:step :none :why :past-worth} when no end is reached because every
   route to them costs more than the goal is worth (the search stopped at that bound, not at the end of the rock)."
-  [c from goal may-dig? {:keys [own? skip fetch? slice] :as opts}]
+  [c from goal may-dig? {:keys [own? skip fetch?] :as opts}]
   (when-not (skip :dig-route)
     (let [p (:primitives c)
           block-at (escape/block-at-of p)
@@ -831,11 +830,9 @@
                                   (for [dx in dy in s [(- r) r]] [dx dy s]))))
           gap (fn [a b] (js/Math.hypot (- (a 0) (b 0)) (- (a 1) (b 1)) (- (a 2) (b 2))))
           ;; the cells one end's stand search may read, priced like a route search's nodes against what the leg could save at most
-          ;; (the call's budget, opts :bound-s and :worth-s; at ##Inf the straight dig to the goal; with that ##Inf too, as the
-          ;; route search itself, the nodes the call's route slice has left)
+          ;; (the call's budget, opts :bound-s and :worth-s)
           budget-s (min (call-budget-s c) (or (:bound-s opts) ##Inf) (or (:worth-s opts) ##Inf))
-          budget-s (if (infinite? budget-s) (rest-dig-s c from goal) budget-s)
-          scan-cells (if (infinite? budget-s) (if-let [left (some-> slice :left deref)] left ##Inf) (/ budget-s (cost/search-read-s)))
+          scan-cells (/ budget-s (cost/search-read-s))
           read-cells (fn [r] (js/Math.pow (inc (* 2 r)) 3))
           ;; a leg end over seen air is no stand a dig route makes (it lays no floor): the body lands under it, the fall
           ;; priced by the route, on a floor seen (one never seen under seen air is no landing to plan a leg to: none); one no

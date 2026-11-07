@@ -781,7 +781,7 @@
   "fit, and while that is ok, ok with a jobs.survival.fetch-trip-food child as its :look-first call while the
   trip's food (home-food/trip-fetch of own-trip, ending at place, by quote-fn) pays a fetch from home: the engine runs
   it only before the start, so a trip leaves home with its food. When going on with the carried food costs less than
-  the call is worth (ctx/worth; ##Inf with no engine behind c), the fetch (jobs.survival.fetch-trip-food) is told to go on
+  the call is worth (ctx/worth), the fetch (jobs.survival.fetch-trip-food) is told to go on
   with the carried food when get-food falls short; otherwise get-food's ending stops the call."
   [fit place quote-fn]
   (fn [c]

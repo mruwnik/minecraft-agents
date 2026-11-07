@@ -231,7 +231,7 @@
   ([worth cells made-out?]
    (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :args {:mob "cow"}}]
      (with-redefs [cost/animal-find-worth (constantly worth)
-                   ctx/worth (constantly ##Inf)
+                   ctx/worth (fn [_] (ctx/default-worth))
                    lib-look/makes-out-fn (constantly made-out?)]
        (some-> (await (hp/unseen-cell! c {:leaks (mapv (fn [[x y z]] {:why :unloaded :pos {:x x :y y :z z}}) cells)} #{}))
                ((juxt :x :y :z)))))))

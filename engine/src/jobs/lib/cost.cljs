@@ -511,8 +511,7 @@
 
 (defn try-again?
   "Whether call c's next try of kind (a key of value/::retry-counts) is worth its price: its retry-chance after the call's
-  failures in a row (u/failed!, u/progress! resets) times ctx/worth over the kind's measured :try-s. Never at a worth of 0;
-  at ##Inf (arrive) whenever the kind ever wins, where only the call's :spend stops it. opts {:fails :try-s} replace
+  failures in a row (u/failed!, u/progress! resets) times ctx/worth over the kind's measured :try-s. Never at a worth of 0. opts {:fails :try-s} replace
   the call's failures and the kind's seconds for a caller that counts its own."
   ([c kind] (try-again? c kind nil))
   ([c kind {:keys [fails try-s]}]

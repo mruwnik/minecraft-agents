@@ -107,7 +107,7 @@
               eng (core/create {:primitives p :dir (tu/tmp-dir) :now #(deref clock) :jobs registry/jobs
                                 :events (events/make {:body "Fake" :sinks [(second (tu/capture-sink))] :now #(deref clock)})})
               sides (mapv (fn [z] [8 64 z]) (range 21))]
-          (with-redefs [ctx/worth (constantly ##Inf)
+          (with-redefs [ctx/worth (fn [_] (ctx/default-worth))
                         look/unseen? (constantly true)]
             (doseq [side sides]
               (core/submit! eng (list 'jobs.movement.walk-look {:side side :to [6 64 0]}) {})
