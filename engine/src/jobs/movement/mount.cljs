@@ -22,7 +22,7 @@
   Ends done (data {:id :vehicle name}; cause :already when aboard it before the start), or
   condition-failed: the conditions' causes above, :hand-full
   (a mob, with an item in hand that cannot be put away), or
-  nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed ::max-walks (2) times),
+  nothing-possible: :timeout (the server never seated the body), :unreachable (a walk or click left the vehicle out of reach and it had not moved since; go-to's failure is its answer),
   :failed (any other status, data :mount the primitive's).")
 
 (a/defargs args
@@ -34,10 +34,9 @@
 (def reach 2.5)
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-walks {:default 2 :doc "Failed walks to the vehicle before the call stops :unreachable." :spec (a/int-in 1 nil)}
    ::sight-radius {:default 64 :doc "How far a vehicle is looked for among the entities in sight." :spec (a/num-in 1 nil)}})
 
-(defn max-walks [] (settings/get settings ::max-walks))
+(defn cell [e] (update-vals (u/pos-of (.-pos e)) js/Math.floor))
 (def seat-s "Seconds the server takes to seat the body, for the quote." 1)
 
 (defn sensed
@@ -152,16 +151,18 @@
           (done! c {:id id :vehicle (:name v) :already true})
           :continue))
       :else
-      (loop [fails 0]
-        (let [e (entity-of p id)]
+      (loop [from nil why nil n 0]
+        (let [e (entity-of p id)
+              at (when e (cell e))
+              blind? (and from (= from at))
+              stop-unreachable! #(stop! c id :nothing-possible :unreachable (when why {:why why}))]
           (cond
             (nil? e) :continue
             (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)
-            (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
-              (cond
-                (= :continue r) :continue
-                (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})
-                :else (recur (inc fails))))
+            (if (or blind? (and from (not (cost/try-again? c :walk {:fails n}))))
+              (stop-unreachable!)
+              (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
+                (if (= :continue r) :continue (recur at (contract/cause-key r) (inc n)))))
             :else
             (let [r (await (ctx/act c :mount #js {:id id}))
                   status (.-status r)]
@@ -171,5 +172,5 @@
                 ("gone" "not-mountable" "occupied") :continue ; the world changed since can-run? looked: it asks again
                 "hand-full" (stop! c id :condition-failed :hand-full)
                 "timeout" (stop! c id :nothing-possible :timeout {:seen (js->clj (.-vehicle r) :keywordize-keys true)})
-                "out-of-reach" (if (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
+                "out-of-reach" (if (or blind? (and from (not (cost/try-again? c :walk {:fails n})))) (stop-unreachable!) (recur at why (inc n)))
                 (stop! c id :nothing-possible :failed {:mount status})))))))))

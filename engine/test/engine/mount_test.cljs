@@ -20,11 +20,14 @@
      :act (fn [k args] (.call (aget p (name k)) p "t" args))
      :seen seen}))
 
+(def walks (atom 0))
+
 (defn ^:async run [spec args & [mount-status child child-res]]
   (let [p (doto (tu/fake spec) (.setOwner "t"))
+        _ (reset! walks 0)
         _ (when mount-status (set! (.-mount p) (fn [_ _] (js/Promise.resolve #js {:status mount-status}))))
         c (cond-> (bare-ctx p args) child (assoc :engine {:jobs registry/jobs}
-                                                 :call (fn [_ _ _] (js/Promise.resolve
+                                                 :call (fn [_ _ _] (swap! walks inc) (js/Promise.resolve
                                                                     (cond (= :continue child) :continue
                                                                           (:arrived child-res) {:kind :done :cause nil :data child-res}
                                                                           :else {:kind :nothing-possible :cause :unreachable :data (or child-res {:reason :blocked})})))))
@@ -134,13 +137,14 @@
               o (await (run {:entities [far]} {:id 9} nil :continue))]
           (is (= :continue (:r o))))))))
 
-(deftest a-failed-walk-twice-is-unreachable
+(deftest a-failed-walk-is-not-walked-again-while-the-vehicle-has-not-moved
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [far (assoc boat :pos {:x 1.5 :y 64 :z 30.5})
               o (await (run {:entities [far]} {:id 9} nil :done))]
-          (is (= :unreachable (:reason (result-of o)))))))))
+          (is (= :unreachable (:reason (result-of o))))
+          (is (= 1 @walks) "go-to's failure is the answer: the second walk had nothing changed"))))))
 
 (deftest a-heard-row-without-a-position-is-skipped
   (async done
@@ -175,4 +179,5 @@
               o (await (js/Promise.race #js [(run {:entities [far]} {:id 9} nil :done {:arrived true})
                                              (js/Promise. (fn [res _] (js/setTimeout #(res {:hung true}) 200)))]))]
           (is (nil? (:hung o)) "no endless re-walk")
+          (is (= 1 @walks))
           (is (= :unreachable (:reason (result-of o)))))))))
