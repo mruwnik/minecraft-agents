@@ -16,9 +16,10 @@
    :after [[:body-near [16.5 13 16.5] 5] [:block [22 0 16] "iron_ore"] [:item "raw_iron" 0]]}
   ;; card 6ce69619: dark plot, torches carried, the platform's other sides lead off over unseen floor: the walk learns cell by cell (an unlit floor, a void edge)
   ;; and must end on go-to's own refusal of the drop (:unreachable, whichever of its reasons: no climb back, the 7 hp budget, a dark floor that keeps turning out absent), not :no-progress. A torch beside the ore shows it from the platform.
+  ;; The platform is bedrock: with stone the body digs a stair down through it (no drop at all), so only the drop leads on.
   {:name "thirteen-block-drop-in-the-dark-ends-on-the-drop-refusal"
    :plot {:light :dark :height 18}
-   :blocks [[:fill [12 0 12] [16 12 20] "stone"] [:set [21 0 16] "torch"]]
+   :blocks [[:fill [12 0 12] [16 12 20] "bedrock"] [:set [21 0 16] "torch"]]
    :body {:at [16.5 13 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8]]}
    :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :radius 16 :ways #{:seen} :mend false})]]
    :expect [{:event {:source :job :kind :stopped :data {:got 0 :because {:because {:cause {:reason :unreachable}}}}} :within-s 150 :of-job true}]
