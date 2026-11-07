@@ -215,6 +215,10 @@
     (is (= {:gaps 1 :off-gaps 0 :stop-s 2} (select-keys (report [(c/scan-line (line 2000 :started {:name "look"}))]) [:gaps :off-gaps :stop-s]))
         "a look on the way: the flight stood, the chaser coming")
     (is (some? (c/scan-line (line 2000 :child_started {:slot :eat}))))
+    (is (= [nil "j1" "j1" nil nil] (map (fn [[id slot]] (:fled (c/scan-line (pr-str {:generation-id "g" :time-ms 2000 :source :job :kind :child_started
+                                                                                      :context {:job-id id :reflex-id :hostile-near} :data {:slot slot}}))))
+                                     [["j1/eat" :eat] ["j1/step" :step] ["j1/flee/step" :step] ["j1/fight/walk" :walk] ["j1/hide/pause" :pause]]))
+        "a flight's step started: the flight got going (caught-flights); a fight's walk or a hide's pause is none")
     (are [between] (= {:gaps 0 :off-gaps 1} (select-keys (report between) [:gaps :off-gaps]))
       [(c/scan-line (line 2000 :child_started {:slot :eat}))]
       [(c/scan-line (line 2000 :started {:name "place"}))]

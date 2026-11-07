@@ -4,8 +4,11 @@
   An episode is a run of decisions (flee or fight) about one group of kinds (caught/groups), each within gap-ms of the
   one before; its health the first's, its :chasers the most of the group's mobs a decision names near (nil before the
   decisions named them), its :weapon the one its respond run equipped or wore at its end. Within gap-ms after its last
-  decision it died of the group or was hurt by :hits of its blows.
-  report: per group, the flights as ::flights counts them (a death by the blows that kill at its health, the group's blow
+  decision it died of the group or was hurt by :hits of its blows. :held? when one of its runs held still (a :held record:
+  hid, sealed, cornered, under a roof) within that time before any of them started a flight step (a record's :fled,
+  event-counts/flight-moves; the debug logs that hold those rotate sooner, so an older hold counts as before them): that
+  flight never ran, and is no sample of a flight's catch.
+  report: per group, the flights not :held? as ::flights counts them (:held, per group, {:n :died} of the rest) (a death by the blows that kill at its health, the group's blow
   at the counting difficulty, unarmoured) and their fit (caught/posterior: the blows, the chance caught at some healths);
   :fights, per weapon the zombie family's fights, their deaths and the deaths cost/fight-answer prices them at
   (unarmoured: the kit's armour is not in the logs); :by-chasers, the zombie family's flights caught (killed, or hurt
@@ -20,16 +23,16 @@
 (def caught-hits {:zombie 2 :creeper 1 :bow 2 :spider 2})
 
 (defn episodes
-  "Rows [{:group :decision :t :health :chasers :weapon :mob :died? :hits}] of the episodes in records
+  "Rows [{:group :decision :t :health :chasers :weapon :mob :held? :died? :hits}] of the episodes in records
   (world-test.event-counts/scan-line's, sorted by :t), of flee decisions or of decision's."
   ([records] (episodes records :flee))
   ([records decision]
    (mapcat (fn [[group family]]
-             (let [eps (reduce (fn [eps {:keys [k t mob health near job] d :decision}]
+             (let [eps (reduce (fn [eps {:keys [k t gen mob health near job] d :decision}]
                                  (if (and (= :decided k) (family mob) (= decision d))
                                    (let [e (peek eps)
                                          n (some->> near (filter family) count)
-                                         more (fn [e] (cond-> e n (update :chasers (fnil max 0) n)))]
+                                         more (fn [e] (cond-> (update e :runs (fnil conj #{}) [gen job]) n (update :chasers (fnil max 0) n)))]
                                      (if (and e (<= (- t (:end e)) gap-ms))
                                        (conj (pop eps) (more (assoc e :end t)))
                                        (conj eps (more {:t t :end t :health health :job job :mob mob}))))
@@ -40,6 +43,8 @@
                                                               (some #(when (and (= :ended (:k %)) (= job (:job %)) (<= t (:t %))) (:wear %)) records))))]
                (for [e eps :when (:health e)]
                  {:group group :decision decision :t (:t e) :health (:health e) :chasers (:chasers e) :weapon (weapon e) :mob (:mob e)
+                  :held? (boolean (when-let [h (some #(when (and (= :held (:k %)) ((:runs e) [(:gen %) (:job %)]) (within e %)) %) records)]
+                                    (not-any? #(and (:fled %) ((:runs e) [(:gen %) (:fled %)]) (<= (:t e) (:t %) (:t h))) records)))
                   :died? (boolean (some #(and (= :died (:k %)) (family (:cause %)) (within e %)) records))
                   :hits (reduce + 0 (keep #(when (and (= :hurt (:k %)) (some family (:causes %)) (within e %)) (or (:hits %) 1)) records))})))
            caught/groups)))
@@ -77,13 +82,15 @@
   "{:flights {group counts} :fit {group {:blows :shape :chance {health chance}}} :fights :by-chasers} of flee rows and
   fight rows (episodes'), at the ::threat/difficulty setting."
   [rows fights]
-  (let [counts-of (fn [rows] (into (sorted-map) (for [[g rs] (group-by :group rows) :when (blow-of g)]
+  (let [{held true rows false} (group-by (comp boolean :held?) rows)
+        counts-of (fn [rows] (into (sorted-map) (for [[g rs] (group-by :group rows) :when (blow-of g)]
                                                   [g (flights rs (threat/difficulty-scale (threat/mob-blow (blow-of g))))])))
         fit-of (fn [counts] (into (sorted-map) (for [[g c] counts :let [{:keys [blows shape]} (caught/posterior c)]]
                                                  [g {:blows (r3 blows) :shape (some-> shape r3) :chance (into (sorted-map) (for [h [2 5 10 15 20]] [h (r3 (caught/chance c h))]))}])))
         counts (counts-of rows)
         armed (counts-of (filter armed? fights))]
     {:flights counts
+     :held (into (sorted-map) (for [[g rs] (group-by :group held)] [g {:n (count rs) :died (count (filter :died? rs))}]))
      :fit (fit-of counts)
      :fights (fight-deaths (filter #(= :zombie (:group %)) fights))
      :fight-counts armed

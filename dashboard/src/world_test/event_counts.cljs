@@ -113,16 +113,24 @@
 
 (defn- num-of [re line] (some-> (re-find re line) second js/parseFloat))
 
+(def flight-moves "The children of a respond run (their job ids past the run's) that move a flight: a run that starts one has got its flight going." #{"step" "flee/step" "swim-out"})
+
 (defn off-flight
   "record (scan-line's, nil: none) with :off the line's root job when the line starts, inside a respond run, an action or a
-  child no flight runs between its steps (flight-actions, flight-slots): flee-steps ends the flight's stop there."
+  child no flight runs between its steps (flight-actions, flight-slots): flee-steps ends the flight's stop there; with
+  :fled the root job when it starts a flight-moves child (caught-flights counts only the flights that ran)."
   [line t gen record]
-  (if (and (str/includes? line ":reflex-id :hostile-near")
-           (or (and (str/includes? line ":kind :started") (str/includes? line ":source :action")
-                    (not (flight-actions (second (re-find #":name \"([^\"]*)\"" line)))))
-               (and (str/includes? line ":kind :child_started") (not (flight-slots (second (re-find #":slot :([a-z-]+)" line)))))))
-    (assoc (or record {:k :off :t t :gen gen}) :off (root-job (second (re-find #":job-id \"([^\"]*)\"" line))))
-    record))
+  (let [respond? (str/includes? line ":reflex-id :hostile-near")
+        child (when (and respond? (str/includes? line ":kind :child_started")) (second (re-find #":slot :([a-z-]+)" line)))
+        id (second (re-find #":job-id \"([^\"]*)\"" line))
+        job #(root-job id)]
+    (cond
+      (and respond? (or (and (str/includes? line ":kind :started") (str/includes? line ":source :action")
+                             (not (flight-actions (second (re-find #":name \"([^\"]*)\"" line)))))
+                        (and child (not (flight-slots child)))))
+      (assoc (or record {:k :off :t t :gen gen}) :off (job))
+      (and child (flight-moves (second (re-find #"^[^/]*/(.*)$" (str id))))) (assoc (or record {:k :fled :t t :gen gen}) :fled (job))
+      :else record)))
 
 (defn scan-line
   "One log line -> a small record, or nil for a line the counts do not read. Only the few kinds they read are parsed whole."

@@ -8,6 +8,7 @@
 (defn decided [t health decision] {:k :decided :t t :gen "g" :mob "zombie" :decision decision :health health :job "r1"})
 (defn flee [t health] (decided t health :flee))
 (defn hurt [t hits] {:k :hurt :t t :gen "g" :causes #{"zombie"} :hits hits})
+(defn fled [t] {:k :pos :t t :gen "g" :fled "r1"})
 
 (deftest decisions-within-the-gap-are-one-episode-with-the-blows-and-death-after-it
   (is (= [[0 18 false 3 nil] [100000 12 false 1 nil] [200000 5 true 0 nil]]
@@ -34,6 +35,16 @@
                           (assoc (flee 100000 20) :near ["zombie"])])]
     (is (= [2 1] (map :chasers (filter #(= :zombie (:group %)) rows))))
     (is (= {1 {:k 0 :n 1} 2 {:k 1 :n 1}} (:by-chasers (s/report rows []))))))
+
+(deftest a-flight-held-still-before-it-stepped-is-no-sample-of-a-flights-catch
+  (let [died {:k :died :t 8000 :gen "g" :cause "zombie"}
+        held {:k :held :t 4000 :gen "g" :job "r1"}
+        rows (concat (s/episodes [(flee 0 20) held died])
+                     (s/episodes [(flee 0 20) (fled 500) held died])
+                     (s/episodes [(flee 0 20) (assoc (fled 500) :fled "r2") held died]))]
+    (is (= [true false true] (map :held? rows)) "a step of its own run before the hold: the flight ran, then was cornered")
+    (is (= {:flights {:zombie {:lived [] :died [[20 8 1]]}} :held {:zombie {:n 2 :died 2}}}
+           (select-keys (settings/with-settings {::threat/difficulty 1} #(s/report rows [])) [:flights :held])))))
 
 (deftest fights-are-counted-armed-and-dry
   (settings/with-settings {::threat/difficulty 1}
