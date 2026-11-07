@@ -1037,9 +1037,10 @@
         survives (areduce z g acc 0 (+ acc (* (aget weights g) (aget z g))))
         shares (map (fn [{:keys [mob caught c]}] (let [g (group [mob] caught)] [(* c (:chance g)) (:death g)])) found)
         mass (reduce + 0 (map first shares))]
-    {:chance (min 1 (max 0 (- 1 survives)))
-     :death (if (pos? mass) (/ (reduce + (map #(* (first %) (second %)) shares)) mass) 0)
-     :hurt (min (life body) (max 0 hurt))}))
+    (let [chance (min 1 (max 0 (- 1 survives)))]
+      {:chance chance
+       :death (if (pos? mass) (/ (reduce + (map #(* (first %) (second %)) shares)) mass) 0)
+       :hurt (min (* (- 1 chance) (life body)) (max 0 hurt))})))
 
 (defn spawn-mets
   "[mob weight met] of each of threat/spawn-weights spawned beside body at `at`, caught at the prior."
