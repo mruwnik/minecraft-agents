@@ -8,7 +8,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.flee-search :as search]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.survival.respond.options :as cornered]
@@ -100,8 +99,7 @@
 
 (defn ^:async walk-away!
   "The flee step when the body outruns the chasers: eat a bite, then take the stairs up, the goal leg or the flight's
-  target (cover/flight-target! over judged, cover/judge!; stuck: the cornered fallback, called with its reason; a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first.
-  A search its meter cut with no end chosen holds the step once (retreat.search-cut): the next step searches again."
+  target (cover/flight-target! over judged, cover/judge!; stuck: the cornered fallback, called with its reason; a target out of the line of fire is walked onto and centred on, not near), or cover where it stands, or dig a side pocket first."
   [c threats judged covered? stuck]
   (let [p (:primitives c)
         threat (first threats)
@@ -124,14 +122,9 @@
                 (await (cover/dig-pocket! c)))]
     (cond
       (some? cover) cover
-      ;; the next step's search has its whole budget and what this one judged kept: once; cut again with nothing chosen, nothing changed
-      (and (nil? target) (search/cut? (:ends judged)) (not (:cut-held (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :cut-held true)
-          (ctx/emit! c :retreat.search-cut :debug {:nodes (:nodes (meta (:ends judged))) :planned (:planned (meta (:ends judged)))})
-          :again)
       (nil? target) (await (stuck "no open way away from the hostile"))
       :else
-      (let [_ (ctx/update-mem! c dissoc :cornered :cut-held)
+      (let [_ (ctx/update-mem! c dissoc :cornered)
             _ (say-target! c target threats covered?)
             _ (when leg (respond.goal/start-leg! c))
             from (u/self-pos c)

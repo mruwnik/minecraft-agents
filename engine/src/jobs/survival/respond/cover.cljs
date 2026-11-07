@@ -169,14 +169,25 @@
   "[{:at :seconds :closed :refuge-s}]: the looks through a door into a building survey s dropped :unseen, the home's or
   another's (room-lib/door-glances), each what it may show: the chance the room beyond the door side is closed
   (cost/closed-chance of its boundary's seen and unseen cells, reach-room/boundary) and then the run from the door into it
-  at a flight's pace; its seconds room-lib/glance-s. Part of the step's one search. respond prices each against the
-  answers without it."
-  [c s]
+  at a flight's pace; its seconds room-lib/glance-s. Part of the step's one search, before the flee search: a door's
+  flood only while it pays as survey's door sides do (cost/refuge-search-pays? of room-lib/flood-s against threats' lead
+  at the body and that door, the run it saves over survey's ways in won, and fire). respond prices each against the answers
+  without it."
+  [c s threats]
   (let [p (:primitives c)
         m (room-lib/step-meter c)
-        pace (cost/flee-pace (room-lib/food p))
+        me (u/self-pos c)
+        food (room-lib/food p)
+        pace (cost/flee-pace food)
+        here (room-lib/here-s p threats)
+        best (reduce min ##Inf (keep (fn [{w :way-in :as r}] (when (and w (room-lib/race-won? p r w threats)) (:steps w))) (:rooms s)))
+        fire (fire-on c threats)
+        pays? (fn [d] (let [blocks (u/dist me d)]
+                        (cost/refuge-search-pays? (reach/spent-s) (room-lib/flood-s) here (room-lib/lead-s p [d] threats blocks)
+                                                  (cost/run-saved-s blocks best food) fire)))
         r (binding [reach/*search* m]
             (vec (for [g (room-lib/door-glances c s)
+                       :when (pays? (room-lib/mid (:d g)))
                        :let [{:keys [seen unseen]} (reach-room/boundary p (:pos g))]]
                    {:at g :seconds (room-lib/glance-s c g) :closed (cost/closed-chance seen (count unseen))
                     :refuge-s (/ (u/dist (room-lib/mid (:d g)) (room-lib/mid (:pos g))) pace)})))]
@@ -211,7 +222,7 @@
                            s (survey c threats false)
                            rooms (:rooms s)
                            ;; before the flee search: the step's one search, its home floods first
-                           looks (when (and s (not-any? combat/creeper? threats)) (building-looks c s))
+                           looks (when (and s (not-any? combat/creeper? threats)) (building-looks c s threats))
                            judged (await (respond.goal/judge! c threats (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))
                            r (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (respond.goal/closed-home judged)) glanced)]
                        (cond-> r (and (seq looks) (not (:refuge-s r))) (assoc :looks looks))))
@@ -265,8 +276,7 @@
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
   judged's search (judge!; a :retreat.search debug event lists them): the best score less marks (a step or end in a ranged chaser's line of fire, a safe home's credit), a pocket only in a closed cave; with none, or when its step is into a cell the body has not seen
-  (flee-search/into-unseen?), after a look at the routes' first unseen cells (look-ahead!; not when the search was cut,
-  flee-search/cut?), the same over the search run again (nothing left to look at: the step as it was); nil when cornered
+  (flee-search/into-unseen?), after a look at the routes' first unseen cells (look-ahead!), the same over the search run again (nothing left to look at: the step as it was); nil when cornered
   or the search was cut before an end was chosen. Left out: ends under rock below the flight's floor
   (flight/floor; not out of the line of fire, nor on stairs the body cut), ends go-to refused, routes near a :hazard,
   wet ends while a dry one is left (none with a drowned among threats); then ends toward a hostile not chasing
@@ -281,8 +291,7 @@
            from (u/self-pos c)
            opts-for #(respond.goal/choose-opts c threats covered? (respond.goal/closed-home %))
            first-pick (search/choose (:ends judged) (opts-for judged))
-           ;; a search its meter cut has more to plan at the next step's: no look stands in for that
-           again (when (and (not (search/cut? (:ends judged))) (or (nil? first-pick) (search/into-unseen? first-pick)))
+           again (when (or (nil? first-pick) (search/into-unseen? first-pick))
                    (await (look-ahead! c threats covered? judged first-pick)))
            e (if again
                (search/choose (:ends again) (opts-for again))

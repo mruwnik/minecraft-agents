@@ -186,24 +186,31 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [run (fn ^:async run [closed-chance]
+        (let [run (fn ^:async run [{:keys [closed-chance home? flood-pays?] :or {home? true flood-pays? true}}]
                     (let [world (-> (hut {:x 5.5 :y 64 :z 5.5} hs/door-states [(zombie 5.5 12.5 nil)])
                                     (assoc :inventory [{:name "cobblestone" :count 16}])
                                     (assoc-in [:self :health] 4))
                           {:keys [eng seen]} (ht/setup-seeing (dissoc world :floor) nil 1000)
-                          chance cost/closed-chance]
-                      (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever})
+                          chance cost/closed-chance
+                          pays? cost/refuge-search-pays?]
+                      (when home? (mem/write! (:store eng) :home {:pos {:x 4 :y 64 :z -1}} {:cap 1 :ttl :forever}))
                       (when closed-chance (set! cost/closed-chance closed-chance))
+                      ;; a look's one flood (rooms/flood-s) that the race does not pay for; survey's searches cost other sums
+                      (when-not flood-pays? (set! cost/refuge-search-pays? (fn [spent cost-s & more] (and (not= cost-s (rooms/flood-s)) (apply pays? spent cost-s more)))))
                       (try (core/submit! eng '(jobs.survival.respond-to-hostile) {})
                            (await (tu/run-until-empty eng 1))
-                           (finally (set! cost/closed-chance chance)))
+                           (finally (set! cost/closed-chance chance) (set! cost/refuge-search-pays? pays?)))
                       [(first (filter #(= :hostile.look-in (:kind %)) @seen)) (first (filter #(= :hostile.decided (:kind %)) @seen))]))
-              [look] (await (run nil))
-              [never decided] (await (run (constantly 0)))]
+              [look] (await (run {}))
+              [never decided] (await (run {:closed-chance (constantly 0)}))
+              [stranger] (await (run {:home? false}))
+              [unpaid] (await (run {:flood-pays? false}))]
           (is (< (:cost look) (:value look)) (str "the look pays: " (select-keys look [:value :cost :closed :prices])))
           (is (< (get-in look [:prices :look-in]) (get-in look [:prices :pillar])) "and is the cheapest answer")
           (is (nil? never) "a room that cannot be closed is worth no look")
-          (is (= :pillar (:cover decided)) (str "so the pillar it beats otherwise is taken: " (:prices decided))))))))
+          (is (= :pillar (:cover decided)) (str "so the pillar it beats otherwise is taken: " (:prices decided)))
+          (is (< (:cost stranger) (:value stranger)) (str "a stranger's building is looked into on the same price: " (select-keys stranger [:value :cost :closed :prices])))
+          (is (nil? unpaid) "a look whose flood the race does not pay for is no answer"))))))
 
 (deftest the-door-a-glance-opens-is-recorded-with-an-expiry
   ;; the glance clicked the door by hand and wrote no :opened entry: a cut flight left it open and unrecorded

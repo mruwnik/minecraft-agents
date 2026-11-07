@@ -126,6 +126,22 @@
           (is (= [0 true false] [(:planned (meta none)) (search/cut? none) (search/boxed? none)])
               "a spent meter plans nothing, and that is no proof the body is boxed in"))))))
 
+(deftest a-plan-the-meter-stops-short-is-a-cut-search-on-the-last-target-too
+  ;; the search was marked cut only when a next target found the meter empty: a last plan cut short read as whole
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+              chasers [{:name "zombie" :mob "zombie" :pos {:x 6.5 :y 64 :z 0.5}}]
+              target (first (search/ring {:x 0.5 :z 0.5} chasers 10 4))
+              nodes 4
+              m (rooms/search-meter (- (cost/search-budget-s) (* nodes (cost/search-cell-ceiling-s))))
+              ends (await (search/price! c [target] {:chasers chasers :meter m}))]
+          (is (= 1 (:planned (meta ends))) (pr-str (meta ends)))
+          (is (<= (:nodes (meta ends)) nodes) (pr-str (meta ends)))
+          (is (search/cut? ends) (str "its one plan stopped at the meter " (pr-str (meta ends))))
+          (is (pos? @(:cuts m)) "the cut is counted"))))))
+
 (deftest a-pressed-body-plans-a-ring-route-whatever-named-targets-come-first
   ;; named targets are planned before the ring: a pressed body must not keep only a route toward the zombie
   (async done
@@ -632,6 +648,14 @@
     (is (= {:chance 1 :cornered? true :seconds 0.6} (search/caught-chance [(caught :unseen [5 64 0])] {:k 10 :n 10} {} [[5 64 0]]))
         "the flight looked at that cell already and looks at it no more: cornered")
     (is (= 1 (:chance (search/caught-chance [(caught)] {:k 10 :n 10} {} nil))))))
+
+(deftest a-cut-search-with-every-way-caught-is-priced-cornered-as-the-flight-takes-it
+  ;; the flight takes the cornered step on a cut search that chose no end: priced as a way unplanned, the price
+  ;; weighed a flight that never walks
+  (let [caught (end-of 4 0 1 :found? false :caught? true :caught-s 0.6)]
+    (is (= (search/caught-chance [caught] {:k 10 :n 10} {} nil)
+           (search/caught-chance (with-meta [caught] {:cut? true}) {:k 10 :n 10} {} nil)
+           {:chance 1 :cornered? true}))))
 
 (deftest a-kept-flee-price-is-planned-again-when-any-input-of-the-price-changed
   (async done
