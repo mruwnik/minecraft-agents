@@ -455,6 +455,29 @@
           (is (< worth price) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 
+;; the same room with its west wall not yet seen (a body just arrived, facing away): an unseen wall is an open side, so
+;; the roof would price 0 and be dug at once; a look round at the wall comes first and the slab is kept
+(deftest a-roof-is-priced-after-a-look-at-the-rooms-unseen-wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (-> (tu/box -2 60 -3 42 70 3 "stone")
+                         (dissoc "3,63,0" "3,64,0")
+                         (as-> m (apply dissoc m (keys (tu/box 3 66 0 40 67 0 "air"))))
+                         (assoc "3,68,0" "dirt"))
+              env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
+              p (tu/seeing-all (:p env))
+              looked? #(some (fn [call] (= "look" (.-name call))) (.-calls (.-world p)))
+              hidden? (fn [pos] (and (not (looked?)) (= 2 (js/Math.floor (.-x pos))) (= 0 (js/Math.floor (.-z pos)))
+                                     (<= 63 (js/Math.floor (.-y pos)) 64)))
+              seen-at (aget p "seenBlockAt")
+              sensed-at (aget p "sensedAt")
+              _ (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
+              _ (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
+              r (await (tu/with-looks-showing #(ending-cause (:eng env) job {:pos [3 68 0] :pillar false :worth 10} 20)))]
+          (is (= [:unreachable [3 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
+          (is (empty? (calls p "dig"))))))))
+
 ;; the same room and slab, a root call (worth ##Inf) and no other way: the roof is dug through
 (deftest a-roof-with-no-other-way-is-dug-through-at-the-roots-worth
   (async done

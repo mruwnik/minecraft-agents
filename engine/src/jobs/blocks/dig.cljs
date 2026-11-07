@@ -17,6 +17,7 @@
             [jobs.lib.walk-pick :as pick]
             [jobs.lib.pace :as pace]
             [jobs.lib.lava :as lava]
+            [jobs.lib.look-edge :as look-edge]
             [jobs.lib.loose :as loose]
             [jobs.lib.need :as need]
             [jobs.lib.sense :as sense]
@@ -440,27 +441,40 @@
       :continue
       (< (pick/quoted-s c q) (+ (or (some-> name table/dig-cost) 0) price)))))
 
+(defn ^:async look-at-room!
+  "Before cell is priced as the roof of the body's room (b/roof-price): one look round per feet cell at the room's unseen
+  walls (look-edge/pending), since an unseen wall counts as open and an open room has no shelter to lose. :again when it looked."
+  [c cell]
+  (let [feet (b/feet-cell c)]
+    (when (and (not= feet (:roof-looked (ctx/mem c))) (b/roof-over-body? c cell))
+      (when-let [sides (seq (look-edge/pending c (sense/round-looked c)))]
+        (ctx/update-mem! c assoc :roof-looked feet)
+        (await (sense/look-round! c (vec sides)))
+        :again))))
+
 (defn ^:async dig-through!
   "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does.
   A block that roofs the body's room costs its shelter (b/roof-price): before-walk? it is left for the walk when the walk's
   quote (walk-cheaper?) costs less than the dig and that price; after a failed walk it is the only way, dug unless the
   price is over the dig's worth (roof-kept!).
   Before the walk a block with an open side (open-side?) is left for the walk too, unless it roofs the room.
+  A roof is priced only after a look round at the room's unseen walls (look-at-room!).
   :again, :continue, or nil when there is no such block, it is kept, or the child could not dig it."
   [c pos before-walk?]
   (when-let [hit (when (:through (:args c)) (b/through-cell c pos))]
-    (let [price (if before-walk? (b/roof-price c hit) 0)
-          walk (when (pos? price) (await (walk-cheaper? c pos hit price)))]
-      (cond
-        (= :continue walk) :continue
-        (and before-walk? (zero? price) (open-side? c pos)) nil
-        (or walk (roof-kept! c hit)) nil
-        :else
-        (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-          (cond
-            (= :continue r) :continue
-            :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
-                      (when (= :done (:kind r)) :again))))))))
+    (or (await (look-at-room! c hit))
+      (let [price (if before-walk? (b/roof-price c hit) 0)
+            walk (when (pos? price) (await (walk-cheaper? c pos hit price)))]
+        (cond
+          (= :continue walk) :continue
+          (and before-walk? (zero? price) (open-side? c pos)) nil
+          (or walk (roof-kept! c hit)) nil
+          :else
+          (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+            (cond
+              (= :continue r) :continue
+              :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
+                        (when (= :done (:kind r)) :again)))))))))
 
 (defn pillar-height
   "How many blocks to pillar up to reach pos from the feet: pos at least 3 above the feet cell and within 3 cells sideways, as many blocks as leave it 3 above the feet (1 to 6; the blocks left are for climbing to its drop); else nil."
