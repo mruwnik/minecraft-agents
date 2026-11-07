@@ -1,0 +1,27 @@
+;; Card a333e337 (5363e675's seeded drop-route): collect-drops :dig to a drop 22 blocks down in stone. A shaft [16 9..29 16] cut from the
+;; rim shows the drop at the cave cell [17 8 16] at its foot; the rest is stone the body has not seen, so the route prices unseen rock
+;; and the search is bounded by its walk-then-stair band. Stone mass x 8..24, z 8..24, y 0..29; the body stands beside the shaft on the
+;; rim [15.5 30 16.5] with a pickaxe. The search CPU is not an event: the job's finishing inside :within-s is the timing check (a proof
+;; of seconds to minutes past the band would not finish; unsure 60% the limit is tight enough to tell).
+;; Should-succeed: the diamonds are dug to and collected. Should-fail: the same drop without :dig is left (nothing dug).
+{:defaults
+ {:tags [:forestry :collect-drops :mining :survival]
+  :time :any
+  :plot {:height 40}
+  :blocks [[:fill [8 0 8] [24 29 24] "stone"] [:fill [16 9 16] [16 29 16] "air"] [:fill [17 8 16] [17 9 16] "air"] [:set [16 8 16] "air"]]
+  :body {:at [15.5 30 16.5] :inventory [["stone_pickaxe" 1] ["torch" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "drop-22-down-is-dug-to-with-dig"
+   :act [[:summon "item" [17.5 8.2 16.5] "{Item:{id:\"minecraft:diamond\",count:8}}"]
+         [:job (jobs.items.collect-drops {:radius 30 :holes [#at [16 29 16]] :dig true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:item "diamond" 8]]}
+  {:name "drop-22-down-without-dig-is-left"
+   :act [[:summon "item" [17.5 8.2 16.5] "{Item:{id:\"minecraft:diamond\",count:8}}"]
+         [:wait-s 2]
+         [:job (jobs.items.collect-drops {:radius 30 :holes [#at [16 29 16]]})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
+            {:no-event {:source :action :kind :started :data {:name "dig"}} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:item "diamond" 0]]
+   :limit-s 120}]}
