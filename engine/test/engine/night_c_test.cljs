@@ -21,10 +21,12 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.walk-pick :as pick]
+            [jobs.movement.go-to.preview :as pv]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
@@ -688,7 +690,12 @@
     (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route dissoc :unseen-floors)))) "a partial over seen ground only that the search exhausted: no way")
     (is (true? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route #(-> % (dissoc :unseen-floors) (assoc :budget true)))))) "a partial cut by the node budget: not known yet, not none")
     (is (true? (:found (night/budget-priced {:primitives (tu/fake {})} (assoc-in q [:route :reason] :budget)))) "the dig search's :budget over a walk on unseen floors: still that walk")
-    (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route #(-> % (dissoc :unseen-floors) (assoc :reason :budget)))))) "the dig search's :budget alone: no walk known")))
+    (is (false? (:found (night/budget-priced {:primitives (tu/fake {})} (update q :route #(-> % (dissoc :unseen-floors) (assoc :reason :budget)))))) "the dig search's :budget alone: no walk known")
+    (let [cut {:found false :reason :partial :budget true :near 96 :goal [96 64 0] :partial {:seconds 4.9 :waypoints [[27 64 0]]}}]
+      (is (< (js/Math.abs (- (:seconds (night/budget-priced {:primitives (tu/fake {})} (pv/quote-of-route cut false false)))
+                             (+ 4.9 (cost-planner/left-s 69 false))))
+             1e-9)
+          "the walk is priced to the bed: the part searched and the 69 blocks past its end"))))
 
 (deftest a-walks-worth-is-what-the-next-way-costs-more-than-the-answer-and-is-finite
   (let [prices {:bed 30 :shelter 100 :log-out 70 :exposed 400}]

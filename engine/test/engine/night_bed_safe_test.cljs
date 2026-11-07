@@ -25,6 +25,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-pick :as pick]
+            [jobs.movement.go-to.preview :as pv]
             [jobs.survival.night :as night]))
 
 (def far-bed {:x 40 :y 64 :z 0})
@@ -295,9 +296,11 @@
         (let [bed {:x 96 :y 64 :z 0}
               {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"96,64,0" "red_bed"}))
               quote-once! pick/quote-once!
+              ;; the search got a third of the way: the rest is priced past its end
               cut (fn [{:keys [route] :as q}]
-                    (assoc q :route {:found false :reason :partial :budget true :near 2
-                                     :partial (select-keys route [:seconds :dark-seconds :waypoints :length])}))]
+                    (merge q (pv/quote-of-route {:found false :reason :partial :budget true :near 96 :goal [96 64 0]
+                                                 :partial {:seconds (/ (:seconds route) 3) :waypoints [[32 64 0]]}}
+                                                false false)))]
           (st/know-bed! eng bed)
           (swap! clock + (* 4 sh-clock/ms-per-day))
           (set! pick/quote-once! (fn ^:async q [c args]
