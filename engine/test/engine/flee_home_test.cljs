@@ -615,13 +615,13 @@
                                           :home false))
               c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1})
               _ (.setOwner (:primitives eng) "tx")
-              flood (rooms/flood-s)
+              flood (* (rooms/flood-s) (/ (cost/room-read-ceiling-s) (cost/room-read-s)))
               budget (cost/search-budget-s)
               judged (fn [threats fire]
                        (rooms/new-step! c)
                        (let [r (with-redefs [cover/fire-on (constantly fire)] (cover/survey c threats false))]
                          [(- (* 2 7) (count (filter (comp #{:unjudged} :why) (:dropped r))))
-                          (<= (- budget (cost/room-read-s)) (:spent-s r) budget)
+                          (<= (- budget (cost/room-read-ceiling-s)) (:spent-s r) budget)
                           (= (:spent-s r) (rooms/step-spent-s c))]))]
           (is (< flood budget (* 7 flood)) "the budget fits a flood, fewer than the sides")
           (are [threats fire] (= [(js/Math.floor (/ budget flood)) true true] (judged threats fire))
@@ -632,6 +632,12 @@
           (cover/survey c [] false)
           (is (= [] (filter (comp #{:not-closed :unseen} :why) (:dropped (cover/survey c [] false))))
               "a second survey in the step judges nothing more: the step's searches are one"))))))
+
+(deftest the-step-meter-charges-the-upper-bound-cell-prices
+  (let [m (rooms/search-meter 0)]
+    (is (= [(cost/room-read-ceiling-s) (cost/walk-cell-ceiling-s)] [(:read-s m) (:cell-s m)]) "a wall-time ceiling is metered at the slowest scene")
+    (is (< (cost/room-read-s) (cost/room-read-ceiling-s)) "above the mean a flood is priced at")
+    (is (< (cost/walk-cell-s) (cost/walk-cell-ceiling-s)) "above the mean a walk search is priced at")))
 
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
   (async done
@@ -712,7 +718,7 @@
               threats [(seen-zombie 5.5 30.5)]
               rooms (mapv #(dissoc % :way-in) (:rooms (rooms/survey c home {:threats threats})))
               budget (cost/search-budget-s)
-              late (rooms/verdicts p rooms threats true (- budget (* 3 (cost/walk-cell-s))) nil)
+              late (rooms/verdicts p rooms threats true (- budget (* 3 (cost/walk-cell-ceiling-s))) nil)
               fresh (rooms/verdicts p rooms threats true 0 nil)]
           (is (= [true] (mapv :home? rooms)) "the home")
           (is (= [:unpriced] (mapv :why (:verdicts late))) "three cells left of the step's search: the home's walk search is cut")

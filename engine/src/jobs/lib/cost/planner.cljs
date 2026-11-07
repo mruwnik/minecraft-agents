@@ -218,6 +218,10 @@
                        :doc "Measured CPU of the refuge walk search (reach-room/walk-steps to a goal with no way, reach/node-budget cells), [seconds cells] (walk-cell-s is their quotient): two runs 2026-11-07 at load ~13 over a slab and a pillared slab (0.135 and 0.150 ms a cell; 0.18 to 0.29 at load 29). Recount: engine.search-recount-test's RECOUNT :pooled-walk line, add its seconds and cells to these."}
    ::room-cells-timed {:default [2.053 34846] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
                        :doc "Measured CPU of a refuge room flood (reach-room/room-flood: an open slab, a pillared slab, a walled room), [seconds cells] (room-read-s is their quotient): two runs 2026-11-07 at load ~13 (0.045 and 0.073 ms a cell pooled; 0.035 open, 0.08 to 0.11 a closed room). Recount: engine.search-recount-test's RECOUNT :pooled-room line, add its seconds and cells to these."}
+   ::walk-cells-ceiling {:default [0.156 1000] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                       :doc "As ::search-cells-ceiling for the refuge walk search (walk-cell-ceiling-s): the slowest scene at load ~13, the pillared slab, 0.156 ms a cell against 0.143 pooled (0.18 to 0.29 at load 29). The refuge search-meter charges it so the 100 ms step budget holds in wall time."}
+   ::room-cells-ceiling {:default [0.090 1000] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
+                       :doc "As ::search-cells-ceiling for a refuge room flood (room-read-ceiling-s): a closed room's upper range, 0.09 ms a cell (0.08 to 0.11 measured) against 0.059 pooled (the open slab 0.035); the worst 0.11 would price a flood to its 1024-cell cap at 113 ms and cut every one. Recount: the RECOUNT :room-closed line of engine.search-recount-test."}
    ::flood-cells-timed {:default [0.52 30720] :spec (a/pred "[seconds cells], both positive" (fn [v] (and (vector? v) (= 2 (count v)) (every? pos? v))))
                         :doc "Measured CPU of go-to's room floods (nearest-stand), [seconds cells] (flood-cell-s is their quotient): 30 floods of 1024 cells over a flat slab, 2026-10-30 (0.52 s = 0.017 ms a cell). Recount: engine.search-recount-test's RECOUNT :flood line."}
    ::quote-unseen-factor {:default 2 :doc "A go-to quote's mean counts each block still to go past a partial route (or with no route, when the call may change the world) as this many walked blocks of unseen terrain (walk-floor each)." :spec (a/num-in 0 nil)}
@@ -325,5 +329,9 @@
 (defn walk-cell-s "Seconds of CPU one cell of a refuge walk search expands costs (::walk-cells-timed)." [] (timed-cell-s ::walk-cells-timed))
 
 (defn room-read-s "Seconds of CPU one cell of a refuge room flood reads costs (::room-cells-timed)." [] (timed-cell-s ::room-cells-timed))
+
+(defn walk-cell-ceiling-s "Upper-bound seconds of CPU one cell of a refuge walk search expands costs (::walk-cells-ceiling): what the step's search-meter charges." [] (timed-cell-s ::walk-cells-ceiling))
+
+(defn room-read-ceiling-s "Upper-bound seconds of CPU one cell of a refuge room flood reads costs (::room-cells-ceiling)." [] (timed-cell-s ::room-cells-ceiling))
 
 (defn flood-cell-s "Seconds of CPU one cell of go-to's room flood costs (::flood-cells-timed)." [] (timed-cell-s ::flood-cells-timed))
