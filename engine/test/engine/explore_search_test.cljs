@@ -335,6 +335,18 @@
           (is (= [[6 64 6]] (map :pos (:found (found-of any)))))
           (is (= :stopped (:kind (not-found-of own))) "the penned cow is not counted"))))))
 
+(deftest a-cow-on-a-floor-hidden-behind-a-fence-is-not-counted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring (into {} (for [x (range 3 10) z (range 3 10) :when (or (#{3 9} x) (#{3 9} z))] [(str x ",64," z) "oak_fence"]))
+              spec (fn [cow] {:cone? 16 :self {:pos [6.5 64 -4.5]} :blocks ring
+                              :entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos cow}]})
+              penned (await (search! {:target "cow" :takeable true :max-distance 20 :worth 0} (spec {:x 6.5 :y 64 :z 6.5})))
+              free (await (search! {:target "cow" :takeable true :max-distance 20 :worth 0} (spec {:x 6.5 :y 64 :z 1.5})))]
+          (is (= :stopped (:kind (not-found-of penned))) "the cow on a floor behind the fence the body cannot see may be kept: not counted")
+          (is (= [[6 64 1]] (map :pos (:found (found-of free)))) "a cow on open ground before the fence is counted"))))))
+
 (deftest a-sheep-in-a-foreign-zone-is-found-only-without-takeable
   (async done
     (tu/run-async done

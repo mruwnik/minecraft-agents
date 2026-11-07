@@ -129,6 +129,14 @@
          (when penned? (swap! pens conj (:inside answer)))
          penned?))))
 
+(defn cell-unsure?
+  "Whether the body has not seen the floor under the feet cell (the pen check reads it :unloaded with no cell filled): from
+  outside a pen its fence hides the floor inside, so whether an animal there is kept is not known yet."
+  [c cell]
+  (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+                           :max-cells (settings/get settings ::pen-max-cells)})]
+    (and (= :unloaded (:reason answer)) (empty? (:inside answer)))))
+
 (defn enclosed?
   "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it (cell-enclosed? at its feet; others-only? as there)."
   ([c pens e] (enclosed? c pens e false))

@@ -403,7 +403,8 @@
   "found without the blocks in :avoid columns, the blocks on the footprint of a plan the body made (its
   posts and walls are not material to cut), the noted entities standing in a zone or plan of the body's own (its pens),
   the entities of :skip-ids, and (when :takeable is on) those a zone, claim or plan footprint bars taking and the
-  entities standing in a closed fenced enclosure that is not the body's own (kept animals)."
+  entities standing in a closed fenced enclosure that is not the body's own (kept animals), or on a floor the body
+  has not seen (behind a fence: the scan's look round decides)."
   [c found]
   (let [{:keys [takeable avoid skip-ids]} (:args c)
         avoid (set (map vec avoid))
@@ -411,7 +412,7 @@
         pens (atom [])
         kept? (fn [{:keys [pos]}]
                 (and (not (access/in-own-area? c (zipmap [:x :y :z] pos)))
-                     (spare/cell-enclosed? c pens (vec pos))))
+                     (or (spare/cell-enclosed? c pens (vec pos)) (spare/cell-unsure? c (vec pos)))))
         in (when takeable (access/rules-input c))
         own (access/rules-input c {:spare-own? true})]
     (cond->> found
