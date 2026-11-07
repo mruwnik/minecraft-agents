@@ -2,9 +2,11 @@
   "jobs.build.light-area against the seeing fake world: dark rooms and corridors are lit with the fewest torches."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.ready-test :as ready-test]
             [engine.test-util :as tu]
             [jobs.build.light-area :as light-area]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.sense :as sense]
             [jobs.lib.torch-plan :as tp]
             [jobs.lib.util :as u]))
 
@@ -63,6 +65,20 @@
           (is (= 1 (count (torch-cells p room))))
           (is (< 1 (count @states)) "the body looked round and hung a torch: more than one state")
           (is (= (count @states) @plans) "each state of the room (args, torches hung, places failed, cells looked at, body cell) is planned once, however often the step's checks ask"))))))
+
+(deftest the-lighting-is-planned-again-when-the-body-s-memory-of-the-world-changes
+  (let [plans (atom 0)
+        memory (atom 1)
+        plan tp/plan
+        c (assoc (ready-test/ctx-of {:self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory torches}) :args {:boxes [[[0 64 0] [2 64 2]]]})]
+    (with-redefs [tp/plan (fn [x] (swap! plans inc) (plan x))
+                  sense/known-memory (fn [_] @memory)]
+      (light-area/lighting c)
+      (light-area/lighting c)
+      (is (= 1 @plans) "an unchanged state is planned once")
+      (reset! memory 2)
+      (light-area/lighting c)
+      (is (= 2 @plans) "a cell seen differently: planned again"))))
 
 (deftest powder-snow-lets-light-through-like-air
   (async done

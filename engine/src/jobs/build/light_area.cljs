@@ -11,6 +11,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.torch :as torch]
@@ -107,10 +108,11 @@
 (defn lighting
   "{:spots [cell ..] :uncovered [cell ..]} (jobs.lib.torch-plan/plan) for what the area still owes: spots nearest the body
   first, those a place failed at left out. One plan for the step's checks: kept (check-cache) while the args, the torches hung,
-  the places failed, the cells looked at and the body's cell stay."
+  the places failed, the cells looked at, the body's cell, the torch carried and its memory of the world (sense/known-memory) stay."
   [c]
-  (let [{:keys [torches failed viewed]} (ctx/mem c)]
-    (check-cache/keyed c ::lighting [(:args c) torches failed viewed (u/cell-vec (u/self-pos c))] #(plan-lighting c))))
+  (let [{:keys [torches failed viewed]} (ctx/mem c)
+        p (:primitives c)]
+    (check-cache/keyed c ::lighting [(:args c) torches failed viewed (u/cell-vec (u/self-pos c)) (torch/carried-torch p) (sense/known-memory p)] #(plan-lighting c))))
 
 (defn half-seen?
   "An open cell whose floor or head cell the body has not seen yet: whether it is spawn ground is undecided."
