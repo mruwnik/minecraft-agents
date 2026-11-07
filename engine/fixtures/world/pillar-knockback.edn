@@ -2,7 +2,7 @@
 ;; Forced knockbacks: [:rcon tp @s ~0.6 ~ ~] shoves the body to the edge of the column cell mid-pillar (/damage by a mob gave no displacement).
 ;; The forced-knockback done-a/b cases FAIL on 90cb3ad1: a shove between rounds gives up :off-column at once (recentre only runs after a failed place).
 ;; A zombie is summoned beside the body a moment after the job starts, so it hits mid-pillar (:mobs :keep: the runner
-;; does not clear hostiles). Should-fail cases: no blocks (waits :too-few-blocks), stone above the head (:ceiling).
+;; does not clear hostiles). Should-fail cases: no blocks (waits :too-few-blocks), bedrock above the head (:ceiling; stone is dug through).
 {:defaults
  {:tags [:access :survival :hostile]
   :mobs :keep
@@ -67,7 +67,7 @@
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting}}]
    :limit-s 40}
   {:name "ceiling-two-above-head"
-   :blocks [[:set [16 3 16] "stone"]]
+   :blocks [[:set [16 3 16] "bedrock"]]
    :body {:inventory [["dirt" 12]]}
    :act [[:job (jobs.access.pillar {:height 5})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 40 :of-job true}]

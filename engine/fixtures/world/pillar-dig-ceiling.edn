@@ -1,4 +1,5 @@
 ;; Card 53bff399: a pillar under a diggable roof digs it out and goes on; a roof it cannot dig (bedrock) ends :ceiling.
+;; tall-sand has :worth 20: each landing is a failure in a row and another is tried while it is worth its price, so the sand ends :ceiling; at the default worth the column is dug through.
 ;; A 1x2 pocket in a stone mass, two dirt blocks over it, a dark chamber above; dark and sealed, so any time of day.
 {:defaults
  {:tags [:access]
@@ -27,7 +28,7 @@
    :limit-s 100}
   {:name "tall-sand-over-the-head-never-buries-the-body"
    :blocks [[:fill [16 7 16] [16 12 16] "sand"] [:fill [16 13 16] [16 14 16] "stone"]]
-   :act [[:job (jobs.access.pillar {:height 5})]]
+   :act [[:job (jobs.access.pillar {:height 5 :worth 20})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 90 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["suffocation"]}} :for-s 90 :until {:source :job :kind :stopped} :of-job true}]
    :limit-s 100}]}
