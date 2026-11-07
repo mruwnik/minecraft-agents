@@ -557,7 +557,7 @@
                       :round (fn ^:async walker-round [c]
                                (let [threats (cornered/near-hostiles c)]
                                  (dotimes [_ 2]
-                                   (swap! out conj (await (step/walk-away! c threats (await (cover/judge! c nil [] false)) nil (fn ^:async st [_] (swap! stuck inc) :cornered))))))
+                                   (swap! out conj (await (step/walk-away! c threats (await (cover/judge! c threats nil [] false)) nil (fn ^:async st [_] (swap! stuck inc) :cornered))))))
                                (ctx/end c :done nil))}
               s (setup {:entities [(zombie 7 -3 {})]})
               s (update-in (assoc-in s [:eng :jobs 'walker] walker) [:eng :jobs] merge
@@ -955,6 +955,31 @@
           (is (zero? (second @costs)) "out of the line behind the wall")
           (is (zero? (nth @costs 2)) "a route all behind the wall")
           (is (pos? (nth @costs 3)) "covered first step and end, exposed in the middle: the seconds in fire are priced"))))))
+
+(deftest a-look-ahead-under-fire-is-taken-only-when-what-it-may-spare-is-worth-its-seconds-there
+  ;; the flight looked up to 5 times before each pick into the unseen, unpriced, though standing in a shooter's line
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [looks (atom 0)
+              out (atom nil)
+              s (setup {:ms-per-call 0})
+              judged {:ends [{:unseen [3 64 0] :s 1 :trapped 50}]}
+              s (assoc-in s [:eng :jobs 'looker]
+                          {:round (fn ^:async r [c]
+                                    (let [covered? (cover/cover-fn (:primitives c) [] (respond.state/fire-spots c))
+                                          price (cover/look-price c [] covered? judged {:dead-end 0} [[3 64 0]])
+                                          ahead (fn ^:async ahead [dead-end] (some? (await (cover/look-ahead! c [] covered? judged {:dead-end dead-end}))))]
+                                      (with-redefs [sense/look-at-unknown! (fn ([_c _cells _n] (swap! looks inc) (js/Promise.resolve nil)) ([_c _cells _n _stop?] (swap! looks inc) (js/Promise.resolve nil)))
+                                                    respond.goal/judge! (fn [& _] (js/Promise.resolve {}))]
+                                        (reset! out [price (await (ahead (* 0.9 (:s price)))) @looks (await (ahead (* 1.1 (:s price)))) @looks])))
+                                    (ctx/end c :done nil))})]
+          (mem/write! (:store (:eng s)) :hurt {:damageType "minecraft:arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
+          (await (run-job! s 'looker {}))
+          (let [[price cheap cheap-looks dear dear-looks] @out]
+            (is (> (:s price) (cost/look-s 1)) (str "in the shot spot's line: the look's seconds and the fire on them " (pr-str price)))
+            (is (= [false 0] [cheap cheap-looks]) "a dead end that costs less than the look: no look")
+            (is (= [true 1] [dear dear-looks]) "one that costs more: the look, then the search again")))))))
 
 (deftest the-flee-price-runs-from-the-chasers-the-flight-runs-from
   ;; a zombie standing 13 blocks off, beyond the danger radius, chases neither: both step away from it as a bystander

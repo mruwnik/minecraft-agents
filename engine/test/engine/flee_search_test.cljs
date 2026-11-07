@@ -247,6 +247,13 @@
     (is (= (* 0.5 (+ 2 5)) (get homed (:end east))) "a seen way home: the walk back to the fork and the way home")
     (is (zero? (get homed (:end home))) "a seen way pays none")))
 
+(deftest a-walk-back-from-a-dead-end-pays-the-shooters-fire-on-it
+  ;; the walk back counted only the chasers that walk: a way home in a skeleton's line of fire cost as much as one out of it
+  (let [in-fire (fn [{:keys [cells]}] (* 10 (count (filter #(neg? (:x %)) cells))))
+        dead-end #(get (into {} (map (juxt :end :dead-end)) (search/scored [] {:x 0.5 :y 64 :z 0.5} [east home] nil %)) (:end east))]
+    (is (= (* 0.5 (+ 2 5)) (dead-end nil)))
+    (is (= (* 0.5 (+ 2 5 20)) (dead-end in-fire)) "the two cells of the way home west of the fork in fire, 10 s each")))
+
 (deftest a-cover-past-the-seen-part-of-a-way-pays-its-dead-end
   ;; card 645e6abc: the reverted pricing dropped the dead end of every cover end
   (let [from {:x 0.5 :y 64 :z 0.5}

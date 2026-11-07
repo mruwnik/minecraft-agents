@@ -97,19 +97,21 @@
     (search/safe-why e) (search/safe-why e)
     (and home (> (u/dist home goal) (same-place))) :home-safer))
 
-(declare under-floor? margin)
+(declare under-floor? margin fire-price)
 
 (defn ^:async judge!
   "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
-  cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only): {:goal (active) :why (:given-up, else verdict; nil: it
+  cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only, the walks back
+  from dead ends priced with the fire of threats' shooters, fire-price): {:goal (active) :why (:given-up, else verdict; nil: it
   may go there) :home (safe-home of homes) :room :home-why (of the last of homes) :ends (the search's scored ends)}."
-  [c homes room covered? covers]
+  [c threats homes room covered? covers]
   (let [goal (active c)
         named (cond-> (mapv (fn [h] {:pos h :kind :home}) homes)
                 (and goal (not (given-up? c goal)) (not (under-floor? c goal))) (conj {:pos goal :kind :goal}))
         chs (chasers c)
-        ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))}))
+        ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
+                                               :fire (:route (fire-price c threats covered?))}))
         home (safe-home ends homes)]
     {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))
      :why (when goal
@@ -137,6 +139,28 @@
          (filter #(<= (danger-q/mob-distance p %) (threats/follow-range (.-name %))))
          (map #(danger-q/mob-pos p %)))))
 
+(defn fire-price
+  "The shooters' fire on a flight from threats where cover is covered? (cell -> bool), nil with no covered? or no shooter
+  (a ranged one of threats, a shot spot's, flight/fire-spots): {:covered? (covered? memoized) :risk (seconds in fire ->
+  the seconds of death they risk: the death at the body (cost/death-s) times 1-(1-chance)^(seconds/cost/exposure-s), the
+  chance the shooters' that of cost/threat-parts) :route (a timed route {:cells :end} -> :risk of its seconds on cells
+  not covered, each the time since the cell before (the first since 0), plus cost/exposure-s at an end not covered)}."
+  [c threats covered?]
+  (let [shooters (distinct (concat (map #(.-name %) (filter combat/ranged? threats)) (map :shooter (flight/fire-spots c))))]
+    (when (and covered? (seq shooters))
+      (let [p (:primitives c)
+            from (u/self-pos c)
+            body (threats/death-body c)
+            death (cost/death-s p (ctx/view c))
+            chance (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) shooters)))
+            covered-memo (memoize (fn [cell] (covered? (select-keys cell [:x :y :z]))))
+            risk (fn [secs] (* death (- 1 (Math/pow (- 1 chance) (/ secs (max 1 (cost/exposure-s)))))))]
+        {:covered? covered-memo
+         :risk risk
+         :route (fn [{:keys [cells end]}]
+                  (risk (+ (reduce + 0 (map (fn [prev cell] (if (covered-memo cell) 0 (- (:t cell 0) (:t prev 0)))) (cons nil cells) cells))
+                           (if (covered-memo end) 0 (cost/exposure-s)))))}))))
+
 (defn choose-opts
   "The options flee-search/choose takes for the flight's step from threats (mobs), the one place they are built: the
   price of a flight (respond.cover/caught-chance!) and the flight itself (respond.cover/flight-target!) ask it with the same situation,
@@ -158,25 +182,18 @@
         other-mob (risk (:chance (cost/spawn-kill body from)))
         creeper (some #(when (combat/creeper? %) (.-name %)) threats)
         names (distinct (map #(.-name %) threats))
-        shooters (distinct (concat (map #(.-name %) (filter combat/ranged? threats)) (map :shooter (flight/fire-spots c))))
         chance-of (fn [ns] (- 1 (reduce * (map #(- 1 (:chance (cost/threat-parts body % nil from))) ns))))
         near-other? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
         mark (fn [f s] {:holds? (search/at-step-or-end f) :s s})
-        covered-memo (when covered? (memoize (fn [cell] (covered? (select-keys cell [:x :y :z])))))
-        ;; the seconds of e's route in fire (the time spent on each cell not covered) plus those standing at an end in it
-        fire-s (fn [e]
-                 (let [cells (if (seq (:cells e)) (:cells e) (keep e [:step :end]))
-                       on-route (reduce + 0 (map (fn [prev cell] (if (covered-memo cell) 0 (- (:t cell 0) (:t prev 0))))
-                                                 (cons nil cells) cells))]
-                   (+ on-route (if (covered-memo (:end e)) 0 (cost/exposure-s)))))
+        fire (fire-price c threats covered?)
         marks (concat [(mark near-other? other-mob)]
                       (map #(mark % other-mob) (flight/avoid-ends c))
                       (when creeper
                         [{:holds? (fn [e] (boolean (some door? (:cells e))))
                           :s (risk (:chance (cost/threat-parts body creeper nil from)))}])
-                      (when (and covered? (seq shooters))
-                        [{:holds? (fn [e] (or (some (complement covered-memo) (:cells e)) ((search/at-step-or-end (complement covered-memo)) e)))
-                          :s (fn [e] (risk (- 1 (Math/pow (- 1 (chance-of shooters)) (/ (fire-s e) (max 1 (cost/exposure-s)))))))}])
+                      (when-let [{:keys [covered? route]} fire]
+                        [{:holds? (fn [e] (or (some (complement covered?) (:cells e)) ((search/at-step-or-end (complement covered?)) e)))
+                          :s (fn [e] (route {:cells (if (seq (:cells e)) (:cells e) (keep e [:step :end])) :end (:end e)}))}])
                       (when home
                         [{:holds? #(= home (:pos (:target %))) :s (- (risk (chance-of names)))}]))]
     {:refused (:refused (ctx/mem c))

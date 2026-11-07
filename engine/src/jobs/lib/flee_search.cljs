@@ -427,31 +427,36 @@
   "The walk back of a flight on scored end r that finds its way shut at its first unseen cell, along other way e
   (cost/dead-end-cost's backs): from its last seen cell back to where e's route leaves r's, then on along e. :s its
   seconds back to the fork (the way in is r's price, the unseen cells' walk back their unseen-share), e's price past
-  the fork and the arrival r's end scores past e's; :caught-s that of the whole flight (caught-s); :unseen? e's,
-  :trapped its trap-s."
-  [chasers r e]
+  the fork and the arrival r's end scores past e's, plus fire (a fn of a timed route {:cells :end}: the seconds of
+  death the shooters' fire on it risks, respond.goal/fire-price; nil none) of the walk back, timed from the turn; :caught-s
+  that of the whole flight (caught-s); :unseen? e's, :trapped its trap-s."
+  ([chasers r e] (back-via chasers r e nil))
+  ([chasers r e fire]
   (let [seen (subvec (:cells r) 0 (:seen-n r))
         f (dec (count (take-while true? (map #(= (cell-of %1) (cell-of %2)) seen (:cells e)))))
         last-t (:t (peek seen))
         at-fork (- (* 2 last-t) (:t (nth seen f)))
         e-fork (:t (nth (:cells e) f))
-        on (- (:price e) (:dead-end e 0))]
+        on (- (:price e) (:dead-end e 0))
+        back (-> []
+                 (into (map #(assoc % :t (- (* 2 last-t) (:t %)))) (rseq (subvec seen f (dec (count seen)))))
+                 (into (map #(update % :t + (- at-fork e-fork))) (subvec (:cells e) (inc f))))]
     {:s (+ (- at-fork last-t) (if (pos? (:s e)) (* on (- 1 (/ e-fork (:s e)))) on)
-           (- (min (:arrive r) unreached-s) (min (:arrive e) unreached-s)))
-     :caught-s (caught-s chasers (-> seen
-                                     (into (map #(assoc % :t (- (* 2 last-t) (:t %)))) (rseq (subvec seen f (dec (count seen)))))
-                                     (into (map #(update % :t + (- at-fork e-fork))) (subvec (:cells e) (inc f)))))
-     :unseen? (some? (:unseen e)) :trapped (when (:unseen e) (trap-s chasers e))}))
+           (- (min (:arrive r) unreached-s) (min (:arrive e) unreached-s))
+           (if fire (fire {:cells (mapv #(update % :t - last-t) back) :end (:end e)}) 0))
+     :caught-s (caught-s chasers (into seen back))
+     :unseen? (some? (:unseen e)) :trapped (when (:unseen e) (trap-s chasers e))})))
 
 (defn dead-end-race
   "cost/dead-end-race {:cost :chance} of a dead end at the first unseen cell of scored end r; nil when r does not reach
   a cell unseen. Its :counts and trap-s, backs along the ways out of pool (open or running on unseen, not caught, not a cover end, not through that
-  cell; back-via)."
-  [chasers r pool]
+  cell; back-via, with fire)."
+  ([chasers r pool] (dead-end-race chasers r pool nil))
+  ([chasers r pool fire]
   (when (and (:trapped r) (< (:seen-n r) (count (:cells r))))
     (let [shut (cell-of (nth (:cells r) (:seen-n r)))
           out? #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (not (:cover? %)) (not-any? (fn [c] (= shut (cell-of c))) (:cells %)))]
-      (cost/dead-end-race (:counts r) (trap-s chasers r) (map #(back-via chasers r %) (filter out? pool))))))
+      (cost/dead-end-race (:counts r) (trap-s chasers r) (map #(back-via chasers r % fire) (filter out? pool)))))))
 
 (defn dead-end
   "Seconds a dead end at the first unseen cell of scored end r adds to its price (dead-end-race); 0 when r does not reach
@@ -464,9 +469,10 @@
   seconds the first chaser takes to the end, ##Inf with none), :gain (arrive less the chasers' arrival at from: what
   the walk buys over standing still; 0 where no chaser can get to the body already), :caught-s (caught-s of its route),
   :caught? (one lands a blow: caught-s over 0), :caught-seen? (caught on its seen cells alone: no look past them frees it), :dead-end (dead-end, the ways out those of pool, default the ends
-  scored), on :price, and :score (see the ns doc)."
-  ([chasers from priced] (scored chasers from priced nil))
-  ([chasers from priced pool]
+  scored; the walks back priced with fire, back-via), on :price, and :score (see the ns doc)."
+  ([chasers from priced] (scored chasers from priced nil nil))
+  ([chasers from priced pool] (scored chasers from priced pool nil))
+  ([chasers from priced pool fire]
    (let [here (arrive-at chasers from)
          raced (mapv (fn [{:keys [end cells seen-n] :as e}]
                        (let [arrive (arrive-at chasers (cost/centred end))
@@ -475,7 +481,7 @@
                                 :caught-seen? (and (pos? c-s) (pos? (caught-s chasers (subvec cells 0 (min (count cells) (or seen-n (count cells))))))))))
                      priced)]
      (mapv (fn [e]
-             (let [race (dead-end-race chasers e (or pool raced))
+             (let [race (dead-end-race chasers e (or pool raced) fire)
                    d (:cost race 0)
                    price (+ (:price e) d)]
                (assoc e :dead-end d :dead-chance (:chance race) :price price :score (- (min (:arrive e) unreached-s) price))))
@@ -483,8 +489,9 @@
 
 (defn covers
   "Ends on the routes of scored where cover first holds (covered?: a cell -> whether it is out of every ranged mob's line
-  of fire): each route cut there, timed with no stops (unstopped: walked whole) and scored again against chasers, its dead end against the ways of ends, :cover? true."
-  [chasers from covered? ends]
+  of fire): each route cut there, timed with no stops (unstopped: walked whole) and scored again against chasers, its dead end against the ways of ends (fire as scored's), :cover? true."
+  ([chasers from covered? ends] (covers chasers from covered? ends nil))
+  ([chasers from covered? ends fire]
   (scored chasers from
           (keep (fn [{:keys [cells s price priced dead-end] :as e}]
                   (when-let [i (first (keep-indexed #(when (and (pos? %1) (covered? (select-keys %2 [:x :y :z]))) %1) cells))]
@@ -493,7 +500,7 @@
                       (assoc e :end (select-keys (peek part) [:x :y :z]) :cells part :cover? true :found? true :open? true
                                :s (:t (peek part)) :price (* share (- price dead-end)) :priced (* share priced)))))
                 ends)
-          ends))
+          ends fire)))
 
 (defn hazard-near?
   "Whether a cell of route cells lies within ::hazard-clearance of one of hazards (positions)."
@@ -589,8 +596,9 @@
 (defn ^:async search!
   "The flee search from where the body stands: the targets (named, {:pos :range :kind}) and the ring ends at reach
   (default: reach, where the chasers give the body up) priced (price!) and scored against chasers ([{:name :pos}]), with covers on
-  their routes when covered? is given. opts {:reach :y-margin :covered? :covers :covers-key} (covers: price!'s)."
-  [c chasers targets {:keys [covered?] :as opts}]
+  their routes when covered? is given, the walks back from dead ends priced with :fire (scored). opts {:reach :y-margin
+  :covered? :covers :covers-key :fire} (covers: price!'s)."
+  [c chasers targets {:keys [covered? fire] :as opts}]
   (let [t0 (clock/now)
         self (.self (:primitives c))
         from (u/self-pos c)
@@ -598,9 +606,9 @@
         ways-ms (js/Math.round (- (clock/now) t0))
         r (or (:reach opts) (reach from chasers (.-food self)))
         priced (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers)))
-        ends (scored chasers from priced)]
+        ends (scored chasers from priced nil fire)]
     (ctx/emit! c :retreat.search-work :debug (assoc (meta priced) :ms (js/Math.round (- (clock/now) t0)) :ways-ms ways-ms :targets (count targets)))
-    (with-meta (cond-> ends covered? (into (covers chasers from covered? ends))) (meta priced))))
+    (with-meta (cond-> ends covered? (into (covers chasers from covered? ends fire))) (meta priced))))
 
 (defn unseen-ahead
   "The first unseen cells ([x y z], nearest first) of ends' routes but those in glanced (looked at this flight already:

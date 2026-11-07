@@ -1080,10 +1080,11 @@
   "Rock with a lit cave (x 3..20, z 12..20) and a tunnel east from its middle (z 16) to x 28, turning north there."
   (merge (tu/box 0 63 0 31 75 31 "stone") (tu/box 3 64 12 20 66 20 "air") (tu/box 21 64 16 28 65 16 "air") (tu/box 28 64 10 28 65 16 "air")))
 
-(deftest a-flight-from-skeletons-looks-before-it-takes-a-cover-past-cells-it-has-not-seen
+(deftest a-flight-from-skeletons-heads-for-the-tunnel-not-a-cover-past-cells-it-has-not-seen
   ;; facing the skeletons, the body had not seen the cave wall beside them: a cover end in that unseen rock, a walk from
-  ;; their bows, was walked to whole with no look and won over the tunnel the body had seen. Facing north, the look
-  ;; turned to the cave wall but memory took only the cell looked at: the search after it planned through the wall
+  ;; their bows whose walk back from a dead end there was priced as out of their fire, was walked to whole and won over
+  ;; the way to the tunnel. Facing north, a look turned to the cave wall but memory took only the cell looked at: the
+  ;; search after it planned through the wall
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1094,7 +1095,7 @@
             (core/submit! eng respond {})
             (dotimes [_ 3] (await (core/tick! eng)))
             (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))]
-              (is (and (< 20 x) (= 16 z)) (str "yaw " yaw ": the first step is the tunnel's cover: " x " " z)))))))))
+              (is (and (< 16 x) (= 16 z)) (str "yaw " yaw ": the first step is east along the tunnel's row: " x " " z)))))))))
 
 
 ;; Wicken j3766: at 13 hp with a wooden sword the fight walked to a seen skeleton, beside a zombie heard further on

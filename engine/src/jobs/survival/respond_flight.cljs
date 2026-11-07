@@ -182,7 +182,7 @@
       :shut-door (await (respond.doors/shut-door! c door))
       :shut-home-door (await (respond.doors/shut-home-door! c (respond.doors/home-door c room)))
       :run-home (await (run-home! c room (or gap-way way)))
-      :walk (let [judged (await (cover/judge! c covered? rooms (seq blast)))]
+      :walk (let [judged (await (cover/judge! c threats covered? rooms (seq blast)))]
               (step/say-choice! c survey verdicts judged blast)
               (await (step/walk-away! c threats judged covered? stuck))))))
 

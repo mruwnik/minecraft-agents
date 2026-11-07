@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.ledger :as ledger]
@@ -151,10 +152,10 @@
 (defn ^:async judge!
   "The flight's goal, homes (homes) and flee search (respond.goal/judge!) after a glance along the way away
   (glance-away!), the homes kept as :homes."
-  [c covered? rooms blast?]
+  [c threats covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
   (let [hs (homes c rooms blast?)]
-    (assoc (await (respond.goal/judge! c hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c))) :homes hs)))
+    (assoc (await (respond.goal/judge! c threats hs (when-not blast? (:start (first rooms))) covered? (dead-end-covers c))) :homes hs)))
 
 (defn ^:async caught-chance-once!
   "{:chance :seconds :cornered?} of the flight's next step from where the body stands (flee-search/caught-chance), for
@@ -182,7 +183,7 @@
                      (let [covered? (cover-fn p threats (flight/fire-spots c))
                            blast? (seq (blast p threats))
                            rooms (:rooms (survey c threats false))
-                           judged (await (respond.goal/judge! c (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))]
+                           judged (await (respond.goal/judge! c threats (homes c rooms blast?) (when-not blast? (:start (first rooms))) covered? (dead-end-covers c specs)))]
                        (search/caught-chance (:ends judged) counts (respond.goal/choose-opts c threats covered? (respond.goal/closed-home judged)) glanced)))
             chance (cond-> chance (and chance scan) (assoc :way-scan scan) (:refuge-s chance) (assoc :hide-s (hide-out/quiet-s)))]
         (ctx/update-mem! c assoc :caught-chance {:in in :t now :chance chance})
@@ -203,15 +204,33 @@
            (await (caught-chance-once! c specs)))
        r))))
 
+(defn look-price
+  "{:s :saving :looks} of the flight's look at cells: s the seconds of its looks (cost/look-s) plus the shooters' fire on
+  the body over them where it stands uncovered (respond.goal/fire-price's :risk); saving what the look may spare: the
+  dead end pick (choose's, nil none) pays for the unseen (:dead-end), with no pick the cheapest cornered answer at a
+  dead end of judged's ends (:trapped)."
+  [c threats covered? judged pick cells]
+  (let [looks (min (count cells) dig-look/max-floor-looks)
+        secs (cost/look-s looks)
+        {:keys [risk] here-covered? :covered?} (respond.goal/fire-price c threats covered?)]
+    {:looks looks
+     :s (+ secs (if (and risk (not (here-covered? (look/cell-of (u/self-pos c))))) (risk secs) 0))
+     :saving (if pick (:dead-end pick 0) (or (some->> (seq (keep :trapped (:ends judged))) (reduce min)) 0))}))
+
 (defn ^:async look-ahead!
   "judged again (respond.goal/judge! over its :homes) after a look at the first unseen cells of its routes not looked at
   this flight (flee-search/unseen-ahead), each with a sight pass (sense/look-at-unknown!: the search plans over memory,
-  so memory takes the whole view first); nil when there is none to look at."
-  [c covered? judged]
+  so memory takes the whole view first), taken only while its look-price is under what it may spare (debug
+  retreat.look-ahead either way); nil when there is none to look at or the look does not pay."
+  [c threats covered? judged pick]
   (when-let [cells (search/unseen-ahead (:ends judged) (:glanced (ctx/mem c)))]
-    (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
-    (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
-    (assoc (await (respond.goal/judge! c (:homes judged) (:room judged) covered? (dead-end-covers c))) :homes (:homes judged))))
+    (let [{:keys [s saving] :as price} (look-price c threats covered? judged pick cells)
+          took? (< s saving)]
+      (ctx/emit! c :retreat.look-ahead :debug (assoc price :took? took? :cells (vec (take (:looks price) cells))))
+      (when took?
+        (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
+        (await (sense/look-at-unknown! c cells dig-look/max-floor-looks))
+        (assoc (await (respond.goal/judge! c threats (:homes judged) (:room judged) covered? (dead-end-covers c))) :homes (:homes judged))))))
 
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
@@ -223,7 +242,7 @@
   (bystander-spots) and flight/avoid-ends, each while another end is left. judged and covered? given so the caller
   shares them; dodge-shot! judges here."
   ([c threats] (let [covered? (cover-fn (:primitives c) threats (flight/fire-spots c))]
-                 (await (flight-target! c threats covered? (await (judge! c covered? (:rooms (survey c threats true)) (seq (blast (:primitives c) threats))))))))
+                 (await (flight-target! c threats covered? (await (judge! c threats covered? (:rooms (survey c threats true)) (seq (blast (:primitives c) threats))))))))
   ([c threats covered? judged]
    (if-let [way (way-up c threats)]
      way
@@ -231,7 +250,7 @@
            from (u/self-pos c)
            opts-for #(respond.goal/choose-opts c threats covered? (respond.goal/closed-home %))
            first-pick (search/choose (:ends judged) (opts-for judged))
-           again (when (or (nil? first-pick) (search/into-unseen? first-pick)) (await (look-ahead! c covered? judged)))
+           again (when (or (nil? first-pick) (search/into-unseen? first-pick)) (await (look-ahead! c threats covered? judged first-pick)))
            e (if again
                (search/choose (:ends again) (opts-for again))
                first-pick)
