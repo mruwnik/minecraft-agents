@@ -1,7 +1,7 @@
 (ns triggers.survival.needs-weapon
   "The needs-weapon trigger: an awake body carrying no weapon (jobs.lib.combat/default-weapons) gets a sword
   (jobs.items.obtain, the best it can make: iron, else stone, else wooden), so a mob it meets is fought, not fled from
-  with the fist. Not for 10 min after a deposit put a weapon away by name (memory :weapon-stowed), nor in the first light, or with a hostile known near (jobs.lib.dawn), nor while an open death's live pile holds a weapon: recover-drops fetches it first. Its default job is a :priced obtain: it searches only as far as the sword is worth."
+  with the fist. Not for 10 min after a deposit put a weapon away by name (memory :weapon-stowed), nor with a hostile known near (jobs.lib.dawn), nor while an open death's live pile holds a weapon: recover-drops fetches it first. Its default job is a :priced obtain: it searches only as far as the sword is worth."
   (:require [engine.game :as game]
             [engine.memory :as mem]
             [jobs.lib.body :as body]

@@ -410,10 +410,13 @@
   {:name "intent-for-another-block-is-never-dug"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "cobblestone" :hollow]]
+   :zones [{:name "w-west" :min [12 0 12] :max [12 3 20] :owner "Other"} {:name "w-east" :min [20 0 12] :max [20 3 20] :owner "Other"}
+           {:name "w-north" :min [12 0 12] :max [20 3 12] :owner "Other"} {:name "w-south" :min [12 0 20] :max [20 3 20] :owner "Other"}
+           {:name "w-floor" :min [12 0 12] :max [20 0 20] :owner "Other"} {:name "w-roof" :min [12 3 12] :max [20 3 20] :owner "Other"}]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [20 1 16] :item "dirt" :before "air" :job "j1" :purpose :pillar :state :intent}
                                               {:cell #at [20 2 16] :item "dirt" :before "air" :job "j1" :purpose :pillar :state :intent}]}}]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :dig-route :pillar :stair :dig-out}})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :no-dig}}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :escalation {:step :none :why :zone}}} :within-s 90 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :zone}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}]}
