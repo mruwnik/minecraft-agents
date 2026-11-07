@@ -3,7 +3,10 @@
   (:require [jobs.lib.shelter.fill :as fill]
             [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
+            [engine.perception.store :as store]
             [jobs.lib.click :as click]
+            [jobs.lib.cost.base-rates :as base-rates]
+            [jobs.lib.memory-age :as memory-age]
             [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -143,6 +146,77 @@
                  :when (unseen? nx ny nz)]
              [nx ny nz]))))
 
+(defn- note-section!
+  "Adds the section of cell x y z to the Map secs (id -> #js [cx sy cz])."
+  [^js secs x y z]
+  (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
+        id (+ (* (+ (* (+ cx 1048576) 2097152) (+ cz 1048576)) 64) (+ sy 16))]
+    (when-not (.has secs id) (.set secs id #js [cx sy cz]))))
+
+(def ^:private ring-sections
+  "Sections round a cell a region's reads reach: the frontier ring that lights an unseen cell (base-rates/unseen-d-max)."
+  (inc (js/Math.ceil (/ base-rates/unseen-d-max 16))))
+
+(defn- stamps-of
+  "The section stamps and aging flips (store/section-stamp, memory-age/section-flips) of every section within ring-sections of
+  one in the Map secs: what a region reads."
+  [^js st ^js secs]
+  (let [out #js [] seen (js/Set.)]
+    (.forEach secs
+              (fn [^js t]
+                (doseq [dx (range (- ring-sections) (inc ring-sections)) dy (range (- ring-sections) (inc ring-sections))
+                        dz (range (- ring-sections) (inc ring-sections))
+                        :let [x (+ (aget t 0) dx) y (+ (aget t 1) dy) z (+ (aget t 2) dz)
+                              id (+ (* (+ (* (+ x 1048576) 2097152) (+ z 1048576)) 64) (+ y 16))]
+                        :when (not (.has seen id))]
+                  (.add seen id)
+                  (.push out (store/section-stamp st (.-dim st) x y z) (or (memory-age/section-flips st x y z) 0)))))
+    out))
+
+(defonce ^:private kept-regions (js/WeakMap.))
+(defonce ^:private region-reads (js/WeakMap.))
+
+(defn- same-reads?
+  "Whether the memory the region read is as it was when kept (its entry from region-reads), by the writes count first."
+  [^js st ^js e]
+  (or (== (.-at e) (.-writes st))
+      (let [now (stamps-of st (.-secs e)) old (.-stamps e)]
+        (when (and (== (.-length now) (.-length old)) (loop [i 0] (or (== i (.-length old)) (and (== (aget old i) (aget now i)) (recur (inc i))))))
+          (set! (.-at e) (.-writes st))
+          true))))
+
+(defn- kept-regions-of
+  "The Map of st's kept regions: {:dim :map :limit}, fresh on a new dimension."
+  [^js st]
+  (let [c (.get kept-regions st)]
+    (if (and c (identical? (.-dim c) (.-dim st)))
+      c
+      (let [c #js {:dim (.-dim st) :map (js/Map.) :limit 256}] (.set kept-regions st c) c))))
+
+(defn- kept-region
+  "The spawn-region kept for key k while the memory sections it read (and their ring) stay as they were, else nil: one quote
+  after another prices the same floods."
+  [p k]
+  (when-let [^js st (some-> (aget p "perception") :st)]
+    (when-let [region (.get (.-map (kept-regions-of st)) k)]
+      (when (same-reads? st (.get region-reads region)) region))))
+
+(defn- keep-region!
+  "Keeps flooded region v (which carries the sections it read) under key k for kept-region, dropping the regions whose memory
+  moved once the kept ones double."
+  [p k v]
+  (when-let [^js st (some-> (aget p "perception") :st)]
+    (when-let [secs (::secs (meta v))]
+      (let [^js c (kept-regions-of st) ^js m (.-map c)]
+        (when-not (.has region-reads v)
+          (.set region-reads v #js {:secs secs :stamps (stamps-of st secs) :at (.-writes st)}))
+        (when (> (.-size m) (.-limit c))
+          (let [dead #js []]
+            (.forEach m (fn [r k] (when-not (same-reads? st (.get region-reads r)) (.push dead k))))
+            (.forEach dead #(.delete m %))
+            (set! (.-limit c) (max 256 (* 2 (.-size m))))))
+        (.set m k v)))))
+
 (defn region-flood
   "spawn-region's flood from [x y z], likeliest cell first (reach/heap-push!), then depth first and farthest from the start
   first (a far dark cell in the open is met in some 30 cells, not after the whole 24-block disc): ends at an unseen edge
@@ -173,6 +247,7 @@
         heap #js [#js [-1 0 x y z]]
         pushes (volatile! 0)
         dark #js []
+        secs (js/Map.)
         way (volatile! 0)
         way-cell (volatile! nil)
         far2 (fn [c] (+ (js/Math.pow (- (aget c 0) x) 2) (js/Math.pow (- (aget c 2) z) 2)))
@@ -183,6 +258,7 @@
                 (let [e (reach/heap-pop! heap)
                       cx (aget e 2) cy (aget e 3) cz (aget e 4) chance (- (aget e 0))
                       c #js [cx cy cz]]
+                  (note-section! secs cx cy cz)
                   (if (< chance (.get best (key cx cy cz)))
                     (recur)
                     (let [sure? (== 1 chance)
@@ -204,8 +280,9 @@
                                                          (reach/heap-push! heap #js [(- nc) (vswap! pushes inc) nx ny nz])))))
                                 (recur))))))))
         chance (if (= :open end) 1 @way)
-        region {:open? (pos? chance) :edge-chance chance :dark dark :partial? (= :far end)
-                :edge (some->> @way-cell (unseen-beside unseen?))}]
+        region (with-meta {:open? (pos? chance) :edge-chance chance :dark dark :partial? (= :far end)
+                           :edge (some->> @way-cell (unseen-beside unseen?))}
+                          {::secs secs})]
     (.forEach (reach-room/walker-sources kind-at certain [x y z] reach/forward)
               (fn [c] (put! (str "spawn|" subtract "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region)))
     region))
@@ -225,7 +302,7 @@
   (what lies past it may be dark floor); :dark the flat #js [x y z ..] of its spawnable cells not lit-here? by the sky's
   darkening subtract, all of them unless :partial? (the flood ended at the first farther than spawn-free-radius from
   `at`). One flood serves every cell `at` walks to within it (reach-room/walker-sources: the same walkers reach it): kept
-  in *regions*, else per body (reach-room/kept-with); a cell a kept partial region holds no far dark cell for floods
+  in *regions*, kept per body while the memory it read stays (kept-region), else per body (reach-room/kept-with); a cell a kept partial region holds no far dark cell for floods
   anew. A perch no walker steps to (a tree top) is judged by the ground it drops to."
   [p {:keys [x y z]} subtract]
   (let [k (str "spawn|" subtract "|" x "|" y "|" z)
@@ -233,10 +310,12 @@
         fits? (fn [{:keys [open? dark partial?]}] (or open? (not partial?) (far-dark? dark x y z)))]
     (if-let [^js m *regions*]
       (let [kind-at (or (.get m "kind") (let [f (reach-room/room-kind-at p (reach-room/shut-kind-at p))] (.set m "kind" f) f))
-            kept (.get m k)]
+            kept (or (.get m k) (when-let [r (kept-region p k)] (.set m k r) r))
+            n (reach/cuts)
+            put! (fn [k v] (.set m k v) (when (= n (reach/cuts)) (keep-region! p k v)))]
         (if (and kept (fits? kept))
           kept
-          (let [v (region kind-at (fn [k v] (.set m k v)))] (.set m k v) v)))
+          (let [v (region kind-at put!)] (put! k v) v)))
       (let [kept (reach-room/kept-with p k region)]
         (if (fits? kept)
           kept

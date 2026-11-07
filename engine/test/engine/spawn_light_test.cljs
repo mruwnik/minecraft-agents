@@ -233,3 +233,24 @@
       (is (= [] (take 5 (wrong day f-day))) "day: sky and block light")
       (is (= [] (take 5 (wrong night f-night))) "night: block light alone")
       (is (< 0 (aget day (store/cell-index 10 14 5))) "the scene is lit"))))
+
+(deftest a-spawn-region-flooded-in-one-decision-is-kept-for-the-next-while-the-memory-it-read-stays
+  (let [raw (tu/fake {:blocks (merge (tu/floor -30 -30 30 30) (tu/box -2 64 -2 2 66 2 "stone") (tu/box -1 64 -1 1 65 1 "air"))
+                      :time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        per (perception/create (fake-raw/create raw) {:now (constantly 1000000) :rand (constantly 0.5)})
+        p (perception/wrap raw per)
+        floods (atom 0)
+        flood sh-inside/region-flood
+        region #(binding [sh-inside/*regions* (js/Map.)] (sh-inside/spawn-region p {:x 0 :y 64 :z 0} 11))]
+    (swap! (fake/state raw) assoc :yaw 0)
+    (perception/pass! per)
+    (with-redefs [sh-inside/region-flood (fn [& a] (swap! floods inc) (apply flood a))]
+      (let [first-region (region)]
+        (is (= 1 @floods))
+        (is (identical? first-region (region)) "the next decision reads the kept region")
+        (is (= 1 @floods))
+        (fake/set-block! raw [1 64 0] "stone")
+        (swap! (fake/state raw) assoc :yaw 90)
+        (perception/pass! per)
+        (is (not (identical? first-region (region))) "a write in a section it read floods it anew")
+        (is (= 2 @floods))))))
