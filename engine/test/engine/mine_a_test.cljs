@@ -670,7 +670,8 @@
         (doseq [settings [{} {:jobs.lib.walk.world/max-damage 0}]]
           (let [s (await (drop-to-ore 77 false settings))
                 e (done-event s)
-                learned (mapcat :learned (events-of s :replan))]
+                ;; the walks over the sides, before the stair: a stair's own walks may learn the floor at its foot
+                learned (->> @(:seen s) (take-while #(not= :go-to.escalated (:kind %))) (filter #(= :replan (:kind %))) (mapcat :learned))]
             (is (= [:completed 1] ((juxt :status :got) e)) (pr-str settings))
             (is (seq learned) (pr-str settings))
             (is (every? (fn [[x y z]] (contains? #{nil "air"} (block-at s x y z))) learned)

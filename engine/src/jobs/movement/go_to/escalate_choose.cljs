@@ -236,14 +236,14 @@
   (= :damage-budget (some-> (:reason result) keyword)))
 
 (defn drop-stranded?
-  "Whether a give-up with result is a search that ran out of land (:exhausted) for a body above the goal pos by more than
-  a fall it survives within the call's max-damage (cost/drop-limit, the planner's own limit): every edge of its land is a
-  fall the walk refuses, so as a player on a platform with a pickaxe does, it digs a stair down, priced against the other
-  ways like any dig-in."
+  "Whether a give-up with result is a search that ran out of land (:exhausted), or a walk whose felt-for floors kept
+  turning out not there (:unseen-floors), for a body above the goal pos by more than the fall the walk takes (the
+  planner's own limit: wworld/damage-budget's hp): every edge of its land is a fall the walk refuses, so as a player on
+  a platform with a pickaxe does, it digs a stair down, priced against the other ways like any dig-in."
   [c feet pos result]
   (let [self (.self (:primitives c))
-        limit (cost/drop-limit (cost/equipment-of (.-equipment self)) (wworld/damage-body c) (wworld/walk-settings c))]
-    (boolean (and (= :exhausted (some-> (:reason result) keyword))
+        limit (:max-drop (cost/fall-profile {:equipment (cost/equipment-of (.-equipment self)) :damage-budget (wworld/damage-budget c)}))]
+    (boolean (and (#{:exhausted :unseen-floors} (some-> (:reason result) keyword))
                   (> (- (second feet) (js/Math.floor (:y pos))) limit)))))
 
 (defn goal-walled?
@@ -1115,7 +1115,8 @@
   reason proves the way needs the world changed and the body is shut in (reach-room/enclosed?, which already counts doors
   as opened: a door that leads nowhere, e.g. onto a step under its lintel, is no way out), or the search ran out of
   land (:exhausted, after the walks that looked at every edge) in a mine or cave larger than a room, or the planner
-  proved the start sealed (:start-enclosed: the walls it could not see may be open ground to the room flood). Never out of
+  proved the start sealed (:start-enclosed: the walls it could not see may be open ground to the room flood), or its
+  felt-for floors ran out (:unseen-floors) above the goal by more than a fall the walk takes (drop-stranded?). Never out of
   the body's own shelter: it is shut in on purpose."
   [c tries result]
   (let [doors (some-> (:doors (:args c)) keyword)
@@ -1131,6 +1132,8 @@
              (goal-walled? c result shut?)
              (damage-refused? result)
              (and (refused-drop? result) (not @shut?))
+             (and (= :unseen-floors (some-> (:reason result) keyword))
+                  (some-> (places/parse-pos (:pos (:args c))) :pos (as-> goal (drop-stranded? c (end/feet-cell c) goal result))))
              (some? (drop-fill c result (skips c) (end/feet-cell c)))
              (air-pocket? c result)
              (and (walker-fault? result) (>= tries (max-blocked))

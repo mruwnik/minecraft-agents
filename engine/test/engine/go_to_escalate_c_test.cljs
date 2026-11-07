@@ -91,7 +91,9 @@
         pos {:x 6 :y 0 :z 0}
         stranded? (fn [max-damage feet result] (choose/drop-stranded? {:primitives p :args {:max-damage max-damage}} feet pos result))]
     (is (true? (stranded? 0 [0 13 0] ex)) "the fall to the goal costs hp the call allows none of")
-    (is (false? (stranded? 20 [0 13 0] ex)) "a fall the call's damage budget pays is no stranding")
+    (is (true? (stranded? 0 [0 13 0] {:reason :unseen-floors})) "every floor felt for at the edges turned out not there")
+    (is (false? (stranded? 20 [0 6 0] ex)) "a fall the walk's damage budget pays is no stranding")
+    (is (true? (stranded? 20 [0 13 0] ex)) "a fall the body survives but the walk's damage budget (min-health) refuses")
     (is (false? (stranded? 0 [0 13 0] {:reason :budget})))
     (is (false? (stranded? 0 [0 -5 0] ex)) "a goal above is no stair down")))
 
