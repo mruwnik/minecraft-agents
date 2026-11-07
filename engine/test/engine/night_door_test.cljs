@@ -250,6 +250,17 @@
           (is (< (:z (st/pos-of p)) 2) "the body stands inside the room, not in the door cell")
           (is (false? (door-open? p)) "the door is shut"))))))
 
+(deftest night-seeing-only-what-it-saw-steps-in-from-the-door-cell-and-shuts-the-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (seeing-setup (merge (open-door-hut {:x 5 :y 64 :z 2} {}) {:inventory st/dirt-stack}))]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 12))
+          (is (< (:z (st/pos-of p)) 2) "the body stands inside the room, not in the door cell")
+          (is (false? (door-open? p)) "the door is shut")
+          (is (= [] (st/calls p "place")) "nothing placed"))))))
+
 (deftest night-looks-first-when-the-closed-room-has-a-wall-cell-never-seen
   (let [{:keys [eng p]} (st/setup (open-door-hut {:x 5 :y 64 :z 0} {}))
         look? #(sh/unlooked-for-roof? p (mem/view (:store eng)))]

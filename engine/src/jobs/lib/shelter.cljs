@@ -109,11 +109,16 @@
 (defn door-key [{:keys [x y z]}] [x y z])
 
 (defn open-room-doors
-  "[{:cell :inside} ...]: the doors and gates standing open in the closed room around the body, the nearest first."
+  "[{:cell :inside} ...]: the doors and gates standing open in the closed room around the body, the nearest first. A body
+  standing in an open door whose room beside closes over what it has seen (reach-room/unseen-room: the doorway hides the
+  walls either side of it) has that door: a step in shows the room."
   [p]
   (when (sh-sense/roofed? p (sh-sense/room-roof-height))
-    (let [self (u/self-pos {:primitives p})]
-      (->> (:doors (reach-room/room p (sh-sense/feet p)))
+    (let [self (u/self-pos {:primitives p})
+          feet (sh-sense/feet p)
+          in-door #(when (sh-inside/open-door? p {:cell feet})
+                     (filter (fn [d] (= (door-key feet) (door-key (:cell d)))) (:doors (reach-room/unseen-room p feet))))]
+      (->> (or (:doors (reach-room/room p feet)) (in-door))
            (filter #(sh-inside/open-door? p %))
            (sort-by #(u/dist self (:cell %)))))))
 
