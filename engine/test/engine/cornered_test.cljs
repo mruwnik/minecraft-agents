@@ -926,26 +926,27 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (hidden-round hiding-retreat {:self {:pos [0.5 64 0.5]} :blocks hard-sided-dead-end
-                                                                  :inventory [{:name "stone_pickaxe" :count 1}]
-                                                                  :entities [(assoc (creeper 8.5 64 0.5) :visible true)]}
-                                                         120000 (fn [_] nil)))]
+        (let [{:keys [eng p seen]} (setup {:self {:pos [0.5 64 0.5]} :blocks hard-sided-dead-end
+                                           :inventory [{:name "stone_pickaxe" :count 1}]
+                                           :entities [(assoc (creeper 8.5 64 0.5) :visible true)]})]
+          (.override (.-world p) "wait" (fn [t a impl] (-> (impl t a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng (tu/order eng retreat) {})
+          (await (core/tick! eng))
           (is (seq (filter #(and (= :retreat.cornered (:kind %)) (contains? (:prices %) :stand)) @seen)) "standing is among the priced answers")
           (is (some #(= :holding (:kind %)) @seen) "the step holds in place until the creeper comes"))))))
 
 ;; the one step back ends 3.5 from the lit creeper, inside its blast (flee-search/fuse-blast): no back-off, no blocks to wall
-;; or pillar with, so the hit that knocks it back and the step after it are the answer a player takes
-(deftest a-body-cornered-by-a-creeper-with-no-step-out-of-its-blast-hits-it-back-and-steps-away
+;; or pillar with, so the hit that knocks it back is the answer a player takes, no step into the blast, and with the fight tried the stand is all that is left (a hold, priced)
+(deftest a-body-cornered-by-a-creeper-with-no-step-out-of-its-blast-hits-it-back-and-takes-no-step-into-the-blast
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "iron_sword" :count 1}] :blocks room :entities [(creeper 3 64 0)]})]
-          (.override (.-world p) "steer"
-                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (.override (.-world p) "wait" (fn [t a impl] (-> (impl t a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "one hit to knock it back")
-          (is (= -1 (:x (first-move eng))) "then the step back into the last cell of the room"))))))
+          (is (zero? (count (calls p "steer"))) "no step into the blast"))))))
 
 (deftest the-fight-is-reach-only-when-the-nearest-hostile-is-a-creeper-or-the-body-is-blind
   (let [zombie #js {:name "zombie" :d 2 :o #js [2 0]}
@@ -981,8 +982,8 @@
         (let [{:keys [eng p]} (setup {:self {:pos [0.5 64 0.5]} :blocks dead-end
                                       :entities [(assoc (creeper 6.5 64 0.5) :visible true)]})
               n (atom 0)]
-          (.override (.-world p) "blockAt"
-                     (fn [token a impl] (when (= 300 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
+          (.override (.-world p) "wait"
+                     (fn [token a impl] (when (= 3 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
           (core/submit! eng (tu/order eng retreat) {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "no melee with a creeper out of reach")
@@ -1407,14 +1408,15 @@
 (defn hold-pricer
   "A job that prices the cornered answers (hostile-fight/weigh of cornered-answers) to the near hostiles, an angry
   enderman among them, after each of held [holds held-s] (the memory a flight's holds leave), into out."
-  [out held]
+  ([out held] (hold-pricer out held true))
+  ([out held enderman?]
   {:defaults {:checks {:safe? '(always) :fit? '(always)}}
    :round (fn ^:async hold-pricer-round [c]
             (let [hs (cornered/near-hostiles c)]
               (reset! out (vec (for [[holds held-s] held]
                                  (do (ctx/update-mem! c assoc :holds holds :held-s held-s)
-                                     (:prices (hostile-fight/weigh c hs (cornered/cornered-answers c hs false nil false true {:water 0}))))))))
-            (ctx/end c :done nil))})
+                                     (:prices (hostile-fight/weigh c hs (cornered/cornered-answers c hs false nil false enderman? {:water 0}))))))))
+            (ctx/end c :done nil))}))
 
 (deftest an-enderman-that-stays-makes-each-hide-held-in-water-dearer-until-the-walls-are-cheaper
   ;; be0a68d8: the hold was priced by the holds left under a cap, so its price fell each hold and only that cap ended it
@@ -1432,6 +1434,23 @@
             (is (= (:water fresh) (:water half)) (str "within one hide nothing changed, nor does the hold's price: " (pr-str (map :water @out))))
             (is (< (:water half) (:water one)) "a hide the enderman outlasted counts against the next")
             (is (< (:plug long) (:water long)) (str "held on long enough, the walls are cheaper: " (pr-str long)))))))))
+
+(deftest a-creeper-that-stays-makes-each-hide-stood-dearer-until-the-walls-are-cheaper
+  ;; 185b99b6: the creeper stand was priced for ever and ended only at hold-cap holds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom nil)
+              hide (hide-out/hide-s)
+              {:keys [eng]} (setup {:self {:pos [0.5 64 0.5]} :blocks hard-sided-dead-end :inventory [{:name "dirt" :count 16}]
+                                    :entities [(assoc (creeper 8.5 64 0.5) :visible true)]}
+                                   (assoc fj/jobs 'test.hold-prices (hold-pricer out [[0 0] [(quot hide 2) (/ hide 2)] [hide hide] [1000 (* 1000 hide)]] false)))]
+          (core/submit! eng '(test.hold-prices) {})
+          (await (core/tick! eng))
+          (let [[fresh half one long] @out]
+            (is (and (some? (:stand fresh)) (= (:stand fresh) (:stand half))) (str "within one hide nothing changed: " (pr-str (map :stand @out))))
+            (is (< (:stand half) (:stand one)) "a hide the creeper outlasted counts against the next")
+            (is (< (:plug long) (:stand long)) (str "stood on long enough, the walls are cheaper: " (pr-str long)))))))))
 
 (deftest a-body-with-an-enderman-near-and-no-water-walks-under-a-nearby-roof
   (async done
@@ -1989,11 +2008,14 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(zombie-at 4)]})
-              holds (atom 0)]
+              holds (atom 0)
+              waits-after (atom 0)]
           (.override (.-world p) "wait"
                      (fn [token a impl]
                        (when (and (hiding? seen) (= 1 (swap! holds inc)))
                          (fake/add-entity! p (assoc (creeper 3 64 0) :visible true)))
+                       (when (and (seq (filter #(= :retreat.hide-breached (:kind %)) @seen)) (= 3 (swap! waits-after inc)))
+                         (swap! (fake/state p) assoc :entities []))
                        (impl token a)))
           (core/submit! eng (tu/order eng '(test.real-flight {:settings {:jobs.survival.hide-out/hide-s 100000 :jobs.survival.hide-out/opened-s 10}})) {})
           (await (core/tick! eng))

@@ -270,7 +270,7 @@
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
                   :plug-dig-zone (when (and (flight/tried? c :plug-dig) (:zone-dig (ctx/mem c))) (await (refuge/plug-option! c :plug-dig-zone #{:pit :pocket})))
-                  :stand (await (hold! c :stand "no way out of the creeper: standing"))
+                  :stand (await (hold! c "no way out of the creeper: standing"))
                   :pillar (await (refuge/pillar! c false))
                   :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))
                   :water (await (stand! c :water :water "in water, away from the enderman"))

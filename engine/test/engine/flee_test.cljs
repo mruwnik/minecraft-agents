@@ -1620,9 +1620,11 @@
                                         :entities [{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :pos {:x 6.5 :y 64 :z 0.5} :chase {:speed 0.7}}]})
               xs (atom [])
               world (.-world p)
+              waits (atom 0)
               _ (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! xs conj (:x (body-pos p)))
+                                          (when (and (= "wait" name) (= 3 (swap! waits inc))) (swap! (fake/state p) assoc :entities []))
                                           (await (impl token a)))))
               _ (await (run-job! s 'test.flight {}))
               _ (swap! xs conj (:x (body-pos p)))]
@@ -1637,9 +1639,11 @@
                                         :entities [{:id 9 :uuid "u9" :name "creeper" :kind "hostile" :pos {:x 2.5 :y 64 :z 0.5}}]})
               xs (atom [])
               world (.-world p)
+              waits (atom 0)
               _ (doseq [name ["steer" "moveTo" "wait" "attack" "place" "dig" "equip" "eat"]]
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! xs conj (:x (body-pos p)))
+                                          (when (and (= "wait" name) (= 3 (swap! waits inc))) (swap! (fake/state p) assoc :entities []))
                                           (await (impl token a)))))
               _ (await (run-job! s 'test.flight {}))
               _ (swap! xs conj (:x (body-pos p)))]
