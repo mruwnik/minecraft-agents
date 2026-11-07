@@ -68,18 +68,22 @@
        :text (str "health " (.toFixed (.-health self) 1) " of 20 may risk " (round1 allowed) " hp, under the " (round1 work)
                   " this job's work may cost: eat or rest to heal first (natural healing needs food 18+)")}))))
 
+(defn spawn-parts
+  "{:kill :each} of one mob spawned beside body at `at` (cost/spawn-kill, cost/spawn-hurt), read once per body and place
+  for c's job: a check prices stays and walks there at several spawn counts."
+  [c body at]
+  (check-cache/keyed c ::spawn [body at] #(hash-map :kill (cost/spawn-kill body at) :each (cost/spawn-hurt body at))))
+
 (defn stay-parts
   "{:hurt :dies :death} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take
-  (cost/spawns-hurt), dies the chance they kill the body and death what that costs (cost/route-death); with ::asleep? on c
-  the body lies asleep through them (cost.answer/woken). What one spawn there costs (cost/spawn-kill, cost/spawn-hurt) is
-  read once for the body and place: a check prices stays at several chances."
+  (cost/spawned-hurt), dies the chance they kill the body and death what that costs (cost/route-death), one spawn's from
+  spawn-parts; with ::asleep? on c the body lies asleep through them (cost.answer/woken)."
   [c chance seconds]
   (let [body (cond-> (threats/death-body c) (::asleep? c) (assoc :asleep? true))
         at (u/self-pos c)
         spawns (* chance seconds)]
     (check-cache/keyed c ::stay [spawns body at]
-                       (fn [] (let [{:keys [kill each]} (when (pos? spawns)
-                                                          (check-cache/keyed c ::spawn [body at] #(hash-map :kill (cost/spawn-kill body at) :each (cost/spawn-hurt body at))))
+                       (fn [] (let [{:keys [kill each]} (when (pos? spawns) (spawn-parts c body at))
                                     {dies :chance death :death} (cost/route-death body {:spawns spawns :at at :spawn-kill kill})]
                                 {:hurt (if each (cost/spawned-hurt body spawns each) 0) :dies dies :death death})))))
 

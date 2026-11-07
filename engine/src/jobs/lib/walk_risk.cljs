@@ -185,10 +185,11 @@
         met-remembered (parts remembered)
         met-all (if (seq catchers) (parts (concat catchers remembered)) met-remembered)
         death-hp (:hurt met-remembered)
-        spawn-dies (cost/route-death body {:spawns spawns :at feet})
+        one (when (pos? spawns) (price/spawn-parts c body feet))
+        spawn-dies (cost/route-death body {:spawns spawns :at feet :spawn-kill (:kill one)})
         dies (fn [met] (cost/either spawn-dies (select-keys met [:chance :death])))
         lethal (cost/lethal-hp (dies met-all))
-        spawn-hp (cost/spawns-hurt body spawns feet)
+        spawn-hp (if one (cost/spawned-hurt body spawns (:each one)) 0)
         hostile-hp (max 0 (- (:hurt met-all) death-hp))
         unfought (if (seq catchers) (cost/lethal-hp (dies met-remembered)) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
@@ -299,7 +300,9 @@
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))
         hurt (+ (if (seq live) (:hurt (cost/route-parts body {:cells here :threats live :at feet})) 0) (:hurt (price/stay-parts c chance secs)))
-        lethal (cost/lethal-hp (cost/route-death body {:cells here :threats live :spawns (* chance secs) :at feet}))]
+        spawns (* chance secs)
+        lethal (cost/lethal-hp (cost/route-death body {:cells here :threats live :spawns spawns :at feet
+                                                       :spawn-kill (when (pos? spawns) (:kill (price/spawn-parts c body feet)))}))]
     {:hp (+ hurt lethal) :lethal-hp lethal :heal-s heal-s :secs secs
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 

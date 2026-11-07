@@ -1488,6 +1488,21 @@
     (is (seq @calls))
     (is (= (distinct @calls) @calls) "each mob's hurt and death at the place read once")))
 
+(deftest stay-estimates-of-several-lengths-price-a-spawn-at-the-place-once
+  ;; a reprice weighs staying for the walk's time, a wait for light and a wait to heal: one spawn's hurt and death beside
+  ;; the body are the same for each
+  (let [c (ctx-of open-night)
+        in (walk-risk/stay-inputs c {:x 20 :y 64 :z 0} 0)
+        calls (atom [])
+        parts answer/threat-parts
+        hurt answer/threat-hurt]
+    (is (pos? (:chance in)))
+    (with-redefs [answer/threat-hurt (fn [b m caught at] (swap! calls conj [:hurt b m at]) (hurt b m caught at))
+                  answer/threat-parts (fn [b m caught at] (swap! calls conj [:parts b m at]) (parts b m caught at))]
+      (doseq [secs [5 60 600]] (walk-risk/stay-estimate c (assoc in :secs secs))))
+    (is (seq @calls))
+    (is (= (distinct @calls) @calls) "each mob's hurt and death for a body at a place read once")))
+
 (defn trip-ctx
   "A ctx at the origin carrying bread loaves, its job's trip the figure (::figure, trip-fed's quote), with a booked chest of 64 bread at chest (nil:
   none), or of {pos loaves} each."
