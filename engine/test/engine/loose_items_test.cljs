@@ -3,6 +3,7 @@
   ones thrown, owed to a live job, in another's zone or not worth it are left."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.event-api :as event-api]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -12,6 +13,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.cost :as cost]
             [jobs.lib.loose :as loose]
             [jobs.lib.world-files :as ew]
             [triggers.items.loose-items :as li]))
@@ -178,6 +180,18 @@
           (is (= 0 (carried p "dirt")))
           (let [ended (filterv #(= :ended (:kind %)) (filterv #(= :reflex (:source %)) @seen))]
             (is (= [:done] (mapv :outcome ended)) "one reflex run, ended done")))))))
+
+(deftest a-root-pick-up-is-worth-getting-the-items-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup (world log-near dirt-down))
+              worths (atom [])
+              collect {:target [] :round (fn [c] (swap! worths conj (ctx/worth c)) (ctx/end c :done nil {:collected 0}))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.collect-drops collect))]
+          (core/submit! eng '(jobs.items.pick-up-loose) {})
+          (await (tu/run-until-empty eng 10))
+          (is (= [(:value (cost/goal-value [{:name "oak_log" :count 1}]))] @worths) "the log, not the dirt down the drop"))))))
 
 (deftest a-child-with-nothing-worth-it-fails-its-condition
   (async done

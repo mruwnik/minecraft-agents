@@ -7,13 +7,15 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]))
 
 (def doc
   "Pick up the loose items the body sees nearby that are worth it (jobs.lib.loose: seen, within the :radius setting, worth the
   detour or on :always, not thrown, owed to another live job or in another's zone or claim). The :loose-items reflex runs it.
-  One jobs.items.collect-drops child takes them by entity id; its go-to leaves what it cannot reach. Items not
+  One jobs.items.collect-drops child takes them by entity id, its walks at the call's worth (at the root worth-of: the
+  goal-value of those items); its go-to leaves what it cannot reach. Items not
   picked up are remembered (:loose-left) for :left-s; so are the seen items when it finds none worth it, so a
   reflex that judged otherwise cannot fire it again for them. Tuning is the jobs.lib.loose settings (a call's :settings overrides).
   Ends :done with data {:collected n :items [names] :left [ids] :text}. With nothing worth it a listed call waits
@@ -66,6 +68,12 @@
   (let [p (:primitives c) view (ctx/view c) w (:world (:engine c))]
     (when (empty? (loose/candidates p view w {} (:root c)))
       {:reason :nothing-worth-it :text (stop-text (loose/explain p view w {} (:root c)))})))
+
+(defn worth-of
+  "Seconds a root pick-up is worth: getting again the items worth it in sight (cost/goal-value)."
+  [c]
+  (:value (cost/goal-value (map #(js->clj (.-item %) :keywordize-keys true)
+                                (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) {} (:root c))))))
 
 (defn can-start? [c] (checks/cause-status :later (nothing-worth-it c)))
 
