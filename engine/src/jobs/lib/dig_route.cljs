@@ -211,25 +211,29 @@
         [px py pz] (if r [ax ay az] goal)
         pm (if r (* 2 r) 0)
         mf (max 1 max-fall)
+        ;; a fall that opens cells is dug, so one costing hp never does (free-fall): the falls the unseen counts are shorter
+        dug-mf (max 1 (min mf (dec free-fall)))
         across-to (fn [x z] (+ (js/Math.abs (- x px)) (js/Math.abs (- z pz))))
         steps-to (fn [x y z] (max 0 (- (js/Math.max (across-to x z) (- py y) (js/Math.ceil (/ (- y py) mf))) pm)))
-        digs-of (fn [a dn up] (+ dn up (* 2 (js/Math.max a (js/Math.ceil (/ dn mf)) (if pillar-s 0 up)))))
+        digs-of (fn [a dn up] (+ dn up (* 2 (js/Math.max a (js/Math.ceil (/ dn dug-mf)) (if pillar-s 0 up)))))
         digs-to (fn [x y z] (digs-of (max 0 (- (across-to x z) pm)) (max 0 (- y py pm)) (max 0 (- py y pm))))
         least-step (if pillar-s (min step-s pillar-s) step-s)
         end-steps (when prior? (max 0 (- (seen-steps px py pz) pm)))
         ;; the fewest unseen cells opened after the last seen one: the step that opened it ends at most a fall and a head
-        ;; under it (e - mf - 1 over the end), across e - 1 or e under it; with that step's own unseen cells under the seen
+        ;; under it (e - dug-mf - 1 over the end), across e - 1 or e under it; with that step's own unseen cells under the seen
         ;; one, last-digs (which the first steps' count cannot add to: they may be that one step's)
         [end-digs last-digs] (when prior?
                                (let [e (seen-cells px py pz) t (max 0 (- e pm)) under (if pillar-s t (* 3 t))]
-                                 [(min (digs-of (max 0 (- e 1 pm)) 0 0) (digs-of 0 (max 0 (- e mf 1 pm)) 0) under)
-                                  (min (max 0 (dec (* 2 t))) (+ t (* 2 (js/Math.ceil (/ (max 0 (- t mf 1)) mf)))) under)]))
+                                 [(min (digs-of (max 0 (- e 1 pm)) 0 0) (digs-of 0 (max 0 (- e dug-mf 1 pm)) 0) under)
+                                  (min (max 0 (dec (* 2 t))) (+ t (* 2 (js/Math.ceil (/ (max 0 (- t dug-mf 1)) dug-mf)))) under)]))
         ;; the first steps open a cell seen-cells less one away, a pillar's first two over the feet
         lead (if pillar-s 2 1)
         prior-h (fn [x y z] (let [n (steps-to x y z)]
                               (+ (* least-step n)
                                  (* unseen-step-s (min n (+ (max 0 (dec (seen-steps x y z))) end-steps)))
-                                 (* unseen-dig-s (min (digs-to x y z) (max (+ (max 0 (- (seen-cells x y z) lead)) end-digs) last-digs))))))
+                                 ;; from a seen cell every way meets the seen: the count of a way that never does is no bound there
+                                 (* unseen-dig-s (let [sc (seen-cells x y z) b (max (+ (max 0 (- sc lead)) end-digs) last-digs)]
+                                                   (if (zero? sc) b (min (digs-to x y z) b)))))))
         heuristic (let [h (if back-h? (fn [x y z] (max (step-h x y z) (@back-lb x y z))) step-h)]
                     (if prior? (fn [x y z] (max (h x y z) (prior-h x y z))) h))
         end? (fn [ck] (let [[x y z] (cell-of ck)]
@@ -403,7 +407,8 @@
         ended (fn [] (if (<= (aget incumbent 0) @max-s) (priced (route-to (aget incumbent 1))) {:problem :dearer}))
         ;; a lower bound of every route's price, searched back from the goal toward the start: a body's two cells per node,
         ;; each step priced base-s of its cheapest move and the cells it opens (across: the two cells entered; up across: the cell
-        ;; over the head too; down: the cell entered; a pillar: the cell over the head), falls and refusals left out, a step across or up only from a cell over a floor. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
+        ;; over the head too, a stair's step when it cuts; down: the cell entered; a pillar: the cell over the head), up and a
+        ;; pillar the unseen toll of the cell entered too, falls and refusals left out, a step across or up only from a cell over a floor. Its frontier exhausted is no route; its cheapest entry past max-s, every route dearer.
         back-s (fn [x y z] (if (or (== (key x y z) start-key) (== (key x (dec y) z) start-key)) 0 (open-s x y z)))
         stands? (fn [x y z] (and (some? (back-s x y z)) (some? (back-s x (inc y) z)) (or (inside? x y z) (do (vreset! back-boxed true) false))))
         to-start (fn [x y z] (* step-s (max (+ (js/Math.abs (- x fx)) (js/Math.abs (- z fz))) (- y (from 1)))))
@@ -442,17 +447,26 @@
                          :else
                          (let [[x y z] (cell-of k)
                                g (.get back-best k)
-                               feet (back-s x y z) head (back-s x (inc y) z)]
+                               feet (back-s x y z) head (back-s x (inc y) z)
+                               toll (unseen-at x y z)]
                            (.add back-done k)
+                           ;; level into the cell (or into the top of a column fallen down, a cell at a time below)
                            (loop [i 0]
                              (when (< i 8)
                                (let [mx (- x (aget dirs i)) mz (- z (aget dirs (inc i)))]
                                  (when (floored? mx y mz) (back-into! g mx y mz (+ (base-s :walk) feet head)))
-                                 (let [over (back-s mx (inc y) mz)]
-                                   (when (floored? mx (dec y) mz) (back-into! g mx (dec y) mz (some-> over (+ (base-s :walk) feet head)))))
                                  (recur (+ i 2)))))
+                           ;; up into the cell: the cell over the head it leaves too, a stair's step when it cuts
+                           (loop [i 0]
+                             (when (< i 8)
+                               (let [mx (- x (aget dirs i)) mz (- z (aget dirs (inc i)))]
+                                 (when-let [over (when (floored? mx (dec y) mz) (back-s mx (inc y) mz))]
+                                   (let [cuts (+ over feet head)]
+                                     (back-into! g mx (dec y) mz (+ (if (and stair-s (pos? cuts)) (cw/stair-leg-cost (+ step-s cuts) step-s stair-s) (+ step-s cuts)) toll))))
+                                 (recur (+ i 2)))))
+                           ;; down the column a cell at a time, as a fall opens it and the straight dig digs it
                            (back-into! g x (inc y) z feet)
-                           (when pillar-s (back-into! g x (dec y) z (+ (base-s :pillar) head)))
+                           (when pillar-s (back-into! g x (dec y) z (+ (base-s :pillar) head toll)))
                            nil))))]
     ;; a cell the back search expanded is priced exactly, any other at least the back queue's least bound less its way to the start
     (vreset! back-lb (fn [x y z] (let [k (key x y z)]

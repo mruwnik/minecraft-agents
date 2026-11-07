@@ -651,7 +651,10 @@
         dig-s (fn [c] ((:dig-s (drops/cut-prices c)) "iron_ore" [0 64 0]))]
     (is (= (* 3 goal) (drops/worth c 3)) "a lost drop is worth what getting it again costs")
     (is (= (max (drops/min-dig-s) (- dig goal)) (dig-s c)) "a goal ore the cut digs through yields one more item: its dig less one worth")
-    (is (= dig (dig-s (assoc c ::drops/counted #{[0 64 0]}))) "a cell of the target's own cluster is in max-s already: no second deduction")))
+    (is (= dig (dig-s (assoc c ::drops/counted #{[0 64 0]}))) "a cell of the target's own cluster is in max-s already: no second deduction")
+    (is (= (max (drops/min-dig-s) (cost/dig-cost "stone")) (drops/unseen-dig-s c)) "a cell never seen is cut as rock, at rock's dig")
+    (is (= (max (drops/min-dig-s) (- (cost/dig-cost "stone") (drops/worth c 1))) (drops/unseen-dig-s (assoc c :args {:item "cobblestone"})))
+        "less one item when the call mines rock")))
 
 (deftest a-cut-whose-cells-fill-again-pays-each-dig-out-of-the-drops-worth
   ;; the way swaps between two cells for ever (each fills again behind the dig): what is spent stays spent, a round

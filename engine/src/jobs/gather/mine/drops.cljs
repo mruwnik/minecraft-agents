@@ -91,6 +91,12 @@
   []
   (cost/dig-cost "dirt"))
 
+(defn unseen-dig-s
+  "The least a cut (cut-prices) pays to dig a cell never seen, which it reads as blocks/hidden-guess: that dig, less one
+  item when the call mines it, at least min-dig-s."
+  [c]
+  (max (min-dig-s) (- (or (cost/dig-cost blocks/hidden-guess) 0) (if (contains? (kinds (:args c)) blocks/hidden-guess) (worth c 1) 0))))
+
 (defn cut-prices
   "dig-route's prices for a cut of the call: go-to's (body-prices), a dig of what the call mines less one item's worth:
   an extra item nothing else counts. Not the cells in (::counted c), whose worth the cut's max-s already holds (the
@@ -114,7 +120,7 @@
   (let [p (:primitives c)
         at (fn [[x y z]] (or (u/seen-name p {:x x :y y :z z}) blocks/hidden-guess))
         ;; one search ends on any of the six stands beside dug
-        prices (assoc (cut-prices c) :max-s max-s :range 1 :near dug :sees (fn [x y z] (not= [x y z] dug)) :unseen-dig-s (min-dig-s)
+        prices (assoc (cut-prices c) :max-s max-s :range 1 :near dug :sees (fn [x y z] (not= [x y z] dug)) :unseen-dig-s (unseen-dig-s c)
                       :guess (constantly "stone"))
         from (u/cell-vec (u/self-pos c))
         goal (mapv + dug [1 0 0])

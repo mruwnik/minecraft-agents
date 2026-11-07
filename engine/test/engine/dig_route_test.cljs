@@ -273,7 +273,9 @@
         [wall wall-cells] (to-end (dr/priced-search (world glass) [0 10 0] [60 4 0] (unseen-opts glass to-glass to-glass 208)))
         [deep deep-cells] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (unseen-opts {} none none 208)))
         ;; every way over the land's top to the far corner bounds alike: summed in other orders, some bounds came out a bit lower
-        [diag diag-cells] (to-end (dr/priced-search (world {}) [0 10 0] [150 4 150] (unseen-opts {} none none 600)))]
+        [diag diag-cells] (to-end (dr/priced-search (world {}) [0 10 0] [150 4 150] (unseen-opts {} none none 600)))
+        ;; a fall past 3 costs hp, so one through rock is dug 3 at most
+        [falls falls-cells] (to-end (dr/priced-search (world {}) [0 10 0] [40 -60 10] (assoc (unseen-opts {} none none 400) :max-fall 16 :fall-s (fn [dy] (if (> dy 3) (* 2 (- dy 3)) 0)))))]
     (is (= {:problem :dearer} far))
     (is (< far-cells 100) (str "a goal 300 blocks off through unseen rock is dearer than 208 s at once (" far-cells " cells)"))
     (is (< (:seconds wall) 90) "the way over a glass plane 600 wide is found")
@@ -281,7 +283,9 @@
     (is (< (:seconds deep) 130))
     (is (< deep-cells 400) (str "a goal 70 blocks down (" deep-cells " cells)"))
     (is (< (:seconds diag) 400))
-    (is (< diag-cells 1000) (str "a goal 150 off on each axis (" diag-cells " cells)"))))
+    (is (< diag-cells 1000) (str "a goal 150 off on each axis (" diag-cells " cells)"))
+    (is (< (:seconds falls) 130))
+    (is (< falls-cells 5000) (str "a goal 70 blocks down, falls past 3 priced (" falls-cells " cells)"))))
 
 (defn same-price?
   "Whether search prices each [from goal opts] of rows the same with the unseen-priced bound, bounded by that price (a
@@ -316,7 +320,10 @@
                                                [[6 -2 1] [0 10 0] {:pillar-s 0.4 :place-s 0.4}]
                                                [[-3 0 -4] [8 4 3]]
                                                [[0 10 0] [2 -1 -6] {:range 1 :near [2 -1 -6]}]
-                                               [[-2 4 3] [4 5 -2] {:pillar-s 0.4}]]))))))
+                                               [[-2 4 3] [4 5 -2] {:pillar-s 0.4}]]))))
+    (is (= [] (remove second (same-price? seen (for [[from goal] [[[0 10 0] [6 -2 0]] [[0 10 0] [12 -14 5]] [[0 10 0] [-1 -16 0]] [[6 -2 1] [0 10 0]] [[-3 0 -4] [8 4 3]]]]
+                                                [from goal {:fall-s (fn [dy] (if (> dy 1) dy 0))}]))))
+        "falls past 1 priced, so a dug fall is 1 at most")))
 
 (deftest the-unseen-priced-bound-prices-seen-steps-at-a-ways-start-end-or-both-as-the-walk-bound-alone
   ;; seen steps (floor, feet and head seen) at the start, the end or both, so the unseen steps before the first seen one and
