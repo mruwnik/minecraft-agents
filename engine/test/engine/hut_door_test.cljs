@@ -177,7 +177,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [far {:self {:pos {:x 5.5 :y 64 :z -0.5} :health 4.8 :food 13}}
-              near-price (await (door-price {}))
+              near-price (await (door-price {} far))
               far-price (await (settings/with-settings {::doors/door-reach 2} #(door-price {} far)))]
           (is (some? far-price) "inside the closed hut, the door out of reach: the flight walks to it, so the cover is priced")
           (is (< near-price far-price) "the walk to the door is in its seconds"))))))

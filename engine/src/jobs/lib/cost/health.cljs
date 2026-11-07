@@ -26,6 +26,8 @@
 
 (def exhaustion-per-point "Exhaustion that drains a point of saturation or food." 4)
 
+(defn fill-point-s [] (settings/get settings ::fill-point-s))
+
 (defn hp-seconds "Seconds an hp costs: the food that heals it again, exhaustion-per-hp at ::fill-point-s a point." []
   (* (/ exhaustion-per-hp exhaustion-per-point) (settings/get settings ::fill-point-s)))
 

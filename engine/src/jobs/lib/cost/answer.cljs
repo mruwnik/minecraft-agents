@@ -81,6 +81,22 @@
       (threat/difficulty-scale (js/Math.floor (+ 1 (* (/ (+ (* impact impact) impact) 2) 7 2 blast-power))))
       0)))
 
+(defn blast-break-chance
+  "The chance a creeper's blast breaks a block of blast resistance r distance blocks from it (vanilla rays: an intensity of
+  blast-power x 0.7-1.3, less 0.75 a block walked and 0.3 x (r + 0.3) at the block; the blocks between are not counted,
+  the worse case)."
+  [distance r]
+  (let [left (- (* 1.3 blast-power) (* 0.75 distance) (* 0.3 (+ r 0.3)))]
+    (min 1 (max 0 (/ left (* 0.6 blast-power))))))
+
+(def blast-reach "Blocks past which a creeper's blast breaks nothing (blast-break-chance 0 at resistance 0)." (/ (- (* 1.3 blast-power) 0.09) 0.75))
+
+(defn blast-env-s
+  "Seconds what a blast breaks costs, of cells [[distance resistance worth]] about it (worth: replacing the cell,
+  cost.destroy/destroyed-s): each by its blast-break-chance."
+  [cells]
+  (reduce + 0 (map (fn [[d r worth]] (* (blast-break-chance d r) worth)) cells)))
+
 (defn blast-hurt
   "blast-damage at distance after the armour stats."
   [stats distance]
@@ -165,15 +181,27 @@
 
 (declare repeat-price answer-death-chance)
 
+(defn blast-count
+  "The creeper blasts answer is expected to set off: its :blast-n (a fight's), each of its :blasts by its chance, the
+  share of its :spread that blasts, and its :caught ones by their chance."
+  [{:keys [blasts spread caught blast-n]}]
+  (let [own (+ (or blast-n 0)
+               (reduce + 0 (map #(if (map? %) (:chance %) 1) blasts))
+               (if (seq spread) (/ (count (filter pos? spread)) (count spread)) 0))]
+    (if caught
+      (+ (* (- 1 (:chance caught)) own) (* (:chance caught) (blast-count caught)))
+      own)))
+
 (defn answer-price*
   "answer-price with death the seconds each death costs."
-  [{:keys [health] :as body} {:keys [seconds then outcomes stays] :as answer} at death]
+  [{:keys [health blast-s] :as body} {:keys [seconds then outcomes stays] :as answer} at death]
   (let [health (or health 20)
         {:keys [dies lived]} (blows-outcome body answer)
         lives (- 1 dies)
         hurt (if (pos? lives) (min (/ lived lives) health) 0)
         own (+ (if (pos? lives) (* lives (health/hp-cost hurt)) 0)
                (if (pos? dies) (* dies death) 0)
+               (if blast-s (* (blast-count answer) blast-s) 0)
                seconds)
         base (if (seq outcomes)
                (+ own (* lives (reduce + (map (fn [[chance a]] (* chance (answer-price* (after body answer) a at death))) outcomes))))
@@ -264,13 +292,16 @@
   land over the whole fight, the fight's length as if it were fought when no mob is in reach; :left the mobs the fight
   leaves alive. :caught: the fight goes bad at the trial prior of the body's health (jobs.lib.cost.caught/prior
   ::fights of the fought mobs, the likeliest gone bad; a creeper or a wet drowned has its own price), its mob then
-  landing that prior's blows; none when the fight's own are more."
+  landing that prior's blows; none when the fight's own are more. :blast-n: the blasts its creepers are expected to set off,
+  the hp each deals over its blast's (at most 1)."
   [{:keys [equipment mobs health] :as fight}]
   (let [stats (armour/armour-stats equipment)
         {left false fought true} (group-by #(not (false? (:reach? %))) mobs)
         fought (vec fought)
         seconds (fight/fight-seconds (assoc fight :mobs (if (seq fought) fought mobs)))
-        damage (fight/fight-damage (assoc fight :mobs fought))
+        per (fight/mob-damages (assoc fight :mobs fought))
+        damage (reduce + 0 per)
+        blast-n (reduce + 0 (map (fn [m d] (if (= "creeper" (:name m)) (min 1 (/ d (max 0.1 (blow stats m)))) 0)) fought per))
         left-damage (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) seconds) left))
         shape (when-let [s (fight/blow-shape (assoc fight :mobs fought))] (fight/sum-shape [[damage s] [left-damage nil]]))
         hit (reduce max 0 (map #(blow stats %) mobs))
@@ -282,6 +313,7 @@
     (cond-> {:damage (+ damage left-damage)
              :hit hit
              :seconds seconds}
+      (pos? blast-n) (assoc :blast-n blast-n)
       shape (assoc :shape shape)
       (seq left) (assoc :left (vec left))
       (and m (< (+ damage left-damage) gone-bad)) (assoc :caught (cond-> {:chance (:chance pr) :hit hit :damage gone-bad}
@@ -304,7 +336,8 @@
   (if b
     (let [both (fn [x y] (let [s (fight/sum-shape [[(small x) (:shape x)] [(mean (:spread x)) nil] [(small y) (:shape y)]])]
                            (cond-> {:damage (+ (:damage x) (:damage y)) :hit (max (:hit x 0) (:hit y 0)) :blasts (into (vec (:blasts x)) (:blasts y))}
-                             s (assoc :shape s))))
+                             s (assoc :shape s)
+                             (or (:blast-n x) (:blast-n y)) (assoc :blast-n (+ (:blast-n x 0) (:blast-n y 0))))))
           clean (both a b)
           ca (:chance (:caught a) 0)
           cb (:chance (:caught b) 0)
@@ -319,7 +352,7 @@
                      (cond-> {:chance chance :damage (+ damage sure) :hit (reduce max 0 (map (comp :hit second) parts)) :blasts blasts}
                        shape (assoc :shape shape))))]
       (cond-> (-> a
-                  (merge (select-keys clean [:damage :hit :blasts]) {:seconds (+ (:seconds a) (:seconds b)) :spread (:spread b)})
+                  (merge (select-keys clean [:damage :hit :blasts :blast-n]) {:seconds (+ (:seconds a) (:seconds b)) :spread (:spread b)})
                   (dissoc :shape :caught :then))
         (:shape clean) (assoc :shape (:shape clean))
         caught (assoc :caught caught)

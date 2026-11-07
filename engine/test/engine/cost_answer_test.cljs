@@ -11,6 +11,7 @@
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.look :as glance]
             [jobs.lib.cost.threat :as threat]
             [engine.settings :as settings]))
@@ -161,19 +162,39 @@
          0.01)
       "a death all but sure ends the meet: what would follow it is not paid"))
 
-(deftest a-death-costs-its-experience-the-walk-back-and-the-items-that-despawn-first
-  (let [bed (assoc (body 5) :respawn {:x 40 :y 64 :z 0} :level 3)
+(deftest a-death-costs-its-experience-the-walk-back-and-what-its-pile-loses-less-what-the-respawn-refills
+  (let [bed (assoc (body 20) :respawn {:x 40 :y 64 :z 0} :level 3)
         lethal {:damage 100 :hit 5 :blasts [100] :seconds 1}
         back (death/back-cost bed here)
         xp (death/experience-cost bed)
         near (fn [x y] (< (js/Math.abs (- x y)) 0.01))
         price (fn [b a] (cost/answer-price b a here))]
     (is (near (+ 1 xp back) (price bed lethal)) "nothing carried: its job walks it back from the bed, no mob met again")
-    (is (near (+ 1 xp back) (price (assoc bed :carried 200) lethal)) "the items kept are picked up on that walk")
-    (is (near (+ 1 (death/back-cost (body 5) here) 200) (price (assoc (body 5) :carried 200) lethal))
-        "no bed: the walk from world spawn, and the items despawn before it gets there")
+    (is (near (+ 1 xp back (* (death/lost-share bed here) 200)) (price (assoc bed :carried 200) lethal))
+        "the walk back beats the despawn: the share of the load the trial bodies' piles lost")
+    (is (< 0.5 (death/lost-share bed here) 1) "most piles were not got back")
+    (is (near (+ 1 (death/back-cost (body 20) here) 200) (price (assoc (body 20) :carried 200) lethal))
+        "no bed near: the items despawn before it gets there")
     (is (near (+ 1 1 xp back) (price bed {:damage 0 :seconds 1 :then [lethal]})) "a death in what follows pays it once too")
+    (is (near (- (+ xp back (* (death/lost-share bed here) 200)) (* 3 (cost/hp-seconds)) (* 2 (health/fill-point-s)))
+              (death/death-cost (assoc bed :health 17 :food 18 :carried 200) here))
+        "the respawn refills health and food: 3 hp and 2 points it need not heal or eat")
+    (is (zero? (death/death-cost (assoc bed :health 2) here)) "a death near the bed with nothing to lose heals more than it costs: never under nothing (Q145)")
     (is (< (price (body 5) lethal) ##Inf) "a sure death is a finite price, bed or none")))
+
+(deftest a-creepers-blast-costs-what-it-breaks-about-the-body-on-top-of-its-hurt
+  (is (< 0.6 (answer/blast-break-chance 1 6) 0.8) "stone a block off: most of the blast's strengths break it")
+  (is (= 1 (answer/blast-break-chance 0.5 0.5)) "dirt at the blast: always")
+  (is (zero? (answer/blast-break-chance 1 1200)) "obsidian holds")
+  (is (zero? (answer/blast-break-chance 5.5 0)) "past the blast's reach nothing breaks")
+  (let [b (assoc (body 20) :respawn here)
+        creeper (mob "creeper" 1)
+        stand (cost/stand-answer {:mobs [creeper] :seconds 4})
+        fought (cost/fight-answer (assoc (fight "diamond_sword" creeper) :health 20))
+        extra (fn [a] (- (cost/answer-price (assoc b :blast-s 100) a here) (cost/answer-price b a here)))]
+    (is (< (js/Math.abs (- 100 (extra stand))) 1e-9) "standing by it: its blast for sure, all of what it breaks, whether the body lives or not")
+    (is (< 0 (:blast-n fought) 1) "hit-and-back sets a blast off now and then: the hp it takes over a blast's")
+    (is (< 0 (extra fought) (extra stand)))))
 
 (deftest an-extra-death-cost-raises-the-death-price-and-tips-a-quick-risky-answer-to-a-slow-safe-one-at-the-edge
   (let [b (assoc (body 20) :respawn here)
@@ -696,9 +717,11 @@
 
 (deftest a-stand-prices-an-hp-at-the-food-that-heals-it-hungry-or-not
   (let [zombie (mob "zombie" 1)
-        stand #(cost/stand-loss (assoc (body 12) :food %) nil [zombie] here 4)]
+        stand #(cost/stand-loss (assoc (body 12) :food %) nil [zombie] here 4)
+        dies (answer/blows-chance (body 12) (cost/stand-answer {:mobs [zombie] :seconds 4}))]
     (is (pos? (stand 20)))
-    (is (= (stand 7) (stand 20)) "the food that heals the hp is its price already: no hunger on top")))
+    (is (< (js/Math.abs (- (stand 20) (stand 7) (* dies 13 (health/fill-point-s)))) 1e-6)
+        "the food that heals the hp is its price already: no hunger on top; only its death, whose respawn refills 13 more points, is cheaper")))
 
 (deftest one-mob-met-beside-a-bare-body-at-full-health-kills-at-its-measured-rates
   ;; spawn-kill's terms at the fake world's easy difficulty: a lone mob fought with a fist hits at its measured rate; a creeper

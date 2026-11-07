@@ -1134,6 +1134,17 @@
           (is (= :fight (:decision unhurt)) "unhurt: a lone zombie costs less than walking away")
           (is (< (:fight (:prices unhurt)) (:fight (:prices hurt))) "5 hp felt within a second: the fight's seconds are priced at that rate"))))))
 
+;; a creeper's blast breaks what is about the body: a build is put back, natural ground costs nothing (Q145)
+(deftest a-creepers-blast-is-priced-at-the-builds-about-the-body-not-at-natural-ground
+  (let [world (fn [blocks entities] (tu/seeing-all (tu/fake {:self {:pos {:x 0 :y 64 :z 0}} :blocks blocks :entities entities})))
+        ground (tu/box -6 63 -6 6 63 6 "stone")
+        wall (tu/box 2 64 -1 2 66 1 "oak_planks")
+        creeper [{:id 8 :name "creeper" :kind "hostile" :pos {:x 4 :y 64 :z 4}}]]
+    (is (zero? (hostile-loss/blast-s (world ground []))) "a crater in natural stone costs nothing")
+    (is (< 0 (hostile-loss/blast-s (world (merge ground wall) []))) "a planks wall beside the body is put back")
+    (is (not (contains? (hostile-loss/body-at (world (merge ground wall) []) {}) :blast-s)) "no creeper known: no blast to price")
+    (is (pos? (:blast-s (hostile-loss/body-at (world (merge ground wall) creeper) {}))) "a creeper near: the answers pay it")))
+
 ;; Bramble #39: the fight walked to a skeleton with a creeper standing by it, beyond the trigger's melee radius; one blast did 17
 (deftest a-creeper-standing-by-the-mob-the-fight-would-walk-to-makes-it-a-flight
   (async done

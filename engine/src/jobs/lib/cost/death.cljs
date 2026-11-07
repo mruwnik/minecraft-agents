@@ -1,10 +1,11 @@
 (ns jobs.lib.cost.death
-  "Death as an ordinary cost, in seconds like every other: the time to get the carried items back plus what the lost
-  experience is worth. A route pays chance-of-dying x death-cost (jobs.lib.cost.answer/death-chance: the known threats
-  are priced by the answer the body would take to each). Pure.
+  "Death as an ordinary cost, in seconds like every other: the walk back, the carried items its pile loses and what the
+  lost experience is worth, less what the respawn refills (full health and food: a death is a quick heal, Q145), never
+  under 0. A route pays chance-of-dying x death-cost (jobs.lib.cost.answer/death-chance: the known threats are priced
+  by the answer the body would take to each). Pure.
 
   body: {:level experience levels, :respawn {:x :y :z} where it would wake (its bed, else world spawn), :carried the seconds the carried items are
-  worth (item-value)}.
+  worth (item-value), :health and :food (default 20: nothing refilled)}.
 
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
   as terrain-danger.
@@ -14,6 +15,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.survival :as survival]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.value :as value]))
@@ -23,6 +25,8 @@
                         :doc "Worth of one experience level lost at a death, in seconds (the game drops a few levels' worth)."}
    ::extra-s {:default 0 :spec (a/num-in 0 nil)
               :doc "Seconds a death costs on top of its walk back, items and experience (death-cost); 0: the death is only what it takes to get back (Q79)."}
+   ::pile-returns {:default {:k 7 :n 27} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
+                   :doc "Of n deaths of the trial bodies whose respawn lay within cost.threat/despawn-blocks of the death (the walk back beats the despawn), k where at least half the items carried were picked up again within 12 blocks of the spot before the next death, 2026-11-07; bodies whose logs record no pick-ups that hour left out. Recount: node tools/event-counts.mjs pile-returns."}
    ::notice-rate {:default {:other {:k 8 :n-s 42.4}
                             :ranged [{:case "lit 2" :blocks 2 :k 8 :n-s 11.2} {:case "lit 5" :blocks 5 :k 8 :n-s 18.7}
                                      {:case "lit 9" :blocks 9 :k 9 :n-s 46.9} {:case "lit 13" :blocks 13 :k 8 :n-s 21.2}
@@ -84,16 +88,30 @@
   [body at]
   (boolean (and (:respawn body) (not (:reason (value/fetch-cost {:distance (walk-back-blocks body at) :elapsed-ms 0}))))))
 
+(defn lost-share
+  "The share of what is carried a death at `at` loses: all when not kept?, else what the trial bodies' piles did not get
+  back (::pile-returns)."
+  [body at]
+  (if (kept? body at) (- 1 (value/counted-chance (settings/get settings ::pile-returns))) 1))
+
+(defn refill-s
+  "Seconds of healing and eating a respawn saves body: the hp under 20 at health/hp-seconds each and the food points
+  under 20 at ::fill-point-s each (cost.health)."
+  [{:keys [health food]}]
+  (+ (* (max 0 (- 20 (or health 20))) (health/hp-seconds))
+     (* (max 0 (- 20 (or food 20))) (health/fill-point-s))))
+
 (defn back-cost
   "Seconds the walk from the body's :respawn to `at` and back for the items costs: a trip and the walk price."
   [body at]
   (+ (value/trip) (:cost (value/walk-cost {:distance (walk-back-blocks body at)}))))
 
 (defn death-cost
-  "Seconds a death at `at` ({:x :y :z}) costs: experience-cost and the walk back (back-cost:
-  its job resumes there) with the :carried items when not kept?, and the ::extra-s setting."
+  "Seconds a death at `at` ({:x :y :z}) costs: experience-cost, the walk back (back-cost: its job resumes there), the
+  lost-share of the :carried items and the ::extra-s setting, less refill-s, never under 0."
   [body at]
-  (+ (settings/get settings ::extra-s) (experience-cost body) (back-cost body at) (if (kept? body at) 0 (or (:carried body) 0))))
+  (max 0 (- (+ (settings/get settings ::extra-s) (experience-cost body) (back-cost body at) (* (lost-share body at) (or (:carried body) 0)))
+            (refill-s body))))
 
 (defn blow-outcome
   "{:dies :lived} of blows of about hit hp, damage hp of them expected, against the health and absorption of body: dies the

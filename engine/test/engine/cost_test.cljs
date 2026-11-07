@@ -632,9 +632,11 @@
     (is (> (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far)))
     (is (= (cost/experience-cost {:level 10}) (- (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far))))))
 
-(deftest a-death-loses-its-load-unless-the-walk-back-beats-the-despawn
+(deftest a-death-loses-what-the-trial-piles-lost-while-the-walk-back-beats-the-despawn-else-its-whole-load
   (let [lost #(- (cost/death-cost (assoc % :carried 3000) far) (cost/death-cost % far))]
-    (is (zero? (lost {:respawn {:x 0 :y 64 :z 0}})) "a bed 100 blocks off: the walk back gets it")
+    (is (< (js/Math.abs (- (lost {:respawn {:x 0 :y 64 :z 0}}) (* 3000 (- 1 (value/counted-chance (settings/get death/settings ::death/pile-returns))))))
+           1e-9)
+        "a bed 100 blocks off: the walk back gets the share the trial bodies' piles got back")
     (is (= 3000 (lost {:respawn {:x 3000 :y 64 :z 0}})) "a bed too far for the despawn window")
     (is (= 3000 (lost {})) "no respawn known: the load is given up")))
 
@@ -677,7 +679,9 @@
     (is (< (cost/death-s (at [40 64 40]) nil) (cost/death-s (at nil) nil) (cost/death-s (at [4000 64 0]) nil)) "no known respawn: a death with a walk, not a free one")))
 
 (deftest a-hold-costs-its-seconds-and-hp-lost-and-a-way-out-its-hurt-and-death-risk
-  (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3}
+  ;; a load carried far from the bed: its death costs more than the respawn refills (a bare body near its bed would heal
+  ;; by it, death-cost 0)
+  (let [body {:respawn {:x 0 :y 64 :z 0} :level 0 :health 3 :carried 3000}
         route {:spawns 0.5}]
     (is (= 100 (cost/hold-price {:held-s 100 :hp-lost 0 :health 3})))
     (is (= (+ 100 (* 2 (cost/hp-seconds))) (cost/hold-price {:held-s 100 :hp-lost 2 :health 3})) "hunger's hp at an hp's price, the same at low health")

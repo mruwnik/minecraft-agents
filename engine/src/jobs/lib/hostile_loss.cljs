@@ -2,6 +2,7 @@
   "What doing nothing about the dangers near costs the body (cost/stand-loss over a respond call): the hostile-near
   trigger holds only while it is positive, and respond-to-hostile is worth it."
   (:require [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
@@ -9,6 +10,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.game-facts :as game-facts]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shot :as shot]
             [jobs.lib.util :as u]))
@@ -39,12 +41,36 @@
               (boolean (and (death-spot/bare-headed? e) (death-spot/burns-by-day? p (.-name e) at)))))
    :speed (cost/chase-speed (cost/mob-kind e)) :follow (threat/follow-range (.-name e))})
 
+(defn blast-s
+  "Seconds a creeper's blast at the body's feet costs what is about it (cost/blast-env-s): each sensed cell within
+  cost/blast-reach at what destroying it costs (cost/destroyed-fn: a build, a chest, farmland and crops; natural terrain
+  nothing) and its blast resistance."
+  [p]
+  (let [{:keys [x y z]} (u/pos-of (.-pos (.self p)))
+        [fx fy fz] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]
+        sensed (fn [[x y z]] (u/sensed p {:x x :y y :z z}))
+        destroyed (cost/destroyed-fn sensed)
+        blocks (.-blocksByName (game-facts/data @game/version))
+        r (js/Math.ceil cost/blast-reach)]
+    (cost/blast-env-s
+     (for [dx (range (- r) (inc r)) dy (range (- r) (inc r)) dz (range (- r) (inc r))
+           :let [d (js/Math.hypot (- (+ fx dx 0.5) x) (- (+ fy dy 0.5) (+ y 0.5)) (- (+ fz dz 0.5) z))]
+           :when (< d cost/blast-reach)
+           :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]
+                 b (sensed cell)
+                 n (when (and b (not (true? (.-unknown b)))) (.-name b))
+                 worth (if n (destroyed n cell false) 0)]
+           :when (pos? worth)]
+       [d (or (some-> (aget blocks n) .-resistance) 0) worth]))))
+
 (defn body-at
-  "What the answers' prices read of the body of p (memory view): health, absorption, food and what a death costs it (cost/death-body)."
+  "What the answers' prices read of the body of p (memory view): health, absorption, food, what a death costs it
+  (cost/death-body) and, with a creeper known near, what its blast breaks about the body (:blast-s, blast-s)."
   [p view]
   (let [self (.self p)]
-    (assoc (cost/death-body p view)
-           :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))))
+    (cond-> (assoc (cost/death-body p view)
+                   :health (.-health self) :absorption (.-absorption self) :food (or (.-food self) 20))
+      (some #(= "creeper" (.-name %)) (danger-q/known-hostiles p (danger-q/hostile-radius) {})) (assoc :blast-s (blast-s p)))))
 
 (defn mobs-of
   "Hostiles hs (JS entities) of p as the answers take them (mob-near) and, while no shooter of hs is seen, one of each kind
