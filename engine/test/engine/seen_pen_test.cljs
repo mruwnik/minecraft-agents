@@ -12,6 +12,7 @@
             [jobs.animals.herd-pen :as hp]
             [jobs.animals.herd-survey :as hs]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.value :as value]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.memory-age :as memory-age]
             [jobs.lib.pen :as pen]
@@ -127,9 +128,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))
-              _ (ht/submit! s {:target 1})
-              _ (await (ht/run-ticks s 60))]
+        (let [worth value/animal-worth
+              s (blind-pen! (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700)))]
+          (set! value/animal-worth (constantly 240)) ; a cow's food points at food-point-worth
+          (try
+            (ht/submit! s {:target 1})
+            (await (ht/run-ticks s 60))
+            (finally (set! value/animal-worth worth)))
           (is (= :no-pen (:reason (ht/done-event s))) "nothing can be read: the run ends :no-pen, never :unreachable, never brings")
           (is (< 5 (count (distinct (map #(js->clj (.-args %)) (h/calls (:p s) "look"))))) "more than five distinct look directions: priced, not cut off after five cells"))))))
 

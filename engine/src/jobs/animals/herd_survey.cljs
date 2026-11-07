@@ -44,7 +44,7 @@
     (cond
       (or (nil? g) (:gate-visited m)) (finish! c :no-pen (unseen-extra answer))
       (u/within? (u/self-pos c) g (gate-look-range))
-      (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
+      (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen :blind-pen)))
           :continue)
       :else (let [r (await (near/go-near! c g (gate-look-range) {:doors :never :ways #{:walk :clear-seal}}))]
               (if (and (= :blocked r) (not (await (near/risky-wait! c r))))
@@ -53,11 +53,12 @@
 
 (defn ^:async check-unknown!
   "The pen has cells the body has not seen (a gate in the dark decays): go near the nearest not yet looked at, look at it
-  once, then read the pen again. No such cell left, or one too far to look at, goes to the pen's gate to look in (look-from-gate!)."
+  once, then read the pen again. No such cell left, one too far to look at, or a look that left its cell unknown (:blind-pen:
+  from this side a look reads nothing, so another buys nothing) goes to the pen's gate to look in (look-from-gate!)."
   [c answer]
   (let [here (u/self-pos c)
-        looked (set (:looked-pen (ctx/mem c)))
-        unk (await (unseen-cell! c answer looked))]
+        m (ctx/mem c)
+        unk (when-not (:blind-pen m) (await (unseen-cell! c answer (set (:looked-pen m)))))]
     (cond
       (nil? unk) (await (look-from-gate! c answer))
       (not (u/within? here unk (look-range)))
@@ -65,7 +66,8 @@
         (await (look-from-gate! c answer))
         :continue)
       :else (do (await (sense/look-at! c (cell unk)))
-                (ctx/update-mem! c update :looked-pen (fnil conj []) (cell unk))
+                (ctx/update-mem! c #(cond-> (update % :looked-pen (fnil conj []) (cell unk))
+                                      (sense/unknown? (:primitives c) (cell unk)) (assoc :blind-pen true)))
                 :continue))))
 
 (defn gate-verdict
