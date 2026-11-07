@@ -273,12 +273,9 @@
   (if (or (>= closed-chance 1) (infinite? dig-in-s)) 0 (* (- 1 closed-chance) dig-in-s)))
 
 (defn room-chance
-  "The chance the room at pose is closed: 1 for a closed room, cost/closed-chance of its sides seen and unseen for a room
-  not seen inside yet (an opening can only be in a side), nil for any other."
+  "The chance the room at pose is closed: 1 for a closed room, reach-room/closed-chance for a room not seen inside yet, nil for any other."
   [p pose]
-  (cond
-    (room-lib/refuge-room? p pose) 1
-    (reach-room/unseen-room? p pose) (let [{:keys [seen unseen]} (reach-room/boundary p pose)] (cost/closed-chance seen (count unseen)))))
+  (if (room-lib/refuge-room? p pose) 1 (reach-room/closed-chance p pose)))
 
 (defn rank-walk
   "enter-room/walk-args of place t, quoted at worth ##Inf: the walk is ranked and priced here, the call's worth (home-worth) decides at walk time."

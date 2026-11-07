@@ -18,6 +18,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.lava :as lava]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.loose :as loose]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world]
@@ -455,9 +456,10 @@
           (is (< worth price) (pr-str r))
           (is (empty? (calls (:p env) "dig"))))))))
 
-;; the same room with its west wall not yet seen (a body just arrived, facing away): an unseen wall is an open side, so
-;; the roof would price 0 and be dug at once; a look round at the wall comes first and the slab is kept
-(deftest a-roof-is-priced-after-a-look-at-the-rooms-unseen-wall
+;; the same room with its west wall not yet seen (a body just arrived, facing away): the roof is priced at the chance
+;; the room is closed, its shelter times reach-room/closed-chance of the seen and unseen walls (Q128), read before any
+;; look; that still outweighs the dirt, so the slab is kept
+(deftest a-roof-over-a-room-with-an-unseen-wall-is-priced-at-its-closed-chance
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -465,17 +467,22 @@
                          (dissoc "3,63,0" "3,64,0")
                          (as-> m (apply dissoc m (keys (tu/box 3 66 0 40 67 0 "air"))))
                          (assoc "3,68,0" "dirt"))
-              env (setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
+              make #(setup {:self {:pos {:x 3.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1}] :blocks blocks :time 1000 :light {} :light-default [0 0]})
+              price-of #(b/roof-price {:engine {:warned (atom #{})} :primitives % :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}} [3 65 0])
+              full (price-of (tu/seeing-all (:p (make))))
+              env (make)
               p (tu/seeing-all (:p env))
-              looked? #(some (fn [call] (= "look" (.-name call))) (.-calls (.-world p)))
-              hidden? (fn [pos] (and (not (looked?)) (= 2 (js/Math.floor (.-x pos))) (= 0 (js/Math.floor (.-z pos)))
-                                     (<= 63 (js/Math.floor (.-y pos)) 64)))
+              hidden? (fn [pos] (and (= 2 (js/Math.floor (.-x pos))) (= 0 (js/Math.floor (.-z pos))) (<= 63 (js/Math.floor (.-y pos)) 64)))
               seen-at (aget p "seenBlockAt")
               sensed-at (aget p "sensedAt")
               _ (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (seen-at pos))))
               _ (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true} (sensed-at pos))))
-              r (await (tu/with-looks-showing #(ending-cause (:eng env) job {:pos [3 68 0] :pillar false :worth 10} 20)))]
-          (is (= [:unreachable [3 65 0]] [(:reason r) (:cell (:roof-kept r))]) (pr-str r))
+              chance (reach-room/closed-chance p {:x 3 :y 63 :z 0})
+              price (price-of p)
+              r (await (ending-cause (:eng env) job {:pos [3 68 0] :pillar false :worth 10} 20))]
+          (is (< 0 chance 1) (pr-str chance))
+          (is (< (js/Math.abs (- price (* chance full))) 1e-6) (pr-str [price chance full]))
+          (is (= [:unreachable [3 65 0] (js/Math.round price)] [(:reason r) (:cell (:roof-kept r)) (:price (:roof-kept r))]) (pr-str r))
           (is (empty? (calls p "dig"))))))))
 
 ;; the same room and slab, a root call (worth ##Inf) and no other way: the roof is dug through

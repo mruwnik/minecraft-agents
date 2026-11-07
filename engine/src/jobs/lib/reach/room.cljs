@@ -3,6 +3,7 @@
   door shut, kept per body), the floods under them and the unseen-edge reads that say 'look first'.
   See jobs.lib.reach for the block reads and walk searches."
   (:require [clojure.string :as str]
+            [jobs.lib.cost.look :as glance]
             [jobs.lib.memory-age :as memory-age]
             [engine.perception.rays :as rays]
             [jobs.lib.reach :refer [openable? open-prop? tall-block kind-of keyer passable? seen-standable? standing-cell
@@ -363,6 +364,13 @@
                    distinct)
         {unseen true seen false} (group-by (fn [[cx cy cz]] (nil? (u/seen-block p {:x cx :y cy :z cz}))) sides)]
     {:seen (count seen) :unseen (vec (distinct (concat unseen (remove (fn [[ex ey ez]] (contains? edge [ex (dec ey) ez])) edge))))}))
+
+(defn closed-chance
+  "The chance the room round pos {:x :y :z} is closed while it is an unseen-room (an opening can only be in a side not
+  seen): cost/closed-chance of boundary's seen and unseen sides; nil for any other room."
+  [p pos]
+  (when (unseen-room? p pos)
+    (let [{:keys [seen unseen]} (boundary p pos)] (glance/closed-chance seen (count unseen)))))
 
 (defn open-sides
   "{:open n :closed n} of the feet cells [[x y z]] (boundary's :unseen, seen by now) by their columns (feet and head): open

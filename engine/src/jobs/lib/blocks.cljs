@@ -14,6 +14,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
@@ -197,15 +198,18 @@
            (and (not= :open (kind-at x y z)) (= :open (kind-at x (dec y) z)))))))
 
 (defn roof-price
-  "Seconds breaking the block at cell costs in shelter lost (Q121): 0 unless it roofs the body's room (roof-over-body?) and
-  that room is shut now (sh-inside/safe-room-at?, or sealed but for its dark: dark-room-at?), where the hole lets outside
-  walkers in. The hole stays until mended, so the mobs spawning at the likeliest cell it opens onto (a cell not seen solid
+  "Seconds breaking the block at cell costs in shelter lost (Q121): 0 unless it roofs the body's room (roof-over-body?),
+  times the chance that room is shut (1 when sh-inside/safe-room-at?, or sealed but for its dark: dark-room-at?; with
+  walls not seen yet reach-room/closed-chance, Q128), where the hole lets outside walkers in. The hole stays until mended, so the mobs spawning at the likeliest cell it opens onto (a cell not seen solid
   counts as open) are counted over one whole day and night whatever the hour (chance-at of full day with stay? true over
   the day ticks, night-chance over the night ticks), priced as an opening (cost/opening-price)."
   [c [x y z :as cell]]
   (let [p (:primitives c)
-        feet (sh-sense/feet p)]
-    (if-not (and (roof-over-body? c cell) (or (sh-inside/safe-room-at? p feet) (sh-inside/dark-room-at? p feet)))
+        feet (sh-sense/feet p)
+        closed (cond (not (roof-over-body? c cell)) 0
+                     (or (sh-inside/safe-room-at? p feet) (sh-inside/dark-room-at? p feet)) 1
+                     :else (or (reach-room/closed-chance p feet) 0))]
+    (if (zero? closed)
       0
       (let [night-ticks (- sh-clock/morning-tick sh-clock/dusk-tick)
             day-s (sh-clock/ticks->s (- sh-clock/night-end-tick night-ticks))
@@ -214,7 +218,7 @@
                            (for [[dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
             spawns (apply max 0 (map #(+ (* day-s (spawn-light/chance-at p % false 0 true)) (* night-s (spawn-light/night-chance p %))) beyond))
             body (assoc (threats/death-body c) :health (.-health (.self p)))]
-        (cost/opening-price body (cost/spawns-hurt body spawns feet) {:spawns spawns} feet)))))
+        (* closed (cost/opening-price body (cost/spawns-hurt body spawns feet) {:spawns spawns} feet))))))
 
 (defn roof-kept
   "{:cell :price :worth} when breaking cell costs more shelter (roof-price) than the call's worth (ctx/worth), else nil."
