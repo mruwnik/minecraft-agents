@@ -1495,14 +1495,24 @@
         at (u/self-pos c)
         each (answer/spawn-hurt body at)
         calls (atom [])
-        hurt answer/threat-hurt
-        parts answer/threat-parts]
-    (with-redefs [answer/threat-hurt (fn [b m caught at] (swap! calls conj [:hurt m]) (hurt b m caught at))
-                  answer/threat-parts (fn [b m caught at] (swap! calls conj [:parts m]) (parts b m caught at))]
+        met answer/met]
+    (with-redefs [answer/met (fn [b m caught at] (swap! calls conj m) (met b m caught at))]
       (doseq [chance [0.001 0.002 0.004]]
         (is (= (* chance 10 each) (:hurt (price/stay-parts c chance 10))))))
     (is (seq @calls))
-    (is (= (distinct @calls) @calls) "each mob's hurt and death at the place read once")))
+    (is (= (distinct @calls) @calls) "each mob's answer at the place decided once, for its hurt and its death")))
+
+(deftest the-jobs-of-one-body-price-a-spawn-at-one-place-once
+  ;; a go-to's reprice and its dig child's check both price a spawn beside the body where it stands
+  (let [c (ctx-of open-night)
+        child (assoc c :id (str (:id c) "/dig") :slots [:dig])
+        body (threats/death-body c)
+        at (u/self-pos c)
+        calls (atom 0)
+        both cost/spawn-kill-hurt]
+    (with-redefs [cost/spawn-kill-hurt (fn [b a] (swap! calls inc) (both b a))]
+      (is (= (price/spawn-parts c body at) (price/spawn-parts child body at))))
+    (is (= 1 @calls))))
 
 (deftest stay-estimates-of-several-lengths-price-a-spawn-at-the-place-once
   ;; a reprice weighs staying for the walk's time, a wait for light and a wait to heal: one spawn's hurt and death beside
@@ -1510,14 +1520,12 @@
   (let [c (ctx-of open-night)
         in (walk-risk/stay-inputs c {:x 20 :y 64 :z 0} 0)
         calls (atom [])
-        parts answer/threat-parts
-        hurt answer/threat-hurt]
+        met answer/met]
     (is (pos? (:chance in)))
-    (with-redefs [answer/threat-hurt (fn [b m caught at] (swap! calls conj [:hurt b m at]) (hurt b m caught at))
-                  answer/threat-parts (fn [b m caught at] (swap! calls conj [:parts b m at]) (parts b m caught at))]
+    (with-redefs [answer/met (fn [b m caught at] (swap! calls conj [b m at]) (met b m caught at))]
       (doseq [secs [5 60 600]] (walk-risk/stay-estimate c (assoc in :secs secs))))
     (is (seq @calls))
-    (is (= (distinct @calls) @calls) "each mob's hurt and death for a body at a place read once")))
+    (is (= (distinct @calls) @calls) "each mob's answer for a body at a place decided once, for its hurt and its death")))
 
 (defn trip-ctx
   "A ctx at the origin carrying bread loaves, its job's trip the figure (::figure, trip-fed's quote), with a booked chest of 64 bread at chest (nil:

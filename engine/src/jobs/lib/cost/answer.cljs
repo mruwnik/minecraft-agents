@@ -754,16 +754,25 @@
                   struck (assoc (dissoc body :asleep?) :absorption (max 0 (- shield hit)) :health (- (or (:health body) 20) (max 0 (- hit shield))))]
               [struck (threat-answers struck mob-name caught) hit]))))
 
+(defn met
+  "[struck answers first-hit decision] of mob-name met beside body at `at`, caught at caught: woken's, and decide's of its
+  answers: what threat-parts and threat-hurt both read."
+  [body mob-name caught at]
+  (let [[struck answers hit] (woken body mob-name caught)]
+    [struck answers hit (decide struck answers at)]))
+
+(defn met-parts
+  "threat-parts of a met answer."
+  [mob-name at [struck answers _ {:keys [answer death]}]]
+  {:chance (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
+              (if (pos? (life struck)) (answer-death-chance struck (get answers answer) at death) 1))
+   :death death})
+
 (defn threat-parts
   "{:chance :death} of mob-name met beside body at `at`: the answer-death-chance of the answer decide takes of
   woken's answers (a provoked-only mob counts threat/provoked-share) and what that death costs (decide's :death)."
   [body mob-name caught at]
-  (let [[struck answers] (woken body mob-name caught)
-        {:keys [answer death]} (decide struck answers at)
-        a (get answers answer)]
-    {:chance (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
-                (if (pos? (life struck)) (answer-death-chance struck a at death) 1))
-     :death death}))
+  (met-parts mob-name at (met body mob-name caught at)))
 
 (defn threat-chance
   "The :chance of threat-parts."
@@ -791,15 +800,19 @@
    (let [swim (/ (* (planner/swim-s (planner/depth-strider (:equipment body))) (inc wet)) planner/walk-floor)]
      (mapv (fn [{:keys [k n]}] (* (/ (inc k) (+ n 2)) (dec swim))) (settings/get settings ::unseen-water-lags)))))
 
+(defn met-hurt
+  "threat-hurt of a met answer."
+  [mob-name [struck answers hit {:keys [answer]}]]
+  (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
+     (if (pos? (life struck))
+       (let [{:keys [dies lived]} (blows-outcome struck (get answers answer))] (+ (* hit (- 1 dies)) lived))
+       0)))
+
 (defn threat-hurt
   "hp mob-name met beside body takes off it at `at`: the lived-damage of the answer decide takes of woken's answers, with
   its first hit (its death is threat-chance's); a provoked-only mob threat/provoked-share of it."
   [body mob-name caught at]
-  (let [[struck answers hit] (woken body mob-name caught)]
-    (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
-       (if (pos? (life struck))
-         (let [{:keys [dies lived]} (blows-outcome struck (get answers (:answer (decide struck answers at))))] (+ (* hit (- 1 dies)) lived))
-         0))))
+  (met-hurt mob-name (met body mob-name caught at)))
 
 (defn group-parts
   "{:chance :death :hurt :near} of mob names met together by body at `at`, caught at caught: the answer decide takes of
@@ -1027,16 +1040,38 @@
      :death (if (pos? mass) (/ (reduce + (map #(* (first %) (second %)) shares)) mass) 0)
      :hurt (min (life body) (max 0 hurt))}))
 
-(defn spawn-kill
-  "{:chance :death} of one mob spawned beside body at `at`: each its threat-parts, caught at the prior, over
-  threat/spawn-weights, the chance the weighted mean, the death each's by its weight times its chance."
+(defn spawn-mets
+  "[mob weight met] of each of threat/spawn-weights spawned beside body at `at`, caught at the prior."
   [body at]
-  (let [parts (map (fn [[mob w]] [w (threat-parts body mob nil at)]) threat/spawn-weights)
+  (mapv (fn [[mob w]] [mob w (met body mob nil at)]) threat/spawn-weights))
+
+(defn mets-kill
+  "spawn-kill of spawn-mets ms at `at`."
+  [ms at]
+  (let [parts (map (fn [[mob w m]] [w (met-parts mob at m)]) ms)
         mass (reduce + (map (fn [[w {:keys [chance]}]] (* w chance)) parts))]
     {:chance (/ mass (reduce + (vals threat/spawn-weights)))
      :death (if (pos? mass)
               (/ (reduce + (map (fn [[w {:keys [chance death]}]] (* w chance death)) parts)) mass)
               0)}))
+
+(defn mets-hurt
+  "spawn-hurt of spawn-mets ms."
+  [ms]
+  (/ (reduce + (map (fn [[mob w m]] (* w (met-hurt mob m))) ms))
+     (reduce + (vals threat/spawn-weights))))
+
+(defn spawn-kill
+  "{:chance :death} of one mob spawned beside body at `at`: each its threat-parts, caught at the prior, over
+  threat/spawn-weights, the chance the weighted mean, the death each's by its weight times its chance."
+  [body at]
+  (mets-kill (spawn-mets body at) at))
+
+(defn spawn-kill-hurt
+  "{:kill (spawn-kill) :each (spawn-hurt)} of one mob spawned beside body at `at`, each mob's answer decided once."
+  [body at]
+  (let [ms (spawn-mets body at)]
+    {:kill (mets-kill ms at) :each (mets-hurt ms)}))
 
 (defn spawns-chance
   "The chance spawns mobs (an expected count, a Poisson one) spawned beside body kill it at `at`, each at kill (default
@@ -1047,8 +1082,7 @@
 (defn spawn-hurt
   "hp one mob spawned beside body takes off it at `at`: each its threat-hurt, caught at the prior, over threat/spawn-weights."
   [body at]
-  (/ (reduce + (map (fn [[mob w]] (* w (threat-hurt body mob nil at))) threat/spawn-weights))
-     (reduce + (vals threat/spawn-weights))))
+  (mets-hurt (spawn-mets body at)))
 
 (defn spawned-hurt
   "hp spawns mobs (an expected count) each taking `each` (spawn-hurt) take off body, at most its life."

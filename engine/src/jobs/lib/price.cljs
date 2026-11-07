@@ -70,9 +70,9 @@
 
 (defn spawn-parts
   "{:kill :each} of one mob spawned beside body at `at` (cost/spawn-kill, cost/spawn-hurt), read once per body and place
-  for c's job: a check prices stays and walks there at several spawn counts."
+  for every job of c's body: checks and their children price stays and walks there at several spawn counts."
   [c body at]
-  (check-cache/keyed c ::spawn [body at] #(hash-map :kill (cost/spawn-kill body at) :each (cost/spawn-hurt body at))))
+  (check-cache/body-keyed c ::spawn [body at] #(cost/spawn-kill-hurt body at)))
 
 (defn stay-parts
   "{:hurt :dies :death} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp they take

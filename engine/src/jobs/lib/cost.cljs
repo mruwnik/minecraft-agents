@@ -539,6 +539,7 @@
 (def threat-parts answer/threat-parts)
 (def spawns-chance answer/spawns-chance)
 (def spawn-hurt answer/spawn-hurt)
+(def spawn-kill-hurt answer/spawn-kill-hurt)
 (def spawned-hurt answer/spawned-hurt)
 (def spawns-hurt answer/spawns-hurt)
 (def spawn-price answer/spawn-price)
