@@ -2,6 +2,7 @@
   "The recount of the route search's measured prices (jobs.lib.cost/search-cell-s, go-to's flood cell): times a search to its
   end over fixed scenes and prints the pooled seconds and cells to put in the prices' docs. Never fails on a time."
   (:require [cljs.test :refer [deftest is]]
+            [jobs.lib.cost :as cost]
             [jobs.lib.dig-route :as dr]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -115,3 +116,70 @@
     (line :pooled-walk (pooled [:walk-slab :walk-pillars]))
     (line :pooled-room (pooled [:room-slab :room-pillars :room-closed]))
     (is (= 5 (count rows)))))
+
+(defn bedrock-shell
+  "Bedrock one cell thick round c (c itself air): a goal no cost reaches, so a search expands the region round it."
+  [[cx cy cz :as c]]
+  (into {c "air"} (for [x (range -1 2) y (range -1 2) z (range -1 2) :when (not= [x y z] [0 0 0])] [[(+ cx x) (+ cy y) (+ cz z)] "bedrock"])))
+
+(defn scene-search
+  "A priced search from from to an unreachable goal over a fake body's world: stone below y 10, the extra cells, unseen? the cells it has not seen."
+  [extra unseen? from goal]
+  (let [p (tu/fake {:blocks (merge (box -30 0 -30 30 9 30 "stone") extra)})
+        prices (dr/body-prices p unseen?)]
+    (dr/priced-search (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) from goal (assoc prices :max-s 1000))))
+
+(defn to-cells
+  "Run a search in slices of 500 cells until it has expanded at least n: {:cells :reads :s}."
+  [run n]
+  (let [t0 (now)]
+    (loop [cells 0 reads 0]
+      (if (>= cells n)
+        {:cells cells :reads reads :s (/ (- (now) t0) 1000)}
+        (let [[a e _ rd] (run 500) cells (+ cells e) reads (+ reads rd)]
+          (if a {:cells cells :reads reads :s (/ (- (now) t0) 1000)} (recur cells reads)))))))
+
+(def big-scenes
+  "Scenes of several thousand cells: an open layer, a stone mass to dig, an unseen layer, shallow water."
+  {:open #(scene-search (bedrock-shell [0 12 6]) (constantly false) [0 10 0] [0 12 6])
+   :stone-mass #(scene-search (bedrock-shell [20 5 20]) (constantly false) [0 5 0] [20 5 20])
+   :unseen #(scene-search (bedrock-shell [0 12 6]) (constantly true) [0 10 0] [0 12 6])
+   :water #(scene-search (merge (into {} (for [x (range -30 31) y [10 11] z (range -30 31)] [[x y z] "water"])) (bedrock-shell [0 11 6])) (constantly false) [0 10 0] [0 11 6])})
+
+(defn percentile [xs q] (let [v (vec (sort xs))] (nth v (min (dec (count v)) (int (js/Math.ceil (* q (dec (count v)))))))))
+
+(deftest recount-prints-the-ceiling-spread-over-big-scenes
+  (let [rows (into {} (for [[k mk] (merge big-scenes scenes)] [k (vec (for [_ (range 5)] (to-cells (mk) 4000)))]))
+        per (fn [f] (fn [rs] (map #(/ (* 1000 (:s %)) (f %)) rs)))
+        cells-of (per :cells) reads-of (per :reads)]
+    (doseq [[k rs] rows]
+      (println (str "RECOUNT-SPREAD " k ": ms/cell median " (.toFixed (median (cells-of rs)) 4) " p90 " (.toFixed (percentile (cells-of rs) 0.9) 4)
+                    ", ms/read median " (.toFixed (median (reads-of rs)) 5) " p90 " (.toFixed (percentile (reads-of rs) 0.9) 5))))
+    (let [all (mapcat val rows)]
+      (println (str "RECOUNT-SPREAD all: ms/cell mean " (.toFixed (/ (* 1000 (reduce + (map :s all))) (reduce + (map :cells all))) 4)
+                    " p90 " (.toFixed (percentile (cells-of all) 0.9) 4) " max " (.toFixed (apply max (cells-of all)) 4)
+                    "; ms/read mean " (.toFixed (/ (* 1000 (reduce + (map :s all))) (reduce + (map :reads all))) 5)
+                    " p90 " (.toFixed (percentile (reads-of all) 0.9) 5) " max " (.toFixed (apply max (reads-of all)) 5))))
+    (is (= 8 (count rows)))))
+
+(defn pool-scene
+  "A search through a stone mass x -15..15, y 60..63, z -8..8 (bedrock round it) from an air cell at its west end to a goal in the bedrock,
+  with water pools at x in xs on the rows z -4, 0, 4 (y 62): digs beside a pool let its water in to y 62. Run to its end: {:cells :reads :s}."
+  [xs]
+  (let [pools (set (for [x xs z [-4 0 4]] [x 62 z]))
+        beside? (fn [[x y z]] (some pools [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)] [x (inc y) z] [x (dec y) z]]))
+        in-box? (fn [[x y z]] (and (<= -15 x 15) (<= 60 y 63) (<= -8 z 8)))
+        w (fn [c] (cond (#{[-15 62 0] [15 62 0]} c) "air" (pools c) "water" (in-box? c) "stone" :else "bedrock"))
+        flood {:level (fn [c] (when (beside? c) 62)) :open (delay [2 0]) :dig (fn [under _] [1 (inc under)]) :step (fn [under] [0 under])}
+        run (dr/search w [-15 62 0] [15 62 0] {:step-s 1 :flood flood})]
+    (to-end run 60)))
+
+(deftest recount-prints-the-pool-origin-join-cost
+  (let [join cost/flood-origin-join
+        scenes {:none [] :one [0] :two [0 6] :several [-12 -6 0 6 12]}
+        run (fn [] (into {} (for [[k xs] scenes] [k (pool-scene xs)])))
+        after (run)
+        before (try (set! cost/flood-origin-join (fn [a _] a)) (run) (finally (set! cost/flood-origin-join join)))]
+    (doseq [k (keys scenes)]
+      (println (str "RECOUNT-JOIN " k ": before " (:cells (before k)) " cells " (.toFixed (* 1000 (:s (before k))) 0) " ms; after " (:cells (after k)) " cells " (.toFixed (* 1000 (:s (after k))) 0) " ms")))
+    (is (= 4 (count after)))))
