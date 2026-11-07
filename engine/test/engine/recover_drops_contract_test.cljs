@@ -126,8 +126,10 @@
               timer (js/setInterval #(swap! clock + 500) 5)]
           (await (run-until-empty eng 12))
           (js/clearInterval timer)
-          (is (= [{:job "jobs.survival.recover-drops" :args {:value-overrides dt/held-values :retry true}}] (next-of seen))
-              "retry is given already: the call again is the retry"))
+          (is (= [{:job "jobs.survival.recover-drops" :args {:value-overrides dt/held-values :retry true}}]
+                 (mapv #(update % :args dissoc :worth) (next-of seen)))
+              "retry is given already: the call again is the retry")
+          (is (every? #(pos? (get-in % [:args :worth])) (next-of seen)) "and carries the worth the call had, as every submit needs one"))
         (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
           (die! eng {:pos dt/death-pos :inventory dt/junk})
           (core/submit! eng (tu/order eng job) {})

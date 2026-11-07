@@ -2,6 +2,7 @@
   "The calls a goal job's ending names under :next for the agent to submit (the agent tools print them): what would
   unblock it, then the job itself again ({:job :args :again true}), last. Each call is {:job \"jobs.x\" :args {..}}."
   (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [jobs.lib.need :as need]))
 
 (def max-fixes "Unblocking calls an ending names at most: the first ones are the nearest to the cause." 3)
@@ -50,11 +51,13 @@
     (vec (take max-fixes (distinct (concat (if (seq passed) passed (some-> e chain-fix vector)) (keep identity fixes)))))))
 
 (defn with-next
-  "data with :next: the unblocking calls, then job again with the args of c's call that differ from defs' defaults."
+  "data with :next: the unblocking calls, then job again with the args of c's call that differ from defs' defaults. A call
+  with no :worth carries c's (ctx/worth), as every submit needs one."
   [data c job defs e & fixes]
-  (let [unblock (apply unblocking data e fixes)]
-    (assoc data :next (conj unblock
-                            (assoc (call job (given defs (:args c))) :again true)))))
+  (let [w (ctx/worth c)
+        unblock (apply unblocking data e fixes)]
+    (assoc data :next (mapv #(update-in % [:args :worth] (fnil identity w))
+                            (conj unblock (assoc (call job (given defs (:args c))) :again true))))))
 
 (defn on-ending
   "A round's result e, with :next in its data (with-next over e and its :because chain) when it is an ending other

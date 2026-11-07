@@ -9,21 +9,21 @@
 (deftest a-fetch-that-failed-down-the-chain-is-named-then-the-job-again-with-its-own-args
   (let [fetch (contract/ending :condition-failed {:reason :tool :kind "hoe"} nil)
         e (contract/with-because (contract/ending :nothing-possible :no-hoe {:got 0}) fetch)]
-    (is (= [{:job "jobs.items.get-tool" :args {:kind "hoe" :explore true}}
-            {:job "jobs.farm.grow" :args {:w 5} :again true}]
-           (:next (:data (next-call/on-ending {:args {:crop "wheat" :w 5 :submitted-at {:x 0}}} e 'jobs.farm.grow defs)))))))
+    (is (= [{:job "jobs.items.get-tool" :args {:kind "hoe" :explore true :worth 90}}
+            {:job "jobs.farm.grow" :args {:w 5 :worth 90} :again true}]
+           (:next (:data (next-call/on-ending {:args {:crop "wheat" :w 5 :submitted-at {:x 0}} :quote-call {:worth 90}} e 'jobs.farm.grow defs)))))))
 
 (deftest a-childs-calls-pass-up-its-resubmit-becoming-a-plain-call
   (let [child (contract/ending :nothing-possible :no-source
                                {:next [{:job "jobs.gather.mine" :args {:item "raw_iron"}}
-                                       {:job "jobs.items.obtain" :args {:item "iron_ingot"} :again true}]})]
-    (is (= [{:job "jobs.gather.mine" :args {:item "raw_iron"}}
-            {:job "jobs.items.obtain" :args {:item "iron_ingot"}}
-            {:job "jobs.farm.grow" :args {} :again true}]
-           (:next (:data (next-call/on-ending {:args {}} child 'jobs.farm.grow defs)))))))
+                                       {:job "jobs.items.obtain" :args {:item "iron_ingot" :worth 30} :again true}]})]
+    (is (= [{:job "jobs.gather.mine" :args {:item "raw_iron" :worth 90}}
+            {:job "jobs.items.obtain" :args {:item "iron_ingot" :worth 30}}
+            {:job "jobs.farm.grow" :args {:worth 90} :again true}]
+           (:next (:data (next-call/on-ending {:args {} :quote-call {:worth 90}} child 'jobs.farm.grow defs)))))))
 
 (deftest done-carries-no-next
-  (is (nil? (:next (:data (next-call/on-ending {:args {}} (contract/ending :done nil {:got 1}) 'jobs.farm.grow defs))))))
+  (is (nil? (:next (:data (next-call/on-ending {:args {} :quote-call {:worth 90}} (contract/ending :done nil {:got 1}) 'jobs.farm.grow defs))))))
 
 (deftest a-seal-is-offered-only-for-a-cause-of-a-breach
   (let [e #(contract/ending :condition-failed % {})]

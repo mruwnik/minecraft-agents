@@ -690,11 +690,11 @@
 
 
 (deftest a-wet-ending-offers-wet-true-and-a-flooded-one-a-seal
-  (let [c {:args {:block "sand" :count 2}}
+  (let [c {:args {:block "sand" :count 2} :quote-call {:worth 40}}
         nxt #(mapv (juxt :job :args) (:next (:data (mine-trip/with-next c (contract/ending :condition-failed % {}) [1 2 3]))))]
-    (is (= [["jobs.gather.mine" {:block "sand" :count 2 :wet true}]] (nxt :wet)))
-    (is (= [["jobs.blocks.seal-opening" {:at [1 2 3]}] ["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :flooded)))
-    (is (= [["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :no-tool)))))
+    (is (= [["jobs.gather.mine" {:block "sand" :count 2 :wet true :worth 40}]] (nxt :wet)))
+    (is (= [["jobs.blocks.seal-opening" {:at [1 2 3] :worth 40}] ["jobs.gather.mine" {:block "sand" :count 2 :worth 40}]] (nxt :flooded)))
+    (is (= [["jobs.gather.mine" {:block "sand" :count 2 :worth 40}]] (nxt :no-tool)))))
 
 ;; a sand measured cheap to get: the stay beside a killer is dearer than its worth
 (def cheap-sand {:jobs.lib.cost.value/gather-counts {"sand" {:s 1 :got 10}}})
