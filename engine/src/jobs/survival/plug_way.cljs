@@ -8,6 +8,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.checks :as checks]
+            [jobs.lib.choose :as choose]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.pace :as pace]
@@ -18,6 +19,7 @@
             [jobs.lib.tools :as tools]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.respond.state :as flight]
+            [jobs.survival.shut-in-night :as shut-night]
             [jobs.survival.wall-placer :as wall-placer]))
 
 (a/defargs settings
@@ -76,13 +78,19 @@
                   :result (merge {:pos (sh-sense/feet (:primitives c)) :way way} extra)}))))
 
 (defn morning-s
-  "Seconds a night's shelter costs by day (0 unless :for :night): dug of its placed blocks dug again on the way out, at the
-  best carried tool's time for the block it places (jobs.lib.blocks/pick), and left of them left in the world at their item value."
+  "Seconds a night's shelter costs by day (0 unless :for :night): dug of its placed blocks dug again on the way out, and left
+  of them as leave-shelter treats them: dug again too when worth more than shut-in-night's ::take-back-value and the
+  body can harvest them (jobs.lib.dig-in-leave/take-back!), else left in the world at their item value. A dig is at the best
+  carried tool's time for the block it places (jobs.lib.blocks/pick)."
   [c dug left]
-  (let [b (when (= :night (:for (:args c))) (lb/pick c (flight/blocks c)))]
+  (let [p (:primitives c)
+        b (when (= :night (:for (:args c))) (lb/pick c (flight/blocks c)))]
     (if-not b
       0
-      (+ (* dug (/ (tools/clear-ms (:primitives c) b) 1000)) (* left (:value (cost/item-value [{:name b :count 1}])))))))
+      (let [dig-s (/ (tools/clear-ms p b) 1000)
+            value (:value (cost/item-value [{:name b :count 1}]))
+            back? (and (empty? (choose/cheap-blocks [b] (shut-night/take-back-value))) (tools/can-harvest? p b))]
+        (+ (* dug dig-s) (* left (if back? dig-s value)))))))
 
 (defn quote-of
   "Time of a way: 0 once enclosed, else seconds (##Inf when it cannot be done here, which shut-in drops), with :risk-s the part of

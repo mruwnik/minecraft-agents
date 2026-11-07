@@ -20,6 +20,8 @@
    ::max-reseals {:default 3 :doc "Times a night shelter is sealed again at the cell it stands in before that site counts as failed: a seal that is gone again moments after it was placed is not sealed again for ever." :spec (a/int-in 1 nil)}
    ::take-back-gate-range {:default 2 :doc "A cheap seal block this near a door or fence gate some plan wants is taken back with the dear ones: it would box the gate in." :spec (a/int-in 0 nil)}})
 
+(defn take-back-value [] (settings/get settings ::take-back-value))
+
 (defn futile-radius [] (settings/get settings ::futile-radius))
 
 (def failed-policy {:cap 5 :ttl 600000})
@@ -77,7 +79,7 @@
         start (or (case way :walls (:shaft-start (ctx/mem c)) :pit start nil) (when resealed (:start prev)))
         door (or door (when resealed (:door prev)))
         view (ctx/view c)
-        cheap (set (choose/cheap-blocks (keys spent) (settings/get settings ::take-back-value)))
+        cheap (set (choose/cheap-blocks (keys spent) (take-back-value)))
         take-back (->> (concat (when resealed (:take-back prev))
                                (for [{:keys [cell item]} placed :when (or (not (cheap item)) (near-gate? c (u/cell-pos cell)) (sh-spawn/spawn-bed-at? view (u/cell-pos cell)))] {:cell (u/cell-pos cell) :item item}))
                        (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)

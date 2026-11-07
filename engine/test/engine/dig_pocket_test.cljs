@@ -9,6 +9,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [jobs.lib.cost.danger :as cost-danger]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
@@ -339,7 +340,9 @@
         open (wall-in/open-count (c "oak_planks"))]
     (is (= (* open (settings/get way/settings ::way/night-place-s)) (get-in (q "oak_planks") [:uses :job-time 1])) "placing only, however dear the block")
     (is (= (get-in (q "dirt") [:uses :job-time 1]) (get-in (q "oak_planks") [:uses :job-time 1])))
-    (is (< (:morning-s (q "dirt")) (:morning-s (q "oak_planks"))) "the dig back is morning-s's")))
+    (is (< (:morning-s (q "dirt")) (:morning-s (q "oak_planks"))) "the dig back is morning-s's")
+    (is (= (* open (/ (tools/clear-ms (:primitives (c "oak_planks")) "oak_planks") 1000)) (:morning-s (q "oak_planks")))
+        "planks, worth more than their dig, are all dug back at dawn as leave-shelter does, not left at their worth")))
 
 (deftest a-straight-pit-in-another-zone-is-priced-with-the-trespass
   (let [zone {:name "keep" :owner "Miles" :min [-1 55 -1] :max [1 70 1]}
