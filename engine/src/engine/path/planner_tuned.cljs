@@ -523,10 +523,51 @@
     (aset (.-peaks search) 0 used)
     search))
 
+(def ^:private ^:const UNREAD 0xFFFE) ; a cell of read-once's copy not read yet (no state id; UNLOADED is 0xFFFF)
+
+(defn- read-once-view
+  [^js snapshot]
+  (let [view (js/Object.create snapshot)
+        sections (js/Map.)
+        ^js last #js {:cx 0 :sy 0 :cz 0 :ids nil}
+        section (fn [cx sy cz]
+                  (let [key (+ (* (+ (* (bit-and cx 0xFFFF) 65536) (bit-and cz 0xFFFF)) 4096) (bit-and sy 4095))
+                        ^js found (.get sections key)]
+                    (if (some? found)
+                      found
+                      (let [ids (.fill (js/Uint16Array. 4096) UNREAD)]
+                        (.set sections key ids)
+                        ids))))]
+    (set! (.-stateAt view)
+          (fn [x y z]
+            (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
+                  i (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))]
+              (when-not (and (some? (.-ids last)) (== cx (.-cx last)) (== sy (.-sy last)) (== cz (.-cz last)))
+                (set! (.-ids last) (section cx sy cz))
+                (set! (.-cx last) cx) (set! (.-sy last) sy) (set! (.-cz last) cz))
+              (let [^js ids (.-ids last)
+                    id (aget ids i)]
+                (if (== id UNREAD)
+                  (let [read (.stateAt snapshot x y z)] (aset ids i read) read)
+                  id)))))
+    view))
+
+(defn- read-once
+  "snapshot whose stateAt asks it once per cell and keeps the answer in a copy of the cell's section, when snapshot is a
+  view over another one (made with Object.create, as the walk's rock guess, walls and a memory mask are): a search reads
+  each cell many times over, and every read of a view passes each layer. The search reads what the snapshot answered
+  first, as a live snapshot masks a section once. A snapshot of its own (no view) reads as fast as the copy would."
+  [^js snapshot]
+  (let [^js proto (js/Object.getPrototypeOf snapshot)]
+    (if (or (nil? proto) (nil? (.-stateAt proto)))
+      snapshot
+      (read-once-view snapshot))))
+
 (defn- new-search
   "The search of query, its start moved off the edge of a block (start-query); initialised (init again is harmless)."
-  ^Search [^js snapshot ^js query ^js options]
-  (let [^Search search (search-from snapshot query options)]
+  ^Search [^js snapshot0 ^js query ^js options]
+  (let [snapshot (read-once snapshot0)
+        ^Search search (search-from snapshot query options)]
     (.init search)
     (let [q (start-query search query)]
       (with-start-air (if (identical? q query) search (search-from snapshot q options)) options))))
@@ -619,15 +660,20 @@
   "plan in slices (create-plan-once); a sampled search that ends on the box (sampled-box?) restarts over every column."
   [snapshot query options]
   (let [inner (volatile! (create-plan-once snapshot query options))
-        exact (volatile! false)]
+        exact (volatile! false)
+        ;; the result sampled-box? was read from: a result scans every node (frontierNode), so it is made once
+        checked (volatile! nil)]
     #js {:step (fn [max-expansions]
                  (let [^js p @inner
                        ^boolean done (.step p max-expansions)]
-                   (if (and done (not ^boolean @exact) (sampled-box? (.result p) query options))
-                     (do (vreset! exact true)
-                         (vreset! inner (create-plan-once snapshot query (exact-options options)))
-                         false)
+                   (if (and done (not ^boolean @exact))
+                     (let [r (.result p)]
+                       (if (sampled-box? r query options)
+                         (do (vreset! exact true)
+                             (vreset! inner (create-plan-once snapshot query (exact-options options)))
+                             false)
+                         (do (vreset! checked r) true)))
                      done)))
-         :result (fn [] (.result ^js @inner))
+         :result (fn [] (let [r @checked] (if (some? r) r (.result ^js @inner))))
          :progress (fn [] (.progress ^js @inner))
          :endSweep (fn [] (.endSweep ^js @inner))}))

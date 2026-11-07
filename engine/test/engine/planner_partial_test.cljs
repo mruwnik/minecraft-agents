@@ -271,6 +271,30 @@
     ;; each column read stops at its ground; the cap is 32 columns whatever the goal set
     (is (< @reads (* 32 400)))))
 
+(deftest a-search-over-a-view-asks-it-once-per-cell
+  (let [base (pf/snapshot {:fill [(stone -2 -2 30 30 70)]})
+        view (js/Object.create base)
+        reads (js/Map.)
+        _ (set! (.-stateAt view) (fn [x y z]
+                                   (let [k (str x "," y "," z)] (.set reads k (inc (or (.get reads k) 0))))
+                                   (.stateAt base x y z)))
+        r (pf/plan view {:from plateau :goal (near 20 70 20)} {:goalFlood 0})]
+    (is (= "found" (:status r)))
+    (is (= 1 (apply max (es6-iterator-seq (.values reads)))) "a view (the walk's rock guess, a memory mask) is read through once a cell")))
+
+(deftest a-plan-in-slices-makes-its-result-once
+  (let [snap (pf/snapshot {:fill island})
+        reads (atom 0)
+        orig (.-stateAt snap)
+        _ (set! (.-stateAt snap) (fn [x y z] (swap! reads inc) (.call orig snap x y z)))
+        query {:from plateau :goal (near 28 66 2)}
+        whole (do (pf/plan snap query {:goalFlood 0}) @reads)
+        _ (reset! reads 0)
+        ^js p (planner/create-plan snap (clj->js query) (pf/options-js {:goalFlood 0}))]
+    (while (not (.step p 50)))
+    (is (= "partial" (.-status (.result p))))
+    (is (= whole @reads) "the result's scan of the nodes reads the snapshot once, as plan's does")))
+
 (deftest an-unsampled-column-goal-below-the-box-is-still-found
   (let [snap (pf/snapshot {:fill steps-down})
         ;; 40 column goals: the sample reads the even ones (over void); only goal 1 has ground to walk to
