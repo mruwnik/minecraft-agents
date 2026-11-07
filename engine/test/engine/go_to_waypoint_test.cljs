@@ -20,7 +20,6 @@
 
 (defn across [{:keys [x z]} [gx gz]] (js/Math.hypot (- gx x) (- gz z)))
 
-(defn end-pos [moved] (:to (last moved)))
 
 ;; flat ground at feet 64 (x -2..30, z -6..6), a cliff at x 31 up to a plateau at feet 84 (x 31..70); a ramp beside the
 ;; line, z 4..6, climbs from feet 64 at x 30 to feet 84 at x 50
@@ -53,17 +52,17 @@
     (tu/run-async done
       (fn ^:async t []
         (let [blocks (merge (box -2 63 -3 20 63 3 "stone") (box 30 63 -3 70 83 3 "stone"))
-              {:keys [out eng ticks]} (await (settings/with-settings {:jobs.lib.walk.watch/max-learned 1000}
-                                                 #(go! {:blocks blocks :light [15 0] :self {:pos {:x 0 :y 64 :z 0}}}
-                                                       {:pos [60 0] :range 0})))
+              {:keys [out eng ticks seen]} (await (settings/with-settings {:jobs.lib.walk.watch/max-learned 1000}
+                                                      #(go! {:blocks blocks :light [15 0] :self {:pos {:x 0 :y 64 :z 0}}}
+                                                            {:pos [60 0] :range 0})))
               moved (map :data (mem/entries (mem/view (:store eng)) :moved))
-              at-edge (count (drop-while #(< (:x (:to %)) 19) moved))]
+              edge-looks (filter #(and (= :replan (:kind %)) (<= 20 (first (:at %)))) @seen)]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (keyword? (:why @out)) (pr-str @out))
           (is (< ticks 30) "the call ends")
-          (is (<= 18 (:x (end-pos moved)) 20) "the waypoints led to the gap's edge")
-          ;; from the walk to the edge on: it, a walk per way-look, the re-aim, the column looks, the blocked tries
-          (is (<= at-edge (+ 1 (count (gts/way-looks)) 1 gaim/max-column-looks (gts/max-blocked)))
+          (is (seq edge-looks) "the waypoints led to the gap's edge, where the walk looked down it")
+          ;; the walks: one to the edge, a walk per way-look, the re-aim, the column looks, the blocked tries
+          (is (<= (count moved) (+ 1 (count (gts/way-looks)) 1 gaim/max-column-looks (gts/max-blocked)))
               (pr-str (map (juxt (comp :x :to) :status) moved))))))))
 
 (defn ^:async waypoint-walk!

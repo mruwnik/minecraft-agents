@@ -163,6 +163,19 @@
     (is (= [27.5 64 0.75] (steer/sub-of w {:x 27.5 :y 64 :z 0.75})) "its cell [27 64 0] has no floor; its box is over z 1's")
     (is (nil? (steer/sub-of w {:x 27.5 :y 64 :z 1.5})) "a body over its own cell's floor is kept as the cell")))
 
+(deftest a-body-cuts-a-corner-past-a-hole-with-no-floor-in-reach-while-its-box-is-over-a-floor
+  (let [corner (steer/step-body {:blocks (dissoc cut [27 59 0])} {:x 27.4 :y 64 :z 1.05 :vy 0} {:forward true} (/ js/Math.PI 4))]
+    (is (= [27 64 0] (mapv js/Math.floor [(:x corner) (:y corner) (:z corner)])) "a bottomless hole is no wall")
+    (is (not (:collided corner)))))
+
+(deftest a-sneaking-body-stops-at-the-edge-of-a-hole-with-no-floor-in-reach
+  (let [w {:blocks (dissoc cut [27 59 0])}
+        at {:x 27.5 :y 64 :z 0.75 :vy 0} ; over the hole, its box still over the floor at z 1
+        sneak (steer/step-body w at {:forward true :sneak true} 0)
+        walk (steer/step-body w at {:forward true} 0)]
+    (is (= 0.75 (:z sneak)) "one more step would take the box off the floor: held at the edge")
+    (is (< (:z walk) 0.7) "walking on, it goes over")))
+
 (deftest a-ladder-climbs-with-jump-and-does-not-climb-without-it
   (async done
     (tu/run-async done

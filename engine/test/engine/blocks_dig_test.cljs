@@ -411,14 +411,15 @@
           (is (:dug (await (tu/child-outcome eng job {:pos at :on-fluid :fail} 5)))))))))
 
 (deftest a-block-the-walk-cannot-reach-waits-unreachable
+  ;; at the foot of a 1x1 shaft, deeper than any fall the walk takes
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (setup {:self body :blocks {"3,55,0" "dirt"}})
-              e (:ending (await (tu/child-outcome (:eng env) job {:pos [3 55 0]} 15)))
+        (let [env (setup {:self body :blocks {"3,30,0" "dirt"}})
+              e (:ending (await (tu/child-outcome (:eng env) job {:pos [3 30 0]} 15)))
               r (:cause e)]
           (is (= :nothing-possible (:kind e)))
-          (is (= {:reason :unreachable :pos {:x 3 :y 55 :z 0}} (select-keys r [:reason :pos])))
+          (is (= {:reason :unreachable :pos {:x 3 :y 30 :z 0}} (select-keys r [:reason :pos])))
           (is (keyword? (:why r)))
           (is (empty? (calls (:p env) "dig"))))))))
 

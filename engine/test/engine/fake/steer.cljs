@@ -3,7 +3,7 @@
   :self {:pos [x y z]} :controls {} :unreachable #{[x y z]} :no-path #{[x y z]}}.
 
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
-  controls and turns the head (world :yaw/:pitch) to its yaw and pitch, then moves 0.2 blocks (0.26 sprinting, 0.06 sneaking) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
+  controls and turns the head (world :yaw/:pitch) to its yaw and pitch, then moves 0.2 blocks (0.26 sprinting, 0.06 sneaking, never off an edge) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
   next floor once its box (half-width) has left the floor it is on (supported?), and climbs or descends a ladder. A
   move into a cell holding a fence, gate, wall, pane or bamboo is
   judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post or over a drop's edge (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
@@ -140,6 +140,14 @@
         sz (reduce + (map js/Math.cos dirs))]
     (when (> (js/Math.hypot sx sz) 1e-6) (js/Math.atan2 sx sz))))
 
+(defn sneak-held
+  "moved, or body when it sneaks and moved's box would be over no floor while body's is over one: the game's sneak holds
+  the body at the edge."
+  [w body moved {:keys [sneak]}]
+  (if (and sneak (supported? w (:x body) (:y body) (:z body)) (not (supported? w (:x moved) (:y moved) (:z moved))))
+    (assoc body :collided false)
+    moved))
+
 (defn horizontal
   "The body after the horizontal part of a tick. A move whose cell holds a narrow block (a post, gate, wall, pane or
   bamboo) is judged by the body's box against the blocks' boxes, as the planner's space judges it; a blocked move
@@ -171,8 +179,8 @@
             ;; a swimmer moves through open water, or over its surface, with no floor under it
             (and (or (wet-y? cell) (wet-y? (dec cell))) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
             (assoc body :x x :z z :collided false)
-            ;; a drop waits until the box has left the floor it is on
-            (and (< rise 0) (supported? w x (:y body) z) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
+            ;; a drop waits until the box has left the floor it is on; a hole with no floor in reach is no wall either
+            (and (or (nil? g) (< rise 0)) (supported? w x (:y body) z) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
             (assoc body :x x :z z :collided false)
             (or (<= rise step) (and (<= rise jump-step) jump)) (assoc body :x x :y g :z z :collided false)
             :else (assoc body :collided true))))))
@@ -220,7 +228,7 @@
   "One tick of the walker: horizontal then vertical. :vx and :vz are the tick's horizontal move (blocks a tick, as
   mineflayer's velocity)."
   [w body controls yaw]
-  (let [moved (horizontal w body controls yaw)]
+  (let [moved (sneak-held w body (horizontal w body controls yaw) controls)]
     (vertical w (assoc moved :vx (- (:x moved) (:x body)) :vz (- (:z moved) (:z body))) controls)))
 
 (declare start-body)
