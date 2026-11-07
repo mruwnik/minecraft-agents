@@ -542,3 +542,9 @@
         (is (< 0 edge 0.5))))
     (is (seq @walked))
     (is (= #{1} (set (vals @walked))) "no cell walked twice")))
+
+(deftest unseen-key-is-unique-for-a-bigger-table
+  (let [qn 5 dn 20 dyn 12
+        keys (for [y [-3 0 1 64] adj (range 3) qb (range qn) lit? [true false] di (range dn) dyb (range dyn)]
+               (base-rates/unseen-key qn dn dyn y adj qb lit? di dyb))]
+    (is (= (count keys) (count (set keys))) "a table with a 5th q bucket, 20 distances and 12 dy buckets keeps every bucket its own key")))

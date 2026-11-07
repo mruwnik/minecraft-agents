@@ -174,6 +174,12 @@
   [^js edges v]
   (loop [i 0] (if (and (< i (alength edges)) (>= v (aget edges i))) (recur (inc i)) i)))
 
+(defn unseen-key
+  "One number per (y, adj, qb, lit?, di, dyb) for a table of qn q buckets, dn distances and dyn dy buckets; y is a whole number.
+  A string key was most of a call's cost, and a search prices thousands of cells."
+  [qn dn dyn y adj qb lit? di dyb]
+  (+ (* y 6 qn dn dyn) adj (* 3 (+ qb (* qn (+ (if lit? 1 0) (* 2 (+ di (* dn dyb)))))))))
+
 (defn unseen-solid
   "The chance a cell a body whose feet are at height y has not seen is solid, dy blocks over the feet, d blocks
   (Chebyshev) from the nearest frontier cell (seen open beside unseen: where sight was cut by light or reach, not by a
@@ -189,8 +195,7 @@
          dyb (edges-under unseen-dy-edges dy)
          di (dec (-> d (max 1) (min unseen-d-max)))
          adj (cond (nil? beside-solid?) 2 beside-solid? 1 :else 0)
-         ;; one number: a string key was most of a call's cost, and a search prices thousands of cells; y is a whole number
-         key (+ (* y 4096) adj (* 3 (+ qb (* 4 (+ (if lit? 1 0) (* 2 (+ di (* 16 dyb))))))))]
+         key (unseen-key (inc (alength unseen-q-edges)) unseen-d-max (inc (alength unseen-dy-edges)) y adj qb lit? di dyb)]
      (or (.get unseen-kept key)
          (let [at [(if lit? :lit :dark) di qb dyb adj]
                {:keys [a b]} (prior-at unseen-sections y #(first (get-in % at)) #(second (get-in % at)))
