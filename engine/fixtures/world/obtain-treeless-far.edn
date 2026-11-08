@@ -1,8 +1,8 @@
-;; Treeless start: the only tree stands 40 blocks east. obtain oak_log with :explore walks and looks as far as the find is worth
-;; (the caller's :worth, else a log's worth to the body, which pays for a few blocks only) until the tree is seen, then fells it.
+;; The only tree stands 40 blocks east, seen from the start. obtain oak_log with :explore walks to it and fells it as far as the walk
+;; is worth (the caller's :worth, else a log's worth to the body, which pays for a few blocks only).
 ;; Plot 220 x 64, open sky over a glowstone floor (lit at any hour); body at the west end, tree at x 40 z 32.
-;; Should-succeed: with a :worth that pays for the walk the log is got; a kit (iron pickaxe, no stone or tree in sight) prices the
-;; search of its pickaxe's logs at the kit's worth, so the tree is felled and the wooden pickaxe for the stone is next. Should-fail: a log is cheap, 40 blocks off is past what it pays for, so obtain waits :not-worth (the search priced above the log's worth) and does not walk.
+;; Should-succeed: with a :worth that pays for the walk the log is got; a kit (iron pickaxe, no stone in sight) prices
+;; the walk to its pickaxe's logs at the kit's worth, so the tree is felled and the wooden pickaxe for the stone is next. Should-fail: a log is cheap, 40 blocks off is past what it pays for, so obtain waits :not-worth (the walk to the tree priced above the log's worth) and does not walk.
 {:defaults
  {:tags [:items :obtain :explore :large :jobs]
   :time :any
