@@ -1,0 +1,20 @@
+;; Two sand blocks, one 5 blocks east of the body and one 8 west. The body remembers being hit down beside the east one (a :hurt entry with :pos).
+;; Should-succeed: a hit that left 4 hp counts like a death spot, so the mine takes the farther west sand and leaves the east one standing.
+;; Should-fail: a hit that left 12 hp is no near-death, so the nearer east sand is mined and the west one stays.
+;; Old code (before 647456054) ignored :hurt entries for places, so the first case would mine the nearer east sand.
+{:defaults
+ {:tags [:mine :jobs :memory :survival] :time :any
+  :plot {:height 8}
+  :blocks [[:set [22 0 16] "sand"] [:set [8 0 16] "sand"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "sand" :count 1 :radius 14 :ways #{:seen}})]]
+  :limit-s 100}
+ :cases
+ [{:name "a-sand-by-a-near-death-is-mined-last"
+   :memory [{:kind :hurt :data {:health 4 :amount 3 :attacker {:name "skeleton"} :pos #xyz [21.5 0 16.5]}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:not-block [8 0 16] "sand"] [:block [22 0 16] "sand"] [:item "sand" [:>= 1]]]}
+  {:name "a-sand-by-a-small-hit-is-mined-first"
+   :memory [{:kind :hurt :data {:health 12 :amount 3 :attacker {:name "skeleton"} :pos #xyz [21.5 0 16.5]}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:not-block [22 0 16] "sand"] [:block [8 0 16] "sand"] [:item "sand" [:>= 1]]]}]}
