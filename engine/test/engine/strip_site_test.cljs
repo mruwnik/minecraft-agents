@@ -416,11 +416,16 @@
           (is (= [[:impossible :bad-args] [:impossible :bad-args]]
                  (mapv (juxt (comp :kind :ending) :reason) [no-site no-at]))))))))
 
+(defn pack
+  "Nine zombies by the site: a crowd the stay's cheapest answer to costs more than a hand order (one alone is answered within it)."
+  []
+  (mapv (fn [i] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}) (range 9)))
+
 (deftest a-danger-near-holds-the-site-back-from-the-start
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (setup :triggers {} :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}])
+        (let [env (setup :triggers {} :entities (pack))
               r (await (wait! env args))]
           (is (= :not-done r) "the job yields every round")
           (is (= :hostile-near (:reason (first (filter #(= :waiting (:kind %)) @(:seen env))))) "waiting with its reason")
@@ -431,10 +436,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env-at (atom nil)
-              zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y -27 :z 13} :health 20 :visible true}
               env (setup :triggers {}
                          :results {'jobs.strip.corridor (fn [_]
-                                                          (fake/add-entity! (:p @env-at) zombie)
+                                                          (doseq [z (pack)] (fake/add-entity! (:p @env-at) z))
                                                           (core/cancel! (:eng @env-at) (first (:list (core/state (:eng @env-at)))))
                                                           {:status :done :taken {} :new-segments []})})
               _ (reset! env-at env)]

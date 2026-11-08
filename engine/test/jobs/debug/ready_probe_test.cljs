@@ -9,7 +9,7 @@
             [jobs.lib.reach.room :as reach-room]))
 
 (defn kind [args world]
-  (first ((:safe? (get registry/jobs 'jobs.debug.ready-probe)) (assoc (rt/ctx-of world) :args args))))
+  (first ((:safe? (get registry/jobs 'jobs.debug.ready-probe)) (assoc (rt/dark-ctx-of world) :args args))))
 
 (deftest safe-binds-the-checker-its-args-choose
   (rt/lit 0 15

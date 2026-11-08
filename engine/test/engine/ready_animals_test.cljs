@@ -35,9 +35,9 @@
                               {:id "far" :box [[15 64 0] [15 64 0]] :herd {:mob "cow" :target 2}}]}})
 
 (defn status
-  "The status of check over a night hut, the body inside, the args and the plans given."
+  "The status of check over a night hut, the body inside, the args and the plans given, for a long stay on a cheap goal (rt/dark-ctx-of)."
   [check args & [world]]
-  (let [c (-> (rt/ctx-of (or world rt/night-hut))
+  (let [c (-> (rt/dark-ctx-of (or world rt/night-hut))
               (assoc :args args)
               (assoc-in [:engine :world] (world/of-data plans {})))]
     (rt/lit 0 15 #(first (check c)))))

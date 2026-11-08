@@ -23,7 +23,7 @@
 (def inside [5 64 0])
 (def outside [15 64 0])
 
-(defn ctx [world args] (assoc (rt/ctx-of world) :args args))
+(defn ctx "A long stay on a cheap goal (rt/dark-ctx-of): one whose worth buys no long stay in the dark." [world args] (assoc (rt/dark-ctx-of world) :args args))
 
 (defn kind [check world args] (first (check (ctx world args))))
 
@@ -81,9 +81,9 @@
       "an 8-cell corridor, an unread site (one segment) and a cart each stay their quote's mean, not risk/work-s :long"))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
-(def zombie-day (assoc rt/open-night :time st/noon :entities [zombie]))
+(def zombie-day (assoc rt/open-night :time st/noon :entities (rt/pack zombie)))
 
-(deftest a-corridor-with-a-reachable-zombie-is-later-through-safe
+(deftest a-corridor-with-a-reachable-pack-is-later-through-safe
   (is (= [:later :ok]
          [(kind corridor/safe? zombie-day {:segment segment})
           (rt/lit 0 15 #(kind corridor/safe? (dissoc zombie-day :entities) {:segment segment}))])))
