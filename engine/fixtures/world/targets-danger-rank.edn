@@ -1,6 +1,6 @@
 ;; Card 9ce04add: jobs.lib.targets ranks candidates with go-to's own prices (damage weight, health scale): fell-tree with two trees picks the one
 ;; whose walk is not past a hostile. Tree A is nearer (9.5 east) with a zombie (NoAI, helmeted) at its foot; tree B is farther (10.5 west), clear. The body stands 9 off the zombie, outside the hostile-near radius, else fell-tree waits.
-;; The job starts at once, before the zombie is sensed: it walks toward tree A, and when the zombie holds that walk it chooses again and takes tree B.
+;; The job starts at once, before the zombie is sensed: it walks toward tree A, and when the zombie holds that walk it chooses again and takes tree B. The body ends beside the zombie (a walk is not re-gated mid-way), where a walk away is held by an adjacent hostile: the hostile-near reflex deals with it and the job goes on to tree B.
 ;; Should-succeed: tree B is felled first (its base log gone), tree A stands. The live risk is the margin between the prices.
 {:defaults
  {:tags [:forestry :fell-tree :planner]
@@ -10,6 +10,7 @@
   :blocks [[:fill [22 0 16] [22 4 16] "oak_log"] [:fill [20 4 14] [24 6 18] "oak_leaves[persistent=true]"] [:fill [22 4 16] [22 5 16] "oak_log"]
            [:fill [2 0 16] [2 4 16] "oak_log"] [:fill [0 4 14] [4 6 18] "oak_leaves[persistent=true]"] [:fill [2 4 16] [2 5 16] "oak_log"]]
   :body {:at [12.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :register [{:trigger :hostile-near}]
   :limit-s 120}
  :cases
  [{:name "tree-past-a-zombie-is-felled-after-the-clear-one"
