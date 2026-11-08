@@ -10,15 +10,16 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
-            [jobs.lib.vehicle :as vehicle]))
+            [jobs.lib.vehicle :as vehicle]
+            [jobs.movement.go-to.tuning :as tuning]))
 
 (def doc
   "Get off whatever the body rides (boat, raft, minecart, mount). Ends at once when on foot.
-  Faces :toward when given, else the nearest dry cell within ::dry-radius of the vehicle
+  Faces :toward when given, else the nearest dry cell within go-to's dry-radius of the vehicle
   (feet and head air over a solid, non-fluid block), else leaves without a look. The server picks the exit from that look.
   Then it uses the dismount primitive (sneak).
-  A landing in water with a dry cell within ::dry-radius of it is not the end: the body walks (jobs.movement.go-to, swimming) onto that cell.
-  On success the call is done with data {:pos :landed}, :landed being :dry, or :in-water only when no dry cell was near.
+  A landing in water is not the end: the body walks (jobs.movement.go-to, swimming) out of the water, go-to picking the nearest dry stand it sees, within the call's worth and ::job-time-s.
+  On success the call is done with data {:pos :landed}, :landed being :dry, or :in-water only when go-to found no dry stand.
   A walk that does not arrive ends nothing-possible :not-landed (the go-to ending as :because).
   A failed dismount is retried in the same run after ::retry-wait-s. After ::max-tries it ends nothing-possible :dismount-failed
   (data :tries :status), with the body still aboard. On foot at the start the call is refused (condition :not-mounted). Never :continue. The :mounted trigger runs it (cooldown persistence: a body still aboard is tried again 30 s later).")
@@ -35,8 +36,7 @@
 (a/defargs settings
   {::job-time-s {:default 30 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-tries {:default 8 :doc "Dismounts tried before giving up." :spec (a/int-in 1 nil)}
-   ::retry-wait-s {:default 0.1 :doc "Seconds waited after a failed dismount." :spec (a/num-in 0 nil)}
-   ::dry-radius {:default 2 :doc "Dry cells this many blocks (horizontally) from the vehicle are faced." :spec (a/num-in 0 nil)}})
+   ::retry-wait-s {:default 0.1 :doc "Seconds waited after a failed dismount." :spec (a/num-in 0 nil)}})
 
 (def meta {:category :reflex})
 
@@ -67,7 +67,7 @@
   "The yaw to face when getting off, or nil."
   [c v]
   (let [from (vehicle-pos c v)
-        target (or (:toward (:args c)) (vehicle/nearest-dry-cell (:primitives c) from (settings/get settings ::dry-radius)))]
+        target (or (:toward (:args c)) (vehicle/nearest-dry-cell (:primitives c) from (tuning/dry-radius)))]
     (when target (vehicle/yaw-toward from (vehicle/centre target)))))
 
 (defn landed-in-water?
@@ -78,15 +78,17 @@
     (if (seq names) (boolean (some #{"water"} names)) (boolean flag))))
 
 (defn ^:async walk-ashore
-  "The swim from a water landing onto the dry cell kept in job memory: :continue while it goes on, else the ending."
-  [c cell]
-  (let [r (await (child/call-walk* c :ashore {:pos cell :range 0 :ways #{:walk :clear-seal}}))]
+  "The swim from a water landing out of the water: go-to leaves the water for the nearest dry stand it sees. :continue while it goes on, else the ending."
+  [c landing]
+  (let [p (:primitives c)
+        r (await (child/call-walk* c :ashore {:pos landing :range (tuning/dry-radius) :ways #{:walk :clear-seal}}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :ashore)
-          (if (= :done (:kind r))
-            (ctx/end c :done nil {:pos (u/self-pos c) :landed :dry})
-            (ctx/end c :nothing-possible :not-landed {:cell cell :walk (:cause r)}))))))
+          (cond
+            (not= :done (:kind r)) (ctx/end c :nothing-possible :not-landed {:cell landing :walk (:cause r)})
+            (landed-in-water? p (u/self-pos c) (.-inWater (.self p))) (ctx/end c :done nil {:pos landing :landed :in-water})
+            :else (ctx/end c :done nil {:pos (u/self-pos c) :landed :dry}))))))
 
 (defn ^:async step
   "One dismount try; :again after a failed one (the tries are kept in job memory), else the ending."
@@ -103,11 +105,10 @@
         (if (= "dismounted" (.-status r))
           (let [self (.self p)
                 pos (u/pos-of (.-pos r))
-                wet? (landed-in-water? p pos (.-inWater self))
-                dry (when wet? (vehicle/nearest-dry-cell p pos (settings/get settings ::dry-radius)))]
-            (if dry
-              (do (ctx/update-mem! c assoc :ashore dry) :again)
-              (ctx/end c :done nil {:pos pos :landed (if wet? :in-water :dry)})))
+                wet? (landed-in-water? p pos (.-inWater self))]
+            (if wet?
+              (do (ctx/update-mem! c assoc :ashore pos) :again)
+              (ctx/end c :done nil {:pos pos :landed :dry})))
           (let [tries (inc (or (:tries (ctx/mem c)) 0))]
             (ctx/update-mem! c assoc :tries tries)
             (if (< tries max-tries)
