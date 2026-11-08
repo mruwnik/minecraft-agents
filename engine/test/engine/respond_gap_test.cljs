@@ -142,10 +142,11 @@
       (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:plug-dig] true))))))
 
 (deftest a-gap-that-fails-refused-falls-back-to-the-usual-response
+  ;; the flight takes the first good-enough way (Q147): its first step leaves the skeleton's line of fire
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (no-gap-run {:inventory [cobble8 pickaxe]
                                                  :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}
-                                                [:gap :gap :pocket :step :step] false))]
+                                                [:gap :gap :pocket :step] false))]
           (is (some #(and (= :child_ended (:kind %)) (= :gap (:slot %)) (= :refused (:reason %))) @seen) "the gap job ran and placed nothing"))))))

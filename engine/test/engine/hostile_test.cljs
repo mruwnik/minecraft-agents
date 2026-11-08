@@ -1090,7 +1090,8 @@
   ;; facing the skeletons, the body had not seen the cave wall beside them: a cover end in that unseen rock, a walk from
   ;; their bows whose walk back from a dead end there was priced as out of their fire, was walked to whole and won over
   ;; the way to the tunnel. Facing north, a look turned to the cave wall but memory took only the cell looked at: the
-  ;; search after it planned through the wall
+  ;; search after it planned through the wall. The search stops at the first good-enough way (Q147): the seen tunnel
+  ;; comes first, the covers in unseen rock need not be planned at all
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1102,12 +1103,9 @@
             (dotimes [_ 3] (await (core/tick! eng)))
             (let [[x _ z] (:target (first (filter #(= :retreat.target (:kind %)) @seen)))
                   {:keys [ends picked]} (first (filter #(= :retreat.search (:kind %)) @seen))
-                  best (apply max-key :score (remove :unseen ends))
-                  unseen (filter :unseen ends)]
+                  best (apply max-key :score (remove :unseen ends))]
               (is (and (< 16 x) (= 16 z)) (str "yaw " yaw ": the first step is east along the tunnel's row: " x " " z))
-              (is (= picked (:at best)) (str "yaw " yaw ": the best seen end is picked"))
-              (is (and (seq unseen) (every? #(< (:score %) (:score best)) unseen))
-                  (str "yaw " yaw ": each cover in the unseen rock pays its dead end, so scores under the seen way: " (mapv (juxt :score :dead-end) unseen) " vs " (:score best))))))))))
+              (is (= picked (:at best)) (str "yaw " yaw ": a seen end is picked, no cover in the unseen rock: " (pr-str ends))))))))))
 
 
 ;; Wicken j3766: at 13 hp with a wooden sword the fight walked to a seen skeleton, beside a zombie heard further on

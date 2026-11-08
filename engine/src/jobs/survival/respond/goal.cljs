@@ -106,13 +106,14 @@
       (not (contains? #{nil :unjudged} why)) why
       (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
-(declare under-floor? margin fire-price)
+(declare under-floor? margin fire-price choose-opts)
 
 (defn ^:async judge!
   "What the flight makes of its goal and homes (positions; room the closed room's start among them, nil none) this step, from one flee search (flee-search/search!, part of the step's one search, room-lib/step-meter, from
   chasers, the goal and homes named, covered? as cover-fn, a dead end priced with covers, a fn of no argument giving the
   cornered step's covers where the body stands, respond.options/cornered-covers, built at a dead end only, the walks back
-  from dead ends priced with the fire of threats' shooters, fire-price, near-ring (blocks, nil none) the search's near ring):
+  from dead ends priced with the fire of threats' shooters, fire-price, near-ring (blocks, nil none) the search's near ring;
+  its far ring stops at the first good-enough way, by choose-opts):
   {:goal (active) :why (:given-up, else verdict; nil: it may go there) :home (safe-home of homes) :room :home-why (of the
   last of homes) :ends (the search's scored ends)}."
   [c threats homes room covered? covers near-ring]
@@ -122,7 +123,8 @@
         chs (chasers c)
         m (room-lib/step-meter c)
         ends (await (search/search! c chs named {:covered? covered? :y-margin (margin c) :covers covers :covers-key (:tried (ctx/mem c))
-                                               :fire (:route (fire-price c threats covered?)) :meter m :near near-ring}))
+                                               :fire (:route (fire-price c threats covered?)) :meter m :near near-ring
+                                               :enough (delay (choose-opts c threats covered? nil))}))
         _ (room-lib/spent-meter! c m)
         home (safe-home ends homes)]
     {:goal goal :home home :room room :ends ends :home-why (home-why ends (last homes))

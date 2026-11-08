@@ -64,6 +64,23 @@
           (is (= 2 (:x end)) (str "the step turns into the branch north: " (pr-str end)))
           (is (neg? (:z end)) (pr-str end)))))))
 
+(deftest a-flee-search-asked-for-a-good-enough-way-stops-at-the-first-open-one
+  ;; Q147: good enough, not the best
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [search (fn ^:async search [opts]
+                       (await (search/search! (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+                                              [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] opts)))
+              whole (await (search {}))
+              enough (await (search {:enough {}}))
+              e (search/choose enough {})]
+          (is (= 12 (:planned (meta whole))) (pr-str (meta whole)))
+          (is (:enough? (meta enough)) (pr-str (meta enough)))
+          (is (= 1 (:planned (meta enough))) "the first way planned ends the ring")
+          (is (and (:open? e) (neg? (:z (:end e)))) (str "the way out turns north: " (pr-str (:end e))))
+          (is (< (- (:arrive e) (:score e)) (:staying (meta enough))) "its price is below staying's"))))))
+
 (deftest a-flee-search-is-bounded-by-the-nodes-its-ring-expands
   ;; the old search was cut by the clock: a slow machine planned fewer ways
   (async done
