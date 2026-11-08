@@ -206,6 +206,9 @@
     (is (< 0 ore (cost/worth-to nil ["raw_iron"] nil)) "an unseen ore is tunnelled to: its expected search spend, under what one usually costs, no stair up")
     (is (< (cost/worth-to nil ["oak_log"] nil) log) "a tree is climbed toward before any search: the stair is in its price")))
 
+(deftest a-buried-bodys-ore-search-wanted-for-35-s-starts-where-a-stair-priced-in-would-refuse
+  (is (nil? (:not-worth (buried-search "raw_iron" 35))) "search about 25 s; the stair up adds over 20 s more (the log's price less its usual cost)"))
+
 (deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-its-usual-cost-and-stair-but-not-its-ore-search
   (is (nil? (:not-worth (buried-search "raw_iron" (+ (cost/worth-to nil ["raw_iron"] nil) 1)))) "the ore is tunnelled to: what it usually costs is within the worth")
   (is (= :not-worth (:reason (:not-worth (buried-search "oak_log" (+ (cost/worth-to nil ["oak_log"] nil) 1))))) "the log search adds the stair up"))
@@ -231,11 +234,12 @@
 
 (defn seen-check
   "obtain/not-worth of a root call for 1 item by a body that sees the blocks ({cell name}), and nothing else."
-  [item ways blocks]
+  [item ways blocks & [worth]]
   (let [p (tu/seeing-all (tu/fake-on-floor {:blocks blocks}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
-        c (rooted {:primitives p :view (constantly view) :args {:item item :count 1 :ways ways :explore false :ignore-zones? true}})]
-    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])
+        c0 {:primitives p :view (constantly view) :args {:item item :count 1 :ways ways :explore false :ignore-zones? true}}
+        c (if worth (rooted c0 worth) (rooted c0))]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly []) need/trees-unreachable? (constantly false)
                   need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
       (obtain/not-worth c))))
 
@@ -244,6 +248,11 @@
 (deftest a-root-obtain-gathers-a-seen-source-only-within-what-the-item-is-worth
   (is (nil? (seen-sand-check 3)) "a few blocks off: within the walk a terrain block usually takes")
   (is (= :not-worth (:reason (seen-sand-check 40))) "at the edge of what is seen: far dearer than sand usually is"))
+
+(deftest a-log-wanted-for-six-seconds-is-felled-near-but-the-walk-of-forty-blocks-waits
+  (let [tree (fn [x] (into {} (for [y (range 64 68)] [(str x "," y ",0") "oak_log"])))]
+    (is (nil? (seen-check "oak_log" #{:gather} (tree 3) 6)) "obtain-treeless-far's control: a tree beside the body is within 6 s")
+    (is (= :not-worth (:reason (seen-check "oak_log" #{:gather} (tree 40) 6))) "the walk of 40 blocks (12.75 s) is not")))
 
 (deftest a-root-wooden-pickaxe-is-worth-the-walk-to-a-tree-at-the-edge-of-sight
   (is (nil? (seen-check "wooden_pickaxe" #{:craft :gather} (into {} (for [y (range 64 68)] [(str "40," y ",0") "oak_log"]))))
@@ -295,7 +304,7 @@
     (is (= iron-worth (:price (ore 1200))) "the search is never dearer than what one raw iron usually costs")
     (is (= {:reason :not-worth :price iron-worth :worth (dec iron-worth)} (:not-worth (ore (dec iron-worth)))) "a call worth just under one ore's worth-to waits")
     (is (nil? (:not-worth (ore iron-worth))) "a call worth one raw iron's own worth starts it")
-    (is (nil? (:not-worth (ore 250))) "obtain-strip-on's should-fail worth starts")))
+    (is (nil? (:not-worth (ore 210))) "obtain-strip-on's should-fail worth starts")))
 
 (deftest a-buried-bodys-iron-pickaxe-pays-the-stair-up-for-a-tables-log-and-a-seen-table-spares-it
   ;; obtain-chain/iron-pickaxe-no-ore-seen-explores-by-default

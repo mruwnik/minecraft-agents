@@ -1,7 +1,9 @@
 ;; A body under rock needing a log it does not see: the search is priced with the stair up to the sky.
 ;; Should-succeed: worth 500 pays the stair, the body climbs out and fells the tree.
 ;; Should-fail: worth 15 does not pay a trip and the stair (no stair step is cut).
-;; An unseen ore is tunnelled to, not climbed to: a hand order for raw iron (:worth 1200) starts gathering (the mine cuts its own stair to the ore).
+;; An unseen ore is tunnelled to, not climbed to: a caller who wants one raw iron for 35 s starts gathering. The search is priced about 20 s (unit scene at y 0:
+;; 19.8 s) and a stair up to the sky would add 35 s or more (the log's stair at y 0 costs 34.5 s over the tree's usual cost), so a stair priced in by mistake
+;; (55 s or more) would refuse at 35: the margin is 15 s over the honest price and 20 s under the wrong one.
 {:defaults
  {:tags [:obtain :explore]
   :plot {:height 12 :length 40 :width 40 :light :sky}
@@ -25,6 +27,6 @@
   {:name "a-buried-body-searching-for-ore-is-not-refused-for-a-stair-it-never-climbs"
    :blocks [[:set [26 0 20] "iron_ore"]]
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8]]}
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 1200 :explore true})]]
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :worth 35 :explore true})]]
    :expect [{:event {:source :job :kind :obtain.gathering} :within-s 20 :of-job true}]
    :limit-s 30}]}
