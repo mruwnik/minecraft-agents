@@ -375,6 +375,16 @@
           (is (= :job-time (:reason result)) (pr-str result))
           (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
 
+(deftest a-craft-that-times-out-again-and-again-is-not-an-identical-refusal-and-keeps-retrying-at-a-real-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "timeout"}))
+              result (await (child-outcome eng job {:item "bread" :worth (* 1000 (try-s :craft))} 400))]
+          (is (= :job-time (:reason result)) (pr-str result))
+          (is (< 2 (count (calls p "craft")) 400) "a bare timeout carries no server reason: it is noise, not a refusal"))))))
+
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
   (async done
     (tu/run-async done
