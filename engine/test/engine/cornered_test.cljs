@@ -31,6 +31,7 @@
             [jobs.lib.cost.caught :as caught]
             [jobs.lib.cost :as cost]
             [jobs.lib.rooms :as room-lib]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.survival.respond.cover :as cover]
@@ -2329,7 +2330,12 @@
     (is (false? (boxed? (assoc closed :inventory [{:name "cobblestone" :count 4}]) (mob-at "zombie" 4))) "blocks to wall with")
     (is (false? (boxed? (assoc closed :inventory [{:name "iron_sword" :count 1}]) (mob-at "zombie" 4))) "armed")
     (is (false? (boxed? {:blocks dead-end} (mob-at "zombie" 4))) "a one-wide tunnel may lead on")
-    (is (false? (boxed? {} (mob-at "zombie" 4))) "open ground: it can walk")))
+    (is (false? (boxed? {} (mob-at "zombie" 4))) "open ground: it can walk")
+    (let [roofed (atom {})]
+      (is (false? (boxed-in {:blocks (into {} (for [x (range -30 41) z (range -10 11)] [(key-of x 67 z) "stone"]))} (mob-at "zombie" 4) roofed))
+          "open ground under a roof: it can walk")
+      (is (< (room-lib/step-spent-s (step roofed)) (* 0.5 reach-room/room-cells (cost/room-read-ceiling-s)))
+          "its flood stops past close-radius, not at the room-cells cap: the step's search keeps the rest"))))
 
 (deftest a-walking-body-takes-cover-after-shot-hits-hits-by-a-ranged-mob
   (let [arrow {:data {:damageType "arrow" :attacker {:name "skeleton"}}}

@@ -163,16 +163,17 @@
 
 (defn bare-boxed-in?
   "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius in that room (not outside its door; not
-  in the doorway, a step from the other side) and has no weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room."
+  in the doorway, a step from the other side) and has no weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room.
+  A hut lies within close-radius of the body: a room reaching farther leaves room to keep a mob past it, so a flight works there."
   [c hostiles]
   (let [p (:primitives c)
         close (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
                             (<= (danger-q/mob-distance p %) (close-radius)))
                       hostiles)
         feet (sh-sense/feet p)
-        ;; one flood (sh-sense/shut-in-hut?'s room), a part of the step's one search (Q141): a cut one is no room
+        ;; one flood, a part of the step's one search (Q141): a cut one is no room
         room (fn [] (let [m (room-lib/step-meter c)
-                          r (binding [reach/*search* m] (reach-room/room p feet))]
+                          r (binding [reach/*search* m] (reach-room/room-near p feet (close-radius)))]
                       (room-lib/spent-meter! c m)
                       r))
         in-room? (fn [{:keys [cells]}]

@@ -52,10 +52,11 @@
                 (recur (inc head))))))))
 
 (defn flood-cells
-  "flood-visit's cells when every reachable cell was expanded within budget, else nil."
-  [next-cells start budget]
-  (let [{:keys [cells closed?]} (flood-visit next-cells start budget)]
-    (when closed? cells)))
+  "flood-visit's cells when every reachable cell was expanded within budget (none stopping it, abort?), else nil."
+  ([next-cells start budget] (flood-cells next-cells start budget nil))
+  ([next-cells start budget abort?]
+   (let [{:keys [cells closed?]} (flood-visit next-cells start budget abort?)]
+     (when closed? cells))))
 
 (defn flood
   "flood-cells' answer as :closed (every reachable cell expanded within budget) or :room."
@@ -252,13 +253,14 @@
 (defn room-flood
   "{:cells [...] :unseen? bool :edge #{[x y z]}}: the cells a walker at cell [x y z] reaches (room-kind-at, pocket-steps)
   fewer than budget (default room-cells), the unseen cells it stopped at (:edge), and whether there are any or any cell
-  is an unseen-edge?; nil when the flood is open. `kind-at`: room-kind-at of a shut-kind-at. entered?: the start was
-  stepped into through a seen door (pocket-steps)."
+  is an unseen-edge?; nil when the flood is open, or abort? (a cell #js [x y z] -> bool) stopped it. `kind-at`: room-kind-at of
+  a shut-kind-at. entered?: the start was stepped into through a seen door (pocket-steps)."
   ([p kind-at x y z] (room-flood p kind-at x y z room-cells))
   ([p kind-at x y z budget] (room-flood p kind-at x y z budget false))
-  ([p kind-at x y z budget entered?]
+  ([p kind-at x y z budget entered?] (room-flood p kind-at x y z budget entered? nil))
+  ([p kind-at x y z budget entered? abort?]
    (let [edge (volatile! (transient #{}))]
-     (when-let [cells (flood-cells (pocket-steps p kind-at [x y z] entered? #(vswap! edge conj! %)) [x y z] budget)]
+     (when-let [cells (flood-cells (pocket-steps p kind-at [x y z] entered? #(vswap! edge conj! %)) [x y z] budget abort?)]
        (let [edge (persistent! @edge)]
          {:cells cells :edge edge :unseen? (boolean (or (seq edge) (some #(unseen-edge? p kind-at %) cells)))})))))
 
@@ -500,6 +502,15 @@
   "room* kept per body (kept); not kept without a perception."
   [p {:keys [x y z] :as pos}]
   (kept p (str x "|" y "|" z) (fn [_] (room-with p pos (partial kept-flood p)))))
+
+(defn room-near
+  "room's answer at pos when every cell of the room lies within r blocks across of pos, else nil: its flood stops at the
+  first cell farther, so it reads no more than the cells within r. Kept as room is."
+  [p {:keys [x y z] :as pos} r]
+  (kept p (str "near|" x "|" y "|" z "|" r)
+        (fn [kind-at]
+          (let [far? (fn [c] (> (js/Math.hypot (- (aget c 0) x) (- (aget c 2) z)) r))]
+            (room-with p pos (fn [sx sy sz entered?] (room-flood p kind-at sx sy sz room-cells entered? far?)))))))
 
 (defn look-key [{:keys [x y z]}] (str "look|" x "|" y "|" z))
 
