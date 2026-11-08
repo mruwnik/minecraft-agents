@@ -5,6 +5,7 @@
   (:require [jobs.lib.choose :as choose]
             [jobs.lib.need :as need]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
@@ -116,18 +117,22 @@
               (await (look-round! c cell))
               nil))))))
 
-(def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
+(defn reseal?
+  "Whether another place in a lava cell after tries places the lava flowed back over is worth its price: none yet, else
+  cost/try-again? :place, and :place-refused once it flowed back twice (an identical refusal repeats)."
+  [c tries]
+  (or (zero? tries) (cost/try-again? c (if (< 1 tries) :place-refused :place) {:fails tries})))
 
 (defn ^:async seal!
   "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :ways allow,
   zones as opts :ignore-zones?, the fluid named in the event text as opts :fluid). Memory :seals counts places per
   cell, :sealing the cell in hand. :again once placed (event kind, info), :continue while the child waits on the
   world, else the stop {:reason :lava-unsealed :cell} with the place outcome (:place; :need when no block is
-  carried) or :tries."
+  carried) or :tries once another is not worth it (reseal?)."
   [c kind block-at cell {:keys [ways ignore-zones? fluid]}]
   (let [tries (get-in (ctx/mem c) [:seals cell] 0)
         [x y z] cell]
-    (if (>= tries max-seals)
+    (if-not (reseal? c tries)
       {:reason :lava-unsealed :cell cell :tries tries}
       (do
         ;; a waiting child is resumed on the same cell: only its first round counts a try
