@@ -1186,6 +1186,31 @@
           (is (= [1 64 0] (:cell @out)))
           (is (nil? (:walk @out)) "the walk child's ending is the :because, not copied"))))))
 
+(deftest a-walk-that-ends-above-the-step-waits-for-the-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [prep (fn [p]
+                     (let [world (.-world p)
+                           state (.. world -state)
+                           falling (atom false)]
+                       (.override world "steer"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (when (= [1 64 0] (:pos (:self @state)))
+                                        (reset! falling true)
+                                        (swap! state update :self assoc :pos [1 65 0] :onGround false))
+                                      r)))
+                       (.override world "wait"
+                                  (fn ^:async f [token a impl]
+                                    (when @falling
+                                      (reset! falling false)
+                                      (swap! state update :self assoc :pos [1 64 0] :onGround true))
+                                    (await (impl token a))))))
+              {:keys [out]} (await (stair! {:blocks ground} east prep))]
+          (is (= :done (:status @out)))
+          (is (= 3 (:steps @out))))))))
+
 (deftest a-falling-block-hazard-names-the-block
   (let [stop (stop {[1 67 0] "gravel" [1 66 0] "stone"} #{:fluid-adjacent} :zones [])]
     (is (re-find #"gravel" (str (:why stop))))))
