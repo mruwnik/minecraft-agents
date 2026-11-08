@@ -1251,3 +1251,10 @@
           (is (finished? s) "the search ends")
           (is (seq @asked))
           (is (apply distinct? @asked) (pr-str @asked)))))))
+
+(deftest a-search-ended-by-a-price-says-how-much-of-it-is-risk-and-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [state]} (await (search-quoted! (fn [_ _] {:uses {:job-time [3 3 9]} :risk {:death-chance 0.9 :dark-s 4}})))]
+          (is (re-find #"costs \d+ s \(\d+ s of it risk, 4 s walked in the dark\), more than the 12 s" (:text (not-found-of state)))))))))
