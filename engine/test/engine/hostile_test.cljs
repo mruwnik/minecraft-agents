@@ -117,6 +117,16 @@
 
 (def sword [{:name "iron_sword" :count 1}])
 
+(defn mobs-come-on-wait!
+  "A held body waits for a melee mob to close in: while it waits or looks round, every mob named in names steps next to it."
+  [p names]
+  (doseq [prim ["wait" "look"]]
+    (.override (.-world p) prim
+               (fn [token a impl]
+                 (let [[x y z] (fake/vec-pos (:pos (fake/self p)))]
+                   (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (names (:name %)) (assoc :pos [(+ x 1) y z])) es))))
+                 (impl token a)))))
+
 (def diamond-armour
   {:head {:name "diamond_helmet" :count 1} :torso {:name "diamond_chestplate" :count 1}
    :legs {:name "diamond_leggings" :count 1} :feet {:name "diamond_boots" :count 1}})
@@ -350,12 +360,13 @@
     [2000 8000] 10000 16 16 [8000]
     [] 10000 16 18 []))
 
-(deftest respond-fights-a-hostile-beyond-melee-by-walking-up
+(deftest respond-fights-a-melee-hostile-beyond-reach-by-waiting-for-it-never-walking-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (flight-round respond {:inventory sword :entities [(zombie 7 0)]}))]
-          (is (fought? s) "the hostile at 7 blocks is walked up to and hit"))))))
+          (is (every? #(<= (:x %) 0) (tu/walked-to (:eng s))) "no step toward the zombie 7 blocks off: it closes to the body")
+          (is (not (fought? s)) "nothing is in reach to swing at"))))))
 
 (deftest respond-keeps-a-fight-while-what-is-left-of-the-mob-is-worth-it
   (async done
@@ -900,14 +911,14 @@
           (await (core/tick! eng))
           (is (= {:x 0 :z -4} (first-move eng)) "a home beyond the hostile is ignored"))))))
 
-(deftest retreat-flees-from-the-weighted-set-of-threats-not-the-nearest
+(deftest retreat-with-mobs-on-three-sides-holds-for-them-never-walking-out-to-the-nearest
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup-flight {:entities [(zombie 1 0 4) (zombie 2 3 -3) (zombie 3 -3 -3)]})]
           (core/submit! eng (tu/order retreat) {})
           (await (core/tick! eng))
-          (is (> (:z (first-move eng)) 1) "mobs on three sides: it leaves through the one open side, not away from the nearest"))))))
+          (is (empty? (tu/walked-to eng)) "no way out: the mobs close to the body, none is walked to"))))))
 
 (deftest retreat-is-not-bent-by-a-home-2000-blocks-away
   (async done
@@ -1064,16 +1075,14 @@
   (+ (count (filter #(and (= (:x pos) (:x %)) (= (:z pos) (:z %))) (tu/walked-to eng)))
      (count (filter #(let [a (.. % -args -pos)] (and (= (:x pos) (.-x a)) (= (:z pos) (.-z a)))) (calls p "moveTo")))))
 
-(deftest respond-retreats-from-a-hostile-it-cannot-reach
+(deftest respond-holds-for-a-hostile-it-cannot-reach-and-never-walks-to-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup-flight {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
+        (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(zombie 6 0)] :unreachable ["6,64,0"]})]
           (core/submit! eng (tu/order respond) {})
           (await (core/tick! eng))
-          (is (= 3 (count (filter #(and (= :goal-not-standable (get-in % [:ending :cause :why])) (nil? (get-in % [:ending :because]))) @seen))) "three go-to walks towards the zombie gave up, never more (the flight's own leg ends :search-spent by the call's seconds)")
-          (is (= 3 (walks-to {:p p :eng eng} {:x 6 :z 0})) "one blocked walk per go-to call: any y re-aim comes before the walk")
-          (is (< (:x (last-move eng)) 0) "then it walks away instead")
+          (is (zero? (walks-to {:p p :eng eng} {:x 6 :z 0})) "a melee mob closes to the body: no walk towards it")
           (is (zero? (count (calls p "attack")))))))))
 
 ;; ------------------------------------------------------- ranged mobs count further out
@@ -1226,6 +1235,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 9 0 4)]})]
+          (mobs-come-on-wait! p #{"zombie"})
           (let [swing (.-attack p)]
             (aset p "attack" (fn [& a]
                                (when-not (:creeper-came @(fake/state p))
@@ -1483,7 +1493,10 @@
         (let [{:keys [p eng]} (await (flight-round retreat {:inventory sword :blocks box :entities [(zombie 2 0)]}))]
           (is (= 4 (count (calls p "attack"))) "nowhere to go: it hits back until the zombie dies")
           (is (= [] (:list (core/state eng)))))
-        (let [{:keys [eng p]} (await (flight-round retreat {:blocks box :entities [(zombie 2 0)]}))]
+        (let [{:keys [eng p]} (setup-flight {:blocks box :entities [(zombie 2 0)]})]
+          (mobs-come-on-wait! p #{"zombie"})
+          (core/submit! eng (tu/order retreat) {})
+          (dotimes [_ 3] (await (core/tick! eng)))
           (is (= -1 (:x (first-move eng))) "unarmed: first a step back into the far corner of the pen")
           (is (= 4 (count (calls p "attack"))) "nowhere further and nothing to build with: the fist, not a failed round")
           (is (= [] (:list (core/state eng))) "no giving up while the zombie can be hit"))))))

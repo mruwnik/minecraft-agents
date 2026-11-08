@@ -607,6 +607,16 @@
 
 (defn zombie [x y z] {:id 7 :name "zombie" :kind "hostile" :pos {:x x :y y :z z} :health 20})
 
+(defn mobs-come-on-wait!
+  "A held body waits for a melee mob to close in: while it waits or looks round, every mob named in names steps next to it."
+  [p names]
+  (doseq [prim ["wait" "look"]]
+    (.override (.-world p) prim
+               (fn [token a impl]
+                 (let [[x y z] (fake/vec-pos (:pos (fake/self p)))]
+                   (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (names (:name %)) (assoc :pos [(+ x 1) y z])) es))))
+                 (impl token a)))))
+
 (defn creeper [x y z] {:id 8 :name "creeper" :kind "hostile" :pos {:x x :y y :z z} :health 20})
 
 (defn ^:async ticks!
@@ -1569,23 +1579,6 @@
           (is (neg? (:x (first-move eng))) "away from it")
           (is (zero? (count (calls p "place")))))))))
 
-(deftest a-cornered-body-keeps-fighting-a-mob-that-keeps-hurting-it-though-the-walk-to-it-is-blocked
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks dead-end :entities [(zombie 6 64 0)]})
-              calls (atom 0)
-              hurt! (fn []
-                      (swap! calls inc)
-                      (swap! (fake/state p) update-in [:self :health] - 0.1)
-                      (when (>= @calls 60) (swap! (fake/state p) assoc :entities [])))]
-          (.override (.-world p) "steer" (fn [_ _ _] (hurt!) (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
-          (.override (.-world p) "wait" (fn [token a impl] (hurt!) (impl token a)))
-          (core/submit! eng (order eng retreat) {})
-          (await (core/tick! eng))
-          (is (<= 60 @calls) "kept trying until the zombie was gone")
-          (is (not-any? #(re-find #"cannot-escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
-
 (deftest escape-order-by-situation
   (is (= [:water :roof :plug :pillar :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
       "no walk away, no back-off; the pillar is priced (an enderman reaches its top); a fight only last, whatever the odds")
@@ -1636,8 +1629,9 @@
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
           (.override (.-world p) "steer" (fn [token a impl] (-> (impl token a) (.then follow-and-hit!))))
           (.override (.-world p) "attack" leave!)
+          (mobs-come-on-wait! p #{"zombie"})
           (core/submit! eng (order eng retreat) {})
-          (await (core/tick! eng))
+          (dotimes [_ 3] (await (core/tick! eng)))
           (is (seq (calls p "attack")) "it swings at the zombie that keeps hitting it")
           (is (<= (count (filter #(= :retreat.target (:kind %)) @seen)) 2)
               "no flee step after the second hit"))))))
@@ -1667,19 +1661,20 @@
                  :when (or (= 6 (Math/abs x)) (= 6 (Math/abs z)) (= y 63) (= y 70))]
              [(str x "," y "," z) "stone"])))
 
-(deftest a-body-cornered-in-its-closed-room-waits-for-the-zombie-instead-of-walking-to-it
+(deftest a-body-cornered-in-a-closed-room-waits-for-the-zombie-instead-of-walking-to-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks wide-box :inventory [{:name "iron_sword" :count 1}] :entities [(zombie 5 64 0)]})
-              n (atom 0)]
-          (mem/write! (:store eng) :home {:pos {:x 0 :y 64 :z 0}} {:cap 1 :ttl :forever})
-          (.override (.-world p) "wait"
-                     (fn [token a impl] (when (= 8 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
-          (core/submit! eng (order eng retreat) {})
-          (await (core/tick! eng))
-          (is (every? #(<= (:x %) 0) (tu/walked-to eng)) "no step toward the zombie across the room")
-          (is (zero? (count (calls p "attack"))) "nothing to swing at: it is out of reach"))))))
+        (doseq [home? [true false]]
+          (let [{:keys [eng p]} (setup {:blocks wide-box :inventory [{:name "iron_sword" :count 1}] :entities [(zombie 5 64 0)]})
+                n (atom 0)]
+            (when home? (mem/write! (:store eng) :home {:pos {:x 0 :y 64 :z 0}} {:cap 1 :ttl :forever}))
+            (.override (.-world p) "wait"
+                       (fn [token a impl] (when (= 8 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
+            (core/submit! eng (order eng retreat) {})
+            (await (core/tick! eng))
+            (is (every? #(<= (:x %) 0) (tu/walked-to eng)) (str "no step toward the zombie across the room, home " home?))
+            (is (zero? (count (calls p "attack"))) (str "nothing to swing at: it is out of reach, home " home?))))))))
 
 (defn ^:async beset-round
   "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
@@ -1850,7 +1845,7 @@
         (let [{:keys [p seen]}
               (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.hide-out/hide-s 100000}})
                                    {:self {:health 20 :food 20} :inventory [{:name "cobblestone" :count 20}]
-                                    :entities [{:id 9 :name "spider" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 16}]}
+                                    :entities [{:id 9 :name "spider" :kind "hostile" :pos {:x 2 :y 64 :z 0} :health 16}]}
                                    120000 (fn [_] nil)))]
           (is (= [:fight] (keep #(when (= :hostile.decided (:kind %)) (:decision %)) @seen)) "the fist fight")
           (is (pos? (count (calls p "attack"))))

@@ -113,7 +113,7 @@
         e (if (= :fight decision)
             (await (ctx/call c :fight 'jobs.combat.attack
                              {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius :fire-range
-                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
+                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c) (options/melee-only? (options/near-hostiles c))) :prior (:fight-prior (ctx/mem c))
                               :checks {:safe? '(always) :fit? '(always)}}))
             (await (flight/flee! c)))]
     (cond
