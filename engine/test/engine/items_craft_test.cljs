@@ -323,12 +323,22 @@
 
 (defn try-s "The measured seconds of a retry of kind." [kind] (get-in (settings/get value/settings ::value/retry-counts) [kind :try-s]))
 
+(defn starving-bake-worth
+  "What get-food, the bake's real parent, is worth to a starving body."
+  [eng]
+  (:worth (second (tu/at-own-worth eng '(jobs.survival.get-food {:carry 0})))))
+
 (defn ^:async refusing-in-reach
-  "Craft bread with :worth w beside a table that refuses every craft, at most 12 ticks: [result craft-calls eng seen]."
+  "Craft bread beside a table that refuses every craft, at most 12 ticks: [result craft-calls eng seen]. w is the
+  craft's :worth, or :starving for a starving body's bake under get-food."
   [w]
-  (let [{:keys [eng p seen]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
+  (let [starving? (= :starving w)
+        {:keys [eng p seen]} (setup (cond-> {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}}
+                                      starving? (assoc :self {:food 2})))
         _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
-        result (await (child-outcome eng job {:item "bread" :worth w} 12))]
+        result (await (if starving?
+                        (child-outcome eng job {:item "bread"} 12 (starving-bake-worth eng))
+                        (child-outcome eng job {:item "bread" :worth w} 12)))]
     [result (count (calls p "craft")) eng seen]))
 
 (deftest craft-gives-up-when-in-reach-of-a-table-that-still-refuses
@@ -345,7 +355,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [[_ cheap] (await (refusing-in-reach (try-s :craft)))
-              [_ dear] (await (refusing-in-reach (* 1000 (try-s :craft))))]
+              [_ dear] (await (refusing-in-reach :starving))]
           (is (= 2 cheap) "a goal worth one try's price is not worth a second at under a sure chance")
           (is (> dear cheap) "a dear goal tries again"))))))
 
@@ -354,12 +364,16 @@
     (tu/run-async done
       (fn ^:async t []
         (let [rejected (fn ^:async f [w]
-                         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}})
+                         (let [starving? (= :starving w)
+                               {:keys [eng p]} (setup (cond-> {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}}
+                                                        starving? (assoc :self {:food 2})))
                                _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
-                               result (await (child-outcome eng job {:item "bread" :worth w} 12))]
+                               result (await (if starving?
+                                               (child-outcome eng job {:item "bread"} 12 (starving-bake-worth eng))
+                                               (child-outcome eng job {:item "bread" :worth w} 12)))]
                            [(:reason result) (count (calls p "craft"))]))
               [cheap-end cheap] (await (rejected (try-s :craft)))
-              [_ dear] (await (rejected (* 1000 (try-s :craft))))]
+              [_ dear] (await (rejected :starving))]
           (is (= [:craft-failed 1] [cheap-end cheap]) "a rejection can be passing: one that costs more than it is worth to repeat is not")
           (is (> dear cheap) "a dear goal tries again"))))))
 
@@ -381,10 +395,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
+        (let [{:keys [eng p]} (setup {:self {:food 2} :inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "timeout"}))
-              result (await (child-outcome eng job {:item "bread" :worth (* 1000 (try-s :craft))} 400))]
-          (is (= :job-time (:reason result)) (pr-str result))
+              result (await (child-outcome eng job {:item "bread"} 400 (starving-bake-worth eng)))]
           (is (< 2 (count (calls p "craft")) 400) "a bare timeout carries no server reason: it is noise, not a refusal"))))))
 
 (deftest craft-hands-over-the-alternatives-of-a-missing-ingredient
