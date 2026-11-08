@@ -136,6 +136,20 @@
               ends (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x -0.5 :y 64 :z 0.5}}] [{:pos {:x -5 :y 64 :z 0} :kind :goal}] {}))]
           (is (some #(nil? (:pos (:target %))) ends) (str "a ring route is planned after the named one " (pr-str (map :target ends)))))))))
 
+(deftest the-named-targets-of-a-search-plan-over-one-path-world
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [worlds (atom 0)
+              path-world wworld/path-world
+              c (ctx-of (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+              named [{:pos {:x -5 :y 64 :z 0} :kind :goal} {:pos {:x -20 :y 64 :z 0} :kind :home}]
+              _ (set! wworld/path-world (fn ([p] (path-world p)) ([p unknown] (swap! worlds inc) (path-world p unknown))))
+              ends (try (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x 6.5 :y 64 :z 0.5}}] named {}))
+                        (finally (set! wworld/path-world path-world)))]
+          (is (= 2 (count (filter (comp :pos :target) ends))) "both named targets planned")
+          (is (= 2 @worlds) "the ring's world and one for the named targets"))))))
+
 (defn ^:async open-field-prices
   "{ring end: price} of the flee search on open ground at time (a zombie 5 blocks west of the body), with spawns-over
   forced to 0 when unspawned?."

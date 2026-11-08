@@ -190,12 +190,12 @@
       (-> .-goal (unchecked-set "kind" "column")))))
 
 (defn costed
-  "The pathWorld a flee route plans over: what the body has seen (go-to's :unknown, the cell goal spared by the rock
-  guess; with priced? no rock guess: an unseen cell keeps the planner's unseen price and the search adds a dead end
+  "The pathWorld a flee route plans over: what the body has seen (go-to's :unknown, the cells goals ([x y z] each)
+  spared by the rock guess; with priced? no rock guess: an unseen cell keeps the planner's unseen price and the search adds a dead end
   there, dead-end), costed as go-to's walks but for the threats keep? leaves out (the chasers: their danger is the
   race); nil when the body cannot sense the world."
-  [c goal keep? priced?]
-  (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (cond-> (wworld/unknown-spec c) priced? wworld/without-rock) goal nil))
+  [c goals keep? priced?]
+  (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (cond-> (wworld/unknown-spec c) priced? wworld/without-rock) nil (seq goals)))
           (#(wworld/costed-world c % {:dangers? (wworld/dangers?) :dark? (wworld/dark?) :keep? keep?}))))
 
 (defn floor-cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
@@ -277,6 +277,7 @@
   [c {:keys [targets chasers pos body covers others caught-by policy]} other? landings meter]
   (let [p (:primitives c)
         ring-world (costed c nil other? true)
+        named-world (delay (costed c (keep #(some-> (:pos %) floor-cell) targets) other? false))
         cornered (delay (when-let [mobs (seq (keep #(when (:mob %) {:distance 0 :name (:mob %) :burns (:burns %)}) chasers))]
                           (let [fight (cost/fight-answer {:weapon (:weapon body) :equipment (:equipment body) :health (:health body) :mobs mobs})]
                             (apply min (vals (:prices (cost/decide body (cost/cornered-answers {:equipment (:equipment body) :mobs mobs :fight fight :covers (when covers (covers))}) pos)))))))
@@ -297,7 +298,7 @@
                   (and (> planned named-n) (<= contact-s own-s)))
             (do (when cut? (lreach/spend! meter 0 true))
                 (with-meta out (cond-> {:nodes nodes :planned planned :unrouted unrouted :plan-ms (js/Math.round plan-ms)} cut? (assoc :cut? true))))
-            (let [pw (if-let [target (:pos t)] (costed c (floor-cell target) other? false) ring-world)
+            (let [pw (if (:pos t) @named-world ring-world)
                   t1 (clock/now)
                   ^js res (await (plan-to! c pw policy (query c t) cap landings))
                   ms (- (clock/now) t1)
