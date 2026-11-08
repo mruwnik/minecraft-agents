@@ -41,7 +41,7 @@
 
 (def doc
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
-  Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with the default ways, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
+  Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), no known hostile in the bed's rest box (:hostile-near: the server refuses the sleep), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with the default ways, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered at any distance, its walk priced; never an occupied one or one given up on; never one whose walk leaves a dug-in or room shelter unless that long without sleep): jobs.survival.sleep on it.
   A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. Beds are priced against the other ways through the night (answers, cheapest): a bed not sheltered (sh-beds/bed-sheltered?: shut in a closed roofed room where no mob spawns) is slept in only when overdue for sleep or lying there is the cheapest; a carried bed goes down as the :answer says (else the cheapest): :bed lain in where it lies, :sealed its row walled and roofed first (seal-and-sleep!), and when another way is cheaper it is not put down. A sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open, and a carried bed not put down ends condition-failed :bed-open {:answer} too; a row left open ends nothing-possible :seal-failed.
   A sleep that ends :bed-unreachable yields :continue: the next round picks another bed or puts the carried one down (sleep wrote :bed-unreachable; when its walk was refused on the night's price it wrote nothing, and the bed goes into :bed-walk-unsafe instead, skipped while the world is as priced); for a bed named by :bed there is no other, so it ends nothing-possible :bed-unreachable. A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
@@ -351,12 +351,21 @@
     (contract/status :look :no-bed "no bed to use and none carried to put down" {})
     (contract/ok :bed "a bed to use, put down or fetch")))
 
+(defn rest-box-status
+  "Later :hostile-near while a hostile the body knows of stands in the rest box of the bed to use (none: the body's cell,
+  where a carried one goes down): the server refuses the sleep (sh-sleepers/monsters-near-bed?)."
+  [c]
+  (let [p (:primitives c)]
+    (if (sh-sleepers/monsters-near-bed? p (or (bed-to-use c) (sh-sense/feet p)))
+      (contract/later :hostile-near "a hostile is near the bed: the server refuses the sleep")
+      (contract/ok :rest-box-clear "no known hostile near the bed"))))
+
 (defn can-start?
-  "Night, and by night a bed (a room flood fill) to use, put down or fetch. Not cond/and: bed-status is skipped by day,
-  where its flood fill would run for nothing."
+  "Night, and by night a bed (a room flood fill) to use, put down or fetch, with no hostile near it (rest-box-status). Not
+  cond/and: bed-status is skipped by day, where its flood fill would run for nothing."
   [c]
   (let [n (contract/asked c (checks/night :not-night))]
-    (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status)]) n)))
+    (if (= :ok (first n)) (contract/all [n (contract/asked c bed-status) (rest-box-status c)]) n)))
 
 (defn can-run?
   "Before every round: day came (:later :not-night)."
