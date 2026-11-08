@@ -21,12 +21,13 @@
             {:no-event {:source :job :kind :go-to.escalated :data {:step :stair}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}
             {:no-event {:source :job :kind :go-to.escalated :data {:step :pillar}} :for-s 280 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [14.5 20 12.5] 1]]}
-  ;; card 80d92bf2: the slab 23 wide (z 1..23): a box the leg's length round its ends is cut off by it, the doubled one reaches round
+  ;; card 80d92bf2: the slab 23 wide (z 1..23), seen from a lit hall along its face (z 0..24): a box the leg's length round its ends is cut off
+  ;; by it, the doubled one reaches round. A buried body sees no slab: it learns the wall a cell a dig, and the walk-on's price ends the dig
   {:name "a-leg-widens-its-box-round-a-slab-wider-than-its-length"
-   :plot {:width 36}
+   :plot {:width 36 :light :lit}
    :blocks [[:fill [2 0 0] [24 30 34] "stone"]
             [:fill [8 0 1] [9 30 23] "bedrock"]
-            [:fill [4 20 12] [5 21 12] "air"]
+            [:fill [2 20 0] [7 21 24] "air"]
             [:fill [14 20 12] [14 21 12] "air"]]
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [14 20 12] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 90 :of-job true}
