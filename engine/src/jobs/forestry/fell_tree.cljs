@@ -186,10 +186,12 @@
 ;; ------------------------------------------------------------------ the pillar
 
 (defn ^:async rerank-while-threatened!
-  "While a hostile holds the job off its chosen tree before a log is dug, choose again with what the body senses now
+  "While a hostile holds the job off its chosen tree before a log is dug, or the walk there waits on its price (:risky:
+  a hostile seen on the way, reprice/turn-away), choose again with what the body senses now
   (the search prices known dangers): true once another tree is committed. The same tree again is kept as it was."
   [c]
-  (when (and (zero? (:dug (ctx/mem c) 0)) (= :later (first (ready/threatened c))))
+  (when (and (zero? (:dug (ctx/mem c) 0))
+             (or (= :later (first (ready/threatened c))) (= :risky (some-> (:child-wait c) deref :reason))))
     (let [{:keys [radius species]} (:args c)
           before (ctx/mem c)]
       (loop [n 0]
@@ -198,7 +200,7 @@
             (and (= :searching t) (< n 20)) (do (await (pace/pace! c)) (recur (inc n)))
             (not (map? t)) false
             (= (:column t) (:column before)) (do (ctx/update-mem! c assoc :partials (:partials before 0)) false)
-            :else true))))))
+            :else (do (some-> (:child-wait c) (reset! nil)) true)))))))
 
 (defn ^:async walk-failed!
   "Book a walk result of :blocked or :partial against the chosen tree: :again once the tree is given up, or another
