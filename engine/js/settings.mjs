@@ -69,7 +69,7 @@ export const SPECS = {
   'enchant/settle-max-ms': { default: 2000, spec: ['int-in', 0, null], doc: "Enchant settles after this long at most, in ms." },
   'enchant/poll-ms': { default: 25, spec: ['int-in', 1, null], doc: "How often enchant polls, in ms." },
   'interact/interact-wait-ms': { default: 500, spec: ['int-in', 0, null], doc: "How long interact waits for the server's reaction, in ms." },
-  'interact/love-grace-ms': { default: 150, spec: ['int-in', 0, null], doc: "Grace after a food use before the love status is judged, in ms." },
+  'interact/love-grace-ms': { default: 150, spec: ['int-in', 0, null], doc: "Grace after a food use before the love status is judged, and after the entity vanished before the use is judged to have had no effect, in ms." },
   'interact/poll-ms': { default: 50, spec: ['int-in', 1, null], doc: "How often interact polls, in ms." },
   'interact/dismount-wait-ms': { default: 1000, spec: ['int-in', 0, null], doc: "How long the dismount an interact needs waits, in ms." },
   'interact/release-ms': { default: 500, spec: ['int-in', 0, null], doc: "How long a held use is held before release, in ms." },

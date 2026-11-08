@@ -139,6 +139,13 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
     // a feed's love status and slot update are separate packets: a bare consumption waits a grace for love
     const onlyConsumed = r => r.consumed > 0 && !r.love && r.worn === 0 && r.leash === null && Object.keys(r.changed).length === 0
     let consumedAt = null
+    let goneAt = null
+    // a mooshroom turns into a cow: its entity goes before the shears' wear arrives, so a vanished entity waits the grace too
+    const goneSettled = r => {
+      if (!r.gone) return false
+      goneAt ??= Date.now()
+      return Date.now() - goneAt >= setting('interact/love-grace-ms') * timeScale
+    }
     const settled = r => {
       if (!seen(r)) return false
       if (!onlyConsumed(r)) return true
@@ -146,7 +153,7 @@ export async function interactWith (bot, ctx, a, { timeScale = 1, reach }) {
       return Date.now() - consumedAt >= setting('interact/love-grace-ms') * timeScale
     }
     let r = read()
-    while (!settled(r) && !r.gone && !bot.vehicle && !bot.currentWindow && Date.now() < deadline) {
+    while (!settled(r) && !goneSettled(r) && !bot.vehicle && !bot.currentWindow && Date.now() < deadline) {
       await sleepMs(setting('interact/poll-ms') * timeScale)
       ctx.alive()
       r = read()

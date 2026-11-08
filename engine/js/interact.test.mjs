@@ -132,6 +132,19 @@ const scenarios = [
     expect: { status: 'used', consumed: 0, worn: 0, love: false, leash: 'detached', changed: {} }
   },
   {
+    label: 'entity that vanishes before the shears wear arrives (mooshroom to cow)',
+    bot: {
+      target: entity('mooshroom'),
+      items: [shears()],
+      onUse: bot => {
+        delete bot.entities[5]
+        setImmediate(() => { bot.heldItem.durabilityUsed = 1 })
+      }
+    },
+    a: { id: 5, item: 'shears' },
+    expect: { status: 'used', consumed: 0, worn: 1, love: false, leash: null, changed: {} }
+  },
+  {
     label: 'attach of another entity is ignored',
     bot: { target: entity('cow'), items: [wheat()], onUse: bot => bot._client.emit('attach_entity', { entityId: 6, vehicleId: 7 }) },
     a: { id: 5, item: 'wheat' },
