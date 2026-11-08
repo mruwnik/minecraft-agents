@@ -935,7 +935,7 @@
                                            :inventory [{:name "stone_pickaxe" :count 1}]
                                            :entities [(assoc (creeper 8.5 64 0.5) :visible true)]})]
           (.override (.-world p) "wait" (fn [t a impl] (-> (impl t a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
-          (core/submit! eng (tu/order eng retreat) {})
+          (core/submit! eng (order eng retreat) {})
           (await (core/tick! eng))
           (is (seq (filter #(and (= :retreat.cornered (:kind %)) (contains? (:prices %) :stand)) @seen)) "standing is among the priced answers")
           (is (some #(= :holding (:kind %)) @seen) "the step holds in place until the creeper comes"))))))
