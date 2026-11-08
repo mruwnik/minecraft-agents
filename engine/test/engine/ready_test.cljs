@@ -906,9 +906,8 @@
         floods (atom [])
         flood reach-room/room-flood
         note! (fn [x y z] (swap! floods conj [x y z (reach-room/steady-key (aget p "perception"))]))
-        near (with-redefs [reach-room/room-flood (fn ([p k x y z] (note! x y z) (flood p k x y z))
-                                                   ([p k x y z budget] (note! x y z) (flood p k x y z budget))
-                                                   ([p k x y z budget entered?] (note! x y z) (flood p k x y z budget entered?)))]
+        near (with-redefs [reach-room/room-flood (let [f (fn [p k x y z & more] (when (= 3 (count more)) (note! x y z)) (apply flood p k x y z more))]
+                                              (fn ([a b c d e] (f a b c d e)) ([a b c d e g] (f a b c d e g)) ([a b c d e g h] (f a b c d e g h)) ([a b c d e g h i] (f a b c d e g h i))))]
                (vec (repeatedly 3 #(look-edge/walkable-near p [6 64 0]))))]
     (is (some? (first near)))
     (is (apply = near))

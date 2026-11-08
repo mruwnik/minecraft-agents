@@ -36,9 +36,8 @@
         floods (atom [])
         flood reach-room/room-flood
         note! (fn [p args] (swap! floods conj (conj args (reach-room/steady-key (aget p "perception")))))]
-    (with-redefs [reach-room/room-flood (fn ([p k x y z] (note! p [x y z]) (flood p k x y z))
-                                          ([p k x y z budget] (note! p [x y z budget]) (flood p k x y z budget))
-                                          ([p k x y z budget entered?] (note! p [x y z budget entered?]) (flood p k x y z budget entered?)))]
+    (with-redefs [reach-room/room-flood (let [f (fn [p k x y z & more] (when (= 3 (count more)) (note! p (into [x y z] more))) (apply flood p k x y z more))]
+                                          (fn ([a b c d e] (f a b c d e)) ([a b c d e g] (f a b c d e g)) ([a b c d e g h] (f a b c d e g h)) ([a b c d e g h i] (f a b c d e g h i))))]
       (dotimes [_ 2] (is (= :later (first (probe/safe? (assoc c :id (str (random-uuid)))))))))
     (is (seq @floods))
     (is (= (distinct (map #(vector (take 3 %) (last %)) @floods)) (map #(vector (take 3 %) (last %)) @floods))
