@@ -152,8 +152,8 @@
 
 (defn dead-end-covers
   "The covers a dead end of the flee search is priced with (respond.goal/judge!): the cornered step's where the body
-  stands (cornered-covers, against the hostiles it weighs, from the ways' specs when given), built when the search
-  first meets a dead end. Not home: the dead end lies away from it."
+  stands (cornered-covers, against the hostiles it weighs, from the ways' specs when given), built only when the search
+  needs them (flee-search/price-all!). Not home: the dead end lies away from it."
   ([c] (dead-end-covers c nil))
   ([c specs] (fn [] (cornered/cornered-covers c (cornered/near-hostiles c) false specs))))
 

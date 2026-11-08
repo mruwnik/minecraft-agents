@@ -230,7 +230,7 @@
         ;; a far cell never sensed reads stone: the dig looks at it and stops if it lays open a gap
         wall-name #(or (look/rock-name p %) (when (unknown? %) "stone"))
         ;; the far pair lies behind cells the body has not dug yet: unsensed, it reads stone like the walls, the dig looks and stops on a gap
-        floor-holds? (every? #(let [n (wall-name (at % -1 [0 0]))] (and (solid/solid? n) (not (rules/falling? n)))) [1 2])
+        floor-holds? (delay (every? #(let [n (wall-name (at % -1 [0 0]))] (and (solid/solid? n) (not (rules/falling? n)))) [1 2]))
         names (map-indexed (fn [i cell] (if (< i 2) (dug-name cell) (or (dug-name cell) (when (unknown? cell) "stone")))) dug)]
     (when (and (every? #(solid/solid? %) names)
                (every? #(solid/solid? (wall-name %)) walls)
@@ -238,7 +238,7 @@
                (every? #(and (rules/natural? %) (not (escape/protected? %)) (not (rules/falling? %))) names)
                (not-any? #(rules/falling? (wall-name %)) (map #(at % 2 [0 0]) [1 2]))
                (or (lb/pick c blocks) (some (set blocks) (map #(lb/item-name {:block %}) names))
-                   (and floor-holds? (lb/pick c (vec look/loose-ground)))))
+                   (and @floor-holds? (lb/pick c (vec look/loose-ground)))))
       {:cells (vec dug) :harvest? (every? #(tools/can-harvest? p %) names)})))
 
 (defn pocket-cells

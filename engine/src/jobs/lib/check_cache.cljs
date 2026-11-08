@@ -92,16 +92,17 @@
 (defonce bodies (js/WeakMap.))
 
 (defn body-keyed
-  "keyed for a pure (thunk) of `inputs`, kept for every job of c's body (engine): a value no world read, only its inputs
-  and the settings, decides."
+  "keyed for a pure (thunk) of `inputs`, kept for every job of c's body (engine; none without one): a value no world
+  read, only its inputs and the settings, decides."
   [c tag inputs thunk]
-  (let [key (:warned (:engine c))
-        entries (or (.get bodies key) (let [e (atom {})] (.set bodies key e) e))
-        look {:in inputs :values (:values @settings/state) :scope (.getStore settings/call-scope)}
-        same? (fn [e] (and (identical? (:values e) (:values look)) (= (:scope e) (:scope look)) (= (:in e) inputs)))
-        hit (first (filter same? (get @entries tag)))]
-    (if hit
-      (:v hit)
-      (let [v (thunk)]
-        (swap! entries update tag #(into [] (take (settings/get settings ::keep)) (cons (assoc look :v v) (remove same? %))))
-        v))))
+  (if-let [key (:warned (:engine c))]
+    (let [entries (or (.get bodies key) (let [e (atom {})] (.set bodies key e) e))
+          look {:in inputs :values (:values @settings/state) :scope (.getStore settings/call-scope)}
+          same? (fn [e] (and (identical? (:values e) (:values look)) (= (:scope e) (:scope look)) (= (:in e) inputs)))
+          hit (first (filter same? (get @entries tag)))]
+      (if hit
+        (:v hit)
+        (let [v (thunk)]
+          (swap! entries update tag #(into [] (take (settings/get settings ::keep)) (cons (assoc look :v v) (remove same? %))))
+          v)))
+    (thunk)))

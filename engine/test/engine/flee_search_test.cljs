@@ -15,9 +15,12 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.flee-search :as search]
             [jobs.lib.look :as look]
+            [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
             [jobs.lib.rooms :as rooms]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spawn-light :as spawn-light]
+            [jobs.lib.threats :as threats]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.util :as u]
             [jobs.survival.respond.goal :as respond.goal]))
@@ -242,6 +245,41 @@
           (is (seq ends))
           (is (not-any? :unseen ends) "all seen: no dead end in the dark")
           (is (zero? @built) "no dead end met: the covers' quotes are never asked for"))))))
+
+(deftest a-good-enough-check-builds-no-covers-while-no-open-way-could-be-below-staying
+  ;; card b8c11a8c: the stop check forced staying's price, and with it the covers, after every far end it planned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks (carve rock [[-3 -3 3 3]]) :light-default [15 15]
+                            :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x -2.5 :y 64 :z 0.5}}]
+                            :self {:pos {:x 0.5 :y 64 :z 0.5}} :yaw 270 :pitch 0})
+              p (tu/seeing-all raw)
+              built (atom 0)
+              ends (await (search/search! (ctx-of p) [{:name "zombie" :mob "zombie" :pos {:x -2.5 :y 64 :z 0.5}}] []
+                                          {:enough {} :covers (fn [] (swap! built inc) {})}))]
+          (is (seq ends))
+          (is (not-any? :open? ends) "a seen room shut all round: no way out")
+          (is (not-any? :unseen ends) "all seen: no dead end in the dark")
+          (is (zero? @built) "no open way to weigh against staying: the covers' quotes are never asked for"))))))
+
+(deftest a-flee-search-reads-the-spawn-kill-a-walk-price-read-at-the-same-feet
+  ;; the search priced one mob spawned beside the body afresh (~20 ms) where the decision's walk quote had just priced it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (sky/with-sky (tu/fake {:floor [-32 -32 32 32] :time st/night :self {:pos {:x 0.5 :y 64 :z 0.5}}
+                                        :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x -4.5 :y 64 :z 0.5}}]}))
+              c (assoc (ctx-of p) :engine {:warned (atom {})})
+              _ (price/spawn-parts c (threats/death-body c) (sh-sense/feet p))
+              asked (atom 0)
+              [kill kill-hurt] [cost/spawn-kill cost/spawn-kill-hurt]
+              _ (set! cost/spawn-kill (fn [body at] (swap! asked inc) (kill body at)))
+              _ (set! cost/spawn-kill-hurt (fn [body at] (swap! asked inc) (kill-hurt body at)))
+              ends (try (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {}))
+                        (finally (set! cost/spawn-kill kill) (set! cost/spawn-kill-hurt kill-hurt)))]
+          (is (seq ends))
+          (is (zero? @asked) "the spawn kill at the body's feet is the one the walk price kept"))))))
 
 ;; card 6699a4ea: the old search priced a dead end the same wherever it lay, so the straight way on through the dark
 ;; beat the branch behind, and the body learnt of the dead end only once the zombie held the branch
