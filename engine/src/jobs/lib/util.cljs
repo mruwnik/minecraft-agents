@@ -203,7 +203,7 @@
 (defn progress!
   "The act the failures counted against succeeded: the failures in a row start again from none."
   [c]
-  (ctx/update-mem! c dissoc ::failures)
+  (ctx/update-mem! c dissoc ::failures ::refusal)
   nil)
 
 (defn failures
@@ -212,10 +212,21 @@
   (::failures (ctx/mem c) 0))
 
 (defn failed!
-  "Count one more failure in a row in job memory, which cost/try-again? weighs another try by; nil."
+  "Count one more failure in a row in job memory, which cost/try-again? weighs another try by; nil. With a refusal key (the
+  cell and the cause the server gave) the failure counts as a refusal too: the same key again in a row is an identical
+  refusal (refusals), any other failure or key starts the count again."
+  ([c] (failed! c nil))
+  ([c refusal]
+   (ctx/update-mem! c #(-> %
+                           (update ::failures (fnil inc 0))
+                           (cond-> (nil? refusal) (dissoc ::refusal)
+                                   refusal (assoc ::refusal {:key refusal :n (if (= refusal (:key (::refusal %))) (inc (:n (::refusal %))) 1)}))))
+   nil))
+
+(defn refusals
+  "How many times in a row the server refused with the same key (failed! c key); 0 after any other failure or progress."
   [c]
-  (ctx/update-mem! c update ::failures (fnil inc 0))
-  nil)
+  (:n (::refusal (ctx/mem c)) 0))
 
 (defn count-fail!
   "Count one more failure in a row in job memory. True when that makes max-failures."

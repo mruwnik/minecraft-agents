@@ -422,7 +422,8 @@
         (let [placed-at (fn ^:async placed* [worth]
                           (let [{:keys [eng p seen] :as s} (setup {})]
                             (.override (.-world p) "jumpPlace"
-                                       (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
+                                       (let [n (atom 0)]
+                                         (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason (str "not-raised-" (swap! n inc))}))))
                             (core/submit! eng (list job {:height 6 :worth worth}) {})
                             (await (ticks s eng 80))
                             (assert (finished? eng))
@@ -433,8 +434,20 @@
           (doseq [r [cheap dear]]
             (is (empty? (:ledger r)) "the intents of blocks that never went in are dropped")
             (is (= :place-failed (:reason (:stopped r))))
-            (is (= "not-raised" (:detail (:stopped r))))
+            (is (re-matches #"not-raised-\d+" (:detail (:stopped r))) "refusals with a different cause each time are priced as noise")
             (is (= [0 64 0] (:at (:stopped r))) "the give-up names the cell it could not place on")))))))
+
+(deftest the-same-refusal-at-the-same-cell-twice-stops-the-pillar-after-two-tries-even-at-a-high-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {})]
+          (.override (.-world p) "jumpPlace" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: Server refused to place cobblestone: spawn protection"})))
+          (core/submit! eng (list job {:height 6 :worth 1200}) {})
+          (await (ticks s eng 80))
+          (is (finished? eng))
+          (is (= 2 (count (calls p "jumpPlace"))) "a refusal that repeats exactly is a rule: the second one ends the tries")
+          (is (= :place-failed (:reason (first (of-kind seen :stopped))))))))))
 
 (deftest a-placement-the-server-refuses-five-times-is-tried-again-at-the-roots-endless-worth
   (async done
@@ -445,7 +458,7 @@
           (.override (.-world p) "jumpPlace"
                      (fn [token args impl]
                        (if (pos? (swap! refused dec))
-                         (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})
+                         (js/Promise.resolve #js {:status "failed" :placed 0 :reason (str "not-raised-" @refused)})
                          (impl token args))))
           (core/submit! eng (tu/order (list job {:height 2})) {})
           (await (ticks s eng 30))

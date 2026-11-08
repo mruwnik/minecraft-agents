@@ -1,5 +1,5 @@
 ;; Card 0b907838: a pillar that gives up :place-failed names the cell (:at) and the cause (:detail), and its text ends "at [x y z] (reason)".
-;; Adventure mode refuses every block placement without a failure the job could foresee. At the worth a caller passes (1200 s) cost/try-again? :place allows about a dozen refused jumps before the pillar gives up.
+;; Adventure mode refuses every block placement without a failure the job could foresee. The same refusal at the same cell twice (cost/refusal-kind :place-refused) ends the pillar after two jumps, at any worth.
 {:defaults
  {:tags [:access]
   :mobs :keep
@@ -10,5 +10,5 @@
  [{:name "place-refused-names-cell-and-cause"
    :act [[:rcon "gamemode adventure $BODY"]
          [:job (jobs.access.pillar {:height 1 :worth 1200})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :place-failed :at [:any] :detail [:contains "Server refused to place"]}} :within-s 150 :of-job true}]
-   :limit-s 160}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :place-failed :at [:any] :detail [:contains "Server refused to place"]}} :within-s 60 :of-job true}]
+   :limit-s 70}]}

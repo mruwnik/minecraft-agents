@@ -95,11 +95,11 @@
 (def defaults {:use {:blocks :pillar} :spend {:job-time ::job-time-s}})
 
 (defn retry?
-  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place, at the call's :try-s) plus the hp the try's failure costs (hurt, default 0; a landing's cost/landing-hp, at cost/hp-cost)."
+  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place, at the call's :try-s; the same refusal at the same cell twice in a row: :place-refused) plus the hp the try's failure costs (hurt, default 0; a landing's cost/landing-hp, at cost/hp-cost)."
   ([c] (retry? c 0))
   ([c hurt]
    (or (zero? (u/failures c))
-       (cost/try-again? c :place {:try-s (+ (or (:try-s (:args c)) (cost/retry-s :place)) (cost/hp-cost hurt))}))))
+       (cost/try-again? c (cost/refusal-kind c :place) {:try-s (+ (or (:try-s (:args c)) (cost/retry-s :place)) (cost/hp-cost hurt))}))))
 
 (defn land-step-ms [] (settings/get settings ::land-step-ms))
 
@@ -372,7 +372,8 @@
             _ (when shoved?
                 (ctx/update-mem! c assoc :counted true)
                 (ctx/emit! c :pillar.knockback :info (knockback-data c (:base (ctx/mem c)))))
-            _ (when (or shoved? (not (and (mob-in-cell c cell) (mob-wait! c)))) (u/failed! c))]
+            _ (when (or shoved? (not (and (mob-in-cell c cell) (mob-wait! c))))
+                (u/failed! c (when-not shoved? [cell (some-> (.-reason r) str)])))]
         (if (retry? c)
           :again
           (let [settled (ledger/reconcile l block-at)]

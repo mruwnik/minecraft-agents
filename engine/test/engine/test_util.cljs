@@ -27,14 +27,14 @@
 (def order-worth "A hand order's worth, as in the workspace examples (dashboard agent-tools workspace); engine tests cannot reach that string." 1200)
 
 (defn order
-  "Job spec form as an agent orders it by hand: each job without a :worth in its args gets worth (default order-worth; an agent submit without a worth is refused)."
+  "Job spec form as an agent orders it by hand: each job without a :worth in its args gets worth (default order-worth; a :worth given, a wrong type too, stays for the job's spec to refuse; an agent submit without a worth is refused)."
   ([form] (order form order-worth))
   ([form worth]
    (let [[head & parts] form]
      (case head
        (seq any until) (apply list head (map #(order % worth) parts))
        repeat (apply list head (concat (butlast parts) [(order (last parts) worth)]))
-       (if (number? (:worth (first parts)))
+       (if (some? (:worth (first parts)))
          form
          (list head (assoc (first parts) :worth worth)))))))
 

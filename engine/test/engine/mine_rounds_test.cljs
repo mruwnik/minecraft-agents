@@ -149,7 +149,7 @@
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-torches (:reason (m/done-event s))) "a server that keeps refusing the craft is stuck: the retries stop paying and the dig ends :no-torches")
-          (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
+          (is (<= 2 (count (m/calls s "craft")) 4) "a rejected craft is tried once more, then the identical refusal ends the tries (a fresh craft call may start over once)"))))))
 
 (deftest a-stocking-torch-craft-the-server-keeps-rejecting-is-retried-while-the-goal-pays-then-ends-the-trip-no-torches
   (async done
@@ -161,7 +161,7 @@
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-torches (:reason (m/done-event s))) "a root mine is worth its items (about 200 s for an iron ore), so the retries end when another craft no longer pays")
-          (is (< 1 (count (m/calls s "craft"))) "a rejected craft is tried again while the goal is worth a try"))))))
+          (is (<= 2 (count (m/calls s "craft")) 4) "a rejected craft is tried once more, then the identical refusal ends the tries (a fresh craft call may start over once)"))))))
 
 (deftest a-collect-that-ends-with-nothing-gained-is-booked-and-does-not-loop
   (async done

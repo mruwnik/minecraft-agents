@@ -226,10 +226,10 @@
   count and the reason."
   ([c made kind reason] (give-up! c made kind reason nil))
   ([c made kind reason extra]
-   (u/failed! c)
-   (if (cost/try-again? c kind)
+   (u/failed! c (:refusal extra))
+   (if (cost/try-again? c (cost/refusal-kind c kind))
      :again
-     (finish! c made (assoc extra :reason reason :text (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d))))))))
+     (finish! c made (assoc (dissoc extra :refusal) :reason reason :text (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d))))))))
 
 (defn table-problem
   "The crafting table to get while one is wanted and none is carried, else nil."
@@ -473,7 +473,7 @@
         "full" (or (await (room! c))
                    (finish! c made {:reason :full :text "inventory is full and make-room freed nothing"}))
         "cannot" (finish! c made {:reason :cannot :detail (.-reason r) :text (str "cannot craft " item ": " (.-reason r))})
-        (give-up! c made :craft :craft-failed {:detail status})))))
+        (give-up! c made :craft :craft-failed {:detail status :refusal [status (.-reason r)]})))))
 
 (defn ^:async cleanup
   "However the call ended: dig up the table this call put down, once, unless :keep-table, a zone or claim refuses the dig

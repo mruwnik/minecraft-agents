@@ -512,6 +512,12 @@
 
 (def retry-s value/retry-s)
 
+(defn refusal-kind
+  "kind, or its -refused kind (value/::retry-counts :place-refused, :craft-refused) once the server refused the call with the
+  same key twice in a row (u/failed! c key): an identical refusal repeats, so a try after it is priced at a hard refusal's chance."
+  [c kind]
+  (if (< 1 (u/refusals c)) (keyword (str (name kind) "-refused")) kind))
+
 (defn try-again?
   "Whether call c's next try of kind (a key of value/::retry-counts) is worth its price: its retry-chance after the call's
   failures in a row (u/failed!, u/progress! resets) times ctx/worth over the kind's measured :try-s. Never at a worth of 0. opts {:fails :try-s} replace
