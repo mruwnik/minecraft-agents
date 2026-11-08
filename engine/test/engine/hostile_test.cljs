@@ -540,25 +540,12 @@
             (await (core/tick! (:eng s)))
             (is (= walks? (boolean (seq (tu/walked-to (:eng s))))) (str "light " light))))))))
 
-(deftest the-fight-holds-position-in-the-dark-with-more-than-one-hostile-known
-  (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/with-light-data (tu/fake world)) :view (fn [] {:data {} :now 0}) :args {}}))
-    {:time 14000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} true
-    {:time 14000 :entities [(zombie 7 5 0)]} false
-    {:time 1000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} false))
-
 (def closed-room
   "A 3x3 room around the body, walls to y 69, roof at y 70, floor at y 63."
   (into {} (for [x (range -2 3) z (range -2 3) y (range 63 71)
                  :let [wall? (or (= 2 (Math/abs x)) (= 2 (Math/abs z)))]
                  :when (or wall? (= y 63) (= y 70))]
              [(str x "," y "," z) "stone"])))
-
-(deftest a-body-shut-in-a-room-in-the-dark-holds-against-one-hostile-unless-stay-inside-is-off
-  (are [world overrides held?] (= held? (settings/with-settings overrides #(respond-to-hostile/hold? {:primitives (tu/with-light-data (tu/fake world)) :view (fn [] {:data {} :now 0}) :args {}})))
-    {:time 14000 :blocks closed-room :entities [(zombie 7 5 0)]} {} true
-    {:time 14000 :blocks closed-room :entities [(zombie 7 5 0)]} {::respond-to-hostile/stay-inside false} false
-    {:time 1000 :blocks closed-room :entities [(zombie 7 5 0)]} {} false
-    {:time 14000 :entities [(zombie 7 5 0)]} {} false))
 
 (def breached-room
   "The closed room with a hole in its east wall and a low roof over the body."

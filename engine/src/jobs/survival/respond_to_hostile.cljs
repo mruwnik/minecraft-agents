@@ -28,7 +28,6 @@
             [jobs.survival.respond.state :as state]
             [jobs.survival.shut-in :as shut-in]
             [jobs.survival.dig-pit :as dig-pit]
-            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.look :as look]
@@ -52,13 +51,11 @@
 (a/defargs settings
   {::stay-inside {:default true :doc "A body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)." :spec boolean?}
    ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take (a hide runs long)." :spec (a/num-in 0 nil)}
-   ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "How recent a hurt keeps a fight from leaving heard or watched mobs, and makes a round look once more; the flight's hits within it are counted (:hits)." :spec (a/num-in 0 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}})
 
 (defn stay-inside? [] (settings/get settings ::stay-inside))
-(defn hold-radius [] (settings/get settings ::hold-radius))
 (defn hit-window-ms [] (* 1000 (settings/get settings ::hit-window-s)))
 (defn struck-policy [] {:cap (settings/get settings ::struck-cap) :ttl (* 1000 (settings/get settings ::struck-s))})
 
@@ -77,15 +74,6 @@
 (def near options/near)
 
 (def other {:fight :flee :flee :fight})
-
-(defn hold?
-  "Whether the fight stays where it is: in the dark, with more than one hostile known (the ones in view are not all there are),
-  or with any when the body is shut in a closed room or its own shelter and ::stay-inside is on."
-  [c]
-  (let [p (:primitives c)]
-    (boolean (and (look/dark-here? p)
-                  (or (> (count (danger-q/known-hostiles p (hold-radius) {})) 1)
-                      (and (stay-inside?) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 
 (defn hurt-lately?
   "Whether a mob may have hurt the body within hit-window-ms (an unseen one may be hitting it); hunger, fire or a fall do not count."
