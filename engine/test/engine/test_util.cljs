@@ -24,10 +24,10 @@
 
 (def require-here node/require-here)
 
-(def order-worth "The :worth of a hand order: what an agent's submit gives a goal it names no worth for." 1200)
+(def order-worth "A hand order's worth, as in the workspace examples (dashboard agent-tools workspace); engine tests cannot reach that string." 1200)
 
 (defn order
-  "Job spec form as an agent orders it by hand: each job without a :worth in its args gets worth (default order-worth)."
+  "Job spec form as an agent orders it by hand: each job without a :worth in its args gets worth (default order-worth; an agent submit without a worth is refused)."
   ([form] (order form order-worth))
   ([form worth]
    (let [[head & parts] form]
