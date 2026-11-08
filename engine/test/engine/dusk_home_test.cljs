@@ -84,12 +84,21 @@
         (let [world (-> stair-home-world (assoc :inventory []) (update :blocks merge (tu/box -1 62 -1 1 63 1 "obsidian")))]
           (is (< (first (await (go-home-from-the-ground 60 70 {:commute? true} world))) 3) "the far home is walked to"))))))
 
+(def lit-tunnel-world
+  "The stair-home-world sealed in a stone shell, every cell lit by block light (nothing spawns anywhere the body can
+  walk), with a dirt plug across the tunnel: the way out costs digging, which a worth of 0 never buys."
+  (let [inner (tu/box -1 64 -1 62 73 1 "stone")]
+    (-> stair-home-world
+        (assoc :light {} :light-default [15 15])
+        (update :blocks #(merge (apply dissoc (tu/box -2 64 -2 63 74 2 "stone") (keys inner)) (dissoc % "0,67,0") (tu/box 30 64 -1 30 73 1 "dirt"))))))
+
 (deftest stuck-underground-climbs-out-of-a-lit-tunnel-at-its-own-worth
-  ;; lit, the spot spawns nothing: being stuck is the loss, not the night's spawns
+  ;; every neighbour cell seen and lit: the spot spawns nothing, so being stuck is the loss, not the night's spawns
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup (assoc stair-home-world :light-default [0 15]))]
+        (let [{:keys [eng p]} (st/setup lit-tunnel-world)
+              _ (tu/seeing-all p)]
           (mem/write! (:store eng) :home {:pos {:x 60 :y 70 :z 0}} mem/place-policy)
           (core/submit! eng (tu/at-own-worth eng '(jobs.survival.go-home {:limit 1000})) {})
           (await (tu/run-until-empty eng 30))
