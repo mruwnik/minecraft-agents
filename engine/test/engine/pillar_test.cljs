@@ -13,6 +13,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.access.pillar :as pillar]
+            [jobs.lib.cost :as cost]
             [jobs.lib.pillar :as pl]))
 
 ;; ------------------------------------------------------------------ the step
@@ -236,6 +237,22 @@
           (is (finished? eng))
           (is (= [0 68 0] (feet p)))
           (is (empty? (of-kind seen :stopped)) "8 gravel blocks fall back: one obstacle"))))))
+
+(deftest a-landing-is-tried-again-only-while-its-hurt-is-paid-for-too
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [try-s (cost/retry-s :place)
+              hurt-s (cost/hp-cost cost/landing-hp)
+              ;; the first landing's try is worth its seconds alone, not its seconds and its hp
+              worth (/ (+ try-s (/ hurt-s 2)) (cost/retry-chance :place 1))
+              {:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "sand"}})]
+          (core/submit! eng (tu/order eng (list job {:height 2 :worth worth})) {})
+          (await (ticks s eng 40))
+          (is (finished? eng))
+          (is (= :ceiling (:reason (first (of-kind seen :stopped)))))
+          (is (= :landed (:dig (first (of-kind seen :stopped)))))
+          (is (every? #(contains? #{nil "air"} %) (blocks-at p [[0 64 0] [0 65 0]])) "the cells are clear"))))))
 
 (deftest digging-the-head-cell-under-a-falling-column-does-not-wait-for-it
   (async done

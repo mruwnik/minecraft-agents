@@ -39,6 +39,8 @@
 
 (defn heal-s-per-hp [] (settings/get settings ::heal-s-per-hp))
 
+(def landing-hp "hp a falling block that lands on the body costs: suffocation, 1 hp a half second, for the second a dig out takes." 2)
+
 (defn hp-cost "Seconds losing damage hp costs: hp-seconds each, a part hp pro rata." [damage]
   (* (max 0 damage) (hp-seconds)))
 

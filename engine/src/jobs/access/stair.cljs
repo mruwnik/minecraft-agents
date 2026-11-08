@@ -326,8 +326,6 @@
                                               :text (str "stair " (if arrived "walked back onto" "could not walk back onto") " its line at " (pr-str cell))})))
         (if (= :continue r) :continue :again)))))))
 
-(def landing-hp "hp a falling block that lands on the body costs: suffocation, 1 hp a half second, for the second a dig out takes." 2)
-
 (declare undermine-settle-ms)
 
 (defn undermine-s "Seconds a cut from beside the column adds: undermine-settle-ms and a step out and back at cost/walk-speed." []
@@ -337,7 +335,7 @@
   "Whether cutting from beside costs less than what an unseen cell over the column risks a body at health: ::hidden-fall-share
   x a landing, its landing-hp at cost.health/hp-cost or, at health landing-hp or less, the death (death-s), against undermine-s."
   [health death-s]
-  (> (* (settings/get settings ::hidden-fall-share) (if (<= health landing-hp) death-s (cost-health/hp-cost landing-hp)))
+  (> (* (settings/get settings ::hidden-fall-share) (if (<= health cost-health/landing-hp) death-s (cost-health/hp-cost cost-health/landing-hp)))
      (undermine-s)))
 
 (defn undermine-cell

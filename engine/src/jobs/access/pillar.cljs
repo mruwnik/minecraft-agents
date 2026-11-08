@@ -95,9 +95,11 @@
 (def defaults {:use {:blocks :pillar} :spend {:job-time ::job-time-s}})
 
 (defn retry?
-  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place, at the call's :try-s)."
-  [c]
-  (or (zero? (u/failures c)) (cost/try-again? c :place {:try-s (:try-s (:args c))})))
+  "Whether the pillar goes on after the failures in a row (u/failed!: a refused place, a knockback, a landed falling block, a dug roof block; a placed block is u/progress!): none yet, else while another try is worth its price (cost/try-again? :place, at the call's :try-s) plus the hp the try's failure costs (hurt, default 0; a landing's cost/landing-hp, at cost/hp-cost)."
+  ([c] (retry? c 0))
+  ([c hurt]
+   (or (zero? (u/failures c))
+       (cost/try-again? c :place {:try-s (+ (or (:try-s (:args c)) (cost/retry-s :place)) (cost/hp-cost hurt))}))))
 
 (defn land-step-ms [] (settings/get settings ::land-step-ms))
 
@@ -454,7 +456,7 @@
     (when-let [cell (first (filter #(rules/falling? (block-at %)) [(up feet 1) feet]))]
       (do
         (u/failed! c)
-        (if-not (retry? c)
+        (if-not (retry? c cost/landing-hp)
           (do (await (dig-one! c cell true))
               (finish! c l (give-up :ceiling :at cell :block (block-at cell) :dig :landed)))
           (if (= :continue (await (dig-one! c cell true))) :continue :again))))))
