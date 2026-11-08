@@ -52,6 +52,18 @@
   (let [kind-at (seen-kind-at p)]
     (fn [x y z] (sees-cell? kind-at (eye-at {:x (+ x 0.5) :y y :z (+ z 0.5)}) cell))))
 
+(defn dug-stand-sees-fn
+  "stand-sees-fn for the end stand of a dig route, which reads a cell never seen as rock: such a cell blocks the line
+  too, but for the stand's own feet and head cells, which the route digs."
+  [p cell]
+  (let [guessed (fn [x y z] (let [b (u/sensed p {:x x :y y :z z})]
+                              (cond (true? (some-> b .-unknown)) :solid
+                                    (= "lava" (some-> b .-name)) :open
+                                    :else (reach/kind-of b))))]
+    (fn [x y z]
+      (sees-cell? (fn [cx cy cz] (if (and (== cx x) (== cz z) (or (== cy y) (== cy (inc y)))) :open (guessed cx cy cz)))
+                  (eye-at {:x (+ x 0.5) :y y :z (+ z 0.5)}) cell))))
+
 (defn body-eye
   "The eye of the job's body where it stands now (a whole x or z is a cell: the body stands at its middle)."
   [c]

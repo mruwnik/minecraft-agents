@@ -688,16 +688,18 @@
           (is ((aim/stand-sees-fn p [9 60 0]) x y z) (pr-str [x y z])))))))
 
 (deftest a-goal-buried-under-a-plateau-in-range-but-out-of-sight-is-dug-to
-  ;; the stand on the plateau over the goal is within :range but sees only rock: no stand reached sees it, so it is walled in
+  ;; the stand on the plateau over the goal is within :range but sees only rock: no stand reached sees it, so it is walled in.
+  ;; The unseen pocket beside it is rock to the dig route, so the route ends on a stand that sees the goal past dug cells,
+  ;; not one that would see it only through that rock: one dig route, no ways out of holes dug short of sight
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (climb! {:blocks (box 2 0 2 30 5 30 "stone") :self {:pos {:x 16.5 :y 6 :z 16.5}} :light [0 15]
-                                                    :seen [[2 5 2 30 9 30]] :inventory [{:name "stone_pickaxe" :count 1}]}
+        (let [{:keys [out p] :as s} (await (climb! {:blocks (dissoc (box 2 0 2 30 5 30 "stone") "19,2,16" "19,3,16") :self {:pos {:x 16.5 :y 6 :z 16.5}} :light [0 15]
+                                                    :seen [[2 5 2 30 9 30]] :inventory [{:name "stone_pickaxe" :count 1} {:name "cobblestone" :count 4}]}
                                                    {:pos [20 3 16] :range 3 :see true :unknown false}))
               [x y z] (mapv js/Math.floor (gt/at p))]
           (is (true? (:arrived @out)) (pr-str @out))
-          (is (some #(= :dig-route (:step %)) (gt/events-of s :go-to.escalated)))
+          (is (= [:dig-route] (map :step (gt/events-of s :go-to.escalated))) (pr-str (map (juxt :step :at) (gt/events-of s :go-to.escalated))))
           (is ((aim/stand-sees-fn p [20 3 16]) x y z) (pr-str [x y z])))))))
 
 (deftest a-free-body-under-see-walks-round-a-wall-to-a-goal-past-sight-and-digs-nothing
@@ -844,3 +846,4 @@
       (way :approach :leg) (way :stair :climb) :leg)
     (is (= :searching (:step (esc/or-climb {:step :dig-route} {:step :searching} (constantly 1) 0.5))) "a climb still searched is waited for")
     (is (= :dig-route (:step (esc/or-climb {:step :dig-route} {:step :searching} (constantly 1) 1))) "no longer than the way in hand costs")))
+

@@ -513,7 +513,7 @@
   :pillar-s (a fn is rebuilt each call: not part of the slice's key), :margin).
   The search ends by price once its cheapest open cell costs more than the least of route-opts :bound-s, :worth-s and the straight dig (each cell's dig seconds, a walked step or the fall a dug floor drops it, and an unseen toll), the back search's bound in the heuristic; each is searched round dig-route/lane first (seeded-search; a climb's pillar part the route-opts :max-places carried), the straight dig held (:held-s: past dig-route/answer-s with no cheaper route in hand it is the route); every search through search-opts (dig-way, frontier-way, replans, climb) also prices its CPU (:read-s a cell read). With :slice (route-slice) a search that spends it goes on at the next call; without, it ends
   at the node budget as no route. With :range (and :near, the cell it is measured from) the route ends on any stand
-  within it (with :see, one whose eye sees that block, jobs.lib.aim) and never digs :near. Each guess on it pays, at the chance it is not diggable (its class's risk, route-opts :guess-risk {class
+  within it (with :see, one whose eye sees that block over the rock it guesses, aim/dug-stand-sees-fn) and never digs :near. Each guess on it pays, at the chance it is not diggable (its class's risk, route-opts :guess-risk {class
   chance}: guess-class), a look and a replan round it, in the search; it is none over :worth-s seconds. Its :share-s is its
   :seconds without those misses: a way's price (way-total) reads unseen cells at the chance they are solid only. The body's own blocks (own?) are dug free in the search and the worth checks; the reported :seconds and :share-s add their dig."
   [p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice spent] :as route-opts}]
@@ -654,7 +654,7 @@
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell) (or (not lazy?) (allowed? cell)))
                                                             ((:dig-s prices) (or name (block-at cell)) cell)))}
                                   route-opts
-                                  (when-let [cell (:see route-opts)] {:sees (aim/stand-sees-fn p cell)})))
+                                  (when-let [cell (:see route-opts)] {:sees (aim/dug-stand-sees-fn p cell)})))
         ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused spent lazy?]
                  (let [m (max-s refused)
