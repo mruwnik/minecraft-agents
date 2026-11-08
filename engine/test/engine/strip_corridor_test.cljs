@@ -205,12 +205,13 @@
         (let [r (await (run! (world) {:segment "nonsense"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys r [:status :reason]))))))))
 
-(deftest spawner-break-with-a-cave-spider-near-waits-and-digs-nothing
+(deftest spawner-break-with-a-pack-of-cave-spiders-near-waits-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (world :entities [spider] :blocks spawner-corridor)
-              why (await (bd/waiting-after env (list job (assoc args :spawner :break :worth 0)) 3))]
+        (let [pack (map #(assoc spider :id (+ 20 %) :pos {:x (+ 2 (mod % 3)) :y 64 :z (- (quot % 3) 1)}) (range 9))
+              env (world :entities pack :blocks spawner-corridor)
+              why (await (bd/waiting-after env (list job (assoc args :spawner :break)) 3))]
           (is (= :hostile-near (:reason why)))
           (is (empty? (bd/calls (:p env) "dig")))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))

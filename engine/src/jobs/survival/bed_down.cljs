@@ -279,12 +279,12 @@
     (cost/night-walk-bound-s (sh/in-ground? p (ctx/view c)) left (reduce min ##Inf prices))))
 
 (defn mid-danger?
-  "A hostile near (ready/threatened), burning, drowning, or off the ground (not in water, not riding): a log-out now
+  "A hostile near (ready/hostile-now?), burning, drowning, or off the ground (not in water, not riding): a log-out now
   leaves the danger waiting for the return."
   [c]
   (let [p (:primitives c)
         self (.self p)]
-    (or (not= :ok (first (ready/threatened c)))
+    (or (ready/hostile-now? c)
         (body/burning? p)
         (breath/drowning? p)
         (and (false? (.-onGround self)) (not (.-inWater self)) (nil? (.-vehicle self))))))

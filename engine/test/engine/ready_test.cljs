@@ -543,10 +543,11 @@
     {:entities [skeleton]} {:ranged-radius 5} :ok))
 
 (deftest threatened-prices-a-seen-mob-against-the-calls-worth
-  (let [verdict (fn [worth] (let [s (ready/threatened (assoc (with-entry (merge at-origin {:entities [zombie]}) {}) :worth (constantly worth)))]
-                              [(first s) (:reason (nth s 2))]))]
-    (is (= [:later :hostile-near] (verdict 0)) "a worthless call waits for the reflex")
-    (is (= [:ok :seen-priced] (verdict 1e9)) "a call worth more than the mob costs does not wait on a reflex that may never remove it")))
+  (let [verdict (fn [worth] (let [s (ready/threatened (assoc (with-entry (merge at-origin {:entities [zombie] :inventory sword}) {}) :worth (constantly worth)))]
+                              [(first s) (:reason (nth s 2)) (:loss (nth s 2))]))
+        [_ _ loss] (verdict tu/order-worth)]
+    (is (= [:later :hostile-near] (take 2 (verdict tu/order-worth))) "a hand order waits beside a mob that costs more than the order is worth")
+    (is (= [:ok :seen-priced] (take 2 (verdict (inc loss)))) "a call worth more than the mob costs does not wait on a reflex that may never remove it")))
 
 (deftest threatened-keeps-the-triggers-visible-only-option
   (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})

@@ -2,7 +2,7 @@
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (priced; the estimate of jobs.lib.spawn-light/exposure is
   above 0; :look while the light there is unseen and a look from here would show it, else priced as unseen (unseen-status); :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
-  (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
+  (threatened: a mob near whose danger over the stay is more than the call is worth); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
             [clojure.string :as str]
             [engine.args :as a]
@@ -870,7 +870,7 @@
    'job-fit {:args [] :type :status :doc "the frame's own fit? holds" :fn #(own-export :fit?)}
    'exposed {:args [] :type :status :doc "the place of the frame's own safe? is exposed (dark)"
              :fn #(lcond/not exposure-of)}
-   'threatened {:args [] :type :status :doc "a hostile is near (ready/threatened)" :fn #(lcond/not threatened)}
+   'threatened {:args [] :type :status :doc "a hostile is near and its danger over the stay is more than the call is worth (ready/threatened)" :fn #(lcond/not threatened)}
    'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or while starving (food 0, or hurt with food unreachable) no hostile is near"
                           :fn (fn [] #(or-starving (own-export :safe?) %))}
    'healthy {:args [] :type :status :doc "health is enough and the body is not poisoned (fit?)" :fn (fn [] fit?)}
