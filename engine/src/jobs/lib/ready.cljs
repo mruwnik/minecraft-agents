@@ -445,13 +445,28 @@
   [c]
   (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true)))
 
+(defn seen-price
+  "ok while the dangers the hostile-near trigger holds for (seen or remembered) cost no more than the call is worth over
+  its stay (loss-over, as heard-price): the reflex answers a mob it can answer, so a job that still finds one near has
+  seen the reflex decline or fail, and waiting on it has no end. Over the worth: later :hostile-near."
+  [c]
+  (let [p (:primitives c)
+        hs (danger/hostile-dangers p (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))
+        all (hostile-loss/loss-over c (ctx/view c) hs (price/stay-s c))
+        worth (ctx/worth c)]
+    (if (<= all worth)
+      (contract/ok :seen-priced (str "a hostile is near" (nearest-text c) ": " (price/round1 all) " s over the stay, within the call's worth " (price/round1 worth) " s"))
+      (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": " (price/round1 all) " s over the stay, more than the call's worth " (price/round1 worth) " s: deal with it first")
+                      :loss all :worth worth :recheck-after-ms walk-risk/recheck-ms))))
+
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a
-  mob seen or remembered; heard-only mobs are priced (heard-price)."
+  mob seen or remembered and its danger over the stay is more than the call is worth (seen-price); heard-only mobs are
+  priced the same way (heard-price)."
   [c]
   (check-cache/cached c ::threatened
                       #(if (hostile-now? c)
-                         (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first"))
+                         (seen-price c)
                          (heard-price c))))
 
 (defn unarmed-threatened

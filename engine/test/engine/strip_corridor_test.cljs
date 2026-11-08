@@ -210,7 +210,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (world :entities [spider] :blocks spawner-corridor)
-              why (await (bd/waiting-after env (list job (assoc args :spawner :break)) 3))]
+              why (await (bd/waiting-after env (list job (assoc args :spawner :break :worth 0)) 3))]
           (is (= :hostile-near (:reason why)))
           (is (empty? (bd/calls (:p env) "dig")))
           (is (= "spawner" (bd/block-at (:p env) spawner-cell))))))))
