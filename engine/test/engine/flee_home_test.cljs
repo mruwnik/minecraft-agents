@@ -58,11 +58,25 @@
     (when-not (false? (:home world)) (mem/write! (:store eng) :home {:pos (:home world home)} {:cap 1 :ttl :forever}))
     {:eng eng :p p :seen seen}))
 
-(defn ^:async flee! [world]
-  (let [{:keys [eng] :as s} (setup world)]
-    (core/submit! eng (tu/order '(test.flight)) {})
-    (await (tu/run-until-empty eng 6))
-    s))
+(def stall-waits
+  "Waits after which a flight here counts as stuck (the fake's mobs never leave; flights here wait 5 at most): the mobs
+  are cleared so the test fails instead of hanging."
+  100)
+
+(defn ^:async flee!
+  "Run a flight in world to its end, at most 6 ticks; the mobs leave on wait leave-wait (default: only at stall-waits, a failure)."
+  ([world] (await (flee! world stall-waits)))
+  ([world leave-wait]
+   (let [{:keys [eng p] :as s} (setup world)
+         waits (atom 0)]
+     (.override (.-world p) "wait" (fn ^:async f [token a impl]
+                                     (let [n (swap! waits inc)]
+                                       (when (#{leave-wait stall-waits} n) (swap! (fake/state p) assoc :entities []))
+                                       (when (= n stall-waits) (is (< n stall-waits) "the flight ends before stall-waits holds")))
+                                     (await (impl token a))))
+     (core/submit! eng (tu/order '(test.flight)) {})
+     (await (tu/run-until-empty eng 6))
+     s)))
 
 (defn zombie [x z chase] (cond-> {:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z} :visible true}
                            chase (assoc :chase {:speed chase})))
@@ -269,7 +283,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [creeper (assoc (zombie 5.5 4.3 nil) :name "creeper")
-              {:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 1.5} open-door [creeper])))
+              ;; the fake creeper never blasts or walks off: it leaves on the third hold, as one does that finds no way in
+              {:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 1.5} open-door [creeper]) 3))
               choice (first (filter #(= :retreat.choice (:kind %)) @seen))
               cornered (filter #(= :retreat.cornered (:kind %)) @seen)]
           (is (false? (hs/door-open? p)) "the door is shut: it takes the creeper's line of sight")
