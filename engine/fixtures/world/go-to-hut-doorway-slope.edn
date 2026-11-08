@@ -18,10 +18,8 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [13 3 24] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [13.5 3 24.5] 2] [:block [12 1 17] "air"] [:block [15 1 17] "stone"] [:block [14 0 19] "stone"]]}
-;; The search case is a surface scene: lit sky plot and a skylight in the roof, so the body is not sealed under the underground cell's 118-block rise prior (a sealed body pays the stair up to the sky first, 2338 s against the 1200 s worth).
   {:name "search-starting-in-the-hut-finds-a-cow-outside"
-   :plot {:light :sky}
-   :blocks [[:set [14 2 17] "air"]]
    :act [[:summon "cow" [13.5 3 25.5]]
          [:job (jobs.explore.search {:worth 1200 :target "cow" :scan-radius 24})]]
-   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]}} :within-s 120 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]}} :within-s 120 :of-job true}]
+   :after [[:block [14 2 17] "stone"]]}]}

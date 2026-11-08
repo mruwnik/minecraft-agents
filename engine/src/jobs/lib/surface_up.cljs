@@ -88,11 +88,11 @@
 (def sky-scan "Blocks out from the feet, and between columns, of the look for a surface the body remembers." {:reach 8 :step 4 :height 80})
 
 (defn known-surface
-  "The y of the open ground the body knows above its feet, else nil: the nearest (by the flat distance from the feet) of the
+  "The y of the open ground the body knows at or above its feet, else nil: the nearest (by the flat distance from the feet) of the
   tops of its own stairs that end under the open sky and the lowest sky-lit stands (open, seen solid under) it remembers in
-  the columns round it. Only a ground a stair straight toward it reaches (flat distance within its rise) counts: a stair
-  rises a block for each block it goes along."
-  [c]
+  the columns round it. Only a ground a stair straight toward it reaches (flat distance within its rise, or within least, the
+  blocks of stair the body cuts anyway) counts: a stair rises a block for each block it goes along."
+  [c & [least]]
   (let [p (:primitives c)
         {:keys [x y z] :as feet} (sh-sense/feet p)
         {:keys [reach step height]} sky-scan
@@ -102,12 +102,12 @@
                                                (pos? (or (sh-sense/sky-light-at p cell) 0))
                                                (sh-sense/seen-cell? p (update cell :y dec)) (sh-sense/solid-at? p (update cell :y dec)))
                                       cell)))
-                         (range (inc y) (+ y height))))
+                         (range y (+ y height))))
         stands (keep (fn [[dx dz]] (stand-in (+ x dx) (+ z dz)))
                      (for [dx (range (- reach) (inc reach) step) dz (range (- reach) (inc reach) step) :when (not= 0 dx dz)] [dx dz]))
         flat #(u/flat-dist feet %)]
     (->> (concat (open-tops c) stands)
-         (filter #(<= (flat %) (- (:y %) y)))
+         (filter #(<= (flat %) (max (- (:y %) y) (or least 0))))
          (sort-by (juxt flat :y))
          first
          :y)))
@@ -130,7 +130,8 @@
           (pos? (or light 0)) dy
           solid? (recur (inc dy) dy 0)
           (and (nil? light) (> (inc gap) (dig-look/rock-depth)))
-          (js/Math.ceil (cost/expected-rise y (+ last-rock (dig-look/rock-depth) 1) (known-surface c)))
+          (let [least (+ last-rock (dig-look/rock-depth) 1)]
+            (js/Math.ceil (cost/expected-rise y least (known-surface c least))))
           :else (recur (inc dy) last-rock (if (nil? light) (inc gap) gap)))))))
 
 (defn climb-s

@@ -100,6 +100,19 @@
     (aset (.-rawWorld p) "lightAt" (fn [_ y _] (if (>= y 80) 240 0)))
     (with-mem {} #(is (= 16 (surface/rise {:primitives p})) "the air from y 67 to 71 is seen, the stone over it too, and the sky from 80 is the rise"))))
 
+(deftest a-body-under-a-one-block-roof-with-open-sky-remembered-beside-it-prices-a-few-blocks-of-stair
+  (let [pocket #{"0,3,0" "0,4,0"}
+        p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 0.5 :y 3 :z 0.5}}
+                                                      :blocks (merge (box -9 2 -9 9 2 9 "stone")
+                                                                     (apply dissoc (box -2 3 -2 2 5 2 "stone") pocket))})))
+        sensed (aget p "sensedAt")
+        above-roof? (fn [pos] (and (>= (js/Math.floor (.-y pos)) 6) (<= (js/Math.abs (js/Math.floor (.-x pos))) 2) (<= (js/Math.abs (js/Math.floor (.-z pos))) 2)))
+        seen-at (aget p "seenBlockAt")]
+    (aset p "seenBlockAt" (fn [pos] (if (above-roof? pos) #js {:unknown true :pos pos} (.call seen-at p pos))))
+    (tu/set-sensed! p (fn [pos] (if (above-roof? pos) #js {:unknown true} (sensed pos))))
+    (aset (.-rawWorld p) "lightAt" (fn [x y z] (if (or (> (js/Math.abs x) 2) (> (js/Math.abs z) 2)) 240 0)))
+    (with-mem {} #(is (<= (surface/rise {:primitives p}) 8) "the ground round the hut is lit, so the sky is within a stair of the roof, not at the underground prior"))))
+
 (defn known-surface-with
   "known-surface of a body at y 16 in a 7-wide block of rock, with extra blocks and the floors of the stairs it cut."
   [extra floors]
