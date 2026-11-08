@@ -1143,10 +1143,10 @@
 
 (deftest a-body-shut-in-on-a-plateau-far-from-a-sealed-pocket-gets-off-at-the-edge-nearest-it
   ;; world case go-to-far-enclosed-goal: a plateau 6 high on a stone mass, the pocket 70 across and 9 down too far for one
-  ;; dig route; no stair, pillar or wall leads off the top: its dig legs are dearer than the walk to the edge nearest the
-  ;; pocket, so it walks there (each step nearer: the old approaches round the top, each no nearer, gave up after 3), gets
-  ;; down and digs the short way from the plain; the far search from the top outgrows the heap (stubbed: test-util turns
-  ;; the real check off) and goes on across rounds as one search
+  ;; dig route; no stair, pillar or wall leads off the top: each dig leg is weighed against the walk to the edge nearest the
+  ;; pocket by their whole ways and the cheaper taken (the two are within a few percent here, so which wins is the prices'
+  ;; call, not pinned); it never tours (each look over an edge starts nearer the pocket) and arrives. The far search from
+  ;; the top outgrows the heap (stubbed: test-util turns the real check off) and goes on across rounds as one search
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1165,9 +1165,14 @@
                                         (finally (set! dig-route/heap-full? (constantly false))
                                                  (set! dig-route/search search)))]
           (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) (map (juxt :step :at) (filter #(= :go-to.escalated (:kind %)) seen))))
-          (let [tops (map #(u/dist (zipmap [:x :y :z] (:at %)) {:x 80 :y 51 :z 56}) (filter #(and (= :go-to.escalated (:kind %)) (= :approach (:step %)) (= 61 (second (:at %)))) seen))]
-            (is (every? true? (map > tops (rest tops))) (str "no tour round the top: each look over its seen edge starts nearer the pocket " (pr-str tops))))
-          (is (some #(and (= :dig-route (:step %)) (< (second (:at %)) 61)) (filter #(= :go-to.escalated (:kind %)) seen)) "the short dig is taken from the plain, not the top")
+          (let [escalated (filter #(= :go-to.escalated (:kind %)) seen)
+                looks (map #(u/dist (zipmap [:x :y :z] (:at %)) {:x 80 :y 51 :z 56}) (filter #(= :approach (:step %)) escalated))
+                weighed (filter :weighed escalated)]
+            (is (<= 2 (count looks)) (pr-str looks))
+            (is (every? true? (map > looks (rest looks))) (str "no tour: each look over a seen edge starts nearer the pocket " (pr-str looks)))
+            (is (seq weighed) "the leg is weighed against the way off the edge")
+            (is (every? (fn [{:keys [step weighed]}] (let [least (apply min (map :s weighed))] (some #(and (= step (:step %)) (= least (:s %))) weighed))) weighed)
+                (str "the cheaper whole way is taken " (pr-str (map (juxt :step :at :weighed) weighed)))))
           (is (= [80 51 56] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos (.self p))))))))))))
 
 (deftest a-dig-route-over-guessed-rock-is-tried-from-the-top-when-its-search-can-end
