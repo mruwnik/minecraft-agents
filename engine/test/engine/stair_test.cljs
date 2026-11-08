@@ -737,6 +737,11 @@
         ;; card 37b7baf9: with the water seen gone the plug is an ordinary block
         (is (= {:plug "air" :plug-digs 2 :stops []} (await (later-stair-at-plug! "stone"))))))))
 
+(deftest water-that-filled-the-lower-cut-cell-is-plugged-there-not-in-the-cell-above
+  (let [block-at {[1 64 0] "air" [1 63 0] "water"}
+        dug [{:cell [1 64 0]} {:cell [1 63 0]}]]
+    (is (= [[[1 63 0] [1 63 0]]] (sc/exposed-water #(get block-at % "stone") dug #{} [[1 64 0] [1 63 0]])))))
+
 (deftest water-beside-a-dug-cell-with-no-block-to-plug-it-says-so
   (async done
     (tu/run-async done

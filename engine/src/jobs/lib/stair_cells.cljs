@@ -143,7 +143,7 @@
 
 (defn exposed-water
   "The cells this stair dug (memory :dug) among the cut that are open now and touch seen water, each with the water
-  cell: [cell water], water in the cell itself counted. Empty when :fluid-adjacent is accepted."
+  cell: [cell water], water in the cell itself counted, water in the cell below not (it cannot flow up). Empty when :fluid-adjacent is accepted."
   [block-at dug accept cut]
   (if (accept :fluid-adjacent)
     []
@@ -151,7 +151,7 @@
       (vec (for [cell cut :when (dug? cell)
                  :let [n (block-at cell)]
                  :when (or (bs/air n) (bs/fluids n))
-                 w (cons cell (map #(shape/add cell %) rules/neighbour-deltas))
+                 w (cons cell (map #(shape/add cell %) (remove #{[0 -1 0]} rules/neighbour-deltas)))
                  :when (= "water" (block-at w))]
              [cell w])))))
 
