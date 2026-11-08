@@ -268,7 +268,7 @@
   - {:step :approach :pos cell}: no side of the body's cell is solid: walk to wall-spot first.
   - on a ledge (no side solid, no wall-spot) under a higher goal with a pillar block carried: a stair whose first
     floor the stair job lays.
-  - a stair with no pit and no goal above (a sealed tunnel, a goal through thick rock): the deepest diggable one, up
+  - a stair with no pit and no goal above or below the feet (a sealed tunnel, a goal through thick rock): the deepest diggable one, up
     to max-depth and to the rim of a wall it climbs onto (rim-steps).
   - the pit's pillar with a seen solid cell in the column over it.
   - {:step :none :why kw}: none of these. :why :no-headroom: a pit the carried blocks would pillar out of but for
@@ -295,7 +295,7 @@
                         (or (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?) (vector n)))
                                   (distinct (filter pos? [rise depth])))
                             [nil rise]))
-         climb (delay (when-not (or (off :stair) (pos? rise))
+         climb (delay (when-not (or (off :stair) (pos? rise) (< (second goal) (second feet)))
                         (some (fn [n] (some-> (escape/stair-heading block-at feet stair-dirs n may-dig?)
                                               (as-> h [h (escape/rim-steps block-at (escape/unseen-of p) feet (escape/heading-dirs h) n (escape/drop-limit p))])))
                               (range (escape/max-depth) 0 -1))))

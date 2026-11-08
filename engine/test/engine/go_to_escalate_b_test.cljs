@@ -110,6 +110,15 @@
         p (tu/fake {:self {:pos {:x -1 :y 64 :z 0}} :blocks pocket})]
     (is (= :stair (:step (escape-way/choose p [-1 64 0] [6 64 0]))))))
 
+(deftest escape-choose-makes-no-stair-up-to-a-goal-below-in-the-same-sealed-cut
+  ;; a cut and a 4-deep trench sealed in rock, the goal on the trench floor: a stair up leads nowhere (the way to it is a dig toward it)
+  (let [pocket (apply dissoc (box -8 55 -3 12 68 3 "stone")
+                      (concat (for [x (range 0 4) y [64 65]] (str x "," y ",0"))
+                              (for [x [4 5] y (range 60 66)] (str x "," y ",0"))))
+        p (tu/fake {:self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks pocket})]
+    (is (not= :stair (:step (escape-way/choose p [3 64 0] [5 60 0]))))
+    (is (= :stair (:step (escape-way/choose p [3 64 0] [8 64 0]))) "a goal on the cut's level behind rock is still climbed to")))
+
 (deftest escape-choose-stair-without-a-goal-above-stops-at-the-rim-of-the-wall-it-climbs-onto
   ;; a 2-high wall 4 thick across the way, open ground on top: the stair stands on the rim after 2 steps, not max-depth
   (let [wall-world (merge (box -10 63 -10 14 63 10 "stone") (box 0 64 -10 3 65 10 "stone"))
