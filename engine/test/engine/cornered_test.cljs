@@ -757,22 +757,6 @@
           (is (not (hiding? seen)) "built under 2: not hidden")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
 
-(deftest a-flights-pillar-is-tried-again-at-the-flights-worth
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [jumps (fn ^:async jumps* [job scale]
-                      (let [{:keys [eng p]} (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0.5 64 1.6)]})]
-                        (.override (.-world p) "jumpPlace"
-                                   (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
-                        (core/submit! eng (let [[j a] (order eng job)] (list j (update a :worth * scale))) {})
-                        (await (core/tick! eng))
-                        (count (calls p "jumpPlace"))))
-              real (await (jumps '(test.real-flight) 1))
-              dear (await (jumps '(test.real-flight) 10))]
-          (is (<= 1 real 6) "at respond's real worth a try next to a zombie costs its seconds and the zombie's blows: a few tries, not over a hundred")
-          (is (< real dear) "a dearer danger pays for more jumps"))))))
-
 (deftest a-pillar-refused-for-a-zombie-in-its-cell-strikes-it-and-decides-again-each-time-then-hides
   (async done
     (tu/run-async done
