@@ -3,6 +3,7 @@
 ;; explores by default), a5d11d58 + 992b220d + 198dcd8b (ore seen -> mine -> smelt -> craft in one call), 06703dfa (raw_iron mined
 ;; from seen ore is collected), 490ee54b (a pickaxe with 2 uses left is not dug to breakage).
 ;; Open plot, body at [16.5 0 16.5] looking east (yaw 270); the table [16 0 20], furnace [20 0 14] where a case sets them.
+;; Without a table the log for one is searched for above the stair up from the plot, dearer than the call: the explore case sets one.
 ;; Should-fail: {:explore false} with no ore in sight waits no-source naming raw_iron; a nearly broken pick ends mine :no-tool.
 {:defaults
  {:tags [:items :obtain :jobs]
@@ -38,6 +39,7 @@
    :after [[:item "coal" [:>= 2]]]
    :limit-s 150}
   {:name "iron-pickaxe-no-ore-seen-explores-by-default"
+   :blocks [[:set [16 0 20] "crafting_table"]]
    :body {:inventory [["stone_pickaxe" 1] ["stick" 2] ["cobblestone" 8]]}
    :act [[:job (jobs.items.obtain {:worth 1200 :item "iron_pickaxe"})]]
    :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}]
