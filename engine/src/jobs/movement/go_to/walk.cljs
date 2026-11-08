@@ -160,7 +160,7 @@
 (defn known-end-check
   "near/walk-round!'s :stair-check: {:known-end true} for the plan the round would walk (check's {:cut plan'} when it cuts
   one, else the plan) over a mask (c's :unknown) to where a search cut by its budget, ended or short of an unloaded goal got nearest (not a frontier) that
-  ends no block nearer pos than the body is or has been in the call (approaches :closest): the budget left the search
+  ends no block nearer pos than the body is or has been in the call (approaches :closest), an ended one not over rock it guessed in a call that may dig (escalation digs there): the budget left the search
   short of anywhere new, and walking there swings between ends it knows; a cut short of a dark step does so too, each
   look there planning anew from farther off. Else check's why. Not while the round tours the edge of what the body has
   seen (mem :edge-mode), which it turns to instead."
@@ -171,6 +171,7 @@
           closest (min (:closest (record c) ##Inf) (u/dist (u/self-pos c) pos))]
       (if (and (or (nil? why) (:cut why)) (:unknown c) (not (:edge-mode (ctx/mem c))) (= "partial" status) (seq steps)
                (contains? #{"budget" "exhausted" "goal-unloaded"} (some-> ^js r .-reason)) (not (:frontier-taken walked))
+               (not (and (= "exhausted" (some-> ^js r .-reason)) (ways/escalating? c) (wworld/rock-guess? (:primitives c) (:unknown c))))
                (>= (u/dist (peek steps) pos) (dec closest)))
         {:known-end true}
         why))))

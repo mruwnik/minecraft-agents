@@ -1262,15 +1262,23 @@
                                                  {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
 
-;; live twin: walkway-stair-out-of-view/stair-100-east-arrives. Down the stair, the ended search (exhausted) is nearest at the
-;; walkway's west end over the goal, where the body has stood: the walk tours the floor's rim instead of climbing back to it
-(deftest go-to-down-a-stair-at-the-far-end-of-a-very-long-lit-walkway-arrives
+;; live twins: walkway-stair-out-of-view/stair-100-east-arrives, stair-walled-shut-unreachable. Down the stair, the ended
+;; search (exhausted) is nearest at the walkway's west end over the goal, where the body has stood: the walk tours the
+;; floor's rim instead of climbing back to it; with the walkway shut at the stair top the tour finds nothing and ends unreachable
+(defn very-long-walkway-run [shut? expected]
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (run-go-to {:self {:pos {:x 230.5 :y 85 :z 0.5}} :blocks (walkway 330) :radius 16 :exact-eye true :bodyHitbox true}
+        (let [blocks (cond-> (walkway 330) shut? (merge (box 331 85 -1 331 86 1 "stone")))
+              {:keys [out p]} (await (run-go-to {:self {:pos {:x 230.5 :y 85 :z 0.5}} :blocks blocks :radius 16 :exact-eye true :bodyHitbox true}
                                                  {:pos [60 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))]
-          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
+          (is (= expected (select-keys out (keys expected))) (str (pr-str out) " at " (:pos (fake/self p)))))))))
+
+(deftest go-to-down-a-stair-at-the-far-end-of-a-very-long-lit-walkway-arrives
+  (very-long-walkway-run false {:arrived true}))
+
+(deftest go-to-a-very-long-lit-walkway-shut-at-the-stair-top-is-unreachable
+  (very-long-walkway-run true {:arrived false :reason :unreachable}))
 
 (def tunnel-into-cave
   "A buried stone tunnel (floor y 63, feet and head y 64..65) lit (block light 3, torches at x -1 5 11 give what the body remembers) from x -2 to 20 along z 0 and on to z 2
