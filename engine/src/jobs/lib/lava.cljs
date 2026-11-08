@@ -118,10 +118,10 @@
               nil))))))
 
 (defn reseal?
-  "Whether another place in a lava cell after tries places the lava flowed back over is worth its price: none yet, else
-  cost/try-again? :place, and :place-refused once it flowed back twice (an identical refusal repeats)."
+  "Whether another place in a lava cell after tries places the lava flowed back over is worth its price: none yet,
+  else cost/try-again? :reseal with tries as the failures."
   [c tries]
-  (or (zero? tries) (cost/try-again? c (if (< 1 tries) :place-refused :place) {:fails tries})))
+  (or (zero? tries) (cost/try-again? c :reseal {:fails tries})))
 
 (defn ^:async seal!
   "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :ways allow,

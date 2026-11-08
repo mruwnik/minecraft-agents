@@ -1387,10 +1387,11 @@
     (is (nil? (lava/peek-stance p {:x 0.5 :y 62 :z -0.5} (constantly true) [0 59 0] [[0 0 1]])) "none better than where the body already sees")))
 
 (deftest lava-that-flowed-back-is-resealed-while-worth-the-place
-  ;; at the order's 1200 s: after one flow back :place's .095 / .199 (573 s) beats the 8.968 s place; after two the
-  ;; identical refusal's :place-refused .01 / 2.01 (6 s) does not
+  ;; at the order's 1200 s the :reseal prior (.043 won, .093 failed, 8.968 s a place) gives a chance of
+  ;; .043 / (.136 + n - 1) after n flow backs: 6 flow backs still pay (10 s over 8.968), the 7th (8.4 s) does not,
+  ;; so 6 reseals follow the first place; the old :place-refused price stopped after the second flow back
   (let [c {:quote-call {:worth tu/order-worth}}]
-    (is (= [true true false] (mapv #(lava/reseal? c %) [0 1 2])))))
+    (is (= [true true true true true true true false] (mapv #(lava/reseal? c %) (range 8))))))
 
 (deftest a-peek-stance-on-top-of-rock-the-body-cannot-climb-is-no-stance
   (let [mass (into {} (for [x (range -3 4) y (range 55 62) z (range -3 4)
