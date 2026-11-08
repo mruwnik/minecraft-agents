@@ -421,12 +421,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks table-block})
+        (let [{:keys [eng p]} (setup {:self {:food fed} :inventory [{:name "wheat" :count 3}] :blocks table-block})
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "unreachable" :reason "too-far"}))
-              result (await (child-outcome eng job {:item "bread" :worth (try-s :craft)} 10))]
+              result (await (child-outcome eng job {:item "bread"} 10 (bake-worth eng)))]
           (is (= {:item "bread" :made 0 :status :stopped :reason :unreachable} (dissoc result :text)))
           (is (= 1 (count (tu/walked-to eng))))
-          (is (= 2 (count (calls p "craft"))) "the refusal that walked is not counted; the one in reach ends a goal worth one try"))))))
+          (is (= 2 (count (calls p "craft"))) "the refusal that walked is not counted; the one in reach ends a nearly fed body's bake"))))))
 
 (deftest craft-a-gone-table-is-searched-for-afresh
   (async done
