@@ -318,3 +318,15 @@
                   need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
       (is (= (cost/worth-to nil ["beef"] nil) (price/price-of c)) "no fish without a rod: the beef search")
       (is (nil? (obtain/not-worth c))))))
+
+(deftest a-deep-tunnels-find-is-priced-within-the-job-time-the-call-has-left
+  ;; obtain-strip-on's first case passes :spend :job-time as get-kit's bill children get it
+  (let [p (tu/seeing-all (tu/fake-on-floor {:floor [-40 -50 -45 50 45] :floor-block "stone" :time 6000 :self {:pos [0.5 -39 0.5]}
+                                            :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 14}]}))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c0 {:primitives p :view (constantly view) :args {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :explore true :ignore-zones? true}}
+        need (first (table/gather-needs {"raw_iron" 1} (game/version-of p)))
+        cost-left (fn [job-s] (with-redefs [ctx/mem (constantly {:gather {:climbed {"raw_iron" true}}})]
+                                (:cost (plan/tunnel-way (assoc (rooted c0 5000) :left (constantly {:spend {:job-time job-s}}) :jobs.items.obtain.base/spent 85) need))))]
+    (is (infinite? (cost-left 515)) "a find at y -39 costs more than the 515 s a default call has left, whatever its worth")
+    (is (< (cost-left 2700) js/Infinity) "a bill item's child has 2700 s")))

@@ -4,8 +4,8 @@
 ;; 40 blocks east, past the first run's 32-block tunnel. child/max-fruitless 1 makes one empty run end the gather unless it mines on; the plot
 ;; lies below iron's tunnel level and the roof the body sees bars a stair up to it (obtain.plan/climb-sealed?), so the tunnel keeps the body's
 ;; height; the mass's west face is dirt (no host rock seen, so no look round pays first and walks the body off its east heading) and the
-;; walls of the body's own tunnel are no evidence for a look (cost/look-leg-chance), so the run after an empty one mines on. :worth 5000 stands for a goal's
-;; (get-kit passes its bill's). Should-succeed: the second run reaches the ore, no climb. Should-fail: a caller who wants one raw iron little more than it
+;; walls of the body's own tunnel are no evidence for a look (cost/look-leg-chance), so the run after an empty one mines on. :worth 5000 and :spend :job-time 2700 stand for a goal's
+;; (get-kit passes its bill's, and the time of a bill item: a default call has too little time left for a find at this depth). Should-succeed: the second run reaches the ore, no climb. Should-fail: a caller who wants one raw iron little more than it
 ;; usually costs (:worth 250; the search price is capped at that usual cost) has, after the first run's cut, no worth left for a strip leg: it counts fruitless, no source; a tunnel line open all the way (card 317311e9) cuts
 ;; nothing, so its run is fruitless though its tunnel took steps.
 {:defaults
@@ -16,7 +16,7 @@
   :limit-s 400}
  :cases
  [{:name "unseen-ore-mined-on-past-an-empty-tunnel"
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :worth 5000
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :worth 5000 :spend {:job-time 2700}
                                    :settings {:jobs.lib.child/max-fruitless 1}})]]
    :expect [{:event {:source :job :kind :obtain.strip-on} :within-s 300 :of-job true}
             {:event {:source :job :kind :completed} :within-s 390 :of-job true}
@@ -30,7 +30,7 @@
    :after [[:item "raw_iron" [:= 0]]]}
   {:name "a-tunnel-through-open-air-is-no-new-ground"
    :blocks [[:fill [3 0 6] [46 1 6] "air"]]
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :worth 5000
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :worth 5000 :spend {:job-time 2700}
                                    :settings {:jobs.lib.child/max-fruitless 1}})]]
    :expect [{:event {:source :job :kind :obtain.gathering :data {:item "raw_iron"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
