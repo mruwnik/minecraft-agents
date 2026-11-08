@@ -413,21 +413,24 @@
     (remove danger/seen-only? (danger/hostile-dangers p (ctx/view c) (trigger-args c) {:sight-at (danger/sight-lookup p)}))))
 
 (defn hostile-cost
-  "Seconds going on beside hostiles hs (JS entities) costs the call: its own stay (price/stay-s) and what doing nothing
-  about them over it costs the body (hostile-loss/loss-over); 0 with none."
+  "{:cost s :answer k :danger s} of going on beside hostiles hs over c's stay (price/stay-s, the job's own quoted seconds
+  there): the stay and the cheaper of doing nothing about them and answering them (hostile-loss/danger); all 0 with none."
   [c hs]
-  (if (seq hs) (let [s (price/stay-s c)] (+ s (hostile-loss/loss-over c (ctx/view c) hs s))) 0))
+  (let [s (price/stay-s c)
+        {:keys [answer price] :or {answer :stand price 0}} (when (seq hs) (hostile-loss/danger c (ctx/view c) hs s))]
+    (if (seq hs) {:cost (+ s price) :answer answer :danger price} {:cost 0 :answer :stand :danger 0})))
 
 (defn hostile-status
-  "ok `ok-reason` while the call's worth affords hostile-cost (Q157: the worth less the job's own seconds and the danger over
-  them), else later :hostile-near, priced again after walk-risk/recheck-ms. what: the text naming the dangers."
-  [c ok-reason what cost]
+  "ok `ok-reason` while the call's worth affords hostile-cost (Q157: the worth less the job's own seconds and the
+  cheapest answer to the danger), else later :hostile-near, priced again after walk-risk/recheck-ms. what: the text naming the dangers."
+  [c ok-reason what {:keys [cost answer danger]}]
   (let [worth (ctx/worth c)
-        priced (str what ": " (price/round1 cost) " s with the stay of " (price/round1 (price/stay-s c)) " s")]
+        priced (str what ": " (price/round1 cost) " s, the stay of " (price/round1 (price/stay-s c)) " s and "
+                    (price/round1 danger) " s " (if (= :stand answer) "doing nothing about it" "answering it when it comes"))]
     (if (cost/affords? cost worth)
       (contract/ok ok-reason (str priced ", within the call's worth " (price/round1 worth) " s"))
       (contract/later :hostile-near (str priced ", more than the call's worth " (price/round1 worth) " s: deal with it first")
-                      :cost cost :worth worth :recheck-after-ms walk-risk/recheck-ms))))
+                      :cost cost :answer answer :worth worth :recheck-after-ms walk-risk/recheck-ms))))
 
 (defn heard-price
   "hostile-status of the heard-only dangers (heard-dangers), :heard-priced, as though each came. Over the worth, look
@@ -445,7 +448,7 @@
     (cond
       (empty? hs) (contract/ok :no-hostile-near "no hostile near")
       (= :ok (first s)) s
-      (and (seq guessed) (cost/affords? (hostile-cost c sure) (ctx/worth c)))
+      (and (seq guessed) (cost/affords? (:cost (hostile-cost c sure)) (ctx/worth c)))
       (contract/look :heard-unseen (str heard ": its way to the body runs through cells not seen; look first")
                      :look-at (mapv #(mapv (fn [k] (js/Math.floor (k (danger/mob-pos p %)))) [:x :y :z]) guessed))
       :else s)))
@@ -465,7 +468,7 @@
 
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a
-  mob seen or remembered and the call's worth does not afford its stay with the danger over it (seen-price); heard-only
+  mob seen or remembered and the call's worth does not afford its stay with the cheapest answer to the danger (seen-price); heard-only
   mobs are priced the same way (heard-price)."
   [c]
   (check-cache/cached c [::threatened (price/stay-s c) (ctx/worth c)]

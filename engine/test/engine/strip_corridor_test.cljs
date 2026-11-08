@@ -81,11 +81,12 @@
           (is (= {:status :done :taken {:wood 21 :rail 13 :cobweb 1 :torch 2}} (select-keys r [:status :taken])))
           (is (= 2 (bd/carried (:p env) "torch"))))))))
 
-(deftest a-zombie-in-the-corridor-holds-the-job-back-with-nothing-dug
+(deftest a-pack-in-the-corridor-holds-the-job-back-with-nothing-dug
+  ;; one zombie alone is answered within the order (its fight, ready/hostile-cost): nine are not
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (world :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}])
+        (let [env (world :entities (mapv (fn [i] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}) (range 9)))
               why (await (bd/waiting-after env (list job args) 3))]
           (is (= :hostile-near (:reason why)))
           (is (empty? (bd/calls (:p env) "dig"))))))))

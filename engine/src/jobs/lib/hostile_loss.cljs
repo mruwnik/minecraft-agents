@@ -1,13 +1,14 @@
 (ns jobs.lib.hostile-loss
   "What doing nothing about the dangers near costs the body (cost/stand-loss over a respond call): the hostile-near
   trigger holds only while it is positive, and respond-to-hostile is worth it; too-hurt? counts it in the low-health
-  comparison."
+  comparison; danger the cheapest of that and answering them, what a job that stays beside them pays."
   (:require [engine.args :as a]
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.breath :as breath]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.threat :as threat]
@@ -125,6 +126,27 @@
     (if (empty? mobs)
       0
       (cost/stand-loss (body-at c view) (cost/equipment-of (.-equipment (.self p))) mobs (u/pos-of (.-pos (.self p))) seconds))))
+
+(defn met-over
+  "Seconds hostiles hs (JS entities) cost c's body staying seconds at its cell when each one that gets to it is answered
+  there: cost/route-parts of the cell at full weight, the meeting answered by the cheapest of its answers (cost/decide),
+  its hurt and death (cost/risk-s), as go-to prices a stay beside them (walk-risk/stay-estimate)."
+  [c view hs seconds]
+  (let [p (:primitives c)
+        self (.self p)
+        feet (u/pos-of (.-pos self))
+        body (assoc (body-at c view) :equipment (cost/equipment-of (.-equipment self)) :weapon (combat/best-weapon p combat/default-weapons))
+        threats (mapv (fn [e] {:mob (.-name e) :held (.-held e) :pos (danger-q/mob-pos p e) :reach (constantly 1)}) hs)
+        parts (cost/route-parts body {:cells [(assoc feet :s seconds)] :threats threats :at feet})]
+    (cost/risk-s (.-health self) (:hurt parts) (cost/lethal-hp parts))))
+
+(defn danger
+  "{:answer :price} of hostiles hs (JS entities) near c's body staying seconds: the cheaper of doing nothing about them
+  (loss-over, :stand) and answering each one that comes (met-over, :answered)."
+  [c view hs seconds]
+  (let [stand (loss-over c view hs seconds)
+        met (met-over c view hs seconds)]
+    (if (<= stand met) {:answer :stand :price stand} {:answer :answered :price met})))
 
 (defn loss
   "Seconds doing nothing about hostiles hs costs the body over a respond call (loss-over the spread of call-s)."
