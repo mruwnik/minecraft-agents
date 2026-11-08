@@ -296,7 +296,7 @@
         r (:range (:args c) 1)
         keep? (not (leave-water))
         tried? (:dry-tried (ctx/mem c))
-        dry (when-not (or keep? tried?) (air/dry-stand p pos r (u/self-pos c) ##Inf))
+        dry (when-not (or keep? tried?) (air/dry-stand p pos r (u/self-pos c) (swim/reach-of c ##Inf)))
         status (when dry
                  (ctx/update-mem! c assoc :dry-tried true)
                  (await (walk-dry! c dry)))]

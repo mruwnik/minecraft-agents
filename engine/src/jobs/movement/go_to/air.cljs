@@ -36,26 +36,36 @@
 
 (def look-args "breath/find-air!'s look: columns within :radius, cells up to :reach above the feet." {:radius 2 :reach 10})
 
+(defn- shell
+  "The cells at Chebyshev distance s from [bx by bz], each once."
+  [[bx by bz] s]
+  (if (zero? s)
+    [[bx by bz]]
+    (let [r (range (- s) (inc s)) inner (range (- 1 s) s)]
+      (concat (for [dx [(- s) s] dy r dz r] [(+ bx dx) (+ by dy) (+ bz dz)])
+              (for [dx inner dy [(- s) s] dz r] [(+ bx dx) (+ by dy) (+ bz dz)])
+              (for [dx inner dy inner dz [(- s) s]] [(+ bx dx) (+ by dy) (+ bz dz)])))))
+
 (defn dry-stand
   "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
-  out of water: feet and head open, a solid under the feet; nil when there is none. Either bound may be ##Inf, not both."
+  out of water: feet and head open, a solid under the feet; nil when there is none. Either bound may be ##Inf, not both.
+  Shells of cells round pos come nearest first, and it stops at the first shell no nearer cell can follow."
   [p goal within pos radius]
   (let [k (column/kind-at p false)
         [gx gy gz] (mapv #(js/Math.floor (% goal)) [:x :y :z])
         [bx by bz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        [cx cy cz] (if (<= within radius) [gx gy gz] [bx by bz])
-        n (js/Math.floor (min within radius))
+        reach (js/Math.floor (min radius (+ within (js/Math.hypot (- gx bx) (- gy by) (- gz bz)))))
         sq (fn [a b c] (+ (* a a) (* b b) (* c c)))
-        dry? (fn [[x y z]] (and (keyword-identical? :open (k x y z)) (keyword-identical? :open (k x (inc y) z))
+        dry? (fn [[x y z]] (and (<= (sq (- x bx) (- y by) (- z bz)) (* radius radius)) (<= (sq (- x gx) (- y gy) (- z gz)) (* within within))
+                                (keyword-identical? :open (k x y z)) (keyword-identical? :open (k x (inc y) z))
                                 (keyword-identical? :solid (k x (dec y) z))))
-        cells (for [dx (range (- n) (inc n)) dy (range (- n) (inc n)) dz (range (- n) (inc n))
-                    :let [x (+ cx dx) y (+ cy dy) z (+ cz dz)]
-                    :when (and (<= (sq (- x bx) (- y by) (- z bz)) (* radius radius)) (<= (sq (- x gx) (- y gy) (- z gz)) (* within within)))]
-                [x y z])
-        far (fn [[x y z]] (u/dist pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))
-        found (filter dry? cells)]
-    (when (seq found)
-      (zipmap [:x :y :z] (apply min-key far found)))))
+        far (fn [[x y z]] (u/dist pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))]
+    (loop [s 0 best nil]
+      (let [best (reduce (fn [b cell] (if (or (nil? b) (<= (far cell) (far b))) cell b)) best (filter dry? (shell [bx by bz] s)))]
+        (cond
+          (and best (<= (far best) (+ s 0.5))) (zipmap [:x :y :z] best)
+          (>= s reach) (some->> best (zipmap [:x :y :z]))
+          :else (recur (inc s) best))))))
 
 (defn air-left
   "Seconds of air the body has left before it drowns: the planner's airSupply less the air its oxygen says is used."

@@ -15,6 +15,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.near :as near]
             [jobs.movement.go-to.air :as air]
+            [jobs.movement.go-to.column]
             [jobs.movement.go-to.way-steps :as ways]
             [jobs.movement.go-to.walk :as walk]))
 
@@ -427,3 +428,22 @@
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [-4.5 64 0.5]} :blocks (merge (pond 24) (box 10 63 0 10 63 0 "kelp"))}
                                              {:pos [10 63 0] :range 0 :ways #{:walk :clear-seal}}))]
           (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
+
+(defn- stands-world
+  "kind-at over water to y 62 and open air above, solid only at the given cells: a dry stand is the cell over each."
+  [reads solids]
+  (fn [x y z]
+    (swap! reads inc)
+    (cond (contains? solids [x y z]) :solid (<= y 62) :water :else :open)))
+
+(deftest dry-stand-reads-the-cells-round-the-body-nearest-first-not-the-whole-range
+  (let [reads (atom 0)
+        at {:x 0.5 :y 62 :z 0.5}]
+    (with-redefs [jobs.movement.go-to.column/kind-at (fn [_ _] (stands-world reads #{[5 62 5]}))]
+      (is (= {:x 5 :y 63 :z 5} (air/dry-stand nil at 50 at ##Inf)))
+      (is (< @reads 20000) "a stand 5 blocks off stops the search after the shells up to it, not the 101^3 cells of the range"))))
+
+(deftest dry-stand-picks-the-nearest-though-a-farther-one-lies-in-an-earlier-shell
+  (let [at {:x 0.5 :y 62 :z 0.5}]
+    (with-redefs [jobs.movement.go-to.column/kind-at (fn [_ _] (stands-world (atom 0) #{[7 62 0] [5 62 5]}))]
+      (is (= {:x 7 :y 63 :z 0} (air/dry-stand nil at 20 at ##Inf)) "7 blocks east is nearer than the diagonal 5/5, found in the earlier shell"))))

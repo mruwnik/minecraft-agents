@@ -229,3 +229,9 @@
           (is (nil? (vehicle/vehicle-of (.self p))))
           (is (= 1 (count (calls p "dismount"))))
           (is (= [] (:list (core/state eng)))))))))
+
+(deftest swim-reach-reads-the-job-time-the-call-has-left
+  (let [c (assoc (bare-ctx (setup-owner (tu/fake {})) {}) :left (constantly {:spend {:job-time 3}}))
+        whole (leave/swim-reach (bare-ctx (setup-owner (tu/fake {})) {}))]
+    (is (< (leave/swim-reach c) whole) "3 s left reach less than the default job time")
+    (is (= (* 10 (leave/swim-reach c)) (leave/swim-reach (assoc c :left (constantly {:spend {:job-time 30}})))) "in proportion to the time left")))

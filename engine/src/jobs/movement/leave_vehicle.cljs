@@ -5,7 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
-            [jobs.lib.cost.planner :as cost-planner]
+            [jobs.lib.swim :as swim]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -57,9 +57,9 @@
   {:uses {:job-time [0.1 0.5 (+ 1 (* (settings/get settings ::max-tries) (settings/get settings ::retry-wait-s)))]}})
 
 (defn swim-reach
-  "Blocks the body swims in the call's ::job-time-s (cost.planner/swim-speed of what it wears): no dry cell farther is reached within it."
+  "Blocks the body swims in the job time the call has left, ::job-time-s when none is left to read (swim/reach-of): no dry cell farther is reached within it."
   [c]
-  (* (settings/get settings ::job-time-s) (cost-planner/swim-speed (.-equipment (.self (:primitives c))))))
+  (swim/reach-of c (settings/get settings ::job-time-s)))
 
 (defn vehicle-pos
   "Where the ridden entity is, else the body."

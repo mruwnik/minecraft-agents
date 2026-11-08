@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost.planner :as cost-planner]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -13,6 +14,14 @@
 (defn reach [] (settings/get settings ::reach))
 (defn step-s [] (settings/get settings ::step-s))
 (defn air-radius [] (settings/get settings ::air-radius))
+
+(defn reach-of
+  "Blocks the body swims in the job time the call has left (what the caller or the call itself leaves, the least over the chain),
+  at the surface speed of what it wears; with no finite time left, in `otherwise` seconds."
+  [c otherwise]
+  (let [left (when-let [f (:left c)] (get-in (f) [:spend :job-time]))
+        t (if (and (number? left) (js/isFinite left)) left otherwise)]
+    (* t (cost-planner/swim-speed (.-equipment (.self (:primitives c)))))))
 
 (defn rose?
   "A swim that ended with the feet at floor y is progress only above the best height reached so far (best, nil before
