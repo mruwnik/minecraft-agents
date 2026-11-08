@@ -15,6 +15,7 @@
             [jobs.items.obtain.table :as table]
             [jobs.lib.recipes :as recipes]
             [jobs.lib.cost :as cost]
+            [jobs.lib.surface-up :as surface]
             [jobs.items.get-kit :as kit]))
 
 (defn rooted
@@ -273,3 +274,47 @@
                          [(need/seen-refusal c ["oak_log"] 1) (need/torch-due c (contract/status-cause s))]))]
     (is (= [nil nil] (judged looks)) "called: the look runs first, no torch")
     (is (= [never {:x 0 :y 64 :z 0}] (judged never)) "no look left: refused, and a torch is due")))
+
+(defn hall-price
+  "price-of and obtain/not-worth of a root call worth w for args by a body in a 2-high hall of rock at y -40 (every block seen,
+  no look priced: each unseen need costs what one usually does), carrying inv, with blocks added."
+  [args inv w blocks]
+  (let [p (tu/with-sky-only (tu/seeing-all (tu/fake {:self {:pos {:x 16.5 :y -40 :z 16.5}} :time 6000 :inventory inv
+                                                     :blocks (merge (apply dissoc (tu/box 0 -41 0 32 -28 32 "stone") (keys (tu/box 1 -40 1 31 -39 31 "air")))
+                                                                    blocks)})))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c (rooted {:primitives p :view (constantly view) :args (merge {:count 1 :ways #{:craft :smelt :gather :search :chest} :explore true :ignore-zones? true} args)} w)]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly []) plan/look-cost (constantly js/Infinity)
+                  need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
+      {:price (price/price-of c) :not-worth (obtain/not-worth c) :climb (surface/climb-s c)})))
+
+(def iron-worth (cost/worth-to nil ["raw_iron"] nil))
+
+(deftest an-unseen-ore-search-no-look-prices-costs-what-one-ore-usually-does-and-a-call-worth-less-waits
+  ;; obtain-strip-on and obtain-buried-search ore cases at :worth 100 and 15
+  (let [ore #(hall-price {:item "raw_iron"} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}] % {})]
+    (is (= iron-worth (:price (ore 1200))) "the search is never dearer than what one raw iron usually costs")
+    (is (= {:reason :not-worth :price iron-worth :worth 100} (:not-worth (ore 100))))
+    (is (nil? (:not-worth (ore iron-worth))) "a call worth one raw iron's own worth starts it")))
+
+(deftest a-buried-bodys-iron-pickaxe-pays-the-stair-up-for-a-tables-log-and-a-seen-table-spares-it
+  ;; obtain-chain/iron-pickaxe-no-ore-seen-explores-by-default
+  (let [inv [{:name "stone_pickaxe" :count 1} {:name "stick" :count 2} {:name "cobblestone" :count 8}]
+        none (hall-price {:item "iron_pickaxe"} inv 1200 {})
+        table (hall-price {:item "iron_pickaxe"} inv 1200 {"16,-40,20" "crafting_table"})]
+    (is (pos? (:climb none)))
+    (is (<= (+ (* 3 iron-worth) (:climb none)) (:price none)) "the log for the table is searched for above the stair up")
+    (is (= (* 3 iron-worth) (:price table)) "a seen table: only the three raw iron")
+    (is (nil? (:not-worth table)) "within an agent submit's worth")))
+
+(deftest a-far-cow-for-beef-or-cod-without-a-rod-costs-what-a-beef-usually-does
+  ;; obtain-no-rod-hunts
+  (let [p (tu/seeing-all (tu/fake-on-floor {:time 6000 :self {:pos {:x 4.5 :y 64 :z 12.5}} :blocks (tu/box 10 63 10 15 63 15 "water")}))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c (rooted {:primitives p :view (constantly view)
+                   :args {:any-of ["beef" "cod"] :count 1 :explore true :ignore-zones? true :ways #{:craft :smelt :gather :search :hunt}}}
+                  1200)]
+    (with-redefs [ctx/mem (constantly {}) ctx/entries (constantly [])
+                  need/gather-viable? (fn [c names n] (boolean (seq (:gather (plan/gather-plan c names n)))))]
+      (is (= (cost/worth-to nil ["beef"] nil) (price/price-of c)) "no fish without a rod: the beef search")
+      (is (nil? (obtain/not-worth c))))))
