@@ -9,7 +9,7 @@
   - A free body whose walk ends :one-way at a drop it refuses (escalate-choose/refused-drop?), or any body whose walk ends :damage-budget (escalate-choose/damage-refused?; a shut-in one weighs the cheapest climb against the dig), digs toward the goal as for an out-of-sight goal (dig-toward: dig-way, or a leg toward a far goal), not stopping when the stair's last cell brings the goal into sight. A search that ran out of land (:exhausted), or a walk whose felt-for floors ran out (:unseen-floors), with the goal below the body by more than a fall the walk takes within its damage budget (escalate-choose/drop-stranded?) digs down the same way, goal seen or not, when a dig route exists.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs), makes a way instead of giving up, one child job
-    each (jobs.lib.escape.way/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation; a dig route is taken past them): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
+    each (jobs.lib.escape.way/choose, over the ways the call allows), after one that started no nearer the goal than one before (escalation/count-escalation) only while worth its price (escalation/worth-another?; a dig route that ends nearer is taken past it): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
     through a wall toward the goal, the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, for a shut-in body (a leg of it toward a goal farther than one: dig-toward) weighed by its whole way (way-total) against a stair or pillar out or, with neither, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way), none dearer than the call's worth, nor than a stair or pillar from the feet, and with neither of those a leg of it (escalate-choose/dig-leg); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot). Each emits go-to.escalated {:step :why :n}, with :weighed [{:step :s}..] when it chose by price between a stair or pillar and a dig (:bound for a dig search that found none under it). Once
@@ -127,15 +127,26 @@
           (recur (inc lvl)))))))
 
 (defn count-escalation
-  "The count toward max-escalations of an escalation starting d from the goal, given memory m: {:fruitless n
+  "The count toward worth-another? of an escalation starting d from the goal, given memory m: {:fruitless n
   :escalation-best b}. One that starts more than 1 block nearer than any before (b, the least so far) counts as the
-  first again: a stair that climbed is a way made, and a deep climb takes more than max-escalations of them. On a
+  first again: a stair that climbed is a way made, and a deep climb takes many of them. On a
   climb away from a dive (memory :dive-climb) d is the height still to gain: its stairs may lead off sideways."
   [m d]
   (let [best (:escalation-best m)
         nearer? (and best (< d (dec best)))]
     {:fruitless (inc (if nearer? 0 (:fruitless m 0)))
      :escalation-best (min d (or best d))}))
+
+(def priced-way-steps #{:stair :pillar :bridge :fill-gap :dig-route})
+
+(defn worth-another?
+  "Whether escalation e (nil: one not chosen yet), the n-th in a row none starting nearer the goal (count-escalation),
+  is worth making: the first always; a later one while the chance a way works after n-1 that did not times the call's
+  worth beats its price (cost/try-again? :escalate at escape-way/price, else the kind's measured seconds)."
+  [c feet n e]
+  (or (<= n 1)
+      (cost/try-again? c :escalate {:fails (dec n)
+                                    :try-s (or (:route-s e) (when (priced-way-steps (:step e)) (escape-way/price (:primitives c) feet e)))})))
 
 (defn detour-escalate!
   "Start escalation e (detour-way) instead of giving up :detour (why: the bound's {:route :blocks :straight :allowed}); a
@@ -310,7 +321,7 @@
                                                 (- (:y pos) (second feet))
                                                 (u/dist (zipmap [:x :y :z] feet) pos)))
         n (:fruitless counted)
-        _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
+        _ (when (worth-another? c feet n nil) (await (look-round! c feet)))
         goal (stand-goal c (mapv #(js/Math.floor (% pos)) [:x :y :z]))
         slice (route-slice (route-owner c))
         shut? (delay (escape/walk-enclosed? c))
@@ -434,13 +445,13 @@
     (ctx/hold-still! c (when (= :searching (:step e)) :searching))
     (cond
       lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
-      (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
+      (and (:cave-climb (ctx/mem c)) (or (not (worth-another? c feet n e)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up :escalate-failed :route-search) (assoc :cave-ok true)))
           :again)
       (and failed (= :detour status) (not= :replans-spent (:reason failed)) (not (:other-heading failed))) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation failed}))
-      ;; past the count a dig route is still taken while it ends more than a block nearer the goal than any way before
-      (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
-      (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
+      ;; past its price a dig route is still taken while it ends more than a block nearer the goal than any way before
+      (and (not (worth-another? c feet n e)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
+      (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (dec n)}) into? (assoc :into true))}))
       (= :searching (:step e))
       ;; a failed escalation's child is done: left in memory it would run again before the search goes on
       (do (search-begun! c feet goal opts)
@@ -459,7 +470,7 @@
 
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
-  with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
+  with failed, the detail of the escalation that just failed, when there is none left after it; past worth-another?
   with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
   :cave-climb) walks that plan after all instead of giving up (memory :cave-ok). A detour's escalation that failed
   (detour-escalate!) gives the detour up at once, unless its dig route ran out of replans (:replans-spent) or its stair
@@ -539,7 +550,7 @@
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
   it (restore-next!); a cut of the body's own builds (:own-cut) at once, done or stopped in a dead end (what
   restore/skip-why spares then, the cells the body stands in or needs, waits for that walk), but a dug route only after the walk through it (an own-cut one after a short walk to the stand two cells past the hole when that is seen open: past-hole-stand). An approach to a cell more than a block nearer the goal than it set out from does not count toward
-  max-escalations (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
+  worth-another? (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
   walked to twice (memory :approached)."
   [c pos {:keys [step]} done?]
   (let [feet (end/feet-cell c)
@@ -612,8 +623,7 @@
   (escalated! c pos detail false))
 
 (defn ^:async escalation-next!
-  "The child changed nothing: try the next method (escalate!, never the same step twice, at most max-escalations in
-  all) after a go-to.escalation-stopped warn, giving up with detail when none is left."
+  "The child changed nothing: try the next method (escalate!, never the same step twice, while worth-another?) after a go-to.escalation-stopped warn, giving up with detail when none is left."
   [c pos {:keys [step] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " failed: "
                                                                         (some-> (:reason detail) name)
