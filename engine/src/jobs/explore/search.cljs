@@ -377,7 +377,10 @@
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
                                      (cond
-                                       (= :price why) (str ", the next walk costs " (js/Math.round (:next-price m)) " s"
+                                       (= :price why) (str (if-let [rise (:next-climb m)]
+                                                                  (str ", the stair up to the sky (" rise " blocks) costs ")
+                                                                  ", the next walk costs ")
+                                                                (js/Math.round (:next-price m)) " s"
                                                            (when (:next-risk m) (str " (" (:next-risk m) " s of it risk, " (:next-dark m) " s walked in the dark)"))
                                                            ", more than the "
                                                            (js/Math.round (worth-of c)) " s the find is worth"
@@ -610,7 +613,7 @@
       (cond
         (:estimate q) :continue
         (infinite? price) nil
-        (cost/leg-stops? price chance (pick/ev-worth worth q)) (do (ctx/update-mem! c assoc :next-price price :next-chance chance :next-risk (js/Math.round (- price (second (get-in q [:uses :job-time])))) :next-dark (js/Math.round (get-in q [:risk :dark-s] 0)))
+        (cost/leg-stops? price chance (pick/ev-worth worth q)) (do (ctx/update-mem! c assoc :next-price price :next-chance chance :next-climb nil :next-risk (when-let [t (second (get-in q [:uses :job-time]))] (js/Math.round (- price t))) :next-dark (js/Math.round (get-in q [:risk :dark-s] 0)))
                                                                   (finish! c :not-found :price))
         :else nil))))
 
@@ -776,7 +779,7 @@
     (when-not (:on (:surface (ctx/mem c)))
       (let [price (surface-up/climb-s c)]
         (when (cost/leg-stops? price 1 worth)
-          (ctx/update-mem! c assoc :next-price price :next-chance 1)
+          (ctx/update-mem! c assoc :next-price price :next-chance 1 :next-climb (surface-up/rise c))
           (finish! c :not-found :price))))))
 
 (defn ^:async advance!

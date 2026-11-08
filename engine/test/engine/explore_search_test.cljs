@@ -1109,7 +1109,8 @@
         (let [s (await (search! {:target "sheep" :scan-radius 16 :worth 1}
                                 {:blocks (merge (tu/box -3 60 -3 3 70 3 "stone") (tu/box 0 64 0 0 65 0 "air")) :self {:pos {:x 0.5 :y 64 :z 0.5}}} 60
                                 #(swap! (fake/state (:p %)) assoc :light-default [0 0])))]
-          (is (= :price (:why (not-found-of s)))))))))
+          (is (= :price (:why (not-found-of s))))
+          (is (re-find #"the stair up to the sky \(\d+ blocks\) costs \d+ s, more than the 1 s" (:text (not-found-of s)))))))))
 
 (deftest use-notes-false-ignores-searched-notes-older-than-the-job
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
