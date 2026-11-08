@@ -10,22 +10,21 @@
  {:tags [:night :survival :sleep :bed]
   :time :night-exclusive :time-why :sleep
   :blocks [[:fill [8 0 8] [16 3 16] "stone_bricks" :hollow] [:fill [10 -1 17] [15 -1 22] "glowstone"]]
-  :zones [{:name "w-west" :min [8 0 8] :max [8 3 16] :owner "Other"} {:name "w-east" :min [16 0 8] :max [16 3 16] :owner "Other"}
-          {:name "w-north" :min [8 0 8] :max [16 3 8] :owner "Other"} {:name "w-south" :min [8 0 16] :max [16 3 16] :owner "Other"}
-          {:name "w-roof" :min [8 3 8] :max [16 3 16] :owner "Other"} {:name "w-floor" :min [8 0 8] :max [16 0 16] :owner "Other"}]
   :body {:at [12.5 0 19.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 2 :inventory [["red_bed" 1]]}
   :act [[:job (jobs.memory.set-place {:worth 1200 :name :home :pos #at [12 0 12]}) [:now]]
         [:job (jobs.survival.night {:worth 1200 :ways #{:bed :shelter}})]]}
  :cases
  [{:name "no-failed-walk-the-carried-bed-is-walked-into-the-home"
    :blocks [[:fill [12 0 16] [12 1 16] "air"]]
-   :zones []
    :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}]
    :expect [{:event {:source :job :kind :child_started :data {:slot :home-walk}} :within-s 60}
             {:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [12 0 12] 4.5]}} :within-s 120}]
    :after [[:item "red_bed" 0] [:body-near [12.5 0 12.5] 5]]
    :limit-s 130}
   {:name "twelve-failed-walks-into-a-walled-home-the-carried-bed-goes-down-outside"
+   :zones [{:name "w-west" :min [8 0 8] :max [8 3 16] :owner "Other"} {:name "w-east" :min [16 0 8] :max [16 3 16] :owner "Other"}
+           {:name "w-north" :min [8 0 8] :max [16 3 8] :owner "Other"} {:name "w-south" :min [8 0 16] :max [16 3 16] :owner "Other"}
+           {:name "w-roof" :min [8 3 8] :max [16 3 16] :owner "Other"} {:name "w-floor" :min [8 0 8] :max [16 0 16] :owner "Other"}]
    :memory [{:kind :sleep-status :data {:sleeping 0 :needed 2}} {:kind :log-out :data {:ms 0 :status "unsupported"}}
             {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
             {:kind :home-walk-failed :data {:pos #xyz [12 0 12]} :policy {:cap 12 :ttl :forever}}
