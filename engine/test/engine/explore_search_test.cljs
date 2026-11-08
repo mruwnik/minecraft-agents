@@ -511,7 +511,7 @@
           (is (not= :price (:why (not-found-of state)))))))))
 
 (deftest the-spiral-legs-nearest-the-body-come-first
-  (let [c {:args {:pattern :spiral :worth 6000 :within 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :worth tu/order-worth :within 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
         m {:origin [0 0 0]}
         order (search/candidates c m)]
     (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
@@ -525,7 +525,7 @@
     (try [(f) @n] (finally (set! js/Math.hypot h)))))
 
 (deftest a-priced-search-plans-legs-past-the-max-distance-setting
-  (let [c {:args {:pattern :spiral :worth 6000} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
+  (let [c {:args {:pattern :spiral :worth tu/order-worth} :primitives #js {:self (fn [] #js {:pos #js {:x 0.5 :y 0 :z 0.5}})}}
         dist #(js/Math.hypot (% 0) (% 1))
         far (fn [c] (hypots #(first (filter (fn [pt] (> (dist pt) 96)) (search/candidates c {:origin [0 0 0]})))))
         [leg work] (far c)]
@@ -1060,7 +1060,7 @@
         counting (js/Proxy. p #js {:get (fn [t k] (if (= "blockAt" k)
                                                    (fn [pos] (swap! reads inc) (.blockAt t pos))
                                                    (let [v (aget t k)] (if (fn? v) (.bind v t) v))))})
-        c {:args {:pattern :spiral :worth 6000 :within 128} :primitives counting}
+        c {:args {:pattern :spiral :worth tu/order-worth :within 128} :primitives counting}
         r (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4}
             #(search/choose-leg c {:origin [0 64 0]} ["diamond_block"] []))]
     (is (nil? (:leg r)))
@@ -1116,7 +1116,7 @@
         note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
         choose (fn [use-notes? ns]
                  (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth 6000 :within 8} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
+                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes? :worth tu/order-worth :within 8} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
     (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
     (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
     (is (nil? (:leg (choose false [(note 150)]))) "a note this job made still covers")))
@@ -1125,7 +1125,7 @@
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
                              (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                               #(search/choose-leg {:args {:pattern :spiral :worth 6000 :within 8} :primitives p} {:origin [0 64 0]} names []))))]
+                               #(search/choose-leg {:args {:pattern :spiral :worth tu/order-worth :within 8} :primitives p} {:origin [0 64 0]} names []))))]
     (is (nil? (:leg (choose ["cow" "pig"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))
@@ -1133,7 +1133,7 @@
 (deftest a-leg-for-farm-animals-never-stands-in-a-pit-below-the-feet-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (tu/box -36 45 -36 36 45 36 "grass_block") :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
         choose (fn [names] (settings/with-settings {:jobs.lib.cost.find/leg-spacing 4 :jobs.explore.search/max-distance 8}
-                             #(search/choose-leg {:args {:pattern :spiral :worth 6000 :within 8} :primitives p} {:origin [0 64 0]} names [])))]
+                             #(search/choose-leg {:args {:pattern :spiral :worth tu/order-worth :within 8} :primitives p} {:origin [0 64 0]} names [])))]
     (is (nil? (:leg (choose ["chicken"]))))
     (is (every? #(= :underground (:reason %)) (:failed (choose ["chicken"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))

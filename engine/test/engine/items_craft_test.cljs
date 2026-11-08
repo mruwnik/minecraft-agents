@@ -369,7 +369,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
-              result (await (child-outcome eng job {:item "bread" :worth 6000} 400))]
+              result (await (child-outcome eng job {:item "bread" :worth (* 1000 (try-s :craft))} 400))]
           (is (= :job-time (:reason result)) (pr-str result))
           (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
 

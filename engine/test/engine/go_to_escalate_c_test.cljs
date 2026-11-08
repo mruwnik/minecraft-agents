@@ -491,7 +491,7 @@
         refused? (fn [[x _ z]] (and (<= 1 x 4) (< z 2)))
         rounds (atom 0) route dig-route/route
         answer (with-redefs [dig-route/route (fn [& args] (swap! rounds inc) (apply route args))]
-                 (choose/route-answer p [0 64 0] [5 64 2] #(not (refused? %)) (constantly false) false false {:worth-s 6000}))]
+                 (choose/route-answer p [0 64 0] [5 64 2] #(not (refused? %)) (constantly false) false false {:worth-s tu/order-worth}))]
     (is (seq (:dig answer)))
     (is (not-any? refused? (:dig answer)))
     (is (<= @rounds 2) (str @rounds " searches"))))
@@ -987,7 +987,7 @@
         answer #(choose/route-answer p [0 64 0] [12 64 0] (constantly true) (constantly false) false false %)
         risk {:placed 0.2 :apart 0.2}
         plain (answer {})
-        {:keys [seconds share-s dig]} (answer {:guess-risk risk :worth-s 6000})
+        {:keys [seconds share-s dig]} (answer {:guess-risk risk :worth-s tu/order-worth})
         stone-s (/ (tools/clear-ms p "stone") 1000)
         misses (reduce + (map #(* 0.2 (+ (cost/look-s 1) (* 2 stone-s) (cost/walk-step-s))) hidden))
         priced (fn [worth] (some? (answer {:guess-risk risk :worth-s worth})))]
@@ -997,7 +997,7 @@
     (is (< (js/Math.abs (- share-s (:seconds plain))) 1e-6) ":share-s is the route without its misses")
     (is (priced (* 1.01 seconds)) "priced once: no second factor on the route")
     (is (not (priced (* 0.99 seconds))))
-    (is (not-any? hidden (:dig (answer {:guess-risk {:placed 0.9 :apart 0.9} :worth-s 6000}))) "guesses that nearly always fail are dug round through seen rock")
+    (is (not-any? hidden (:dig (answer {:guess-risk {:placed 0.9 :apart 0.9} :worth-s tu/order-worth}))) "guesses that nearly always fail are dug round through seen rock")
     (is (= [[10 65 0]] (map :cell (filter (comp #{:placed} :class) (choose/route-cells p [0 64 0] [12 64 0] (constantly true) (constantly false))))))))
 
 (deftest a-dig-route-search-ends-once-the-cheapest-open-cell-passes-its-worth
@@ -1952,19 +1952,19 @@
 (deftest a-goal-over-an-unseen-floor-is-priced-over-the-chance-the-floor-is-none
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (hiding-with-pickaxe world #{[4 63 0]})
-        seconds (fn [absent] (absent-at [:level] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s 6000}))))]
+        seconds (fn [absent] (absent-at [:level] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s tu/order-worth}))))]
     (is (< (seconds 0.01) (seconds 0.5) (seconds 0.9)) "the likelier a level step's floor is a void, the dearer the way")))
 
 (deftest a-walk-over-an-unseen-floor-of-a-loosened-pass-is-priced-over-the-chance-the-floor-is-none
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "1,64,0" "air" "1,65,0" "air" "2,64,0" "air" "2,65,0" "air" "3,64,0" "air" "3,65,0" "air")
         p (hiding-with-pickaxe world #{[1 63 0] [2 63 0]})
-        seconds (fn [absent] (absent-at [:level] absent #(:seconds (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) true false {:worth-s 6000}))))]
+        seconds (fn [absent] (absent-at [:level] absent #(:seconds (choose/route-answer p [0 64 0] [3 64 0] (constantly true) (constantly false) true false {:worth-s tu/order-worth}))))]
     (is (< (seconds 0.01) (seconds 0.5)) "the likelier a level step's unseen floor is a void, the dearer the walk over it")))
 
 (deftest a-route-that-ends-in-range-short-of-the-goal-is-not-priced-over-the-goals-unseen-floor
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
         p (hiding-with-pickaxe world #{[4 63 0]})
-        seconds (fn [absent] (absent-at [:level :up :down :drop :drop-4 :drop-8] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s 6000 :range 2 :near [4 64 0]}))))]
+        seconds (fn [absent] (absent-at [:level :up :down :drop :drop-4 :drop-8] absent #(:seconds (choose/route-answer p [0 64 0] [4 64 0] (constantly true) (constantly false) false false {:worth-s tu/order-worth :range 2 :near [4 64 0]}))))]
     (is (= (seconds 0.01) (seconds 0.9)) "its end stands on a seen floor")))
 
 (def drop-world
@@ -1974,7 +1974,7 @@
 (defn straight-dig
   "route-answer's route when the straight dig is the answer (a :read-s that prices every search past it) and what the body-prices say of the fall."
   [p goal floors-unseen-ok? route-opts]
-  (choose/route-answer p [0 80 0] goal (constantly true) (constantly false) floors-unseen-ok? false (merge {:read-s 1 :worth-s 6000} route-opts)))
+  (choose/route-answer p [0 80 0] goal (constantly true) (constantly false) floors-unseen-ok? false (merge {:read-s 1 :worth-s tu/order-worth} route-opts)))
 
 (deftest the-straight-dig-over-a-drop-is-priced-at-the-falls-hp-cost
   (let [p (tu/fake {:blocks drop-world :self {:pos {:x 0.5 :y 80 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}]})
