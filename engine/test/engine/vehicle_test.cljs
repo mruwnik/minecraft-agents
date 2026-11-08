@@ -148,6 +148,27 @@
           (is (= [{}] (dismount-args p)))
           (is (= {:pos {:x 2.5 :y 64 :z 0.5} :landed :in-water} (:data r))))))))
 
+(deftest a-water-landing-beside-dry-land-swims-onto-it-before-it-is-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring {"4,64,0" "air" "4,63,0" "stone"}
+              p (setup-owner (aboard {:blocks ring :entities [(assoc boat :dismountAt {:x 2.5 :y 64 :z 0.5})]}))
+              c (bare-ctx p {})
+              r (await (leave/round c))]
+          (is (= [{:range 0 :pos {:x 4 :y 64 :z 0}}] (mapv #(select-keys % [:range :pos]) @(:pauses c))) "one walk, to the dry cell")
+          (is (= [:done :dry] [(:kind r) (:landed (:data r))])))))))
+
+(deftest a-water-landing-whose-swim-fails-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring {"4,64,0" "air" "4,63,0" "stone"}
+              p (setup-owner (aboard {:blocks ring :entities [(assoc boat :dismountAt {:x 2.5 :y 64 :z 0.5})]}))
+              c (assoc (bare-ctx p {}) :call (fn [_ _ _] (js/Promise.resolve (contract/ending :nothing-possible :blocked nil))))
+              r (await (leave/round c))]
+          (is (= [:nothing-possible :not-landed] [(:kind r) (:cause r)])))))))
+
 (deftest a-failed-dismount-is-retried-in-the-run-then-given-up
   (async done
     (tu/run-async done
