@@ -115,12 +115,6 @@
                                      (some-> (:pos (:data d)) (u/dist near) (<= (settings/get settings ::pile-reach)))))
                         (body/open-deaths view))))))
 
-(def safe?
-  (let [base (price/staying :work (ready/safe-at-or-roaming place))
-        pile-ok (contract/ok :pile "a death pile does not wait for light")]
-    (with-meta (fn [c] (if (at-death-pile? c) pile-ok (base c)))
-      (update (meta base) ::ready/exposure (fn [f] (fn [c] (if (at-death-pile? c) pile-ok (f c))))))))
-
 (defn max-moves [] (settings/get settings ::max-moves))
 
 (defn radius-of [c] (or (:radius (:args c)) (settings/get settings ::radius)))
@@ -592,6 +586,14 @@
     {:uses {:job-time [0 mean (if (or (pos? search) dig) ##Inf (* 3 mean))]}
      :yields {:items (update-vals names (fn [k] [0 k k]))}
      :done [0 n (if (or (pos? search) dig) ##Inf n)]}))
+
+(defn stay-s "Seconds the job stays: its quote's mean." [c] (second (get-in (quote-of c) [:uses :job-time])))
+
+(def safe?
+  (let [base (price/with-stay (ready/safe-at-or-roaming place) stay-s true)
+        pile-ok (contract/ok :pile "a death pile does not wait for light")]
+    (with-meta (fn [c] (if (at-death-pile? c) pile-ok (base c)))
+      (update (meta base) ::ready/exposure (fn [f] (fn [c] (if (at-death-pile? c) pile-ok (f c))))))))
 
 (defn cleanup
   "However the job ends: the :collecting hold on its area is released."

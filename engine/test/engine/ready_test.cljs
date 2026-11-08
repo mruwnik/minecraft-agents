@@ -79,6 +79,7 @@
             [jobs.items.pick-up-loose :as pick-up-loose]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.risk :as risk]
             [jobs.lib.cost.answer :as answer]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
@@ -542,12 +543,11 @@
     {:entities [skeleton]} {} :later
     {:entities [skeleton]} {:ranged-radius 5} :ok))
 
-(deftest threatened-prices-a-seen-mob-against-the-calls-worth
-  (let [verdict (fn [worth] (let [s (ready/threatened (assoc (with-entry (merge at-origin {:entities [zombie] :inventory sword}) {}) :worth (constantly worth)))]
-                              [(first s) (:reason (nth s 2)) (:loss (nth s 2))]))
-        [_ _ loss] (verdict tu/order-worth)]
-    (is (= [:later :hostile-near] (take 2 (verdict tu/order-worth))) "a hand order waits beside a mob that costs more than the order is worth")
-    (is (= [:ok :seen-priced] (take 2 (verdict (inc loss)))) "a call worth more than the mob costs does not wait on a reflex that may never remove it")))
+(deftest threatened-prices-a-seen-mob-over-the-jobs-own-stay
+  (let [c (with-entry (merge at-origin {:entities [zombie] :inventory sword}) {})
+        verdict (fn [stay] (let [s (ready/threatened (assoc c ::price/stay-s stay))] [(first s) (:reason (nth s 2))]))]
+    (is (= [:ok :seen-priced] (verdict (risk/work-s :click))) "a hand order's click beside a zombie, sword in hand, does not wait on a reflex that may never remove it")
+    (is (= [:later :hostile-near] (verdict (risk/work-s :long))) "the same call staying long beside it waits: priced again for its stay, not the last check's")))
 
 (deftest threatened-keeps-the-triggers-visible-only-option
   (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})
@@ -559,13 +559,13 @@
 (deftest threatened-prices-a-mob-only-heard-and-waits-on-no-reflex
   (let [wall (tu/box 2 64 -3 3 66 3 "stone")
         room (merge (tu/box -6 63 -6 6 68 6 "stone") (tu/box -5 64 -5 5 67 5 "air"))
-        verdict (fn [blocks worth]
+        verdict (fn [blocks worth stay]
                   (let [s (ready/threatened (-> (with-entry (merge at-origin {:entities [(assoc zombie :pos {:x 7 :y 64 :z 0})] :blocks blocks}) {:visible-only false})
-                                                (assoc :worth (constantly worth) ::price/stay-s 30)))]
+                                                (assoc :worth (constantly worth) ::price/stay-s stay)))]
                     [(first s) (:reason (nth s 2))]))]
-    (is (= [:later :hostile-near] (verdict wall 0)) "a way round the wall: doing nothing about it costs more than a worthless call")
-    (is (= [:ok :heard-priced] (verdict wall 1e9)) "the same sound under a call worth more than it costs: no wait for the reflex to judge it")
-    (is (= [:ok :no-hostile-near] (verdict room 0)) "the body shut in a room with no way in: the sound costs nothing")
+    (is (= [:later :hostile-near] (verdict wall 0 30)) "a way round the wall: doing nothing about it costs more than a worthless call")
+    (is (= [:ok :heard-priced] (verdict wall tu/order-worth (risk/work-s :click))) "the same sound under a hand order's click, which it affords: no wait for the reflex to judge it")
+    (is (= [:ok :no-hostile-near] (verdict room 0 30)) "the body shut in a room with no way in: the sound costs nothing")
     (is (= [:look :heard-unseen] (let [world (merge at-origin {:entities [(assoc zombie :pos {:x 7 :y 64 :z 0})] :blocks room})
                                        p (sky/with-sky (tu/seeing-within (tu/fake (merge {:floor tu/walk-floor} world)) 4))
                                        _ (game/select! p)

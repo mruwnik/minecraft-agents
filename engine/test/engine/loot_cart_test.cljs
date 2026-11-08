@@ -120,12 +120,14 @@
           (is (= [:stopped :refused ["hut"] 0] ((juxt :status :reason :plans :collected) result)))
           (is (= #{50} (cart-ids p))))))))
 
-(deftest a-hostile-met-only-on-the-walk-to-the-cart-keeps-the-cart-unopened
-  ;; the zombie is out of the hostile radius when the job starts (the start check is ok) and 6 blocks from the cart
+(deftest a-pack-met-only-on-the-walk-to-the-cart-keeps-the-cart-unopened
+  ;; the zombies are out of the hostile radius when the job starts (the start check is ok) and 6 blocks from the cart; one
+  ;; alone is priced within a hand order over the looting, nine are not
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:entities [(cart 50 [30 64 0]) {:id 60 :name "zombie" :kind "hostile" :pos {:x 24 :y 64 :z 0}}]})]
+        (let [pack (map (fn [i] {:id (+ 60 i) :name "zombie" :kind "hostile" :pos {:x 24 :y 64 :z (- i 4)}}) (range 9))
+              {:keys [eng p]} (setup {:entities (into [(cart 50 [30 64 0])] pack)})]
           (await (child-outcome eng job {:id 50} 25))
           (is (nil? (get (inv p) "iron_ingot")) "the cart was not emptied")
           (is (= #{50} (cart-ids p))))))))

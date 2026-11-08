@@ -163,13 +163,14 @@
         (let [{:keys [p]} (await (run-set-spawn {:time noon} {} (constantly nil)))]
           (is (pos? (sense/looks p))))))))
 
-(deftest set-spawn-does-not-look-round-with-a-hostile-near
+(deftest set-spawn-looks-round-beside-a-hostile-it-affords-and-not-beside-a-pack-it-does-not
   (async done
     (run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run-set-spawn {:time noon :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 20}]}
-                                                {} (constantly nil)))]
-          (is (zero? (sense/looks p))))))))
+        (let [zombie (fn [i] {:id (inc i) :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z (- i 4)} :health 20})
+              looks (fn ^:async looks-with [n] (sense/looks (:p (await (run-set-spawn {:time noon :entities (mapv zombie (range n))} {} (constantly nil))))))]
+          (is (pos? (await (looks 1))) "one zombie over a 3 s click costs less than a hand order: the job looks for its bed")
+          (is (zero? (await (looks 9))) "nine cost more than the order is worth: no look, the job waits"))))))
 
 (deftest set-spawn-does-not-click-again-when-the-spawn-bed-is-known
   (async done

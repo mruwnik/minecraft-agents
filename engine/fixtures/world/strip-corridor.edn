@@ -6,7 +6,8 @@
 ;; Should-succeed: cobweb (shears) and rails (pickaxe) are taken, the torches hung are taken back; a support's fences and planks go to
 ;; an axe; a chest minecart is looted; :light leaves the spawner with torches round it, :break digs it, :skip leaves it unlit.
 ;; Should-fail: no shears waits :no-tool with the cobweb left; no torches waits :no-torches; :seal stops :spawner, spawner left.
-;; A zombie in the corridor: the job waits :hostile-near, then strips once it is gone.
+;; A zombie in the corridor: the job waits :hostile-near, then strips once it is gone. A cave spider behind the body does not hold a
+;; :break: the pickup after the dig stays only its quote, so it does not wait :hostile-near beside the spider.
 {:defaults
  {:tags [:strip :corridor :mineshaft :jobs] :time :any
   :plot {:height 8 :floor "stone" :light :dark}
@@ -77,6 +78,13 @@
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
    :act [[:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :break})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:spawner 1}}} :within-s 140 :of-job true}]
+   :after [[:not-block [16 1 18] "spawner"]]}
+  {:name "spawner-break-with-a-cave-spider-behind-digs-it-and-does-not-wait-after"
+   :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]
+   :act [[:summon "cave_spider" [6.5 0 15.5] "{NoAI:1b,Silent:1b}"]
+         [:job (jobs.strip.corridor {:worth 1200 :segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:ore] :spawner :break})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:taken {:spawner 1}}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :hostile-near}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [16 1 18] "spawner"]]}
   {:name "spawner-seal-stops-spawner-and-leaves-it"
    :blocks [[:set [16 1 18] "spawner{RequiredPlayerRange:0s}"]]

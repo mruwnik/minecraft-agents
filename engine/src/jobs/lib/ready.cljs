@@ -2,7 +2,7 @@
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (priced; the estimate of jobs.lib.spawn-light/exposure is
   above 0; :look while the light there is unseen and a look from here would show it, else priced as unseen (unseen-status); :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
-  (threatened: a mob near whose danger over the stay is more than the call is worth); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
+  (threatened: a mob near while the call's worth does not afford its stay with the danger over it); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
             [clojure.string :as str]
             [engine.args :as a]
@@ -412,32 +412,43 @@
   (let [p (:primitives c)]
     (remove danger/seen-only? (danger/hostile-dangers p (ctx/view c) (trigger-args c) {:sight-at (danger/sight-lookup p)}))))
 
+(defn hostile-cost
+  "Seconds going on beside hostiles hs (JS entities) costs the call: its own stay (price/stay-s) and what doing nothing
+  about them over it costs the body (hostile-loss/loss-over); 0 with none."
+  [c hs]
+  (if (seq hs) (let [s (price/stay-s c)] (+ s (hostile-loss/loss-over c (ctx/view c) hs s))) 0))
+
+(defn hostile-status
+  "ok `ok-reason` while the call's worth affords hostile-cost (Q157: the worth less the job's own seconds and the danger over
+  them), else later :hostile-near, priced again after walk-risk/recheck-ms. what: the text naming the dangers."
+  [c ok-reason what cost]
+  (let [worth (ctx/worth c)
+        priced (str what ": " (price/round1 cost) " s with the stay of " (price/round1 (price/stay-s c)) " s")]
+    (if (cost/affords? cost worth)
+      (contract/ok ok-reason (str priced ", within the call's worth " (price/round1 worth) " s"))
+      (contract/later :hostile-near (str priced ", more than the call's worth " (price/round1 worth) " s: deal with it first")
+                      :cost cost :worth worth :recheck-after-ms walk-risk/recheck-ms))))
+
 (defn heard-price
-  "ok while the heard-only dangers (heard-dangers) cost no more than the call is worth over its stay: what doing nothing
-  about them for price/stay-s costs (hostile-loss/loss-over, the trigger's price, as though each came), against ctx/worth.
-  Over it, look :heard-unseen at the guessed ones' spots when only a way through cells the body has not seen (an unseen
-  wall is no shelter) makes the price too high, else later :hostile-near, priced again after walk-risk/recheck-ms. A
-  sound is priced, not waited on."
+  "hostile-status of the heard-only dangers (heard-dangers), :heard-priced, as though each came. Over the worth, look
+  :heard-unseen at the guessed ones' spots when only a way through cells the body has not seen (an unseen wall is no
+  shelter) makes the price too high. A sound is priced, not waited on."
   [c]
   (let [p (:primitives c)
-        view (ctx/view c)
         hs (heard-dangers c)
-        worth (ctx/worth c)
-        loss #(if (seq %) (hostile-loss/loss-over c view % (price/stay-s c)) 0)
-        all (loss hs)
         heard (when (seq hs) (dawn/hostile-text (map #(dawn/describe p %) hs)))
         seen-way (danger/seen-way-lookup p)
         opts {:sight? (:visible-only (trigger-args c) true) :sight-at (danger/sight-lookup p)}
         sure (filter #(danger/danger-in? p seen-way % opts) hs)
-        guessed (remove (set sure) hs)]
+        guessed (remove (set sure) hs)
+        s (hostile-status c :heard-priced (str "a hostile is near: " heard) (hostile-cost c hs))]
     (cond
       (empty? hs) (contract/ok :no-hostile-near "no hostile near")
-      (<= all worth) (contract/ok :heard-priced (str heard ": " (price/round1 all) " s over the stay, within the call's worth " (price/round1 worth) " s"))
-      (and (seq guessed) (<= (loss sure) worth))
+      (= :ok (first s)) s
+      (and (seq guessed) (cost/affords? (hostile-cost c sure) (ctx/worth c)))
       (contract/look :heard-unseen (str heard ": its way to the body runs through cells not seen; look first")
                      :look-at (mapv #(mapv (fn [k] (js/Math.floor (k (danger/mob-pos p %)))) [:x :y :z]) guessed))
-      :else (contract/later :hostile-near (str "a hostile is near: " heard ": " (price/round1 all) " s over the stay, more than the call's worth " (price/round1 worth) " s")
-                            :loss all :worth worth :recheck-after-ms walk-risk/recheck-ms))))
+      :else s)))
 
 (defn hostile-now?
   "Whether the hostile-near trigger would hold now (the radii and options of its register entry) for a mob seen or
@@ -446,25 +457,18 @@
   (hostile-loss/hostile-near? c (ctx/view c) (assoc (trigger-args c) :ignore-heard? true)))
 
 (defn seen-price
-  "ok while the dangers the hostile-near trigger holds for (seen or remembered) cost no more than the call is worth over
-  its stay (loss-over, as heard-price): the reflex answers a mob it can answer, so a job that still finds one near has
-  seen the reflex decline or fail, and waiting on it has no end. Over the worth: later :hostile-near."
+  "hostile-status of the dangers the hostile-near trigger holds for (seen or remembered), :seen-priced: the reflex answers
+  a mob it can answer, so a job that still finds one near has seen the reflex decline or fail, and waiting on it has no end."
   [c]
-  (let [p (:primitives c)
-        hs (danger/hostile-dangers p (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))
-        all (hostile-loss/loss-over c (ctx/view c) hs (price/stay-s c))
-        worth (ctx/worth c)]
-    (if (<= all worth)
-      (contract/ok :seen-priced (str "a hostile is near" (nearest-text c) ": " (price/round1 all) " s over the stay, within the call's worth " (price/round1 worth) " s"))
-      (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": " (price/round1 all) " s over the stay, more than the call's worth " (price/round1 worth) " s: deal with it first")
-                      :loss all :worth worth :recheck-after-ms walk-risk/recheck-ms))))
+  (let [hs (danger/hostile-dangers (:primitives c) (ctx/view c) (assoc (trigger-args c) :ignore-heard? true))]
+    (hostile-status c :seen-priced (str "a hostile is near" (nearest-text c)) (hostile-cost c hs))))
 
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry) for a
-  mob seen or remembered and its danger over the stay is more than the call is worth (seen-price); heard-only mobs are
-  priced the same way (heard-price)."
+  mob seen or remembered and the call's worth does not afford its stay with the danger over it (seen-price); heard-only
+  mobs are priced the same way (heard-price)."
   [c]
-  (check-cache/cached c ::threatened
+  (check-cache/cached c [::threatened (price/stay-s c) (ctx/worth c)]
                       #(if (hostile-now? c)
                          (seen-price c)
                          (heard-price c))))
@@ -870,7 +874,7 @@
    'job-fit {:args [] :type :status :doc "the frame's own fit? holds" :fn #(own-export :fit?)}
    'exposed {:args [] :type :status :doc "the place of the frame's own safe? is exposed (dark)"
              :fn #(lcond/not exposure-of)}
-   'threatened {:args [] :type :status :doc "a hostile is near and its danger over the stay is more than the call is worth (ready/threatened)" :fn #(lcond/not threatened)}
+   'threatened {:args [] :type :status :doc "a hostile is near and the call's worth does not afford its stay with the danger over it (ready/threatened)" :fn #(lcond/not threatened)}
    'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or while starving (food 0, or hurt with food unreachable) no hostile is near"
                           :fn (fn [] #(or-starving (own-export :safe?) %))}
    'healthy {:args [] :type :status :doc "health is enough and the body is not poisoned (fit?)" :fn (fn [] fit?)}

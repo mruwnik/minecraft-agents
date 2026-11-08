@@ -205,6 +205,15 @@
         (let [r (await (run! (world) {:segment "nonsense"}))]
           (is (= {:status :stopped :reason :bad-args} (select-keys r [:status :reason]))))))))
 
+(deftest spawner-break-with-one-cave-spider-near-digs-it-and-does-not-wait-after
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (world :entities [spider] :blocks spawner-corridor)
+              why (await (bd/waiting-after env (list job (assoc args :spawner :break)) 20))]
+          (is (nil? why) "the pickup after the dig stays as long as its own quote, not a work stay beside the spider")
+          (is (= "air" (bd/block-at (:p env) spawner-cell))))))))
+
 (deftest spawner-break-with-a-pack-of-cave-spiders-near-waits-and-digs-nothing
   (async done
     (tu/run-async done
