@@ -1,3 +1,4 @@
+;; :worth 1200 is a hand order's worth, as in the workspace examples (a means job has no worth-of; the CLI takes numbers only).
 ;; The needs-weapon trigger (card eba9f703): by day a body carrying no weapon crafts the best sword it can (stone, else wooden).
 ;; Body with 4 cobblestone, 2 sticks and a table in the bag. Should-succeed: no sword -> a stone sword. Should-fail: an iron sword carried -> nothing made.
 {:defaults
@@ -51,7 +52,7 @@
    :time :any
    :plot {:light :sky}
    :act [[:wait-s 8]
-         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.collect-drops {:center [1 2 3]})" "--now" "--wait" "--timeout" "20s"]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.collect-drops {:worth 1200 :center [1 2 3]})" "--now" "--wait" "--timeout" "20s"]
           {:ok false :reason :bad-spec}]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 30}]
    :limit-s 90}]}

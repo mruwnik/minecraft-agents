@@ -1,3 +1,4 @@
+;; :worth 1200 on a trigger's stand-in :job is a hand-registered trigger's worth, as in the workspace examples; the cases check the trigger, not its price.
 ;; An agent-defined stay-in-area trigger (ad hoc :when (outside-box lo hi), job go-to back inside; engine/README Conditions).
 ;; Box x 0..20 of a 40 long plot; the register entry is the recipe worlds/Leo/WORLD.md gives for the base.
 ;;   walk-out-is-cut-and-body-returns (should-succeed): a go-to toward x 30 leaves the box; the trigger fires, its go-to ends at x 10, the body is back inside.
@@ -7,7 +8,7 @@
   :plot {:height 10 :length 40 :width 16}
   :register [{:id :stay-in-box
               :when (outside-box #at [0 -2 0] #at [20 6 15])
-              :job (jobs.movement.go-to {:pos #at [10 0 8] :range 2 :ways #{:walk :clear-seal}})
+              :job (jobs.movement.go-to {:worth 1200 :pos #at [10 0 8] :range 2 :ways #{:walk :clear-seal}})
               :persistence :cooldown :cooldown-s 5}]
   :body {:at [4.5 0 8.5] :yaw 270 :settle-s 1}
   :limit-s 90}

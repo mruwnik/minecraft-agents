@@ -1,3 +1,4 @@
+;; :worth 1200 is a hand order's worth, as in the workspace examples (a means job has no worth-of; the CLI takes numbers only).
 ;; What the jobs/observe tools answer in situations that need a live body (cards abe33c66 a2972022 999ed566 4f3c0f82).
 ;; Should-succeed: a --now submit behind the night reflex says so in :hint; a weather change is logged; a fresh body knows no job of the last case;
 ;; a zombie that left the body's sight is no longer listed. Should-fail (controls): by day no reflex hint; a zombie still in sight stays listed.
@@ -15,12 +16,12 @@
    :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
    :body {:inventory [["cobblestone" 16]]}
    :act [[:await {:source :reflex :kind :fired :context {:reflex-id :night}} 30]
-         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.get-tool {:item \"wooden_pickaxe\"})" "--now"]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.get-tool {:worth 1200 :item \"wooden_pickaxe\"})" "--now"]
           {:ok true :hint [:contains "queued behind reflex"]}]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 30}]}
   {:name "now-submit-by-day-has-no-reflex-hint"
    :time :day :time-why :weather
-   :act [[:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name :wt-a :pos [6 150 6]})" "--now"]
+   :act [[:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:worth 1200 :name :wt-a :pos [6 150 6]})" "--now"]
           {:ok true :hint [:not [:contains "reflex"]]}]]
    :expect [{:event {:source :job :kind :completed} :within-s 30}]}
   {:name "observe-places-lists-a-set-place"

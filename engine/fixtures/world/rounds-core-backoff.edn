@@ -1,3 +1,4 @@
+;; :worth 1200 on a trigger's stand-in :job is a hand-registered trigger's worth, as in the workspace examples; the cases check the trigger, not its price.
 ;; Card 7fd2b650 case at the end: a status-only :backoff map never turns backoff on for a reflex that has none.
 ;; Rounds redesign (card 978285e1): backoff belongs to register entries only, a listed job is only flagged.
 ;; A stone island x 10..22, z 10..12 sits inside a 5-wide, 6-deep void ring (x 5..27, z 5..17); the body stands south of the ring (z 18.5)
@@ -16,7 +17,7 @@
  ;; the backoff case is a persistently true trigger (:hungry: hunger leaves food 8 and damage hp 15, so food < 6 + 5) whose job fails every act on an unreachable chest
  ;; (deposit is a listed job, so it also warns reflex.continued once: expected here).
  [{:name "hungry-failing-job-backs-off-after-three-runs"
-   :register [{:trigger :hungry :why "the case runs the rounds machinery with a deposit job and its own backoff" :cooldown-s 0 :backoff {:after 3} :job (jobs.storage.deposit {:chest #at [16 0 11]})}]
+   :register [{:trigger :hungry :why "the case runs the rounds machinery with a deposit job and its own backoff" :cooldown-s 0 :backoff {:after 3} :job (jobs.storage.deposit {:worth 1200 :chest #at [16 0 11]})}]
    :blocks [[:set [16 0 11] "chest"]]
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 5 minecraft:generic"]]

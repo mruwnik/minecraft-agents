@@ -1,3 +1,4 @@
+;; :worth 1200 on a trigger's stand-in :job is a hand-registered trigger's worth, as in the workspace examples; the cases check the trigger, not its price.
 ;; Cards d6a489cf (the night fact is silent when sealed in a lit corridor; owner Q345: an open tunnel or stair is not shelter), 820b2869 (dig-in walls run out of
 ;; blocks -> pit).
 ;; Night: run with --allow-time --time-log <shared time log>. Stone mass x 2..30, z 8..24, y 0..9 (cases that need a taller
@@ -7,7 +8,7 @@
  {:tags [:night :survival :access]
   :time :night
   :plot {:height 24}
-  :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.notify {:text "night fired"})}]
+  :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.notify {:worth 1200 :text "night fired"})}]
   :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases

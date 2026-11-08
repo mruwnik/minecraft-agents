@@ -1,3 +1,4 @@
+;; :worth 1200 is a hand order's worth, as in the workspace examples (a means job has no worth-of; the CLI takes numbers only).
 ;; Card 53d05972 (D19): jobs.movement.reach builds a stair down or a bridge, chosen by price, where go-to finds no walk.
 ;; Tunnel (wall torches light it and the pit): stone mass x 2..30, y -5..3, z 14..18, a 1x2 tunnel along z 16 from x 4 to x 28 cut by a chasm x 12..16 (3 deep, lava at the bottom, lit by it). Should-succeed: dirt carried: a 5-block bridge (go-to.escalated :bridge) and the far end is reached; a side tunnel round
 ;; the pit is walked, nothing placed. Should-fail: reach :ways #{:walk} stops at the pit edge, the pit stays open.
@@ -22,7 +23,7 @@
   {:name "move-to-tool-bridges-the-pit"
    :blocks [[:fill [2 -5 14] [30 3 18] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:cli "world" ["$body" "submit" "move-to" #at [27 0 16] "--range" "0" "--who" "wt" "--world" "$world"] {:ok true}]]
+   :act [[:cli "world" ["$body" "submit" "move-to" #at [27 0 16] "--range" "0" "--worth" "1200" "--who" "wt" "--world" "$world"] {:ok true}]]
    :expect [{:event {:source :job :kind :reach.span :data {:step :bridge}} :within-s 60}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 160}]
    :after [[:block [14 -1 16] "dirt"] [:body-near [27.5 0 16.5] 2]]}
@@ -38,7 +39,7 @@
    :blocks [[:fill [2 -5 14] [30 3 20] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]
             [:fill [4 0 17] [4 1 17] "air"] [:fill [4 0 18] [28 1 18] "air"] [:fill [28 0 17] [28 1 17] "air"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:cli "world" ["$body" "submit" "move-to" #at [27 16] "--range" "0" "--who" "wt" "--world" "$world"] {:ok true}]]
+   :act [[:cli "world" ["$body" "submit" "move-to" #at [27 16] "--range" "0" "--worth" "1200" "--who" "wt" "--world" "$world"] {:ok true}]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120}
             {:no-event {:source :job :kind :reach.span} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:block [14 -1 16] "air"] [:body-near [27.5 0 16.5] 2]]}

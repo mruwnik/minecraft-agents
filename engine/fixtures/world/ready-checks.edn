@@ -1,3 +1,4 @@
+;; :worth 1200 on a trigger's stand-in :job is a hand-registered trigger's worth, as in the workspace examples; the cases check the trigger, not its price.
 ;; Readiness live cases L1-L6 (docs/readiness-checks-design.md): jobs.debug.ready-probe binds safe-at (:at) or safe-if-lit (:lit?) and only emits
 ;; job.ready-probe once started. Register empty (no hostile reflex, no night trigger) unless a case says so; no bed anywhere.
 ;; Night cases need --allow-time --time-log <the shared time log>. A stone hut x 8..16, z 8..16 with a doorway at [8 0..1 12]; the :at cell [4 0 12]
@@ -77,7 +78,7 @@
   {:name "l5-night-trigger-with-a-lit-bound-job-is-held"
    :time-why :dawn-decision
    :body {:at [4.5 0 12.5] :settle-s 2}
-   :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.ready-probe {:lit? true})}]
+   :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.ready-probe {:worth 1200 :lit? true})}]
    :expect [{:event {:source :reflex :kind :held :data {:reason :dark}} :within-s 40}
             {:no-event {:source :reflex :kind :fired} :for-s 30}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 30}]
@@ -85,7 +86,7 @@
   {:name "l5-night-trigger-whose-job-overrides-the-check-fires"
    :time-why :night-light
    :body {:at [4.5 0 12.5] :settle-s 2}
-   :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.ready-probe {:lit? true :checks {:safe? (always)}})}]
+   :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.ready-probe {:worth 1200 :lit? true :checks {:safe? (always)}})}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 40}
             {:event {:source :job :kind :job.ready-probe} :within-s 40}
             {:no-event {:source :reflex :kind :held} :for-s 20}]
