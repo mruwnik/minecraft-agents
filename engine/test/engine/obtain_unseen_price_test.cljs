@@ -291,7 +291,7 @@
 (def iron-worth (cost/worth-to nil ["raw_iron"] nil))
 
 (deftest an-unseen-ore-search-no-look-prices-costs-what-one-ore-usually-does-and-a-call-worth-less-waits
-  ;; obtain-strip-on and obtain-buried-search ore cases at :worth 100 and 15
+  ;; obtain-strip-on and obtain-buried-search ore cases at raw_iron's own worth
   (let [ore #(hall-price {:item "raw_iron"} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}] % {})]
     (is (= iron-worth (:price (ore 1200))) "the search is never dearer than what one raw iron usually costs")
     (is (= {:reason :not-worth :price iron-worth :worth 100} (:not-worth (ore 100))))
