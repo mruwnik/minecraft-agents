@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, heldSlots, loadConfig, lockedKeys, heavyWaits, heavyWaitBody, maxLoadOf, pidAlive, procStart, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, heldSlots, loadConfig, lockedKeys, heavyWaits, heavyWaitBody, maxLoadOf, queueTurn, pidAlive, procStart, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -440,4 +440,49 @@ test('heavyWaits: markers of a reused pid, a thread id or a dead pid are ignored
     assert.deepEqual(heavyWaits('t', -1).sort(), [[2], [3], null].sort())
     assert.deepEqual(fs.readdirSync(path.join(dir, 'heavy-wait')).sort(), Object.keys(live).sort())
   })
+})
+
+test('queueTurn: only the `free` oldest waiters may take a slot; ties go by id', () => {
+  const q = [{ id: 't.3', t: 30 }, { id: 't.1', t: 10 }, { id: 't.2', t: 20 }]
+  assert.equal(queueTurn(q, 't.1', 1), true)
+  assert.equal(queueTurn(q, 't.2', 1), false)
+  assert.equal(queueTurn(q, 't.2', 2), true)
+  assert.equal(queueTurn(q, 't.3', 2), false)
+  assert.equal(queueTurn([{ id: 'b', t: 5 }, { id: 'a', t: 5 }], 'a', 1), true)
+})
+
+test('integration: light waiters get a freed slot oldest first', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const out = path.join(dir, 'order')
+  const env = plainEnv({ RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '60000', RES_SLOT_POLL_MS: '50', RES_SLOT_STATUS_MS: '1' })
+  const release = path.join(dir, 'release')
+  const until = (cond) => new Promise((resolve) => { const t = setInterval(() => cond() && (clearInterval(t), resolve()), 20) })
+  const start = (tag, body = '') => {
+    const p = spawn('node', [script, 't', '--', 'sh', '-c', `echo ${tag} >> ${out}; ${body}`], { cwd: dir, env, stdio: ['ignore', 'ignore', 'pipe'] })
+    return { waiting: new Promise((r) => p.stderr.on('data', (d) => /waiting for t/.test(d) && r())), done: new Promise((r) => p.on('close', r)) }
+  }
+  const holder = start('holder', `until [ -e ${release} ]; do sleep 0.02; done`)
+  await until(() => fs.existsSync(out))
+  const waiters = []
+  for (const tag of ['L1', 'L2', 'L3', 'L4']) { const w = start(tag, 'sleep 0.2'); await w.waiting; waiters.push(w) }
+  fs.writeFileSync(release, '')
+  await Promise.all([holder, ...waiters].map((x) => x.done))
+  assert.deepEqual(fs.readFileSync(out, 'utf8').trim().split('\n'), ['holder', 'L1', 'L2', 'L3', 'L4'])
+  fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('waiting: a waiter reprints its TEST_EVENTS phase line every status interval, not only when the reason changes', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '2000', RES_SLOT_POLL_MS: '100', RES_SLOT_STATUS_MS: '400', TEST_EVENTS: '1' }
+  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
+  try {
+    await new Promise((r) => setTimeout(r, 1000))
+    const phases = run(['t', '--', 'echo', 'ran'], env).stdout.split('\n').filter((l) => l.startsWith('@@test '))
+    assert.ok(phases.length >= 3, `${phases.length} phase lines in 2 s at a 0.4 s interval`)
+  } finally { process.kill(-holder.pid, 'SIGKILL') }
+  fs.rmSync(dir, { recursive: true, force: true })
 })

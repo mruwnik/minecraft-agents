@@ -15,7 +15,7 @@ import crypto from 'node:crypto'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile, heavyWaitBody } from './res-slot.mjs'
+import { slotArgs, logRun, slotDir, candidateSlots, isHeavy, heavyWaitFile, heavyWaitBody, heldSlots, queueTurn, queueFile, queueJoin, queueEntries } from './res-slot.mjs'
 import { WHOLE_RUN_CAP_S, lastFinished, RUN_ROOT, sweepStale, cleanupOnExit, killTree, slowestPriorMs, stallLimitS, watchStall, killStalled, stallMessage } from './test-run.mjs'
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -139,33 +139,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // Runs cmd under the first free slot; polls until one is free. A heavy run (integration) also tries the reserved slot first and, while it waits, keeps light res-slot runs off those slots.
 // slotsNow() is re-read every round, so a waiting shard widens its slot list as memory frees up.
 let waitSeq = 0
+const STATUS_MS = Number(process.env.RES_SLOT_STATUS_MS) || 60000
 export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = () => {}, onSpawn = () => {}) => {
   const t0 = Date.now(), heavy = isHeavy()
   const orderNow = () => candidateSlots(slotsNow(), RES.kinds.tests.max, RES.kinds.tests.reserve ?? 0, heavy)
   const wait = heavyWaitFile('tests', process.pid, waitSeq++)
+  const queued = queueFile('tests', process.pid, waitSeq++)
   if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true })
+  queueJoin(queued)
+  let lastWait = 0
   try {
-    for (let first = true; ; first = false) {
+    for (;;) {
       const order = orderNow()
       if (heavy) fs.writeFileSync(wait, heavyWaitBody(order))
-      for (const [n, i] of order.entries()) {
+      const held = heldSlots('tests', RES.kinds.tests.max)
+      const turn = heavy || queueTurn(queueEntries('tests'), path.basename(queued), order.filter((i) => !held.includes(i)).length)
+      for (const i of turn ? order : []) {
         const t1 = Date.now()
         const r = await new Promise((res) => {
           let out = ''
-          const p = spawn('flock', slotArgs('tests', i, cmd, 99, '', heavy), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+          const marker = `${queued}.run.${i}` // the wrapper creates it once it holds the lock: this waiter leaves the queue then
+          fs.rmSync(marker, { force: true })
+          const p = spawn('flock', slotArgs('tests', i, cmd, 99, marker, heavy), { ...opts, stdio: ['ignore', 'pipe', 'pipe'] })
+          const poll = setInterval(() => { if (fs.existsSync(marker)) { fs.rmSync(queued, { force: true }); clearInterval(poll) } }, 100)
           onSpawn(p)
           p.stdout.on('data', (d) => { out += d; onOut(String(d)) }); p.stderr.on('data', (d) => { out += d })
-          p.on('close', (code) => res({ code, out }))
+          p.on('close', (code) => { clearInterval(poll); fs.rmSync(marker, { force: true }); res({ code, out }) })
         })
         if (r.code !== 99) {
           logRun({ kind: 'tests', needMb: SHARD_MB, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code: r.code, cmd: cmd.join(' ') })
           return r
         }
-        if (first && n === order.length - 1) onWait()
       }
+      if (Date.now() - lastWait >= STATUS_MS) { lastWait = Date.now(); onWait() }
       await sleep(1000 + Math.random() * 500)
     }
-  } finally { fs.rmSync(wait, { force: true }) }
+  } finally { fs.rmSync(wait, { force: true }); fs.rmSync(queued, { force: true }) }
 }
 
 // A missing, empty or half-written file (another part writing it right now) is no prior timings.

@@ -6,6 +6,7 @@
 // A run appends {start:true, pid, kind, cmd} to /tmp/mc-res/log.jsonl when it gets its slot, and {kind, needMb, waitedS, ranS, code, cmd} when it finishes.
 // A kind with maxLoadPerCore also waits while the 1-minute load average plus the cores (loadCores each) of its recent grants is at maxLoadPerCore x cores. Heavy runs skip that gate.
 // Kinds, need, max and the memory floor: tools/res-slot.json (tools/test-shards.mjs reads the same floor and tests numbers).
+// Light waiters take a freed slot oldest first (<dir>/queue); a waiting run reprints its phase every RES_SLOT_STATUS_MS (60 s).
 // Exit 75 "busy" after ~9 min of waiting (agents' foreground calls cap at 10 min): retry. The slot is an flock held by the command's own process, so it is freed when the command exits or dies.
 import fs from 'node:fs'
 import os from 'node:os'
@@ -129,6 +130,23 @@ export const heavyWaits = (kind, self = process.pid) => {
     return []
   })
 }
+// Light waiters: <dir>/queue/<kind>.<pid>[.<n>] = {t, start}, written when a light run starts waiting. A light run may take a free slot only while it is among the `free` oldest live waiters, so a waiter that arrived first is not passed again and again by newer ones.
+export const queueTurn = (entries, id, freeCount) => [...entries].sort((a, b) => a.t - b.t || (a.id < b.id ? -1 : 1)).findIndex((e) => e.id === id) < freeCount
+export const queueFile = (kind, pid = process.pid, n = '') => path.join(dir(), 'queue', `${kind}.${pid}${n === '' ? '' : `.${n}`}`)
+export const queueJoin = (file) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify({ t: Date.now(), start: procStart(process.pid) })) }
+// Live entries of a kind (dead owners' files are deleted).
+export const queueEntries = (kind) => {
+  const d = path.join(dir(), 'queue')
+  if (!fs.existsSync(d)) return []
+  return fs.readdirSync(d).filter((f) => f.startsWith(`${kind}.`)).flatMap((f) => {
+    try {
+      const w = JSON.parse(fs.readFileSync(path.join(d, f), 'utf8'))
+      if (pidAlive(Number(f.split('.')[1]), w.start ?? undefined)) return [{ id: f, t: w.t }]
+      fs.rmSync(path.join(d, f), { force: true })
+    } catch { /* half-written: not queued yet */ }
+    return []
+  })
+}
 const grantDir = () => path.join(dir(), 'grants')
 // Start time (clock ticks since boot) of a process, null if /proc has no such pid.
 export const procStart = (pid) => {
@@ -224,7 +242,13 @@ const main = async () => {
   const maxWaitMs = Number(process.env.RES_SLOT_MAX_WAIT_MS ?? 540000), pollMs = Number(process.env.RES_SLOT_POLL_MS ?? 1000)
   fs.mkdirSync(dir(), { recursive: true })
   const t0 = Date.now()
-  let lastLine = t0, lastReason = ''
+  let lastLine = t0, lastReason = '', lastPhase = 0
+  const myQueue = queueFile(kind)
+  if (!heavy) {
+    queueJoin(myQueue)
+    process.on('exit', () => fs.rmSync(myQueue, { force: true }))
+    for (const [sig, code] of [['SIGTERM', 143], ['SIGINT', 130]]) process.on(sig, () => process.exit(code))
+  }
   if (heavy) {
     process.on('exit', () => fs.rmSync(heavyWaitFile(kind), { force: true }))
     for (const [sig, code] of [['SIGTERM', 143], ['SIGINT', 130]]) process.on(sig, () => process.exit(code))
@@ -239,6 +263,7 @@ const main = async () => {
     const gated = await withGate(() => {
       const reserved = currentReserved()
       free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), lightHeldCount(kind, k.max), k.sweepCap, sweeping)
+      if (!heavy && free.length && !queueTurn(queueEntries(kind), path.basename(myQueue), free.length)) free = []
       const rampLoad = rampingLoad(readGrants().filter((g) => pidAlive(g.pid, g.start)), kind, Date.now(), rampMs())
       const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved, loadAvg: os.loadavg()[0], maxLoad: heavy ? undefined : maxLoadOf(k, os.cpus().length), rampLoad })
       if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now(), start: procStart(process.pid), kind, cores: k.loadCores ?? 0 }))
@@ -249,7 +274,7 @@ const main = async () => {
       const t1 = Date.now()
       const dropGrant = () => fs.rmSync(path.join(grantDir(), `${process.pid}.json`), { force: true })
       for (const i of free) {
-        const code = await tryRun(kind, i, cmd, () => fs.rmSync(heavyWaitFile(kind), { force: true }), heavy) // the marker stays until the command holds the slot, else a light waiter takes it in the gap
+        const code = await tryRun(kind, i, cmd, () => { fs.rmSync(heavyWaitFile(kind), { force: true }); fs.rmSync(myQueue, { force: true }) }, heavy) // the marker stays until the command holds the slot, else a light waiter takes it in the gap
         if (code === null) continue
         logRun({ kind, needMb, waitedS: Math.round((t1 - t0) / 1000), ranS: Math.round((Date.now() - t1) / 1000), code, cmd: cmd.join(' ') })
         process.exit(code)
@@ -259,7 +284,10 @@ const main = async () => {
     else {
       // live-tests phase line (TEST_EVENTS=1), once per change of reason (digits ignored: free MB drifts)
       const reason = d.why.replace(/\d+/g, '#')
-      if (process.env.TEST_EVENTS && reason !== lastReason) console.log(`@@test ${JSON.stringify({ event: 'phase', t: Date.now(), name: `waiting: ${d.why}${blockers()}`.slice(0, 300) })}`)
+      if (process.env.TEST_EVENTS && (reason !== lastReason || Date.now() - lastPhase >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000))) {
+        lastPhase = Date.now()
+        console.log(`@@test ${JSON.stringify({ event: 'phase', t: Date.now(), name: `waiting: ${d.why}${blockers()}`.slice(0, 300) })}`)
+      }
       lastReason = reason
     }
     if (d.action === 'wait' && Date.now() - lastLine >= (Number(process.env.RES_SLOT_STATUS_MS) || 60000)) {
