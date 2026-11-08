@@ -36,7 +36,6 @@
             [jobs.lib.next-call :as next-call]
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
-            [jobs.lib.walk :as lwalk]
             [jobs.lib.walk.drive :as drive]
             [plan.shape :as shape]))
 
@@ -292,7 +291,7 @@
             r)]
     (cond
       (= :continue r) :continue
-      (and (:arrived (:data r)) (do (await (lwalk/settle! c)) (= next-feet (reach/standing-vec (:primitives c)))))
+      (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
       (do (await (look/glance! c [(look/headings (name (:heading (:args c))))]))

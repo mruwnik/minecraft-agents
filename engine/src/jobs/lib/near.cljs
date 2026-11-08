@@ -205,6 +205,8 @@
         (await (step-out! c to range doors shut-also timeout-s (policy-of))))
       ;; however the walk ended, what it opened and could not shut yet (the body was in its column) is shut when in reach
       (when-not (= :never doors) (await (pass/shut-leftovers! c)))
+      ;; an arrival while still falling is not one: callers read the landed cell
+      (when (= :arrived (:status result)) (await (walk/settle! c)))
       result)))
 
 (defn move-status
