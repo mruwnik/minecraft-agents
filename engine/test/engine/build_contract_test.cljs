@@ -138,8 +138,8 @@
           (is (= {"oak_fence" 3} (get-in e [:cause :needs])))
           (is (= 3 (count (get-in e [:data :missing]))))
           (is (= 6 (get-in e [:data :placed])))
-          (is (= [{:job "jobs.items.obtain" :args {:item "oak_fence" :count 3}}
-                  {:job "jobs.build.from-plan" :args {:plan "pen"} :again true}]
+          (is (= [{:job "jobs.items.obtain" :args {:item "oak_fence" :count 3 :worth tu/order-worth}}
+                  {:job "jobs.build.from-plan" :args {:plan "pen" :worth tu/order-worth} :again true}]
                  (get-in e [:data :next]))))
         (let [e (await (plan-ending {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]}
                                     {"pen" (bfp/pen-plan)} {:plan "pen" :ways #{:carried} :least 2}))]
