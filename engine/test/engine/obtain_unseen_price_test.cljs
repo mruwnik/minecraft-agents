@@ -207,7 +207,7 @@
     (is (< (cost/worth-to nil ["oak_log"] nil) log) "a tree is climbed toward before any search: the stair is in its price")))
 
 (deftest a-buried-bodys-ore-search-wanted-for-35-s-starts-where-a-stair-priced-in-would-refuse
-  (is (nil? (:not-worth (buried-search "raw_iron" 35))) "search about 25 s; the stair up adds over 20 s more (the log's price less its usual cost)"))
+  (is (nil? (:not-worth (buried-search "raw_iron" 35))) "search about 20–26 s; the stair up adds over 20 s more (the log's price less its usual cost)"))
 
 (deftest the-start-check-refuses-a-buried-bodys-log-search-worth-less-than-its-usual-cost-and-stair-but-not-its-ore-search
   (is (nil? (:not-worth (buried-search "raw_iron" (+ (cost/worth-to nil ["raw_iron"] nil) 1)))) "the ore is tunnelled to: what it usually costs is within the worth")
@@ -304,7 +304,7 @@
     (is (= iron-worth (:price (ore 1200))) "the search is never dearer than what one raw iron usually costs")
     (is (= {:reason :not-worth :price iron-worth :worth (dec iron-worth)} (:not-worth (ore (dec iron-worth)))) "a call worth just under one ore's worth-to waits")
     (is (nil? (:not-worth (ore iron-worth))) "a call worth one raw iron's own worth starts it")
-    (is (nil? (:not-worth (ore 210))) "obtain-strip-on's should-fail worth starts")))
+    (is (nil? (:not-worth (ore 230))) "obtain-strip-on's should-fail worth (230) starts, about 22 s over its search price")))
 
 (deftest a-buried-bodys-iron-pickaxe-pays-the-stair-up-for-a-tables-log-and-a-seen-table-spares-it
   ;; obtain-chain/iron-pickaxe-no-ore-seen-explores-by-default
