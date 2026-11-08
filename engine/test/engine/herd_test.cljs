@@ -16,6 +16,7 @@
             [jobs.animals.herd-run :as hr]
             [jobs.animals.herd-trip :as ht]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [engine.test-util :as tu]))
@@ -1506,6 +1507,19 @@
           (await (run-ticks s 900))
           (is (= :brought (:reason (done-event s))))
           (is (= #{1} (cows-in-pen s))))))))
+
+(deftest the-search-for-one-more-animal-is-worth-its-share-of-the-calls-worth-less-its-trip
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [given (atom nil)
+              c {:primitives (tu/fake {}) :args {:mob "cow" :radius 20 :target 3} :worth (constantly tu/order-worth)
+                 :view (fn [] {:now 0}) :update-mem (fn [_ _])}]
+          (with-redefs [ctx/mem (constantly {:origin {:x 0 :y 64 :z 0} :in-pen-start ["u1"]})
+                        ctx/call (fn [_ _ _ args] (reset! given args) (js/Promise.resolve {:kind :stopped}))]
+            (await (ht/search! c))
+            (is (= (- (/ tu/order-worth 2) (cost/trip)) (:worth @given))
+                "one of the two the pen lacked at the start: half of what the caller values the herd at, less its trip")))))))
 
 (deftest no-animal-near-the-start-sends-the-body-to-search-and-the-one-found-is-brought
   (async done

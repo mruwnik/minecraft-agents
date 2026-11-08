@@ -8,7 +8,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items kinds left-behind]]
+            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items kinds left-behind owed]]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
@@ -83,9 +83,10 @@
   (await (blocks/dig-cell! c pos {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn worth
-  "Seconds n of the call's item are worth (jobs.lib.cost/worth-to: the least of its items; no body: a mine digs for no bed)."
+  "Seconds n of the call's items are worth to it: the call's worth less the other items it owes (owed), each at an even
+  share of it (cost/worth-left)."
   [c n]
-  (* n (cost/worth-to nil (items (:args c)) (u/self-pos c))))
+  (cost/worth-left c (cost/others-share-s c n (max 1 (owed c)))))
 
 (defn min-dig-s
   "A dig costs at least the dig of dirt, the softest block a cut meets, whatever the drop yields: a cell that fills again

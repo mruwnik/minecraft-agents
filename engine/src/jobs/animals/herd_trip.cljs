@@ -133,12 +133,14 @@
 (defn ^:async search!
   "Nothing brought and no animal of :mob listed within :radius of the start: walk and look for one (jobs.explore.search,
   once per run, within :radius of the start). The count asked for is one more than the animals of the kind in view now, so
-  the ones already penned do not end the search. :continue; the next call lists again."
+  the ones already penned do not end the search. Its worth is the call's share for one of the adults the pen lacked at
+  the start, less that one's trip back (cost/worth-left). :continue; the next call lists again."
   [c]
-  (let [{:keys [mob radius]} (:args c)
+  (let [{:keys [mob radius target]} (:args c)
         [origin _] (range-from-origin c)
         seen (count (animals/herd (:primitives c) mob 24))
-        worth (cost/animal-find-worth mob)
+        lacking (max 1 (- target (count (:in-pen-start (ctx/mem c)))))
+        worth (cost/worth-left c (+ (cost/others-share-s c 1 lacking) (cost/trip)))
         e (when (pos? worth)
             (await (ctx/call c :explore 'jobs.explore.search
                              (child/search-args {:target mob :count (inc seen) :center origin :max-distance (max 1 (long radius))

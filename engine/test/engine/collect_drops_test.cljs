@@ -825,7 +825,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :view (fn [] {:now 0})}
+        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
               item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}
               routes (atom 0) worths (atom []) priced (atom nil)
               cells [[1 70 0] [2 70 0] [3 70 0]]]
@@ -840,6 +840,15 @@
                   guess (reduce + (map #((:dig-s @priced) blocks/hidden-guess %) cells))]
               (is (not= guess (reduce + (map #((:dig-s @priced) "stone" %) cells))) "the guess is pinned apart from stone")
               (is (< (js/Math.abs (- (+ guess 5) (- w1 w2))) 1e-6) "all three cells (two dug, one failed), unseen, at the guess the plan used, and the first search's CPU come out of the worth"))))))))
+
+(deftest a-drops-dig-worth-is-its-share-of-the-calls-worth
+  (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
+        item #js {:id 1 :item #js {:name "diamond" :count 1}}
+        other #js {:id 2 :item #js {:name "diamond" :count 2}}]
+    (with-redefs [job-ns/candidates (fn [_ _] [item other])]
+      (is (= (/ tu/order-worth 3) (job-ns/item-worth c item)) "one of three diamonds in sight: a third of what the caller values the call at, not a diamond's price"))
+    (with-redefs [job-ns/candidates (fn [_ _] [])]
+      (is (= tu/order-worth (job-ns/item-worth c item)) "the last drop: the call's whole worth"))))
 
 (deftest a-drop-whose-only-dig-costs-more-than-it-is-worth-is-left-past-worth-not-no-route
   (async done
@@ -875,7 +884,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :view (fn [] {:now 0})}
+        (let [c {:primitives (tu/fake-on-floor {}) :args {:items ["diamond"]} :id "j" :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
               item #js {:id 1 :pos #js {:x 8.5 :y 64 :z 0.5} :item #js {:name "diamond" :count 1}}
               routes (atom 0) worths (atom []) priced (atom nil)
               cells [[1 70 0]]]

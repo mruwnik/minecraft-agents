@@ -123,10 +123,11 @@
        (< (:searches (ctx/mem c) 0) max-searches)))
 
 (defn ^:async search!
-  "No animal in reach: walk and look for one (jobs.explore.search; one in view beyond :radius counts). :continue while it
-  runs, :again once it found one (the child is called again), else nil."
+  "No animal in reach: walk and look for one (jobs.explore.search; one in view beyond :radius counts), at the call's worth
+  less the trip back with it (cost/worth-left). :continue while it runs, :again once it found one (the child is called
+  again), else nil."
   [c]
-  (let [worth (cost/animal-find-worth (:mob (:args c)))
+  (let [worth (cost/worth-left c (cost/trip))
         e (when (pos? worth)
             (await (ctx/call c :explore 'jobs.explore.search
                              (child/search-args {:target (:mob (:args c)) :count 1 :worth worth :takeable true}))))]

@@ -15,7 +15,7 @@
     mob-toll answered-together ({:stance :price :near} of mobs met together), threat-factor (its meet rate x that price): go-to's planner dangers, a mob priced by the answer the reflex would take to it (answer/decide) (jobs.lib.cost.mob-toll).
     health   hp-seconds (the food that heals an hp again), hp-cost, landing-hp (hp a falling block that lands on the body costs), risk-s (a walk's hurt and death chance in seconds), commute-s (a walk there and back against sheltering here), night-lost-s (the work a way through the night costs), night-way-s (the one price of a way through the night), night-walk-bound-s (the longest walk that price could still take), damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; outlasts, trip-points, carry-points: the food a trip carries, priced against the chance the trip outlasts it, at least that reserve less the home food; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
-    value    item-value, survived-worth (a find's worth times the chance the trip does not end in death), chance-times (p x s, 0 at p 0 though s be ##Inf), affords? (a price within a worth, never ##Inf), quote-gain (the seconds a walk quote is expected to save), reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, turn-back-cost (an unseen floor's look and, not there, the walk back), food-worth, animal-worth (its meat's food points at food-point-worth), animal-find-worth (an animal's worth less one trip, a search's worth), crop-worth (a ripe crop's food points at food-point-worth): a tour of
+    value    item-value, survived-worth (a find's worth times the chance the trip does not end in death), chance-times (p x s, 0 at p 0 though s be ##Inf), affords? (a price within a worth, never ##Inf), quote-gain (the seconds a walk quote is expected to save), reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, turn-back-cost (an unseen floor's look and, not there, the walk back), food-worth, animal-worth (its meat's food points at food-point-worth), worth-left / others-share-s (a child's worth: the call's less the rest of its plan), crop-worth (a ripe crop's food points at food-point-worth): a tour of
              frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; wear-saved: the wear of a dear tool a spare's digs save; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; lit-way-s, torch-way-s, torch-gap: a way lit as it goes; dark-way-s: one walked or dug dark; dark-or-lit: a dark stay against lighting it; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark) and spawn-rate at its height, spawn-share its share of cells that spawn.
@@ -527,11 +527,23 @@
    (> (value/chance-times (retry-chance kind (or fails (u/failures c))) (ctx/worth c))
       (or try-s (retry-s kind)))))
 
+(defn worth-left
+  "The worth a child of call c gets: the call's (ctx/worth) less rest-s, the price of the rest of c's plan after the
+  child, 0 at least; ##Inf stays ##Inf. Sunk cost does not lower it."
+  [c rest-s]
+  (let [w (ctx/worth c)]
+    (if (infinite? w) w (max 0 (- w rest-s)))))
+
+(defn others-share-s
+  "rest-s for worth-left of a child after n of the call's total units: the other units, each at an even share of the
+  call's worth (none when n covers total)."
+  [c n total]
+  (if (>= n total) 0 (* (ctx/worth c) (/ (- total n) total))))
+
 (def turn-back-cost value/turn-back-cost)
 (def cover-tour-s value/cover-tour-s)
 (def food-worth food/food-worth)
 (def animal-worth value/animal-worth)
-(def animal-find-worth value/animal-find-worth)
 (def crop-worth value/crop-worth)
 (def expected-drops value/expected-drops)
 (def food-point-worth value/food-point-worth)

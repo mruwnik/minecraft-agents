@@ -2,11 +2,13 @@
   "jobs.animals.bring against the fake world: it picks lead-to or lure-to and passes the ending up."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.animals.bring :as bring]))
+            [jobs.animals.bring :as bring]
+            [jobs.lib.cost :as cost]))
 
 (defn cow [id x]
   {:id id :uuid (str "u" id) :name "cow" :kind "passive" :pos {:x x :y 64 :z 0}})
@@ -96,6 +98,16 @@
       (fn ^:async t []
         (let [s (await (bring! {:inventory wheat :entities []} {}))]
           (is (some #(and (= :child_started (:kind %)) (= "j1/explore" (:job %))) @(:seen s))))))))
+
+(deftest the-search-for-an-animal-is-worth-the-calls-worth-less-the-trip-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [given (atom nil)
+              c (assoc (ctx-of wheat {}) :worth (constantly tu/order-worth) :view (fn [] {:now 0}) :update-mem (fn [_ _]))]
+          (with-redefs [ctx/call (fn [_ _ _ args] (reset! given args) (js/Promise.resolve {:kind :stopped}))]
+            (await (bring/search! c))
+            (is (= (- tu/order-worth (cost/trip)) (:worth @given)) "what the caller values the animal at, not the animal's own price")))))))
 
 (deftest an-animal-the-search-found-beyond-the-radius-is-then-taken
   (async done

@@ -256,11 +256,16 @@
         (do (await (ctx/act c :moveTo #js {:pos #js {:x (+ x 0.5) :y y :z (+ z 0.5)} :range 0.15}))
             (sh-sense/solid-at? p (update (sh-sense/feet p) :y dec))))))
 
+(defn item-count [^js item] (or (some-> item .-item .-count) 1))
+
 (defn item-worth
-  "Seconds the item entity is worth to the body (jobs.lib.cost/find-worth, as the dig yield is priced)."
+  "Seconds the item entity is worth to the call: its worth less the other wanted items in sight, each item at an even
+  share of it (cost/worth-left)."
   [c ^js item]
-  (let [{:keys [name count]} (js->clj (.-item item) :keywordize-keys true)]
-    (cost/find-worth nil [name] (u/self-pos c) (or count 1))))
+  (let [anchor (or (:anchor (ctx/mem c)) (:near (:args c)) (u/self-pos c))
+        others (reduce + 0 (map item-count (remove #(= (.-id %) (.-id item)) (candidates c anchor))))
+        n (item-count item)]
+    (cost/worth-left c (cost/others-share-s c n (+ n others)))))
 
 (defn worth-of
   "Seconds a root collect is worth: getting again the drops in sight round the anchor (cost/goal-value), and with :search
@@ -403,9 +408,11 @@
             _ (await (look-pit! c from (item-cell item)))
             seen-name (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
             wanted (set (:items (:args c)))
-            yield (fn [n _] (let [i (blocks/item-name {:block n})] (if (contains? wanted i) (cost/worth-to nil [i] (u/self-pos c)) 0)))
+            drop-s (item-worth c item)
+            one-s (/ drop-s (item-count item))
+            yield (fn [n _] (if (contains? wanted (blocks/item-name {:block n})) one-s 0))
             prices (dig-prices c seen-name yield)
-            worth (- (item-worth c item) spent)
+            worth (- drop-s spent)
             r (drop-route prices worth (:id c) seen-name (look/unseen-solid?-fn p) from (item-cell item))]
         (case (:problem r)
           :searching :continue

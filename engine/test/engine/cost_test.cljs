@@ -809,8 +809,16 @@
     (is (= (meat "cow" "beef") (cost/animal-worth "cow")) "the food points its kill-drops give, at food-point-worth")
     (is (= (meat "chicken" "chicken") (cost/animal-worth "chicken")))
     (is (= (settings/with-settings {:jobs.lib.cost.value/gather-counts {"beef" {:s 500 :got 1}}} #(cost/animal-worth "cow")) (cost/animal-worth "cow"))
-        "a pen's animal is food as a field's crop is, not its meat's replacement cost")
-    (is (= (- (cost/animal-worth "cow") (cost/trip)) (cost/animal-find-worth "cow")) "a search for one is worth the animal less a trip")))
+        "a pen's animal is food as a field's crop is, not its meat's replacement cost")))
+
+(deftest a-childs-worth-is-the-calls-less-the-rest-of-its-plan
+  (let [c (fn [w] {:worth (constantly w) :view (fn [] {:now 0})})]
+    (is (= 700 (cost/worth-left (c 1000) 300)))
+    (is (zero? (cost/worth-left (c 100) 300)) "a plan dearer than the call: 0, never below")
+    (is (= ##Inf (cost/worth-left (c ##Inf) ##Inf)) "an order to arrive stays one")
+    (is (= 750 (cost/others-share-s (c 1000) 1 4)) "three other units of four at a quarter each")
+    (is (zero? (cost/others-share-s (c 1000) 5 4)) "n covers the call: no rest")
+    (is (= 250 (cost/worth-left (c 1000) (cost/others-share-s (c 1000) 1 4))))))
 
 (deftest a-stick-is-worth-its-share-of-the-planks-it-is-made-of
   (let [worth #(:value (cost/item-value [{:name % :count 1}]))]

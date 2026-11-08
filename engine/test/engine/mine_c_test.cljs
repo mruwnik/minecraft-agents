@@ -634,33 +634,36 @@
 
 (deftest a-cut-beside-a-dug-cell-never-opens-a-cell-under-gravel-nor-costs-more-than-the-drop
   (let [cut (fn [blocks worth] (let [s (start {:world {:blocks blocks :inventory pickaxe :yaw 270}})]
-                                 (drops/drop-cut {:primitives (:p s) :view (fn [] {:now 0})} [2 64 0] worth)))]
+                                 (drops/drop-cut {:primitives (:p s) :worth (constantly tu/order-worth) :view (fn [] {:now 0})} [2 64 0] worth)))]
     (is (= [[1 64 0]] (cut walled-ore 100)) "the wall cell between is the way")
     (is (not-any? #{[1 64 0]} (cut (assoc walled-ore "1,65,0" "gravel") 100)) "gravel over it would fall on the body walking in: the cut goes round")
     (is (= :dearer (cut walled-ore 0.01)) "a drop worth less than one cell's dig is not cut to")))
 
 (deftest a-cut-whose-route-search-outgrew-the-heap-answers-too-big
-  (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {} :id "j" :view (fn [] {:now 0})}]
+  (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {} :id "j" :worth (constantly tu/order-worth) :view (fn [] {:now 0})}]
     (with-redefs [dig-route/heap-full? (constantly true)]
       (is (= :too-big (drops/drop-cut c [2 64 0] 100)) "drop-cut keeps the reason")))
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :view (fn [] {:now 0})}
+        (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
               steps {:drop-cut (fn [_ _ _] :too-big) :dig-cell! (fn [_ _] :dug) :look-at! (fn [_ _] nil) :mem (fn [_] {})}]
           (is (= :too-big (await (drops/cut-via c steps [2 64 0] 5))) "cut-via passes it up, not nil"))))))
 
 (deftest a-too-big-cut-says-the-heap-was-full-not-that-the-search-outgrew-it
   (is (= "mine's cut toward 2,64,0 not made, the heap was full: the drop is left" (drops/cut-too-big-text [2 64 0]))))
 
-(deftest a-drops-worth-is-its-replacement-cost-and-a-goal-ore-dug-on-the-way-is-an-extra-item
-  (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron"} :view (fn [] {:now 0})}
-        goal (:value (cost/goal-value [{:name "raw_iron" :count 1}]))
+(deftest a-drops-worth-is-its-share-of-the-calls-worth-and-a-goal-ore-dug-on-the-way-is-an-extra-item
+  (let [c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:item "raw_iron" :count 4}
+           :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
+        share (/ tu/order-worth 4)
         pick-s #(/ (tools/clear-ms (:primitives c) %) 1000)
         dig (pick-s "iron_ore")
         dig-s (fn [c] ((:dig-s (drops/cut-prices c)) "iron_ore" [0 64 0]))]
-    (is (= (* 3 goal) (drops/worth c 3)) "a lost drop is worth what getting it again costs")
-    (is (= (max (drops/min-dig-s) (- dig goal)) (dig-s c)) "a goal ore the cut digs through yields one more item: its dig less one worth")
+    (is (= (* 3 share) (drops/worth c 3)) "three of the four owed: three quarters of what the caller values the call at, not their price")
+    (is (= tu/order-worth (drops/worth c 5)) "more than the call owes: its whole worth, no more")
+    (is (= ##Inf (drops/worth (assoc c :worth (constantly ##Inf)) 1)) "an order to arrive: every share is ##Inf")
+    (is (= (max (drops/min-dig-s) (- dig share)) (dig-s c)) "a goal ore the cut digs through yields one more item: its dig less one share")
     (is (= dig (dig-s (assoc c ::drops/counted #{[0 64 0]}))) "a cell of the target's own cluster is in max-s already: no second deduction")
     (is (= (max (drops/min-dig-s) (pick-s "stone")) (drops/unseen-dig-s c)) "a cell never seen is cut as rock, at rock's dig with the pickaxe carried")
     (is (= (max (drops/min-dig-s) (- (pick-s "stone") (drops/worth c 1))) (drops/unseen-dig-s (assoc c :args {:item "cobblestone"})))
@@ -676,7 +679,7 @@
               m (atom {})
               budgets (atom [])
               digs (atom 0)
-              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0})}
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
               stone-s ((:dig-s (drops/cut-prices c)) "stone" nil)
               steps {:drop-cut (fn [_ _ max-s]
                                  (swap! budgets conj max-s)
@@ -700,7 +703,7 @@
                     plans (atom 0)
                     dug (atom [])
                     m (atom {})
-                    c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0}) :emit (fn [kind _ _] (reset! told kind))}
+                    c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :worth (constantly tu/order-worth) :view (fn [] {:now 0}) :emit (fn [kind _ _] (reset! told kind))}
                     steps {:drop-cut (fn [_ _ _] (when (and during-search (zero? @plans)) (during-search seen)) (swap! plans inc) (vec (remove (set (map first @dug)) way)))
                            :dig-cell! (fn [_ cell] (let [at [(:x cell) (:y cell) (:z cell)]]
                                                      (swap! dug conj [at @plans])
@@ -741,7 +744,7 @@
         (let [m (atom {})
               now (atom 0)
               c {:primitives (:p (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args))
-                 :view (fn [] {:now @now})}
+                 :worth (constantly tu/order-worth) :view (fn [] {:now @now})}
               run (fn ^:async run* [frontier walk]
                     (let [plans (atom []) walks (atom []) looks (atom [])
                           steps {:drop-cut (fn [_ _ max-s] (swap! plans conj max-s) (if (empty? @walks) :dearer []))
@@ -771,7 +774,7 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
               m (atom {})
-              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now 0})}
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
               steps {:drop-cut (fn [_ _ _] [[1 64 0]])
                      :dig-cell! (fn [_ _] nil)
                      :look-at! (fn [_ _] nil)
@@ -787,7 +790,7 @@
         (let [s (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}})
               m (atom {})
               now (atom 0)
-              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :view (fn [] {:now @now})}
+              c {:primitives (:p s) :args {:block "stone"} :update-mem (fn [f args] (apply swap! m f args)) :worth (constantly tu/order-worth) :view (fn [] {:now @now})}
               steps {:drop-cut (fn [_ _ _] [[1 64 0]])
                      :dig-cell! (fn [_ _] (swap! now + 60000) nil)
                      :look-at! (fn [_ _] nil)
@@ -885,7 +888,7 @@
 (deftest a-cut-search-that-spends-its-nodes-goes-on-at-the-next-call
   ;; a step back from the wall: no way beside the dug cell is a single search node (the cell it left counts as unseen rock)
   (let [s (doto (start {:world {:blocks walled-ore :inventory pickaxe :yaw 270}}) (set-pos! -0.5 64 0.5))
-        c {:primitives (:p s) :id "cut-resume" :view (fn [] {:now 0})}
+        c {:primitives (:p s) :id "cut-resume" :worth (constantly tu/order-worth) :view (fn [] {:now 0})}
         asks (settings/with-settings {:jobs.lib.dig-route/max-nodes 1}
                #(vec (take-while #{:searching} (repeatedly (fn [] (drops/drop-cut c [2 64 0] 100))))))]
     (is (seq asks) "the first call is cut short")
@@ -911,7 +914,7 @@
   (let [plug [10 64 0]
         stone (into {} (map (fn [d] [(apply str (interpose "," (map + plug d))) "stone"])) rules/neighbour-deltas)
         p (tu/seeing-all (tu/fake {:blocks (assoc stone "10,64,0" "stone") :unloaded ["11,64,0"] :inventory [{:name "stone_pickaxe" :count 1}]}))
-        c {:primitives p :args {:item "raw_iron"}
+        c {:primitives p :args {:item "raw_iron"} :worth (constantly tu/order-worth)
            :view (fn [] {:now 0 :data {:entries {:stair-plug [{:t 0 :data {:dim "overworld" :cell plug}}]}}})}
         flood-s (partial dig-route/flood-s (:flood (drops/cut-prices c)))]
     (is (> (flood-s [[:dig plug "stone"]]) (flood-s [[:dig [20 64 0] "stone"]])) "the plug costs the flood price over a plain dig")))
