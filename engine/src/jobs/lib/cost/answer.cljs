@@ -1081,7 +1081,8 @@
   hurt grows by q (E[H(set + k)] - E[H(set)]) (joins): exact for two threats, and for any that meet surely at once or never.
   A class's notice rate (death/notice-prior) is one unknown over the whole route: Z is kept at each of the classes'
   death/rate-nodes, a threat's sets reckoned at its own class's rate, other classes' notices over their priors. The hurt at
-  most the body's life. :death what a death costs (group-parts'), each threat's by its weight times its own death chance (0 with none)."
+  most the body's life. :death what a death costs (group-parts'), each threat's by its weight times its own death chance (0 with none).
+  :secs the seconds the answers hold the body (Q142: a fight costs its time), each threat's :near by its chance of getting to it."
   [body {:keys [cells at] :as route}]
   (let [at (or at (first cells))
         group (memoize #(group-parts body %1 %2 at))
@@ -1116,7 +1117,8 @@
     (let [chance (min 1 (max 0 (- 1 survives)))]
       {:chance chance
        :death (if (pos? mass) (/ (reduce + (map #(* (first %) (second %)) shares)) mass) 0)
-       :hurt (min (* (- 1 chance) (life body)) (max 0 hurt))})))
+       :hurt (min (* (- 1 chance) (life body)) (max 0 hurt))
+       :secs (reduce + 0 (map (fn [{:keys [c prior exposure near]}] (* c (- (js/Math.expm1 (- (notice-hazard prior exposure)))) near)) found))})))
 
 (defn spawn-mets
   "[mob weight met] of each of threat/spawn-weights spawned beside body at `at`, caught at the prior."

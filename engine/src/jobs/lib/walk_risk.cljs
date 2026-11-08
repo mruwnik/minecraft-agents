@@ -198,11 +198,11 @@
 
 (defn risk-s
   "Seconds the hp cost of a walk-risk estimate (its :hp and :lethal-hp, plus `extra-hurt` hp, default 0) costs c's body at
-  `health` (default its health now) (cost/risk-s)."
+  `health` (default its health now) (cost/risk-s), and its fights' own seconds (:fight-s, stay-estimate's)."
   ([c est] (risk-s c est 0))
   ([c est extra-hurt] (risk-s c est extra-hurt (.-health (.self (:primitives c)))))
-  ([_ {:keys [hp lethal-hp] :or {hp 0 lethal-hp 0}} extra-hurt health]
-   (cost/risk-s health (+ (- hp lethal-hp) extra-hurt) lethal-hp)))
+  ([_ {:keys [hp lethal-hp fight-s] :or {hp 0 lethal-hp 0 fight-s 0}} extra-hurt health]
+   (+ (cost/risk-s health (+ (- hp lethal-hp) extra-hurt) lethal-hp) fight-s)))
 
 (defn estimate
   "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
@@ -293,17 +293,19 @@
   sensed mob within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
   its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/death-chance,
   cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
-  the route (cost.health/heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp; :heal-s and :secs the wait."
+  the route (cost.health/heal-s-per-hp an hp); for :secs when given. :lethal-hp the death's part of :hp; :fight-s the seconds
+  the threats' answers take (route-parts' :secs); :heal-s and :secs the wait."
   [c {:keys [goal route-hp feet health cannot-heal? body live chance secs]}]
   (let [heal-s (if cannot-heal? 0 (* (health/heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get risk/settings ::risk/risk-share))) health))))
         secs (or secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s))))
         here [(assoc feet :s secs)]
         live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1)))) (threats/with-reach c live))
-        hurt (+ (if (seq live) (:hurt (cost/route-parts body {:cells here :threats live :at feet})) 0) (:hurt (price/stay-parts c chance secs)))
+        met (if (seq live) (cost/route-parts body {:cells here :threats live :at feet}) {:hurt 0 :secs 0})
+        hurt (+ (:hurt met) (:hurt (price/stay-parts c chance secs)))
         spawns (* chance secs)
         lethal (cost/lethal-hp (cost/route-death body {:cells here :threats live :spawns spawns :at feet
                                                        :spawn-kill (when (pos? spawns) (:kill (price/spawn-parts c body feet)))}))]
-    {:hp (+ hurt lethal) :lethal-hp lethal :heal-s heal-s :secs secs
+    {:hp (+ hurt lethal) :lethal-hp lethal :fight-s (:secs met) :heal-s heal-s :secs secs
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 
 (defn sleep-bed

@@ -414,11 +414,19 @@
 
 (defn hostile-cost
   "{:cost s :answer k :danger s} of going on beside hostiles hs over c's stay (price/stay-s, the job's own quoted seconds
-  there): the stay and the cheaper of doing nothing about them and answering them (hostile-loss/danger); all 0 with none."
+  there): the stay and the cheaper of doing nothing about them (hostile-loss/loss-over, :stand) and answering each one
+  that comes (:answered), each with the spawns met there: go-to's price of that stay (walk-risk/stay-estimate, its
+  :live [] for the spawns alone, at walk-risk/risk-s); all 0 with none."
   [c hs]
-  (let [s (price/stay-s c)
-        {:keys [answer price] :or {answer :stand price 0}} (when (seq hs) (hostile-loss/danger c (ctx/view c) hs s))]
-    (if (seq hs) {:cost (+ s price) :answer answer :danger price} {:cost 0 :answer :stand :danger 0})))
+  (if (empty? hs)
+    {:cost 0 :answer :stand :danger 0}
+    (let [s (price/stay-s c)
+          in (assoc (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs s)
+          price #(walk-risk/risk-s c (walk-risk/stay-estimate c %))
+          answered (price in)
+          stand (+ (price (assoc in :live [])) (hostile-loss/loss-over c (ctx/view c) hs s))
+          [answer danger] (if (<= stand answered) [:stand stand] [:answered answered])]
+      {:cost (+ s danger) :answer answer :danger danger})))
 
 (defn hostile-status
   "ok `ok-reason` while the call's worth affords hostile-cost (Q157: the worth less the job's own seconds and the

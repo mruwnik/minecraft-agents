@@ -462,6 +462,16 @@
     (is (nil? (flee 0)) "the drowned keeps up on a ledge")
     (is (some? (flee ##Inf)) "land that goes on, or not known, is the walk away")))
 
+(deftest a-threat-met-on-a-route-costs-the-seconds-its-answer-holds-the-body
+  ;; Q142, a fight costs its time; would fail on old code: route-parts had no :secs
+  (let [armed (assoc (body 20) :weapon "iron_sword")
+        route (fn [weight] {:cells [(assoc here :s 600)] :threats [{:mob "zombie" :weight weight :reach (constantly 1)}]})
+        near (:near (answer/group-parts armed ["zombie"] nil here))
+        met (:met (death/met-stretch "zombie" (constantly 1) [(assoc here :s 600)]))]
+    (is (< 1 near) "premise: the fight takes seconds")
+    (is (< (js/Math.abs (- (:secs (cost/route-parts armed (route 1))) (* met near))) 1e-9) "its answer's seconds by the chance it gets to the body")
+    (is (< (js/Math.abs (- (:secs (cost/route-parts armed (route 0.5))) (* 0.5 met near))) 1e-9) "and by its weight")))
+
 (deftest a-lethal-threat-costs-the-body-its-death-not-the-hp-it-would-have-lost-too
   ;; a fist fight with a witch is 26 punches 1.3 s apart under her potions: 84 hp expected; the walk out of her range about 13
   (let [route (fn [weight & mobs] {:cells [(assoc here :s 60)] :threats (for [m mobs] {:mob m :weight weight :reach (constantly 1)})})]
