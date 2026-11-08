@@ -113,15 +113,14 @@
 
 
 (defn worth-of
-  "The loss doing nothing costs (Q151, cost/hurt-loss-s): in lava or a fire block a sure death; else alight, the
-  cost/burn-hp prior after fire protection (cost/after-armour :burning)."
+  "The loss doing nothing costs (Q151): in lava or a fire block a death (cost/death-s), absorption only delays it; else
+  alight, the cost/burn-hp prior after fire protection (cost/after-armour :burning, cost/hurt-loss-s)."
   [c]
   (let [p (:primitives c)
         self (.self p)]
-    (cost/hurt-loss-s p (ctx/view c)
-                      (cond (body/in-hazard? p) (.-health self)
-                            (body/burning? p) (cost/after-armour (cost/armour-stats (.-equipment self)) :burning cost/burn-hp 1)
-                            :else 0))))
+    (cond (body/in-hazard? p) (cost/death-s p (ctx/view c))
+          (body/burning? p) (cost/hurt-loss-s p (ctx/view c) (cost/after-armour (cost/armour-stats (.-equipment self)) :burning cost/burn-hp 1))
+          :else 0)))
 
 (defn done?
   "Out: not burning and no poured water left to scoop."

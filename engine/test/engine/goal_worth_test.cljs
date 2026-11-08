@@ -295,6 +295,7 @@
         drowning (tu/fake {:self {:inWater true :oxygen 4} :blocks water})
         enclosed (tu/fake-on-floor {:blocks {"0,65,0" "stone"}})
         lava (tu/fake-on-floor {:self {:inLava true :onFire true}})
+        lava-absorbing (tu/fake-on-floor {:self {:inLava true :onFire true :absorption 4}})
         low (tu/fake-on-floor {:self {:onFire true :health 10}})
         night (tu/fake-on-floor {:time 18000})
         night-c (ctx-of night {} {})]
@@ -303,6 +304,7 @@
              ["breathe enclosed: a sure death" 'jobs.survival.breathe enclosed (death enclosed)]
              ["breathe afloat, head out: nothing hurts" 'jobs.survival.breathe (tu/fake {:self {:inWater true :oxygen 5} :blocks {"0,64,0" "water"}}) 0]
              ["extinguish in lava: a sure death" 'jobs.survival.extinguish lava (death lava)]
+             ["extinguish in lava with absorption: still a death, absorption only delays it" 'jobs.survival.extinguish lava-absorbing (death lava-absorbing)]
              ["extinguish alight at full health: the burn's hp" 'jobs.survival.extinguish (tu/fake-on-floor {:self {:onFire true}}) (cost/hp-cost cost/burn-hp)]
              ["extinguish alight at 10 hp: the burn kills" 'jobs.survival.extinguish low (death low)]
              ["unwedge: held still, no hurt" 'jobs.survival.unwedge (tu/fake-on-floor {:blocks {"0,64,0" "sand"}}) cost/wedged-s]
