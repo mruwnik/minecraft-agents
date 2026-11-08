@@ -67,14 +67,13 @@
 
 (defn worth-of
   "The loss doing nothing costs (Q151), each trigger's own: with :commute? (dusk-home) the night where the body stands,
-  its dark's stay risk (price/stay-risk-s at spawn-light/night-chance) or, when cheaper, sheltering here
-  (cost/shelter-s), which the night reflex does anyway; else (stuck-underground) staying stuck (cost/stuck-s)."
+  its dark's stay risk (price/stay-risk-s at spawn-light/night-chance); else (stuck-underground) staying stuck (cost/stuck-s)."
   [c]
   (if-not (:commute? (:args c))
     cost/stuck-s
     (let [p (:primitives c)
           dark-s (sh-clock/ticks->s (max 0 (- sh-clock/day-tick (max (.-timeOfDay (.self p)) sh-clock/dark-tick))))]
-      (min cost/shelter-s (price/stay-risk-s c (spawn-light/night-chance p (update-vals (u/self-pos c) js/Math.floor)) dark-s)))))
+      (price/stay-risk-s c (spawn-light/night-chance p (update-vals (u/self-pos c) js/Math.floor)) dark-s))))
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (at-home? c))]

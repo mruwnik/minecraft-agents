@@ -31,7 +31,7 @@
     farm     field-share: the share of a field's unseen cells ripe or sowable, from the measured passes and its seen cells; ripe-chance: a cell seen growing ripe by now, at the game's growth rate, growing-s: the seconds of them within the server's simulation distance of the body; harvests, sown-worth: the harvests a crop still to grow is worth now and what a sown cell is worth (its food at food-point-worth); field-step-s: the measured seconds of a tend step, earthwork-s: levelling a patch's cells off height (jobs.lib.cost.farm).
     pen      gap-loss: the animal worth a herd loses through fence gaps till the next pass, from a Gamma prior on the escape rate (jobs.lib.cost.pen); herd-loss, through one gap open a while.
     rise     expected-rise: the blocks up to a sky the body has not seen, from its height, what it knows of the surface, and a prior on the ground height (jobs.lib.cost.rise).
-    averted  open-door-s, open-gate-s, short-slot-s, left-cell-s, riding-s, wedged-s, shelter-s, stuck-s, burn-hp: the loss a reflex averts where its trigger prices none, broad priors (jobs.lib.cost.averted); tree-worth: a tree's logs."
+    averted  open-door-s, open-gate-s, short-slot-s, left-cell-s, riding-s, wedged-s, stuck-s, burn-hp: the loss a reflex averts where its trigger prices none, broad priors (jobs.lib.cost.averted); tree-worth: a tree's logs."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -554,7 +554,6 @@
 (def left-cell-s averted/left-cell-s)
 (def riding-s averted/riding-s)
 (def wedged-s averted/wedged-s)
-(def shelter-s averted/shelter-s)
 (def stuck-s averted/stuck-s)
 (def burn-hp averted/burn-hp)
 (def earthwork-s farm/earthwork-s)

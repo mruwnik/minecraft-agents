@@ -312,5 +312,6 @@
              ["unwedge: held still, no hurt" 'jobs.survival.unwedge (tu/fake-on-floor {:blocks {"0,64,0" "sand"}}) cost/wedged-s]]]
       (is (= expected (worth job p {})) label))
     (is (< 0 (worth 'jobs.survival.go-home dusk {:commute? true}) (death dusk)) "dusk-home in the open: a night's stay here, not a death")
-    (is (<= (worth 'jobs.survival.go-home dusk {:commute? true}) cost/shelter-s) "dusk-home: never more than sheltering here, which the night reflex does anyway")
+    (is (= 1000 (with-redefs [price/stay-risk-s (fn ([_ _ _] 1000) ([_ _ _ _] 1000))] (worth 'jobs.survival.go-home dusk {:commute? true})))
+        "dusk-home: the night's stay risk, not capped at what sheltering here would cost")
     (is (pos? (worth 'jobs.survival.go-home lit-tunnel {:limit 1000})) "stuck-underground in a lit tunnel: still stuck, never nothing")))

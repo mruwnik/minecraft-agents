@@ -17,6 +17,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost.value :as value]
             [jobs.lib.crafting-table :as crafting-table]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.spot :as spot]
             [jobs.lib.world-files :as world]))
@@ -951,9 +952,16 @@
                                      :inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}]} args))]
             (is (empty? (placed-at p)) (pr-str args))))))))
 
-(deftest ingredient-fetches-are-worth-the-calls-own-worth-when-it-is-more
-  (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}}) :args {:item "wooden_pickaxe" :count 1})
-        own (craft/goal-worth (assoc c :worth (constantly 0)))]
-    (is (pos? own) "the item's own worth bounds a call worth less")
-    (is (= tu/order-worth (craft/goal-worth c)) "a craft ordered by hand: the order's worth, more than the item's own")
-    (is (= (+ own 100) (craft/goal-worth (assoc c :worth (constantly (+ own 100))))))))
+
+(deftest ingredient-fetches-take-the-calls-worth-not-the-items-usual-cost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}})
+                       :args {:item "wooden_pickaxe" :count 1 :ways #{:carried :chest :craft :gather}})
+              asked (atom [])]
+          (with-redefs [need/item! (fn ([c item] (need/item! c item 1 nil)) ([c item n] (need/item! c item n nil))
+                                        ([_ item _ opts] (swap! asked conj [item opts]) (js/Promise.resolve {:kind :failed})))]
+            (await (craft/fetch! c (constantly {:item "stick" :count 2}))))
+          (is (= ["stick"] (map first @asked)))
+          (is (not-any? #(contains? (second %) :worth) @asked) "the fetch inherits the craft's worth"))))))
