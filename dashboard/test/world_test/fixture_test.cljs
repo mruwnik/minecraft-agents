@@ -472,6 +472,12 @@
     (is (not (:pass? (f/judge-after origin [:body-near [16.5 0 16.5] 1] "ProbeFixture has the following entity data: [20018.9d, 150.0d, 20016.5d]"))))
     (is (:pass? (f/judge-after origin [:body-far [16.5 0 16.5] 25] "ProbeFixture has the following entity data: [20046.9d, 150.0d, 20016.5d]")))
     (is (not (:pass? (f/judge-after origin [:body-far [16.5 0 16.5] 25] "ProbeFixture has the following entity data: [20018.9d, 150.0d, 20016.5d]"))))
+    (is (= "execute as B at @s if block ~ ~-0.5 ~ stone" (f/after-command origin "B" grid {} [:body-on "stone"])))
+    (is (= "execute as B at @s unless block ~ ~ ~ water" (f/after-command origin "B" grid {} [:body-not-in "water"])))
+    (is (:pass? (f/judge-after origin [:body-on "stone"] "Test passed")))
+    (is (not (:pass? (f/judge-after origin [:body-on "stone"] "Test failed"))))
+    (is (:pass? (f/judge-after origin [:body-not-in "water"] "Test passed")))
+    (is (not (:pass? (f/judge-after origin [:body-not-in "water"] "Test failed"))))
     (is (= [-1.5 64 2.25] (f/reply-pos "X has the following entity data: [-1.5d, 64.0d, 2.25d]")))))
 
 (deftest pos-bounds-are-plot-relative
