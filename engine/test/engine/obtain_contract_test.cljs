@@ -12,6 +12,7 @@
             [engine.obtain-iron-test :as oi]
             [engine.obtain-obsidian-test :as oo]
             [engine.memory :as mem]
+            [engine.perception :as perception]
             [engine.registry :as registry]
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
@@ -71,6 +72,28 @@
               e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false} 30))]
           (is (= :done (:kind e)))
           (is (= {:got 4 :item "oak_planks"} (select-keys (:data e) [:got :item]))))))))
+
+(defn ^:async walled-trunk-run
+  "A root obtain of 2 oak logs with ways, at its own worth, by a body in a lit room under rock facing south: a two-log
+  trunk walled in by leaves 11 blocks east, out of the first sight pass. The run's events and inventory."
+  [ways]
+  (let [room (reduce dissoc (merge (tu/box -3 63 -4 14 63 4 "andesite") (tu/box -3 64 -4 14 68 4 "stone"))
+                     (for [x (range -2 14) y (range 64 68) z (range -3 4)] (str x "," y "," z)))
+        trunk (merge (tu/box 10 64 -1 12 67 1 "oak_leaves") {"11,64,0" "oak_log" "11,65,0" "oak_log"})
+        s (f/start (oi/ore-world (merge room trunk) []) [])]
+    (swap! (fake/state (:p s)) assoc :light-default [0 15])
+    (perception/pass! (aget (:p s) "perception"))
+    (await (oi/obtain! s (cond-> {:item "oak_log" :count 2 :explore true} ways (assoc :ways ways)) 40))
+    {:inv (f/inv s) :waits (mapv :text (f/events-of s :waiting))}))
+
+(deftest a-buried-call-dear-only-by-the-stair-up-looks-round-before-refusing-and-fells-the-trunk-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:inv {"oak_log" 2} :waits []} (await (walled-trunk-run nil)))
+            "chests allowed: a look round, not a :not-worth wait for the stair up; the leaves are cut and the trunk felled")
+        (is (= {:inv {"oak_log" 2} :waits []} (await (walled-trunk-run #{:craft :gather :search})))
+            "no chest way: the unseen log alone makes the look round worth it")))))
 
 (deftest a-craft-cut-by-its-time-limit-after-it-made-some-is-run-again
   (async done

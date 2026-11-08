@@ -14,9 +14,10 @@
             [jobs.items.obtain.chest :refer [blocked-text candidates cheapest! inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
-            [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
+            [jobs.items.obtain.need :refer [explorable? explorable-needs gather-held gather-viable?]]
             [jobs.items.obtain.plan :refer [craft-plan craft-s gather-plan smelt-s walk-s]]
             [jobs.items.obtain.price :refer [gather-s price-of]]
+            [jobs.items.obtain.seen :refer [seen-of]]
             [jobs.items.obtain.why :refer [gather-fix no-source-why tried-text]]
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]
@@ -46,7 +47,7 @@
 
   A death since the call began starts it again from what is carried: :got counts from the respawn.
 
-  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only for a child given a :worth; a :look instead while chests are allowed, none is seen and a look round is within the worth: the price is judged after it).
+  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); a way priced within the call's worth (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth; no way known is :not-worth only for a child given a :worth; a :look instead, before any look round, while chests are allowed and none is seen or a raw need is unseen, and a look round is within the worth: the price is judged after it).
   Worth (ctx/worth): the caller's, at the root worth-of; each walk of a search for an unseen need is priced against it, within the job time left.
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source (with the craft child's cause as :cause when a gather also ended), :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried; the start refusal of a seen source's child (:exposed ..: nothing-possible for its :never, condition-failed for its :later), data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: fetch-time/one-unit-s, ::unit-s more per unit of :count beyond the first; a bill ::bill-item-s per item).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
@@ -153,12 +154,21 @@
         (when-not (or (cost/affords? s worth) (and (not (and (seq (:slots c)) given)) (not (js/isFinite s))))
           {:reason :not-worth :price s :worth worth})))))
 
+(defn unseen-raw?
+  "Before the first round with no look around yet, whether a raw need the price searches for is not seen."
+  [c names]
+  (and (not (:start (ctx/mem c)))
+       (not (look/surveyed? c))
+       (gathers? c)
+       (boolean (some #(not (seen-of c %)) (explorable-needs c names (shortfall c names))))))
+
 (defn look-first?
-  "Whether the round would look around first (survey-first?) for no more than the call's worth (a look round's looks):
-  a look may show a chest that makes a dear call cheap."
+  "Whether a dear call looks around first for no more than its worth (a look round's looks): a chest behind the body
+  (survey-first?) or a raw need beside it, unseen (unseen-raw?), may make it cheap."
   [c]
-  (and (survey-first? c (names-of (:args c)))
-       (cost/affords? (cost/look-s (look/round-size)) (ctx/worth c))))
+  (let [names (names-of (:args c))]
+    (and (or (survey-first? c names) (unseen-raw? c names))
+         (cost/affords? (cost/look-s (look/round-size)) (ctx/worth c)))))
 
 (defn can-start? [c]
   (let [cause (no-source c)
