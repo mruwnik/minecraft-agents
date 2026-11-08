@@ -6,6 +6,7 @@
             [engine.harvest-test :as ht]
             [engine.herd-test :as herd]
             [engine.library-test :as lt]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -287,3 +288,25 @@
     (is (pos? chance))
     (is (= (price/stay-risk-s c chance (risk/work-s :work)) (worth 'jobs.build.light-area p {:near 3}))
         "light-area: a job's work in the dark where it stands")))
+
+(deftest a-reflex-is-worth-what-doing-nothing-loses-not-a-whole-death
+  (let [death (fn [p] (cost/death-s p (ctx/view (ctx-of p {} {}))))
+        water {"0,64,0" "water" "0,65,0" "water" "0,66,0" "water" "0,67,0" "water"}
+        drowning (tu/fake {:self {:inWater true :oxygen 4} :blocks water})
+        enclosed (tu/fake-on-floor {:blocks {"0,65,0" "stone"}})
+        lava (tu/fake-on-floor {:self {:inLava true :onFire true}})
+        low (tu/fake-on-floor {:self {:onFire true :health 10}})
+        night (tu/fake-on-floor {:time 18000})
+        night-c (ctx-of night {} {})]
+    (doseq [[label job p expected]
+            [["breathe drowning: a sure death, the swim up keeps a death's worth" 'jobs.survival.breathe drowning (death drowning)]
+             ["breathe enclosed: a sure death" 'jobs.survival.breathe enclosed (death enclosed)]
+             ["breathe afloat, head out: nothing hurts" 'jobs.survival.breathe (tu/fake {:self {:inWater true :oxygen 5} :blocks {"0,64,0" "water"}}) 0]
+             ["extinguish in lava: a sure death" 'jobs.survival.extinguish lava (death lava)]
+             ["extinguish alight at full health: the burn's hp" 'jobs.survival.extinguish (tu/fake-on-floor {:self {:onFire true}}) (cost/hp-cost cost/burn-hp)]
+             ["extinguish alight at 10 hp: the burn kills" 'jobs.survival.extinguish low (death low)]
+             ["unwedge: held still, no hurt" 'jobs.survival.unwedge (tu/fake-on-floor {:blocks {"0,64,0" "sand"}}) cost/wedged-s]
+             ["go-home: the job's time at the night's spawn chance where it stands" 'jobs.survival.go-home night
+              (price/stay-risk-s night-c (spawn-light/night-chance night {:x 0 :y 64 :z 0}) 300)]]]
+      (is (= expected (worth job p {})) label))
+    (is (< 0 (worth 'jobs.survival.go-home night {}) (death night)) "go-home: a night's stay, not a death")))

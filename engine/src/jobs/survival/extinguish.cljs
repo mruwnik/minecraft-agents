@@ -113,9 +113,15 @@
 
 
 (defn worth-of
-  "The loss the reflex averts: a death where the body stands (cost/death-s)."
+  "The loss doing nothing costs (Q151, cost/hurt-loss-s): in lava or a fire block a sure death; else alight, the
+  cost/burn-hp prior after fire protection (cost/after-armour :burning)."
   [c]
-  (cost/death-s (:primitives c) (ctx/view c)))
+  (let [p (:primitives c)
+        self (.self p)]
+    (cost/hurt-loss-s p (ctx/view c)
+                      (cond (body/in-hazard? p) (.-health self)
+                            (body/burning? p) (cost/after-armour (cost/armour-stats (.-equipment self)) :burning cost/burn-hp 1)
+                            :else 0))))
 
 (defn done?
   "Out: not burning and no poured water left to scoop."

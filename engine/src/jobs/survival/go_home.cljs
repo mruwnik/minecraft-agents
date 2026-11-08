@@ -9,6 +9,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.places :as places]
+            [jobs.lib.price :as price]
+            [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.util :as u]
@@ -65,9 +67,11 @@
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 
 (defn worth-of
-  "The loss going home averts: a death where the body stands when the night finds it out (cost/death-s), the most a night in the open costs."
+  "The loss doing nothing costs (Q151): the job's time (::job-time-s) staying where the body stands at its night spawn
+  chance (spawn-light/night-chance), its hurt and death (price/stay-risk-s)."
   [c]
-  (cost/death-s (:primitives c) (ctx/view c)))
+  (let [p (:primitives c)]
+    (price/stay-risk-s c (spawn-light/night-chance p (update-vals (u/self-pos c) js/Math.floor)) (settings/get settings ::job-time-s))))
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (at-home? c))]

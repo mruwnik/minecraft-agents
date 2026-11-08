@@ -159,9 +159,16 @@
 
 
 (defn worth-of
-  "The loss the reflex averts: a death where the body stands (cost/death-s)."
+  "The loss doing nothing costs (Q151): drowning, the drowning of air never reached (air/drown-loss-s), a death; enclosed,
+  the suffocation's death (cost/death-s); afloat and breathing, none."
   [c]
-  (cost/death-s (:primitives c) (ctx/view c)))
+  (let [p (:primitives c)
+        self (.self p)]
+    (case (situation-of c)
+      :drowning (air/drown-loss-s {:health (or (.-health self) 20) :absorption (or (.-absorption self) 0)}
+                                  (breath/air-left-s self) (cost/death-s p (ctx/view c)) ##Inf)
+      :enclosed (cost/death-s p (ctx/view c))
+      0)))
 
 (defn done?
   "Air at the head and, after a swim, solid ground under the feet."

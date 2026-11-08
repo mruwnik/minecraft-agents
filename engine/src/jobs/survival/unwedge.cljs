@@ -44,9 +44,10 @@
 
 
 (defn worth-of
-  "The loss the reflex averts: a death where the body stands (cost/death-s)."
+  "The loss doing nothing costs (Q151): a full block at the feet hurts nothing, it holds the body still
+  (cost/wedged-s while wedged)."
   [c]
-  (cost/death-s (:primitives c) (ctx/view c)))
+  (if (breath/wedged-cell (:primitives c)) cost/wedged-s 0))
 
 (defn done? [c]
   (let [wedged (some? (breath/wedged-cell (:primitives c)))]
