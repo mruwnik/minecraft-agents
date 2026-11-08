@@ -61,6 +61,7 @@
     (let [r (command eng "own-none" :submit {:spec '(done {:worth :own})})]
       (is (= :worth-required (:reason r)))
       (is (re-find #"no worth-of" (:message r))))
+    (is (= :bad-spec (:reason (command eng "own-typo" :submit {:spec '(unknwon {:worth :own})}))) "a job that does not parse is a bad spec, not a missing worth")
     (core/shutdown! eng)))
 
 (deftest ledger-survives-restore-and-pending-is-not-executed-twice

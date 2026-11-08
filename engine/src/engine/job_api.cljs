@@ -95,11 +95,15 @@
     (case head
       (seq any until) (apply list head (map #(price-own eng %) parts))
       repeat (apply list head (concat (butlast parts) [(price-own eng (last parts))]))
-      (if-not (and (map? args) (= :own (:worth args)))
-        spec
-        (let [w (get-in (schedule/priced eng {:id "own" :reflex :own} (expr/parse (:jobs eng) (list head (dissoc args :worth)))) [:args :worth])]
-          (when-not (number? w) (throw (js/Error. (str head " has no worth-of: give it a number :worth"))))
-          (list head (assoc args :worth w)))))))
+      (let [parsed (when (and (map? args) (= :own (:worth args)))
+                     (try (expr/parse (:jobs eng) (list head (dissoc args :worth)))
+                          (catch :default _ nil)))]
+        ;; A spec that does not parse stays as given, so spec-error names the real problem.
+        (if-not parsed
+          spec
+          (let [w (get-in (schedule/priced eng {:id "own" :reflex :own} parsed) [:args :worth])]
+            (when-not (number? w) (throw (js/Error. (str head " has no worth-of: give it a number :worth"))))
+            (list head (assoc args :worth w))))))))
 (defn mutate! [eng {:keys [op id spec request-id generation-id by] :or {by :agent} :as request}]
   (let [[spec own-error] (if (#{:submit :interrupt :exclusive} op)
                            (try [(price-own eng spec) nil] (catch :default e [spec (ex-message e)]))
