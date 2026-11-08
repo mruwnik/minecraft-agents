@@ -1,6 +1,7 @@
 (ns jobs.survival.recover-drops.estimate
   "What a pile is worth against the trip to it: value, cost with its parts, the texts that say so, deep piles."
   (:require [clojure.string :as str]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.memory :as mem]
@@ -151,19 +152,21 @@
         straight-s (when pos (/ (u/dist here pos) (cost/walk-blocks-per-s)))
         fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger-s danger-s :elapsed-ms elapsed :cause cause
                                :back? true :stay-s (pl/collect-s c data)})
-        drowns (when-not (:reason fetch) (no-air-way p wet-at pos drown-hp))
+        refused (when (contract/ending? quoted) (str "the walk's quote ended: " (name (contract/cause-key quoted))))
+        drowns (when-not (or refused (:reason fetch)) (no-air-way p wet-at pos drown-hp))
         named (cond-> (mapv #(select-keys % [:name]) mobs) wet (conj (select-keys wet [:name :danger])))]
     (cond-> {:value (pile-worth c data)
              :chance (get-in quoted [:risk :death-chance] 0)
-             :cost (if drowns js/Infinity (:cost fetch))
+             :cost (if (or refused drowns) js/Infinity (:cost fetch))
              :hold-ms (cfg/danger-memory-ms)
              :flight-s (flight-s here mobs)
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
       (seq (drop (cfg/top-n) (:items worth))) (assoc :other-items (let [rest-items (drop (cfg/top-n) (:items worth))]
                                                                     {:kinds (count rest-items) :value (reduce + 0 (map :value rest-items))}))
+      refused (assoc :reason :trip-refused :detail refused)
       drowns (assoc :reason :no-air-way :detail drowns)
-      (and (not drowns) (:parts fetch)) (assoc :parts (:parts fetch))
-      (and (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
+      (and (not refused) (not drowns) (:parts fetch)) (assoc :parts (:parts fetch))
+      (and (not refused) (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
       (pos? (get-in quoted [:risk :dark-s] 0)) (assoc :dark-s (get-in quoted [:risk :dark-s]))
       (seq mobs) (assoc :seen-mobs mobs)
       (seq named) (assoc :top-mobs (vec (take (cfg/top-n) named)))))))

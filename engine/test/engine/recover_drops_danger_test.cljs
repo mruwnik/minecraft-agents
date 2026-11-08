@@ -3,6 +3,7 @@
   over and over is given up."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.contract :as contract]
             [engine.fake :as fake]
             [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops]]
             [engine.library-test :refer [setup]]
@@ -370,6 +371,15 @@
         "the quote's walk risk is the danger, priced as every walk choice prices it")
     (is (= [{:name "zombie"}] (:top-mobs risky)))
     (is (= [{:name "zombie" :pos {:x 15.5 :y 64 :z 3.5}}] (:seen-mobs risky)))))
+
+(deftest a-trip-quote-that-ended-is-not-a-safe-straight-walk
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+        death {:pos dt/death-pos :inventory dt/death-pile-of-the-field-report}
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        refused (estimate/estimate c death 5000 (contract/ending :condition-failed :risk-not-bought nil))]
+    (is (= js/Infinity (:cost refused)))
+    (is (= :trip-refused (:reason refused)))
+    (is (re-find #"risk-not-bought" (:detail refused)))))
 
 (deftest a-danger-of-spawns-on-dark-or-unseen-ground-is-named-in-the-text
   (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
