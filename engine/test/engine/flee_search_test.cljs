@@ -307,6 +307,18 @@
     (is (= (* 0.5 (+ 2 5)) (get homed (:end east))) "a seen way home: the walk back to the fork and the way home")
     (is (zero? (get homed (:end home))) "a seen way pays none")))
 
+(deftest a-search-races-each-end-and-each-walk-back-once-however-often-it-scores-them
+  (let [chasers [{:name "zombie" :mob "zombie" :pos {:x 6.5 :y 64 :z 0.5}}]
+        from {:x 0.5 :y 64 :z 0.5}
+        races (atom 0)
+        blast search/caught-blast]
+    (with-redefs [search/caught-blast (fn [& args] (swap! races inc) (apply blast args))]
+      (let [first-scores (search/scored chasers from [east north home])
+            once @races]
+        (is (= first-scores (search/scored chasers from [east north home])))
+        (is (pos? once))
+        (is (= once @races) "scored again: no race worked out twice")))))
+
 (deftest a-walk-back-from-a-dead-end-pays-the-shooters-fire-on-it
   ;; the walk back counted only the chasers that walk: a way home in a skeleton's line of fire cost as much as one out of it
   (let [in-fire (fn [{:keys [cells]}] (* 10 (count (filter #(neg? (:x %)) cells))))

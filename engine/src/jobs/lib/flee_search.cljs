@@ -460,6 +460,22 @@
         at #(min (arrive-at walkers (cost/centred %)) unreached-s)]
     (+ trapped (max 0 (- (at end) (at (nth cells (dec seen-n))))))))
 
+;; a search scores its ends more than once (covers score them again as their pool): each end's race and each pair's
+;; walk back are worked out once
+(defonce ^:private kept-races (js/WeakMap.))
+(defonce ^:private kept-backs (js/WeakMap.))
+
+(defn- kept-at
+  "(f), kept in store (a WeakMap on the first of ks) under ks, each by identity (numbers by value)."
+  [^js store ks f]
+  (let [^js m (reduce (fn [^js m k] (or (.get m k) (let [n (js/Map.)] (.set m k n) n)))
+                      (or (.get store (first ks)) (let [n (js/Map.)] (.set store (first ks) n) n))
+                      (butlast (rest ks)))
+        k (last ks)]
+    (if (.has m k) (.get m k) (let [v (f)] (.set m k v) v))))
+
+(declare back-via*)
+
 (defn back-via
   "The walk back of a flight on scored end r that finds its way shut at its first unseen cell, along other way e
   (cost/dead-end-cost's backs): from its last seen cell back to where e's route leaves r's, then on along e. :s its
@@ -468,7 +484,10 @@
   death the shooters' fire on it risks, respond.goal/fire-price; nil none) of the walk back, timed from the turn; :caught-s
   that of the whole flight (caught-s); :unseen? e's, :trapped its trap-s."
   ([chasers r e] (back-via chasers r e nil))
-  ([chasers r e fire]
+  ([chasers r e fire] (kept-at kept-backs [r e chasers fire] #(back-via* chasers r e fire))))
+
+(defn- back-via*
+  [chasers r e fire]
   (let [seen (subvec (:cells r) 0 (:seen-n r))
         f (dec (count (take-while true? (map #(= (cell-of %1) (cell-of %2)) seen (:cells e)))))
         last-t (:t (peek seen))
@@ -482,7 +501,7 @@
            (- (min (:arrive r) unreached-s) (min (:arrive e) unreached-s))
            (if fire (fire {:cells (mapv #(update % :t - last-t) back) :end (:end e)}) 0))
      :caught-s (caught-s chasers (into seen back))
-     :unseen? (some? (:unseen e)) :trapped (when (:unseen e) (trap-s chasers e))})))
+     :unseen? (some? (:unseen e)) :trapped (when (:unseen e) (trap-s chasers e))}))
 
 (defn dead-end-race
   "cost/dead-end-race {:cost :chance} of a dead end at the first unseen cell of scored end r; nil when r does not reach
@@ -512,10 +531,12 @@
   ([chasers from priced pool fire]
    (let [here (arrive-at chasers from)
          raced (mapv (fn [{:keys [end cells seen-n] :as e}]
-                       (let [arrive (arrive-at chasers (cost/centred end))
-                             {c-s :caught-s d :blast-d} (caught-blast chasers cells)]
-                         (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :blast-d d :caught? (pos? c-s)
-                                :caught-seen? (and (pos? c-s) (pos? (caught-s chasers (subvec cells 0 (min (count cells) (or seen-n (count cells))))))))))
+                       (kept-at kept-races [e chasers here]
+                                #(let [arrive (arrive-at chasers (cost/centred end))
+                                       {c-s :caught-s d :blast-d} (caught-blast chasers cells)
+                                       seen (min (count cells) (or seen-n (count cells)))]
+                                   (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0) :caught-s c-s :blast-d d :caught? (pos? c-s)
+                                          :caught-seen? (and (pos? c-s) (or (= seen (count cells)) (pos? (caught-s chasers (subvec cells 0 seen)))))))))
                      priced)]
      (mapv (fn [e]
              (let [race (dead-end-race chasers e (or pool raced) fire)
