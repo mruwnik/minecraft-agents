@@ -257,7 +257,8 @@
   or a cover of (:covers) {way {:open-s :seconds :fails}}, a fn called at the first dead end only, those the cornered step
   would take where the body stands; :covers-key what they depend on past the body and its kit), with no mob known the death of
   being caught at its last seen cell, and :counts, wworld/way-counts, for dead-end). Kept for the body while it asks the same of the
-  same inputs (gather, priced-key), but for a cut one."
+  same inputs (gather, priced-key); a cut one only for an asker whose meter has no more left than that search's had (it
+  would plan no further: the flight's first step after the decision that priced it, in the same step's meter)."
   [c targets {:keys [chasers enough?] :as opts}]
   (let [chased (set (map #(floor-cell (:pos %)) chasers))
         other? #(not (chased (floor-cell (:pos %))))
@@ -265,14 +266,16 @@
         in (gather c st targets opts chased other?)
         k (when st (priced-key in))
         hit (when st (.get kept-prices st))
-        v (:v hit)]
+        v (:v hit)
+        left (some-> (:meter opts) :left deref)]
     (if (and k (= k (:k hit)) (wworld/landing-reads-hold? (:primitives c) (:landings hit))
+             (or (not (:cut? (meta v))) (and left (:left hit) (<= left (:left hit))))
              ;; a ring stopped at a good-enough way serves only an asker it is still good enough for
              (or (not (:enough? (meta v))) (and enough? (enough? v (:staying (meta v))))))
       v
       (let [landings (js/Map.)
             v (await (price-all! c in other? landings (:meter opts) enough?))]
-        (when (and st (not (:cut? (meta v)))) (.set kept-prices st {:k k :v v :landings landings}))
+        (when st (.set kept-prices st {:k k :v v :landings landings :left left}))
         v))))
 
 (defn far?

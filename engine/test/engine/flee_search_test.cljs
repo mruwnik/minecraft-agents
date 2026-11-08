@@ -755,6 +755,25 @@
               (swap! (fake-world/state raw) assoc-in [:self :onFire] true)
               (is (changed? dark (await (price (ctx nil)))) "the body on fire"))))))))
 
+(deftest a-cut-flee-price-is-kept-for-an-asker-with-no-more-meter-left
+  ;; the decision's search and the flight's first step share the step's meter: the step would plan no further
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (tu/fake {:blocks junction :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000)}))
+              _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+              c (ctx-of p)
+              chasers [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}]
+              ends (search/ring {:x 0.5 :z 0.5} chasers 10 12)
+              price (fn ^:async price [spent-s] (await (search/price! c ends {:chasers chasers :meter (rooms/search-meter spent-s)})))
+              late (- (cost/search-budget-s) (* 5 (cost/search-cell-ceiling-s)))
+              _ (await (price late))
+              cut (await (price late))]
+          (is (search/cut? cut) (pr-str (meta cut)))
+          (is (identical? cut (await (price late))) "as little left: the cut search is the answer")
+          (is (not (identical? cut (await (price 0)))) "a fresh step's meter plans again"))))))
+
 (deftest a-kept-flee-price-holds-when-the-world-changes-out-of-sight
   (async done
     (tu/run-async done
