@@ -479,8 +479,11 @@ test('waiting: a waiter reprints its TEST_EVENTS phase line every status interva
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
   const env = plainEnv({ RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '60000', RES_SLOT_POLL_MS: '50', RES_SLOT_STATUS_MS: '1', TEST_EVENTS: '1' })
   const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env, stdio: 'ignore', detached: true })
-  const waiter = spawn('node', [script, 't', '--', 'echo', 'ran'], { cwd: os.tmpdir(), env, stdio: ['ignore', 'pipe', 'ignore'], detached: true })
+  let waiter
   try {
+    // a waiter started before the holder's grant exists would take the slot itself and print no phase line
+    await new Promise((resolve) => { const t = setInterval(() => fs.existsSync(path.join(dir, 'grants', `${holder.pid}.json`)) && (clearInterval(t), resolve()), 20) })
+    waiter = spawn('node', [script, 't', '--', 'echo', 'ran'], { cwd: os.tmpdir(), env, stdio: ['ignore', 'pipe', 'ignore'], detached: true })
     // counts lines instead of timing them: the reason never changes, so only the status interval can produce a third
     let phases = 0
     await new Promise((resolve) => {
