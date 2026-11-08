@@ -247,7 +247,7 @@
               ;; the first landing's try is worth its seconds alone, not its seconds and its hp
               worth (/ (+ try-s (/ hurt-s 2)) (cost/retry-chance :place 1))
               {:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "sand"}})]
-          (core/submit! eng (tu/order eng (list job {:height 2 :worth worth})) {})
+          (core/submit! eng (tu/order (list job {:height 2 :worth worth})) {})
           (await (ticks s eng 40))
           (is (finished? eng))
           (is (= :ceiling (:reason (first (of-kind seen :stopped)))))
