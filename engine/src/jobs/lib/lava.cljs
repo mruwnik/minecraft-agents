@@ -139,7 +139,7 @@
             :continue
             (do (ctx/update-mem! c dissoc :sealing)
                 (if (#{:placed :already} outcome)
-                  (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed lava at " (pr-str cell))})
+                  (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed cell " (pr-str cell))})
                       :again)
                   {:reason :lava-unsealed :cell cell :place outcome}))))))))
 

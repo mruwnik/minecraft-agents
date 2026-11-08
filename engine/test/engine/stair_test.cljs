@@ -701,10 +701,11 @@
                                     (let [r (await (impl token a))]
                                       (swap! (.. world -state) assoc-in [:blocks [1 64 1]] "water")
                                       r)))))
-              {:keys [out p]} (await (stair! {:blocks ground :inventory (conj pick {:name "cobblestone" :count 8})} east prep))]
+              {:keys [out p] :as s} (await (stair! {:blocks ground :inventory (conj pick {:name "cobblestone" :count 8})} east prep))]
           (is (= :hazard (:reason @out)))
           (is (= [1 64 0] (:plugged @out)))
-          (is (= "cobblestone" (block-at p [1 64 0])) "the opened cell is shut again"))))))
+          (is (= "cobblestone" (block-at p [1 64 0])) "the opened cell is shut again")
+          (is (not-any? #(re-find #"lava" (str %)) (events-of s :stair.plugged)) "a water plug does not say lava"))))))
 
 (defn ^:async later-stair-at-plug!
   "A stair plugs [1 64 0] against water found at [1 64 1]; that cell then holds behind, and a later stair runs the same
