@@ -884,7 +884,7 @@
 (defn level-round
   "Feet cells of the shortest level way at from's height from feet cell from to the column of goal, round the columns
   whose feet or head cell is blocked?: A* across, as many cells as the search cut buys (answer-s at
-  cost/search-cell-ceiling-s); nil when none is found within them."
+  cost/search-cell-ceiling-s). [cells expanded]: cells nil when none is found within them."
   [[fx fy fz :as from] [gx _ gz] blocked?]
   (let [budget (/ answer-s (cost/search-cell-ceiling-s))
         h (fn [x z] (+ (js/Math.abs (- x gx)) (js/Math.abs (- z gz))))
@@ -894,11 +894,11 @@
     (.set prev (str fx "," fz) nil)
     (heap-push! queue #js [(h fx fz) 0 [fx fz 0]])
     (loop [n 0]
-      (when-let [^js top (when (< n budget) (heap-pop! queue))]
+      (if-let [^js top (when (< n budget) (heap-pop! queue))]
         (let [[x z g] (aget top 2)]
           (if (and (== x gx) (== z gz))
             (loop [k [x z] out ()]
-              (if (= k [fx fz]) (vec out) (recur (.get prev (str (k 0) "," (k 1))) (conj out [(k 0) fy (k 1)]))))
+              (if (= k [fx fz]) [(vec out) n] (recur (.get prev (str (k 0) "," (k 1))) (conj out [(k 0) fy (k 1)]))))
             (do (loop [i 0]
                   (when (< i 8)
                     (let [nx (+ x (aget dirs i)) nz (+ z (aget dirs (inc i)))]
@@ -906,33 +906,37 @@
                         (.set prev (str nx "," nz) [x z])
                         (heap-push! queue #js [(+ g 1 (h nx nz)) (- (inc g)) [nx nz (inc g)]])))
                     (recur (+ i 2))))
-                (recur (inc n)))))))))
+                (recur (inc n)))))
+        [nil n]))))
 
 (defn lane
-  "The feet cells of the planned way from feet cell from to goal that seeded-search searches first: up, climb-lane (with
-  opts' :pillar-s, its :max-places blocks); else walk-then-stair, falling no more than stair-drop, and when one of its
-  cells is blocked? (bedrock, a fluid: no dig opens it) the level way round them (level-round) then walk-then-stair down."
+  "seeded-search's opts for the planned way from feet cell from to goal that it searches first: :seed its feet cells, up
+  climb-lane (with opts' :pillar-s, its :max-places blocks); else walk-then-stair, falling no more than stair-drop, and
+  when one of its cells is blocked? (bedrock, a fluid: no dig opens it) the level way round them (level-round) then
+  walk-then-stair down; :seed-reads and :seed-cells the cells planning it read and expanded."
   [from goal opts floor? blocked?]
-  (if (> (goal 1) (from 1))
-    (climb-lane from goal (when (:pillar-s opts) (:max-places opts)) floor?)
-    (let [drop (stair-drop opts)
-          way (walk-then-stair from goal drop)
-          cut? (some #(or (blocked? %) (blocked? [(% 0) (inc (% 1)) (% 2)])) way)
-          round (when cut? (level-round from goal blocked?))]
-      (if (seq round)
-        (into round (walk-then-stair (peek round) goal drop))
-        way))))
+  (let [reads (volatile! 0)
+        floor? #(do (vswap! reads inc) (floor? %))
+        blocked? #(do (vswap! reads inc) (blocked? %))
+        [seed n] (if (> (goal 1) (from 1))
+                   [(climb-lane from goal (when (:pillar-s opts) (:max-places opts)) floor?) 0]
+                   (let [drop (stair-drop opts)
+                         way (walk-then-stair from goal drop)
+                         cut? (some #(or (blocked? %) (blocked? [(% 0) (inc (% 1)) (% 2)])) way)
+                         [round n] (when cut? (level-round from goal blocked?))]
+                     [(if (seq round) (into round (walk-then-stair (peek round) goal drop)) way) (or n 0)]))]
+    {:seed seed :seed-reads @reads :seed-cells n}))
 
 (defn seeded-search
   "search, but first along the feet cells of :seed alone (the lane), then through them and their neighbours (one across,
   up or down: the band), and only then everywhere: each search bounded by the cheapest route the ones before found (its
   price :max-s and :held-s, so past answer-s it answers with that route or its own cheaper one; a lane or band that ended
   dearer than :max-s holds that, so past answer-s with no route the search ends :dearer: the climb a player digs costs more
-  than the worth, Q141) and their CPU counted as spent. With :read-s a lane or band with no answer once the CPU spent passes
+  than the worth, Q141) and their CPU counted as spent, planning the lane's too (:seed-reads, :seed-cells: lane). With :read-s a lane or band with no answer once the CPU spent passes
   answer-s is left for the next. The cheapest route found is the answer when the last ends dearer, too big or boxed. A fn
   of n as search's, n counting every search's cells."
-  [block-at from goal {:keys [seed max-s read-s searched-s] :as opts}]
-  (let [opts (dissoc opts :seed)
+  [block-at from goal {:keys [seed seed-reads seed-cells max-s read-s searched-s] :as opts}]
+  (let [opts (dissoc opts :seed :seed-reads :seed-cells)
         band (into #{} (for [[x y z] (cons from seed) dx [-1 0 1] dy [-1 0 1] dz [-1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))
         ;; a lane or band is no larger than its cells: the :margin box that keeps an open search's heap small is not theirs
         stages [(-> opts (assoc :only (cons from seed)) (dissoc :margin)) (-> opts (assoc :only band) (dissoc :margin)) opts]
@@ -941,7 +945,7 @@
         best (volatile! nil)
         dearer? (volatile! false)
         ;; the CPU the searches before the running one spent, and the cells it expanded and read so far
-        searched (volatile! (or searched-s 0))
+        searched (volatile! (+ (or searched-s 0) (if read-s (cost/search-cpu-s read-s cell-s (or seed-reads 0) (or seed-cells 0)) 0)))
         cells (volatile! 0) reads (volatile! 0)
         spent (fn [] (+ @searched (if read-s (cost/search-cpu-s read-s cell-s @reads @cells) 0)))
         metered (fn [] (+ @searched (if read-s (cost/search-cpu-s (cost/search-read-ceiling-s) (cost/search-cell-ceiling-s) @reads @cells) 0)))
@@ -1037,8 +1041,8 @@
   way must take priced in it (:prior-h?, with :seen-steps and :seen-cells), grown only while the heap has room (heap-full?), round :seed first (default lane: a route in hand
   before the 100 ms cut). A fn of n as search's."
   [block-at from goal opts]
-  (seeded-search block-at from goal (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?
-                                           :seed (or (:seed opts) (lane from goal opts #(when-let [n (block-at %)] (not (open? n))) #(when-let [n (block-at %)] (nil? (cell-cost n))))))))
+  (seeded-search block-at from goal (cond-> (assoc opts :read-s (cost/search-read-s) :back-h? true :prior-h? true :full? heap-full?)
+                                      (nil? (:seed opts)) (merge (lane from goal opts #(when-let [n (block-at %)] (not (open? n))) #(when-let [n (block-at %)] (nil? (cell-cost n))))))))
 
 (defn route-resumed
   "route, but a search that spends its nodes (:max-nodes) is kept under key and

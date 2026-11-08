@@ -227,9 +227,10 @@
         to-end (fn [run] (loop [cells 0 reads 0] (let [[a e _ rd] (run 500)] (if a [a (+ cells e) (+ reads rd)] (recur (+ cells e) (+ reads rd))))))
         [exact exact-cells] (to-end (dr/search w [0 10 0] [0 5 6] opts))
         _ (.clear dr/kept)
-        [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
-    ;; the back search and each expansion's neighbours are read too: here the CPU goes by the cells read
-    (is (< (js/Math.abs (- (:searched-s priced) (max (* (cost/search-read-s) reads) (* (cost/search-cell-s) priced-cells)))) 1e-12) "its CPU priced by the cells it read or expanded (summed over the seeded stages)")
+        [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))
+        lane (dr/lane [0 10 0] [0 5 6] opts #(not (dr/open? (w %))) #(nil? (dr/cell-cost (w %))))]
+    ;; the back search and each expansion's neighbours are read too: here the CPU goes by the cells read, the lane's planning too
+    (is (< (js/Math.abs (- (:searched-s priced) (max (* (cost/search-read-s) (+ reads (:seed-reads lane))) (* (cost/search-cell-s) priced-cells)))) 1e-12) "its CPU priced by the cells it read or expanded (summed over the seeded stages)")
     (is (< priced-cells reads) "more than it expanded")
     (is (<= (:seconds priced) (+ (:seconds exact) (:searched-s priced)))
         (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))
@@ -672,6 +673,22 @@
     (is (= :dearer (:problem a)) (pr-str a))
     ;; the stages before the last count their CPU at the means: a few more reads than the ceiling's
     (is (< reads (* 2 (/ dr/answer-s (cost/search-read-ceiling-s)))) (str reads " cells read"))))
+
+(deftest the-way-a-lane-plans-round-a-slab-is-charged-to-its-search
+  ;; Q141: every search CPU counts, planning the lane round a cell no dig opens (level-round) too
+  ;; one layer of stone two high in bedrock: the search ends well within answer-s, so the charge is all that differs
+  (let [at (fn [[x y z :as c]] (cond (#{[3 64 0] [3 65 0]} c) "air"
+                                      (and (<= -2 x 14) (<= -14 z 14) (<= 64 y 65) (not (and (<= 4 x 5) (<= -10 z 10)))) "stone"
+                                      :else "bedrock"))
+        [from goal] [[3 64 0] [10 64 0]]
+        l (dr/lane from goal {} (constantly true) #(nil? (dr/cell-cost (at %))))
+        opts {:step-s 1 :dig-s (fn [n _] (dr/cell-cost n)) :read-s (cost/search-read-s)}
+        [charged] (to-end (dr/seeded-search at from goal (merge opts l)))
+        [uncharged] (to-end (dr/seeded-search at from goal (merge opts l {:seed-reads 0 :seed-cells 0})))]
+    (is (some #(< 10 (js/Math.abs (% 2))) (:seed l)) "the lane goes round the slab's end")
+    (is (pos? (:seed-cells l)))
+    (is (< (js/Math.abs (- (:searched-s charged) (:searched-s uncharged) (cost/search-cpu-s (cost/search-read-s) (cost/search-cell-s) (:seed-reads l) (:seed-cells l)))) 1e-12)
+        (pr-str (select-keys l [:seed-reads :seed-cells]) (:searched-s charged) (:searched-s uncharged)))))
 
 (def tolled-tunnel
   "Stone below y 10 with a tunnel x 0..10 at y 10..11, z 0, open."

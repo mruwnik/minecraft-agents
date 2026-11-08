@@ -645,11 +645,11 @@
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
         allowed? (memoize #(escape/diggable? block-at may-dig? %))
-        seed (dig-route/lane from goal (merge prices route-opts) #(when-let [n (seen-floor %)] (not (dig-route/open? n))) #(when-let [n (block-at %)] (nil? (dig-route/cell-cost n))))
+        ;; planned only when a search begins, not on each slice that goes on with a kept one: its CPU is that search's
+        lane (delay (dig-route/lane from goal (merge prices route-opts) #(when-let [n (seen-floor %)] (not (dig-route/open? n))) #(when-let [n (block-at %)] (nil? (dig-route/cell-cost n)))))
         opts (fn [refused m spent lazy?] (merge prices
                                   ;; the straight dig is a route in hand: past answer-s with none cheaper the search ends :dearer and it answers
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent :held-s (let [st (straight-s refused)] (when (< st ##Inf) st))}
-                                  (when seed {:seed seed})
                                   ;; a cell seen-floor reads nameless (not seen, under a cell seen open: no floor) is still dug at its guess
                                   {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) cell) (or (not lazy?) (allowed? cell)))
                                                             ((:dig-s prices) (or name (block-at cell)) cell)))}
@@ -659,9 +659,9 @@
         search (fn [refused spent lazy?]
                  (let [m (max-s refused)
                        a (if slice
-                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused lazy? worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(let [o (opts refused m spent lazy?)] ((if (:seed o) dig-route/seeded-search dig-route/search) seen-floor from goal (assoc o :full? dig-route/heap-full?))) m (route-epoch p)
+                           (sliced-answer slice [from goal floors-unseen-ok? (dissoc route-opts :pillar-s) guess-risk refused lazy? worth-s (select-keys fall [:equipment :carried]) spent (some? fetch?) (tools/carried-dig-tools p)] #(dig-route/seeded-search seen-floor from goal (merge (opts refused m spent lazy?) @lane {:full? dig-route/heap-full?})) m (route-epoch p)
                                          {:reprice #(dig-route/route-within seen-floor from goal % (assoc (opts refused m spent lazy?) :max-s nil :read-s nil :searched-s 0 :back-h? false)) :max-drop max-fall})
-                           (dig-route/route seen-floor from goal (opts refused m spent lazy?)))]
+                           (dig-route/route seen-floor from goal (merge (opts refused m spent lazy?) @lane)))]
                    a))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, each search counting the CPU the ones before it spent
