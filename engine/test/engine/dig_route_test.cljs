@@ -227,10 +227,9 @@
         to-end (fn [run] (loop [cells 0 reads 0] (let [[a e _ rd] (run 500)] (if a [a (+ cells e) (+ reads rd)] (recur (+ cells e) (+ reads rd))))))
         [exact exact-cells] (to-end (dr/search w [0 10 0] [0 5 6] opts))
         _ (.clear dr/kept)
-        [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))
-        lane (dr/lane [0 10 0] [0 5 6] opts #(not (dr/open? (w %))) #(nil? (dr/cell-cost (w %))))]
+        [priced priced-cells reads] (to-end (dr/priced-search w [0 10 0] [0 5 6] opts))]
     ;; the back search and each expansion's neighbours are read too: here the CPU goes by the cells read, the lane's planning too
-    (is (< (js/Math.abs (- (:searched-s priced) (max (* (cost/search-read-s) (+ reads (:seed-reads lane))) (* (cost/search-cell-s) priced-cells)))) 1e-12) "its CPU priced by the cells it read or expanded (summed over the seeded stages)")
+    (is (< (js/Math.abs (- (:searched-s priced) (max (* (cost/search-read-s) reads) (* (cost/search-cell-s) priced-cells)))) 1e-12) "its CPU priced by the cells it read or expanded (summed over the seeded stages, the lane's planning too)")
     (is (< priced-cells reads) "more than it expanded")
     (is (<= (:seconds priced) (+ (:seconds exact) (:searched-s priced)))
         (str "dearer than the cheapest by at most the CPU it spent (" priced-cells " cells, the exact search " exact-cells ")"))
@@ -689,6 +688,26 @@
     (is (pos? (:seed-cells l)))
     (is (< (js/Math.abs (- (:searched-s charged) (:searched-s uncharged) (cost/search-cpu-s (cost/search-read-s) (cost/search-cell-s) (:seed-reads l) (:seed-cells l)))) 1e-12)
         (pr-str (select-keys l [:seed-reads :seed-cells]) (:searched-s charged) (:searched-s uncharged)))))
+
+(deftest the-lane-planned-before-a-slice-is-taken-off-that-slice-once
+  ;; Q141: a slice's cells left are cut by the lane's cells and reads, on the first call only
+  (let [at (fn [[x y z :as c]] (cond (#{[3 64 0] [3 65 0]} c) "air"
+                                      (and (<= -2 x 14) (<= -14 z 14) (<= 64 y 65) (not (and (<= 4 x 5) (<= -10 z 10)))) "stone"
+                                      :else "bedrock"))
+        [from goal] [[3 64 0] [10 64 0]]
+        l (dr/lane from goal {} (constantly true) #(nil? (dr/cell-cost (at %))))
+        opts {:step-s 1 :dig-s (fn [n _] (dr/cell-cost n)) :read-s (cost/search-read-s)}
+        run (dr/seeded-search at from goal (merge opts l))
+        [_ first-used _ first-reads] (run 1000000)
+        again (dr/seeded-search at from goal (merge opts l))
+        [_ e1] (again 1)
+        [_ e2] (again 1)
+        plain (dr/seeded-search at from goal (merge opts l {:seed-reads 0 :seed-cells 0}))
+        [_ plain-used _ plain-reads] (plain 1000000)]
+    (is (pos? (:seed-cells l)))
+    (is (= (:seed-cells l) (- first-used plain-used)) "the first call owes the lane's cells")
+    (is (= (:seed-reads l) (- first-reads plain-reads)) "and its reads")
+    (is (< e2 (:seed-cells l)) (pr-str e1 e2 "a later call owes no lane"))))
 
 (def tolled-tunnel
   "Stone below y 10 with a tunnel x 0..10 at y 10..11, z 0, open."

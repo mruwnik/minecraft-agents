@@ -956,11 +956,14 @@
                          (.push runs (search block-at from goal (cond-> (assoc (nth stages i) :searched-s @searched)
                                                                   (:dig b) (assoc :max-s (min (or max-s ##Inf) (:seconds b)) :held-s (:seconds b))
                                                                   (and (nil? (:dig b)) @dearer? max-s) (assoc :held-s max-s))))))
-        stale? (fn [] (.some stales #(%)))]
+        stale? (fn [] (.some stales #(%)))
+        ;; the lane was planned in start, before the first slice: that slice owes its cells and reads once
+        seed-owed (volatile! [(or seed-cells 0) (or seed-reads 0)])]
     (fn run
       ([n] (run n nil))
       ([n max-s']
-       (loop [n n e 0 r 0]
+       (loop [n (let [[c] @seed-owed] (max 1 (- n c))) e (first @seed-owed) r (second @seed-owed)]
+         (vreset! seed-owed [0 0])
          (when (zero? (alength runs)) (begin! 0))
          (let [i (dec (alength runs))
                first? (< i last-stage)
