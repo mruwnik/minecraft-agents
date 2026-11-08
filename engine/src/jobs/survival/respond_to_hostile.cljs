@@ -106,14 +106,14 @@
 (defn ^:async run-child
   "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back: the
   flight may run), or the ending of a flight that ended otherwise. The flight is this job's own steps (respond-flight/flee!)."
-  [c decision hold]
+  [c decision]
   (let [_ (when (and (= :fight decision) (not= :fight (:last-run (ctx/mem c))))
             (ctx/update-mem! c #(cond-> % (:fight (:children %)) (update-in [:children :fight] dissoc :start))))
         _ (ctx/update-mem! c assoc :last-run decision)
         e (if (= :fight decision)
             (await (ctx/call c :fight 'jobs.combat.attack
                              {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius :fire-range
-                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c) (options/melee-only? (options/near-hostiles c))) :prior (:fight-prior (ctx/mem c))
+                              :use {:tools (combat/weapons c)} :hold true :prior (:fight-prior (ctx/mem c))
                               :checks {:safe? '(always) :fit? '(always)}}))
             (await (flight/flee! c)))]
     (cond
@@ -389,14 +389,14 @@
     (ctx/update-mem! c assoc :stay-noted true)
     (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))
   (ctx/update-mem! c #(cond-> (assoc % :decision decision) cover (assoc :cover-way cover) (not cover) (dissoc :cover-way)))
-  (let [result (await (run-child c decision stay?))]
+  (let [result (await (run-child c decision))]
     (keep-struck! c)
     (cond
       (not= :declined result) result
       (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
       stay? result
       (and (= :fight decision) (leave-watched? c near)) (leave-watched! c near)
-      :else (await (run-child c (other decision) false)))))
+      :else (await (run-child c (other decision))))))
 
 (defn ^:async respond [c near]
   (let [p (:primitives c)
@@ -553,8 +553,8 @@
           t0 (ctx/now c)
           before (signature c hs)
           outcome (cond
-                    (hiding? c) (await (run-child c :flee false))
-                    (empty? hs) (when (shot/open? (:primitives c) (ctx/view c)) (await (run-child c :flee false)))
+                    (hiding? c) (await (run-child c :flee))
+                    (empty? hs) (when (shot/open? (:primitives c) (ctx/view c)) (await (run-child c :flee)))
                     (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
                     (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
                     (look-unheard? c hs) (await (look/look-around! c))

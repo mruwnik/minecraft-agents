@@ -83,11 +83,6 @@
 
 (declare near-hostiles)
 
-(defn melee-only?
-  "Whether hostiles are all melee mobs (no ranged mob, creeper or enderman): they close to the body (cost.fight prices no approach), so a fight against them holds and lets them come."
-  [hostiles]
-  (boolean (and (seq hostiles) (not-any? #(or (combat/ranged? %) (combat/creeper? %) (combat/enderman? %)) hostiles))))
-
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
   the health, kept while the hostile stays close: :again, nil when the fight
@@ -101,7 +96,7 @@
     (ctx/update-mem! c #(cond-> % (:cornered (:children %)) (update-in [:children :cornered] dissoc :start)))
     (let [hits-before (hits-total (:struck (:fight-prior (ctx/mem c))))
           r (await (ctx/call c :cornered 'jobs.combat.attack
-                             {:targets :hostiles :radius radius :ranged-radius ranged-radius :hold (melee-only? (near-hostiles c)) :use {:tools (mapv name weapons)}
+                             {:targets :hostiles :radius radius :ranged-radius ranged-radius :hold true :use {:tools (mapv name weapons)}
                               :skip (flight/dead-ids c) :prior (:fight-prior (ctx/mem c)) :checks {:safe? '(always) :fit? '(always)}}))
           ended (when (contract/ending? r) r)]
       (ctx/update-mem! c update :dead #(into (vec %) (:killed (:data ended))))

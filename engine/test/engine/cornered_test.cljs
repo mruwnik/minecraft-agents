@@ -607,16 +607,6 @@
 
 (defn zombie [x y z] {:id 7 :name "zombie" :kind "hostile" :pos {:x x :y y :z z} :health 20})
 
-(defn mobs-come-on-wait!
-  "A held body waits for a melee mob to close in: while it waits or looks round, every mob named in names steps next to it."
-  [p names]
-  (doseq [prim ["wait" "look"]]
-    (.override (.-world p) prim
-               (fn [token a impl]
-                 (let [[x y z] (fake/vec-pos (:pos (fake/self p)))]
-                   (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (names (:name %)) (assoc :pos [(+ x 1) y z])) es))))
-                 (impl token a)))))
-
 (defn creeper [x y z] {:id 8 :name "creeper" :kind "hostile" :pos {:x x :y y :z z} :health 20})
 
 (defn ^:async ticks!
@@ -1629,7 +1619,7 @@
               leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
           (.override (.-world p) "steer" (fn [token a impl] (-> (impl token a) (.then follow-and-hit!))))
           (.override (.-world p) "attack" leave!)
-          (mobs-come-on-wait! p #{"zombie"})
+          (fake/mobs-come-on-wait! p #{"zombie"})
           (core/submit! eng (order eng retreat) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (seq (calls p "attack")) "it swings at the zombie that keeps hitting it")

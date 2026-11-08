@@ -117,16 +117,6 @@
 
 (def sword [{:name "iron_sword" :count 1}])
 
-(defn mobs-come-on-wait!
-  "A held body waits for a melee mob to close in: while it waits or looks round, every mob named in names steps next to it."
-  [p names]
-  (doseq [prim ["wait" "look"]]
-    (.override (.-world p) prim
-               (fn [token a impl]
-                 (let [[x y z] (fake/vec-pos (:pos (fake/self p)))]
-                   (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (names (:name %)) (assoc :pos [(+ x 1) y z])) es))))
-                 (impl token a)))))
-
 (def diamond-armour
   {:head {:name "diamond_helmet" :count 1} :torso {:name "diamond_chestplate" :count 1}
    :legs {:name "diamond_leggings" :count 1} :feet {:name "diamond_boots" :count 1}})
@@ -367,6 +357,20 @@
         (let [s (await (flight-round respond {:inventory sword :entities [(zombie 7 0)]}))]
           (is (every? #(<= (:x %) 0) (tu/walked-to (:eng s))) "no step toward the zombie 7 blocks off: it closes to the body")
           (is (not (fought? s)) "nothing is in reach to swing at"))))))
+
+(deftest a-fight-holds-for-a-melee-mob-with-a-shooter-in-the-scene
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup-flight {:inventory sword :entities [(zombie 7 0) {:id 9 :name "skeleton" :kind "hostile" :pos {:x -15 :y 64 :z 0}}]})
+              runner {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                      :round (fn ^:async r [c]
+                               (await (respond-to-hostile/run-child c :fight))
+                               (ctx/end c :done nil))}
+              eng (assoc-in eng [:jobs 'runner] runner)]
+          (core/submit! eng (tu/order '(runner)) {})
+          (await (core/tick! eng))
+          (is (every? #(<= (:x %) 0) (tu/walked-to eng)) "no step toward the zombie 7 blocks off: it closes to the body, a skeleton in the scene changes nothing"))))))
 
 (deftest respond-keeps-a-fight-while-what-is-left-of-the-mob-is-worth-it
   (async done
@@ -818,7 +822,7 @@
               runner {:defaults {:checks {:safe? '(always) :fit? '(always)}}
                       :round (fn ^:async r [c]
                                (ctx/update-mem! c assoc :last-run :flee :children {:fight {:start {:x 0 :y 64 :z 0}}})
-                               (await (respond-to-hostile/run-child c :fight false))
+                               (await (respond-to-hostile/run-child c :fight))
                                (ctx/end c :done nil))}
               eng (-> eng
                       (assoc-in [:jobs 'runner] runner)
@@ -1235,7 +1239,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 9 0 4)]})]
-          (mobs-come-on-wait! p #{"zombie"})
+          (fake/mobs-come-on-wait! p #{"zombie"})
           (let [swing (.-attack p)]
             (aset p "attack" (fn [& a]
                                (when-not (:creeper-came @(fake/state p))
@@ -1494,7 +1498,7 @@
           (is (= 4 (count (calls p "attack"))) "nowhere to go: it hits back until the zombie dies")
           (is (= [] (:list (core/state eng)))))
         (let [{:keys [eng p]} (setup-flight {:blocks box :entities [(zombie 2 0)]})]
-          (mobs-come-on-wait! p #{"zombie"})
+          (fake/mobs-come-on-wait! p #{"zombie"})
           (core/submit! eng (tu/order retreat) {})
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= -1 (:x (first-move eng))) "unarmed: first a step back into the far corner of the pen")

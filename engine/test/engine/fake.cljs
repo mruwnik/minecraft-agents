@@ -864,6 +864,15 @@
 (defn swap-self! [p f & args] (apply swap! (state p) update :self f args))
 (defn set-block! [p pos block] (swap! (state p) put-block (vec-pos pos) block))
 (defn remove-block! [p pos] (swap! (state p) drop-block (vec-pos pos)))
+(defn mobs-come-on-wait!
+  "A held body waits for a melee mob to close in: while it waits or looks round, every mob named in names steps next to it."
+  [p names]
+  (doseq [prim ["wait" "look"]]
+    (.override (.-world p) prim
+               (fn [token a impl]
+                 (let [[x y z] (vec-pos (:pos (self p)))]
+                   (swap! (state p) update :entities (fn [es] (mapv #(cond-> % (names (:name %)) (assoc :pos [(+ x 1) y z])) es))))
+                 (impl token a)))))
 (defn add-entity!
   "Adds an entity (a spec entity: camelCase keys, {:x :y :z} or vector pos) to the fake."
   [p e]
