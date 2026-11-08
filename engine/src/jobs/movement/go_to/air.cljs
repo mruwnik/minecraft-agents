@@ -3,7 +3,7 @@
   keeps beginning afresh), swim to air first, then plan again; an arrival in water reads a dry stand in range.
 
   Rules of go-to:
-  - An arrival in water walks on to the nearest seen dry stand within :range and ::dry-radius of the body (settings), once
+  - An arrival in water walks on to the nearest seen dry stand within :range of the goal, once
     a call, a short walk of its own; with none, or that walk failing, it ends {:arrived true :in-water true} with an info
     go-to.in-water saying which. The leave-water setting false keeps an arrival in water. Under water with its search going on (no
     walk) it swims to air first (go-to.surfacing) when under ::surface-air seconds of air are left (always), or when the
@@ -38,18 +38,19 @@
 
 (defn dry-stand
   "The seen cell within radius of pos (the body) and within range within of goal, nearest pos, where the body stands
-  out of water: feet and head open, a solid under the feet; nil when there is none."
+  out of water: feet and head open, a solid under the feet; nil when there is none. Either bound may be ##Inf, not both."
   [p goal within pos radius]
   (let [k (column/kind-at p false)
         [gx gy gz] (mapv #(js/Math.floor (% goal)) [:x :y :z])
         [bx by bz] (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        n (js/Math.floor radius)
+        [cx cy cz] (if (<= within radius) [gx gy gz] [bx by bz])
+        n (js/Math.floor (min within radius))
         sq (fn [a b c] (+ (* a a) (* b b) (* c c)))
         dry? (fn [[x y z]] (and (keyword-identical? :open (k x y z)) (keyword-identical? :open (k x (inc y) z))
                                 (keyword-identical? :solid (k x (dec y) z))))
         cells (for [dx (range (- n) (inc n)) dy (range (- n) (inc n)) dz (range (- n) (inc n))
-                    :let [x (+ bx dx) y (+ by dy) z (+ bz dz)]
-                    :when (and (<= (sq dx dy dz) (* radius radius)) (<= (sq (- x gx) (- y gy) (- z gz)) (* within within)))]
+                    :let [x (+ cx dx) y (+ cy dy) z (+ cz dz)]
+                    :when (and (<= (sq (- x bx) (- y by) (- z bz)) (* radius radius)) (<= (sq (- x gx) (- y gy) (- z gz)) (* within within)))]
                 [x y z])
         far (fn [[x y z]] (u/dist pos {:x (+ x 0.5) :y y :z (+ z 0.5)}))
         found (filter dry? cells)]

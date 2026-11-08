@@ -35,6 +35,20 @@
           (is (<= 13 x) (str "the bank east of the pond: at " [x y z]))
           (is (empty? (gt/events-of s :go-to.in-water))))))))
 
+(deftest an-arrival-on-water-walks-on-to-a-dry-stand-in-range-however-far-it-is
+  ;; a pond x 0..20 z -10..7 whose only bank within range 9 of the goal is the north one (z 8), 8 or more from the body:
+  ;; old code read dry stands within 6 of the body only, so the arrival stayed in the water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (gt/go! {:self {:pos [3.5 63 0.5]} :blocks (merge (box -12 55 -14 32 63 14 "stone") (box 0 58 -10 20 63 7 "water"))}
+                                                   {:pos [10 64 0] :range 9 :ways #{:walk :clear-seal}}))
+              [x y z] (gt/at p)]
+          (is (true? (:arrived @out)) (str "result " @out))
+          (is (false? (.-inWater (.self p))) (str "on dry land: at " [x y z]))
+          (is (<= 8 z) (str "the north bank: at " [x y z]))
+          (is (empty? (gt/events-of s :go-to.in-water))))))))
+
 (deftest an-arrival-on-water-with-no-dry-stand-in-range-says-in-water
   (async done
     (tu/run-async done

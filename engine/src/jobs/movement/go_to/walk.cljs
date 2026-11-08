@@ -55,7 +55,7 @@
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
             [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
-            [jobs.movement.go-to.tuning :as tuning :refer [surface-descent-s dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius leave-water max-blocked max-searching]]
+            [jobs.movement.go-to.tuning :as tuning :refer [surface-descent-s dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain leave-water max-blocked max-searching]]
             [jobs.movement.go-to.turn-back :as turn-back]
             [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! none-held? round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
@@ -289,14 +289,14 @@
 
 (defn ^:async leave-water!
   "An arrival within range of pos, in water: with the leave-water setting (default true), once a call (mem :dry-tried), walk on to the
-  nearest seen dry stand within range (air/dry-stand, dry-radius of the body; walk-dry!). Out of water and in range:
+  nearest seen dry stand within range (air/dry-stand; walk-dry!, bounded by the call's :spend). Out of water and in range:
   arrived; out of range: :again (the call walks back); else it ends in water, an info go-to.in-water saying why."
   [c pos]
   (let [p (:primitives c)
         r (:range (:args c) 1)
         keep? (not (leave-water))
         tried? (:dry-tried (ctx/mem c))
-        dry (when-not (or keep? tried?) (air/dry-stand p pos r (u/self-pos c) (dry-radius)))
+        dry (when-not (or keep? tried?) (air/dry-stand p pos r (u/self-pos c) ##Inf))
         status (when dry
                  (ctx/update-mem! c assoc :dry-tried true)
                  (await (walk-dry! c dry)))]

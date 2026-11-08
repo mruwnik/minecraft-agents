@@ -157,23 +157,24 @@
                  (swap! (fake/state p) #(-> % (assoc-in [:self :pos] [(+ x 0.5) 64 0.5]) (assoc-in [:self :inWater] false)))
                  (js/Promise.resolve (contract/ending :done nil nil)))))
 
-(deftest a-water-landing-with-dry-land-5-blocks-off-swims-onto-it-before-it-is-done
+(deftest a-water-landing-with-dry-land-20-blocks-off-swims-onto-it-before-it-is-done
+  ;; old code walked to within go-to's dry-radius 6 of the landing, so a shore 20 off was never aimed at
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [ring {"8,64,0" "air" "8,63,0" "stone"}
+        (let [ring {"22,64,0" "air" "22,63,0" "stone"}
               p (setup-owner (aboard {:blocks ring :entities [(assoc boat :dismountAt {:x 2.5 :y 64 :z 0.5})]}))
               pauses (atom [])
-              c (let [w (walking-ashore p 8)] (assoc w :call (fn [s d a] (swap! pauses conj a) ((:call w) s d a))))
+              c (let [w (walking-ashore p 22)] (assoc w :call (fn [s d a] (swap! pauses conj a) ((:call w) s d a))))
               r (await (leave/round c))]
-          (is (= [{:pos {:x 2.5 :y 64 :z 0.5}}] (mapv #(select-keys % [:pos]) @pauses)) "one walk, from the landing")
-          (is (= [:done :dry {:x 8.5 :y 64 :z 0.5}] [(:kind r) (:landed (:data r)) (:pos (:data r))])))))))
+          (is (= [{:pos {:x 22 :y 64 :z 0} :range 0}] (mapv #(select-keys % [:pos :range]) @pauses)) "one walk, to the seen dry cell")
+          (is (= [:done :dry {:x 22.5 :y 64 :z 0.5}] [(:kind r) (:landed (:data r)) (:pos (:data r))])))))))
 
 (deftest a-water-landing-whose-swim-fails-is-not-done
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (setup-owner (aboard {:entities [(assoc boat :dismountAt {:x 2.5 :y 64 :z 0.5})]}))
+        (let [p (setup-owner (aboard {:blocks {"8,64,0" "air" "8,63,0" "stone"} :entities [(assoc boat :dismountAt {:x 2.5 :y 64 :z 0.5})]}))
               c (assoc (bare-ctx p {}) :call (fn [_ _ _] (js/Promise.resolve (contract/ending :nothing-possible :blocked nil))))
               r (await (leave/round c))]
           (is (= [:nothing-possible :not-landed] [(:kind r) (:cause r)])))))))

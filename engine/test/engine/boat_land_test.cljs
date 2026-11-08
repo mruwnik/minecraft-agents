@@ -163,9 +163,16 @@
       (fn ^:async t []
         (let [{:keys [res]} (await (run (assoc world :dismountFails true) {}))]
           (is (= :not-landed (:reason res)) (pr-str res))
-          (is (= :dismount-failed (contract/cause-key (:because (:ending res)))) (pr-str res)))
-        (let [{:keys [res]} (await (run (world-with 18.5 10.5 {:x 10 :y 63 :z 10}) {}))]
-          (is (= :not-landed (:reason res)) "the dismount left the body in water"))))))
+          (is (= :dismount-failed (contract/cause-key (:because (:ending res)))) (pr-str res)))))))
+
+(deftest a-dismount-into-water-11-from-the-seen-bank-swims-ashore
+  ;; old code read dry stands within go-to's dry-radius 6 of the landing only: not-landed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (run (world-with 18.5 10.5 {:x 10 :y 63 :z 10}) {}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (not (<= 0 (js/Math.floor (.-x (.-pos (.self p)))) 20)) "on a bank, out of the lake"))))))
 
 (deftest a-drive-that-fails-is-drive-failed-with-its-cause
   (async done
