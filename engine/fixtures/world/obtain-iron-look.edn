@@ -1,9 +1,9 @@
 ;; Iron wanted, none seen (obtain.plan/search-way): a look over the rock in sight against a strip tunnel from the feet.
 ;; Should-succeed: a lit hall with a stone floor at y -41 (iron's small placement only) and iron behind a wall: for a raw
-;; iron worth a goal's search (:worth, about 8 raw iron's own) the look pays and a tunnel there does not, so the
+;; iron worth a goal's search (:worth 1000) the look pays and a tunnel there does not, so the
 ;; body searches, sees the ore and mines it.
 ;; Should-fail (no look, no climb): a dirt floor in a bedrock shell shows no rock and a roof no stair goes up through: the mine
-;; tunnels for it at the feet, no search starts.
+;; tunnels for it at the feet, no search starts, for a goal that wants a kit's 8 iron (:worth 3600, the kit trial's).
 {:defaults
  {:tags [:obtain :explore :mine] :time :any
   :plot {:light :lit :height 6 :length 48 :width 24 :floor "stone"}
@@ -20,7 +20,7 @@
    :after [[:item "raw_iron" [:>= 1]]]}
   {:name "no-rock-in-sight-tunnels-for-iron-without-a-look"
    :plot {:light :lit :height 6 :length 48 :width 24 :floor "dirt"}
-   :act [[:job (jobs.items.obtain {:worth :own :item "raw_iron" :count 8 :ways #{:gather}})]]
+   :act [[:job (jobs.items.obtain {:worth 3600 :item "raw_iron" :count 8 :ways #{:gather}})]]
    :expect [{:event {:source :job :kind :obtain.gathering :data {:item "raw_iron"}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 60 :until {:source :job :kind :obtain.gathering}}
             {:no-event {:source :job :kind :obtain.climbed} :for-s 60 :until {:source :job :kind :obtain.gathering}}]

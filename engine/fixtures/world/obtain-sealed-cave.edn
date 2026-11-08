@@ -2,10 +2,10 @@
 ;; search finds nothing (no sight through rock), so obtain walks to a wall and cuts a stair up (by hand) to the sky, then finds the tree.
 ;; Tree at x 28, z 16: five logs under a leaf crown. Stone x 0..31, z 0..31, y 0..9 (surface y 10); a 7x2x7 hollow round the body at feet y 0.
 ;; Untimed: day, because the tree is seen on the surface and the body waits out a dark one.
-;; Each case passes the :worth an agent gives its goal: a root obtain's own worth is the items' usual cost, which a stair out of rock (by hand about 200 s) always tops.
+;; Each case passes the :worth an agent gives its goal; a stair out of rock costs about 200 s by hand.
 ;; Should-succeed: oak logs carried. Should-fail: none (the dig must not stop :no-source or :no-way-up).
-;; Refusal side (card 37706724): at :worth :own, obtain's own worth-of for 2 logs (what a trigger root passes), the stair
-;; up is dearer than the logs: a look round, then a :not-worth wait, and no stair is cut.
+;; Refusal side (card 37706724): a caller who wants 2 logs only a little (:worth 30) finds the stair
+;; up dearer than the logs: a look round, then a :not-worth wait, and no stair is cut.
 {:defaults
  {:tags [:obtain :explore :mining :no-tool]
   :plot {:height 16 :light :sky}
@@ -34,8 +34,8 @@
    :expect [{:event {:source :job :kind :completed} :within-s 950 :of-job true}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 900 :until {:source :job :kind :stair.step}}]
    :after [[:item "furnace" [:>= 1]]]}
-  {:name "sealed-cave-logs-at-their-own-worth-wait-not-worth-and-cut-no-stair"
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true :worth :own})]]
+  {:name "sealed-cave-logs-wanted-little-wait-not-worth-and-cut-no-stair"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true :worth 30})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30}
             {:no-event {:source :job :kind :stair.step} :for-s 60}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 60}]
