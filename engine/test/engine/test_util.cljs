@@ -467,11 +467,11 @@
                  (do (reset! out (f r)) (ctx/end c :done nil)))))}))
 
 (defn ^:async child-outcome
-  "Run job with args as the child of a recording parent ordered at order-worth until the list is empty, at most n ticks;
-  the child's outcome."
-  [eng job args n]
+  "Run job with args as the child of a recording parent ordered at parent-worth (default order-worth) until the list is
+  empty, at most n ticks; the child's outcome."
+  [eng job args n & [parent-worth]]
   (let [out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent job args out)))]
-    (core/submit! eng (list 'recording-parent {:worth order-worth}) {})
+    (core/submit! eng (list 'recording-parent {:worth (or parent-worth order-worth)}) {})
     (await (run-until-empty eng n))
     @out))

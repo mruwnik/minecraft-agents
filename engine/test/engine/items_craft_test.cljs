@@ -36,8 +36,8 @@
 
 (defn ^:async child-outcome
   "tu/child-outcome without the :ending an old parent also reads."
-  [eng job args n]
-  (let [r (await (tu/child-outcome eng job args n))]
+  [eng job args n & [parent-worth]]
+  (let [r (await (tu/child-outcome eng job args n (or parent-worth tu/order-worth)))]
     (cond-> r (map? r) (dissoc :ending))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
@@ -364,16 +364,18 @@
           (is (> dear cheap) "a dear goal tries again"))))))
 
 ;; the cause differs each try: an identical refusal ends the tries at any worth (cost/refusal-kind)
-(deftest a-craft-at-a-high-worth-that-keeps-failing-ends-on-its-time-spend
+(deftest a-craft-the-server-keeps-rejecting-for-a-starving-bodys-bake-ends-craft-failed-after-retries
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
-              n (atom 0)
+        (let [n (atom 0)
+              {:keys [eng p]} (setup {:self {:food 2} :inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
               _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason (str "server rejected the craft " (swap! n inc))}))
-              result (await (child-outcome eng job {:item "bread" :worth (* 1000 (try-s :craft))} 400))]
-          (is (= :job-time (:reason result)) (pr-str result))
-          (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
+              hungry-worth (:worth (second (tu/at-own-worth eng '(jobs.survival.get-food {:carry 0}))))
+              result (await (child-outcome eng job {:item "bread"} 400 hungry-worth))]
+          (is (< (try-s :craft) hungry-worth) "get-food, the bake's parent, is worth more than a try when starving")
+          (is (= :craft-failed (:reason result)) (pr-str result))
+          (is (< 1 (count (calls p "craft"))) "retried while the goal paid, then stopped"))))))
 
 (deftest a-craft-that-times-out-again-and-again-is-not-an-identical-refusal-and-keeps-retrying-at-a-real-worth
   (async done
