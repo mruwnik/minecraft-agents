@@ -2,7 +2,6 @@
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.ctx :as ctx]
-            [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
@@ -67,11 +66,15 @@
 (defn at-home? [c] (let [pos (place c)] (boolean (and pos (<= (u/dist (u/self-pos c) pos) arrive-range)))))
 
 (defn worth-of
-  "The loss doing nothing costs (Q151): the job's time (::job-time-s) staying where the body stands at its night spawn
-  chance (spawn-light/night-chance), its hurt and death (price/stay-risk-s)."
+  "The loss doing nothing costs (Q151), each trigger's own: with :commute? (dusk-home) the night where the body stands,
+  its dark's stay risk (price/stay-risk-s at spawn-light/night-chance) or, when cheaper, sheltering here
+  (cost/shelter-s), which the night reflex does anyway; else (stuck-underground) staying stuck (cost/stuck-s)."
   [c]
-  (let [p (:primitives c)]
-    (price/stay-risk-s c (spawn-light/night-chance p (update-vals (u/self-pos c) js/Math.floor)) (settings/get settings ::job-time-s))))
+  (if-not (:commute? (:args c))
+    cost/stuck-s
+    (let [p (:primitives c)
+          dark-s (sh-clock/ticks->s (max 0 (- sh-clock/day-tick (max (.-timeOfDay (.self p)) sh-clock/dark-tick))))]
+      (min cost/shelter-s (price/stay-risk-s c (spawn-light/night-chance p (update-vals (u/self-pos c) js/Math.floor)) dark-s)))))
 
 (defn done? [c]
   (let [d (and (not (checks/running? c)) (at-home? c))]

@@ -7,5 +7,7 @@
 (def short-slot-s "A slot short of the free ones wanted leaves the next pickups' stack on the ground: gathering it again, about half a minute." 30)
 (def left-cell-s "A cell left broken in another's ground costs its owner the find and the fix: about a minute." 60)
 (def riding-s "A body left riding walks nowhere: its jobs' walks fail until it gets off, about a minute." 60)
+(def shelter-s "A night sheltered where the body stands rather than at home: a pit or walls made and dug open by day, about a minute." 60)
+(def stuck-s "A body left idle deep under its home works at nothing till it is out: another idle wait and the climb out, a few minutes." 300)
 (def wedged-s "A body wedged in a block walks nowhere: its jobs' walks fail until it is free, about a minute." 60)
 (def burn-hp "hp a body still alight once out of the flames loses: vanilla burns it an hp a second, 8 s after fire, 15 s after lava; the longer." 15)

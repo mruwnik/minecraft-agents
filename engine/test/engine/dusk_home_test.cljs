@@ -84,6 +84,17 @@
         (let [world (-> stair-home-world (assoc :inventory []) (update :blocks merge (tu/box -1 62 -1 1 63 1 "obsidian")))]
           (is (< (first (await (go-home-from-the-ground 60 70 {:commute? true} world))) 3) "the far home is walked to"))))))
 
+(deftest stuck-underground-climbs-out-of-a-lit-tunnel-at-its-own-worth
+  ;; lit, the spot spawns nothing: being stuck is the loss, not the night's spawns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (assoc stair-home-world :light-default [0 15]))]
+          (mem/write! (:store eng) :home {:pos {:x 60 :y 70 :z 0}} mem/place-policy)
+          (core/submit! eng (tu/at-own-worth eng '(jobs.survival.go-home {:limit 1000})) {})
+          (await (tu/run-until-empty eng 30))
+          (is (< (js/Math.abs (- 60 (.-x (.-pos (.self p))))) 3) "the home up the stair is reached"))))))
+
 (deftest go-home-walks-to-the-home-and-waits-with-none
   (async done
     (tu/run-async done

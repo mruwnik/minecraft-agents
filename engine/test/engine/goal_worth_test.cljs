@@ -297,8 +297,8 @@
         lava (tu/fake-on-floor {:self {:inLava true :onFire true}})
         lava-absorbing (tu/fake-on-floor {:self {:inLava true :onFire true :absorption 4}})
         low (tu/fake-on-floor {:self {:onFire true :health 10}})
-        night (tu/fake-on-floor {:time 18000})
-        night-c (ctx-of night {} {})]
+        dusk (tu/fake-on-floor {:time 12000})
+        lit-tunnel (tu/fake-on-floor {:time 18000 :light-default [0 15]})]
     (doseq [[label job p expected]
             [["breathe drowning: a sure death, the swim up keeps a death's worth" 'jobs.survival.breathe drowning (death drowning)]
              ["breathe enclosed: a sure death" 'jobs.survival.breathe enclosed (death enclosed)]
@@ -309,8 +309,8 @@
              ["extinguish alight with absorption: it takes the first hp, as drowning's" 'jobs.survival.extinguish
               (tu/fake-on-floor {:self {:onFire true :absorption 4}}) (cost/hp-cost (- cost/burn-hp 4))]
              ["extinguish alight at 10 hp: the burn kills" 'jobs.survival.extinguish low (death low)]
-             ["unwedge: held still, no hurt" 'jobs.survival.unwedge (tu/fake-on-floor {:blocks {"0,64,0" "sand"}}) cost/wedged-s]
-             ["go-home: the job's time at the night's spawn chance where it stands" 'jobs.survival.go-home night
-              (price/stay-risk-s night-c (spawn-light/night-chance night {:x 0 :y 64 :z 0}) 300)]]]
+             ["unwedge: held still, no hurt" 'jobs.survival.unwedge (tu/fake-on-floor {:blocks {"0,64,0" "sand"}}) cost/wedged-s]]]
       (is (= expected (worth job p {})) label))
-    (is (< 0 (worth 'jobs.survival.go-home night {}) (death night)) "go-home: a night's stay, not a death")))
+    (is (< 0 (worth 'jobs.survival.go-home dusk {:commute? true}) (death dusk)) "dusk-home in the open: a night's stay here, not a death")
+    (is (<= (worth 'jobs.survival.go-home dusk {:commute? true}) cost/shelter-s) "dusk-home: never more than sheltering here, which the night reflex does anyway")
+    (is (pos? (worth 'jobs.survival.go-home lit-tunnel {:limit 1000})) "stuck-underground in a lit tunnel: still stuck, never nothing")))
