@@ -1752,7 +1752,7 @@
                                                    (assoc up-east :steps 3) hidden))]
           (is (= :done (:status @out)))
           (is (= "cobblestone" (block-at p lava)))
-          (is (= 1 (count (events-of s :stair.sealed)))))))))
+          (is (= ["sealed lava at [4 69 0]"] (map :text (events-of s :stair.sealed))) "a lava seal says lava"))))))
 
 (deftest the-bridge-child-runs-under-the-stairs-fit-and-keeps-the-callers-checks
   (async done

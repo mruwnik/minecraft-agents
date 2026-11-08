@@ -119,7 +119,7 @@
       (when-let [cell (first (cells/exposed-lava block-at feet cut))]
         (if (= :stop (:on-lava (:args c)))
           {:reason :lava-exposed :cell cell :fluid "lava"}
-          (let [r (await (lava/seal! c kind block-at cell {:ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
+          (let [r (await (lava/seal! c kind block-at cell {:fluid "lava" :ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
             (when (= :again r) (ctx/update-mem! c assoc :sealed-at (ctx/now c)))
             r))))))
 
@@ -149,7 +149,7 @@
   place child waits; the stop {:reason :hazard :cell :plugged :hazards} once plugged, else {:reason :water-unplugged}."
   [c block-at accept cut]
   (when-let [[cell w] (first (cells/exposed-water block-at (:dug (ctx/mem c)) accept cut))]
-    (let [r (await (lava/seal! c :stair.plugged block-at cell {:ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
+    (let [r (await (lava/seal! c :stair.plugged block-at cell {:fluid "water" :ways (need/call-ways c) :ignore-zones? (:ignore-zones? (:args c))}))]
       (cond
         (= :continue r) :continue
         (= :again r) (do (mem/plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})

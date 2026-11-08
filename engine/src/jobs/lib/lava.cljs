@@ -120,10 +120,11 @@
 
 (defn ^:async seal!
   "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :ways allow,
-  zones as opts :ignore-zones?). Memory :seals counts places per cell, :sealing the cell in hand. :again once placed
-  (event kind, info), :continue while the child waits on the world, else the stop {:reason :lava-unsealed :cell}
-  with the place outcome (:place; :need when no block is carried) or :tries."
-  [c kind block-at cell {:keys [ways ignore-zones?]}]
+  zones as opts :ignore-zones?, the fluid named in the event text as opts :fluid). Memory :seals counts places per
+  cell, :sealing the cell in hand. :again once placed (event kind, info), :continue while the child waits on the
+  world, else the stop {:reason :lava-unsealed :cell} with the place outcome (:place; :need when no block is
+  carried) or :tries."
+  [c kind block-at cell {:keys [ways ignore-zones? fluid]}]
   (let [tries (get-in (ctx/mem c) [:seals cell] 0)
         [x y z] cell]
     (if (>= tries max-seals)
@@ -139,7 +140,7 @@
             :continue
             (do (ctx/update-mem! c dissoc :sealing)
                 (if (#{:placed :already} outcome)
-                  (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed cell " (pr-str cell))})
+                  (do (ctx/emit! c kind :info {:cell cell :now (block-at cell) :text (str "sealed " fluid " at " (pr-str cell))})
                       :again)
                   {:reason :lava-unsealed :cell cell :place outcome}))))))))
 
