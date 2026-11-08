@@ -779,7 +779,7 @@
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks cave
                                                    :inventory [{:name "iron_pickaxe" :count 1}]}
                                                   {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal}}))]
-          (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out))
+          (is (= [false :start-enclosed] ((juxt :arrived :why) @out)) (str "a sealed body is the problem, as the looped rounds it replaces ended: " (pr-str @out)))
           (is (empty? (events-of seen :go-to.retrying)) "an exhausted search from the same cell over the same memory answers the same"))))))
 
 (deftest an-approach-walk-may-take-back-its-own-seal

@@ -132,7 +132,7 @@
            :goal-on-magma "every cell in range is on magma or in a magma bubble column, where a route never ends"
            :start-enclosed (if damage-refused
                             "the only ways out cost hp (a fall) and the damage budget allows none"
-                            (str "the body is shut in and nothing it can walk reaches out" (blocked-words blocked-by)))
+                            (str "the body is shut in and " (if shut-in "this walk may not dig or build out" "nothing it can walk reaches out") (blocked-words blocked-by)))
            :exhausted (if shut-in
                         (str "the body is shut in and this walk may not dig or build out" (blocked-words blocked-by))
                         "no walkable way leads there from here")

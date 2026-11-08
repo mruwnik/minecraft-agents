@@ -473,6 +473,7 @@
         (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit}) {:pos [10 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= false (:arrived @out)))
           (is (true? (:shut-in @out)) "the result says the body is shut in")
+          (is (= :start-enclosed (:why @out)) "the body is the problem, not the target: lib/result body-side?")
           (is (re-find #"shut in" (:text @out)) "and so does the text, not 'no walkable way'")
           (is (empty? (events-of seen :go-to.escalated))))))))
 

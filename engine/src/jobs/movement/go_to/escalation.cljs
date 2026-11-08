@@ -509,7 +509,8 @@
 (defn ^:async give-up-or-escalate!
   "Give up the walk with result, or escalate instead (escalate?): at the next step, so the walk's search and the
   escalation's do not block the body in one. A give-up whose reason may mean the body is shut in looks round first
-  (look-round!), so {:shut-in true} rests on walls the body has seen."
+  (look-round!), so {:shut-in true} rests on walls the body has seen; an :exhausted search of a shut-in body ends
+  :start-enclosed (the body is the problem: lib/result body-side?)."
   [c pos tries status result]
   (if (escalate? c tries result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result) :escalate-now true
@@ -520,7 +521,8 @@
                             (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result)))]
       (when shut-reason? (await (look-round! c (end/feet-cell c))))
       (end/give-up! c pos result (cond (night-refusal? c result) {:escalation {:step :none :why :night-risk}}
-                                       (and shut-reason? (escape/walk-enclosed? c)) {:shut-in true})))))
+                                       (and shut-reason? (escape/walk-enclosed? c))
+                                       (cond-> {:shut-in true} (= :exhausted (some-> (:reason result) keyword)) (assoc :why :start-enclosed)))))))
 
 (defn ahead-cells
   "The cells, in walking order, of way e's dig route (when its step is :dig-route) and of the dig routes of its later
