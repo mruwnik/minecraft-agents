@@ -66,11 +66,13 @@
     [(- (:x to) (:x from)) (- (:z to) (:z from))]))
 
 (defn ^:async fight-or-wait!
-  "fight!, except that a reach-only fight with no hostile within hit-reach fails the option at once: attack would sit waiting for one to come."
-  [c weapons reach-only? hostiles]
-  (if (and reach-only? (not-any? #(<= (danger-q/mob-distance (:primitives c) %) (hit-reach)) hostiles))
-    (do (flight/tried! c :fight) nil)
-    (await (fight! c weapons reach-only?))))
+  "fight!, except that with no hostile within hit-reach a reach-only fight fails the option at once (attack would sit waiting for one to come), and a stay? fight (the body in its home room, melee mobs only) holds there for it: the room is the fight's ground, not the open."
+  [c weapons reach-only? stay? hostiles]
+  (cond
+    (some #(<= (danger-q/mob-distance (:primitives c) %) (hit-reach)) hostiles) (await (fight! c weapons reach-only?))
+    stay? (await (hold! c "in the room: waiting for the mob to come in"))
+    reach-only? (do (flight/tried! c :fight) nil)
+    :else (await (fight! c weapons reach-only?))))
 
 (defn ^:async fist-look!
   "Count a sweep and let the flight step again: it walks away if a way has opened, else the options (all failed) come back here."
@@ -266,7 +268,7 @@
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
-                           (await (fight-or-wait! c (if (and armed? (= [:fight] order)) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %) #(mob-offset c %) (rc/creeper-keep)) hostiles)))
+                           (await (fight-or-wait! c (if (and armed? (= [:fight] order)) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %) #(mob-offset c %) (rc/creeper-keep)) (boolean (and home? (not fire?) (seq hostiles) (not-any? #(or (combat/ranged? %) (combat/creeper? %) (combat/enderman? %)) hostiles))) hostiles)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))

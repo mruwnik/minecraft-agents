@@ -1661,6 +1661,26 @@
           (is (seq (calls p "attack")) "one hit in a box with no way out: it swings")
           (is (not-any? #(and (= :child_started (:kind %)) (= :back-off (:slot %))) @seen) "and never steps back"))))))
 
+(def wide-box
+  "An 11x11 room around the body, walls to y 69, roof at y 70, floor at y 63."
+  (into {} (for [x (range -6 7) z (range -6 7) y (range 63 71)
+                 :when (or (= 6 (Math/abs x)) (= 6 (Math/abs z)) (= y 63) (= y 70))]
+             [(str x "," y "," z) "stone"])))
+
+(deftest a-body-cornered-in-its-closed-room-waits-for-the-zombie-instead-of-walking-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks wide-box :inventory [{:name "iron_sword" :count 1}] :entities [(zombie 5 64 0)]})
+              n (atom 0)]
+          (mem/write! (:store eng) :home {:pos {:x 0 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (.override (.-world p) "wait"
+                     (fn [token a impl] (when (= 8 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
+          (core/submit! eng (order eng retreat) {})
+          (await (core/tick! eng))
+          (is (every? #(<= (:x %) 0) (tu/walked-to eng)) "no step toward the zombie across the room")
+          (is (zero? (count (calls p "attack"))) "nothing to swing at: it is out of reach"))))))
+
 (defn ^:async beset-round
   "A retreat of an armed body that carries blocks, at 8 health with zombies about and every walk blocked ((on-walk
   setup-map) runs at each, (before setup-map) before the round); the mobs leave at its first place or attack. The setup map."
