@@ -1,10 +1,10 @@
 ;; Card 7b3979e5: a pit shut-in beside the respawn bed seals its top on the bed's respawn cell; leaving by day takes that lid back,
 ;; else the server finds the bed obstructed and the next death respawns at the world spawn.
-;; A 2-thick stone slab (y 0..1) gives the pit room above the bedrock; bed at [12 2 11..12], body in the cell south of it. Surface plot (leave-shelter waits while it is dark outside), :time :any: it runs in the current phase.
+;; A stone slab (y -3..1; a surface plot has a 1-thick floor over air, so a 3-deep pit would open onto it) gives the pit rock under it; bed at [12 2 11..12], body in the cell south of it. Surface plot (leave-shelter waits while it is dark outside), :time :any: it runs in the current phase.
 {:defaults
  {:tags [:night :survival :shut-in :bed]
   :plot {:light :sky}
-  :blocks [[:fill [0 0 0] [31 1 31] "stone"]]
+  :blocks [[:fill [0 -3 0] [31 1 31] "stone"]]
   :body {:at [12.5 2 13.5] :inventory [["iron_pickaxe" 1] ["dirt" 24]] :effects [["resistance" 600 4]] :settle-s 2}
   :limit-s 120}
  :cases
