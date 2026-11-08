@@ -59,7 +59,7 @@
   {:name "sand-seen-far-off-is-not-worth-the-walk"
    :plot {:height 12 :floor "grass_block" :isolate true :length 32 :width 64}
    :blocks [[:fill [16 0 52] [17 0 52] "sand"]]
-   :act [[:job (jobs.items.obtain {:worth 1200 :item "sand" :count 1 :explore false})]]
+   :act [[:job (jobs.items.obtain {:worth :own :item "sand" :count 1 :explore false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30 :of-job true}]
    :after [[:item "sand" 0]]}
   {:name "a-wooden-pickaxe-is-worth-the-walk-to-a-tree-far-off"

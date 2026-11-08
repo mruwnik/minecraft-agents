@@ -16,7 +16,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 580 :of-job true}]
    :after [[:item "oak_log" 4]]}
   {:name "cheap-tree-far-off-is-not-searched-for"
-   :act [[:job (jobs.items.obtain {:worth 1200 :item "oak_log" :count 1 :ways #{:gather} :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth :own :item "oak_log" :count 1 :ways #{:gather} :explore true})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 30 :until {:source :job :kind :waiting :data {:reason :not-worth}}}]
    :after [[:item "oak_log" 0]]}

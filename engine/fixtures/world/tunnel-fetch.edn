@@ -30,7 +30,7 @@
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :limit-s 220
-   :after [[:item "stone_pickaxe" [:>= 1]] [:block [15 6 20] "air"]]}
+   :after [[:item "stone_pickaxe" [:>= 1]] [:body-near [16.5 6 20.5] 1.5]]}
   {:name "tunnel-fetch-false-stops-no-tool-and-fetches-nothing"
    :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
@@ -69,4 +69,4 @@
    :expect [{:event {:source :job :kind :tool.spare} :within-s 90}
             {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
    :limit-s 220
-   :after [[:item "stone_pickaxe" [:>= 1]] [:block [15 6 20] "air"]]}]}
+   :after [[:item "stone_pickaxe" [:>= 1]] [:body-near [16.5 6 20.5] 1.5]]}]}
