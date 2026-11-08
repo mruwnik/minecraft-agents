@@ -206,7 +206,7 @@
         (assoc body :y (inc cell) :vy 0.3)
         (solid? w cx (dec cell) cz) (assoc body :vy 0)
         :else (assoc body :y (dec cell) :vy -0.3))
-      (and (not (solid? w cx (dec cell) cz)) (wet? w cx (dec cell) cz))
+      (and (not (solid? w cx (dec cell) cz)) (wet? w cx (dec cell) cz) (not (supported? w (:x body) (:y body) (:z body))))
       (assoc body :y (dec cell) :vy -0.3)
       :else
     (if (climbable? w cx cell cz)
@@ -467,12 +467,12 @@
 ;; --- the tick loop
 
 (defn sub-of
-  "The :sub-pos to keep for body (sub-pos): its true position when its cell's centre is not clear for it, or, out of
-  water, is over no floor while its box is (at a drop's edge, its centre past it), else nil."
+  "The :sub-pos to keep for body (sub-pos): its true position when its cell's centre is not clear for it, or is over no
+  floor while its box is (at a drop's edge, its centre past it), else nil."
   [w {:keys [x y z]}]
   (let [[cx cy cz] [(floor x) (floor y) (floor z)]]
     (when (or (and (narrow-cell? w cx cy cz) (not (body-clear? w (+ cx 0.5) y (+ cz 0.5))))
-              (and (not (wet? w cx cy cz)) (supported? w x y z) (not (supported? w (+ cx 0.5) y (+ cz 0.5)))))
+              (and (supported? w x y z) (not (supported? w (+ cx 0.5) y (+ cz 0.5)))))
       [x cy z])))
 
 (defn decide-safely [decide pose]
