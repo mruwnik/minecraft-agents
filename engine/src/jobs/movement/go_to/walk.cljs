@@ -20,7 +20,7 @@
     a frontier walk, or at a re-plan or cut of a walk short of the goal (drive/follow!'s :walk-spent?), once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
     ever in the call) passes what the goal is worth (jobs.lib.cost/tour-worth of the goal's straight
     blocks at the call's start and ctx/worth): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
-    A search cut by its budget whose nearest node, or the cut of its plan walked up to a dark step, is no nearer than the body is or has been tours the edge of what it has seen instead (known-end-check, asked inside and outside go-to.reprice).
+    A search cut by its budget, ended (exhausted) or short of an unloaded goal whose nearest node, or the cut of its plan walked up to a dark step, is no nearer than the body is or has been tours the edge of what it has seen instead (known-end-check, asked inside and outside go-to.reprice).
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck)."
@@ -159,7 +159,7 @@
 
 (defn known-end-check
   "near/walk-round!'s :stair-check: {:known-end true} for the plan the round would walk (check's {:cut plan'} when it cuts
-  one, else the plan) over a mask (c's :unknown) to where a search cut by its budget got nearest (not a frontier) that
+  one, else the plan) over a mask (c's :unknown) to where a search cut by its budget, ended or short of an unloaded goal got nearest (not a frontier) that
   ends no block nearer pos than the body is or has been in the call (approaches :closest): the budget left the search
   short of anywhere new, and walking there swings between ends it knows; a cut short of a dark step does so too, each
   look there planning anew from farther off. Else check's why. Not while the round tours the edge of what the body has
@@ -170,7 +170,7 @@
           {:keys [status steps r] :as walked} (or (:cut why) plan)
           closest (min (:closest (record c) ##Inf) (u/dist (u/self-pos c) pos))]
       (if (and (or (nil? why) (:cut why)) (:unknown c) (not (:edge-mode (ctx/mem c))) (= "partial" status) (seq steps)
-               (= "budget" (some-> ^js r .-reason)) (not (:frontier-taken walked))
+               (contains? #{"budget" "exhausted" "goal-unloaded"} (some-> ^js r .-reason)) (not (:frontier-taken walked))
                (>= (u/dist (peek steps) pos) (dec closest)))
         {:known-end true}
         why))))

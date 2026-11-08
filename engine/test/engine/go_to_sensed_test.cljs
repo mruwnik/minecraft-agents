@@ -481,7 +481,8 @@
     (swap! gcut/approaches assoc-in [(:id c) :closest] 13.2)
     (is (= {:known-end true} (check (plan "budget" dead-end) false)))
     (is (nil? (check (plan "budget" {:x 64 :y 0 :z 16}) false)) "an end nearer than the body has been")
-    (is (nil? (check (plan "exhausted" dead-end) false)) "an ended search")
+    (is (= {:known-end true} (check (plan "exhausted" dead-end) false)) "an ended search ends there as well")
+    (is (= {:known-end true} (check (plan "goal-unloaded" dead-end) false)) "so does one short of an unloaded goal")
     (swap! mem* assoc :edge-mode true)
     (is (nil? (check (plan "budget" dead-end) true)) "already touring the edge")
     (swap! gcut/approaches dissoc (:id c))))
@@ -1259,6 +1260,16 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (run-go-to {:self {:pos {:x 15.5 :y 85 :z 0.5}} :blocks (walkway 60) :radius 16 :exact-eye true :bodyHitbox true}
                                                  {:pos [5 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))]
+          (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
+
+;; live twin: walkway-stair-out-of-view/stair-100-east-arrives. Down the stair, the ended search (exhausted) is nearest at the
+;; walkway's west end over the goal, where the body has stood: the walk tours the floor's rim instead of climbing back to it
+(deftest go-to-down-a-stair-at-the-far-end-of-a-very-long-lit-walkway-arrives
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen p]} (await (run-go-to {:self {:pos {:x 230.5 :y 85 :z 0.5}} :blocks (walkway 330) :radius 16 :exact-eye true :bodyHitbox true}
+                                                 {:pos [60 64 8] :range 1 :ways #{:walk :clear-seal} :unknown true} lit-and-looking))]
           (is (= {:arrived true} (select-keys out [:arrived])) (str (pr-str out) " at " (:pos (fake/self p)))))))))
 
 (def tunnel-into-cave
