@@ -9,6 +9,7 @@
   (let [p (tu/fake {})
         jobs {'wait {:args {:ms {:default 1000}}
                      :round (fn ^:async round [ctx] (await (ctx/act ctx :wait #js {:ms 1000})) :continue)}
+              'priced {:args {:n {:default 1}} :worth-of (fn [_] 42.5) :round #(ctx/end % :done nil)}
               'done {:args {} :round #(ctx/end % :done nil)}
               'fail {:args {} :round (fn [_] (throw (js/Error. "test failure")))}}
         eng (core/create {:primitives p :jobs jobs :triggers {} :dir (tu/tmp-dir)
@@ -52,6 +53,15 @@
         (is (= :worth-required (:reason r)) (pr-str op spec))
         (is (re-find #"worth is required" (:message r)))))
     (is (= [] (:list (core/state eng))) "nothing was listed")))
+
+(deftest worth-own-takes-the-jobs-own-priced-worth
+  (let [{:keys [eng]} (setup)]
+    (is (= "j1" (get-in (command eng "own" :submit {:spec '(seq (priced {:worth :own}) (done {:worth 5}))}) [:job :id])))
+    (is (= 42.5 (get-in (core/state eng) [:instances "j1" :spec :children 0 :args :worth])) "the worth-of a trigger would pass")
+    (let [r (command eng "own-none" :submit {:spec '(done {:worth :own})})]
+      (is (= :worth-required (:reason r)))
+      (is (re-find #"no worth-of" (:message r))))
+    (core/shutdown! eng)))
 
 (deftest ledger-survives-restore-and-pending-is-not-executed-twice
   (let [{:keys [eng p jobs]} (setup)

@@ -4,7 +4,7 @@
 ;; Untimed: day, because the tree is seen on the surface and the body waits out a dark one.
 ;; Each case passes the :worth an agent gives its goal: a root obtain's own worth is the items' usual cost, which a stair out of rock (by hand about 200 s) always tops.
 ;; Should-succeed: oak logs carried. Should-fail: none (the dig must not stop :no-source or :no-way-up).
-;; Refusal side (card 37706724): at :worth 14.8, obtain's own worth-of for 2 logs (what a trigger root passes), the stair
+;; Refusal side (card 37706724): at :worth :own, obtain's own worth-of for 2 logs (what a trigger root passes), the stair
 ;; up is dearer than the logs: a look round, then a :not-worth wait, and no stair is cut.
 {:defaults
  {:tags [:obtain :explore :mining :no-tool]
@@ -35,7 +35,7 @@
             {:no-event {:source :job :kind :obtain.exploring} :for-s 900 :until {:source :job :kind :stair.step}}]
    :after [[:item "furnace" [:>= 1]]]}
   {:name "sealed-cave-logs-at-their-own-worth-wait-not-worth-and-cut-no-stair"
-   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true :worth 14.8})]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true :worth :own})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :not-worth}} :within-s 30}
             {:no-event {:source :job :kind :stair.step} :for-s 60}
             {:no-event {:source :job :kind :obtain.exploring} :for-s 60}]

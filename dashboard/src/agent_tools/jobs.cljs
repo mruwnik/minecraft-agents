@@ -20,7 +20,7 @@
   (str "usage: " prefix " <body> --world <world> list [--limit 8 --offset 0] | show <jID> | submit '(jobs.storage.deposit {:items [\"bread\"]})' [--drop-on-death] [--next | --now | --exclusive] [--alongside] [--wait [--timeout 60s]] | cancel <jID> | cancel-all | retry <jID> | resolve <request-id> --reason handled|condition-recovered [--worlds DIR --state LEGACY_PARENT]\n"
        "A job that depends on where the body stands (access.stair, access.bridge, access.pillar, gather.mine) gets :submitted-at (the body's position at submit) added to its args; if the body is then over 6 blocks from it when the job starts, the job waits :moved-since-submit (something moved the body meanwhile) instead of running there; a job queued behind another of this body counts from where the body stands when that one ends. Give :here true in the args (any job takes it) to run wherever the body is.\n"
        "submit appends the job to the end of the list (jobs take turns).\n"
-       "Every job of a spec needs :worth in its args: what the goal is worth to you in seconds of the body's time (a number; a submit without it is refused); the job refuses a far or costly goal it does not pay for, so give a high :worth to go anyway: submit '(jobs.items.obtain {:item \"oak_log\" :worth 2000})'. :spend caps what the job may use, e.g. {:job-time 600 :tries 3}.\n"
+       "Every job of a spec needs :worth in its args: what the goal is worth to you in seconds of the body's time (a number; a submit without it is refused); `:worth :own` takes the job's own priced worth, as a trigger fires it, for a job that prices itself; the job refuses a far or costly goal it does not pay for, so give a high :worth to go anyway: submit '(jobs.items.obtain {:item \"oak_log\" :worth 2000})'. :spend caps what the job may use, e.g. {:job-time 600 :tries 3}.\n"
        "A spec is a job name then its args map: submit '(jobs.movement.go-to {:pos {:x 1 :y 64 :z 2} :worth 300})' or '(jobs.items.get-tool {:item \"stone_pickaxe\" :worth 600})'. Find a job's args with observe.mjs <body> catalog job <name> (catalog jobs [prefix] lists names).\n"
        "  --drop-on-death  the body's death cancels the job; without it the job stays listed through a death and runs again from the respawn once the respawn reflexes (recover-drops, night) are done\n"
        "  --next  list it directly after the current job: it gets the next round, nothing is cut\n"
@@ -45,13 +45,13 @@
          (throw (js/Error. (str (.-message error) "; " spec-example))))))
 
 (defn unpriced
-  "The job names of spec form whose args give no :worth (a combinator's jobs too)."
+  "The job names of spec form whose args give no :worth, a number or :own (the job's own worth-of; a combinator's jobs too)."
   [form]
   (let [[head & parts] (when (seq? form) form)]
     (case head
       (seq any until) (mapcat unpriced parts)
       repeat (unpriced (last parts))
-      (when (and head (not (number? (:worth (first parts))))) [head]))))
+      (when (and head (not (or (number? (:worth (first parts))) (= :own (:worth (first parts)))))) [head]))))
 
 (defn spec-for [text]
   (when (or (not (string? text)) (> (.byteLength js/Buffer text) 12000))

@@ -1,7 +1,7 @@
 ;; Card 5311abf3: a two-log trunk at x 28, z 16 walled in by leaves (3x3 round both logs, crown above, leaves y 0..3), body empty-handed
 ;; 11 blocks east, beside it as it faces south. A player cuts a leaf and steps in, or reaches a log from a free side; obtain must get both logs every time.
 ;; Untimed: lit plot in the buried cell, so a log not yet seen prices the stair up (card dc56a046): the call looks round first.
-;; :worth 14.8 = obtain's own worth-of for 2 logs, what a trigger root passes. Should-succeed: 2 oak logs carried, the job completes.
+;; :worth :own = obtain's own worth-of for 2 logs, what a trigger root passes. Should-succeed: 2 oak logs carried, the job completes.
 ;; Should-fail: a :not-worth wait, or it ends :no-source or :no-path with one log.
 {:defaults
  {:tags [:obtain :forestry :fell-tree :no-tool] :time :any
@@ -11,13 +11,13 @@
   :limit-s 120}
  :cases
  [{:name "two-logs-walled-in-by-leaves"
-   :act [[:job (jobs.items.obtain {:worth 14.8 :item "oak_log" :count 2 :explore true})]]
+   :act [[:job (jobs.items.obtain {:worth :own :item "oak_log" :count 2 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 100 :until {:source :job :kind :completed}}
             {:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}
   {:name "no-chest-way-looks-round-for-the-log-before-pricing-the-stair"
-   :act [[:job (jobs.items.obtain {:worth 14.8 :item "oak_log" :count 2 :explore true :ways #{:craft :gather :search}})]]
+   :act [[:job (jobs.items.obtain {:worth :own :item "oak_log" :count 2 :explore true :ways #{:craft :gather :search}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :not-worth}} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}]}

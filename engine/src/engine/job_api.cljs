@@ -6,6 +6,7 @@
   (:require [engine.core :as core]
             [engine.condition :as condition]
             [engine.core.cleanup :as cleanup]
+            [engine.core.schedule :as schedule]
             [engine.expr :as expr]
             [engine.hooks :as hooks]
             [clojure.walk :as walk]
@@ -85,8 +86,25 @@
   "core/submit! opts from a request's :next? :survive-death? :by."
   [request by]
   (merge {:by by} (select-keys request [:next? :survive-death?])))
+(defn price-own
+  "spec with each leaf's `:worth :own` replaced by that job's worth-of over this body, as a fired trigger gets it
+  (core.schedule/priced); throws when a job has none. For a caller that wants the job's own price, not a default."
+  [eng spec]
+  (let [[head & parts] (when (seq? spec) spec)
+        args (first parts)]
+    (case head
+      (seq any until) (apply list head (map #(price-own eng %) parts))
+      repeat (apply list head (concat (butlast parts) [(price-own eng (last parts))]))
+      (if-not (and (map? args) (= :own (:worth args)))
+        spec
+        (let [w (get-in (schedule/priced eng {:id "own" :reflex :own} (expr/parse (:jobs eng) (list head (dissoc args :worth)))) [:args :worth])]
+          (when-not (number? w) (throw (js/Error. (str head " has no worth-of: give it a number :worth"))))
+          (list head (assoc args :worth w)))))))
 (defn mutate! [eng {:keys [op id spec request-id generation-id by] :or {by :agent} :as request}]
-  (let [prior (get-in (core/state eng) [:job-requests :records request-id])
+  (let [[spec own-error] (if (#{:submit :interrupt :exclusive} op)
+                           (try [(price-own eng spec) nil] (catch :default e [spec (ex-message e)]))
+                           [spec nil])
+        prior (get-in (core/state eng) [:job-requests :records request-id])
         signature (fingerprint request)
         spec-error (when (#{:submit :interrupt :exclusive} op)
                      (if (bounded-spec? spec) (expr/problem (:jobs eng) spec) "job expression exceeds size/depth limits"))
@@ -105,6 +123,7 @@
                                                           {:id (get-in result [:job :id]) :status :absent})))
                   (fail :request-uncertain "A previous attempt was interrupted; it will not be executed again."))
               (fail :request-id-conflict))
+      own-error (fail :worth-required own-error)
       spec-error (fail :bad-spec spec-error)
       (and spec (checks-problem spec)) (fail :bad-args (checks-problem spec))
       worth-error (fail :worth-required worth-error)
