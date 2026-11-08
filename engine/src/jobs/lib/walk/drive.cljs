@@ -122,13 +122,15 @@
   {:x (+ fx 0.5 (* lip-reach (compare tx fx))) :z (+ fz 0.5 (* lip-reach (compare tz fz)))})
 
 (defn lean-to!
-  "Sneaks to the point {:x :z} (the game's sneak keeps the body from going off the edge), within a tenth of a block."
+  "Sneaks to the point {:x :z} (the game's sneak keeps the body from going off the edge), within a tenth of a block; not
+  at all where sneak holds no edge (walk/sneak-holds?: a body hanging in a vine would slide out of it and fall)."
   [c {:keys [x z]}]
   (let [ticks (volatile! 0)]
     (ctx/act c :steer (walk/steer-args (walk/steer-s c 3)
                                        (fn [pose]
                                          (let [dx (- x (.-x pose)) dz (- z (.-z pose))]
-                                           (if (or (and (< (js/Math.abs dx) 0.1) (< (js/Math.abs dz) 0.1)) (> (vswap! ticks inc) lean-ticks))
+                                           (if (or (not (walk/sneak-holds? (walk/pose-of pose)))
+                                                   (and (< (js/Math.abs dx) 0.1) (< (js/Math.abs dz) 0.1)) (> (vswap! ticks inc) lean-ticks))
                                              #js {:done true}
                                              #js {:controls #js {:forward true :sneak true} :yaw (js/Math.atan2 (- dx) (- dz))})))))))
 

@@ -155,19 +155,24 @@
   and so does a climb (it holds the body on a ladder)."
   #{:start :walk :diagonal :corner :jump})
 
+(defn sneak-holds?
+  "Whether sneak keeps the body from going off an edge: on the ground, out of water and off a climbable and scaffolding
+  (sneak sinks it in water and descends there; hanging, nothing stops it leaving the cell)."
+  [{:keys [on-ground in-water on-climbable on-scaffolding]}]
+  (boolean (and on-ground (not in-water) (not on-climbable) (not on-scaffolding))))
+
 (defn gait-controls
   "The executor's controls under the policy's gait: a sneaking walk never sprints and holds sneak only on the ground, on a
   sneak-moves step out of water (it sinks the body, and stops it at a deep bank), off a climbable and scaffolding (sneak descends there); in the air it
   lets go, so a slime landing bounces. A :climb-down step from scaffolding holds sneak under every gait (scaffolding is
   solid on top unless sneaking)."
-  [policy {:keys [steps i]} {:keys [on-ground in-water on-climbable on-scaffolding]} controls]
+  [policy {:keys [steps i]} {:keys [on-scaffolding] :as pose} controls]
   (let [step (get steps i)
         scaffold-down? (and on-scaffolding (= :climb-down (:move step)))]
     (cond-> controls
       (= :sneak (:gait policy))
       (assoc :sprint false
-             :sneak (boolean (and on-ground (not in-water) (not on-climbable) (not on-scaffolding)
-                                  (contains? sneak-moves (:move step)) (not (executor/water-step? step)))))
+             :sneak (boolean (and (sneak-holds? pose) (contains? sneak-moves (:move step)) (not (executor/water-step? step)))))
       scaffold-down? (assoc :sneak true))))
 
 (defn prefix

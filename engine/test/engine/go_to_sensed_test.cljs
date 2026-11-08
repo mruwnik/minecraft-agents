@@ -1375,6 +1375,16 @@
           (is (empty? sneaks))
           (is (pos? looks) "a look moves nothing, so it still happens"))))))
 
+(deftest a-body-hanging-in-a-vine-does-not-lean-to-a-lip-the-walk-learned-is-missing
+  ;; the walkway's end cell a vine column down to the room floor: a sneak there holds no edge, the lean slid a body out and it fell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [vine (into (dissoc walkway-room "20,84,0") (for [y (range 64 85)] [(str "20," y ",0") "vine"]))
+              {:keys [sneaks looks]} (await (walkway-end-acts {:self {:pos {:x 20.5 :y 84 :z 0.5}} :blocks vine}))]
+          (is (empty? sneaks))
+          (is (pos? looks) "a look moves nothing, so it still happens"))))))
+
 (defn ^:async dark-stair-replans []
   (let [{:keys [out seen]} (await (run-go-to stair-body stair-job
                                              (fn [{:keys [p]}] (swap! (fake/state p) assoc :light-default [0 0] :pitch 30))))]
