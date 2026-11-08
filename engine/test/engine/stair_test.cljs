@@ -742,6 +742,10 @@
         dug [{:cell [1 64 0]} {:cell [1 63 0]}]]
     (is (= [[[1 63 0] [1 63 0]]] (sc/exposed-water #(get block-at % "stone") dug #{} [[1 64 0] [1 63 0]])))))
 
+(deftest water-under-a-dug-cell-that-was-never-dug-exposes-the-cell-above
+  (let [block-at {[2 64 0] "air" [2 63 0] "water"}]
+    (is (= [[[2 64 0] [2 63 0]]] (sc/exposed-water #(get block-at % "stone") [{:cell [2 64 0]}] #{} [[2 64 0] [2 63 0]])))))
+
 (deftest water-beside-a-dug-cell-with-no-block-to-plug-it-says-so
   (async done
     (tu/run-async done
