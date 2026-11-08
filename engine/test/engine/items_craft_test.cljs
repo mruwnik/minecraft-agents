@@ -363,12 +363,14 @@
           (is (= [:craft-failed 1] [cheap-end cheap]) "a rejection can be passing: one that costs more than it is worth to repeat is not")
           (is (> dear cheap) "a dear goal tries again"))))))
 
+;; the cause differs each try: an identical refusal ends the tries at any worth (cost/refusal-kind)
 (deftest a-craft-at-a-high-worth-that-keeps-failing-ends-on-its-time-spend
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 3}] :blocks {"2,64,0" "crafting_table"}} 1000)
-              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason "server rejected the craft"}))
+              n (atom 0)
+              _ (.override (.-world p) "craft" (fn ^:async f [_ _ _] #js {:status "failed" :made 0 :reason (str "server rejected the craft " (swap! n inc))}))
               result (await (child-outcome eng job {:item "bread" :worth (* 1000 (try-s :craft))} 400))]
           (is (= :job-time (:reason result)) (pr-str result))
           (is (< 1 (count (calls p "craft")) 400) "retried while the spend lasted, then stopped"))))))
