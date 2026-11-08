@@ -86,11 +86,14 @@ export function createDig (env) {
       ctx.alive()
       const before = lyingBefore(p)
       const held = env.bot.heldItem?.name
+      const max = env.bot.registry?.itemsByName?.[held]?.maxDurability
+      const lastUse = max > 0 && (env.bot.heldItem.durabilityUsed ?? 0) >= max - 1
       await env.bot.dig(block, true)
       ctx.alive()
       // mineflayer clears the block on its own side when its timer ends; the server breaks it only if the tool the timer
-      // assumed was held to the end, so a tool lost on the way leaves the block there: put it back, report no dig
-      if (held && env.bot.heldItem?.name !== held) {
+      // assumed was held to the end, so a tool lost on the way leaves the block there: put it back, report no dig.
+      // A tool on its last use breaks with the block, so its going is no loss.
+      if (held && !lastUse && env.bot.heldItem?.name !== held) {
         env.bot._updateBlockState(block.position, block.stateId)
         return { status: 'failed', reason: 'tool-lost' }
       }

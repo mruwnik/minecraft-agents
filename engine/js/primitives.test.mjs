@@ -3454,6 +3454,19 @@ test('dig of a block whose tool was lost during the dig puts the block back and 
   assert.deepEqual(restored.map(x => x.slice(0, 3)), [[2, 64, 0]])
 })
 
+test('dig whose pickaxe breaks on its last use is dug and leaves the block cleared', async () => {
+  const { bot, p } = rig({ ...world, blocks: { '2,64,0': 'stone' } })
+  bot.registry = { ...bot.registry, itemsByName: { stone_pickaxe: { maxDurability: 132 } } }
+  bot.heldItem = { name: 'stone_pickaxe', count: 1, slot: 36, durabilityUsed: 131 }
+  const restored = []
+  bot._updateBlockState = (pos, id) => restored.push(id)
+  const original = bot.dig
+  bot.dig = async (...args) => { const r = await original(...args); bot.heldItem = null; return r }
+  const r = await p.dig('t1', { pos: at(2, 64, 0) })
+  assert.equal(r.status, 'dug')
+  assert.deepEqual(restored, [])
+})
+
 test('dig counts a drop that merged into an old stack as new', async () => {
   const stack = { count: 1 }
   const merging = { id: 21, ...pile, getDroppedItem: () => ({ name: 'cobblestone', count: stack.count }) }
