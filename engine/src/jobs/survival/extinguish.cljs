@@ -119,7 +119,9 @@
   (let [p (:primitives c)
         self (.self p)]
     (cond (body/in-hazard? p) (cost/death-s p (ctx/view c))
-          (body/burning? p) (cost/hurt-loss-s p (ctx/view c) (cost/after-armour (cost/armour-stats (.-equipment self)) :burning cost/burn-hp 1))
+          (body/burning? p) (cost/hurt-loss-s {:health (or (.-health self) 20) :absorption (or (.-absorption self) 0)}
+                                              (cost/after-armour (cost/armour-stats (.-equipment self)) :burning cost/burn-hp 1)
+                                              (cost/death-s p (ctx/view c)))
           :else 0)))
 
 (defn done?

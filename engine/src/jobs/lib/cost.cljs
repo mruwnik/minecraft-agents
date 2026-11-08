@@ -719,12 +719,10 @@
   ([p view at] (death-cost (death-body p view) at)))
 
 (defn hurt-loss-s
-  "Seconds hp of sure damage costs the body of p (Q151): death-s by the chance it takes the life (blow-outcome :dies) and
-  the hp the body lives through at hp-cost."
-  [p view hp]
-  (let [body (assoc (death-body p view) :absorption (or (.-absorption (.self p)) 0))
-        {:keys [dies lived]} (death/blow-outcome body hp hp hp nil)]
-    (+ (* dies (death-cost body (some-> (.self p) .-pos u/pos-of))) (hp-cost lived))))
+  "Seconds hp of sure damage costs a body {:health :absorption} (Q151): death-s once the hp reach its life, else the hp past
+  the absorption (taken first) at hp-cost."
+  [{:keys [health absorption]} hp death-s]
+  (if (>= hp (+ health absorption)) death-s (hp-cost (max 0 (- hp absorption)))))
 
 (defn death-fn
   "fn of a health h: death-s of the body of p at its feet were its health h (what the respawn refills follows it)."

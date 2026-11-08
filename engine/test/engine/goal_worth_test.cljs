@@ -306,6 +306,8 @@
              ["extinguish in lava: a sure death" 'jobs.survival.extinguish lava (death lava)]
              ["extinguish in lava with absorption: still a death, absorption only delays it" 'jobs.survival.extinguish lava-absorbing (death lava-absorbing)]
              ["extinguish alight at full health: the burn's hp" 'jobs.survival.extinguish (tu/fake-on-floor {:self {:onFire true}}) (cost/hp-cost cost/burn-hp)]
+             ["extinguish alight with absorption: it takes the first hp, as drowning's" 'jobs.survival.extinguish
+              (tu/fake-on-floor {:self {:onFire true :absorption 4}}) (cost/hp-cost (- cost/burn-hp 4))]
              ["extinguish alight at 10 hp: the burn kills" 'jobs.survival.extinguish low (death low)]
              ["unwedge: held still, no hurt" 'jobs.survival.unwedge (tu/fake-on-floor {:blocks {"0,64,0" "sand"}}) cost/wedged-s]
              ["go-home: the job's time at the night's spawn chance where it stands" 'jobs.survival.go-home night
