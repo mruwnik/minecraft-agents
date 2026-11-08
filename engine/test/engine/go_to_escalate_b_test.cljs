@@ -14,6 +14,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
+            [jobs.access.stair :as stair]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.way :as escape-way]
             [jobs.lib.pen :as pen]
@@ -122,6 +123,13 @@
         steps (fn [unseen?] (escape/rim-steps block-at unseen? [-1 64 0] [1 0] 8 3))]
     (is (= 2 (steps (constantly false))) "a seen floor under the second step is the rim")
     (is (= 8 (steps #(= [1 65 0] (vec %)))) "an unseen floor is not known to be solid")))
+
+(deftest a-stair-given-steps-ends-on-the-rim-only-when-asked-to
+  (let [wall-world (merge (box -10 63 -10 14 63 10 "stone") (box 0 64 -10 3 65 10 "stone"))
+        p (tu/fake {:self {:pos {:x -0.5 :y 64 :z 0.5}} :blocks wall-world})
+        target (fn [to-rim?] (stair/rim-target {:primitives p :args {:dir :up :heading :east :steps 8 :to-rim? to-rim?}} [-1 64 0] 0 8))]
+    (is (= 2 (target true)) "a way out ends on the wall's rim")
+    (is (= 8 (target false)) "a caller's own :steps are all cut")))
 
 (deftest a-stair-ends-on-a-thin-wall-with-lower-ground-beyond-but-not-on-a-cliff-or-its-own-tread
   (let [steps (fn [world max-drop]

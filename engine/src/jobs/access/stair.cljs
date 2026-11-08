@@ -68,7 +68,7 @@
   - A missing pickaxe is got by the jobs.blocks.dig child (the call's :ways), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :ways #{:carried} end :no-tool.
   - A root stair marks itself for the :ore-seen trigger (jobs.lib.ore-pick): exposed ore within reach is dug.
 
-  A stair :up given :steps (a way out) ends at the rim of a wall once it sees one (jobs.lib.escape/rim-steps), short of its steps.
+  A stair :up given :steps with :to-rim? (a way out) ends at the rim of a wall once it sees one (jobs.lib.escape/rim-steps), short of its steps.
 
   One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
   body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.
@@ -98,6 +98,7 @@
    :leave-drops {:doc "true: dig on with a full pack and leave the stone lying, as a player escaping does (go-to); unset: wait :no-free-slot" :spec boolean? :default false}
    :collect {:doc "true: pick up each dig's drop while the pack has room for it and keep it from the stair's floors (keep-for-put-back!), so the cut can be put back; a job instance id (go-to's break-out of its own pen): the same, held by that job until it ends or clears it" :spec (a/or-of boolean? string?) :default false}
    :not-protected? {:doc "true (go-to's escalation): stops :not-diggable at a protected block (jobs.lib.escape/diggable?), including one first seen while digging" :spec boolean? :default false}
+   :to-rim? {:doc "true (a way out: go-to's escalation, hide-out): a stair :up given :steps ends on the rim of a wall once it sees one (jobs.lib.escape/rim-steps), short of its steps" :spec boolean? :default false}
    :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}})
 
 (a/defargs settings
@@ -408,12 +409,12 @@
                 (do (ctx/update-mem! c dissoc :undermine) :again))))))
 
 (defn rim-target
-  "A stair up given :steps (a way out) judged again at step i on what the body sees now: it ends on the rim it stands on
+  "A stair up given :steps and :to-rim? (a way out) judged again at step i on what the body sees now: it ends on the rim it stands on
   once that is seen (jobs.lib.escape/rim-steps), else at target. Unseen cells are rock, so a stair through rock keeps its length."
   [c feet i target]
-  (let [{:keys [dir heading y]} (:args c)
+  (let [{:keys [dir heading y to-rim?]} (:args c)
         p (:primitives c)]
-    (if (and (= :up dir) (nil? y) (< i target))
+    (if (and to-rim? (= :up dir) (nil? y) (< i target))
       (+ i (escape/rim-steps (escape/block-at-of p) (escape/unseen-of p) feet (shape/headings heading) (- target i) (escape/drop-limit p)))
       target)))
 
