@@ -1261,6 +1261,23 @@ test('relight: forgetting the farthest dirty column drops its overlay, so a far 
   assert.equal(view.lightOverlay(5, 0, (65 + 64) >> 4), undefined)
 })
 
+test('relight: forgetting the farthest dirty column announces the dropped overlay to relit listeners', async () => {
+  const { view, torch, bot } = torchWorld({ relightRange: 50, relightBudgetMs: 1e9, dirtyColumnsMax: 1 })
+  torch(88)
+  bot.entity.position = new Vec3(90.5, 65, 10.5)
+  await view.flushColumns()
+  await view.idle()
+  const relit = []
+  view.onRelit((cx, cz) => relit.push([cx, cz]))
+  bot.entity.position = new Vec3(8.5, 65, 10.5)
+  bot.world.getColumn(5, 0).setBlockStateId({ x: 8, y: 65, z: 8 }, AIR)
+  bot.emit('blockUpdate', { position: new Vec3(88, 65, 8), stateId: stateOf('torch') }, { position: new Vec3(88, 65, 8), stateId: AIR })
+  torch(120)
+  await view.flushColumns()
+  await view.idle()
+  assert.ok(relit.some(([cx, cz]) => cx === 5 && cz === 0))
+})
+
 test('overlay light in a column file decodes to the overlay, and a column without overlay is unchanged', () => {
   const column = makeColumn()
   const args = { column, x: 0, z: 0, t: 1, body: 'Bob', mcVersion: VERSION }

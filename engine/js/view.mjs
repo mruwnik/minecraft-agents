@@ -256,8 +256,10 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const far = k => { const [cx, cz] = k.split(',').map(Number); return at ? (cx * 16 + 8 - at.x) ** 2 + (cz * 16 + 8 - at.z) ** 2 : 0 }
     const victim = [...dirty.keys()].filter(k => k !== keep).reduce((a, b) => far(b) > far(a) ? b : a)
     dirty.delete(victim)
-    overlays.delete(victim) // its pending changes make the relit light stale, the server light is the better reading
-    markColumn(...victim.split(',').map(Number))
+    const [cx, cz] = victim.split(',').map(Number)
+    // perception's light epoch moves only on a relit notice, so the dropped overlay must announce itself
+    if (overlays.delete(victim)) for (const fn of relitListeners) fn(cx, cz) // its pending changes make the relit light stale, the server light is the better reading
+    markColumn(cx, cz)
   }
   // a whole dirty column: one point at the middle of each touched section (the box around it covers the section)
   const sectionPoints = (cx, cz, sections) => [...sections].map(sy => ({ x: cx * 16 + 8, y: sy * 16 + 8, z: cz * 16 + 8 }))
