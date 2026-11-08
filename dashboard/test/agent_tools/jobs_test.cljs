@@ -82,10 +82,10 @@
 (deftest a-job-spec-without-a-worth-fails-locally-naming-the-jobs
   (doseq [[source named] [["(jobs.time.wait-for-light)" "jobs.time.wait-for-light"]
                           ["(seq (jobs.x {:worth 3}) (jobs.y))" "jobs.y"]
-                          ["(repeat (jobs.y {}))" "jobs.y"]]]
+                          ["(repeat (jobs.y {}))" "jobs.y"]
+                          ["(jobs.x {:worth :own})" "jobs.x"]]]
     (is (thrown-with-msg? js/Error (re-pattern (str "worth is required: give " (str/replace named "." "\\.") " a :worth")) (jobs/spec-for source)) source))
-  (is (= '(seq (jobs.x {:worth 3})) (jobs/spec-for "(seq (jobs.x {:worth 3}))")))
-  (is (= '(jobs.x {:worth :own}) (jobs/spec-for "(jobs.x {:worth :own})")) ":own asks for the job's own priced worth"))
+  (is (= '(seq (jobs.x {:worth 3})) (jobs/spec-for "(seq (jobs.x {:worth 3}))"))))
 
 (deftest a-malformed-job-spec-error-shows-an-example
   (doseq [source ["{:job :foo}" "()" "(jobs.one {:worth 60}) (jobs.two {:worth 60})"]]

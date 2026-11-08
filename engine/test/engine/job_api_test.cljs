@@ -54,14 +54,12 @@
         (is (re-find #"worth is required" (:message r)))))
     (is (= [] (:list (core/state eng))) "nothing was listed")))
 
-(deftest worth-own-takes-the-jobs-own-priced-worth
-  (let [{:keys [eng]} (setup)]
-    (is (= "j1" (get-in (command eng "own" :submit {:spec '(seq (priced {:worth :own}) (done {:worth 5}))}) [:job :id])))
-    (is (= 42.5 (get-in (core/state eng) [:instances "j1" :spec :children 0 :args :worth])) "the worth-of a trigger would pass")
-    (let [r (command eng "own-none" :submit {:spec '(done {:worth :own})})]
-      (is (= :worth-required (:reason r)))
-      (is (re-find #"no worth-of" (:message r))))
-    (is (= :bad-spec (:reason (command eng "own-typo" :submit {:spec '(unknwon {:worth :own})}))) "a job that does not parse is a bad spec, not a missing worth")
+(deftest a-submit-worth-is-a-number-even-for-a-job-with-a-worth-of
+  (let [{:keys [eng]} (setup)
+        r (command eng "own" :submit {:spec '(seq (priced {:worth :own}) (done {:worth 5}))})]
+    (is (= :bad-spec (:reason r)) "a job's worth-of is its price, not what the caller wants it for")
+    (is (re-find #"priced :worth must be a number" (:message r)))
+    (is (= [] (:list (core/state eng))))
     (core/shutdown! eng)))
 
 (deftest ledger-survives-restore-and-pending-is-not-executed-twice
