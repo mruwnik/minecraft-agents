@@ -194,7 +194,7 @@
         unfought (if (seq catchers) (cost/lethal-hp (dies met-remembered)) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
-     :death-chance (:chance (dies met-all)) :dark-s exposed-s :hostiles (count catchers) :catcher-keys (into #{} (keep :key) catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
+     :death-chance (:chance (dies met-all)) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
 (defn risk-s
   "Seconds the hp cost of a walk-risk estimate (its :hp and :lethal-hp, plus `extra-hurt` hp, default 0) costs c's body at
@@ -205,13 +205,13 @@
    (cost/risk-s health (+ (- hp lethal-hp) extra-hurt) lethal-hp)))
 
 (defn estimate
-  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :catcher-keys :threats} of the walk of c's body to `goal` ({:x :y :z})
+  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned), and with :back? back on the same way
   as one walk (a mob that noticed the body going still has it coming back), and with :stay-s standing that many seconds at the
   goal first (its cell's seconds in the route, its spawns by the light there), and with :sky under that darkening of the sky (estimate-inputs): hp the expected damage and lethal-hp,
   the death the spawns and known threats risk (cost/death-chance) in hp (cost/lethal-hp), walk-hp the
   same leaving out the sensed mobs that catch the walk, their hurt and their death share both (a fight with them prices
-  them); death-hp the remembered threats' hurt, hostile-hp what the catchers (keys catcher-keys) add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed dark); threats [{:mob :pos}] the known threats priced."
+  them); death-hp the remembered threats' hurt, hostile-hp what the catchers add to it, all met in one route-parts; dark-s the seconds walked where a mob could spawn (caves-free?: no unseen cell guessed dark); threats [{:mob :pos}] the known threats priced."
   [c goal & [opts]]
   (estimate-of c (estimate-inputs c goal opts)))
 
@@ -417,7 +417,7 @@
   while its walk's hurt (hp less the death's share) is within what the call's worth (ctx/worth) buys at the health it walks at
   (price/allowed-hp) and its seconds, the death's price among them, within the worth (bought?). Later :risky, with both prices, while an affordable wait is cheaper than walking now, rechecked
   every recheck-ms; ok :acceptable while walking now is affordable; ok :cheaper-than-staying while it costs no more hp than
-  staying put (both with :catchers, the keys of the hostiles that catch the walk); later :risky while only a wait is affordable; never :stranded when staying costs and the body cannot heal
+  staying put; later :risky while only a wait is affordable; never :stranded when staying costs and the body cannot heal
   (seal in or go to a nearer refuge), else never :risky. Ok :unplanned with no plan: go-to's round
   prices its plan before it walks a step of it (jobs.movement.go-to.reprice)."
   ([c goal] (let [kept (planned c)] (status c (or (:goal kept) goal) kept)))
@@ -445,8 +445,8 @@
                                   :risk hurt-hp :allowed allowed :now-s now-s :wait (:wait w) :wait-s s :recheck-after-ms recheck-ms))]
        (cond
          (and best (< (+ (:s best) (:rest-s best 0)) (+ now-s (night-rest-s c goal plan in now-s 0)))) (wait best)
-         now? (contract/ok :acceptable (str "route risk " (price/round1 hurt-hp) " hp hurt, within " (price/round1 allowed) ", " (price/round1 now-s) " s with its death") :catchers (:catcher-keys est))
-         (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)") :catchers (:catcher-keys est))
+         now? (contract/ok :acceptable (str "route risk " (price/round1 hurt-hp) " hp hurt, within " (price/round1 allowed) ", " (price/round1 now-s) " s with its death"))
+         (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
          best (wait best)
          (and (pos? (:hp stay)) (:cannot-heal? stay-in)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hurt-hp :allowed allowed :stay-hp (:hp stay))
          :else (contract/never :risky (str over "; no wait makes it affordable") :risk hurt-hp :allowed allowed))))))

@@ -7,7 +7,9 @@
             [engine.events :as events]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.fake :as fake]
             [engine.test-util :as tu]
+            [jobs.lib.walk.drive :as drive]
             [jobs.lib.look :as look]
             [jobs.lib.walk-risk :as walk-risk]
             [jobs.lib.ready :as ready]
@@ -56,6 +58,23 @@
             "a side still unseen from close by is remembered, so no walk is offered for it again")
         (is (= [0 [0 64 0] nil [:completed] [[8 64 0]] nil] (await (walk-look nil 0)))
             "a walk the worth does not buy is not walked, and the side is not remembered as looked at from close by")))))
+
+(deftest a-zombie-seen-on-the-walk-back-whose-fight-the-worth-affords-does-not-stop-the-walk
+  ;; 3e2a404c7 handed the walk back on sight of it: walk-look ended :no-way-back short of where it began
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [follow! drive/follow!
+              added (atom false)]
+          (set! drive/follow! (fn [c plan opts]
+                                (when (and (not @added) (>= (.-x (.-pos (.self (:primitives c)))) 6))
+                                  (reset! added true)
+                                  (fake/add-entity! (:primitives c) {:id 7 :name "zombie" :kind "hostile" :pos {:x 2.5 :y 64 :z 0.5}}))
+                                (follow! c plan opts)))
+          (try
+            (is (= [6 [0 64 0] nil [:completed] nil [{:x 6 :y 64 :z 0}]] (await (walk-look 2 tu/order-worth))))
+            (is @added "the zombie came into sight on the walk back")
+            (finally (set! drive/follow! follow!))))))))
 
 (deftest a-leg-whose-walk-ends-short-of-its-stand-looked-from-nowhere-and-is-declined-not-looked-at
   (async done

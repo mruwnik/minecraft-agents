@@ -11,7 +11,6 @@
             [jobs.lib.goal :as goal]
             [jobs.lib.price :as price]
             [jobs.lib.spawn-light :as spawn-light]
-            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as wwalk]
             [jobs.lib.walk-risk :as risk]))
@@ -56,29 +55,19 @@
         (-> plan (assoc :steps steps :status "partial" :cut-rest (vec (take wwalk/look-ahead-steps more))) (dissoc :frontier-taken))
         plan))))
 
-(defn turn-away
-  "The :later :risky a called child's walk (ctx/returns-on-later?) ends on when status s, ok, prices a fight with a
-  hostile of keys `new`, seen since the walk began, that catches the rest of the walk (s's :catchers): the walk got dearer
-  than its caller chose it at, so the caller chooses again with what the body knows now. Else nil."
-  [c s new]
-  (when (and (ctx/returns-on-later? c) (some new (:catchers (nth s 2))))
-    (contract/later :risky (str "a hostile seen mid-walk catches the rest of it (" (nth s 1) "): handed back to choose again")
-                    :repriced true)))
-
 (defn check
   "near/walk-round!'s :stair-check: check's why, else status of the round's first plan, of every re-plan once a plan
   passed by safe-prefix, and of a re-plan that knows of a
   hostile near the way to pos not known before (at the first plan or a re-plan that passed) or of a blow by a mob not felt
   before (danger/hit-ids: one at the heels, whose hits a walk that does not get away keeps taking), read anew (check-cache/fresh):
-  {:risk s} when s is :later or :never, or is ok but a called child's walk turns away from a newly seen hostile (turn-away),
-  the plan kept (risk/note-plan!) for the start check to hold the call on, unless
+  {:risk s} when s is :later or :never, the plan kept (risk/note-plan!) for the start check to hold the call on, unless
   the plan stops short of pos with a safe-prefix, then {:cut prefix} (walked in its place) when that is not the plan, or
   {:searching true} for a plan to where a search that has not ended has got to, whose rest is priced unseen: the search
   goes on rather than hold (a :refresh re-plan keeps its old plan whatever the check says, so a failed hostile is asked
   again). Other re-plans read only the hostile list. None under a caller's :checks :safe?, which replaces go-to's."
   [c pos check]
   (let [p (:primitives c)
-        ids #(into #{} (map threats/mob-key) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
+        ids #(into #{} (map (fn [e] (.-id e))) (danger/hostiles-near-way p pos (settings/get price/settings ::price/way-radius) {}))
         known (atom (ids))
         felt (atom #{})
         prefixed (atom false)
@@ -88,14 +77,11 @@
       (or (when check (check plan first?))
           (when own?
             (let [now (ids)
-                  hit (danger/hit-ids (ctx/view c))
-                  seen (set (remove @known now))]
-              (when (or first? @prefixed (seq seen) (seq (remove @felt hit)))
+                  hit (danger/hit-ids (ctx/view c))]
+              (when (or first? @prefixed (seq (remove @known now)) (seq (remove @felt hit)))
                 (let [c' (cond-> c (not first?) check-cache/fresh)
-                      s (status c' pos plan)
-                      away (when (and (not first?) (= :ok (first s))) (turn-away c s seen))]
+                      s (status c' pos plan)]
                   (cond
-                    away (do (risk/note-plan! c pos plan) {:risk away})
                     (not (#{:later :never} (first s))) (do (swap! known into now)
                                                            (swap! felt into hit)
                                                            nil)

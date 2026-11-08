@@ -428,22 +428,16 @@
         s (reprice/status c {:x 30 :y 64 :z 0} (plan-of straight-cells))]
     (is (= :ok (first s)) (str "a lone zombie by the way at full health: the walk's price is within what it buys, " (pr-str s)))))
 
-(deftest a-called-walk-hands-back-when-a-hostile-seen-mid-walk-catches-the-rest-of-it-a-root-walk-goes-on
-  ;; old code let the affordable fight on: the walk ran on to the zombie and its caller never chose again
-  (let [c (assoc (finite-worth (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5} :health 20 :food 20}})) :update-mem (fn [_ _]))
+(deftest a-called-walk-goes-on-past-a-hostile-seen-mid-walk-while-the-fight-is-affordable
+  ;; 3e2a404c7 handed a called walk back on any newly seen hostile that catches it, the fight affordable or not
+  ;; (a fight the worth does not buy is handed back: a-round-s-first-plan-and-a-hostile-seen-mid-walk-ask-go-to-s-check-for-the-rest-of-it)
+  (let [c (assoc (finite-worth (ready-test/ctx-of {:time st/noon :self {:pos {:x 0.5 :y 64 :z 0.5} :health 20 :food 20}})) :slots [:walk] :update-mem (fn [_ _]))
         goal {:x 30 :y 64 :z 0}
         plan (plan-of straight-cells)
-        child (reprice/check (assoc c :slots [:walk]) goal nil)
-        root (reprice/check c goal nil)]
+        child (reprice/check c goal nil)]
     (is (nil? (child plan true)))
-    (is (nil? (root plan true)))
-    (fake/add-entity! (:primitives c) {:id 6 :name "zombie" :kind "hostile" :pos {:x -9.5 :y 64 :z 0.5}})
-    (is (nil? (child plan false)) "a zombie the walk leaves behind does not catch it")
     (fake/add-entity! (:primitives c) {:id 7 :name "zombie" :kind "hostile" :pos {:x 9.5 :y 64 :z 0.5}})
-    (is (= :ok (first (reprice/status c goal plan))) "the fight with the one ahead is affordable")
-    (is (= [:later :risky true] ((juxt first #(:reason (nth % 2)) #(:repriced (nth % 2))) (:risk (child plan false))))
-        "the walk got dearer than its caller chose it at: handed back to choose again")
-    (is (nil? (root plan false)) "a root walk has nothing else to choose: it walks on")))
+    (is (nil? (child plan false)) "the fight with the zombie ahead is within the worth: the walk goes on")))
 
 (deftest a-blow-mid-walk-asks-go-to-s-check-again-for-a-hostile-known-at-the-first-plan
   ;; old code re-asked only for a hostile newly near the way: an exclusive walk replanned in place under a drowned's blows
