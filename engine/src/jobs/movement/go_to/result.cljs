@@ -123,7 +123,7 @@
   "The give-up reason in words, for the :text of the result: no map dumps."
   [pos {:keys [blocks why kind detail escalation shut-in blocked-by nearest-hostile nearest-hostile-at sent-backs jumps mob mob-distance explored walks torches waypoint-why hp-cost hp-budget low-passage dip rise route straight in-water goal-left damage-refused p-absent turn-back-s worth-s extra-s]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
-       (if (and escalation (not (#{:way-dives :detour} why)))
+       (if (and escalation (not (#{:way-dives :detour :one-way} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation) (blocked-words blocked-by))
          (case why
            :abilities (str (if shut-in "the body is shut in and " "it ") (or (kind-words kind) (str "needs a " (some-> kind name) " move the body cannot make")))
@@ -154,7 +154,7 @@
                      "the search used up its node budget without reaching the goal, mostly over land the body has not seen (the unknown-max-nodes setting): walk nearer in stages to see more of it")
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"
-           :one-way "the way back is one-way"
+           :one-way "the only way on is a drop the body will not take back (one-way)"
            :way-dives (str "the goal is " rise " blocks above and the only way found dives more than " dip " blocks below where the walk began under ground: "
                            (if escalation
                              (str "its own stair up failed (" (escalation-words escalation) "); cut one from another spot")

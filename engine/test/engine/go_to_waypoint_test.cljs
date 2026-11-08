@@ -1,6 +1,7 @@
 (ns engine.go-to-waypoint-test
   "go-to's waypoints toward a far column whose ground is only guessed (jobs.movement.go-to.column/waypoint)."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.string :as str]
             [engine.go-to-column-test :refer [slope stub-ctx]]
             [engine.go-to-support :refer [hiding]]
             [engine.fake :as fake]
@@ -59,6 +60,7 @@
               edge-looks (filter #(and (= :replan (:kind %)) (<= 20 (first (:at %)))) @seen)]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (keyword? (:why @out)) (pr-str @out))
+          (is (str/includes? (str (:text @out)) "a drop the body will not take back") "the words name the drop, not a shut-in")
           (is (< ticks 30) "the call ends")
           (is (seq edge-looks) "the waypoints led to the gap's edge, where the walk looked down it")
           ;; the walks: one to the edge, a walk per way-look, the re-aim, the column looks, the blocked tries
