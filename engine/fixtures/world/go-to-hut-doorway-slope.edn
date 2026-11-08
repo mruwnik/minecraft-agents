@@ -18,10 +18,8 @@
    :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [13 3 24] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
    :after [[:body-near [13.5 3 24.5] 2] [:block [12 1 17] "air"] [:block [15 1 17] "stone"] [:block [14 0 19] "stone"]]}
-;; A surface scene: sky plot, a one-block roof with no skylight, and a 3x3 clearing cut in the slope in front of the doorway, lit by the sky and seen through
-;; the doorway from where the body starts (in line with it). That remembered ground is at the feet's level, a few blocks off: the stair up to the sky is cheap, so
-;; the search does not end :price. Should-succeed: found; the roof and walls stay whole, so it left by the doorway.
-;; Old code (before 24e480e8f) counted only stands above the feet: the clearing floor is level with them, so the stair cost the underground prior and the search ended :price.
+;; A surface hut: sky plot, a one-block roof with no skylight, and a lit clearing at the door seen through the doorway. The search finds the cow and leaves
+;; the roof and walls whole (the regression from card 980f23ee). The rise from remembered ground is pinned by the surface_up unit test.
   {:name "search-starting-in-the-hut-finds-a-cow-outside"
    :plot {:light :sky :height 8}
    :blocks [[:fill [12 0 20] [14 2 22] "air"]]
