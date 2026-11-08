@@ -1,5 +1,6 @@
 ;; Rounds migration of leave-vehicle (card 8aa49e24): one run each, never :continue.
 ;; Card 94c0f053: darkness of the body's own cell holds nothing aboard: leave-vehicle binds no exposure check.
+;; Card c3cc1fd8: the :mounted reflex (no job listed) gets the body off a boat in a pond with no job submitted.
 ;; Should-succeed: leave-vehicle gets off a boat on land (completed, landed :dry), twice (boat, minecart), and on an unlit plot.
 {:defaults
  {:tags [:survival :leave-vehicle] :time :any
@@ -25,4 +26,14 @@
          [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,$BOX,limit=1]"]
          [:job (jobs.movement.leave-vehicle {:worth 1200})]]
    :expect [{:event {:source :job :kind :completed :data {:landed :dry}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :waiting} :for-s 40 :until {:source :job :kind :completed :data {:landed :dry}} :of-job true}]}]}
+            {:no-event {:source :job :kind :waiting} :for-s 40 :until {:source :job :kind :completed :data {:landed :dry}} :of-job true}]}
+  {:name "mounted-reflex-gets-the-body-off-a-boat-beside-land"
+   :register [{:trigger :mounted}]
+   :blocks [[:fill [9 0 14] [13 0 18] "stone"] [:fill [10 0 15] [12 0 17] "water"]]
+   :body {:at [11.5 0 16.5]}
+   :act [[:summon "oak_boat" [11.5 0 16.5] "{}"]
+         [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,$BOX,limit=1]"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :mounted}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :mounted} :data {:outcome :done}} :within-s 60}
+            {:no-event {:source :job :kind :stopped :data {:reason :dismount-failed}} :for-s 60 :until {:source :reflex :kind :ended :context {:reflex-id :mounted}}}]
+   :limit-s 90}]}
