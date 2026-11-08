@@ -1143,9 +1143,10 @@
 
 (deftest a-body-shut-in-on-a-plateau-far-from-a-sealed-pocket-gets-off-at-the-edge-nearest-it
   ;; world case go-to-far-enclosed-goal: a plateau 6 high on a stone mass, the pocket 70 across and 9 down too far for one
-  ;; dig route; no stair, pillar or wall leads off the top, and it gets there without a tour round the top (the old
-  ;; approaches round it, each no nearer, gave up after 3); the far search from the top outgrows the heap (stubbed:
-  ;; test-util turns the real check off) and goes on across rounds as one search. Whether it digs from the plain: card 870a079a
+  ;; dig route; no stair, pillar or wall leads off the top: its dig legs are dearer than the walk to the edge nearest the
+  ;; pocket, so it walks there (each step nearer: the old approaches round the top, each no nearer, gave up after 3), gets
+  ;; down and digs the short way from the plain; the far search from the top outgrows the heap (stubbed: test-util turns
+  ;; the real check off) and goes on across rounds as one search
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1164,7 +1165,9 @@
                                         (finally (set! dig-route/heap-full? (constantly false))
                                                  (set! dig-route/search search)))]
           (is (true? (:arrived out)) (pr-str (select-keys out [:why :text :escalation]) (map (juxt :step :at) (filter #(= :go-to.escalated (:kind %)) seen))))
-          (is (<= (count (filter #(and (= :approach (:step %)) (= 61 (second (:at %)))) (filter #(= :go-to.escalated (:kind %)) seen))) 2) "no tour round the top")
+          (let [tops (map #(u/dist (zipmap [:x :y :z] (:at %)) {:x 80 :y 51 :z 56}) (filter #(and (= :go-to.escalated (:kind %)) (= :approach (:step %)) (= 61 (second (:at %)))) seen))]
+            (is (every? true? (map > tops (rest tops))) (str "no tour round the top: each look over its seen edge starts nearer the pocket " (pr-str tops))))
+          (is (some #(and (= :dig-route (:step %)) (< (second (:at %)) 61)) (filter #(= :go-to.escalated (:kind %)) seen)) "the short dig is taken from the plain, not the top")
           (is (= [80 51 56] (mapv js/Math.floor ((juxt :x :y :z) (u/pos-of (.-pos (.self p))))))))))))
 
 (deftest a-dig-route-over-guessed-rock-is-tried-from-the-top-when-its-search-can-end
