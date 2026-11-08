@@ -5,7 +5,7 @@
   apart, in seconds, by its chance, so low health weighs through the death chance. hp-cost: the price of losing some hp; risk-s: a walk's risk in seconds.
   gain-worth: hp gained at hp-seconds each and the death they avert (Q140).
   damage-budget: the hp a walk may spend on certain damage (drops over 3 blocks, plants that hurt on touch): the health
-  and absorption over the floor (:min-health, default 12) less a margin of 1, at most :max-damage; 0 while burning, poisoned or withered,
+  and absorption over the floor (:min-health, default 12) less a margin of 1, never more than survivable-budget, at most :max-damage; 0 while burning, poisoned or withered,
   or with a health or absorption that is not a number.
   survivable-budget: the hp a walk that must arrive may spend: all but 1 (the margin dropped), still under
   a caller's :max-damage, and just the damage-budget when the caller set a :min-health (a floor that is never crossed)."
@@ -104,7 +104,8 @@
   [{:keys [health absorption effects on-fire]} {:keys [min-health max-damage]}]
   (if (or on-fire (some ticking-effects effects) (not (js/isFinite health)) (not (js/isFinite (or absorption 0))))
     0
-    (min (max 0 (- (+ health (or absorption 0)) (or min-health (default-min-health)) (margin)))
+    ;; a floor and margin of 0 would budget a lethal fall, deeper than the planner's maxDrop (survivable-budget's)
+    (min (max 0 (- (+ health (or absorption 0)) (max 1 (+ (or min-health (default-min-health)) (margin)))))
          (or max-damage js/Infinity))))
 
 (defn survivable-budget

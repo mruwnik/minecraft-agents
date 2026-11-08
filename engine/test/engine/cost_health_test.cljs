@@ -29,6 +29,10 @@
     {:health 20 :food 20 :effects ["poison"]} {} 0
     {:health 20 :food 20 :effects ["speed"]} {} 7))
 
+(deftest the-budget-never-passes-the-survivable-budget
+  (settings/with-settings {:jobs.lib.cost.health/margin 0}
+    #(is (= 9 (health/damage-budget {:health 10} {:min-health 0}) (health/survivable-budget {:health 10} {})))))
+
 (deftest an-unknown-health-leaves-no-budget
   (are [body] (= 0 (health/damage-budget body {}))
     {:health js/NaN :food 20}

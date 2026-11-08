@@ -97,6 +97,12 @@
     (is (false? (stranded? 0 [0 13 0] {:reason :budget})))
     (is (false? (stranded? 0 [0 -5 0] ex)) "a goal above is no stair down")))
 
+(deftest a-goal-deeper-than-the-planners-max-drop-is-stranded-whatever-the-floor
+  (settings/with-settings {:jobs.lib.cost.health/margin 0}
+    #(let [c {:primitives (tu/fake {:self {:health 10 :food 20}}) :args {:min-health 0}}]
+       (is (= 12 (:max-drop (wworld/body-policy c))) "the planner searches no fall past 12 at 10 hp")
+       (is (true? (choose/drop-stranded? c [0 13 0] {:x 6 :y 0 :z 0} {:reason :exhausted})) "a 13 fall it never searched"))))
+
 (deftest escape-enclosed-counts-doors-as-walls-under-doors-never
   (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
         p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))]
