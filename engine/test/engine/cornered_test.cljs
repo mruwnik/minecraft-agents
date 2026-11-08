@@ -1450,7 +1450,7 @@
               {:keys [eng]} (setup {:self {:pos [0.5 64 0.5]} :blocks hard-sided-dead-end :inventory [{:name "dirt" :count 16}]
                                     :entities [(assoc (creeper 8.5 64 0.5) :visible true)]}
                                    (assoc fj/jobs 'test.hold-prices (hold-pricer out [[0 0] [(quot hide 2) (/ hide 2)] [hide hide] [1000 (* 1000 hide)]] false)))]
-          (core/submit! eng '(test.hold-prices) {})
+          (core/submit! eng (tu/order '(test.hold-prices)) {})
           (await (core/tick! eng))
           (let [[fresh half one long] @out]
             (is (and (some? (:stand fresh)) (= (:stand fresh) (:stand half))) (str "within one hide nothing changed: " (pr-str (map :stand @out))))

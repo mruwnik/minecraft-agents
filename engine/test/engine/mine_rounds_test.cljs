@@ -145,7 +145,7 @@
       (fn ^:async t []
         (let [s (m/start-lit (m/torch-world coal-stick) [0 0] {:call-ms 1000})]
           (.override (.-world (:p s)) "craft" (fn [_ _ _] (js/Promise.resolve #js {:status "failed" :made 0 :reason "server rejected the craft"})))
-          (core/submit! (:eng s) (tu/at-own-worth (:eng s) (m/spec (assoc torch-tunnel :spend {:job-time 120}))) {})
+          (core/submit! (:eng s) (tu/order (m/spec (assoc torch-tunnel :spend {:job-time 120}))) {})
           (await (m/run-ticks s 60))
           (is (m/finished? s))
           (is (= :no-torches (:reason (m/done-event s))) "a server that keeps refusing the craft is stuck: the retries stop paying and the dig ends :no-torches")
