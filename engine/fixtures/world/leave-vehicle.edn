@@ -36,4 +36,5 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :mounted}} :within-s 30}
             {:event {:source :reflex :kind :ended :context {:reflex-id :mounted} :data {:outcome :done}} :within-s 60}
             {:no-event {:source :job :kind :stopped :data {:reason :dismount-failed}} :for-s 60 :until {:source :reflex :kind :ended :context {:reflex-id :mounted}}}]
+   :after [[:body-far [11.5 0 16.5] 2.0]]
    :limit-s 90}]}
