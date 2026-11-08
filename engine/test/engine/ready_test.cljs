@@ -121,7 +121,11 @@
     (game/select! p)
     (assoc c :primitives p)))
 
-(def hour-s "An hour's stay, a night-long dig's: the dark there, or the job's own seconds, cost more than a hand order is worth." 3600)
+(def hour-s "A scene number, not a stay a job quotes: stays this long in the open dark cost more than a hand order is worth." 3600)
+
+(def dig-night-s "A stay of about a night's length (600 s), the longest a dig quotes." 600)
+
+(def small-worth "A call worth a little over a night's dig: it affords the stay beside a zombie, not the stay and the fight." 800)
 
 (defn long-stay "ctx c staying a long job's measured run there (risk/work-s :long)." [c] (assoc c ::price/stay-s (risk/work-s :long)))
 
@@ -548,25 +552,46 @@
     {:entities (pack skeleton)} {:ranged-radius 5} :ok))
 
 (deftest threatened-prices-a-seen-mob-at-the-jobs-own-stay-and-the-cheapest-answer
-  ;; Would fail on old code: it priced the zombie as left alone over the stay (stand-loss, a near sure death over an hour),
-  ;; not go-to's price of staying beside it with the fight's own seconds (Q142) and the spawns met there.
-  (let [c (with-entry (merge at-origin {:entities [zombie] :inventory sword}) {})
+  ;; Would fail on old code: it priced the zombie as left alone over the stay (stand-loss, a near sure death over the
+  ;; stay), not go-to's price of staying beside it with the fight's own seconds (Q142) and the spawns met there.
+  (let [c (-> (with-entry (merge at-origin {:entities [zombie]}) {}) (assoc :worth (constantly small-worth)))
         at (fn [c stay] (assoc c ::price/stay-s stay))
         verdict (fn [stay] (let [s (ready/threatened (at c stay))] [(first s) (:reason (nth s 2))]))
         cost (fn [c stay] (ready/hostile-cost (at c stay) (danger/hostile-dangers (:primitives c) (ctx/view c) {:ignore-heard? true})))
         in (fn [c stay] (assoc (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs stay))
         go-to-stay (fn [c stay] (walk-risk/risk-s c (walk-risk/stay-estimate c (in c stay))))
+        armed (with-entry (merge at-origin {:entities [zombie] :inventory sword}) {})
         night (with-entry (merge open-night {:entities [zombie] :inventory sword}) {})]
-    (is (= [:ok :seen-priced] (verdict (risk/work-s :click))) "a click beside a zombie, sword in hand: the fight is within a hand order's worth")
-    (is (= [:later :hostile-near] (verdict hour-s)) "the same zombie and worth, the job staying an hour: its own seconds tip it")
-    (is (< (* 3 (:danger (cost c hour-s))) (ctx/worth c)) "premise: the danger alone is well within the worth")
-    (is (< 1 (:fight-s (walk-risk/stay-estimate c (in c (risk/work-s :click))))) "the fight's own seconds are in the price")
-    (doseq [stay [(risk/work-s :click) hour-s]]
-      (is (= [:answered (go-to-stay c stay)] ((juxt :answer :danger) (cost c stay))) (str stay " s by day: go-to's price of staying beside it")))
+    (is (= [:ok :seen-priced] (verdict (risk/work-s :click))) "a click beside a zombie, bare-handed: well within the worth")
+    (is (= [:ok :seen-priced] (verdict (risk/work-s :long))) "a long run: still within it")
+    (is (= [:later :hostile-near] (verdict dig-night-s)) "the same zombie and worth, a night's dig: its own seconds tip it")
+    (is (< (* 1.5 (:danger (cost c dig-night-s))) (- small-worth 0) ) "premise: the danger alone is well within the worth")
+    (is (< dig-night-s small-worth (+ dig-night-s (:danger (cost c dig-night-s)))) "premise: the stay alone fits, the sum does not")
+    (is (< 1 (:fight-s (walk-risk/stay-estimate armed (in armed (risk/work-s :click))))) "the fight's own seconds are in the price")
+    (doseq [stay [(risk/work-s :click) dig-night-s]]
+      (is (= [:answered (go-to-stay armed stay)] ((juxt :answer :danger) (cost armed stay))) (str stay " s by day: go-to's price of staying beside it")))
     (lit 0 15 (fn []
-                (is (pos? (:hp (walk-risk/stay-estimate night (assoc (in night hour-s) :live [])))) "premise: mobs spawn there by night")
-                (doseq [stay [(risk/work-s :click) hour-s]]
+                (is (pos? (:hp (walk-risk/stay-estimate night (assoc (in night dig-night-s) :live [])))) "premise: mobs spawn there by night")
+                (doseq [stay [(risk/work-s :click) dig-night-s]]
                   (is (= [:answered (go-to-stay night stay)] ((juxt :answer :danger) (cost night stay))) (str stay " s by night: go-to's price, its spawns too")))))))
+
+(deftest hostile-cost-prices-the-mobs-it-is-given-not-every-mob-sensed
+  ;; Would fail on 3a7851aaa: :answered read every known threat (stay-inputs), so both calls priced both zombies.
+  (let [far (assoc zombie :id 8 :pos {:x -3 :y 64 :z 0})
+        c (assoc (with-entry (merge at-origin {:entities [zombie far] :inventory sword}) {}) ::price/stay-s (risk/work-s :click))
+        hs (vec (danger/hostile-dangers (:primitives c) (ctx/view c) {:ignore-heard? true}))
+        price (fn [hs] (:danger (ready/hostile-cost c hs)))]
+    (is (= 2 (count hs)) "premise: both zombies are dangers")
+    (is (= :answered (:answer (ready/hostile-cost c hs))) "premise: the answer is the priced one")
+    (is (< 0 (price (subvec hs 0 1)) (price hs)) "two zombies cost more than the one handed in")))
+
+(deftest a-walk-past-a-mob-owes-the-fights-seconds-go-to-prices-too
+  ;; Would fail on 3a7851aaa: estimate-of left :fight-s out, so risk-s priced a walk past a zombie without the fight's time.
+  (let [c (with-entry (merge at-origin {:entities [zombie] :inventory sword}) {})
+        est (walk-risk/estimate c {:x 30 :y 64 :z 0})]
+    (is (pos? (:hostiles est)) "premise: the zombie catches the walk")
+    (is (< 1 (:fight-s est)) "the fight's seconds are in the estimate")
+    (is (< (walk-risk/risk-s c (assoc est :fight-s 0)) (walk-risk/risk-s c est)) "and in the walk gate's price")))
 
 (deftest threatened-keeps-the-triggers-visible-only-option
   (let [far (assoc zombie :pos {:x 5 :y 64 :z 0})

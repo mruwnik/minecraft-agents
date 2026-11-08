@@ -30,6 +30,7 @@
             [jobs.lib.spawn-light :as spawn-light]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
+            [jobs.lib.threats :as threats]
             [jobs.lib.walk-risk :as walk-risk]))
 
 (a/defargs settings
@@ -412,16 +413,23 @@
   (let [p (:primitives c)]
     (remove danger/seen-only? (danger/hostile-dangers p (ctx/view c) (trigger-args c) {:sight-at (danger/sight-lookup p)}))))
 
+(defn only-mobs
+  "stay-inputs `in` with its :live threats (and their :weights) only those of the entities hs."
+  [in hs]
+  (let [ks (set (map threats/mob-key hs))
+        kept (filterv (fn [[t _]] (contains? ks (:key t))) (map vector (:live in) (:weights in)))]
+    (assoc in :live (mapv first kept) :weights (mapv second kept))))
+
 (defn hostile-cost
   "{:cost s :answer k :danger s} of going on beside hostiles hs over c's stay (price/stay-s, the job's own quoted seconds
   there): the stay and the cheaper of doing nothing about them (hostile-loss/loss-over, :stand) and answering each one
-  that comes (:answered), each with the spawns met there: go-to's price of that stay (walk-risk/stay-estimate, its
+  that comes (:answered), both pricing the mobs hs alone, each with the spawns met there: go-to's price of that stay (walk-risk/stay-estimate, its
   :live [] for the spawns alone, at walk-risk/risk-s); all 0 with none."
   [c hs]
   (if (empty? hs)
     {:cost 0 :answer :stand :danger 0}
     (let [s (price/stay-s c)
-          in (assoc (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) :secs s)
+          in (-> (walk-risk/stay-inputs c (sh-sense/feet (:primitives c)) 0) (assoc :secs s) (only-mobs hs))
           price #(walk-risk/risk-s c (walk-risk/stay-estimate c %))
           answered (price in)
           stand (+ (price (assoc in :live [])) (hostile-loss/loss-over c (ctx/view c) hs s))

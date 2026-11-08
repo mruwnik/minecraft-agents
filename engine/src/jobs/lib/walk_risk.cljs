@@ -194,7 +194,7 @@
         unfought (if (seq catchers) (cost/lethal-hp (dies met-remembered)) lethal)]
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava)
      :walk-hp (+ spawn-hp death-hp unfought lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
-     :death-chance (:chance (dies met-all)) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
+     :death-chance (:chance (dies met-all)) :fight-s (or (:secs met-all) 0) :dark-s exposed-s :hostiles (count catchers) :threats (mapv #(select-keys % [:mob :pos]) (concat catchers remembered))}))
 
 (defn risk-s
   "Seconds the hp cost of a walk-risk estimate (its :hp and :lethal-hp, plus `extra-hurt` hp, default 0) costs c's body at
@@ -205,7 +205,7 @@
    (+ (cost/risk-s health (+ (- hp lethal-hp) extra-hurt) lethal-hp) fight-s)))
 
 (defn estimate
-  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
+  "{:hp :walk-hp :spawn-hp :hostile-hp :death-hp :lethal-hp :death-chance :fight-s :lava-hp :dark-s :hostiles :threats} of the walk of c's body to `goal` ({:x :y :z})
   on the way of :plan (go-to's plan of it, {:status :steps}; none: all of it unplanned), and with :back? back on the same way
   as one walk (a mob that noticed the body going still has it coming back), and with :stay-s standing that many seconds at the
   goal first (its cell's seconds in the route, its spawns by the light there), and with :sky under that darkening of the sky (estimate-inputs): hp the expected damage and lethal-hp,
