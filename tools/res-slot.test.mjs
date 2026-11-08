@@ -466,23 +466,29 @@ test('integration: light waiters get a freed slot oldest first', async () => {
   const holder = start('holder', `until [ -e ${release} ]; do sleep 0.02; done`)
   await until(() => fs.existsSync(out))
   const waiters = []
-  for (const tag of ['L1', 'L2', 'L3', 'L4']) { const w = start(tag, 'sleep 0.2'); await w.waiting; waiters.push(w) }
+  for (const tag of ['L1', 'L2', 'L3', 'L4', 'L5', 'L6']) { const w = start(tag, 'sleep 0.1'); await w.waiting; waiters.push(w) }
   fs.writeFileSync(release, '')
   await Promise.all([holder, ...waiters].map((x) => x.done))
-  assert.deepEqual(fs.readFileSync(out, 'utf8').trim().split('\n'), ['holder', 'L1', 'L2', 'L3', 'L4'])
+  assert.deepEqual(fs.readFileSync(out, 'utf8').trim().split('\n'), ['holder', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'])
   fs.rmSync(dir, { recursive: true, force: true })
 })
 
-test('waiting: a waiter reprints its TEST_EVENTS phase line every status interval, not only when the reason changes', async () => {
+test('waiting: a waiter reprints its TEST_EVENTS phase line every status interval, not only when the reason changes', { timeout: 30000 }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
   const cfg = path.join(dir, 'cfg.json')
   fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1 } } }))
-  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '2000', RES_SLOT_POLL_MS: '100', RES_SLOT_STATUS_MS: '400', TEST_EVENTS: '1' }
-  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env: plainEnv(env), stdio: 'ignore', detached: true })
+  const env = plainEnv({ RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '60000', RES_SLOT_POLL_MS: '50', RES_SLOT_STATUS_MS: '1', TEST_EVENTS: '1' })
+  const holder = spawn('node', [script, 't', '--', 'sleep', '30'], { cwd: os.tmpdir(), env, stdio: 'ignore', detached: true })
+  const waiter = spawn('node', [script, 't', '--', 'echo', 'ran'], { cwd: os.tmpdir(), env, stdio: ['ignore', 'pipe', 'ignore'], detached: true })
   try {
-    await new Promise((r) => setTimeout(r, 1000))
-    const phases = run(['t', '--', 'echo', 'ran'], env).stdout.split('\n').filter((l) => l.startsWith('@@test '))
-    assert.ok(phases.length >= 3, `${phases.length} phase lines in 2 s at a 0.4 s interval`)
-  } finally { process.kill(-holder.pid, 'SIGKILL') }
+    // counts lines instead of timing them: the reason never changes, so only the status interval can produce a third
+    let phases = 0
+    await new Promise((resolve) => {
+      let buf = ''
+      waiter.stdout.on('data', (d) => { buf += d; const lines = buf.split('\n'); buf = lines.pop(); phases += lines.filter((l) => l.startsWith('@@test ')).length; phases >= 3 && resolve() })
+      waiter.on('close', resolve)
+    })
+    assert.ok(phases >= 3, `${phases} phase lines`)
+  } finally { process.kill(-holder.pid, 'SIGKILL'); try { process.kill(-waiter.pid, 'SIGKILL') } catch {} }
   fs.rmSync(dir, { recursive: true, force: true })
 })

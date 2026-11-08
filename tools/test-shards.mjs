@@ -146,7 +146,8 @@ export const runInSlot = async (slotsNow, cmd, opts, onOut = () => {}, onWait = 
   const wait = heavyWaitFile('tests', process.pid, waitSeq++)
   const queued = queueFile('tests', process.pid, waitSeq++)
   if (heavy) fs.mkdirSync(path.dirname(wait), { recursive: true })
-  queueJoin(queued)
+  fs.mkdirSync(path.dirname(queued), { recursive: true }) // the run marker lives there
+  if (!heavy) queueJoin(queued) // a heavy waiter takes no turn, so its entry would only hold a light one back
   let lastWait = 0
   try {
     for (;;) {
