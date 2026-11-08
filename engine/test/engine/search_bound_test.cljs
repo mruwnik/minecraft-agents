@@ -72,6 +72,15 @@
       (is (js/isFinite (escape-way/stair-route-s p [0 64 0] stair)) "no filler carried: the fill is a fetch, not impossible")
       (is (js/isFinite (sb/fallback-s c [0 64 0] [0 70 0] (constantly true) {}))))))
 
+(deftest a-stair-ending-farther-from-the-goal-costs-more-for-the-same-steps
+  (let [c (ctx-at 0)
+        cost-of (fn [heading]
+                  (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair :heading heading :steps 8}))
+                                escape-way/price (fn ([_ _ _] 0) ([_ _ _ _] 0))
+                                risk/estimate (fn [& _] {:hp 0 :lethal-hp 0})]
+                    (sb/fallback-s c [0 64 0] [20 64 0] (constantly true) {})))]
+    (is (< (cost-of :east) (cost-of :west)) "the walk on is measured from where the stair ends (8 along east or west), not from the feet")))
+
 (deftest a-step-priced-unpassable-leaves-the-fallback-at-the-goals-worth
   (with-redefs [escape-way/choose (fn ([_ _ _ _] nil) ([_ _ _ _ _] {:step :stair}))
                 escape-way/price (fn ([_ _ _] ##Inf) ([_ _ _ _] ##Inf))
