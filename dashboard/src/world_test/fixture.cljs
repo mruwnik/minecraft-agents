@@ -1153,8 +1153,8 @@
                           (partition-all any-not-block-chunk)
                           (mapv #(str "execute " (str/join " " %)))))
     (:body-near :body-far) (str "data get entity " body " Pos")
-    :body-on (str "execute as " body " at @s if block ~ ~-0.5 ~ " (first args))
-    :body-not-in (str "execute as " body " at @s unless block ~ ~ ~ " (first args))
+    :body-on [(str "execute as " body " at @s if block ~ ~-0.5 ~ " (first args)) (str "execute if entity " body)]
+    :body-not-in [(str "execute as " body " at @s unless block ~ ~ ~ " (first args)) (str "execute if entity " body)]
     :item (str "execute if items entity " body " container.* " (first args))
     :entities (str "execute if entity " (entities-selector origin args))
     nil))
@@ -1173,7 +1173,9 @@
 
 (defn join-after-replies
   "The single reply of a check from its commands' replies. An :any-not-block cell set differs when any chunk's test failed; a
-  chained `execute if` that fails before its last condition prints nothing, so a blank reply counts as failed. An \"air\"
+  chained `execute if` that fails before its last condition prints nothing, so a blank reply counts as failed; a :body-on /
+  :body-not-in test is forked per body, so a failed test is blank too and a second, unforked `execute if entity` tells a
+  failed test from a missing body. An \"air\"
   check (air, light) is met when either block is there."
   [[op _ block] replies]
   (cond
@@ -1181,6 +1183,11 @@
     (if (some #(str/blank? %) replies) "Test failed" (or (first (filter #(str/includes? % "Test failed") replies)) (last replies)))
     (and (#{:block :not-block} op) (= "air" block))
     (or (first (filter #(str/includes? % "Test passed") replies)) (last replies))
+    (#{:body-on :body-not-in} op)
+    (let [[test present] replies]
+      (cond (not (str/includes? present "Test passed")) "body missing"
+            (str/blank? test) "Test failed"
+            :else test))
     :else (last replies)))
 
 (defn entity-probe-command
@@ -1293,6 +1300,7 @@
         result (case op
                  (:block :not-block :any-not-block :body-on :body-not-in :item :entities)
                  (cond
+                   (and (#{:body-on :body-not-in} op) (= "body missing" reply)) [false "body missing: the body is not online"]
                    (nil? n) [false (str "unrecognised reply: " reply)]
                    (#{:block :body-on :body-not-in} op) [(pos? n) reply]
                    (#{:not-block :any-not-block} op) [(zero? n) reply]

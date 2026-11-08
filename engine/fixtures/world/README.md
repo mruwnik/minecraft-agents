@@ -79,7 +79,7 @@ starts with one); on a `:no-event` it scopes the `:until` event too. Patterns ar
 members, `[:> n] [:>= n] [:< n] [:<= n]` numbers, `[:near p r]` a position within r, `[:contains "s"]` a substring, `[:has p]` a list with one element matching p,
 `[:not p]`, `[:any]` anything present; a vector of patterns matches a sequence of that length; else equality.
 
-After checks: `[:block p "block[state]"]` and `[:not-block p "block"]` (`execute if block`), `[:body-near p r]` and `[:body-far p r]` (body within / at least r blocks from p), `[:body-on "block"]` (block under the feet) and `[:body-not-in "block"]` (feet cell is not that block),
+After checks: `[:block p "block[state]"]` and `[:not-block p "block"]` (`execute if block`), `[:body-near p r]` and `[:body-far p r]` (body within / at least r blocks from p), `[:body-on "block"]` (block under the feet) and `[:body-not-in "block"]` (feet cell is not that block; evidence says "body missing" when the body is offline),
 `[:item "name" n-or-[:>= n]]` (count in the body's inventory), `[:memory pattern]` and `[:file "path" pattern]` (the body's `engine/memory.edn` / a file under its directory, read as EDN, must match the pattern), `[:entities "selector args" [a b] n-or-[:>= n]]`
 (entities in the box a..b, e.g. `"type=cow,tag=wt"`).
 
