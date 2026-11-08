@@ -645,7 +645,7 @@
         ;; a route dearer than worth-s is none: no search goes on past it
         max-s (fn [refused] (min (or (:bound-s route-opts) ##Inf) (or worth-s ##Inf) (* (straight-s refused) (+ 1 1e-9))))
         allowed? (memoize #(escape/diggable? block-at may-dig? %))
-        seed (dig-route/lane from goal (merge prices route-opts) #(when-let [n (seen-floor %)] (not (dig-route/open? n))))
+        seed (dig-route/lane from goal (merge prices route-opts) #(when-let [n (seen-floor %)] (not (dig-route/open? n))) #(when-let [n (block-at %)] (nil? (dig-route/cell-cost n))))
         opts (fn [refused m spent lazy?] (merge prices
                                   ;; the straight dig is a route in hand: past answer-s with none cheaper the search ends :dearer and it answers
                                   {:max-s m :back-h? true :floor-absent-s floor-absent-s :searched-s spent :held-s (let [st (straight-s refused)] (when (< st ##Inf) st))}

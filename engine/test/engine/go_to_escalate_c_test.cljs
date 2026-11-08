@@ -1482,6 +1482,16 @@
            (is (= {:step :searching} (first legs)))
            (is (= :dig-route (:step (first (remove #{{:step :searching}} legs)))) (pr-str (last legs))))))))
 
+;; a slab 21 wide across the line: the box of the leg's own length round its ends is cut off by it, a wider one reaches round
+(deftest a-dig-leg-widens-its-box-round-a-slab-wider-than-its-length
+  (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") (box 4 50 -10 5 80 10 "bedrock")) :inventory [{:name "stone_pickaxe" :count 1}]})
+        c {:primitives p :args {} :slots [] :view (fn [] {:now 0 :data {}}) :worth (constantly tu/order-worth)}
+        leg #(choose/dig-leg c [3 64 0] [10 64 0] (constantly true) {:own? (constantly false) :skip (constantly false) :slice (choose/route-slice "leg-round-wide-slab")})]
+    (with-redefs [ctx/mem (constantly {}) ctx/left (constantly {})]
+      (let [e (first (remove #{{:step :searching}} (take 300 (repeatedly leg))))]
+        (is (= :dig-route (:step e)) (pr-str e))
+        (is (some #(< 10 (js/Math.abs (nth (:cell %) 2))) (:cells e)) "it digs round the slab's end")))))
+
 ;; a goal sealed in bedrock: the back search from it ends at its shell, inside the box, so no wider box is searched
 (deftest a-dig-leg-to-a-goal-sealed-in-bedrock-ends-with-no-leg
   (let [p (tu/fake {:blocks (merge (box -2 50 -14 14 80 14 "stone") (box 9 63 -1 11 66 1 "bedrock") {"10,64,0" "air" "10,65,0" "air"})
