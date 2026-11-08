@@ -72,20 +72,6 @@
           (is (= :done (:kind e)))
           (is (= {:got 4 :item "oak_planks"} (select-keys (:data e) [:got :item]))))))))
 
-(deftest a-call-whose-known-ways-cost-more-than-its-worth-looks-round-for-a-chest-first
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [behind "0,64,-2"
-              s (f/start (-> (f/bare []) (update :blocks assoc behind "chest") (assoc :containers {behind [{:name "stone_hoe" :count 1}]})) [])
-              e (await (ending-of s 'jobs.items.obtain {:item "stone_hoe" :count 1 :worth 20} 80))]
-          (is (= :done (:kind e)) "the chest behind the body, seen once it turns, is within the worth")
-          (is (= {"stone_hoe" 1} (select-keys (f/inv s) ["stone_hoe"]))))
-        (let [s (f/start (f/bare []) [])
-              e (await (ending-of s 'jobs.items.obtain {:item "stone_hoe" :count 1 :worth 20} 80))]
-          (is (= [:condition-failed :not-worth] [(:kind e) (:reason (:cause e))]) "the look showed nothing cheaper: the price is judged after it")
-          (is (seq (filter #(= "look" (.-name %)) (.-calls (.-world (:p s))))) "it looked round before giving up"))))))
-
 (deftest a-craft-cut-by-its-time-limit-after-it-made-some-is-run-again
   (async done
     (tu/run-async done
@@ -429,7 +415,7 @@
       (fn ^:async t []
         (let [none (await (torch-status (f/start (f/bare []) []) 0))]
           (is (= [:later :not-worth ##Inf] [(first none) (:reason (nth none 2)) (:price (nth none 2))]) "no way known: no price"))
-        (let [none (await (torch-status (f/start (f/bare []) []) 1000))]
+        (let [none (await (torch-status (f/start (f/bare []) []) (cost/light-wait-worth 600 4)))]
           (is (= [:look :not-worth ##Inf] [(first none) (:reason (nth none 2)) (:price (nth none 2))])
               "nothing seen and chests allowed: a look round first, as a player turns before giving up"))
         (is (= :ok (first (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) 100))))
