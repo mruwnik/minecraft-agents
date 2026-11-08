@@ -143,6 +143,12 @@
     (cond-> (assoc r :seen-n i)
       (< i (count cells)) (assoc :unseen (unseen (nth cells i))))))
 
+(defn runs-on?
+  "Whether end e's way may go on past what the body knows of it: its route runs into cells unseen, or the meter cut its
+  plan (:cut?: the rest is not known, priced as unseen ground: dead-end-race at its end)."
+  [e]
+  (boolean (or (:unseen e) (:cut? e))))
+
 (defn seen-shut?
   "Whether what the body has seen shows ring end t's way shut past where route r stops (its :end, every cell of it seen):
   a flood from there over seen cells, never back nearer the body at from than that end, meets no cell unseen, none as
@@ -356,16 +362,17 @@
                   s (max (/ ms 1000) (* spent (cost/search-cell-ceiling-s)))
                   _ (lreach/spend! meter s false)
                   r (some->> (routed res slow) (seen-split p))
+                  short? (and r (not (:found? r)) (< cap most) (= "budget" (.-reason res))
+                              (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
                   out (if r
                         (conj out (assoc r :target t
-                                           :cut? (and (not (:found? r)) (< cap most) (= "budget" (.-reason res))
-                                                      (not (and (nil? (:pos t)) (seen-shut? p pos t r))))
+                                           :cut? short?
                                            :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))
                                            :price (+ (:priced r)
                                                      (let [spawns (spawn-light/spawns-over p (:cells r) share)]
                                                        (cost/route-death-cost body {:cells (dwelt (:cells r)) :threats others :spawns spawns :spawn-kill (when (pos? spawns) @spawn-kill)} pos)))
                                            :counts counts
-                                           :trapped (when (:unseen r) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))
+                                           :trapped (when (or (:unseen r) short?) (trapped-at (nth (:cells r) (dec (:seen-n r)))))))
                         out)
                   stop? (boolean (and enough? r (far? t) (enough? out @staying)))]
             (recur (when-not stop? more) out
@@ -535,7 +542,7 @@
   seconds back to the fork (the way in is r's price, the unseen cells' walk back their unseen-share), e's price past
   the fork and the arrival r's end scores past e's, plus fire (a fn of a timed route {:cells :end}: the seconds of
   death the shooters' fire on it risks, respond.goal/fire-price; nil none) of the walk back, timed from the turn; :caught-s
-  that of the whole flight (caught-s); :unseen? e's, :trapped its trap-s."
+  that of the whole flight (caught-s); :unseen? whether e runs on unseen (runs-on?), :trapped its trap-s."
   ([chasers r e] (back-via chasers r e nil))
   ([chasers r e fire] (kept-at kept-backs [r e chasers fire] #(back-via* chasers r e fire))))
 
@@ -554,18 +561,19 @@
            (- (min (:arrive r) unreached-s) (min (:arrive e) unreached-s))
            (if fire (fire {:cells (mapv #(update % :t - last-t) back) :end (:end e)}) 0))
      :caught-s (caught-s chasers (into seen back))
-     :unseen? (some? (:unseen e)) :trapped (when (:unseen e) (trap-s chasers e))}))
+     :unseen? (runs-on? e) :trapped (when (runs-on? e) (trap-s chasers e))}))
 
 (defn dead-end-race
-  "cost/dead-end-race {:cost :chance} of a dead end at the first unseen cell of scored end r; nil when r does not reach
-  a cell unseen. Its :counts and trap-s, backs along the ways out of pool (open or running on unseen, not caught, not a cover end, not through that
-  cell; back-via, with fire)."
+  "cost/dead-end-race {:cost :chance} of a dead end at the first unseen cell of scored end r, or past its end when the
+  meter cut its plan (runs-on?); nil when r does not run on. Its :counts and trap-s, backs along the ways out of pool
+  (open or running on, not caught, not a cover end, not through that cell; back-via, with fire)."
   ([chasers r pool] (dead-end-race chasers r pool nil))
   ([chasers r pool fire]
-  (when (and (:trapped r) (< (:seen-n r) (count (:cells r))))
-    (let [shut (cell-of (nth (:cells r) (:seen-n r)))
-          out? #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (not (:cover? %)) (not-any? (fn [c] (= shut (cell-of c))) (:cells %)))]
-      (cost/dead-end-race (:counts r) (trap-s chasers r) (map #(back-via chasers r % fire) (filter out? pool)))))))
+  (let [{:keys [cells seen-n end]} r]
+    (when (and (:trapped r) (or (< seen-n (count cells)) (:cut? r)))
+      (let [shut (cell-of (if (< seen-n (count cells)) (nth cells seen-n) end))
+            out? #(and (or (:open? %) (runs-on? %)) (not (:caught? %)) (not (:cover? %)) (not-any? (fn [c] (= shut (cell-of c))) (:cells %)))]
+        (cost/dead-end-race (:counts r) (trap-s chasers r) (map #(back-via chasers r % fire) (filter out? pool))))))))
 
 (defn dead-end
   "Seconds a dead end at the first unseen cell of scored end r adds to its price (dead-end-race); 0 when r does not reach
@@ -608,7 +616,7 @@
                   (when-let [i (first (keep-indexed #(when (and (pos? %1) (covered? (select-keys %2 [:x :y :z]))) %1) cells))]
                     (let [part (unstopped (subvec cells 0 (inc i)))
                           share (if (pos? s) (/ (:t (peek part)) s) 1)]
-                      (assoc e :end (select-keys (peek part) [:x :y :z]) :cells part :cover? true :found? true :open? true
+                      (assoc e :end (select-keys (peek part) [:x :y :z]) :cells part :cover? true :found? true :open? true :cut? false
                                :s (:t (peek part)) :price (* share (- price dead-end)) :priced (* share priced)))))
                 ends)
           ends fire)))
@@ -667,12 +675,6 @@
   [f]
   (fn [e] (boolean (or (f (:step e)) (f (:end e))))))
 
-(defn unjudged?
-  "Whether the meter cut search ends (cut?, or an end :cut?) before a ring way was planned whole: what lies round the
-  body is not known this step."
-  [ends]
-  (and (or (:cut? (meta ends)) (some :cut? ends)) (not-any? #(and (nil? (:pos (:target %))) (not (:cover? %)) (not (:cut? %))) ends)))
-
 (defn choose
   "The end entry a flee step takes among scored ends (scored, covers), its :step the cell the step walks to (step-of,
   past the cells go-to refused: refused [x y z]); nil when cornered. Left out: caught ones, those (but cover) that gain
@@ -682,22 +684,20 @@
   end costs it its :s (a number, or a fn of the end entry), the death the mark risks (a negative :s credits the death a place removes: a closed room), off
   its :score. The end with the highest score so priced wins,
   covers, homes and open ways alike. A pocket only when no open way is left uncut: open ways that every chaser cuts leave the pockets out, they are traps.
-  With no ring way planned whole (unjudged?), a ring way the meter cut short (:cut?) is no pocket: it stops where the
-  search stopped, not where the way does (with some planned whole it is one: what its cut part misses may catch it)."
+  A way the meter cut short (:cut?) is a partial route like any other, its score paying the rest past its end as
+  unseen ground (dead-end-race)."
   [ends {:keys [refused never? hazards marks]}]
-  (let [short? (unjudged? ends)
-        on? #(or (:open? %) (and short? (:cut? %) (nil? (:pos (:target %)))))
-        ok (->> ends
+  (let [ok (->> ends
                 (remove :caught?)
                 (filter #(or (:cover? %) (pos? (:gain %))))
-                (filter #(or (on? %) (> (:gain %) (:s %))))
+                (filter #(or (:open? %) (> (:gain %) (:s %))))
                 (keep #(when-let [step (step-of % (or refused #{}))] (assoc % :step step)))
                 (remove #(and never? ((at-step-or-end never?) %)))
                 (remove #(hazard-near? hazards (:cells %)))
                 (map (fn [e] (assoc e :net (- (:score e) (transduce (comp (filter (fn [m] ((:holds? m) e))) (map (fn [m] (let [s (:s m)] (if (fn? s) (s e) s))))) + 0 marks))))))
         ways (filter #(and (:open? %) (nil? (:pos (:target %)))) ends)
         traps? (and (seq ways) (every? :caught? ways))
-        open (filter on? ok)
+        open (filter :open? ok)
         pool (cond (seq open) open traps? nil :else ok)]
     (when (seq pool) (apply max-key :net (reverse pool)))))
 
@@ -784,18 +784,18 @@
   (let [picked (choose ends opts)
         refuge? (and picked (not (:caught? picked)) (boolean (some-> (:prefer? opts) (#(% picked)))))
         ring (filter #(and (nil? (:pos (:target %))) (not (:cover? %))) ends)
-        left (filter #(and (or (:open? %) (:unseen %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
+        left (filter #(and (or (:open? %) (runs-on? %)) (not (:caught? %)) (pos? (:gain %)) (> (:arrive %) (:s %))) ring)
         ways (filter gets-away? ends)
         best (when (seq left) (apply max-key :score left))
         caught (filter :caught? ring)]
     (cond
       refuge? {:chance 0 :refuge-s (door-s picked (:door? opts))}
-      best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (some? (:unseen best)) :counts counts :dead-chance (:dead-chance best)})}
+      best (cond-> {:chance (cost/flight-caught-chance {:way? true :unseen? (runs-on? best) :counts counts :dead-chance (:dead-chance best)})}
              (seq caught) (assoc :seconds (reduce min (map :caught-s caught)))
              (some :blast-d caught) (assoc :blast-d (reduce min (keep :blast-d caught))))
       (and (empty? ring) (boxed? ends)) {:chance 1 :cornered? true}
       (empty? ring) {:chance (cost/flight-caught-chance {:way? true :unseen? true :counts counts})}
-      :else (let [timed (or (seq ways) (seq (filter :unseen ring)))
+      :else (let [timed (or (seq ways) (seq (filter runs-on? ring)))
                   free? (some? (choose ends opts))
                   look? (and (not free?) (unseen-ahead ends glanced))
                   ;; headings a cut left unplanned may hold a way, at the unseen one's chance

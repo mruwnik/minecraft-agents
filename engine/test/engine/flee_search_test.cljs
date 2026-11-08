@@ -689,14 +689,18 @@
     (is (= {:chance 1 :cornered? false} (c [(end-of 4 0 1 :found? false :caught? false :caught-s 0 :gain 2)]))
         "a pocket the flight still runs to, with no way out to call free: a walk caught for certain")))
 
-(deftest a-way-the-meter-cut-short-is-no-pocket-while-no-way-was-planned-whole
-  (let [short (end-of 4 0 5 :found? false :caught? false :caught-s 0 :gain 2 :cut? true)
-        home (end-of 1 0 1 :target {:pos {:x 1 :y 64 :z 0}} :caught? false :gain 0.5)
-        caught (end-of 0 4 0 :caught? true)]
-    (is (search/unjudged? [short home]) "no ring way planned whole")
-    (is (= (:end short) (:end (search/choose [short home] {}))) "the cut way away beats an open home a block off")
-    (is (not (search/unjudged? [short home caught])) "one ring way planned whole")
-    (is (= (:end home) (:end (search/choose [short home caught] {}))) "then the cut one is a pocket: what its cut part misses may catch it")))
+(deftest a-way-the-meter-cut-short-pays-its-rest-as-unseen-ground
+  ;; 2131c932 (Q162): it counted as open while no way was planned whole, a step into what the search never looked at;
+  ;; now it is a partial route like any other, the rest past its end priced as unseen ground
+  (let [from {:x 0.5 :y 64 :z 0.5}
+        whole (way [[0 0] [1 0] [2 0] [3 0]] 4 3)
+        cut (assoc whole :found? false :open? false :cut? true :trapped 100)
+        short (end-of 4 0 5 :found? false :caught? false :caught-s 0 :gain 2 :cut? true)
+        better (end-of 0 -4 6 :caught? false :gain 2)]
+    (is (= 50 (:dead-end (first (search/scored [] from [cut])))) "its end stands for its first unseen cell: trapped 100 at the way-on chance 0.5")
+    (is (zero? (:dead-end (first (search/scored [] from [whole])))) "planned whole and seen: none")
+    (is (= (:end short) (:end (search/choose [short] {}))) "with no way planned whole, taken while its gain pays its walk")
+    (is (= (:end better) (:end (search/choose [short better] {}))) "an open way planned whole comes first")))
 
 (deftest ways-that-stop-at-unseen-cells-are-priced-by-the-ways-seen-not-caught
   (let [stops (fn [& more] (apply end-of 4 0 1 :found? false :unseen [5 64 0] :caught-s 0 :caught? false :arrive 5 more))
