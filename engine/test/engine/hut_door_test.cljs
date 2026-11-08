@@ -16,6 +16,8 @@
             [engine.settings :as settings]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.rooms :as rooms]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.seal :as seal]
             [jobs.survival.respond.doors :as doors]
             [jobs.survival.shut-in :as shut-in]
@@ -164,6 +166,16 @@
           (is (seq (:doors (rooms/room-doors c feet))) "the break not yet seen: the kept doors")
           (perception/pass! per)
           (is (not= false (some-> (rooms/room-doors c feet) :unseen?)) "a wall broken since, seen: the kept closed room is gone (none, or one not known closed)"))))))
+
+(deftest open-ground-is-judged-no-room-from-one-flood
+  (let [{:keys [eng p]} (ct/setup {:self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        c (assoc (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {} :round 1}) :primitives p)
+        pos {:x 0 :y 64 :z 0}
+        spent (fn [f] (let [m (rooms/search-meter 0)] (binding [reach/*search* m] (f)) (reach/spent-s m)))]
+    (is (nil? (rooms/room-doors c pos)) "no room, no unseen room: no doors to shut")
+    (is (pos? (spent #(reach-room/room* p pos))))
+    (is (= (spent #(reach-room/room* p pos)) (spent #(rooms/room-doors c pos)))
+        "the closed room and the unseen room are read from one flood")))
 
 (deftest the-door-is-a-cover-only-where-the-room-has-no-other-opening
   (async done

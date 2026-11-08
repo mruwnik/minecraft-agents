@@ -133,12 +133,13 @@
           kept (get (:refuge-room-doors (ctx/mem c)) k)]
       (if (= wk (:key kept))
         {:doors (:doors kept) :unseen? false}
-        (let [room (reach-room/room p pos)]
+        ;; one flood answers both: the closed room, else the room an unseen cell leaves open
+        (let [{:keys [room unseen]} (reach-room/look p pos)]
           (if room
             (when (closed-past-sight? p room)
               (ctx/update-mem! c assoc-in [:refuge-room-doors k] {:key wk :doors (:doors room)})
               {:doors (:doors room) :unseen? false})
-            (when-let [unseen (reach-room/unseen-room p pos)] {:doors (:doors unseen) :unseen? true})))))))
+            (when-let [u @unseen] {:doors (:doors u) :unseen? true})))))))
 
 (declare shut-by)
 
