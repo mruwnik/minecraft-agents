@@ -365,6 +365,7 @@
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" :unreachable
+      "failed" (if (= "tool-lost" (.-reason r)) :again (finish! c {:dug false :pos pos :block block :reason :failed :primitive status}))
       (finish! c {:dug false :pos pos :block block :reason :failed :primitive status}))))
 
 

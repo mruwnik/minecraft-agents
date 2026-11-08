@@ -658,6 +658,22 @@
           (is (re-find #":need-drop false" (str (:why @(:out s)))) "the stop says how to dig it by hand")
           (is (nil? (waiting s))))))))
 
+(deftest a-pickaxe-lost-while-a-dig-ran-is-fetched-not-dug-bare-handed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [n (atom 0)
+              prep (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (if (= 1 (swap! n inc))
+                                      (do (swap! (.. world -state) assoc :inventory [])
+                                          #js {:status "failed" :reason "tool-lost"})
+                                      (await (impl token a)))))))
+              s (await (stair! {:blocks ground} east prep))]
+          (is (seq (filter #(= :need (:slot %)) (events-of s :child_started))) "the lost pickaxe is looked for"))))))
+
 (deftest lava-two-ahead-stops-before-opening-it
   (async done
     (tu/run-async done

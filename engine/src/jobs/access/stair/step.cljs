@@ -244,10 +244,13 @@
                     (case outcome
                       (:dug :missing) :continue
                       :not-diggable {:reason :not-diggable :cell cell :block block}
-                      :no-tool (if (and (= :auto (:need-drop (:args c))) (not (:by-hand (ctx/mem c))))
+                      :no-tool (cond
+                                 ;; the tool was lost during this dig, which carried no ways: the next dig carries them
+                                 (and (not fetch?) (fetch-tool? c) (lacks-tool? c block)) :continue
+                                 (and (= :auto (:need-drop (:args c))) (not (:by-hand (ctx/mem c))))
                                  (do (ctx/update-mem! c assoc :by-hand true) :continue)
-                                 {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)
-                                :because (let [cause (:cause e)] (when (map? cause) (:why cause)))})
+                                 :else {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)
+                                        :because (let [cause (:cause e)] (when (map? cause) (:why cause)))})
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
 (def fall-wait-ms "How long after a dig the stair waits for a falling block over the open cut to drop before it walks in." 4000)

@@ -641,6 +641,18 @@
               e (:ending (await (tu/child-outcome eng job {:pos [2 64 0]} 10)))]
           (is (= [:nothing-possible :timeout] ((juxt :kind :cause) e))))))))
 
+(deftest a-dig-whose-tool-was-lost-on-the-way-leaves-the-block-and-asks-for-the-tool-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self body :blocks {"2,64,0" "stone"} :inventory pick})
+              world (.-world (:p env))]
+          (.override world "dig" (fn [_ _ _]
+                                   (swap! (.-state world) assoc :inventory [])
+                                   (js/Promise.resolve #js {:status "failed" :reason "tool-lost"})))
+          (is (= :no-tool (:reason (await (ending-cause (:eng env) job {:pos at :ways #{:carried}} 6)))))
+          (is (= 1 (count (calls (:p env) "dig")))))))))
+
 (defn failing-walks
   "env with jobs.movement.go-to replaced by a walk that never arrives (why :no-path); walks counts its calls."
   [env walks]

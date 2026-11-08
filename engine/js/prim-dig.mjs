@@ -85,8 +85,15 @@ export function createDig (env) {
       ctx.onAbort(() => env.bot.stopDigging())
       ctx.alive()
       const before = lyingBefore(p)
+      const held = env.bot.heldItem?.name
       await env.bot.dig(block, true)
       ctx.alive()
+      // mineflayer clears the block on its own side when its timer ends; the server breaks it only if the tool the timer
+      // assumed was held to the end, so a tool lost on the way leaves the block there: put it back, report no dig
+      if (held && env.bot.heldItem?.name !== held) {
+        env.bot._updateBlockState(block.position, block.stateId)
+        return { status: 'failed', reason: 'tool-lost' }
+      }
       const deadline = Date.now() + setting('prim/drop-wait-s') * 1000 * timeScale
       let drops = newDrops(p, before)
       while (drops.length === 0 && Date.now() < deadline) {

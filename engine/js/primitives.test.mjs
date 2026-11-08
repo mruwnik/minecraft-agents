@@ -3442,6 +3442,18 @@ test('dig reports no drops when the cell only had an old pile and nothing new ca
   assert.deepEqual(r.drops, [])
 })
 
+test('dig of a block whose tool was lost during the dig puts the block back and reports tool-lost', async () => {
+  const { bot, p } = rig({ ...world, blocks: { '2,64,0': 'stone' } })
+  bot.heldItem = { name: 'stone_pickaxe', count: 1, slot: 36 }
+  const restored = []
+  bot._updateBlockState = (pos, id) => restored.push([pos.x, pos.y, pos.z, id])
+  const original = bot.dig
+  bot.dig = async (...args) => { const r = await original(...args); bot.heldItem = null; return r }
+  const r = await p.dig('t1', { pos: at(2, 64, 0) })
+  assert.deepEqual([r.status, r.reason], ['failed', 'tool-lost'])
+  assert.deepEqual(restored.map(x => x.slice(0, 3)), [[2, 64, 0]])
+})
+
 test('dig counts a drop that merged into an old stack as new', async () => {
   const stack = { count: 1 }
   const merging = { id: 21, ...pile, getDroppedItem: () => ({ name: 'cobblestone', count: stack.count }) }
