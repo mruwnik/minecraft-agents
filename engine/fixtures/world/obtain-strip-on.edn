@@ -5,8 +5,8 @@
 ;; lies below iron's tunnel level and the roof the body sees bars a stair up to it (obtain.plan/climb-sealed?), so the tunnel keeps the body's
 ;; height; the mass's west face is dirt (no host rock seen, so no look round pays first and walks the body off its east heading) and the
 ;; walls of the body's own tunnel are no evidence for a look (cost/look-leg-chance), so the run after an empty one mines on. :worth 5000 and :spend :job-time 2700 stand for a goal's
-;; (get-kit passes its bill's, and the time of a bill item: a default call has too little time left for a find at this depth). Should-succeed: the second run reaches the ore, no climb. Should-fail: a caller who wants one raw iron little more than it
-;; usually costs (:worth 210; the search price is capped at that usual cost, 208 s, so the start check passes by 2 s and the refuse margin is the old measured one, 42 s more than at 250) has, after the first run's cut, no worth left for a strip leg: it counts fruitless, no source; a tunnel line open all the way (card 317311e9) cuts
+;; (get-kit passes its bill's, and the time of a bill item: a default call has too little time left for a find at this depth). Should-succeed: the second run reaches the ore, no climb. Should-fail: a caller who wants one raw iron a little more than it
+;; usually costs (:worth 230: the start check passes by ~22 s over the 208 s capped search price, and the refuse side keeps ~20 s more margin than the old 250) has, after the first run's cut, no worth left for a strip leg: it counts fruitless, no source; a tunnel line open all the way (card 317311e9) cuts
 ;; nothing, so its run is fruitless though its tunnel took steps.
 {:defaults
  {:tags [:obtain :mine :jobs] :time :any
@@ -23,7 +23,7 @@
             {:no-event {:source :job :kind :obtain.climbed} :for-s 390 :until {:source :job :kind :completed}}]
    :after [[:item "raw_iron" [:>= 1]]]}
   {:name "a-run-that-does-not-pay-ends-after-the-empty-tunnel"
-   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :worth 210
+   :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather} :worth 230
                                    :settings {:jobs.lib.child/max-fruitless 1}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :obtain.strip-on} :for-s 300 :until {:source :job :kind :stopped}}]
