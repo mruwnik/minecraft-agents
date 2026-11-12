@@ -19,6 +19,7 @@
             [jobs.lib.dig-look :refer [unknown? look-at! see-round!]]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
+            [jobs.lib.cost :as cost]
             [jobs.lib.lava :as lava]
             [jobs.lib.reach :as reach]
             [jobs.lib.ready :as ready]
@@ -192,17 +193,28 @@
   (let [need (trip/spare-need c block worn-uses)]
     (boolean (and need (not (:dear need))))))
 
+(defn refill-stop
+  "The stop for one more dig of a cell its earlier digs left refilled (tries of them), when that is not worth its price
+  (cost/try-again?): :lava-unsealed when lava flowed back over a seal (kind :reseal), else :refills (kind :refill). nil while worth it."
+  [c cell block tries]
+  (let [lava? (pos? (get-in (ctx/mem c) [:seals cell] 0))]
+    (when (and (pos? tries) (not (cost/try-again? c (if lava? :reseal :refill) {:fails tries})))
+      (cond
+        lava? {:reason :lava-unsealed :cell cell :block block :tries tries}
+        (rules/falling? block) {:reason :refills :cell cell :block block}
+        :else {:reason :refills :cell cell :block block
+               :why "put back by something else, e.g. the night shelter closing an opened refuge again"}))))
+
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
   [c in cell cut accept]
   (let [p (:primitives c)
         block ((:block-at in) cell)
         seen? (not (unknown? p cell))
-        tries (get-in (ctx/mem c) [:cell-tries cell] 0)]
+        tries (get-in (ctx/mem c) [:cell-tries cell] 0)
+        stop (refill-stop c cell block tries)]
     (cond
-      (>= tries (sset/max-digs block)) (cond-> {:reason :refills :cell cell :block block}
-                                   (not (rules/falling? block))
-                                   (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
+      stop stop
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (and seen? (not (fetch-tool? c)) (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block) :why no-tool-hint}
       (and (worn-last-tool? c block) (= :continue (await (trip/tool-ready! c block nil)))) :yield

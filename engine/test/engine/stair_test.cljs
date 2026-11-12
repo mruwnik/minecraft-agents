@@ -27,7 +27,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.stair-cells :as sc]
-            [jobs.access.stair.limits :as sset]
+            [jobs.lib.cost.value :as value]
             [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.plan :as wplan]
             [jobs.access.stair.judge :as judge]
@@ -1270,7 +1270,7 @@
           (is (= [1 64 0] (:cell @out)))
           (is (empty? (digs p))))))))
 
-(deftest a-cell-that-keeps-refilling-stops
+(deftest a-cell-that-keeps-refilling-is-dug-while-another-dig-is-worth-its-price
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1283,7 +1283,9 @@
                                       r)))))
               {:keys [out p]} (await (stair! {:blocks ground} east prep))]
           (is (= :refills (:reason @out)))
-          (is (= (sset/max-fall-digs) (count (digs p))) "a falling block gets more digs than other refills")
+          (is (= (inc (count (take-while #(> (* (value/retry-chance :refill %) tu/order-worth) (value/retry-s :refill)) (iterate inc 1))))
+                 (count (digs p)))
+              "one more dig of the refilled cell while its chance times the call's worth beats the dig's seconds")
           (is (= [{:cell [1 64 0] :block "stone"}] (:dug @out)) "a dig that left the same block is not recorded"))))))
 
 (deftest gravel-that-falls-into-the-cut-a-few-times-is-dug-until-clear
