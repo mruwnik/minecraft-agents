@@ -1,0 +1,27 @@
+;; Card 8c4964c4: a gather.mine cut by the needs-bed reflex (the bed errand's obtain searches, then stops without a bed) resumes and finishes its blocks;
+;; it does not sit silent as :running. The respawn bed is lost (a newer :spawn-reset), the body carries a pickaxe only, and 24 stone lie in view on the surface.
+;; The reflex holds only in the last 6000 ticks before dusk, so the case sets the time to 9000 right after the mine is submitted.
+;; Should-succeed: the reflex fires and cuts the mine, the mine completes with its 24 stone. Should-fail (control): a standing spawn bed, the reflex never fires and the mine completes alone.
+{:defaults
+ {:tags [:survival :triggers :mining :scheduler]
+  :plot {:height 6 :light :sky}
+  :time :day :time-why :sleep
+  :register [{:trigger :needs-bed}]
+  :blocks [[:fill [20 0 10] [27 1 22] "stone"]]
+  :body {:spawnpoint :far :at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :act [[:job (jobs.gather.mine {:worth 1200 :torches false :block "stone" :count 24 :ways #{:seen} :radius 12})]
+        [:time-set 9000]]
+  :limit-s 260}
+ :cases
+ [{:name "mine-cut-by-the-bed-errand-resumes-and-completes"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}
+            {:kind :spawn-reset :data {:pos #xyz [8 0 16]} :age-s 30}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 40}
+            {:event {:source :job :kind :completed :data {:got [:>= 24]}} :within-s 250 :of-job true}]
+   :after [[:item "cobblestone" [:>= 24]]]}
+  {:name "standing-spawn-bed-leaves-the-mine-alone"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}]
+   :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :for-s 90 :until {:source :job :kind :completed}}
+            {:event {:source :job :kind :completed :data {:got [:>= 24]}} :within-s 150 :of-job true}]
+   :after [[:item "cobblestone" [:>= 24]]]}]}
