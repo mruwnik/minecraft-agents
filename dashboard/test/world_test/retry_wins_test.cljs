@@ -129,3 +129,15 @@
     (is (= {:won 1 :retries 1 :calls 1 :try-s 4} (walk-of once)))
     (is (= {:won 2 :retries 2 :calls 2 :try-s 4} (walk-of again)) "a re-read call adds nothing, a second body joins")
     (is (= (walk-of again) (walk-of rotated)) "A's log is gone, its calls stay")))
+
+(defn escalated [job t n]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind :go-to.escalated :context {:job-id job} :data {:why :exhausted :n n}}))
+
+(deftest an-escalation-is-a-try-that-fails-when-the-next-has-a-higher-n-and-wins-when-the-call-restarts-or-arrives
+  (let [rows (keep r/scan-line [(escalated "j1/go" 0 1) (escalated "j1/go" 1000 2) (escalated "j1/go" 3000 3) (walk "j1/go" 6000 true)
+                                (escalated "j1/go" 10000 1) (escalated "j1/go" 11000 2) (escalated "j1/go" 12000 1) (escalated "j1/go" 13000 2) (walk "j1/go" 14000 false)
+                                (escalated "j1/go" 20000 1)])
+        {:keys [escalate pooled]} (r/report rows)]
+    (is (= {:won 2 :retries 4 :calls 3} (select-keys escalate [:won :retries :calls]))
+        "call 1: n2 failed (n3 follows), n3 won (arrived); call 2: n2 won (n1 restarts); call 3: n2 failed (not arrived); a last escalation with no end is left out")
+    (is (nil? pooled) "escalations stay out of the pool")))

@@ -628,15 +628,16 @@
   (is (= 20 (:escalation-best (esc/count-escalation {:fruitless 1 :escalation-best 20} 30))) "the best so far stays"))
 
 (deftest a-way-after-fruitless-ones-is-made-while-worth-its-price
-  ;; :escalate's prior (.043 wins, .093 fails) after f fruitless ways: .043 / (f - 1 + .136) times the order's 1200 s,
-  ;; f 1 379 s, f 2 45 s, f 3 24 s, f 5 12.5 s; an unpriced way (an approach) costs the :walk try's 17.148 s
+  ;; :escalate's prior (.167 wins, .064 fails) after f fruitless ways: .167 / (f - 1 + .231) times the order's 1200 s,
+  ;; f 1 867 s, f 2 163 s, f 3 87 s, f 9 24.3 s, f 10 21.7 s; an unpriced way (an approach) costs the :escalate try's 23.72 s
   (let [c {:quote-call {:worth tu/order-worth}}]
     (are [n e more?] (= more? (esc/worth-another? c [0 64 0] n e))
       1 {:step :stair :route-s 1e6} true
       2 {:step :stair :route-s 300} true
       3 {:step :stair :route-s 300} false
       4 {:step :approach :pos [3 64 0]} true
-      6 {:step :approach :pos [3 64 0]} false)))
+      10 {:step :approach :pos [3 64 0]} true
+      11 {:step :approach :pos [3 64 0]} false)))
 
 (deftest escape-choose-stair-climbs-as-far-as-the-goal-is-above
   (is (= {:step :stair :heading :east :steps 8}

@@ -11,7 +11,7 @@
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one), :kit-later jobs.items.get-kit's bill after a :later stop (:kit.later-wait a stop rested on, :kit.later-over a bill round that ended otherwise after one); :pooled all kinds' tries together,
   the prior of a kind with none counted. :walk-round is one round inside a go-to: a go-to.retrying (a fruitless round that plans again) fails, and a go-to result that follows one is the call's last round (won when it arrived); a call is a run of retrying tries ending at a result (a job id holds many); the pooled fit leaves it out.
-  Pure parts: scan-line, retries, report."
+  a go-to.escalated (:n) is a try of :escalate (left out of :pooled like :walk-round): it fails when the job's next escalation has a higher :n, wins when the next call began (:n not higher) or the go-to's end after it arrived (`escalations`). Pure parts: scan-line, retries, report."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [world-test.field-passes :as passes]))
@@ -66,6 +66,9 @@
       (when-some [arrived (ending-arrived line)]
         {:kind :walk :key (key) :t (t) :edge :end :fail? (false? arrived) :child? true})
 
+      (and (str/includes? line ":kind :go-to.escalated") (re-find #" :n \d+" line))
+      {:kind :escalate-mark :key (key) :t (t) :edge :mark :n (js/parseInt (field line #" :n (\d+)"))}
+
       (str/includes? line ":kind :go-to.")
       {:kind :go-to-mark :key (key) :t (t) :edge :mark})))
 
@@ -89,13 +92,32 @@
   of it (logs of 2026-10-14 to 19 hold both); a child_ended counts only for a job id that has any go-to.* event (other jobs'
   endings carry :arrived too; go-to.retrying alone would keep only the calls that planned again). The marks are dropped."
   [rows]
-  (let [retrying (into #{} (comp (filter #(#{:walk-round :go-to-mark} (:kind %))) (map :key)) rows)
+  (let [retrying (into #{} (comp (filter #(#{:walk-round :go-to-mark :escalate-mark} (:kind %))) (map :key)) rows)
         results (group-by :key (filter :result? rows))]
     (remove #(or (= :go-to-mark (:kind %))
                  (and (= :walk (:kind %)) (not (:result? %))
                   (or (and (:child? %) (not (retrying (:key %))))
                       (some (fn [r] (< (abs (- (:t r) (:t %))) 1000)) (results (:key %))))))
             rows)))
+
+(defn- escalations
+  "The :escalate rows of the scanned rows (:escalate-mark and :walk ends), per job id and call: an escalation (go-to.escalated)
+  fails when the next one of the job has a higher :n (the same call goes on), wins when it has not (the next call began, nearer)
+  or when the go-to's end that follows arrived; one with no end seen after it is left out. The try after a failed one is the
+  prior's try, so a call's first escalation is its condition."
+  [rows]
+  (mapcat (fn [[key rs]]
+            (:out (reduce (fn [{:keys [prev n out] :as st} r]
+                            (let [emit (fn [fail?] (conj out {:kind :escalate :key (conj key n) :t (:t prev) :edge :end :fail? fail?}))]
+                              (cond
+                                (nil? prev) (if (= :escalate-mark (:kind r)) (assoc st :prev r) st)
+                                (= :escalate-mark (:kind r)) (if (> (:n r) (:n prev))
+                                                               (assoc st :prev r :out (emit true))
+                                                               {:prev r :n (inc n) :out (emit false)})
+                                :else {:prev nil :n (inc n) :out (emit (:fail? r))})))
+                          {:prev nil :n 0 :out []}
+                          (sort-by :t rs))))
+          (group-by :key (filter #(or (= :escalate-mark (:kind %)) (and (= :walk (:kind %)) (= :end (:edge %)))) rows))))
 
 (defn- rounds
   "The :walk-round rows of the scanned rows, keyed per go-to call (a job id holds many): a go-to.retrying is a failed round,
@@ -127,7 +149,7 @@
   in the counts file (the key is [generation job-id ...], a call). The walk-round calls are kept apart from the pooled fit by kind."
   [rows]
   (let [rows (go-to-ends rows)
-        rows (concat (remove #(= :walk-round (:kind %)) rows) (rounds rows))]
+        rows (concat (remove #(#{:walk-round :escalate-mark} (:kind %)) rows) (rounds rows) (escalations rows))]
     (into {} (for [[kind rs] (group-by :kind rows)]
                [kind {:calls (into {} (for [[key ts] (group-by :key (retries rs))]
                                         [key {:tries (count ts) :won (count (filter :won? ts)) :s (reduce + (map :s ts))}]))
@@ -167,7 +189,7 @@
   [x]
   (let [summary (merge-summaries (if (map? x) x {"" (summarize x)}))
         fits (for [[kind {:keys [calls timed]}] summary] (assoc (fit-calls calls) :kind kind :timed timed))
-        pooled-calls (into {} (for [[kind {:keys [calls]}] summary :when (not= :walk-round kind)
+        pooled-calls (into {} (for [[kind {:keys [calls]}] summary :when (not (#{:walk-round :escalate} kind))
                                     [k c] calls]
                                 [(conj k kind) c]))
         spreads (keep :spread fits)
