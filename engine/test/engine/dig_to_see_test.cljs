@@ -15,6 +15,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.stair-cells :as sc]
             [jobs.access.tunnel :as tunnel]
+            [jobs.access.stair.limits :as limits]
             [jobs.lib.access :as access]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.util :as u]
@@ -198,7 +199,7 @@
           (is (some #{{:x 3 :y 63 :z 0}} (places p)) "the cut cell lava flowed into is sealed")
           (is (pos? (count (events-of s :stair.sealed)))))))))
 
-(deftest stair-lava-beside-the-line-that-keeps-flowing-in-ends-the-stair-backed-off
+(deftest stair-lava-beside-the-line-that-keeps-flowing-in-ends-the-stair-at-the-dig-limit-of-the-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -207,9 +208,9 @@
               seals (filterv #{{:x 3 :y 63 :z 0}} (places p))]
           (is (false? @in-lava))
           (is (= :stopped (:status @out)))
-          (is (= :lava-unsealed (:reason @out)))
-          (is (= 2 (count seals)) "one seal and one reseal, then no more")
-          (is (true? (:backed-off @out))))))))
+          ;; the reseal price (6 flow backs at the order's worth) is not reached: the cell's third dig is the limit
+          (is (= :refills (:reason @out)))
+          (is (= (limits/max-cell-digs) (count seals)) "a seal after each dig, then no more digs of the cell"))))))
 
 (deftest the-flow-wait-is-30-ticks-at-the-live-game-rate
   (let [at (fn [rate] (settings/set-clock! rate false :assumed) (dig-look/flow-delay-ms))
