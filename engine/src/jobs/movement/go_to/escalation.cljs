@@ -12,7 +12,7 @@
     each (jobs.lib.escape.way/choose, over the ways the call allows), after one that started no nearer the goal than one before (escalation/count-escalation) only while worth its price (escalation/worth-another?; a dig route that ends nearer is taken past it): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else, shut in under a higher goal, the cheapest climb there (climb-route: one dig route of digs, laid stair floors and pillar blocks, never through a floor of its own stairs), its stairs, pillars and dig routes run back to back with no walk between; else jobs.access.pillar up out of a pit when it carries enough blocks; else
     through a wall toward the goal, the fewest cells dug down or across to it (to a stand within :range, under :see one that sees it), escalation/dig-way, for a shut-in body (a leg of it toward a goal farther than one: dig-toward) weighed by its whole way (way-total) against a stair or pillar out or, with neither, a dig down to the seen stand beyond its land's edge nearest the goal, else a walk to that edge to look over it (escalate-choose/frontier-way), none dearer than the call's worth, nor than a stair or pillar from the feet, and with neither of those a leg of it (escalate-choose/dig-leg); a gap jump the walker refuses with no block to fill it counts as a walled-in goal (escalate-choose/gap-walled?): a step up over a one-cell gap cuts the riser beyond it (gap-dig), else the body digs toward the goal; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
-    followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot). Each emits go-to.escalated {:step :why :n}, with :weighed [{:step :s}..] when it chose by price between a stair or pillar and a dig (:bound for a dig search that found none under it). Once
+    followed by the next escalation at once); else a walk to a wall first; when no way can be made where the body stands, a walk to a cell it can stand on from which one can that leads toward the goal (escape-way/way-spot: a body in its hut beside the doorway, whose walls it spares); each such cell the cheapest walk there and on to the goal (escape-way/priced-spot); where no way is chosen on a cell the give-up's walk did not start from, it walks again before it gives up. Each emits go-to.escalated {:step :why :n}, with :weighed [{:step :s}..] when it chose by price between a stair or pillar and a dig (:bound for a dig search that found none under it). Once
     through, it puts back what a dig route or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
@@ -457,6 +457,9 @@
       (do (search-begun! c feet goal opts)
           (ctx/update-mem! c #(-> % (dissoc :escalation) (assoc :escalate-now true :escalate-failed failed)))
           :again)
+      ;; the kept give-up was a walk from another cell: from here, where an approach or a climb left the body, it walks first
+      (and (= :none (:step e)) (some-> (:at (:give-up (ctx/mem c))) (not= feet)))
+      (do (ctx/update-mem! c dissoc :give-up :escalate-failed :route-search) :again)
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :blocks :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       @hold (reprice/end c @hold)
       :else
@@ -469,7 +472,8 @@
           :again))))
 
 (defn ^:async escalate!
-  "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
+  "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (a give-up
+  kept from another cell than the feet walks again instead: the way it gave up on was not tried from here) (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past worth-another?
   with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
   :cave-climb) walks that plan after all instead of giving up (memory :cave-ok). A detour's escalation that failed
@@ -525,7 +529,7 @@
   [c pos tries status result]
   (if (escalate? c tries result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result) :escalate-now true
-                         :give-up {:tries tries :status status
+                         :give-up {:tries tries :status status :at (end/feet-cell c)
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial :goal-left])})
         :again)
     (let [shut-reason? (and (not (sh-inside/sheltered-in c))

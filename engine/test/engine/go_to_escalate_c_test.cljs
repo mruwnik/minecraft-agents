@@ -38,6 +38,7 @@
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.restore :as restore]
+            [jobs.movement.go-to.result :as gend]
             [jobs.lib.tidy :as tidy]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [box]]
@@ -292,6 +293,30 @@
             (is (= :goal-enclosed (:why @out)) (pr-str spend @out))
             (is (= at (feet p)) (str spend ": the nearest cell to the goal, when the walk there fits the budget"))
             (is (empty? (calls p "dig")))))))))
+
+(deftest a-way-chosen-where-no-walk-was-tried-walks-before-it-gives-up
+  ;; card 2b2da873: an approach or a climb leaves the body on open land; no way is chosen there, but its kept give-up was
+  ;; a walk from another cell, so it walks again rather than give that up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (gt/setup {:blocks (box -10 63 -10 10 63 10 "stone")})
+              given (atom 0)
+              pos {:x 6 :y 64 :z 0}
+              escalate (fn ^:async escalate-from [at]
+                         (let [c (core/make-ctx eng {:root "j9" :slots [] :chain ["j9"] :token "tx" :args {:pos pos :worth tu/order-worth} :round 1})]
+                           (.setOwner (:primitives eng) "tx")
+                           (ctx/update-mem! c assoc :give-up {:tries 3 :status :no-path :at at :result {:status :no-path :reason :exhausted}})
+                           [(await (esc/escalate! c pos nil)) (contains? (ctx/mem c) :give-up)]))]
+          (with-redefs [escape-way/choose (fn ([_ _ _] {:step :none :why :no-wall}) ([_ _ _ _] {:step :none :why :no-wall}) ([_ _ _ _ _] {:step :none :why :no-wall}))
+                        escape-way/way-spot (constantly nil)
+                        gend/give-up! (fn ([_ _ _] (swap! given inc) :gave-up) ([_ _ _ _] (swap! given inc) :gave-up))]
+            (let [away (await (escalate [9 64 9]))
+                  _ (is (zero? @given))
+                  here (await (escalate [0 64 0]))]
+              (is (= [:again false] away) "kept from another cell: walked again, the give-up dropped")
+              (is (= :gave-up (first here)) "kept from the feet: given up")
+              (is (= 1 @given)))))))))
 
 (deftest a-wall-walk-cut-short-is-walked-again
   (async done
