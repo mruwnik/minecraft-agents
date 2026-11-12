@@ -16,7 +16,6 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
-            [engine.settings :as settings]
             [engine.expr :as expr]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -696,35 +695,32 @@
     (is (= [["jobs.blocks.seal-opening" {:at [1 2 3] :worth 40}] ["jobs.gather.mine" {:block "sand" :count 2 :worth 40}]] (nxt :flooded)))
     (is (= [["jobs.gather.mine" {:block "sand" :count 2 :worth 40}]] (nxt :no-tool)))))
 
-;; a caller who wants the sand only a little: the stay beside a killer is dearer than the call's worth
-(def little 1)
-
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds there are priced
 (defn near-sand-by-a-death
   "The sand east within reach, a zombie death beside it age-ms ago (nil: none), sand west at -12, mine for n
-  sand ordered at worth (default a hand order's): the setup map with :go-tos, the go-to args of each walk round. Roofed: under the roof, the sand's neighbourhood
+  sand: the setup map with :go-tos, the go-to args of each walk round. Roofed: under the roof, the sand's neighbourhood
   is dark to the body's memory (the body carries no torch, so it cannot light the stay)."
-  ([age-ms n] (near-sand-by-a-death age-ms n false tu/order-worth))
-  ([age-ms n roofed? worth]
+  ([age-ms n] (near-sand-by-a-death age-ms n false))
+  ([age-ms n roofed?]
   (let [blocks {"3,64,0" "sand" "-12,64,0" "sand"}
         [s go-tos] (spy-go-to (if roofed? (start-shaded blocks []) (start {:world {:blocks (merge floor blocks)}})))
         _ (swap! (fake/state (:p s)) assoc :worldSpawn [0 64 0])
         now @(:clock s)]
     (when age-ms
       (mem/write! (:store (:eng s)) :deaths {:pos {:x 3 :y 64 :z 0} :cause "zombie" :death-t (- now age-ms)} core/deaths-policy))
-    (core/submit! (:eng s) (tu/order (spec {:block "sand" :count n :ways #{:seen}}) worth) {})
+    (core/submit! (:eng s) (tu/order (spec {:block "sand" :count n :ways #{:seen}})) {})
     (assoc s :go-tos go-tos))))
 
 ;; the sand east is within reach (no walk to it), but a zombie killed the body beside it seconds ago: the dig's seconds
-;; there are priced (the death toll does not read light, so this world is unroofed) (go-near!'s in-range stay) against the sand's worth, and the walk west carries the dig's seconds
+;; there are priced (the death toll does not read light, so this world is unroofed) and dearer than the walk west, which carries the dig's seconds
 (deftest a-target-in-reach-of-a-recent-death-is-dug-last
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (near-sand-by-a-death 4000 1 false little)]
+        (let [s (near-sand-by-a-death 4000 1)]
           (await (run-ticks s 30))
           (is (= [-12 64 0] (first (dug-cells s))))
-          (is (= 1 (count (events-of s :near.risky-stay))))
+          (is (empty? (events-of s :near.risky-stay)) "chosen over the near sand, not refused at it")
           (is (some #(and (= -12 (:x (:pos %))) (pos? (:stay-s %))) @(:go-tos s)) (pr-str @(:go-tos s)))
           (is (finished? s)))))))
 
@@ -749,26 +745,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [age-ms [nil 7200000]]
-          (let [s (near-sand-by-a-death age-ms 1 true tu/order-worth)]
+          (let [s (near-sand-by-a-death age-ms 1 true)]
             (is (contains? #{nil 0} (lk/known-light-at (:p s) 3 65 0)) "the premise: nothing lit over the sand before the first look")
             (await (run-ticks s 30))
             (is (= [3 64 0] (first (dug-cells s))) (pr-str age-ms))
             (is (zero? (lk/known-light-at (:p s) 3 65 0)) "still no light of any kind over the sand")
             (is (empty? (events-of s :near.risky-stay)) (pr-str age-ms))))))))
-
-;; a risky skip is priced again on every scan: once the death has faded (cost.death memory-ms) the body walks back to
-;; the near sand it skipped
-(deftest a-target-skipped-as-risky-is-priced-again-once-the-death-has-faded
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (near-sand-by-a-death 4000 2 false little)
-              back? (fn [] (some #(= 3 (:x (:pos %))) @(:go-tos s)))]
-          (await (settings/with-settings {:jobs.lib.cost.death/memory-ms 10000}
-                   (fn ^:async run []
-                     (await (run-until s 60 #(some #{[-12 64 0]} (dug-cells %))))
-                     (is (not (back?)) "skipped while the death is fresh")
-                     (swap! (:clock s) + 10000)
-                     (await (run-ticks s 10)))))
-          (is (back?) (pr-str @(:go-tos s))))))))
 

@@ -19,6 +19,7 @@
             [jobs.lib.access.zones :as zones]
             [jobs.lib.util :as u]
             [jobs.lib.targets :as targets]
+            [jobs.lib.walk-pick :as walk-pick]
             [jobs.lib.reach :as reach-lib]
             [jobs.lib.look :as look :refer [cell-of headings]]
             [jobs.lib.world :as known]
@@ -443,11 +444,31 @@
   [c m cell stair?]
   (first (filter #(zones/in-box? cell (grown % m)) (concat (own-zones c) (when stair? (buildings c cell))))))
 
+(defn stay-loss-fn
+  "A fn of a target pos: seconds the dig's stay there (work-s) costs (threats/danger-near-fn's :stay-loss), 0 outside
+  every known threat's field."
+  [c]
+  (let [near (threats/danger-near-fn c)
+        s (work-s c)]
+    (fn [pos] (if-let [{:keys [stay-loss]} (near (cell-of pos))] (stay-loss s) 0))))
+
+(defn ^:async calmest!
+  "t, the target of group walked to soonest, unless the dig's stay there costs (stay-loss-fn): then the one of t and the
+  targets whose stay costs less that walk-pick/pick-walk! finds cheapest, the walk and the stay together."
+  [c t group]
+  (let [loss (stay-loss-fn c)
+        lt (loss t)
+        calmer (filterv #(< (loss %) lt) group)]
+    (if (empty? calmer)
+      t
+      (await (walk-pick/pick-walk! c (into [t] calmer) (fn [pos] {:pos (cell-of pos) :range (reach)}) loss)))))
+
 (defn ^:async next-target!
   "The target to walk to next: of the targets off the ground snapshot (else those over it) that the body sees in a
   clear line when any does (the block under the feet only when there is no other: it is dug from beside, where a drop
   deeper down is out of sight), the one the body walks to
-  soonest (targets/nearest! over all of them: the search's heuristic is the lower bound), :searching while that search goes on, the nearest in a line when none is found reachable
+  soonest (targets/nearest! over all of them: the search's heuristic is the lower bound), or a calmer one whose walk and
+  stay cost less (calmest!), :searching while that search goes on, the nearest in a line when none is found reachable
   (its walk decides); nil with no targets."
   [c targets]
   (let [{:keys [ground start]} (ctx/mem c)
@@ -460,6 +481,6 @@
     (when (seq group)
       (let [a (await (targets/nearest! c group (reach) {:tag :mine :all true}))]
         (case (:status a)
-          :found (:target a)
+          :found (await (calmest! c (:target a) group))
           :searching :searching
           (first group))))))

@@ -1,8 +1,8 @@
-;; A body that died lately remembers where (memory :deaths) and does not go back to mine there while the memory is fresh.
-;; Lit plot, no clock. A spot seen lit since the death is cleared (death-spot/seen-clear?), and any block light above 0 counts as lit, so the death happens in a sealed 1x2 stone pocket at [10 0 6..7] the body never sees into: it stays uncleared. The iron ore [12 0 6] stands against its east wall, seen from the lit side. The body dies at [10.5 0 6.5] (a NoAI zombie hit), respawns at [16 0 6], east of the pocket, in sight of the ore and is given a pickaxe.
-;; The caller wants the iron only a little (:worth 3 in the zombie cases: a dig and a death-side stay are weighed against it; a caller who wants it dearly takes a short stay by a lately killer). Should-succeed: a second ore at [24 0 6], further off and 13 blocks from the death, is mined instead of the near one, which stays.
+;; A body that died lately remembers where (memory :deaths) and prices the dig's stay there by its killer, who may be back.
+;; Lit plot, no clock. A spot seen lit since the death is cleared (death-spot/seen-clear?), and any block light above 0 counts as lit, so the death happens in a sealed 1x2 stone pocket at [10 0 6..7] the body never sees into: it stays uncleared. The iron ore [12 0 6] stands against its east wall, seen from the lit side. The body dies at [10.5 0 6.5] (a NoAI zombie hit), respawns at [16 0 6], east of the pocket, in sight of the ore and is given a pickaxe. Each mine is a hand order (:worth 1200).
+;; Should-succeed: a second ore at [24 0 6], further off and 13 blocks from the death, is mined instead of the near one, which stays: its walk costs less than the stay by the death (targets/calmest!).
+;; Should-succeed: with no other ore the death-side ore is mined: a zombie death is a quick heal if the mob leaves (Q144), so the stay costs far less than a hand order's worth.
 ;; Should-succeed: a body that died of a fall at the ore mines it (no mob to price).
-;; Should-fail: with no other ore the walk to the death-side ore is held :risky (go-to refuses the walk (mine.walk-refused), or mine skips an ore it stands within reach of: near.risky-stay; mine then stops :none), nothing is dug.
 {:defaults
  {:tags [:mine :death :jobs] :time :any
   :plot {:light :lit :height 12 :floor "dirt" :length 48 :width 48}
@@ -19,10 +19,10 @@
          [:await {:source :body :kind :respawned} 30]
          [:rcon "give $BODY minecraft:stone_pickaxe"]
          [:wait-s 3]
-         [:job (jobs.gather.mine {:worth 3 :torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
+         [:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 200 :of-job true}]
    :after [[:item "raw_iron" 1] [:block [12 0 6] "iron_ore"] [:not-block [24 0 6] "iron_ore"]]}
-  {:name "only-ore-where-it-died-is-refused-as-risky"
+  {:name "only-ore-where-it-died-is-mined-at-a-hand-orders-worth"
    :blocks [[:set [12 0 6] "iron_ore"]]
    :act [[:summon "zombie" [10.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
          [:rcon "damage $BODY 100 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
@@ -30,11 +30,10 @@
          [:await {:source :body :kind :respawned} 30]
          [:rcon "give $BODY minecraft:stone_pickaxe"]
          [:wait-s 3]
-         [:job (jobs.gather.mine {:worth 3 :torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
-   :expect [{:event {:source :job :kind :mine.walk-refused} :within-s 90}
-            {:event {:source :job :kind :stopped :data {:reason :none}} :within-s 90 :of-job true}]
-   :after [[:block [12 0 6] "iron_ore"]]
-   :limit-s 150}
+         [:job (jobs.gather.mine {:worth 1200 :torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :mine.walk-refused} :for-s 10}]
+   :after [[:item "raw_iron" 1] [:not-block [12 0 6] "iron_ore"]]}
   {:name "fall-death-by-the-ore-does-not-hold-the-mine"
    :blocks [[:set [12 0 6] "iron_ore"]]
    :act [[:rcon "damage $BODY 100 minecraft:fall"]
