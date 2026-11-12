@@ -8,6 +8,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.planner :as cost-planner]
@@ -61,13 +62,16 @@
 
 (def target [])
 
-(def defaults {:use {:blocks :build} :spend {:job-time ::job-time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def safe? ready/ok)
 
 (def fit? ready/ok)
 
-(defn blocks [c] (vec (ctx/use c :blocks)))
+(defn blocks
+  "The block names to close with: the call's :use :blocks, else every :build filler (read when needed: the entering digs in, and what it picks up there counts)."
+  [c]
+  (vec (or (ctx/use c :blocks) (choose/filler-names c :build))))
 
 (defn have-blocks? [c] (boolean (or (room-lib/carried-door (:primitives c)) (seq (lb/carried c (blocks c))))))
 

@@ -131,6 +131,11 @@
         (let [{:keys [eng]} (await (enter-with doorway-hut []))]
           (is (empty? (st/entries eng :doorway-tried)) "the night, not enter-room, marks a doorway it could not fill"))))))
 
+(deftest blocks-picked-up-after-the-call-started-count-as-carried
+  (let [{:keys [eng p]} (st/setup (assoc doorway-hut :inventory stones))
+        c {:primitives p :args {} :view (fn [] (mem/view (:store eng))) :quote-call {}}]
+    (is (true? (enter-room/have-blocks? c)) "the carried fillers are read when asked, not frozen at the call start")))
+
 (deftest the-quote-is-infinite-when-the-room-cannot-be-closed-and-free-when-it-is-shut
   (async done
     (tu/run-async done
