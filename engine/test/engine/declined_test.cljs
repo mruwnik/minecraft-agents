@@ -18,9 +18,9 @@
   "Run f (a promise-returning fn of the ctx) as the one round of a parent, with go-to replaced by go-to-def; resolves to
   what f resolved to."
   ([go-to-def f] (in-parent go-to-def f (atom [])))
-  ([go-to-def f seen]
-  (let [clock (atom 1000000)
-        out (atom nil)
+  ([go-to-def f seen] (in-parent go-to-def f seen (atom 1000000)))
+  ([go-to-def f seen clock]
+  (let [out (atom nil)
         parent {:round (fn ^:async r [c] (reset! out [(await (f c))]) (ctx/end c :done nil))}
         eng (core/create {:primitives (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :floor [-5 -5 5 5]})
                           :jobs (assoc registry/jobs 'parent parent 'jobs.movement.go-to go-to-def)
@@ -130,19 +130,29 @@
 
 (deftest a-slot-is-exhausted-once-another-round-is-not-worth-its-price
   ;; at the order's 1200 s, :child-round's pooled .043/.136: after 1 fruitless round 379 s, after 2 45 s, after 3 24 s,
-  ;; after 4 16.5 s; a round with no seconds is priced at the kind's 17.1 s
+  ;; after 4 16.5 s; a round with no seconds, or whose child was declined, is priced at the kind's 17.1 s; a round
+  ;; begun (child/begin!) is priced from there, the caller's own 300 s in it counted though its child took 5 ms;
+  ;; :craft-refused's .01/1 at 3.677 s allows 3
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:none false :30s [false false true] :300s [false true] :unpriced [false false false true] :progress false}
-               (await (in-parent walker
-                                 (fn ^:async f [c]
-                                   (let [after (fn [slot e] (child/fruitless! c slot e) (child/exhausted? c slot))]
-                                     {:none (child/exhausted? c :a)
-                                      :30s (mapv (fn [_] (after :a (round 30))) (range 3))
-                                      :300s (mapv (fn [_] (after :b (round 300))) (range 2))
-                                      :unpriced (mapv (fn [_] (after :d nil)) (range 4))
-                                      :progress (do (child/progress! c :a) (child/exhausted? c :a))}))))))))))
+        (let [clock (atom 1000000)
+              declined {:kind :condition-failed :cause :x :report {:uses {:wall-time 0.005}}}]
+          (is (= {:none false :30s [false false true] :300s [false true] :unpriced [false false false true] :progress false
+                  :declined [false false false true] :begun [false true] :refused [false false false true]}
+                 (await (in-parent walker
+                                   (fn ^:async f [c]
+                                     (let [after (fn [slot e] (child/fruitless! c slot e) (child/exhausted? c slot))
+                                           begun (fn [] (child/begin! c :e) (swap! clock + 300000) (after :e (round 0.005)))]
+                                       {:none (child/exhausted? c :a)
+                                        :30s (mapv (fn [_] (after :a (round 30))) (range 3))
+                                        :300s (mapv (fn [_] (after :b (round 300))) (range 2))
+                                        :unpriced (mapv (fn [_] (after :d nil)) (range 4))
+                                        :declined (mapv (fn [_] (after :f declined)) (range 4))
+                                        :begun (mapv (fn [_] (begun)) (range 2))
+                                        :refused (mapv (fn [_] (child/fruitless! c :g) (child/exhausted? c :g :craft-refused)) (range 4))
+                                        :progress (do (child/progress! c :a) (child/exhausted? c :a))}))
+                                   (atom []) clock)))))))))
 
 (deftest the-give-up-ending-carries-the-last-fruitless-one-not-done
   (async done

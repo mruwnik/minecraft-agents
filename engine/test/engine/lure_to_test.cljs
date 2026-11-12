@@ -227,6 +227,19 @@
             (is (= reason (:reason (done-event s))) (name reason))
             (is (= 1 (count (stopped s))) (name reason))))))))
 
+(deftest an-equip-that-leaves-the-food-out-of-hand-is-retried-at-an-inventory-refusals-price
+  ;; :craft-refused at a worth of 100: a second equip's 1% x 100 is under its 3.7 s (at :child-round's walk-sized price
+  ;; a second would come)
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} {:inventory wheat :entities [(cow 1 3)]}) 50)]
+          ((nth (first end-reasons) 2) p (atom 0))
+          (core/submit! eng (tu/order (list 'jobs.animals.lure-to {:mob "cow" :pos goal :worth 100})) {})
+          (await (tu/run-ticks eng clock 14 700))
+          (is (= :no-hold (:reason (done-event s))))
+          (is (= 1 (count (h/calls p "equip")))))))))
+
 (deftest a-lure-out-of-time-ends-on-the-engines-limit-and-its-cleanup-puts-the-food-away
   (async done
     (tu/run-async done

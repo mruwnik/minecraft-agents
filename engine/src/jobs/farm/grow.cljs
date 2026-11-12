@@ -157,11 +157,6 @@
           (= :done (:kind e)) (do (ctx/update-mem! c assoc :lit true) nil)
           :else (ctx/end c :nothing-possible :no-light (select-keys (:data e) [:uncovered])))))))
 
-(defn declined?
-  "Whether child ending e is a refusal before it ran (tend waits :away while another job is listed): no tend happened."
-  [e]
-  (and (= :condition-failed (:kind e)) (empty? (:data e))))
-
 (defn ^:async tend-step!
   "One tend pass over the field: :again after it, :continue while it waits; passes in a row that left no crop end the run once another is not worth its price (child/exhausted?)."
   [c]
@@ -170,7 +165,7 @@
                              (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
     (cond
       (= :continue e) :continue
-      (declined? e) :continue
+      (child/declined? e) :continue
       :else
       (do (child/fruitless! c :tend e)
           (if (child/exhausted? c :tend)

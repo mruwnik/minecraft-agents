@@ -75,11 +75,12 @@
 
 (defn ^:async hold!
   "Take food, a carried breeding food, into the hand. Nil when it is held; :no-hold once another
-  try after failed ones in a row is not worth its price (child/exhausted?); else :retry after one more equip (the caller checks the hand next round)."
+  try after failed ones in a row is not worth its price (child/exhausted? :craft-refused: an inventory action the
+  server let pass without the item in hand repeats until the world changes); else :retry after one more equip (the caller checks the hand next round)."
   [c food]
   (cond
     (= food (held c)) nil
-    (child/exhausted? c :equip) :no-hold
+    (child/exhausted? c :equip :craft-refused) :no-hold
     :else (do (child/fruitless! c :equip)
               (await (ctx/act c :equip (clj->js {:item food})))
               :retry)))

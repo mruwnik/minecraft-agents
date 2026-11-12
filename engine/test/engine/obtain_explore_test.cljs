@@ -108,7 +108,8 @@
           (is (empty? (f/events-of s :obtain.exploring)))
           (is (<= 1 (get (f/inv s) "raw_iron" 0)) "the mine went for the ore and got it"))))))
 
-(deftest logs-only-on-a-bedrock-pillar-are-explored-for-before-obtain-stops
+(deftest logs-only-on-a-bedrock-pillar-are-explored-for-at-a-hand-orders-worth-not-at-obtains-own
+  ;; at obtain's own worth of 2 logs (~15 s) one unreachable round is already not worth another, so no explore comes
   (async done
     (tu/run-async done
       (fn ^:async t []

@@ -430,6 +430,7 @@
               (ctx/emit! c :obtain.wool-colour :info
                          {:message (str "no " wanted " sheep worth the walk; taking " taking " wool instead")
                           :wanted wanted :taking taking})))
+          (child/begin! c :gather)
           (let [e (waits/waiting-out c (await (ctx/call c (gather-slot need) (:job need) (:args need))))]
             (if (= :continue e)
               :continue

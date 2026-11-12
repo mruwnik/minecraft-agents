@@ -50,25 +50,49 @@
   [c slot]
   (get-in (ctx/mem c) [:fruitless slot] 0))
 
+(defn declined?
+  "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
+  [e]
+  (and (= :condition-failed (:kind e)) (empty? (:data e))))
+
+(defn begin!
+  "slot's round starts now, unless one is under way (fruitless! and progress! end it): fruitless! prices the round from
+  here, so the caller's own work in it (a walk, a feed) counts."
+  [c slot]
+  (when-not (get-in (ctx/mem c) [:round-t slot])
+    (ctx/update-mem! c assoc-in [:round-t slot] (ctx/now c))))
+
+(defn round-s
+  "The seconds of slot's round ending in e: from begin! when it was called, else e's :wall-time; nil (the kind's
+  seconds) when the child never ran (declined?)."
+  [c slot e]
+  (when-not (declined? e)
+    (if-let [t (get-in (ctx/mem c) [:round-t slot])]
+      (/ (- (ctx/now c) t) 1000)
+      (get-in e [:report :uses :wall-time]))))
+
 (defn fruitless!
   "Count one more round of slot's child that brought nothing, keeping its ending e (if given, and not :done) for give-up
-  and its seconds (the report's :wall-time) as the price of the next (exhausted?); the count so far, this one included."
+  and its seconds (round-s) as the price of the next (exhausted?); the count so far, this one included."
   ([c slot] (fruitless! c slot nil))
   ([c slot e]
-   (ctx/update-mem! c #(cond-> (-> (update-in % [:fruitless slot] (fnil inc 0))
-                                   (assoc-in [:fruitless-s slot] (get-in e [:report :uses :wall-time])))
-                         (and (map? e) (not= :done (:kind e))) (assoc-in [:fruitless-ending slot] (dissoc e :report))))
+   (let [s (round-s c slot e)]
+     (ctx/update-mem! c #(cond-> (-> (update-in % [:fruitless slot] (fnil inc 0))
+                                     (assoc-in [:fruitless-s slot] s)
+                                     (update :round-t dissoc slot))
+                           (and (map? e) (not= :done (:kind e))) (assoc-in [:fruitless-ending slot] (dissoc e :report)))))
    (fruitless c slot)))
 
 (defn exhausted?
   "Whether another round of slot's child after its fruitless ones in a row is not worth its price: never before one;
-  else not cost/try-again? :child-round at the call's worth, the round priced at the seconds the last fruitless one
-  took, else (none, or one that ended at once) at the kind's."
-  [c slot]
-  (let [n (fruitless c slot)
-        s (get-in (ctx/mem c) [:fruitless-s slot])]
-    (and (pos? n)
-         (not (cost/try-again? c :child-round (cond-> {:fails n} (and (number? s) (pos? s)) (assoc :try-s s)))))))
+  else not cost/try-again? of kind (default :child-round) at the call's worth, the round priced at the seconds the
+  last fruitless one took, else (none, or one that ended at once) at the kind's."
+  ([c slot] (exhausted? c slot :child-round))
+  ([c slot kind]
+   (let [n (fruitless c slot)
+         s (get-in (ctx/mem c) [:fruitless-s slot])]
+     (and (pos? n)
+          (not (cost/try-again? c kind (cond-> {:fails n} (and (number? s) (pos? s)) (assoc :try-s s))))))))
 
 (defn give-up
   "The ending of a caller whose slot's child is exhausted: nothing-possible with cause reason and data, the child's last
@@ -79,7 +103,7 @@
 (defn progress!
   "slot's child brought something: its fruitless rounds start again from none."
   [c slot]
-  (ctx/update-mem! c (fn [m] (reduce #(update %1 %2 dissoc slot) m [:fruitless :fruitless-ending :fruitless-s]))))
+  (ctx/update-mem! c (fn [m] (reduce #(update %1 %2 dissoc slot) m [:fruitless :fruitless-ending :fruitless-s :round-t]))))
 
 (defn ^:async call-walk*
   "A go-to child in slot with args through ctx/call: :continue while the walk goes on (or waits: go-to's safe? says

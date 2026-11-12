@@ -742,7 +742,7 @@
               orig ctx/call]
           (set! ctx/call (fn [c slot job args]
                            (if (= :gather-cobblestone slot)
-                             (do (swap! n inc) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found :report {:uses {:wall-time 30}}}))
+                             (do (swap! n inc) (swap! (:clock s) + 30000) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found}))
                              (orig c slot job args))))
           (try
             (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
@@ -1373,7 +1373,8 @@
                            (if-not (= 'jobs.forestry.harvest-wood job)
                              (orig c slot job args)
                              (do (when (= 3 (swap! calls inc)) (swap! (fake/state (:p s)) fake/give "oak_log" 1))
-                                 (js/Promise.resolve {:kind :done :report {:uses {:wall-time 30}}})))))
+                                 (swap! (:clock s) + 30000)
+                                 (js/Promise.resolve {:kind :done})))))
           (try
             (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "oak_log" :count 20 :explore false})) {})
             (await (run-ticks s 40))

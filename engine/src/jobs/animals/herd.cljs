@@ -288,10 +288,11 @@
                                           (set-phase! c :shut-gate))))
       ;; a run ending with the body on the pen side goes out first (the exit's own way, then the census ends it)
       :shut-gate (cond
-                   (not (gate-open? c)) (after-shut! c)
+                   (not (gate-open? c)) (do (child/progress! c :shut-gate) (after-shut! c))
                    (and (body-in-pen? c) (< (:leaves m 0) (max-leaves)))
                    (set-phase! c :exit {:leaves (inc (:leaves m 0)) :stepped-back false})
-                   :else (await (shut-when-clear! c (shut-look-ms) :shut-gate nil #(shut-failed! c)))))))
+                   :else (do (child/begin! c :shut-gate)
+                             (await (shut-when-clear! c (shut-look-ms) :shut-gate nil #(shut-failed! c))))))))
 
 (defn ^:async step-once!
   "One step of the run: the lead looked at, the :gate-held entry kept fresh, then the phase's step."

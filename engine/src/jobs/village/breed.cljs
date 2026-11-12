@@ -179,7 +179,7 @@
   (ctx/end c kind reason (data-of c seen)))
 
 (defn choose!
-  "Pick the two nearest untried adults (none left after an attempt: the nearest two again) and book them with the baseline count; fewer than two adults after an attempt (one wandered out of sight) is a wait where the body stands for them to come back, and a fruitless attempt; none at all yields (can-run? answers). :again or :continue."
+  "Start an attempt (child/begin!: its feeds and wait price the next): pick the two nearest untried adults (none left after an attempt: the nearest two again) and book them with the baseline count; fewer than two adults after an attempt (one wandered out of sight) is a wait where the body stands for them to come back, and a fruitless attempt; none at all yields (can-run? answers). :again or :continue."
   [c vs seen]
   (let [m (ctx/mem c)
         me (u/self-pos c)
@@ -188,6 +188,7 @@
         adults (filter villager/adult? vs)
         fresh (nearest (remove #(tried (.-uuid %)) adults))
         pair (if (and (< (count fresh) 2) (seq tried)) (nearest adults) fresh)]
+    (child/begin! c :pair)
     (cond
       (< (count pair) 2) (if (seq tried)
                            (do (ctx/update-mem! c assoc :waiting true :at me) :again)

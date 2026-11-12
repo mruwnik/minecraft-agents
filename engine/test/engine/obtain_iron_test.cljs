@@ -19,7 +19,6 @@
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.plan :as plan]
             [jobs.lib.cost :as cost]
-            [jobs.lib.child :as child]
             [jobs.lib.torch :as torch]
             [jobs.items.obtain.need :as need]
             [jobs.lib.sources :as sources]
@@ -542,26 +541,21 @@
     (tu/run-async done
       (fn ^:async t []
         (loop [[[y dug worth runs why] & more] [[64 {:cut {:level 32} :tunnel {:steps 32}} 5000 5 "a run that tunnelled looked at new rock: the gather mines on while the next pays"]
-                                                [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: three end the gather"]
+                                                [64 {:legs [{:length 6 :stop :no-floor}] :tunnel {:steps 6}} 5000 3 "one whose tunnel only walked open air cut nothing: after three 120 s runs a fourth is not worth its price"]
                                                 [64 {} 5000 3 "a run that cut nothing is fruitless: three end the gather"]
-                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (- (one-more-run-worth 16) (plan/strip-s 16 nil)) 3 "a run after which no strip leg pays is fruitless: three end the gather"]
+                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (- (one-more-run-worth 16) (plan/strip-s 16 nil)) 1 "a run after which no strip leg pays is fruitless: at this worth one ends the gather"]
                                                 [64 {:cut {:level 32} :tunnel {:steps 32}} 1 0 "a call worth less than a search's trip does not start"]
-                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 4 "the second run spends what a third would need: three more runs end it"]
-                                                [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16 nil)))) 3 "the walk back from its branches is spent too: no second run pays"]]]
+                                                [16 {:cut {:level 32} :tunnel {:steps 32}} (one-more-run-worth 16) 2 "the second run spends what a third would need: it is fruitless and ends the gather"]
+                                                [16 {:cut {:level 32 :back 64} :tunnel {:steps 32}} (+ (one-more-run-worth 16) (* 0.5 (- (:cost (cost/walk-cost {:distance 64})) (plan/strip-s 16 nil)))) 1 "the walk back from its branches is spent too: no second run pays"]]]
           (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-12 -12 16 16]) (assoc-in [:self :pos :y] y)) [f/own-zone])
                 calls (atom 0)
-                exhausted? child/exhausted?
                 eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
                               (fn ^:async f [c]
-                                ;; a run takes a round at least, as a real dig does
+                                ;; a run takes a mine run's seconds, as a real dig does
                                 (if-not (:dug (ctx/mem c))
-                                  (do (swap! calls inc) (ctx/update-mem! c assoc :dug true) :continue)
+                                  (do (swap! calls inc) (swap! (:clock s) + 120000) (ctx/update-mem! c assoc :dug true) :continue)
                                   (ctx/end c :nothing-possible {:reason :tunnel-length} (merge {:got 0 :reason :tunnel-length} dug)))))]
-            ;; which runs count fruitless is pinned here; when the fruitless ones end it is child's price (declined-test)
-            (set! child/exhausted? (fn [c slot] (<= 3 (child/fruitless c slot))))
-            (try
-              (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :worth worth} 60))
-              (finally (set! child/exhausted? exhausted?)))
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true :worth worth} 60))
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 

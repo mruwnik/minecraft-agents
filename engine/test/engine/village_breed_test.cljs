@@ -8,8 +8,7 @@
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.settings :as settings]
-            [engine.test-util :as tu]
-            [jobs.lib.child :as child]))
+            [engine.test-util :as tu]))
 
 (def job 'jobs.village.breed)
 
@@ -56,21 +55,16 @@
     {:eng eng :p p :seen seen :clock clock :out out}))
 
 (defn ^:async run!
-  "Tick the engine at most n times, while its list holds a job and stop? (when given) is false."
+  "Tick the engine at most n times (2 s apart), while its list holds a job and stop? (when given) is false."
   [{:keys [eng clock extra]} n & [stop?]]
-  ;; the short wait-s makes an attempt nearly free, so child's price would retry far past what a 45 s wait allows;
-  ;; these tests pin breed's attempts, the price of another is pinned in declined-test
-  (let [exhausted? child/exhausted?]
-    (set! child/exhausted? (fn [c slot] (<= 3 (child/fruitless c slot))))
-    (try
-      (await (settings/with-settings (merge {:jobs.village.breed/wait-s 3} extra)
-               (fn ^:async t []
-                 (loop [i 0]
-                   (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
-                     (swap! clock + 700)
-                     (await (core/tick! eng))
-                     (recur (inc i)))))))
-      (finally (set! child/exhausted? exhausted?)))))
+  ;; a 30 s wait and its feeds make an attempt cost ~120 s: at the order's 1200 s a third is not worth it (45 s, child/exhausted?)
+  (await (settings/with-settings (merge {:jobs.village.breed/wait-s 30} extra)
+           (fn ^:async t []
+             (loop [i 0]
+               (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
+                 (swap! clock + 2000)
+                 (await (core/tick! eng))
+                 (recur (inc i))))))))
 
 (defn ^:async breed
   "Run the job until it ends (at most n ticks); its result is in :out. The world has beds unless it says :no-beds."
@@ -111,7 +105,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (breed {:entities pair :inventory bread} args 120 #(feeding % 0)))]
+        (let [{:keys [out] :as s} (await (breed {:entities pair :inventory bread} args 200 #(feeding % 0)))]
           (is (= :no-births (:reason @out)))
           (is (= :stopped (:status @out)))
           (is (= 0 (:births @out)))
@@ -122,9 +116,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out seen]} (await (breed {:entities pair :inventory bread} args 200 #(feeding % 0)))]
-          (is (= :no-births (:reason @out)) "three attempts on the one pair, not the no-food of a second feeding")
+          (is (= :no-births (:reason @out)) "two attempts on the one pair, not the no-food of a second feeding")
           (is (= 2 (count (tosses p))) "the food they took stays unspent")
-          (is (= 3 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "three waits on the one pair"))))))
+          (is (= 2 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "two waits on the one pair"))))))
 
 (deftest a-villager-out-of-sight-after-an-attempt-is-waited-for-not-given-up-on
   (async done
@@ -133,7 +127,7 @@
         (let [{:keys [out seen]} (await (breed {:entities pair :inventory bread} args 300
                                               #(feeding % 0 :after (fn [n] (when (= 2 n) (swap! (fake/state %) update :entities (fn [es] (filterv (fn [e] (not= "v-2" (:uuid e))) es))))))))]
           (is (= :no-births (:reason @out)))
-          (is (= 3 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "three waits, the one villager left in sight does not end it after the first"))))))
+          (is (= 2 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "two waits, the one villager left in sight does not end it after the first"))))))
 
 (deftest fewer-than-two-adults-or-no-food-never-starts
   (async done
@@ -174,7 +168,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (breed {:entities pair :inventory bread} {:target 4} 80
+        (let [{:keys [out]} (await (breed {:entities pair :inventory bread} {:target 4} 200
                                           #(feeding % 2 :entity (villager 9 6))))]
           (is (= 0 (:births @out)))
           (is (= :no-births (:reason @out))))))))
@@ -197,7 +191,7 @@
           (is (= :no-food (:reason @out)))
           (is (= :stopped (:status @out))))))))
 
-(deftest three-fruitless-attempts-stop-no-births
+(deftest fruitless-attempts-stop-no-births-once-another-is-not-worth-it
   (async done
     (tu/run-async done
       (fn ^:async t []

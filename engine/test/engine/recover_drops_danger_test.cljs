@@ -317,12 +317,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the saved legs say another is not worth its price (child's price is pinned in declined-test)
-        (let [exhausted? child/exhausted?
-              _ (set! child/exhausted? (fn [c slot] (<= 3 (child/fruitless c slot))))
-              {:keys [eng]} (await ((resume-run {:blocked true :fruitless {:go 3}})))]
-          (set! child/exhausted? exhausted?)
-          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
+        ;; five saved blocked legs, of their seconds (leg-s x blocked-leg-factor, 18 s) or of a trip saved without them
+        ;; (:child-round's 17.1 s): at 1200 s a sixth wins 1%, 12.5 s
+        (loop [[trip & more] [{:fruitless-s {:go (* (cfg/leg-s) fetch/blocked-leg-factor)}} {}]]
+          (let [{:keys [eng]} (await ((resume-run (merge {:blocked true :fruitless {:go 5}} trip))))]
+            (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str trip)))
+          (when more (recur more)))))))
 
 (deftest a-trip-cut-once-goes-on
   (async done
@@ -526,12 +526,12 @@
                       (into {} (map (fn [[x y z]] [(str x "," y "," z) "stone"])) stone-cell)
                       (into {} (map (fn [[x y z]] [(str x "," y "," z) "dirt"])) plug-cells)
                       (:blocks spec))
-        {:keys [eng seen p]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} spec {:blocks blocks}))]
+        {:keys [eng seen p clock]} (setup (merge {:floor tu/walk-floor :entities (vec (pile-drops pile))} spec {:blocks blocks}))]
     (ledger/write! (:store eng) (into (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-plug :state :placed}) plug-cells)
                                       extra-entries))
     (die! eng {:pos dt/death-pos :inventory pile})
     (core/submit! eng (tu/order job) {})
-    {:eng eng :seen seen :p p}))
+    {:eng eng :seen seen :p p :clock clock}))
 
 (deftest the-seal-cleanup-takes-back-only-blocks-near-the-pile
   (async done
@@ -569,19 +569,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
+        (let [{:keys [eng seen clock]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
               walk-leg! fetch/walk-leg!
               run!* child/run!*
-              exhausted? child/exhausted?
               seals (atom 0)
               walk-worths (atom [])]
-          ;; a stubbed cleanup takes no time, so child's price would let it run on; the price is pinned in declined-test
-          (set! child/exhausted? (fn [c slot] (<= 2 (child/fruitless c slot))))
           (set! fetch/walk-leg! (fn [_ _] [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
           (let [stub (fn ^:async stub [c slot & more]
                       (when (= :seal-walk slot) (swap! walk-worths conj (:worth (second more))))
                       (if (= :seal slot)
-                        (do (swap! seals inc) {:kind :done :data {:removed []}})
+                        (do (swap! seals inc) (swap! clock + 30000) {:kind :done :data {:removed []}})
                         (await (apply run!* c slot more))))]
             (set! (.-cljs$core$IFn$_invoke$arity$4 stub) stub)
             (set! (.-cljs$core$IFn$_invoke$arity$5 stub) stub)
@@ -589,8 +586,7 @@
           (await (run-until-empty eng 60))
           (set! fetch/walk-leg! walk-leg!)
           (set! child/run!* run!*)
-          (set! child/exhausted? exhausted?)
-          (is (= 2 @seals) "the seal is tried again after a run that removed nothing")
+          (is (= 3 @seals) "the seal is tried again after a 30 s run that removed nothing, until a fourth is not worth it at 1200 s")
           (is (and (seq @walk-worths) (every? nil? @walk-worths)) (str "the walk to the seal takes the call's worth: " (pr-str @walk-worths))))))))
 
 (deftest a-walk-stuck-far-from-a-sealed-pile-leaves-the-seal-alone
