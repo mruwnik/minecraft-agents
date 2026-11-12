@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [explore-opts search-names search-scan-radius search-worth site-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [explore-opts job-time-binds? search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [callable? climbs-first? gather-viable? pickaxe-first? seen-refusal tree? light-settling? tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan gathered-s search-way]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
@@ -335,7 +335,8 @@
         saw (str "mine cut " n " blocks at y " y " and saw no " (:key need))]
     (cond
       (not (js/isFinite (:cost way)))
-      (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": another run is worth less than it costs"))
+      (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": another run costs more than the call's "
+                                                       (if (job-time-binds? c) (str "job time left (" (js/Math.round (get-in (ctx/left c) [:spend :job-time])) " s)") "worth")))
           false)
       (and stopped? (not (cost/try-again? c :dig {:fails stops})))
       (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ", the mine stopped " stops " times: another run is worth less than it costs"))

@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.base :as base]
             [jobs.items.obtain.need :as need]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.price :as price]
@@ -339,3 +340,9 @@
                                 (:cost (plan/tunnel-way (assoc (rooted c0 5000) :left (constantly {:spend {:job-time job-s}}) :jobs.items.obtain.base/spent 85) need))))]
     (is (infinite? (cost-left 515)) "a find at y -39 costs more than the 515 s a default call has left, whatever its worth")
     (is (< (cost-left 2700) js/Infinity) "a bill item's child has 2700 s")))
+
+(deftest the-job-time-left-binds-a-search-when-it-is-under-the-calls-worth
+  (let [c {:quote-call {:worth 5000} :left (constantly {})}]
+    (is (base/job-time-binds? (assoc c :left (constantly {:spend {:job-time 515}}))) "515 s left under a worth of 5000 s")
+    (is (not (base/job-time-binds? (assoc c :left (constantly {:spend {:job-time 9000}})))) "more time than the worth")
+    (is (not (base/job-time-binds? c)) "no job time limit")))
