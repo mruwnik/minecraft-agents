@@ -237,13 +237,42 @@
   (when (and (:want-table (ctx/mem c)) (not (carried-table? c)))
     {:item "crafting_table" :count 1}))
 
+(defn shorts
+  "[name n] of each ingredient of the last shortage still not carried up to the amount it needed, in order."
+  [c]
+  (let [have (recipes/pooled (game/version-of (:primitives c)) (:item (:args c)) (storage/carried-totals (reserve/free c (chooser c))))]
+    (keep (fn [[name want]]
+            (let [n (get have name 0)]
+              (when (< n want) [name (- want n)])))
+          (:wants (ctx/mem c)))))
+
+(defn problem
+  "The first of shorts as {:item :count}, else nil."
+  [c]
+  (when-let [[item n] (first (shorts c))] {:item item :count n}))
+
+(defn fetch-opts
+  "The need options of the fetch of item."
+  [c item]
+  {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))})
+
+(defn fetch-worth
+  "The worth of the fetch of item: the call's less the rest of the craft after it (cost/worth-left): the other shorts at
+  their fetch's price (need/item-price) and the batches (quote-of)."
+  [c item]
+  (let [others (for [[k n] (shorts c) :when (not= k item)] (need/item-price c k n (fetch-opts c k) nil))]
+    (cost/worth-left c (+ (second (get-in (quote-of c) [:uses :job-time])) (reduce + 0 others)))))
+
 (defn ^:async fetch!
-  "Get what (problem c) names with jobs.items.obtain children (jobs.lib.need) until nothing is due any more: nil (the item
-  arrived, the fetch failed or the call's ways allow none; the craft judges where it stands), :continue while a child waits."
+  "Get what (problem c) names with jobs.items.obtain children (jobs.lib.need) at fetch-worth until nothing is due any
+  more: nil (the item arrived, the fetch failed or the call's ways allow none; the craft judges where it stands),
+  :continue while a child waits."
   [c problem]
   (loop []
     (when-let [{:keys [item count]} (and (seq (need/fetch-how c)) (problem c))]
-      (let [opts {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))}
+      (let [o (fetch-opts c item)
+            ;; priced once, when the child starts: its worth is frozen then
+            opts (cond-> o (nil? (get-in (ctx/mem c) [:children (:slot o)])) (assoc :worth (fetch-worth c item)))
             kin (get (recipes/interchange (game/version-of (:primitives c)) (:item (:args c))) item)
             e (await (if (> (clojure.core/count kin) 1) (need/blocks! c (sort kin) count opts) (need/item! c item count opts)))]
         (cond
@@ -348,14 +377,6 @@
                 :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (crafting-table/cell-vec table)) (dissoc :table)))
                           (or (await (table-fetch! c)) :again)))))))))
 
-(defn problem
-  "The first ingredient of the last shortage still not carried up to the amount it needed, as {:item :count}, else nil."
-  [c]
-  (let [have (recipes/pooled (game/version-of (:primitives c)) (:item (:args c)) (storage/carried-totals (reserve/free c (chooser c))))]
-    (some (fn [[name want]]
-            (let [n (get have name 0)]
-              (when (< n want) {:item name :count (- want n)})))
-          (:wants (ctx/mem c)))))
 
 (defn ^:async short!
   "A craft ran out of an ingredient: fetch what it lacks and craft again (:again, :continue while a fetch

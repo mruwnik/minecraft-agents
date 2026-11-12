@@ -4,9 +4,9 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [explore-opts own-worth search-names search-scan-radius search-worth site-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [explore-opts search-names search-scan-radius search-worth site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [callable? climbs-first? gather-viable? pickaxe-first? seen-refusal tree? light-settling? tools-wanted torch-due trees-unreachable?]]
-            [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan search-way]]
+            [jobs.items.obtain.plan :refer [cut-s first-leg-pays? gather-plan gathered-s search-way]]
             [jobs.items.obtain.seen :refer [animal-cell animals-of approach-bound gather-carried gather-slot hunt-worth lead-args seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
@@ -82,19 +82,21 @@
       :again)))
 
 (defn pickaxe-args
-  "The args of the obtain child that gets a tool for need: its :worth the need's, or the tool's own when more (the tool outlives the need)."
-  [c names need]
+  "The args of the obtain child that gets a tool for need: its :worth the call's less the gather plan pl it serves
+  (cost/worth-left of obtain.plan/gathered-s); none when that plan has no price (an unseen block no search prices, which
+  the mine's stair still reaches): the child inherits the call's."
+  [c names need pl]
   (let [a (:args c)
-        tools (tools-wanted c names need)]
+        rest-s (gathered-s c pl)]
     (into {} (remove (comp nil? val))
-          {:any-of tools :count 1 :ways (ways-of c) :explore (:explore a)
-           :worth (max (ctx/worth c) (own-worth c tools 1))})))
+          {:any-of (tools-wanted c names need) :count 1 :ways (ways-of c) :explore (:explore a)
+           :worth (when (js/isFinite rest-s) (cost/worth-left c rest-s))})))
 
 (defn ^:async pickaxe-step!
-  "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :continue
-  while it runs, else the gather source fails."
-  [c names need]
-  (let [args (pickaxe-args c names need)
+  "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child) for gather plan pl: :again once it is
+  carried, :continue while it runs, else the gather source fails."
+  [c names need pl]
+  (let [args (pickaxe-args c names need pl)
         _ (when-not (:said-pickaxe (ctx/mem c))
             (ctx/update-mem! c assoc :said-pickaxe true)
             (ctx/emit! c :obtain.pickaxe :info
@@ -386,7 +388,7 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (approach-due? c need))
       (await (approach! c need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
-      (await (pickaxe-step! c names need))
+      (await (pickaxe-step! c names need pl))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (surfacing? c need))
       (await (surface-step! c))

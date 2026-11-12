@@ -1029,12 +1029,15 @@
       (fn ^:async t []
         (let [s (start (world {}) [own-zone])
               id (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "cobblestone" :count 3})) {})
-              call ctx/call]
-          (set! ctx/call (fn [c slot job args] (if (= :pickaxe slot) (js/Promise.resolve :continue) (call c slot job args))))
+              call ctx/call
+              worths (atom #{})]
+          (set! ctx/call (fn [c slot job args] (if (= :pickaxe slot) (do (swap! worths conj (:worth args)) (js/Promise.resolve :continue)) (call c slot job args))))
           (try (await (run-ticks s 20))
                (finally (set! ctx/call call)))
           (is (empty? (events-of s :stopped)) (pr-str (map :why (events-of s :stopped))))
-          (is (seq (listed s)) "the obtain is still running"))))))
+          (is (seq (listed s)) "the obtain is still running")
+          (is (= 1 (count @worths)))
+          (is (< 0 (first @worths) tu/order-worth) "the tool's worth is the call's less the gather it serves, not the tool's own price"))))))
 
 (deftest obtain-oak-planks-fells-no-birch
   ;; a birch log makes no oak planks: felling birch for them gathered hundreds of logs live
