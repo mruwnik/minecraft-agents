@@ -1,0 +1,32 @@
+;; Card 97be427e (ff5c1f07): an arrival in water walks on to any seen dry stand within the call's range, however far the body is from it.
+;; Stone plain, water surface at y 3, bank stands at y 4. The body floats at the middle of a pond whose nearest bank is 9 cells away (over 6, the old body radius) with the goal 9 cells from it too.
+;; Should-succeed: go-to {:range 9} to the water ends arrived and out of water, no go-to.in-water event; a boat dismounted mid-pond swims ashore (landed :dry).
+;; Should-fail: a pond whose nearest bank is 14 cells off, beyond the call's range 9: the call ends arrived in the water, saying go-to.in-water.
+{:defaults
+ {:tags [:movement :water :go-to :boats]
+  :time :any
+  :plot {:height 12 :light :sky}
+  :blocks [[:fill [0 0 0] [31 3 31] "stone"]]
+  :limit-s 120}
+ :cases
+ [{:name "arrival-in-a-pond-walks-to-a-bank-nine-off"
+   :blocks [[:fill [8 0 4] [24 3 20] "water"]]
+   :body {:at [16.5 3 12.5] :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 4 12] :range 9})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :go-to.in-water} :for-s 100 :of-job true :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-not-in "water"]]}
+  {:name "boat-dismounted-mid-pond-swims-ashore"
+   :blocks [[:fill [8 0 4] [24 3 20] "water"]]
+   :body {:at [16.5 3 12.5] :settle-s 2}
+   :act [[:summon "oak_boat" [16.5 3 12.5] "{}"]
+         [:rcon "execute at $BODY run ride $BODY mount @e[type=oak_boat,tag=wt,$BOX,limit=1]"]
+         [:job (jobs.movement.leave-vehicle {:worth 1200})]]
+   :expect [{:event {:source :job :kind :completed :data {:landed :dry}} :within-s 100 :of-job true}]
+   :after [[:body-not-in "water"]]}
+  {:name "arrival-in-a-pond-with-the-bank-beyond-the-range-stays-in-the-water"
+   :blocks [[:fill [2 0 2] [29 3 29] "water"]]
+   :body {:at [16.5 3 15.5] :settle-s 2}
+   :act [[:job (jobs.movement.go-to {:worth 1200 :pos #at [16 4 15] :range 9})]]
+   :expect [{:event {:source :job :kind :go-to.in-water} :within-s 100 :of-job true}]
+   :after [[:body-near [16.5 3 15.5] 4]]}]}
