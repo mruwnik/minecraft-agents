@@ -1,0 +1,24 @@
+;; Card 69db6fa9: a cleanup dig of dirt (a quick chore) holds the cheapest carried tool that breaks it quickly, not the finished kit's iron shovel.
+;; The body pillars two blocks of dirt, then jobs.access.cleanup digs the pillar back. An iron sword keeps the body armed (cleanup is :fit? armed); torches keep hostiles away.
+;; Should-succeed: iron and stone shovel carried, the pillar is gone, the iron shovel stays undamaged and the stone one wore. Should-fail (nothing cheaper to hold): the iron shovel alone does the dig and wears.
+{:defaults
+ {:tags [:tool-wear :cleanup :access]
+  :time :any
+  :blocks [[:set [2 0 2] "torch"] [:set [2 0 30] "torch"] [:set [30 0 2] "torch"] [:set [30 0 30] "torch"]
+           [:set [10 0 10] "torch"] [:set [22 0 22] "torch"] [:set [10 0 22] "torch"] [:set [22 0 10] "torch"]]
+  :limit-s 120}
+ :cases
+ [{:name "dirt-pillar-cleanup-holds-the-stone-shovel"
+   :body {:inventory [["iron_shovel" 1] ["stone_shovel" 1] ["dirt" 4] ["iron_sword" 1]]}
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 2 :use {:blocks ["dirt"]} :ignore-zones? true})]
+         [:await {:source :job :kind :completed} 60]
+         [:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:open [:any]}} :within-s 100 :of-job true}]
+   :after [[:item "iron_shovel[minecraft:damage=0]" 1] [:item "stone_shovel[minecraft:damage=0]" 0]]}
+  {:name "dirt-pillar-cleanup-with-only-the-iron-shovel-wears-it"
+   :body {:inventory [["iron_shovel" 1] ["dirt" 4] ["iron_sword" 1]]}
+   :act [[:job (jobs.access.pillar {:worth 1200 :height 2 :use {:blocks ["dirt"]} :ignore-zones? true})]
+         [:await {:source :job :kind :completed} 60]
+         [:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:open [:any]}} :within-s 100 :of-job true}]
+   :after [[:item "iron_shovel[minecraft:damage=0]" 0] [:item "iron_shovel" 1]]}]}
