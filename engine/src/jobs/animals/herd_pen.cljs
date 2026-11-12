@@ -208,14 +208,15 @@
 (defn ^:async unseen-cell!
   "The cell of answer's :unloaded leaks (never seen), not in looked ([x y z] set), the body walks cheapest to see from
   (walk-pick), or nil. Offered are the nearest cells a look pays for (sense/cell-looks: the call's worth less the
-  animal's trip past the cell (sense/fail-price) against the walk, the earlier looks counted fruitless). A cell within look-range a look from here does not make out
-  (look/makes-out-fn) gains nothing, so no look past it pays from here: the caller tries the gate or ends."
+  animal's trip past the cell (sense/fail-price) against the walk, the earlier looks counted fruitless). A cell within look-range that shows
+  (look/look-shows?) but a look from here does not make out (look/makes-out-fn: dark) gains nothing, so no look past it pays from here: the caller tries the gate or ends.
+  A cell hidden behind something is not that: the body walks round to see it."
   [c answer looked]
   (let [here (u/self-pos c)
         cells (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos) (remove #(contains? looked (cell %))) distinct)
         ks (u/nearest-first here identity (mapv cell cells))
         made-out? (look/makes-out-fn (:primitives c))
-        blind? #(and (u/within? here (u/cell-pos %) (look-range)) (not (made-out? %)))
+        blind? #(and (u/within? here (u/cell-pos %) (look-range)) (look/look-shows? (:primitives c) %) (not (made-out? %)))
         price (some-> (sense/fail-price c {:cells ks} (cost/trip))
                       (update :gap-at (fn [gap-at] #(if (blind? %) ##Inf (gap-at %)))))
         offered (set (take (sense/cell-looks price ks (count looked) 0) ks))]

@@ -228,10 +228,12 @@
   "unseen-cell!'s pick for unseen leaks at cells (default one at [5 64 0]), a call worth `worth` seconds and a look from
   here making out the cells made-out? holds for (default none)."
   ([worth] (looked-cell worth [[5 64 0]] (constantly false)))
-  ([worth cells made-out?]
+  ([worth cells made-out?] (looked-cell worth cells made-out? true))
+  ([worth cells made-out? shows?]
    (let [c {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :args {:mob "cow"}}]
      (with-redefs [ctx/worth (fn [_] worth)
-                   lib-look/makes-out-fn (constantly made-out?)]
+                   lib-look/makes-out-fn (constantly made-out?)
+                   lib-look/look-shows? (constantly shows?)]
        (some-> (await (hp/unseen-cell! c {:leaks (mapv (fn [[x y z]] {:why :unloaded :pos {:x x :y y :z z}}) cells)} #{}))
                ((juxt :x :y :z)))))))
 
@@ -243,4 +245,6 @@
         (is (nil? (await (looked-cell (cost/trip)))) "a call worth no more than the animal's trip back: no look pays")
         (is (= [3 64 0] (await (looked-cell 1e6 [[3 64 0]] (constantly true)))) "a cell in look range a look makes out is looked at")
         (is (nil? (await (looked-cell 1e6 [[3 64 0] [5 64 0]] (constantly false))))
-            "the nearest cell in look range a look from here does not make out buys nothing, so no look past it pays from here")))))
+            "the nearest cell in look range a look from here does not make out buys nothing, so no look past it pays from here")
+        (is (= [3 64 0] (await (looked-cell 1e6 [[3 64 0]] (constantly false) false)))
+            "a cell in look range hidden behind something is not dark: the body walks round to look at it")))))
