@@ -63,7 +63,7 @@
 (defn exhausted?
   "Whether another round of slot's child after its fruitless ones in a row is not worth its price: never before one;
   else not cost/try-again? :child-round at the call's worth, the round priced at the seconds the last fruitless one
-  took, else at the kind's."
+  took, else (none, or one that ended at once) at the kind's."
   [c slot]
   (let [n (fruitless c slot)
         s (get-in (ctx/mem c) [:fruitless-s slot])]

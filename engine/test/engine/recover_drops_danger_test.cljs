@@ -317,7 +317,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((resume-run {:blocked true :fruitless {:go 3}})))]
+        ;; the saved legs say another is not worth its price (child's price is pinned in declined-test)
+        (let [exhausted? child/exhausted?
+              _ (set! child/exhausted? (fn [c slot] (<= 3 (child/fruitless c slot))))
+              {:keys [eng]} (await ((resume-run {:blocked true :fruitless {:go 3}})))]
+          (set! child/exhausted? exhausted?)
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason]))))))))
 
 (deftest a-trip-cut-once-goes-on
@@ -568,8 +572,11 @@
         (let [{:keys [eng seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
               walk-leg! fetch/walk-leg!
               run!* child/run!*
+              exhausted? child/exhausted?
               seals (atom 0)
               walk-worths (atom [])]
+          ;; a stubbed cleanup takes no time, so child's price would let it run on; the price is pinned in declined-test
+          (set! child/exhausted? (fn [c slot] (<= 2 (child/fruitless c slot))))
           (set! fetch/walk-leg! (fn [_ _] [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
           (let [stub (fn ^:async stub [c slot & more]
                       (when (= :seal-walk slot) (swap! walk-worths conj (:worth (second more))))
@@ -582,7 +589,8 @@
           (await (run-until-empty eng 60))
           (set! fetch/walk-leg! walk-leg!)
           (set! child/run!* run!*)
-          (is (= 2 @seals) "the seal is tried again, up to twice a trip")
+          (set! child/exhausted? exhausted?)
+          (is (= 2 @seals) "the seal is tried again after a run that removed nothing")
           (is (and (seq @walk-worths) (every? nil? @walk-worths)) (str "the walk to the seal takes the call's worth: " (pr-str @walk-worths))))))))
 
 (deftest a-walk-stuck-far-from-a-sealed-pile-leaves-the-seal-alone

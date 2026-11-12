@@ -115,7 +115,7 @@
         (let [pillar (into {} (concat (for [y (range 63 67)] [(str "0," y ",4") "bedrock"])
                                       (for [y (range 67 73)] [(str "0," y ",4") "oak_log"])))
               s (f/start (ore-world pillar []) [f/own-zone])]
-          (await (obtain! s {:item "oak_log" :count 2 :explore true} 60))
+          (await (obtain! s {:worth tu/order-worth :item "oak_log" :count 2 :explore true} 60))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for other logs")
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
 

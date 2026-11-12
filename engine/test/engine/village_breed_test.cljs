@@ -8,7 +8,8 @@
             [engine.hostile-test :as h]
             [engine.registry :as registry]
             [engine.settings :as settings]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.child :as child]))
 
 (def job 'jobs.village.breed)
 
@@ -57,13 +58,19 @@
 (defn ^:async run!
   "Tick the engine at most n times, while its list holds a job and stop? (when given) is false."
   [{:keys [eng clock extra]} n & [stop?]]
-  (await (settings/with-settings (merge {:jobs.village.breed/wait-s 3} extra)
-           (fn ^:async t []
-             (loop [i 0]
-               (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
-                 (swap! clock + 700)
-                 (await (core/tick! eng))
-                 (recur (inc i))))))))
+  ;; the short wait-s makes an attempt nearly free, so child's price would retry far past what a 45 s wait allows;
+  ;; these tests pin breed's attempts, the price of another is pinned in declined-test
+  (let [exhausted? child/exhausted?]
+    (set! child/exhausted? (fn [c slot] (<= 3 (child/fruitless c slot))))
+    (try
+      (await (settings/with-settings (merge {:jobs.village.breed/wait-s 3} extra)
+               (fn ^:async t []
+                 (loop [i 0]
+                   (when (and (< i n) (seq (:list (core/state eng))) (not (and stop? (stop?))))
+                     (swap! clock + 700)
+                     (await (core/tick! eng))
+                     (recur (inc i)))))))
+      (finally (set! child/exhausted? exhausted?)))))
 
 (defn ^:async breed
   "Run the job until it ends (at most n ticks); its result is in :out. The world has beds unless it says :no-beds."

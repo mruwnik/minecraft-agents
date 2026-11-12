@@ -742,13 +742,13 @@
               orig ctx/call]
           (set! ctx/call (fn [c slot job args]
                            (if (= :gather-cobblestone slot)
-                             (do (swap! n inc) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found}))
+                             (do (swap! n inc) (js/Promise.resolve {:kind :nothing-possible :cause :no-stone-found :report {:uses {:wall-time 30}}}))
                              (orig c slot job args))))
           (try
             (let [id (await (get-tool! s {:item "stone_pickaxe"} 40))
                   st (last (events-of s :stopped))]
               (is (= :no-source (:reason st)) (pr-str st (core/waiting (:eng s) id)))
-              (is (= 3 @n)))
+              (is (= 3 @n) "a 30 s run after 3 is not worth its price (child/exhausted?)"))
             (finally (set! ctx/call orig))))))))
 
 (deftest crafting-is-off-when-how-leaves-it-out
@@ -1373,12 +1373,12 @@
                            (if-not (= 'jobs.forestry.harvest-wood job)
                              (orig c slot job args)
                              (do (when (= 3 (swap! calls inc)) (swap! (fake/state (:p s)) fake/give "oak_log" 1))
-                                 (js/Promise.resolve {:kind :done})))))
+                                 (js/Promise.resolve {:kind :done :report {:uses {:wall-time 30}}})))))
           (try
             (core/submit! (:eng s) (tu/order (list 'jobs.items.obtain {:item "oak_log" :count 20 :explore false})) {})
             (await (run-ticks s 40))
             (finally (set! ctx/call orig)))
-          (is (= 6 @calls) "two empty rounds, one with a log, then three empty ones end it"))))))
+          (is (= 6 @calls) "two empty rounds, one with a log, then three empty 30 s ones end it (a fourth is not worth its price)"))))))
 
 (def tree-far
   "A tree 24 blocks east of the body, past the 16 blocks within which a seen log counts."
