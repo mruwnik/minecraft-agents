@@ -377,8 +377,8 @@
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
                                      (cond
-                                       (= :price why) (str (if-let [rise (:next-climb m)]
-                                                                  (str ", the stair up to the sky (" rise " blocks) costs ")
+                                       (= :price why) (str (if-let [climb (:next-climb m)]
+                                                                  (str ", the stair up to the sky (" climb " blocks) costs ")
                                                                   ", the next walk costs ")
                                                                 (js/Math.round (:next-price m)) " s"
                                                            (when (:next-risk m) (str " (" (:next-risk m) " s of it risk, " (:next-dark m) " s walked in the dark)"))
