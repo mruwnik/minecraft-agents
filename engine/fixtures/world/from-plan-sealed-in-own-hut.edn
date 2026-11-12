@@ -1,0 +1,24 @@
+;; Card ec76bc20: a build whose body is walled inside a closed room (no exit gap left) with plan cells owed outside. The body is not "shut in":
+;; from-plan lets go-to dig out, then places the cells. Only a room go-to cannot open (bedrock) ends the build :shut-in.
+;; Closed 5x5 room x 14..18, z 14..18, y -1..2 (interior y 0..1); the plan's two cells lie 8 east, outside it. Pickaxe and cobblestone carried.
+;; Should-succeed: stone room, the job ends :completed, both cells placed, no :stopped. Should-fail: bedrock room, the job stops :shut-in, no cell placed.
+{:defaults
+ {:tags [:build :from-plan :shut-in]
+  :time :any
+  :plot {:height 8}
+  :plans [{:id "pair" :metadata {:by "$body"}
+           :parts [{:id "cobbles" :cells [#at [24 0 16] #at [25 0 16]] :want "cobblestone"}]}]
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["stone_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "walled-in-own-hut-digs-out-and-builds"
+   :blocks [[:fill [14 -1 14] [18 2 18] "stone" :hollow]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:pair"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 180 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:block [24 0 16] "cobblestone"] [:block [25 0 16] "cobblestone"]]}
+  {:name "bedrock-room-stops-shut-in"
+   :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
+   :act [[:job (jobs.build.from-plan {:worth 1200 :plan "$plan:pair"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :shut-in}} :within-s 180 :of-job true}]
+   :after [[:block [24 0 16] "air"]]}]}
