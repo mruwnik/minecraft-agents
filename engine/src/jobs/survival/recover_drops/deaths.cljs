@@ -83,10 +83,10 @@
     (when (= death-t (:death-t trip)) trip)))
 
 (defn save-trip!
-  "Write the trip so far (job memory :decided :baseline :phase :cuts :blocked :fruitless :hostile-cut) to the :recover-trip entry."
+  "Write the trip so far (job memory :decided :baseline :phase :cuts :blocked :fruitless :fruitless-s :hostile-cut) to the :recover-trip entry."
   [c]
   (let [m (ctx/mem c)]
-    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase :cuts :blocked :fruitless :hostile-cut]) cfg/trip-policy)))
+    (ctx/remember! c :recover-trip (select-keys m [:death-t :decided :baseline :phase :cuts :blocked :fruitless :fruitless-s :hostile-cut]) cfg/trip-policy)))
 
 (defn hostile-cut?
   "Whether the saved trip was last cut by a hostile: it declined for a danger, or the hostile reflex wrote a :hostile
@@ -102,7 +102,7 @@
   (when (not= (:t entry) (:death-t (ctx/mem c)))
     (let [saved (when-not (seq (retried-deaths c)) (saved-trip c (:t entry)))]
       (ctx/update-mem! c (constantly (merge {:death-t (:t entry)}
-                                            (select-keys saved [:decided :baseline :phase :blocked :fruitless])
+                                            (select-keys saved [:decided :baseline :phase :blocked :fruitless :fruitless-s])
                                             (when saved {:cuts (+ (:cuts saved 0) (if (hostile-cut? c saved) 1 0))}))))
       (when saved (save-trip! c)))))
 

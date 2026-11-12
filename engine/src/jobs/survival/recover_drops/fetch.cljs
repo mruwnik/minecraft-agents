@@ -19,18 +19,18 @@
 
 (defn ^:async clear-seal!
   "When the body's own placed blocks stand near the pile (its flee seal): take back those within seal-radius of it
-  (jobs.access.cleanup :near) and walk again, after a walk to where the eye sees the nearest of them, within ::seal-sight (the cleanup offers only blocks the body has seen). Tried twice a trip at most; :seal-cleared is set once a run removed a block.
+  (jobs.access.cleanup :near) and walk again, after a walk to where the eye sees the nearest of them, within ::seal-sight (the cleanup offers only blocks the body has seen). Tried again after runs that removed nothing while another is worth its price (child/exhausted? :seal); :seal-cleared is set once a run removed a block.
   :next when it ran, else nil."
   [c pos]
-  (when-let [seal (and (not (:seal-cleared (ctx/mem c))) (not (child/exhausted? c :seal 2)) (seq (own-seal-near c pos)))]
-    (child/fruitless! c :seal)
+  (when-let [seal (and (not (:seal-cleared (ctx/mem c))) (not (child/exhausted? c :seal)) (seq (own-seal-near c pos)))]
     (ctx/update-mem! c assoc :phase :go)
     (dth/save-trip! c)
     (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
       (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks cfg/own-checks})))
     (let [r (await (child/run!* c :seal 'jobs.access.cleanup {:of :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc cfg/own-checks :fit? '(always))}))]
-      (when (and (= :done (:kind r)) (seq (:removed (:data r))))
-        (ctx/update-mem! c assoc :seal-cleared true)))
+      (if (and (= :done (:kind r)) (seq (:removed (:data r))))
+        (ctx/update-mem! c assoc :seal-cleared true)
+        (do (child/fruitless! c :seal r) (dth/save-trip! c))))
     :next))
 
 (def blocked-leg-factor
@@ -77,13 +77,13 @@
       (:leg walked)
       (let [nearer (nearer? before (u/self-pos c) pos)]
         (ctx/update-mem! c assoc :recheck true :blocked (not nearer))
-        (if nearer (child/progress! c :go) (child/fruitless! c :go))
+        (if nearer (child/progress! c :go) (child/fruitless! c :go r))
         (dth/save-trip! c)
         :next)
       (not (:arrived walked))
       (do (ctx/update-mem! c assoc :blocked true)
           (when-not (and (refused? r) (not (nearer? before (u/self-pos c) pos)))
-            (child/fruitless! c :go))
+            (child/fruitless! c :go r))
           (dth/save-trip! c)
           (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (dth/save-trip! c) :next))))

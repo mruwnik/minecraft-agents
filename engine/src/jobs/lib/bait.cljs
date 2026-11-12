@@ -74,8 +74,8 @@
           :else e)))))
 
 (defn ^:async hold!
-  "Take food, a carried breeding food, into the hand. Nil when it is held; :no-hold after the shared fruitless tries in
-  a row; else :retry after one more equip (the caller checks the hand next round)."
+  "Take food, a carried breeding food, into the hand. Nil when it is held; :no-hold once another
+  try after failed ones in a row is not worth its price (child/exhausted?); else :retry after one more equip (the caller checks the hand next round)."
   [c food]
   (cond
     (= food (held c)) nil

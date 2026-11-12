@@ -382,7 +382,7 @@
 
 (defn ^:async rehold!
   "The food is not in the hand (a cut, another job's equip): hold it again, or end :no-food when none is carried, or
-  :no-hold after the shared fruitless tries in a row."
+  :no-hold once another try is not worth its price (bait/hold!)."
   [c]
   (let [p (:primitives c)
         food (animals/food-carried p (:mob (:args c)))]

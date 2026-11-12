@@ -438,11 +438,11 @@
   (and (seq found) (every? #(and (:id %) (spared (:id %))) found)))
 
 (defn explore-again?
-  "Whether the search ran and passed-over animals have been met since (a miss, a pair, a baby), within child/max-fruitless searches: it runs again with them skipped."
+  "Whether the search ran and passed-over animals have been met since (a miss, a pair, a baby), and another search is worth its price after the runs so far (child/exhausted? :explore): it runs again with them skipped."
   [c]
   (let [m (ctx/mem c)]
     (boolean (and (:explored m) (:explored-spared m)
-                  (< (:explore-runs m 0) (child/max-fruitless))
+                  (not (child/exhausted? c :explore))
                   (> (count (spared-uuids c)) (:explored-spared m))))))
 
 (defn ^:async explore!
@@ -482,8 +482,7 @@
           :continue
           (do
             (when start?
-              (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c)))
-                                      (update :explore-runs (fnil inc 0)))))
+              (ctx/update-mem! c #(-> % (assoc :explored "started" :searched true :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))))))
             (let [worth (min (animals/search-benefit c) (if (map? alt) (:walk-s alt) ##Inf)) ; a running child keeps the worth it started with (frozen call)
                   opts (merge {:worth worth :spend {:job-time worth}} (when (map? e) e))
                   e (await (child/run!* c :explore 'jobs.explore.search
@@ -492,9 +491,10 @@
               (if (= :continue e)
                 :continue
                 (let [res (:data e)]
+                  (child/fruitless! c :explore e)
                   (ctx/update-mem! c assoc :found-reach
                                    (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
-                  (if (and (only-spared? (:found res) (spared-uuids c)) (< (:explore-runs (ctx/mem c)) (child/max-fruitless)))
+                  (if (and (only-spared? (:found res) (spared-uuids c)) (not (child/exhausted? c :explore)))
                     (do (ctx/update-mem! c #(-> % (assoc :skip-ids (vec (spared-uuids c))) (dissoc :explored)))
                         :again)
                     (do

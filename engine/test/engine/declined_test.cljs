@@ -126,27 +126,31 @@
                                       (do (child/progress! c :a) (n :a))
                                       (child/fruitless! c :a) (n :b)]))))))))))
 
-(deftest a-slot-is-exhausted-at-the-shared-max-fruitless
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= [false true false]
-               (await (in-parent walker
-                                 (fn ^:async f [c]
-                                   (dotimes [_ (dec (child/max-fruitless))] (child/fruitless! c :a))
-                                   [(child/exhausted? c :a)
-                                    (do (child/fruitless! c :a) (child/exhausted? c :a))
-                                    (do (child/progress! c :a) (child/exhausted? c :a))])))))))))
+(defn round [s] {:kind :nothing-possible :cause :x :report {:uses {:wall-time s}}})
 
-(deftest a-per-call-max-and-the-give-up-ending
+(deftest a-slot-is-exhausted-once-another-round-is-not-worth-its-price
+  ;; at the order's 1200 s, :child-round's pooled .043/.136: after 1 fruitless round 379 s, after 2 45 s, after 3 24 s,
+  ;; after 4 16.5 s; a round with no seconds is priced at the kind's 17.1 s
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [false true {:kind :nothing-possible :cause :no-births :data {:n 1} :because {:kind :nothing-possible :cause :x}}]
+        (is (= {:none false :30s [false false true] :300s [false true] :unpriced [false false false true] :progress false}
                (await (in-parent walker
                                  (fn ^:async f [c]
-                                   (child/fruitless! c :a)
-                                   [(child/exhausted? c :a 2)
-                                    (child/exhausted? c :a 1)
-                                    (do (child/fruitless! c :a {:kind :nothing-possible :cause :x :report {:uses {}}})
-                                        (select-keys (child/give-up c :a :no-births {:n 1}) [:kind :cause :data :because]))])))))))))
+                                   (let [after (fn [slot e] (child/fruitless! c slot e) (child/exhausted? c slot))]
+                                     {:none (child/exhausted? c :a)
+                                      :30s (mapv (fn [_] (after :a (round 30))) (range 3))
+                                      :300s (mapv (fn [_] (after :b (round 300))) (range 2))
+                                      :unpriced (mapv (fn [_] (after :d nil)) (range 4))
+                                      :progress (do (child/progress! c :a) (child/exhausted? c :a))}))))))))))
+
+(deftest the-give-up-ending-carries-the-last-fruitless-one-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= {:kind :nothing-possible :cause :no-births :data {:n 1} :because {:kind :nothing-possible :cause :x}}
+               (await (in-parent walker
+                                 (fn ^:async f [c]
+                                   (child/fruitless! c :a {:kind :nothing-possible :cause :x :report {:uses {}}})
+                                   (child/fruitless! c :a {:kind :done :report {:uses {}}})
+                                   (select-keys (child/give-up c :a :no-births {:n 1}) [:kind :cause :data :because]))))))))))

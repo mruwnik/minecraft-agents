@@ -14,8 +14,8 @@
             [jobs.lib.need :as need]
             [jobs.lib.waits :as waits]))
 
-(defn fruitless! [c why]
-  (child/fruitless! c :craft)
+(defn fruitless! [c why e]
+  (child/fruitless! c :craft e)
   (ctx/update-mem! c assoc-in [:craft :why] why)
   :again)
 
@@ -55,7 +55,7 @@
             :again
             (do (when-let [why (or (get-in e [:data :why]) (get-in e [:cause :why]))]
                   (ctx/update-mem! c assoc-in [:craft :detail] why))
-                (fruitless! c (contract/cause-key e))))))))
+                (fruitless! c (contract/cause-key e) e)))))))
 
 (defn ^:async craft-step!
   "One round of the craft source: run the current step of the plan as a child, until it ends."
@@ -67,10 +67,10 @@
       (child/exhausted? c :craft)
       (tried! c :craft (or (:why mem) :failed))
 
-      ;; no plan without the seen table: try that table again (it may be reachable now); fruitless counts bound the retries
+      ;; no plan without the seen table: try that table again (it may be reachable now) while another round is worth it
       (and (nil? step) (:table-unreachable mem))
       (do (ctx/update-mem! c update :craft dissoc :table-unreachable)
-          (fruitless! c :table-unreachable))
+          (fruitless! c :table-unreachable nil))
 
       (nil? step)
       (tried! c :craft :no-plan)

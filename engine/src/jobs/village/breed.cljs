@@ -260,11 +260,11 @@
       :continue
       (let [born (born c seen)]
         (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (cond-> (pos? born) (dissoc :stocked)) (update :births (fnil + 0) born)))
-        (if (pos? born) (child/progress! c :pair) (child/fruitless! c :pair))
+        (if (pos? born) (child/progress! c :pair) (child/fruitless! c :pair r))
         :again))))
 
 (defn ^:async step!
-  "Count what is in sight, then: end at the target, wait near a fed pair, give up after three fruitless attempts, feed the
+  "Count what is in sight, then: end at the target, wait near a fed pair, give up once another attempt after fruitless ones is not worth its price, feed the
   pair, or choose one. :again, :continue or an ending."
   [c]
   (let [m (ctx/mem c)

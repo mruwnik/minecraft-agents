@@ -398,15 +398,16 @@
           (is (= 3 @chases) "a hunt that gave up is repeated max-chases times")
           (is (= [:tried] (mapv :why (:animals (first (none-endings seen)))))))))))
 
-(deftest the-search-runs-again-only-after-meeting-more-passed-over-animals-and-within-the-fruitless-cap
-  (doseq [[mem spared again?] [[{:explored "x" :explored-spared 1 :explore-runs 1} #{1 2} true]
-                               [{:explored "x" :explored-spared 2 :explore-runs 1} #{1 2} false]
-                               [{:explored "x" :explored-spared 1 :explore-runs 3} #{1 2} false]
+(deftest the-search-runs-again-only-after-meeting-more-passed-over-animals-while-worth-its-price
+  ;; at the order's 1200 s a 100 s search after one run is worth another (child :child-round 379 s), after two not (45 s)
+  (doseq [[mem spared again?] [[{:explored "x" :explored-spared 1 :fruitless {:explore 1} :fruitless-s {:explore 100}} #{1 2} true]
+                               [{:explored "x" :explored-spared 2 :fruitless {:explore 1} :fruitless-s {:explore 100}} #{1 2} false]
+                               [{:explored "x" :explored-spared 1 :fruitless {:explore 2} :fruitless-s {:explore 100}} #{1 2} false]
                                [{:explored "not searched: dark" } #{1 2} false]
                                [{:explored-spared 1} #{1 2} false]]]
     (with-redefs [ctx/mem (constantly mem)
                   get-food/spared-uuids (constantly spared)]
-      (is (= again? (get-food/explore-again? nil)) (pr-str mem spared)))))
+      (is (= again? (get-food/explore-again? {:quote-call {:worth tu/order-worth}})) (pr-str mem spared)))))
 
 (deftest food-none-names-the-pair-seen-in-a-look-though-the-last-look-left-it-out-of-view
   (async done

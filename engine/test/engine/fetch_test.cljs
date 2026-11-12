@@ -13,8 +13,6 @@
             [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
-            [jobs.lib.child :as child]
-            [jobs.items.obtain.gather :as gather]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.seen :as seen]
             [jobs.items.obtain.table :as table]
@@ -1235,9 +1233,7 @@
 
 (deftest obtain-sapling-leaf-breaking-is-bounded
   (let [need (table/gather-need {"oak_sapling" 1})]
-    (is (= (base/sapling-leaf-limit) (:jobs.gather.get-seeds/dry-digs (:settings (:args need)))) "digs per child run")
-    (is (= 1 (:max-runs need)) "one fruitless run ends the source")
-    (is (nil? (:max-runs (table/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
+    (is (= (base/sapling-leaf-limit) (:jobs.gather.get-seeds/dry-digs (:settings (:args need)))) "digs per child run")))
 
 (deftest each-gather-source-has-its-own-child-slot
   ;; a child slot's memory outlives its job while it runs: mine started over harvest-wood's :phase ended :count with nothing and a half tunnel
@@ -1245,11 +1241,6 @@
     (is (not= (slot {"oak_log" 2}) (slot {"cobblestone" 1})))
     (is (not= (slot {"cobblestone" 1}) (slot {"coal" 1})))
     (is (= (slot {"cobblestone" 1}) (slot {"cobblestone" 3})) "the same source keeps its slot between rounds")))
-
-(deftest a-declined-child-is-not-a-fruitless-run
-  (let [sapling (table/gather-need {"oak_sapling" 1})]
-    (is (= 1 (gather/fruitless-limit sapling {:kind :nothing-possible :cause :no-leaves :data {:broken 0}})))
-    (is (= (child/max-fruitless) (gather/fruitless-limit sapling {:kind :condition-failed :cause :no-source})) "a child that could not start broke no leaves")))
 
 (deftest gather-mines-fetch-a-pickaxe-without-gathering
   (is (= table/mine-fetch (get-in (table/gather-need {"cobblestone" 1}) [:args :ways])))

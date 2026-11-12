@@ -227,7 +227,7 @@
 (defn shut-failed!
   "The gate cannot be shut: an animal still led is let go first (phase :let-go, the ending :shut-failed unless one is
   set: :gate-stuck if the gate stays open, judged by the count once it shuts after all), then the shut is tried again
-  from :shut-gate, the shared fruitless tries; the next failure leaves the gate to the pen-gate trigger with one warn
+  from :shut-gate while another is worth its price (child/exhausted?); then the next failure leaves the gate to the pen-gate trigger with one warn
   herd.gate-open naming it, and the run ends."
   [c]
   (let [m (ctx/mem c)

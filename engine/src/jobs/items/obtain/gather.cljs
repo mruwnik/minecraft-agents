@@ -37,22 +37,11 @@
 (defn release-crafting-items! [c]
   (ctx/forget-where! c reserve/kind #(= (:id c) (:by %))))
 
-(defn declined?
-  "Whether child ending e is a refusal before it ran: a failed condition with no result of its own."
-  [e]
-  (and (= :condition-failed (:kind e)) (empty? (:data e))))
-
 (defn spared-why
   "The text of a hunt ending that left animals alone (its :spared-by, a count per rule: pen, keep ..), else nil."
   [res]
   (when-let [by (not-empty (:spared-by res))]
     (str "left alone: " (str/join ", " (map (fn [[k n]] (str n " " (name k))) by)))))
-
-(defn fruitless-limit
-  "Fruitless runs that end the gather source: the need's :max-runs, but only for a run that happened; a child that
-  was declined (it could not start) broke nothing and counts against the default."
-  [need e]
-  (if (declined? e) (child/max-fruitless) (:max-runs need (child/max-fruitless))))
 
 (defn note-skipped
   "Memory m with the cells a mine gave up on: one given up on in two runs is left out of the next (a single give-up may be a passing fault)."
@@ -78,7 +67,7 @@
     :else
     (let [why (if (and (= :no-stone-found why) (seen-of c need)) :unreachable why)]
       (child/fruitless! c :gather e)
-      (when (child/exhausted? c :gather (fruitless-limit need e)) (tried! c :gather (or why :failed)))
+      (when (child/exhausted? c :gather) (tried! c :gather (or why :failed)))
       :again)))
 
 (defn pickaxe-args

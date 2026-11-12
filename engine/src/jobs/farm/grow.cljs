@@ -39,8 +39,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 3600 :doc "Seconds a grow may take: the field has to ripen." :spec (a/num-in 0 nil)}
-   ::wait-s {:default 30 :doc "Seconds the body holds still before it looks at the growing crop again." :spec (a/num-in 1 nil)}
-   ::max-tends {:default 3 :doc "Tend passes in a row that leave no crop standing before the run gives up." :spec (a/int-in 1 nil)}})
+   ::wait-s {:default 30 :doc "Seconds the body holds still before it looks at the growing crop again." :spec (a/num-in 1 nil)}})
 
 (def target [:crop])
 (def defaults {:spend {:job-time ::job-time-s}})
@@ -164,7 +163,7 @@
   (and (= :condition-failed (:kind e)) (empty? (:data e))))
 
 (defn ^:async tend-step!
-  "One tend pass over the field: :again after it, :continue while it waits; three passes in a row that left no crop end the run."
+  "One tend pass over the field: :again after it, :continue while it waits; passes in a row that left no crop end the run once another is not worth its price (child/exhausted?)."
   [c]
   (let [e (await (ctx/call c :tend 'jobs.farm.tend
                            (cond-> {:area (:area (ctx/mem c)) :fertilize true}
@@ -174,7 +173,7 @@
       (declined? e) :continue
       :else
       (do (child/fruitless! c :tend e)
-          (if (child/exhausted? c :tend (settings/get settings ::max-tends))
+          (if (child/exhausted? c :tend)
             (child/give-up c :tend :not-planted {:area (:area (ctx/mem c))})
             :again)))))
 
@@ -201,7 +200,7 @@
           :else :again))
 
       (seq seen)
-      (do (ctx/update-mem! c dissoc :fruitless)
+      (do (child/progress! c :tend)
           (await (child/pause! c (settings/get settings ::wait-s) :growing))
           :continue)
 

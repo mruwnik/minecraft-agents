@@ -220,7 +220,6 @@
  :jobs.items.enchant/table-radius
  :jobs.items.give/wait-s
  :jobs.lib.animal-spare/off-limits
- :jobs.lib.child/max-fruitless
  :jobs.lib.combat/attack-gap-ms
  :jobs.lib.cost.death/spawn-horizon-s
  :jobs.lib.cost.find/leg-spacing

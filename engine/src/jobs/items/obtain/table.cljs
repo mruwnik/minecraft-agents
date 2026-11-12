@@ -73,24 +73,24 @@
   (let [logs (get gather "log" 0)]
     (vec (concat
           (for [[sapling n] gather :when (leaves-of sapling)]
-            {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
+            {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)}
              :args {:item sapling :count n :sources [(leaves-of sapling)] :settings {:jobs.gather.get-seeds/dry-digs (sapling-leaf-limit)}}})
           (for [[seed n] gather :when (grass-seeds seed)]
-            {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed) :max-runs 1
+            {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed)
              :args {:item seed :count n}})
           (for [[k n] gather :when (stalks k)]
-            {:key k :count n :job 'jobs.gather.get-seeds :seen #{k} :max-runs 1
+            {:key k :count n :job 'jobs.gather.get-seeds :seen #{k}
              :args {:item k :count n}})
           (when-let [n (get gather "water_bucket")]
             [{:key "water_bucket" :count n :job 'jobs.items.use :seen #{"water"} :args {:item "bucket"}}])
           (for [[k n] gather :when (mob-drops k)]
-            {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
+            {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k)
              :args {:item k :count n :radius (seen-radius)}})
           (for [[k n] gather :when (crop-blocks k)]
-            {:key k :count n :job 'jobs.farm.harvest :crop (crop-blocks k) :seen #{(crop-blocks k)} :max-runs 1
+            {:key k :count n :job 'jobs.farm.harvest :crop (crop-blocks k) :seen #{(crop-blocks k)}
              :args {:crops [(crop-blocks k)]}})
           (for [[k n] gather :when (wool? k)]
-            {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
+            {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k)
              :args {:item k :count n :radius (seen-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:ways log-ways :leafless? true :radius (seen-radius)}}])
           (for [[k n] gather :when (trees/log-name? k)]
@@ -100,7 +100,7 @@
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
                :args {:block (first (sort blocks)) :item k :count n :ways mine-fetch :radius (seen-radius)}}))
           (when-let [n (get gather "bone_meal")]
-            [{:key "bone_meal" :count n :job 'jobs.farm.compost :seen #{"composter"} :max-runs 1 :args {:times n}}])
+            [{:key "bone_meal" :count n :job 'jobs.farm.compost :seen #{"composter"} :args {:times n}}])
           (for [[k n] gather :when (fish-items k)]
             {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n}})
           (when-let [n (get gather "obsidian")]
