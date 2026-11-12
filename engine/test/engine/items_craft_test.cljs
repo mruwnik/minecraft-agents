@@ -954,17 +954,20 @@
 
 
 (deftest an-ingredient-fetch-is-worth-the-calls-worth-less-the-rest-of-the-craft
+  ;; no table is known: the table to get after the ingredients is in the rest; a rest with no price passes no worth (inherited)
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}})
-                       :args {:item "stone_pickaxe" :count 1 :ways #{:carried :chest :craft :gather}} :root "j" :slots []
-                       :view (fn [] {:now 0 :data {:entries {(mem/job-kind "j") [{:t 0 :data {:wants {"stick" 2 "cobblestone" 3}}}]}}}))
-              asked (atom [])
-              priced (atom [])]
-          (with-redefs [need/item-price (fn [_ item n _ _] (swap! priced conj [item n]) 40)
-                        need/item! (fn ([c item] (need/item! c item 1 nil)) ([c item n] (need/item! c item n nil))
-                                     ([_ item _ opts] (swap! asked conj [item (:worth opts)]) (js/Promise.resolve {:kind :failed})))]
-            (await (craft/fetch! c craft/problem)))
-          (is (= [["cobblestone" 3]] @priced) "the other ingredient short is priced, not the one fetched")
-          (is (= [["stick" (- tu/order-worth 40 1.5)]] @asked) "the call's worth less the cobblestone's fetch and the one batch's 1.5 s"))))))
+        (doseq [[price worth] [[40 (- tu/order-worth 40 40 1.5)] [##Inf nil]]]
+          (let [c (assoc (ready-test/ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 20 :food 20}})
+                         :args {:item "stone_pickaxe" :count 1 :ways #{:carried :chest :craft :gather}} :root "j" :slots []
+                         :view (fn [] {:now 0 :data {:entries {(mem/job-kind "j") [{:t 0 :data {:wants {"stick" 2 "cobblestone" 3}}}]}}}))
+                asked (atom [])
+                priced (atom [])]
+            (with-redefs [need/item-price (fn [_ item n _ _] (swap! priced conj [item n]) (get {"cobblestone" price} item 40))
+                          need/item! (fn ([c item] (need/item! c item 1 nil)) ([c item n] (need/item! c item n nil))
+                                       ([_ item _ opts] (swap! asked conj [item (:worth opts) (contains? opts :worth)]) (js/Promise.resolve {:kind :failed})))]
+              (await (craft/fetch! c craft/problem)))
+            (is (= [["cobblestone" 3] ["crafting_table" 1]] @priced) "the other short and the table are priced, not the one fetched")
+            (is (= [["stick" worth (some? worth)]] @asked)
+                "the call's worth less the cobblestone's fetch, the table's and the one batch's 1.5 s")))))))

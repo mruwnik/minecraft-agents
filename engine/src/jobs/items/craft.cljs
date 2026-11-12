@@ -257,11 +257,14 @@
   {:how (need/fetch-how c) :slot (keyword (str "need-" item)) :for-plan (:for-plan (:args c))})
 
 (defn fetch-worth
-  "The worth of the fetch of item: the call's less the rest of the craft after it (cost/worth-left): the other shorts at
-  their fetch's price (need/item-price) and the batches (quote-of)."
+  "The worth of the fetch of item: the call's less the rest of the craft after it (cost/worth-left): the other shorts and,
+  for a recipe that needs a table when none is known, the table, each at its fetch's price (need/item-price), and the
+  batches (quote-of). nil when one of them has no price: the fetch inherits the call's worth (call-worth design 3)."
   [c item]
-  (let [others (for [[k n] (shorts c) :when (not= k item)] (need/item-price c k n (fetch-opts c k) nil))]
-    (cost/worth-left c (+ (second (get-in (quote-of c) [:uses :job-time])) (reduce + 0 others)))))
+  (let [table? (and (not= "crafting_table" item) (needs-table? c) (not (table-known? c)))
+        later (cond-> (vec (remove #(= item (first %)) (shorts c))) table? (conj ["crafting_table" 1]))
+        rest-s (reduce + (second (get-in (quote-of c) [:uses :job-time])) (map (fn [[k n]] (need/item-price c k n (fetch-opts c k) nil)) later))]
+    (when (js/isFinite rest-s) (cost/worth-left c rest-s))))
 
 (defn ^:async fetch!
   "Get what (problem c) names with jobs.items.obtain children (jobs.lib.need) at fetch-worth until nothing is due any
@@ -272,7 +275,8 @@
     (when-let [{:keys [item count]} (and (seq (need/fetch-how c)) (problem c))]
       (let [o (fetch-opts c item)
             ;; priced once, when the child starts: its worth is frozen then
-            opts (cond-> o (nil? (get-in (ctx/mem c) [:children (:slot o)])) (assoc :worth (fetch-worth c item)))
+            w (when (nil? (get-in (ctx/mem c) [:children (:slot o)])) (fetch-worth c item))
+            opts (cond-> o w (assoc :worth w))
             kin (get (recipes/interchange (game/version-of (:primitives c)) (:item (:args c))) item)
             e (await (if (> (clojure.core/count kin) 1) (need/blocks! c (sort kin) count opts) (need/item! c item count opts)))]
         (cond
