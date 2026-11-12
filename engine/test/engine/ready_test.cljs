@@ -565,7 +565,7 @@
     (is (= [:ok :seen-priced] (verdict (risk/work-s :click))) "a click beside a zombie, bare-handed: well within the worth")
     (is (= [:ok :seen-priced] (verdict (risk/work-s :long))) "a long run: still within it")
     (is (= [:later :hostile-near] (verdict dig-night-s)) "the same zombie and worth, a night's dig: its own seconds tip it")
-    (is (< (* 1.5 (:danger (cost c dig-night-s))) (- small-worth 0) ) "premise: the danger alone is well within the worth")
+    (is (< (* 1.5 (:danger (cost c dig-night-s))) small-worth) "premise: the danger alone is well within the worth")
     (is (< dig-night-s small-worth (+ dig-night-s (:danger (cost c dig-night-s)))) "premise: the stay alone fits, the sum does not")
     (is (< 1 (:fight-s (walk-risk/stay-estimate armed (in armed (risk/work-s :click))))) "the fight's own seconds are in the price")
     (doseq [stay [(risk/work-s :click) dig-night-s]]
