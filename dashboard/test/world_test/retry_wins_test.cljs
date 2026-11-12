@@ -141,3 +141,14 @@
     (is (= {:won 2 :retries 4 :calls 3} (select-keys escalate [:won :retries :calls]))
         "call 1: n2 failed (n3 follows), n3 won (arrived); call 2: n2 won (n1 restarts); call 3: n2 failed (not arrived); a last escalation with no end is left out")
     (is (nil? pooled) "escalations stay out of the pool")))
+
+(defn sealed [job t cell]
+  (pr-str {:generation-id "g" :time-ms t :source :job :kind :stair.sealed :context {:job-id job} :data {:cell cell :text (str "sealed lava at " (pr-str cell))}}))
+
+(deftest a-lava-cell-sealed-again-counts-as-a-reseal-try-that-won-when-it-stayed
+  (let [rows (keep r/scan-line [(sealed "j1" 0 [1 2 3]) (sealed "j1" 5000 [1 2 3]) (sealed "j1" 9000 [1 2 3])
+                                (sealed "j1" 1000 [4 2 3]) (sealed "j1" 3000 [4 2 3])
+                                (sealed "j1" 2000 [7 2 3])])
+        {:keys [reseal]} (r/report rows)]
+    (is (= {:won 2 :retries 3 :calls 2} (select-keys reseal [:won :retries :calls]))
+        "cell 1: the second seal failed again, the third stayed; cell 4: the second stayed; a cell sealed once has no retry")))

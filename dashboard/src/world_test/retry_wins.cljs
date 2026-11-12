@@ -11,7 +11,7 @@
   events (:near.risky-wait a refusal, :near.risky-over the stay allowed after one), :comb-look jobs.apiary.harvest's look
   for comb (:apiary.comb-wait a look that took none, :apiary.comb-over a look that took some after one), :kit-later jobs.items.get-kit's bill after a :later stop (:kit.later-wait a stop rested on, :kit.later-over a bill round that ended otherwise after one); :pooled all kinds' tries together,
   the prior of a kind with none counted. :walk-round is one round inside a go-to: a go-to.retrying (a fruitless round that plans again) fails, and a go-to result that follows one is the call's last round (won when it arrived); a call is a run of retrying tries ending at a result (a job id holds many); the pooled fit leaves it out.
-  a go-to.escalated (:n) is a try of :escalate (left out of :pooled like :walk-round): it fails when the job's next escalation has a higher :n, wins when the next call began (:n not higher) or the go-to's end after it arrived (`escalations`). Pure parts: scan-line, retries, report."
+  a go-to.escalated (:n) is a try of :escalate (left out of :pooled like :walk-round): it fails when the job's next escalation has a higher :n, wins when the next call began (:n not higher) or the go-to's end after it arrived (`escalations`). a lava seal placed again on a cell (stair.sealed, blocks.dig.sealed \"sealed lava at\") is a try of :reseal: every seal of a cell but the last failed. Pure parts: scan-line, retries, report."
   (:require [cljs.reader :as reader]
             [clojure.string :as str]
             [world-test.field-passes :as passes]))
@@ -66,6 +66,9 @@
       (when-some [arrived (ending-arrived line)]
         {:kind :walk :key (key) :t (t) :edge :end :fail? (false? arrived) :child? true})
 
+      (and (str/includes? line "sealed lava at") (re-find #":kind :(stair|blocks\.dig)\.sealed" line))
+      {:kind :reseal-mark :key (conj (key) (field line #":cell (\[[^\]]*\])")) :t (t) :edge :mark}
+
       (and (str/includes? line ":kind :go-to.escalated") (re-find #" :n \d+" line))
       {:kind :escalate-mark :key (key) :t (t) :edge :mark :n (js/parseInt (field line #" :n (\d+)"))}
 
@@ -119,6 +122,16 @@
                           (sort-by :t rs))))
           (group-by :key (filter #(or (= :escalate-mark (:kind %)) (and (= :walk (:kind %)) (= :end (:edge %)))) rows))))
 
+(defn- reseals
+  "The :reseal rows of the scanned rows: a lava cell sealed again after its fluid flowed back over the seal. Each :reseal-mark
+  (a seal placed, keyed by job id and cell) but a cell's last failed; the last stayed."
+  [rows]
+  (mapcat (fn [[key ms]]
+            (let [ms (sort-by :t ms)]
+              (map (fn [m last?] {:kind :reseal :key key :t (:t m) :edge :end :fail? (not last?)})
+                   ms (concat (repeat (dec (count ms)) false) [true]))))
+          (group-by :key (filter #(= :reseal-mark (:kind %)) rows))))
+
 (defn- rounds
   "The :walk-round rows of the scanned rows, keyed per go-to call (a job id holds many): a go-to.retrying is a failed round,
   and a call's go-to result that follows a retrying is its last round, won when it arrived. A call ends at its result, or when
@@ -149,7 +162,7 @@
   in the counts file (the key is [generation job-id ...], a call). The walk-round calls are kept apart from the pooled fit by kind."
   [rows]
   (let [rows (go-to-ends rows)
-        rows (concat (remove #(#{:walk-round :escalate-mark} (:kind %)) rows) (rounds rows) (escalations rows))]
+        rows (concat (remove #(#{:walk-round :escalate-mark :reseal-mark} (:kind %)) rows) (rounds rows) (escalations rows) (reseals rows))]
     (into {} (for [[kind rs] (group-by :kind rows)]
                [kind {:calls (into {} (for [[key ts] (group-by :key (retries rs))]
                                         [key {:tries (count ts) :won (count (filter :won? ts)) :s (reduce + (map :s ts))}]))
