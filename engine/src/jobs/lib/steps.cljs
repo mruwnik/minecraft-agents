@@ -44,3 +44,13 @@
     (if-let [call (running-call jobs m)]
       {:todo (:todo m) :report (:report m) :call call}
       (plan decide (:todo m) (:args c) (facts c) (:report m)))))
+
+(defn warn-stopped!
+  "One steps.stopped warn per step of report that stopped? says ended short of done: a pass that ends done went on past it,
+  so the agent hears of it here."
+  [c job report stopped?]
+  (doseq [[step entry] report
+          :when (stopped? entry)
+          :let [reason (or (:reason entry) (:cause entry))]]
+    (ctx/emit! c :steps.stopped :warn {:job job :step step :reason reason
+                                       :text (str job ": the " (name step) " step stopped" (when reason (str ": " (name reason))))})))

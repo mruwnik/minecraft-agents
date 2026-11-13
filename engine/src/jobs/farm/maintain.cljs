@@ -282,12 +282,14 @@
   (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry)))
 
 (defn finish!
-  "End the pass: done when some step ran to its end, else nothing-possible :failed-steps or condition-failed :nothing-to-do."
+  "End the pass: done when some step ran to its end (a steps.stopped warn for each that stopped), else nothing-possible :failed-steps or condition-failed :nothing-to-do."
   [c report]
   (let [out {:steps report}
         entries (vals report)]
     (cond
-      (some (complement (some-fn :skipped :stopped)) entries) (ctx/end c :done nil (assoc out :text (str "farm maintain done: " (count (filter :skipped entries)) " steps skipped")))
+      (some (complement (some-fn :skipped :stopped)) entries)
+      (do (steps/warn-stopped! c "farm maintain" report :stopped)
+          (ctx/end c :done nil (assoc out :text (str "farm maintain done: " (count (filter :skipped entries)) " steps skipped"))))
       (some :stopped entries) (ctx/end c :nothing-possible :failed-steps out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 

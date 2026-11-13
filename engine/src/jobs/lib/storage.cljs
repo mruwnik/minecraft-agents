@@ -41,10 +41,21 @@
     (vec (distinct (map cell-of (concat (when main [main]) (map (comp :pos :data) (mem/entries view group-kind))))))))
 
 (defn add-to-group!
-  "Remember the chest at pos as storage, once."
-  [c pos]
-  (when-not (some #{(cell-of pos)} (group (ctx/view c)))
-    (ctx/remember! c group-kind {:pos (zipmap [:x :y :z] (cell-of pos))} {:cap (group-cap) :ttl :forever})))
+  "Remember the chest at pos as storage, once; :for the cell of the chest it was put down to extend (grown)."
+  ([c pos] (add-to-group! c pos nil))
+  ([c pos for]
+   (when-not (some #{(cell-of pos)} (group (ctx/view c)))
+     (ctx/remember! c group-kind (cond-> {:pos (zipmap [:x :y :z] (cell-of pos))} for (assoc :for (cell-of for))) {:cap (group-cap) :ttl :forever}))))
+
+(defn grown
+  "The cells of the group chests put down to extend the chest at cell, and those put down to extend them."
+  [view cell]
+  (let [entries (map :data (mem/entries view group-kind))]
+    (loop [todo [(cell-of cell)] seen #{(cell-of cell)} out []]
+      (if-let [from (first todo)]
+        (let [new (remove seen (keep #(when (= from (some-> (:for %) cell-of)) (cell-of (:pos %))) entries))]
+          (recur (into (vec (rest todo)) new) (into seen new) (into out new)))
+        out))))
 
 (defn drop-from-group!
   "Forget the chest at pos as storage (it is gone)."

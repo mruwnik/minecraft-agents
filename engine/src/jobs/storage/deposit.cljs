@@ -40,10 +40,10 @@
   Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, joins the storage group (so a later call without :chest tries it) and is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it).
-  With no chest known at all and :make-chests? true, the first one goes down beside the body (the same place child). Storage group: with no :chest (a :chest argument is the only existing chest used; a group one that is full gets a new chest beside it, any other ends :full), the :chest place and the group (memory :storage/chests,
+  With no chest known at all and :make-chests? true, the first one goes down beside the body (the same place child). Storage group: with no :chest (a :chest argument is the only existing chest used, with the chests put down to extend it (jobs.lib.storage/grown); a group one that is full gets a new chest beside it, any other ends :full), the :chest place and the group (memory :storage/chests,
   jobs.lib.storage/group, or a chest of a plan this body made) chests are tried in turn; one that answers full or takes nothing is skipped. When all are
   full and :make-chests? is true, a chest (jobs.blocks.place child, fetched or crafted by the call's :ways; #{:carried} only a carried one) goes down
-  beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
+  beside a full one and joins the group, recorded as extending the :chest argument or place. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
   unreachable, occupied) tries the next free spot (warn deposit.no-chest); a place that ends :need (no chest to be had) ends condition-failed
   :no-chest-item, no free cell beside (or none left to try), or :make-chests? false, nothing-possible :all-chests-full; a chest that cannot be placed after 3 tries nothing-possible :no-chest-spot. Any other :chest is used alone.
   Found goods (jobs.lib.found: bulk or containers picked up with no work of the body near) stay carried, even when named in :items; one
@@ -191,7 +191,7 @@
         (nil? spot) (stop! c :nothing-possible :all-chests-full)
         (= "chest" (u/seen-name (:primitives c) spot)) ; placed by an earlier round of the child
         (do (ctx/update-mem! c dissoc :chest-spot)
-            (storage/add-to-group! c spot)
+            (storage/add-to-group! c spot (storage/chest-of (ctx/view c) (:args c)))
             (ctx/update-mem! c update :made (fnil conj []) (storage/cell-of spot))
             (u/progress! c)
             :again)
@@ -203,7 +203,7 @@
             (= :continue e) :continue
             (and (= :done (:kind e)) (:placed (:data e)))
             (do (ctx/update-mem! c #(-> % (dissoc :chest-spot) (update :made (fnil conj []) (storage/cell-of spot))))
-                (storage/add-to-group! c spot)
+                (storage/add-to-group! c spot (storage/chest-of (ctx/view c) (:args c)))
                 (u/progress! c)
                 :again)
             (and (= :nothing-possible (:kind e)) (not= :unreachable (contract/cause-key e)))

@@ -349,7 +349,7 @@
     :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
 (defn finish!
-  "End the pass: done unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
+  "End the pass: done (a steps.stopped warn for each step that ended short of done) unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
   fewer adults than it was to bring ends with the herd's own kind and cause."
   [c report]
   (let [{:keys [mob target]} (:args c)
@@ -362,7 +362,8 @@
       (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
       (ctx/end c :nothing-possible :failed-steps out)
       :else
-      (ctx/end c :done nil (assoc out :text (str "maintain done: " (count adults) " adults, " (count babies) " babies"))))))
+      (do (steps/warn-stopped! c "animal maintain" report :ended)
+          (ctx/end c :done nil (assoc out :text (str "maintain done: " (count adults) " adults, " (count babies) " babies")))))))
 
 (defn ^:async step-steps
   "One step: finish, or one call of the next step's child. :again after it ended (a failed child is booked with its kind and cause), :yield while it waits on the world (a child that ended condition-failed for a waits/wait-reasons reason, such as :dark, is called again then, not booked as failed), :done at the end."

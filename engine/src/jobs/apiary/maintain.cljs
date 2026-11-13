@@ -282,14 +282,16 @@
   (not (or (:skipped entry) (:stopped entry))))
 
 (defn finish!
-  "End the pass: done when some step ran to its end, else nothing-possible :failed-steps (one stopped or threw) or
+  "End the pass: done when some step ran to its end (a steps.stopped warn for each that stopped), else nothing-possible :failed-steps (one stopped or threw) or
   condition-failed :nothing-to-do."
   [c report]
   (let [{:keys [target]} (:args c)
         out {:target target :bees (count (bees-in-area c (apiary/center-of c))) :steps report}
         entries (vals report)]
     (cond
-      (some ran? entries) (ctx/end c :done nil (assoc out :text (str "maintain done: " (count (filter :skipped entries)) " steps skipped")))
+      (some ran? entries)
+      (do (steps/warn-stopped! c "apiary maintain" report :stopped)
+          (ctx/end c :done nil (assoc out :text (str "maintain done: " (count (filter :skipped entries)) " steps skipped"))))
       (some :stopped entries) (ctx/end c :nothing-possible :failed-steps out)
       :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
 

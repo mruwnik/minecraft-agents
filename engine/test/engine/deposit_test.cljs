@@ -224,6 +224,21 @@
             (is (= {"dirt" 5} (wt/inv p)))
             (is (empty? (get-in @(fake/state p) [:containers [11 64 0]])))))))))
 
+(deftest a-later-deposit-into-a-full-chest-argument-uses-the-chest-put-down-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
+                                          :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "11,64,0" [] "9,64,0" [] "10,64,1" [] "10,64,-1" []}})]
+          (wt/know-place! eng :chest chest)
+          (full-at p [10 64 0])
+          (is (= :done (:kind (await (wt/ending-of eng job {:items ["dirt"] :chest [10 64 0]} 30)))))
+          (let [[made] (vec (disj (chests-in p) [10 64 0]))]
+            (swap! (fake/state p) assoc :inventory [{:name "dirt" :count 3}])
+            (is (= :done (:kind (await (wt/ending-of eng job {:items ["dirt"] :chest [10 64 0] :make-chests? false} 30)))))
+            (is (= {} (wt/inv p)))
+            (is (= [{"dirt" 8}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers made]))]))))))))
+
 (deftest deposit-into-an-explicit-chest-joins-it-to-the-group
   (async done
     (tu/run-async done

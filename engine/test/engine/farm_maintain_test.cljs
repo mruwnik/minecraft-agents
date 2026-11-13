@@ -188,6 +188,14 @@
     :tend {:kind :condition-failed :cause {:reason :need :item "campfire"} :data {:steps {}}} {:reason :need :stopped :condition-failed}
     :cut {:kind :nothing-possible :cause :unreachable :data {:dug 0 :skipped {}}} {:dug 0 :reason :unreachable :stopped :nothing-possible}))
 
+(deftest a-pass-that-harvested-past-a-stopped-deposit-ends-done-and-warns-of-the-step
+  (let [warns (atom [])
+        report {:tend {:field {:crops 105}} :compost {:skipped :no-composter}
+                :deposit {:reason :all-chests-full :gave-up true :stopped :nothing-possible}}
+        ending (maintain/finish! {:emit (fn [kind level fields] (swap! warns conj [kind level (:step fields) (:reason fields)]))} report)]
+    (is (= :done (:kind ending)))
+    (is (= [[:steps.stopped :warn :deposit :all-chests-full]] @warns))))
+
 (def field-60 {:min {:x 62 :y 63 :z 2} :max {:x 64 :y 64 :z 4}})
 
 (deftest a-maintain-far-from-its-seen-field-tends-it
