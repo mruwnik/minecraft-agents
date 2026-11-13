@@ -46,7 +46,7 @@
     (plan-gates c plan)
     (let [quiet (pg/quiet-cells (ctx/view c) quiet-ttl-ms)
           cells (remove quiet (keys (pg/gate-index (world-of c))))]
-      [(pg/candidates (u/self-pos c) cells {:radius (radius c) :min-dist -1}) nil])))
+      [(pg/candidates (u/self-pos c) cells {:radius (radius c)}) nil])))
 
 (defn open-now
   "The open gates among cells, minus the cells in left ({:cell [x y z]})."

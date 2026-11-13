@@ -10,7 +10,7 @@
             [jobs.lib.world-files :as world]
             [clojure.string :as str]))
 
-(def defaults {:radius 64 :min-dist 2 :quiet-s 600 :held-s 30})
+(def defaults {:radius 64 :quiet-s 600 :held-s 30})
 
 ;; ------------------------------------------------------------------ the index
 
@@ -95,9 +95,9 @@
   (js/Math.hypot (- (:x self) (+ x 0.5)) (- (:y self) y) (- (:z self) (+ z 0.5))))
 
 (defn candidates
-  "The cells farther than :min-dist and within :radius of the body."
-  [self cells {:keys [radius min-dist]}]
-  (filterv #(let [d (distance self %)] (and (> d min-dist) (<= d radius))) cells))
+  "The cells within :radius of the body."
+  [self cells {:keys [radius]}]
+  (filterv #(<= (distance self %) radius) cells))
 
 (defn standing-in?
   "Whether the body's feet are inside the cell."

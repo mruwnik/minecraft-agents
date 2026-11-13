@@ -1,6 +1,6 @@
 (ns engine.herd-test
   "jobs.animals.herd against the fake world: a 5x5 pen (fence ring x 10..16, z 0..6) with a gate in its west wall."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -201,6 +201,15 @@
           (is (= :brought (:reason (done-event s))))
           (is (= [1 1] (mapv :held (remove :was-open @log))) "an entry before each open")
           (is (empty? (held-entries s)) "dropped after the last shut"))))))
+
+(deftest only-a-gate-the-run-opened-or-leads-through-is-kept-held
+  (are [m lead-phase? leading? open? held?] (= held? (herd/keep-held? m lead-phase? leading? open?))
+    {:gate {:x 10 :y 64 :z 3} :gate-mine true} false false true true    ; opened by this run
+    {:gate {:x 10 :y 64 :z 3}} true true true true                     ; found open, an animal led through it
+    {:gate {:x 10 :y 64 :z 3}} false false true false                  ; found open, nobody led: the trigger's
+    {:gate {:x 10 :y 64 :z 3}} true false true false                   ; a lead phase with nobody on the lead
+    {:gate {:x 10 :y 64 :z 3} :gate-mine true} false false false false ; shut
+    {} true true true false))                                          ; no gate chosen yet
 
 (deftest one-call-brings-every-cow-and-ends
   (async done

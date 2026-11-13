@@ -126,12 +126,14 @@
        (not= :shut (pg/gate-state (:primitives c) (gate-cell c)))))
 
 (defn hold-gate!
-  "Tell the pen-gate trigger the open gate is open on purpose (pg/hold!)."
+  "Tell the pen-gate trigger the open gate is open on purpose (pg/hold!); :gate-mine marks it this run's to keep held."
   [c]
-  (ctx/update-mem! c dissoc :gate-closed)
+  (ctx/update-mem! c #(-> % (dissoc :gate-closed) (assoc :gate-mine true)))
   (pg/hold! c (gate-cell c)))
 
-(defn drop-gate! [c] (pg/release! c (gate-cell c)))
+(defn drop-gate! [c]
+  (ctx/update-mem! c dissoc :gate-mine)
+  (pg/release! c (gate-cell c)))
 
 ;; ------------------------------------------------------------------ the end
 

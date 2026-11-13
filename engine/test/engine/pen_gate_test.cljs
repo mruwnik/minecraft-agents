@@ -85,11 +85,9 @@
   (is (= [] (pg/open-cells (blocks-of false) (keys gates))))
   (is (= [] (pg/open-cells (constantly nil) (keys gates))) "unloaded: not open"))
 
-(deftest candidates-are-farther-than-min-dist-and-within-radius
-  (are [self ok?] (= ok? (boolean (seq (pg/candidates self [[2 64 0]] {:radius 8 :min-dist 2}))))
-    {:x 2.5 :y 64 :z 0.5} false   ; standing in the gate cell
-    {:x 2.5 :y 64 :z 2.0} false   ; 1.5 away
-    {:x 2.5 :y 64 :z 3.5} true    ; 3 away
+(deftest candidates-are-within-radius
+  (are [self ok?] (= ok? (boolean (seq (pg/candidates self [[2 64 0]] {:radius 8}))))
+    {:x 2.5 :y 64 :z 0.5} true    ; standing in the gate cell
     {:x 2.5 :y 64 :z 8.4} true    ; 7.9 away
     {:x 2.5 :y 64 :z 9.6} false   ; 9.1 away: out of the radius
     {:x 2.5 :y 80 :z 3.5} false)) ; far above
@@ -137,7 +135,7 @@
   (is (= t7 (holds-over (fake-at true 2 5) (knowledge pen-a) times)) "open, body 5 away")
   (is (= f7 (holds-over (fake-at false 2 5) (knowledge pen-a) times)) "shut")
   (is (= f7 (holds-over (fake-at true 2 0) (knowledge pen-a) times)) "the body stands in the gate cell")
-  (is (= f7 (holds-over (fake-at true 2 1) (knowledge pen-a) times)) "the body 1 block from it: a job at the gate")
+  (is (= t7 (holds-over (fake-at true 2 1) (knowledge pen-a) times)) "the body 1 block from it, beside the gate: no job holds it")
   (is (= t7 (holds-over (fake-at true 2 40) (knowledge pen-a) times)) "40 away: a gate left open is still shut")
   (is (= f7 (holds-over (fake-at true 2 100) (knowledge pen-a) times)) "too far away")
   (is (= f7 (holds-over (fake-at true 2 5) (knowledge) times)) "the gate is in no plan")

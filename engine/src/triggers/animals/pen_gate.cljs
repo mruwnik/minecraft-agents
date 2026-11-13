@@ -5,7 +5,7 @@
   (jobs.lib.world-files/derived), never per tick.
 
   The trigger holds when a planned gate was last seen open (perception's memory, never through a wall), within :radius
-  (64) of the body and farther than :min-dist (2). It keeps no state: a gate a job opened on purpose is hidden by memory
+  (64) of the body and the body is not standing in it. It keeps no state: a gate a job opened on purpose is hidden by memory
   entries, three kinds:
     :gate-gave-up  written by jobs.maintenance.shut; the cell is skipped for :quiet-s (10 min)
     :gate-held     written by a job leading animals through, dropped after it shuts the gate; skipped while
@@ -26,10 +26,10 @@
       (let [pos (.-pos (.self p))
             self {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
             hidden (into (pg/opened-cells view) (concat (pg/quiet-cells view (* 1000 quiet-s)) (pg/held-cells view (* 1000 held-s))))
-            open (pg/seen-open-cells p (remove hidden (pg/candidates self gates args)))]
+            open (pg/seen-open-cells p (remove #(or (hidden %) (pg/standing-in? self %)) (pg/candidates self gates args)))]
         (boolean (seq open))))))
 
 (defn pen-gate
-  "Holds when holds? says so; args :radius :min-dist :quiet-s :held-s. The job it starts shuts the gate."
+  "Holds when holds? says so; args :radius :quiet-s :held-s. The job it starts shuts the gate."
   [world view args kn]
   (if (and kn (not (body/recovery-pending? view :pen-gate))) (holds? world view args kn) false))

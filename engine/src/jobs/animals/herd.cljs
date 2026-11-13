@@ -294,13 +294,19 @@
                    :else (do (child/begin! c :shut-gate)
                              (await (shut-when-clear! c (shut-look-ms) :shut-gate nil #(shut-failed! c))))))))
 
+(defn keep-held?
+  "Whether the step keeps the :gate-held entry fresh: only for a gate this run opened (:gate-mine) or leads an animal
+  through; one found open is left to the pen-gate trigger."
+  [{:keys [gate gate-mine]} lead-phase? leading? open?]
+  (boolean (and gate open? (or gate-mine (and lead-phase? leading?)))))
+
 (defn ^:async step-once!
-  "One step of the run: the lead looked at, the :gate-held entry kept fresh, then the phase's step."
+  "One step of the run: the lead looked at, the :gate-held entry kept fresh (keep-held?), then the phase's step."
   [c]
-  (let [{:keys [phase gate]} (ctx/mem c)
+  (let [{:keys [phase] :as m} (ctx/mem c)
         phase (or phase :survey)
         lead-phase? (contains? leading phase)]
-    (when (and gate (gate-open? c)) (hold-gate! c))
+    (when (keep-held? m lead-phase? (and lead-phase? (seq (led-now c))) (and (:gate m) (gate-open? c))) (hold-gate! c))
     (cond
       (and lead-phase? (not (and (= :approach phase) (not (:walked (ctx/mem c))))) (pos? (prune-led! c)) (empty? (:led (ctx/mem c)))) (regather-or-lose! c)
       :else (do (when lead-phase? (await (watch/watch! c {})))
