@@ -438,9 +438,9 @@
            stay (check-cache/keyed c ::stay stay-in #(stay-estimate c stay-in))
            walk-s (risk-s c est)
            rested (fn [w] (cond-> w (= :heal (:wait w)) (assoc :rest-s (night-rest-s c goal plan in walk-s (:secs w)))))
-           best (when (pos? hp) (cheapest-affordable c (mapv rested (wait-ways c goal plan in stay-in))))
-           cut? (and best (sh/night-armed? c) (sh-inside/walk-leaves-shelter? (:primitives c) (:data (ctx/latest c :shelter)) goal 1))
-           now-s (if cut? (+ walk-s walk-s (:s best) (:rest-s best 0)) walk-s)
+           cut? (boolean (and (sh/night-armed? c) (sh-inside/walk-leaves-shelter? (:primitives c) (:data (ctx/latest c :shelter)) goal 1)))
+           best (when (or cut? (pos? hp)) (cheapest-affordable c (mapv rested (wait-ways c goal plan in stay-in))))
+           now-s (if cut? (+ walk-s walk-s (:s best 0) (:rest-s best 0)) walk-s)
            now? (and (not cut?) (bought? c est (.-health self) (.-food self) worth))
            parts (str (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                       hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for recent deaths or hides near it, " (price/round1 lethal-hp) " hp for the death they risk, " (price/round1 lava-hp) " hp for seen lava near the way")
