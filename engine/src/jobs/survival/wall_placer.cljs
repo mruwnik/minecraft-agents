@@ -182,12 +182,16 @@
       (some #(when (access/own-keep in %) %) cells))))
 
 (defn way-trespass
-  "The cell of cells that is another's (a refused place) when the body stands in a doorway: walls round it shut a way through that area, which is never worth a last resort."
+  "The first of cells that is another's (a refused place) and closes the way through the doorway the body stands in: one of the two free cells beside it, at feet or head height. Nil when the body is in no doorway."
   [c cells]
   (let [p (:primitives c)
+        {:keys [x y z] :as feet} (sh-sense/feet p)
+        solid? #(sh-sense/solid-at? p {:x (+ x %1) :y y :z (+ z %2)})
+        ends (cond (and (solid? 1 0) (solid? -1 0) (not (solid? 0 1)) (not (solid? 0 -1))) [[0 1] [0 -1]]
+                   (and (solid? 0 1) (solid? 0 -1) (not (solid? 1 0)) (not (solid? -1 0))) [[1 0] [-1 0]])
+        way? (fn [cell] (and (<= 0 (- (:y cell) y) 1) (some (fn [[dx dz]] (and (= (:x cell) (+ x dx)) (= (:z cell) (+ z dz)))) ends)))
         in (access/rules-input c)]
-    (when (sh-sense/doorway? p (sh-sense/feet p))
-      (some #(when (access/trespass-refusal in :place %) %) cells))))
+    (some #(when (and (way? %) (access/trespass-refusal in :place %)) %) cells)))
 
 (defn ^:async seal-cells!
   "The body of seal!: place the open cells round the feet."
@@ -205,10 +209,9 @@
       (empty? open) :sealed
       (empty? cells) (refuse! c :cells-occupied "every cell to close is taken by a mob or another's block")
       (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) (refuse! c :hostile-in-cell "a hostile stands in a cell to close")
-      (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-      (do (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
-      (way-trespass c cells)
-      (do (ctx/update-mem! c assoc :stop {:reason :trespass-way :text "the walls would shut a way through another's area"}) :failed)
+      (or (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
+          (way-trespass c cells))
+      (do (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area (or would shut a way through it)"}) :failed)
       (own-plan-cell c cells)
       (do (ctx/update-mem! c assoc :stop {:reason :own-plan :text "the walls need a cell of the body's own plan"}) :failed)
       (nil? (lb/pick c blocks)) (refuse! c :no-block "no block is carried to close the walls")
@@ -235,7 +238,7 @@
   in a side cell, which the seal leaves alone).
   A door standing open in a side cell is no wall (fill/sealed?): it is shut. Cells it has not sensed (a ceiling
   out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
-  area (the wall cell then fails no-support); the wall cells themselves are a last resort, but not when the body stands in a doorway: the walls would shut a way through that area (stop :trespass-way).
+  area (the wall cell then fails no-support); the wall cells themselves are a last resort, but never a cell that shuts the doorway the body stands in (stop :trespass).
   An open iron door in a side cell can be neither shut nor filled: the body first steps to a spot not beside it (step-from-door!)."
   [c]
   (let [stepped (await (step-from-door! c))]

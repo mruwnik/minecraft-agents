@@ -150,16 +150,31 @@
             (is (= places (count (calls p "place"))) (pr-str zones))
             (is (= warns (mapv :zones (trespass seen :shut-in.trespass-last-resort))) (pr-str zones)))))))))
 
-(deftest walls-are-not-placed-over-a-way-through-a-foreign-area
+(defn fence-gate-world
+  "night-world with the body in a gap of a fence line along x (fences at x -1 and 1, both heights)."
+  [fence-ys]
+  (update night-world :blocks merge (into {} (for [x [-1 1] y fence-ys] [(str x "," y ",0") "oak_fence"]))))
+
+(deftest walls-are-not-placed-in-another-s-area-over-the-way-through-a-fence-gate
   (async done
     (tu/run-async done
       (st/walls-cheap (fn ^:async t []
-        (let [gate-world (update night-world :blocks merge {"1,64,0" "stone" "-1,64,0" "stone" "1,65,0" "stone" "-1,65,0" "stone"})
-              {:keys [eng p seen]} (setup gate-world [(whole-zone "Miles")])]
+        (let [{:keys [eng p seen]} (setup (fence-gate-world [64 65]) [(whole-zone "Miles")])]
           (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:walls}})) {})
           (await (run-until-empty eng 10))
-          (is (= [] (calls p "place")) "a body in a gateway never walls it up in another's area")
-          (is (= [] (trespass seen :shut-in.trespass-last-resort)))))))))
+          (is (= [] (calls p "place")) "the walls would shut the gap")
+          (is (= [] (trespass seen :shut-in.trespass-last-resort)))
+          (is (some #(and (= :child_ended (:kind %)) (= :trespass (:reason %))) @seen) "the stop is :trespass, so the flight plugs the zone another way")))))))
+
+(deftest a-foreign-cell-that-shuts-no-way-is-still-a-last-resort
+  (async done
+    (tu/run-async done
+      (st/walls-cheap (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (fence-gate-world [64 65]) [(zone "Miles" [-3 66 -3] [3 70 3])])]
+          (core/submit! eng (tu/order '(jobs.survival.shut-in {:ways #{:walls}})) {})
+          (await (run-until-empty eng 10))
+          (is (seq (calls p "place")) "the only refused cells are overhead, none beside the gap")
+          (is (seq (trespass seen :shut-in.trespass-last-resort)))))))))
 
 (deftest shelter-through-dig-in-follows-the-same-rule
   (async done
