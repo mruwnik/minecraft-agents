@@ -1,0 +1,27 @@
+;; Card b1ab6233 (Tamsin j97): a scaffold cleanup never walks down into a pit it cannot climb back out of (its walks are
+;; :ways #{:walk}, so :one-way :closed). Stone mass x 2..12, y 0..5, z 2..14 (feet on top y 6); a 1x1 pit [6 2..5 8] whose
+;; bottom two cells [6 2 8] and [6 3 8] are the body's old pillar (ledger). From the rim [6 6 9] the top block is in reach;
+;; the lower one is not, and the only stand for it is the pit three below the rim, where old cleanup dug it from on top and
+;; was left at the pit's bottom.
+{:defaults
+ {:tags [:cleanup :access :jobs]
+  :time :any
+  :plot {:height 12 :light :lit}
+  :blocks [[:fill [2 0 2] [12 5 14] "stone"] [:fill [6 4 8] [6 5 8] "air"] [:fill [6 2 8] [6 3 8] "dirt"]]
+  :memory [{:kind :scaffold :data {:entries [{:cell #at [6 2 8] :item "dirt" :before "air" :purpose :pillar :state :placed}
+                                             {:cell #at [6 3 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
+  :body {:at [6.5 6 9.5] :settle-s 2 :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [;; should-stop: the top block is taken back, the bottom one left; the body stays on the rim
+  {:name "leaves-the-block-only-a-trap-reaches"
+   :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:removed [[:any]] :open [[:any]]}} :within-s 80 :of-job true}]
+   :after [[:not-block [6 3 8] "dirt"] [:block [6 2 8] "dirt"] [:body-near [6.5 6 9.5] 2]]}
+  ;; should-succeed: with a stair cut beside the pit (a way back up) the bottom block is taken back too
+  {:name "takes-it-back-where-a-stair-leads-out"
+   :blocks [[:fill [6 3 9] [6 5 9] "air"] [:fill [6 4 10] [6 5 10] "air"] [:set [6 5 11] "air"]]
+   :body {:at [6.5 6 12.5]}
+   :act [[:job (jobs.access.cleanup {:worth 1200 :of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:removed [[:any] [:any]]}} :within-s 80 :of-job true}]
+   :after [[:not-block [6 3 8] "dirt"] [:not-block [6 2 8] "dirt"]]}]}
