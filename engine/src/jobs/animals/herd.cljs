@@ -51,8 +51,8 @@
   - :no-pen: the pen cannot be read from :box (the result's :cell names the first unseen cell when there is one; a cell it has not seen is gone near and looked at once; one still unknown goes to the pen's gate to look in, once; still unknown ends here).
   - :leaky: the pen has a leak other than the chosen gate (:leaks lists them).
   - :no-gate: no usable gate. The gate is :gate, else the pen's gate nearest the body. It needs pen floor on
-    one side and free floor straight across (a corner gate has none). The four cells straight out from the gate
-    must be free floor too, each a step up or down from the one before (:why :no-approach). The result and the failure text name the cause: :why
+    one side and free floor straight across (a corner gate has none). The four cells out from the gate
+    must be free floor too, each a step up or down from the one before, straight out or turning along the floor outside (:why :no-approach). The result and the failure text name the cause: :why
     :no-floor-outside (a drop or a blocked cell outside the gate), :not-in-wall (a corner gate), :no-gate-in-pen or
     :no-approach, with the :cell.
   - :refused: the gate stands in another owner's zone or claim, or in a plan's footprint (or no zone list was read;

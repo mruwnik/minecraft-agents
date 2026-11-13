@@ -83,10 +83,10 @@
       (fn ^:async t []
         (let [gate {"2,64,-1" "oak_fence_gate"}
               states {"2,64,-1" {:open false}}
-              blocked (:event (await (run-job {:at [2 64 2]} (world (assoc gate "2,64,-3" "stone" "2,65,-3" "stone" "2,66,-3" "stone") states))))
+              blocked (:event (await (run-job {:at [2 64 2]} (world (into gate (for [x (range -10 16) z (range -10 -1) :when (not= [2 -2] [x z])] [(str x ",63," z) "air"])) states))))
               free (:event (await (run-job {:at [2 64 2]} (world gate states))))]
           (is (false? (:herdable? blocked)))
-          (is (= "pen closed, 25 cells; but no free floor 4 cells out from the gate at [2 64 -3], so herd cannot lead animals in" (:text blocked)))
+          (is (= "pen closed, 25 cells; but no free floor 4 cells out from the gate at [2 64 -5], so herd cannot lead animals in" (:text blocked)))
           (is (= "pen closed, 25 cells" (:text free)))
           (is (nil? (:herdable? free))))))))
 

@@ -1,0 +1,21 @@
+;; Card 789e283e: a gate whose outside is a 1-wide walkway above a drop (no 4 straight cells out) is herded through along the walkway.
+;; Pen: oak fence ring x 18..24, z 13..19, gate west at [18 0 16]; floor outside the gate is only the walkway x 17, z 8..16, the rest a 3-deep drop.
+;; Should-succeed: the cow on the walkway is brought in. Should-fail: none (engine.herd-test covers a pocket with no floor to turn onto).
+{:defaults
+ {:tags [:animals :herd :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:fill [10 -1 8] [17 -3 20] "air"]
+           [:fill [17 -1 8] [17 -1 16] "grass_block"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :body {:at [17.5 0 9.5] :yaw 180 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "a-cow-on-the-walkway-is-led-in-along-the-bend"
+   :act [[:summon "cow" [17.5 0 12.5]]
+         [:job (jobs.animals.herd {:worth 1200 :mob "cow" :target 1 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}]}

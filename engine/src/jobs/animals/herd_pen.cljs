@@ -152,10 +152,37 @@
                  [g]
                  (carry inside true (subvec axis (inc gate-index)))))))
 
+(defn bent-approach
+  "The cells out-2, out-3, out-4 of an approach that turns along the floor outside the gate when the straight line out is
+  not free floor (a walkway along a fence above a drop), as [out-2 out-3 out-4], or nil. Straight is tried before a turn,
+  each cell on the far side of the gate's line from the pen, none twice."
+  [p inside g in out-1]
+  (let [[dx dz] (axis-dir g in)
+        [gx _ gz] g
+        step (fn [used [x y z] [hx hz]]
+               (->> (near-levels [(+ x hx) y (+ z hz)] true)
+                    (filter #(and (free-floor? p %) (not (inside %)) (not (used %))
+                                  (pos? (+ (* (- dx) (- (nth % 0) gx)) (* (- dz) (- (nth % 2) gz))))))
+                    first))
+        walk (fn walk [used cur [hx hz :as h] n]
+               (if (zero? n)
+                 []
+                 (some (fn [h']
+                         (when-let [nxt (step used cur h')]
+                           (when-let [more (walk (conj used nxt) nxt h' (dec n))]
+                             (into [nxt] more))))
+                       [h [hz hx] [(- hz) (- hx)]])))]
+    (seq (walk #{out-1} out-1 [(- dx) (- dz)] 3))))
+
 (defn axis
-  "axis-cells fitted to the floor."
+  "axis-cells fitted to the floor; the out cells bend along the floor when the straight line out is not free."
   [p inside g in out depth]
-  (level-axis p inside (axis-cells g in out depth)))
+  (let [straight (level-axis p inside (axis-cells g in out depth))
+        outs (subvec straight 0 gate-index)]
+    (if-let [bent (when-not (every? #(free-floor? p %) outs)
+                    (bent-approach p inside g in (peek outs)))]
+      (vec (concat (reverse bent) (subvec straight (dec gate-index))))
+      straight)))
 
 (defn overlaps-cell?
   "True when an entity centre pos {:x :z} is within 0.5 + half-width + overlap-margin of the middle of cell on both

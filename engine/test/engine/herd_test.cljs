@@ -1203,15 +1203,25 @@
 
 ;; ------------------------------------------------------------------ the survey's new declines
 
-(deftest an-approach-blocked-three-cells-out-is-no-gate-with-no-approach
+(deftest an-approach-with-no-floor-to-turn-onto-is-no-gate-with-no-approach
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"7,64,3" "stone" "7,65,3" "stone"}} 20))
+        (let [pocket (into {} (for [[x z] [[8 3] [9 2] [9 4]] y [64 65]] [(str x "," y "," z) "stone"]))
+              s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks pocket} 20))
               e (refusal s)]
           (is (= :no-gate (:reason e)))
           (is (= :no-approach (:why e)))
           (is (empty? (calls-of s "useOn"))))))))
+
+(deftest an-approach-blocked-in-line-bends-along-the-floor-and-the-herd-comes-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 2} {:entities [(cow 1 4 3)] :blocks {"8,64,3" "stone" "8,65,3" "stone"}} 20))
+              e (done-event s)]
+          (is (= 1 (:inside e)) "the one cow came in through the bent approach")
+          (is (not= :no-gate (:reason e)) (pr-str e)))))))
 
 (deftest a-pen-floor-a-step-below-its-fence-line-still-has-a-gate
   (async done
